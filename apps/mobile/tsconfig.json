@@ -1,0 +1,17 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@brett/types": ["../../packages/types/src"],
+      "@brett/utils": ["../../packages/utils/src"],
+      "@brett/business": ["../../packages/business/src"]
+    }
+  },
+  "include": ["src", "app"],
+  "references": [
+    { "path": "../../packages/types" },
+    { "path": "../../packages/utils" },
+    { "path": "../../packages/business" }
+  ]
+}
