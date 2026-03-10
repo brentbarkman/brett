@@ -1,0 +1,209 @@
+import type { Thing, CalendarEvent, NavList } from "@brett/types";
+
+export const mockLists: NavList[] = [
+  { id: "l1", name: "Work", count: 14, colorClass: "bg-blue-500" },
+  { id: "l2", name: "Personal", count: 5, colorClass: "bg-green-500" },
+  { id: "l3", name: "Reading", count: 22, colorClass: "bg-purple-500" },
+  { id: "l4", name: "Brett app", count: 8, colorClass: "bg-amber-500" },
+];
+
+export const mockThings: Thing[] = [
+  {
+    id: "t1",
+    type: "task",
+    title: "Finalize NVDA thesis draft",
+    list: "Work",
+    source: "Brett",
+    urgency: "overdue",
+    dueDateLabel: "3 days ago",
+    isCompleted: false,
+    stalenessDays: 4,
+    brettObservation:
+      "This hasn't been touched in 4 days. The market is moving fast—worth prioritizing today.",
+    description:
+      "Review the latest earnings transcript and update the Q3 projections model before sending to the investment committee.",
+  },
+  {
+    id: "t2",
+    type: "task",
+    title: "Review Q2 budget proposal",
+    list: "Work",
+    source: "Finance",
+    urgency: "overdue",
+    dueDateLabel: "2 days ago",
+    isCompleted: false,
+    description:
+      "Finance team needs approval on the revised Q2 marketing spend.",
+  },
+  {
+    id: "t3",
+    type: "task",
+    title: "Prep for board sync",
+    list: "Work",
+    source: "Brett",
+    urgency: "today",
+    dueDateLabel: "Today",
+    isCompleted: false,
+    brettObservation:
+      "Sarah will likely raise the Q2 roadmap timeline. Last week she flagged concerns about the ML pipeline delay.",
+    description:
+      "Gather metrics for the new user onboarding flow and prepare answers for the infrastructure scaling costs.",
+  },
+  {
+    id: "t4",
+    type: "saved_web",
+    title: "Read: The AI Infrastructure Stack",
+    list: "Reading",
+    source: "a16z.com",
+    urgency: "today",
+    isCompleted: false,
+    description:
+      "Comprehensive overview of the emerging AI infra stack, from compute to orchestration.",
+  },
+  {
+    id: "t5",
+    type: "scout",
+    title: "Scout: TSLA earnings call highlights",
+    list: "Inbox",
+    source: "Scout",
+    urgency: "today",
+    isCompleted: false,
+    brettObservation:
+      'I pulled the top 3 mentions of "autonomous" from the transcript. Sentiment is highly positive compared to last quarter.',
+    description:
+      "Automated scout report tracking keywords across major tech earnings calls.",
+  },
+  {
+    id: "t6",
+    type: "task",
+    title: "Draft investor update email",
+    list: "Work",
+    source: "Brett",
+    urgency: "this_week",
+    dueDateLabel: "Thu",
+    isCompleted: false,
+  },
+  {
+    id: "t7",
+    type: "saved_tweet",
+    title: "Saved: Thread on AI agent architectures",
+    list: "Reading",
+    source: "@karpathy",
+    urgency: "this_week",
+    isCompleted: false,
+  },
+  {
+    id: "t8",
+    type: "task",
+    title: "Review design system RFC",
+    list: "Brett app",
+    source: "Brett",
+    urgency: "this_week",
+    dueDateLabel: "Fri",
+    isCompleted: false,
+  },
+  {
+    id: "t9",
+    type: "task",
+    title: "Send weekly team update",
+    list: "Work",
+    source: "Brett",
+    urgency: "done",
+    isCompleted: true,
+  },
+  {
+    id: "t10",
+    type: "saved_web",
+    title: "Read: Sequoia AI report",
+    list: "Reading",
+    source: "sequoiacap.com",
+    urgency: "done",
+    isCompleted: true,
+  },
+];
+
+export const mockEvents: CalendarEvent[] = [
+  {
+    id: "e1",
+    title: "Morning Standup",
+    startTime: "09:00",
+    endTime: "09:30",
+    durationMinutes: 30,
+    color: "blue",
+    location: "Zoom",
+    hasBrettContext: false,
+  },
+  {
+    id: "e2",
+    title: "Weekly Product Sync",
+    startTime: "10:00",
+    endTime: "11:00",
+    durationMinutes: 60,
+    color: "green",
+    location: "Conference Room A",
+    hasBrettContext: true,
+    brettObservation:
+      "The team will likely ask for a decision on the new navigation structure. Review the Figma file beforehand.",
+    attendees: [
+      { name: "Alex", initials: "A" },
+      { name: "Jordan", initials: "J" },
+    ],
+  },
+  {
+    id: "e3",
+    title: "1:1 with Sarah Chen",
+    startTime: "11:30",
+    endTime: "12:00",
+    durationMinutes: 30,
+    color: "purple",
+    location: "Blue Bottle Coffee",
+    hasBrettContext: true,
+    brettObservation:
+      "Sarah recently closed the Acme deal. Good opportunity to recognize her effort.",
+    attendees: [{ name: "Sarah Chen", initials: "SC" }],
+  },
+  {
+    id: "e4",
+    title: "Board Sync Prep",
+    startTime: "13:00",
+    endTime: "14:00",
+    durationMinutes: 60,
+    color: "amber",
+    location: "Office",
+    hasBrettContext: true,
+    brettObservation:
+      "Focus on the Q3 revenue projections. The board is looking for a 15% increase in ARR.",
+  },
+  {
+    id: "e5",
+    title: "Design Review",
+    startTime: "14:30",
+    endTime: "15:00",
+    durationMinutes: 30,
+    color: "blue",
+    location: "Figma / Zoom",
+    hasBrettContext: false,
+  },
+  {
+    id: "e6",
+    title: "Investor Call — Acme Ventures",
+    startTime: "16:00",
+    endTime: "16:30",
+    durationMinutes: 30,
+    color: "green",
+    location: "Google Meet",
+    hasBrettContext: true,
+    brettObservation:
+      "They are particularly interested in our enterprise go-to-market strategy.",
+    attendees: [
+      { name: "David", initials: "D" },
+      { name: "Elena", initials: "E" },
+    ],
+  },
+];
+
+export const mockBriefingItems = [
+  "3 tasks are overdue — the NVDA thesis draft hasn't been touched in 4 days.",
+  "You have back-to-back meetings from 1-3pm. Consider prepping for the board sync now.",
+  "It's 48°F and overcast — good day to stay heads-down.",
+];
