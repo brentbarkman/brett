@@ -4,8 +4,9 @@ import { auth } from "../lib/auth.js";
 
 const authRouter = new Hono();
 
-// Desktop OAuth start — initiates Google OAuth via GET for browser redirect
-authRouter.get("/desktop/google", async (c) => {
+// Desktop OAuth start — renders a page that POSTs to better-auth's social sign-in
+// This preserves cookies (state, CSRF) that better-auth sets on the response
+authRouter.get("/desktop/google", (c) => {
   const port = c.req.query("port");
   const state = c.req.query("state");
 
@@ -24,40 +25,30 @@ authRouter.get("/desktop/google", async (c) => {
   callbackURL.searchParams.set("port", String(portNum));
   callbackURL.searchParams.set("state", state);
 
-  // #7: Internally POST to better-auth with explicit Content-Type
-  const url = new URL("/api/auth/sign-in/social", baseURL);
-  const headers = new Headers(c.req.raw.headers);
-  headers.set("Content-Type", "application/json");
+  // Render a page that POSTs from the browser — preserves Set-Cookie from better-auth
+  const signInURL = new URL("/api/auth/sign-in/social", baseURL).toString();
 
-  const internalReq = new Request(url.toString(), {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      provider: "google",
-      callbackURL: callbackURL.toString(),
-    }),
-  });
-
-  const response = await auth.handler(internalReq);
-
-  // better-auth may return a redirect (302) or JSON with { url }
-  if (response.status >= 300 && response.status < 400) {
-    const location = response.headers.get("Location");
-    if (location) {
-      return c.redirect(location);
-    }
-  }
-
-  if (response.ok) {
-    const data = await response.json() as { url?: string; redirect?: boolean };
-    if (data.url) {
-      return c.redirect(data.url);
-    }
-  }
-
-  const body = await response.text().catch(() => "no body");
-  console.error("Desktop OAuth failed:", response.status, body);
-  return c.text("Failed to initiate Google sign-in", 500);
+  return c.html(`<!DOCTYPE html>
+<html><head><title>Signing in...</title></head>
+<body style="font-family: system-ui; text-align: center; padding: 60px;">
+  <p>Redirecting to Google...</p>
+  <script>
+    fetch(${JSON.stringify(signInURL)}, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "google", callbackURL: ${JSON.stringify(callbackURL.toString())} }),
+      credentials: "include"
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.url) window.location.href = data.url;
+      else document.body.innerHTML = "<p>Sign-in failed. Please close this tab and try again.</p>";
+    })
+    .catch(() => {
+      document.body.innerHTML = "<p>Sign-in failed. Please close this tab and try again.</p>";
+    });
+  </script>
+</body></html>`);
 });
 
 // Desktop OAuth callback — extracts session token and redirects to local Electron server
