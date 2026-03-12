@@ -4,6 +4,6 @@
     "dockerfilePath": "apps/api/Dockerfile"
   },
   "deploy": {
-    "startCommand": "node_modules/.bin/prisma migrate deploy && node dist/index.js"
+    "startCommand": "node_modules/.bin/prisma migrate deploy; echo 'Migration done, starting server...'; node dist/index.js"
   }
 }
