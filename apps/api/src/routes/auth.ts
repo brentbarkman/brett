@@ -39,7 +39,14 @@ authRouter.get("/desktop/google", async (c) => {
 
   const response = await auth.handler(internalReq);
 
-  // better-auth returns a JSON response with { url, redirect } for social sign-in
+  // better-auth may return a redirect (302) or JSON with { url }
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("Location");
+    if (location) {
+      return c.redirect(location);
+    }
+  }
+
   if (response.ok) {
     const data = await response.json() as { url?: string; redirect?: boolean };
     if (data.url) {
@@ -47,6 +54,8 @@ authRouter.get("/desktop/google", async (c) => {
     }
   }
 
+  const body = await response.text().catch(() => "no body");
+  console.error("Desktop OAuth failed:", response.status, body);
   return c.text("Failed to initiate Google sign-in", 500);
 });
 
