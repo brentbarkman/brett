@@ -19,12 +19,13 @@ authRouter.get("/desktop/google", async (c) => {
     return c.text("Invalid port", 400);
   }
 
-  const callbackURL = new URL("/api/auth/desktop-callback", c.req.url);
+  const baseURL = process.env.BETTER_AUTH_URL || c.req.url;
+  const callbackURL = new URL("/api/auth/desktop-callback", baseURL);
   callbackURL.searchParams.set("port", String(portNum));
   callbackURL.searchParams.set("state", state);
 
   // #7: Internally POST to better-auth with explicit Content-Type
-  const url = new URL("/api/auth/sign-in/social", c.req.url);
+  const url = new URL("/api/auth/sign-in/social", baseURL);
   const headers = new Headers(c.req.raw.headers);
   headers.set("Content-Type", "application/json");
 
