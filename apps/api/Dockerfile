@@ -14,6 +14,7 @@ RUN pnpm install --frozen-lockfile --filter @brett/api...
 # Build
 FROM deps AS build
 WORKDIR /app
+COPY tsconfig.base.json ./
 COPY packages/types packages/types
 COPY packages/utils packages/utils
 COPY packages/business packages/business
