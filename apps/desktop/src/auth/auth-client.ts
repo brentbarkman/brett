@@ -7,6 +7,8 @@ const electronAPI = (window as any).electronAPI as
       storeToken: (token: string) => Promise<void>;
       getToken: () => Promise<string | null>;
       clearToken: () => Promise<void>;
+      openExternal: (url: string) => Promise<void>;
+      onAuthCallback: (callback: (token: string) => void) => void;
     }
   | undefined;
 
@@ -46,4 +48,20 @@ export async function clearStoredToken(): Promise<void> {
   if (electronAPI) {
     await electronAPI.clearToken();
   }
+}
+
+// Open Google OAuth in system browser (for passkey support)
+export function openGoogleOAuthInBrowser(): void {
+  const callbackURL = `${API_URL}/api/auth/desktop-callback`;
+  const oauthURL = `${API_URL}/api/auth/sign-in/social?provider=google&callbackURL=${encodeURIComponent(callbackURL)}`;
+  electronAPI?.openExternal(oauthURL);
+}
+
+// Listen for deep link auth callback
+export function onAuthCallback(callback: (token: string) => void): void {
+  electronAPI?.onAuthCallback((token) => {
+    currentToken = token;
+    electronAPI?.storeToken(token);
+    callback(token);
+  });
 }

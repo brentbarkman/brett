@@ -9,12 +9,7 @@ export const app = new Hono();
 app.use(
   "*",
   cors({
-    origin: (origin) => {
-      const allowed = ["http://localhost:5173", "app://.", "file://"];
-      // Electron file:// sends null origin
-      if (!origin || allowed.includes(origin)) return origin ?? "*";
-      return null;
-    },
+    origin: ["http://localhost:5173", "app://."],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,

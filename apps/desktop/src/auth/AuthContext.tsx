@@ -2,9 +2,10 @@ import React, {
   createContext,
   useContext,
   useCallback,
+  useEffect,
 } from "react";
 import type { AuthUser } from "@brett/types";
-import { authClient, clearStoredToken } from "./auth-client";
+import { authClient, clearStoredToken, openGoogleOAuthInBrowser, onAuthCallback } from "./auth-client";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -22,7 +23,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { data: sessionData, isPending: loading } =
+  const { data: sessionData, isPending: loading, refetch } =
     authClient.useSession();
 
   const user: AuthUser | null = sessionData?.user
@@ -59,14 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signInWithGoogle = useCallback(async () => {
-    const { error } = await authClient.signIn.social({
-      provider: "google",
-      callbackURL: window.location.origin,
-    });
-    if (error) {
-      throw new Error(error.message || "Google sign in failed");
-    }
+    // Open Google OAuth in system browser for passkey/biometric support
+    openGoogleOAuthInBrowser();
   }, []);
+
+  // Listen for deep link auth callback from system browser OAuth
+  useEffect(() => {
+    onAuthCallback(() => {
+      refetch();
+    });
+  }, [refetch]);
 
   const signOut = useCallback(async () => {
     await authClient.signOut();

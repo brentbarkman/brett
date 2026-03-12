@@ -3,7 +3,7 @@ dist
 build
 .turbo
 .env
-.env.local
+.env.*
 .env.*.local
 *.tsbuildinfo
 .expo
