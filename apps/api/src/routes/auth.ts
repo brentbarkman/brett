@@ -4,7 +4,7 @@ import { auth } from "../lib/auth.js";
 
 const authRouter = new Hono();
 
-// Desktop OAuth start — initiates Google OAuth via GET (browser-friendly)
+// Desktop OAuth start — initiates Google OAuth via GET for browser redirect
 authRouter.get("/desktop/google", async (c) => {
   const port = c.req.query("port");
   const state = c.req.query("state");
@@ -13,20 +13,29 @@ authRouter.get("/desktop/google", async (c) => {
     return c.text("Missing port or state parameter", 400);
   }
 
-  // Call better-auth's social sign-in internally with callback pointing to our desktop-callback
   const callbackURL = new URL("/api/auth/desktop-callback", c.req.url);
   callbackURL.searchParams.set("port", port);
   callbackURL.searchParams.set("state", state);
 
-  const response = await auth.api.signInSocial({
-    body: {
+  // Internally POST to better-auth's social sign-in with the real request context
+  const url = new URL("/api/auth/sign-in/social", c.req.url);
+  const internalReq = new Request(url.toString(), {
+    method: "POST",
+    headers: c.req.raw.headers,
+    body: JSON.stringify({
       provider: "google",
       callbackURL: callbackURL.toString(),
-    },
+    }),
   });
 
-  if (response?.url) {
-    return c.redirect(response.url);
+  const response = await auth.handler(internalReq);
+
+  // better-auth returns a JSON response with { url, redirect } for social sign-in
+  if (response.ok) {
+    const data = await response.json() as { url?: string; redirect?: boolean };
+    if (data.url) {
+      return c.redirect(data.url);
+    }
   }
 
   return c.text("Failed to initiate Google sign-in", 500);
