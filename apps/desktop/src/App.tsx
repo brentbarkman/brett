@@ -10,6 +10,7 @@ import {
   DetailPanel,
 } from "@brett/ui";
 import type { Thing, CalendarEvent } from "@brett/types";
+import { useAuth } from "./auth/AuthContext";
 import {
   mockLists,
   mockThings,
@@ -18,6 +19,7 @@ import {
 } from "./data/mockData";
 
 export function App() {
+  const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState("All");
   const [isBriefingVisible, setIsBriefingVisible] = useState(true);
   const [selectedItem, setSelectedItem] = useState<
@@ -83,7 +85,7 @@ export function App() {
       {/* Main Layout Shell */}
       <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
         {/* Left Column: Navigation */}
-        <LeftNav isCollapsed={isDetailOpen} lists={mockLists} />
+        <LeftNav isCollapsed={isDetailOpen} lists={mockLists} user={user} />
 
         {/* Center Column: Main Today View */}
         <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">

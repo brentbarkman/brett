@@ -2,12 +2,19 @@ import React from "react";
 import { Inbox, Calendar, Search, Plus } from "lucide-react";
 import type { NavList } from "@brett/types";
 
+interface LeftNavUser {
+  name: string | null;
+  avatarUrl: string | null;
+  email: string;
+}
+
 interface LeftNavProps {
   isCollapsed: boolean;
   lists: NavList[];
+  user?: LeftNavUser | null;
 }
 
-export function LeftNav({ isCollapsed, lists }: LeftNavProps) {
+export function LeftNav({ isCollapsed, lists, user }: LeftNavProps) {
   return (
     <nav
       className={`
@@ -77,8 +84,8 @@ export function LeftNav({ isCollapsed, lists }: LeftNavProps) {
         </div>
       </div>
 
-      {/* Footer Action */}
-      <div className="mt-auto pt-4">
+      {/* Footer */}
+      <div className="mt-auto pt-4 space-y-2">
         <button
           className={`
           flex items-center gap-2 text-white/50 hover:text-white/90 transition-colors w-full
@@ -90,6 +97,38 @@ export function LeftNav({ isCollapsed, lists }: LeftNavProps) {
             <span className="text-sm font-medium">New list</span>
           )}
         </button>
+
+        {user && (
+          <>
+            <div className="h-px bg-white/10 w-full" />
+            <div
+              className={`
+              flex items-center gap-2.5 rounded-lg transition-colors w-full
+              ${isCollapsed ? "justify-center p-2" : "px-2 py-1.5"}
+            `}
+            >
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt=""
+                  className="w-6 h-6 rounded-full flex-shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-bold text-white/80">
+                    {(user.name || user.email)[0].toUpperCase()}
+                  </span>
+                </div>
+              )}
+              {!isCollapsed && (
+                <span className="text-xs text-white/60 truncate">
+                  {user.name || user.email}
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </nav>
   );

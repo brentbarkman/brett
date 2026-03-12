@@ -21,9 +21,35 @@ Two TypeScript compilation targets in one app:
 
 The `index.html` at project root is the Vite entry point. Dev mode loads `localhost:5173`; production loads `dist/renderer/index.html`.
 
+### Auth
+
+Authentication uses **better-auth** client SDK (`better-auth/react`) with JWT bearer tokens.
+
+- `src/auth/auth-client.ts` — better-auth client instance. Configures `fetchOptions.auth` to send bearer tokens on every request. Captures tokens from sign-in/sign-up responses and persists them via Electron's `safeStorage` IPC. Loads stored token on startup for auto-sign-in.
+- `src/auth/AuthContext.tsx` — React context wrapping better-auth's `useSession()` hook. Exposes `user`, `loading`, `signInWithEmail`, `signUpWithEmail`, `signInWithGoogle`, `signOut`. Calls `clearStoredToken()` on sign-out.
+- `src/auth/AuthGuard.tsx` — renders `<LoginPage />` or children based on auth state
+- `src/auth/LoginPage.tsx` — Google OAuth button + email/password form (with name field on sign-up)
+
+Auth uses JWT bearer tokens (not cookies) because Electron doesn't reliably handle cross-origin cookies, and JWTs work identically for future mobile support.
+
+Entry point (`src/main.tsx`) wraps the app:
+```tsx
+<AuthProvider>
+  <AuthGuard fallback={<LoginPage />}>
+    <App />
+  </AuthGuard>
+</AuthProvider>
+```
+
 ### Preload / IPC
 
 `electron/preload.ts` uses `contextBridge.exposeInMainWorld` to expose `electronAPI` to the renderer. All new IPC should go through this bridge — never enable `nodeIntegration`.
+
+Available IPC methods:
+- `platform` — current OS platform
+- `storeToken(token)` — encrypt and persist a token via `safeStorage` + `electron-store`
+- `getToken()` — decrypt and return stored token
+- `clearToken()` — remove stored token
 
 ### Shared Package Imports
 
@@ -42,3 +68,4 @@ Vite resolves these directly to source (`main: "./src/index.ts"` in each package
 - `@vitejs/plugin-react` enabled
 - Path alias: `@` → `./src`
 - Build output: `dist/renderer/`
+- `src/vite-env.d.ts` provides Vite's `ImportMeta` types (required for `import.meta.env`)

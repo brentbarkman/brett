@@ -16,6 +16,8 @@
     "@brett/types": "workspace:*",
     "@brett/ui": "workspace:*",
     "@brett/utils": "workspace:*",
+    "better-auth": "^1.2.7",
+    "electron-store": "^8.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

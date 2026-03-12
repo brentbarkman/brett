@@ -1,0 +1,30 @@
+{
+  "name": "@brett/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "prisma generate && tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@brett/types": "workspace:*",
+    "@brett/utils": "workspace:*",
+    "@brett/business": "workspace:*",
+    "@aws-sdk/client-s3": "^3.750.0",
+    "@hono/node-server": "^1.13.7",
+    "@prisma/client": "^6.4.1",
+    "better-auth": "^1.2.7",
+    "hono": "^4.7.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "prisma": "^6.4.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.3.3",
+    "vitest": "^3.0.0"
+  }
+}

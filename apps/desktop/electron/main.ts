@@ -1,5 +1,40 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, safeStorage } from "electron";
 import path from "path";
+import Store from "electron-store";
+
+const store = new Store<{ encryptedToken?: string }>();
+
+// Token storage IPC handlers
+ipcMain.handle("store-token", (_event, token: string) => {
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(token);
+    store.set("encryptedToken", encrypted.toString("base64"));
+  } else {
+    // Fallback: store unencrypted (dev only)
+    store.set("encryptedToken", token);
+  }
+});
+
+ipcMain.handle("get-token", () => {
+  const stored = store.get("encryptedToken");
+  if (!stored) return null;
+
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      const buffer = Buffer.from(stored, "base64");
+      return safeStorage.decryptString(buffer);
+    } catch {
+      store.delete("encryptedToken");
+      return null;
+    }
+  }
+
+  return stored;
+});
+
+ipcMain.handle("clear-token", () => {
+  store.delete("encryptedToken");
+});
 
 function createWindow() {
   const win = new BrowserWindow({

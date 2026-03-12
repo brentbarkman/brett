@@ -9,3 +9,7 @@ build
 .expo
 android
 ios
+
+# Firebase service account keys
+*-firebase-adminsdk-*.json
+firebase-service-account.json

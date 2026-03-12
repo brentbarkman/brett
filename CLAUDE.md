@@ -6,37 +6,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 pnpm dev                # Run all apps in parallel (Turborepo)
+pnpm dev:full           # Start everything: Postgres + migrations + API + desktop
+pnpm dev:api            # API server only
 pnpm dev:desktop        # Desktop only
 pnpm dev:mobile         # Mobile only
 pnpm build              # Build all packages and apps
 pnpm typecheck          # Type-check all packages
 pnpm lint               # Lint all packages
+pnpm test               # Run API tests (requires Postgres)
+pnpm setup              # Start Postgres + run migrations
+pnpm db:up / db:down    # Start/stop local Postgres via Docker
+pnpm db:migrate         # Run Prisma migrations
+pnpm db:studio          # Open Prisma Studio (DB GUI)
 ```
 
 ## Stack
 - **Monorepo:** pnpm workspaces + Turborepo
+- **API:** Hono + Prisma + better-auth (deployed on Railway)
 - **Desktop:** Electron + Vite + React + TypeScript
-- **Mobile:** Expo / React Native + TypeScript
+- **Mobile:** Expo / React Native + TypeScript (deferred)
 - **UI:** shadcn/ui
-- **Backend:** Railway + Postgres
+- **Database:** Postgres (Docker Compose locally, Railway in prod)
+- **Auth:** better-auth (email/password + Google OAuth, JWT bearer tokens)
+- **Storage:** Railway Object Storage (S3-compatible)
+- **Notifications:** Firebase Cloud Messaging (planned — notifications only, not auth)
 
 ## Architecture
 
-pnpm workspaces + Turborepo monorepo with two apps sharing four packages.
+pnpm workspaces + Turborepo monorepo with three apps sharing four packages.
 
 ### Dependency Graph
 
 ```
-@brett/types          ← shared TS interfaces (User, Task, Notification)
+@brett/types          ← shared TS interfaces (User, AuthUser, Task, Notification)
   ↑
 @brett/utils          ← generic helpers (formatDate, generateId, sleep)
   ↑
 @brett/business       ← domain logic (createTask, toggleTask)
   ↑
-@brett/desktop        ← Electron + Vite + React (imports all 4 packages)
+@brett/api            ← Hono + Prisma + better-auth (imports types, utils, business)
+@brett/desktop        ← Electron + Vite + React (imports all 4 packages + better-auth client)
 @brett/mobile         ← Expo SDK 51 + React Native (imports types, utils, business — NOT ui)
 
-@brett/ui             ← web-only React components (Button) — used by desktop only
+@brett/ui             ← web-only React components — used by desktop only
 ```
 
 All workspace dependencies use the `workspace:*` protocol.
@@ -44,16 +56,20 @@ All workspace dependencies use the `workspace:*` protocol.
 ### Key Config Decisions
 
 - `.npmrc` sets `node-linker=hoisted` — required for Expo/React Native compatibility with pnpm
+- `.nvmrc` pins Node 20 — required by Prisma (>= 18.18)
 - `tsconfig.base.json` uses `composite: true` with project references for incremental builds
 - Turbo caches build outputs (`dist/`, `.next/`, `build/`) and invalidates on `.env.*local` changes
 
 ## Environment Variables
 
-Copy `.env.example` files (root, `apps/desktop/`, `apps/mobile/`) to `.env` and fill in:
-- `DATABASE_URL` — Railway Postgres connection string
-- `ANTHROPIC_API_KEY` — Claude API key
-- `GRANOLA_MCP_ENDPOINT` / `GRANOLA_MCP_API_KEY` — Granola MCP integration
-- `FCM_*` — Firebase Cloud Messaging (desktop uses VAPID_KEY; mobile uses SENDER_ID)
+Copy `.env.example` files (`apps/api/`, `apps/desktop/`) to `.env` and fill in:
+- `DATABASE_URL` — Postgres connection string (defaults to Docker Compose values)
+- `BETTER_AUTH_SECRET` — session signing secret (generate with `openssl rand -base64 32`)
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth (optional for dev)
+- `STORAGE_*` — Railway S3-compatible object storage (optional for dev)
+- `VITE_API_URL` — API server URL for desktop (defaults to `http://localhost:3001`)
+
+Do NOT commit `.env` files.
 
 ## Engineering Principles
 
@@ -78,7 +94,7 @@ Before starting, ask: **BIG or SMALL change?**
 - **SMALL:** one focused question per section
 
 ### 1. Architecture — component boundaries, data flow, scaling, security
-### 2. Code Quality — DRY, error handling, tech debt, over/under-engineering  
+### 2. Code Quality — DRY, error handling, tech debt, over/under-engineering
 ### 3. Tests — coverage, assertion quality, edge cases, failure scenarios
 ### 4. Performance — N+1 queries, memory, caching, latency
 

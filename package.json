@@ -7,7 +7,16 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "dev:desktop": "turbo run dev --filter=@brett/desktop",
-    "dev:mobile": "turbo run dev --filter=@brett/mobile"
+    "dev:mobile": "turbo run dev --filter=@brett/mobile",
+    "dev:api": "turbo run dev --filter=@brett/api",
+    "dev:full": "./scripts/dev.sh",
+    "db:up": "docker compose up -d 2>/dev/null || brew services start postgresql@16 2>/dev/null || brew services start postgresql",
+    "db:down": "docker compose down 2>/dev/null || brew services stop postgresql@16 2>/dev/null || brew services stop postgresql",
+    "db:migrate": "pnpm --filter @brett/api exec prisma migrate dev",
+    "db:studio": "pnpm --filter @brett/api exec prisma studio",
+    "setup": "pnpm db:up && sleep 2 && pnpm db:migrate",
+    "test": "pnpm --filter @brett/api run test",
+    "test:unit": "pnpm --filter @brett/api run test -- --testPathPattern=health"
   },
   "devDependencies": {
     "turbo": "^2.8.15",

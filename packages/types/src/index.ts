@@ -2,7 +2,16 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  avatarUrl?: string | null;
   createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
 }
 
 export interface Task {
