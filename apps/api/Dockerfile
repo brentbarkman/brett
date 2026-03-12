@@ -26,6 +26,9 @@ RUN pnpm --filter @brett/api run build
 FROM base AS runner
 WORKDIR /app
 COPY --from=build /app/node_modules node_modules
+COPY --from=build /app/packages/types packages/types
+COPY --from=build /app/packages/utils packages/utils
+COPY --from=build /app/packages/business packages/business
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/api/node_modules apps/api/node_modules
 COPY --from=build /app/apps/api/prisma apps/api/prisma
