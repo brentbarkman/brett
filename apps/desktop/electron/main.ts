@@ -6,16 +6,36 @@ import { pathToFileURL } from "url";
 import Store from "electron-store";
 
 // #3: Load API URL from main process config — never accept from renderer
-// In dev, read from env. In production, read from build-time config file.
+// In dev, read from .env files. In production, read from build-time config file.
 function getApiURL(): string {
   if (process.env.VITE_API_URL) return process.env.VITE_API_URL;
+
+  // Production: read from build-time config
   try {
     const configPath = path.join(__dirname, "api-config.json");
     const config = JSON.parse(require("fs").readFileSync(configPath, "utf-8"));
-    return config.apiURL;
+    if (config.apiURL) return config.apiURL;
   } catch {
-    return "http://localhost:3001";
+    // Fall through
   }
+
+  // Dev: read from .env files
+  try {
+    const fs = require("fs");
+    const appRoot = path.resolve(__dirname, "..");
+    for (const envFile of [".env.development", ".env"]) {
+      const envPath = path.join(appRoot, envFile);
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, "utf-8") as string;
+        const match = content.match(/^VITE_API_URL=(.+)$/m);
+        if (match) return match[1].trim();
+      }
+    }
+  } catch {
+    // Fall through
+  }
+
+  return "http://localhost:3001";
 }
 const API_URL = getApiURL();
 
