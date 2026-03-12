@@ -66,7 +66,10 @@ authRouter.get("/desktop/google", (c) => {
 
 // Desktop OAuth callback — extracts session token and redirects to local Electron server
 authRouter.get("/desktop-callback", (c) => {
-  const sessionToken = getCookie(c, "better-auth.session_token");
+  // In production with HTTPS, better-auth uses __Secure- prefix
+  const sessionToken =
+    getCookie(c, "__Secure-better-auth.session_token") ||
+    getCookie(c, "better-auth.session_token");
   const port = c.req.query("port");
   const state = c.req.query("state");
   const sig = c.req.query("sig");
