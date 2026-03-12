@@ -1,8 +1,19 @@
+import crypto from "crypto";
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import { auth } from "../lib/auth.js";
 
 const authRouter = new Hono();
+
+// Sign the desktop OAuth state to prevent forgery
+const AUTH_SECRET = process.env.BETTER_AUTH_SECRET || "";
+
+function signState(state: string, port: number): string {
+  return crypto
+    .createHmac("sha256", AUTH_SECRET)
+    .update(`${state}:${port}`)
+    .digest("hex");
+}
 
 // Desktop OAuth start — renders a page that POSTs to better-auth's social sign-in
 // This preserves cookies (state, CSRF) that better-auth sets on the response
@@ -14,7 +25,7 @@ authRouter.get("/desktop/google", (c) => {
     return c.text("Missing port or state parameter", 400);
   }
 
-  // #1: Validate port is numeric and in valid range
+  // Validate port is numeric and in valid range
   const portNum = Number(port);
   if (!Number.isInteger(portNum) || portNum < 1024 || portNum > 65535) {
     return c.text("Invalid port", 400);
@@ -24,6 +35,8 @@ authRouter.get("/desktop/google", (c) => {
   const callbackURL = new URL("/api/auth/desktop-callback", baseURL);
   callbackURL.searchParams.set("port", String(portNum));
   callbackURL.searchParams.set("state", state);
+  // Attach HMAC signature so desktop-callback can verify this flow was initiated here
+  callbackURL.searchParams.set("sig", signState(state, portNum));
 
   // Render a page that POSTs from the browser — preserves Set-Cookie from better-auth
   const signInURL = new URL("/api/auth/sign-in/social", baseURL).toString();
@@ -56,18 +69,25 @@ authRouter.get("/desktop-callback", (c) => {
   const sessionToken = getCookie(c, "better-auth.session_token");
   const port = c.req.query("port");
   const state = c.req.query("state");
+  const sig = c.req.query("sig");
 
   if (!sessionToken) {
     return c.text("Authentication failed — no session token", 401);
   }
-  if (!port || !state) {
-    return c.text("Missing port or state parameter", 400);
+  if (!port || !state || !sig) {
+    return c.text("Missing required parameters", 400);
   }
 
-  // #1: Validate port is numeric and in valid range
+  // Validate port is numeric and in valid range
   const portNum = Number(port);
   if (!Number.isInteger(portNum) || portNum < 1024 || portNum > 65535) {
     return c.text("Invalid port", 400);
+  }
+
+  // Verify HMAC signature — ensures this callback was initiated by /desktop/google
+  const expectedSig = signState(state, portNum);
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
+    return c.text("Invalid signature", 403);
   }
 
   // Build redirect URL safely — only allow localhost
