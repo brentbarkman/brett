@@ -1,16 +1,9 @@
 import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, shell } from "electron";
+import http from "http";
+import crypto from "crypto";
 import path from "path";
 import { pathToFileURL } from "url";
 import Store from "electron-store";
-
-// Register as handler for brett:// deep links
-if (process.defaultApp) {
-  if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient("brett", process.execPath, [path.resolve(process.argv[1])]);
-  }
-} else {
-  app.setAsDefaultProtocolClient("brett");
-}
 
 const store = new Store<{ encryptedToken?: string }>();
 
@@ -46,9 +39,79 @@ ipcMain.handle("clear-token", () => {
   store.delete("encryptedToken");
 });
 
-// Open URL in system browser (for OAuth)
-ipcMain.handle("open-external", (_event, url: string) => {
-  shell.openExternal(url);
+// Start Google OAuth via system browser with localhost callback
+ipcMain.handle("start-google-oauth", (_event, apiURL: string) => {
+  return new Promise<string>((resolve, reject) => {
+    const state = crypto.randomBytes(32).toString("hex");
+    let settled = false;
+
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url!, `http://127.0.0.1`);
+
+      if (url.pathname !== "/callback") {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+
+      const token = url.searchParams.get("token");
+      const returnedState = url.searchParams.get("state");
+
+      if (returnedState !== state) {
+        res.writeHead(403);
+        res.end("Invalid state parameter. Please try again.");
+        return;
+      }
+
+      if (!token) {
+        res.writeHead(400);
+        res.end("No token received. Please try again.");
+        return;
+      }
+
+      // Send a response that closes the browser tab
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(`
+        <html><body style="font-family: system-ui; text-align: center; padding: 60px;">
+          <h2>Sign-in successful!</h2>
+          <p>You can close this tab and return to Brett.</p>
+          <script>window.close();</script>
+        </body></html>
+      `);
+
+      settled = true;
+      server.close();
+
+      // Focus the app window
+      const win = BrowserWindow.getAllWindows()[0];
+      if (win) win.focus();
+
+      resolve(token);
+    });
+
+    // Listen on random port on localhost only
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        reject(new Error("Failed to start OAuth callback server"));
+        return;
+      }
+
+      const port = address.port;
+      const callbackURL = `${apiURL}/api/auth/desktop-callback?port=${port}&state=${state}`;
+      const oauthURL = `${apiURL}/api/auth/sign-in/social?provider=google&callbackURL=${encodeURIComponent(callbackURL)}`;
+      shell.openExternal(oauthURL);
+    });
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        server.close();
+        reject(new Error("OAuth timed out"));
+      }
+    }, 5 * 60 * 1000);
+  });
 });
 
 // Register custom app:// protocol for production
@@ -82,38 +145,6 @@ function createWindow() {
   }
 
   win.webContents.openDevTools();
-}
-
-// Handle brett:// deep link (macOS)
-app.on("open-url", (event, url) => {
-  event.preventDefault();
-  handleDeepLink(url);
-});
-
-function handleDeepLink(url: string) {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname === "auth" && parsed.pathname === "/callback") {
-      const token = parsed.searchParams.get("token");
-      if (token) {
-        // Store the token
-        if (safeStorage.isEncryptionAvailable()) {
-          const encrypted = safeStorage.encryptString(token);
-          store.set("encryptedToken", encrypted.toString("base64"));
-        } else {
-          store.set("encryptedToken", token);
-        }
-        // Notify the renderer to refresh session
-        const win = BrowserWindow.getAllWindows()[0];
-        if (win) {
-          win.webContents.send("auth-callback", token);
-          win.focus();
-        }
-      }
-    }
-  } catch {
-    // Invalid URL, ignore
-  }
 }
 
 app.whenReady().then(() => {

@@ -2,10 +2,9 @@ import React, {
   createContext,
   useContext,
   useCallback,
-  useEffect,
 } from "react";
 import type { AuthUser } from "@brett/types";
-import { authClient, clearStoredToken, openGoogleOAuthInBrowser, onAuthCallback } from "./auth-client";
+import { authClient, clearStoredToken, startGoogleOAuth } from "./auth-client";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -60,15 +59,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signInWithGoogle = useCallback(async () => {
-    // Open Google OAuth in system browser for passkey/biometric support
-    openGoogleOAuthInBrowser();
-  }, []);
-
-  // Listen for deep link auth callback from system browser OAuth
-  useEffect(() => {
-    onAuthCallback(() => {
-      refetch();
-    });
+    await startGoogleOAuth();
+    refetch();
   }, [refetch]);
 
   const signOut = useCallback(async () => {
