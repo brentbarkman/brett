@@ -5,11 +5,16 @@ import { users } from "./routes/users.js";
 
 export const app = new Hono();
 
-// CORS — allow desktop dev server and Electron production
+// #9: CORS — only allow localhost origin in local dev
+const isLocal = !process.env.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL.includes("localhost");
+const allowedOrigins = isLocal
+  ? ["http://localhost:5173", "app://."]
+  : ["app://."];
+
 app.use(
   "*",
   cors({
-    origin: ["http://localhost:5173", "app://."],
+    origin: allowedOrigins,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,

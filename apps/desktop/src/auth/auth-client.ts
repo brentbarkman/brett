@@ -7,7 +7,7 @@ const electronAPI = (window as any).electronAPI as
       storeToken: (token: string) => Promise<void>;
       getToken: () => Promise<string | null>;
       clearToken: () => Promise<void>;
-      startGoogleOAuth: (apiURL: string) => Promise<string>;
+      startGoogleOAuth: () => Promise<string>;
     }
   | undefined;
 
@@ -52,7 +52,7 @@ export async function clearStoredToken(): Promise<void> {
 // Start Google OAuth via system browser with secure localhost callback
 export async function startGoogleOAuth(): Promise<void> {
   if (!electronAPI) return;
-  const token = await electronAPI.startGoogleOAuth(API_URL);
+  const token = await electronAPI.startGoogleOAuth();
   currentToken = token;
   await electronAPI.storeToken(token);
 }

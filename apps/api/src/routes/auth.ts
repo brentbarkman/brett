@@ -13,15 +13,24 @@ authRouter.get("/desktop/google", async (c) => {
     return c.text("Missing port or state parameter", 400);
   }
 
+  // #1: Validate port is numeric and in valid range
+  const portNum = Number(port);
+  if (!Number.isInteger(portNum) || portNum < 1024 || portNum > 65535) {
+    return c.text("Invalid port", 400);
+  }
+
   const callbackURL = new URL("/api/auth/desktop-callback", c.req.url);
-  callbackURL.searchParams.set("port", port);
+  callbackURL.searchParams.set("port", String(portNum));
   callbackURL.searchParams.set("state", state);
 
-  // Internally POST to better-auth's social sign-in with the real request context
+  // #7: Internally POST to better-auth with explicit Content-Type
   const url = new URL("/api/auth/sign-in/social", c.req.url);
+  const headers = new Headers(c.req.raw.headers);
+  headers.set("Content-Type", "application/json");
+
   const internalReq = new Request(url.toString(), {
     method: "POST",
-    headers: c.req.raw.headers,
+    headers,
     body: JSON.stringify({
       provider: "google",
       callbackURL: callbackURL.toString(),
@@ -54,9 +63,17 @@ authRouter.get("/desktop-callback", (c) => {
     return c.text("Missing port or state parameter", 400);
   }
 
-  // Only allow redirect to localhost
-  const redirectURL = `http://127.0.0.1:${encodeURIComponent(port)}/callback?token=${encodeURIComponent(sessionToken)}&state=${encodeURIComponent(state)}`;
-  return c.redirect(redirectURL);
+  // #1: Validate port is numeric and in valid range
+  const portNum = Number(port);
+  if (!Number.isInteger(portNum) || portNum < 1024 || portNum > 65535) {
+    return c.text("Invalid port", 400);
+  }
+
+  // Build redirect URL safely — only allow localhost
+  const redirectURL = new URL(`http://127.0.0.1:${portNum}/callback`);
+  redirectURL.searchParams.set("token", sessionToken);
+  redirectURL.searchParams.set("state", state);
+  return c.redirect(redirectURL.toString());
 });
 
 // Mount better-auth handler — handles all /api/auth/* routes

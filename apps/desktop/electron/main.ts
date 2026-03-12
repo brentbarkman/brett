@@ -5,16 +5,33 @@ import path from "path";
 import { pathToFileURL } from "url";
 import Store from "electron-store";
 
+// #3: Load API URL from main process config — never accept from renderer
+// In dev, read from env. In production, read from build-time config file.
+function getApiURL(): string {
+  if (process.env.VITE_API_URL) return process.env.VITE_API_URL;
+  try {
+    const configPath = path.join(__dirname, "api-config.json");
+    const config = JSON.parse(require("fs").readFileSync(configPath, "utf-8"));
+    return config.apiURL;
+  } catch {
+    return "http://localhost:3001";
+  }
+}
+const API_URL = getApiURL();
+
 const store = new Store<{ encryptedToken?: string }>();
+const isDev = process.env.NODE_ENV === "development";
 
 // Token storage IPC handlers
 ipcMain.handle("store-token", (_event, token: string) => {
   if (safeStorage.isEncryptionAvailable()) {
     const encrypted = safeStorage.encryptString(token);
     store.set("encryptedToken", encrypted.toString("base64"));
-  } else {
-    // Fallback: store unencrypted (dev only)
+  } else if (isDev) {
+    // #6: Only allow unencrypted storage in dev
     store.set("encryptedToken", token);
+  } else {
+    throw new Error("Secure storage is not available");
   }
 });
 
@@ -32,18 +49,38 @@ ipcMain.handle("get-token", () => {
     }
   }
 
-  return stored;
+  if (isDev) return stored;
+
+  // #6: Production without encryption — clear stale unencrypted data
+  store.delete("encryptedToken");
+  return null;
 });
 
 ipcMain.handle("clear-token", () => {
   store.delete("encryptedToken");
 });
 
+// #5: Track in-progress OAuth to prevent concurrent flows
+let oauthInProgress = false;
+
 // Start Google OAuth via system browser with localhost callback
-ipcMain.handle("start-google-oauth", (_event, apiURL: string) => {
+// #3: API URL is read from main process env, not from renderer
+ipcMain.handle("start-google-oauth", () => {
+  if (oauthInProgress) {
+    throw new Error("OAuth flow already in progress");
+  }
+  oauthInProgress = true;
+
   return new Promise<string>((resolve, reject) => {
     const state = crypto.randomBytes(32).toString("hex");
     let settled = false;
+
+    function settle() {
+      if (!settled) {
+        settled = true;
+        oauthInProgress = false;
+      }
+    }
 
     const server = http.createServer((req, res) => {
       const url = new URL(req.url!, `http://127.0.0.1`);
@@ -70,7 +107,11 @@ ipcMain.handle("start-google-oauth", (_event, apiURL: string) => {
       }
 
       // Send a response that closes the browser tab
-      res.writeHead(200, { "Content-Type": "text/html" });
+      // No external resources loaded — prevents token leaking via Referer
+      res.writeHead(200, {
+        "Content-Type": "text/html",
+        "Referrer-Policy": "no-referrer",
+      });
       res.end(`
         <html><body style="font-family: system-ui; text-align: center; padding: 60px;">
           <h2>Sign-in successful!</h2>
@@ -79,7 +120,7 @@ ipcMain.handle("start-google-oauth", (_event, apiURL: string) => {
         </body></html>
       `);
 
-      settled = true;
+      settle();
       server.close();
 
       // Focus the app window
@@ -93,23 +134,24 @@ ipcMain.handle("start-google-oauth", (_event, apiURL: string) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       if (!address || typeof address === "string") {
+        settle();
         reject(new Error("Failed to start OAuth callback server"));
         return;
       }
 
       const port = address.port;
-      const oauthURL = `${apiURL}/api/auth/desktop/google?port=${port}&state=${state}`;
+      const oauthURL = `${API_URL}/api/auth/desktop/google?port=${port}&state=${state}`;
       shell.openExternal(oauthURL);
     });
 
-    // Timeout after 5 minutes
+    // #10: Timeout after 2 minutes (reduced from 5)
     setTimeout(() => {
       if (!settled) {
-        settled = true;
+        settle();
         server.close();
         reject(new Error("OAuth timed out"));
       }
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000);
   });
 });
 
@@ -126,6 +168,9 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+// #4: Pre-compute renderer root for path traversal check
+const rendererRoot = path.resolve(__dirname, "../renderer");
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
@@ -137,13 +182,13 @@ function createWindow() {
     },
   });
 
-  if (process.env.NODE_ENV === "development") {
+  if (isDev) {
     win.loadURL("http://localhost:5173");
+    // #8: Only open DevTools in development
+    win.webContents.openDevTools();
   } else {
     win.loadURL("app://./index.html");
   }
-
-  win.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
@@ -152,7 +197,13 @@ app.whenReady().then(() => {
     const url = new URL(request.url);
     let filePath = url.pathname;
     if (filePath === "/" || filePath === "") filePath = "/index.html";
-    const fullPath = path.join(__dirname, "../renderer", filePath);
+
+    // #4: Prevent path traversal — resolve and verify within renderer root
+    const fullPath = path.resolve(rendererRoot, filePath.replace(/^\//, ""));
+    if (!fullPath.startsWith(rendererRoot + path.sep) && fullPath !== rendererRoot) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
     return net.fetch(pathToFileURL(fullPath).toString());
   });
 

@@ -3,6 +3,8 @@ import { bearer } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma.js";
 
+const isLocal = !process.env.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL.includes("localhost");
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: {
@@ -15,8 +17,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [bearer()],
-  trustedOrigins: [
-    "http://localhost:5173",
-    "app://.",
-  ],
+  trustedOrigins: isLocal
+    ? ["http://localhost:5173", "app://."]
+    : ["app://."],
 });
