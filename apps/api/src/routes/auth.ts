@@ -4,6 +4,34 @@ import { auth } from "../lib/auth.js";
 
 const authRouter = new Hono();
 
+// Desktop OAuth start — initiates Google OAuth via GET (browser-friendly)
+authRouter.get("/desktop/google", async (c) => {
+  const port = c.req.query("port");
+  const state = c.req.query("state");
+
+  if (!port || !state) {
+    return c.text("Missing port or state parameter", 400);
+  }
+
+  // Call better-auth's social sign-in internally with callback pointing to our desktop-callback
+  const callbackURL = new URL("/api/auth/desktop-callback", c.req.url);
+  callbackURL.searchParams.set("port", port);
+  callbackURL.searchParams.set("state", state);
+
+  const response = await auth.api.signInSocial({
+    body: {
+      provider: "google",
+      callbackURL: callbackURL.toString(),
+    },
+  });
+
+  if (response?.url) {
+    return c.redirect(response.url);
+  }
+
+  return c.text("Failed to initiate Google sign-in", 500);
+});
+
 // Desktop OAuth callback — extracts session token and redirects to local Electron server
 authRouter.get("/desktop-callback", (c) => {
   const sessionToken = getCookie(c, "better-auth.session_token");

@@ -98,8 +98,7 @@ ipcMain.handle("start-google-oauth", (_event, apiURL: string) => {
       }
 
       const port = address.port;
-      const callbackURL = `${apiURL}/api/auth/desktop-callback?port=${port}&state=${state}`;
-      const oauthURL = `${apiURL}/api/auth/sign-in/social?provider=google&callbackURL=${encodeURIComponent(callbackURL)}`;
+      const oauthURL = `${apiURL}/api/auth/desktop/google?port=${port}&state=${state}`;
       shell.openExternal(oauthURL);
     });
 
