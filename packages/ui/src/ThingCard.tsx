@@ -1,23 +1,40 @@
-import React from "react";
-import { Zap, Search, Globe, Twitter, Calendar } from "lucide-react";
+import React, { useState, useCallback } from "react";
+import { Zap, BookOpen, Calendar, Check, RotateCcw } from "lucide-react";
 import type { Thing } from "@brett/types";
 
 interface ThingCardProps {
   thing: Thing;
   onClick: () => void;
+  onToggle?: (id: string) => void;
 }
 
-export function ThingCard({ thing, onClick }: ThingCardProps) {
+export function ThingCard({ thing, onClick, onToggle }: ThingCardProps) {
+  const [completing, setCompleting] = useState(false);
+
+  const handleToggleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!onToggle || completing) return;
+
+      if (!thing.isCompleted) {
+        setCompleting(true);
+        setTimeout(() => {
+          onToggle(thing.id);
+          setCompleting(false);
+        }, 600);
+      } else {
+        onToggle(thing.id);
+      }
+    },
+    [onToggle, thing.id, thing.isCompleted, completing],
+  );
+
   const getIcon = () => {
     switch (thing.type) {
       case "task":
         return <Zap size={16} className="text-blue-500" />;
-      case "scout":
-        return <Search size={16} className="text-purple-500" />;
-      case "saved_web":
-        return <Globe size={16} className="text-white/50" />;
-      case "saved_tweet":
-        return <Twitter size={16} className="text-sky-400" />;
+      case "content":
+        return <BookOpen size={16} className="text-amber-400" />;
     }
   };
 
@@ -37,18 +54,68 @@ export function ThingCard({ thing, onClick }: ThingCardProps) {
       onClick={onClick}
       className={`
         group relative flex items-center gap-3 p-3 rounded-lg cursor-pointer
-        bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10
-        transition-colors duration-150
-        ${thing.isCompleted ? "opacity-50" : "opacity-100"}
+        border transition-all duration-200
+        ${completing
+          ? "bg-green-500/[0.03] border-green-500/15"
+          : "bg-white/5 hover:bg-white/10 border-white/5 hover:border-white/10"
+        }
+        ${thing.isCompleted && !completing ? "opacity-50" : "opacity-100"}
       `}
     >
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-black/20 flex items-center justify-center">
-        {getIcon()}
-      </div>
+      {/* Clickable toggle icon */}
+      <button
+        onClick={handleToggleClick}
+        className={`
+          toggle-icon relative flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+          transition-all duration-200 outline-none
+          ${completing
+            ? "bg-green-500/20 border-2 border-green-500/50"
+            : thing.isCompleted
+              ? "bg-black/20 border border-white/10 hover:border-white/30 hover:bg-white/10"
+              : "bg-black/20 border border-white/10 hover:border-green-500/40 hover:bg-green-500/10"
+          }
+        `}
+        style={completing ? {
+          animation: "togglePulse 600ms cubic-bezier(0.16, 1, 0.3, 1)",
+        } : undefined}
+      >
+        {/* Default type icon — hidden via CSS when .toggle-icon:hover */}
+        <span className="transition-all duration-150">
+          {!completing && getIcon()}
+        </span>
+
+        {/* Check overlay on hover (uncompleted) / undo overlay (completed) */}
+        {!completing && !thing.isCompleted && (
+          <Check
+            size={16}
+            className="check-overlay absolute text-green-400 transition-all duration-150"
+          />
+        )}
+        {!completing && thing.isCompleted && (
+          <RotateCcw
+            size={14}
+            className="check-overlay absolute text-white/50 transition-all duration-150"
+          />
+        )}
+
+        {/* Check icon when completing */}
+        {completing && (
+          <Check
+            size={18}
+            strokeWidth={2.5}
+            className="absolute text-green-400"
+            style={{ animation: "checkPop 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
+          />
+        )}
+      </button>
 
       <div className="flex-1 min-w-0">
         <h4
-          className={`text-sm font-medium text-white truncate ${thing.isCompleted ? "line-through text-white/50" : ""}`}
+          className={`text-sm font-medium truncate transition-all duration-300 ${
+            thing.isCompleted || completing
+              ? "line-through text-white/40"
+              : "text-white"
+          }`}
         >
           {thing.title}
         </h4>
@@ -77,6 +144,31 @@ export function ThingCard({ thing, onClick }: ThingCardProps) {
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes togglePulse {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.3); }
+          30% { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+          100% { transform: scale(1.05); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        @keyframes checkPop {
+          0% { opacity: 0; transform: scale(0) rotate(-45deg); }
+          50% { opacity: 1; transform: scale(1.2) rotate(0deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        .check-overlay {
+          opacity: 0;
+          transform: scale(0.75);
+        }
+        .toggle-icon:hover .check-overlay {
+          opacity: 1;
+          transform: scale(1);
+        }
+        .toggle-icon:hover > span:first-child {
+          opacity: 0;
+          transform: scale(0.75);
+        }
+      `}</style>
     </div>
   );
 }

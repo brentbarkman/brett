@@ -6,9 +6,10 @@ interface DetailPanelProps {
   isOpen: boolean;
   item: Thing | CalendarEvent | null;
   onClose: () => void;
+  onToggle?: (id: string) => void;
 }
 
-export function DetailPanel({ isOpen, item, onClose }: DetailPanelProps) {
+export function DetailPanel({ isOpen, item, onClose, onToggle }: DetailPanelProps) {
   if (!item) return null;
   const isTask = "type" in item;
 
@@ -78,9 +79,12 @@ export function DetailPanel({ isOpen, item, onClose }: DetailPanelProps) {
               </div>
             )}
 
-            <button className="w-full mt-4 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg transition-colors font-medium text-sm border border-white/10">
+            <button
+              onClick={() => onToggle?.(item.id)}
+              className="w-full mt-4 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg transition-colors font-medium text-sm border border-white/10"
+            >
               <CheckCircle size={16} />
-              Mark Complete
+              {(item as Thing).isCompleted ? "Mark Incomplete" : "Mark Complete"}
             </button>
           </div>
         )}

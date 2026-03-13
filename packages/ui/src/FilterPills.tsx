@@ -5,7 +5,7 @@ interface FilterPillsProps {
   onSelectFilter: (filter: string) => void;
 }
 
-const FILTERS = ["All", "Tasks", "Notes", "Scout", "Saved", "Reading"];
+const FILTERS = ["All", "Tasks", "Content"];
 
 export function FilterPills({ activeFilter, onSelectFilter }: FilterPillsProps) {
   return (

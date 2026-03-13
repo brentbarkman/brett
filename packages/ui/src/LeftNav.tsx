@@ -1,5 +1,5 @@
 import React from "react";
-import { Inbox, Calendar, Search, Plus } from "lucide-react";
+import { Inbox, Calendar, Search } from "lucide-react";
 import type { NavList } from "@brett/types";
 
 interface LeftNavUser {
@@ -12,9 +12,11 @@ interface LeftNavProps {
   isCollapsed: boolean;
   lists: NavList[];
   user?: LeftNavUser | null;
+  /** Number of incomplete things to show on the Today badge */
+  incompleteCount?: number;
 }
 
-export function LeftNav({ isCollapsed, lists, user }: LeftNavProps) {
+export function LeftNav({ isCollapsed, lists, user, incompleteCount }: LeftNavProps) {
   return (
     <nav
       className={`
@@ -39,7 +41,7 @@ export function LeftNav({ isCollapsed, lists, user }: LeftNavProps) {
         <NavItem
           icon={<Calendar size={18} />}
           label="Today"
-          badge={3}
+          badge={incompleteCount}
           isActive
           isCollapsed={isCollapsed}
         />
@@ -86,18 +88,6 @@ export function LeftNav({ isCollapsed, lists, user }: LeftNavProps) {
 
       {/* Footer */}
       <div className="mt-auto pt-4 space-y-2">
-        <button
-          className={`
-          flex items-center gap-2 text-white/50 hover:text-white/90 transition-colors w-full
-          ${isCollapsed ? "justify-center p-2" : "px-2 py-1.5"}
-        `}
-        >
-          <Plus size={18} />
-          {!isCollapsed && (
-            <span className="text-sm font-medium">New list</span>
-          )}
-        </button>
-
         {user && (
           <>
             <div className="h-px bg-white/10 w-full" />
@@ -170,7 +160,7 @@ function NavItem({
           <span className="text-sm font-medium flex-1 text-left truncate">
             {label}
           </span>
-          {badge !== undefined && (
+          {badge !== undefined && badge > 0 && (
             <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
               {badge}
             </span>

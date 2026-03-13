@@ -19,6 +19,8 @@ model User {
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
+  lists         List[]
+  items         Item[]
 }
 
 model Session {
@@ -57,4 +59,44 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// ── Application tables ──
+
+model List {
+  id         String   @id @default(cuid())
+  name       String
+  colorClass String   @default("bg-gray-500")
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items      Item[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, name])
+}
+
+model Item {
+  id               String    @id @default(cuid())
+  type             String    // "task" | "saved_web" | "saved_tweet" | future types
+  status           String    @default("inbox") // "inbox" | "active" | "snoozed" | "done" | "archived"
+  title            String
+  description      String?
+  source           String    @default("Brett")
+  sourceUrl        String?
+  dueDate          DateTime?
+  completedAt      DateTime?
+  snoozedUntil     DateTime?
+  brettObservation String?
+  listId           String
+  list             List      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, listId])
+  @@index([userId, type])
+  @@index([userId, source])
 }

@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authRouter } from "./routes/auth.js";
 import { users } from "./routes/users.js";
+import { things } from "./routes/things.js";
+import { lists } from "./routes/lists.js";
 
 export const app = new Hono();
 
@@ -16,7 +18,7 @@ app.use(
   cors({
     origin: allowedOrigins,
     allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })
 );
@@ -27,3 +29,5 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 // Routes
 app.route("/api/auth", authRouter);
 app.route("/users", users);
+app.route("/things", things);
+app.route("/lists", lists);

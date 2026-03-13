@@ -12,6 +12,17 @@ pnpm electron:dev     # Full Electron dev (Vite + tsc watch + electron concurren
 pnpm electron:build   # Production build with electron-builder
 ```
 
+## Design System
+
+Brett's aesthetic is **dark glass / premium / editorial**. The guiding principle: semi-transparent panels floating over full-bleed wallpaper. Not opaque SaaS chrome.
+
+### Core Principles
+- **Glass over chrome.** Surfaces use `backdrop-filter: blur()` with low-opacity dark backgrounds rather than solid fills. Panels feel like they exist *on top of* the environment, not *as* the environment.
+- **Depth through layering.** Visual hierarchy comes from opacity and blur levels, not borders. Use subtle borders (`1px solid rgba(255,255,255,0.08)`) sparingly as edge definition, not structure.
+- **Restraint.** Dense information without visual noise. No gradients that scream, no shadows that thud. Everything should feel considered.
+- **Typography carries weight.** Use font weight and size contrast to create hierarchy — not color or decoration.
+
+
 ## Architecture
 
 Two TypeScript compilation targets in one app:

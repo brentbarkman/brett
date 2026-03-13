@@ -42,6 +42,11 @@ export const authClient = createAuthClient({
   },
 });
 
+export async function getToken(): Promise<string | null> {
+  await tokenReady;
+  return currentToken;
+}
+
 export async function clearStoredToken(): Promise<void> {
   currentToken = null;
   if (electronAPI) {
