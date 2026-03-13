@@ -14,3 +14,4 @@ ios
 # Firebase service account keys
 *-firebase-adminsdk-*.json
 firebase-service-account.json
+.worktrees/
