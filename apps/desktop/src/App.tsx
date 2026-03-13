@@ -14,7 +14,7 @@ import {
 import type { Thing, CalendarEvent } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import { useThings, useCreateThing, useToggleThing } from "./api/things";
-import { useLists, useCreateList } from "./api/lists";
+import { useLists } from "./api/lists";
 import { mockEvents, mockBriefingItems } from "./data/mockData";
 
 export function App() {
@@ -30,7 +30,6 @@ export function App() {
   const { data: lists = [] } = useLists();
   const createThing = useCreateThing();
   const toggleThing = useToggleThing();
-  const createList = useCreateList();
 
   // Apply dark mode to root
   useEffect(() => {
@@ -63,38 +62,18 @@ export function App() {
     toggleThing.mutate(id);
   };
 
-  const ensureListThenCreate = (
-    input: { type: string; title: string; sourceUrl?: string },
-    listId: string | null,
-  ) => {
-    if (listId) {
-      createThing.mutate(
-        { ...input, listId },
-        { onError: (err) => console.error("Failed to create thing:", err) }
-      );
-    } else {
-      // No lists yet — auto-create "Inbox" then add the thing to it
-      createList.mutate(
-        { name: "Inbox", colorClass: "bg-blue-500" },
-        {
-          onSuccess: (newList) => {
-            createThing.mutate(
-              { ...input, listId: newList.id },
-              { onError: (err) => console.error("Failed to create thing:", err) }
-            );
-          },
-          onError: (err) => console.error("Failed to create list:", err),
-        }
-      );
-    }
-  };
-
   const handleAddTask = (title: string, listId: string | null) => {
-    ensureListThenCreate({ type: "task", title }, listId);
+    createThing.mutate(
+      { type: "task", title, listId: listId ?? undefined },
+      { onError: (err) => console.error("Failed to create thing:", err) }
+    );
   };
 
   const handleAddContent = (url: string, title: string, listId: string | null) => {
-    ensureListThenCreate({ type: "content", title, sourceUrl: url }, listId);
+    createThing.mutate(
+      { type: "content", title, sourceUrl: url, listId: listId ?? undefined },
+      { onError: (err) => console.error("Failed to create thing:", err) }
+    );
   };
 
   // Filter things based on active pill

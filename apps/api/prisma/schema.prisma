@@ -88,8 +88,8 @@ model Item {
   completedAt      DateTime?
   snoozedUntil     DateTime?
   brettObservation String?
-  listId           String
-  list             List      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  listId           String?
+  list             List?     @relation(fields: [listId], references: [id], onDelete: SetNull)
   userId           String
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt        DateTime  @default(now())

@@ -106,14 +106,14 @@ export function computeStalenessDays(
 // ── Transform ──
 
 export function itemToThing(
-  item: ItemRecord & { list: { name: string } },
+  item: ItemRecord & { list: { name: string } | null },
   now: Date = new Date()
 ): Thing {
   return {
     id: item.id,
     type: item.type as ItemType,
     title: item.title,
-    list: item.list.name,
+    list: item.list?.name ?? "Inbox",
     listId: item.listId,
     status: item.status as ItemStatus,
     source: item.source,
@@ -162,8 +162,8 @@ export function validateCreateItem(
     };
   }
 
-  if (!obj.listId || typeof obj.listId !== "string") {
-    return { ok: false, error: "listId is required" };
+  if (obj.listId !== undefined && obj.listId !== null && typeof obj.listId !== "string") {
+    return { ok: false, error: "listId must be a string" };
   }
 
   if (obj.status !== undefined) {
@@ -195,7 +195,7 @@ export function validateCreateItem(
         typeof obj.brettObservation === "string"
           ? obj.brettObservation
           : undefined,
-      listId: obj.listId as string,
+      listId: typeof obj.listId === "string" ? obj.listId : undefined,
       status: (obj.status as ItemStatus) ?? undefined,
     },
   };

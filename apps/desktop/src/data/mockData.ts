@@ -74,7 +74,7 @@ export const mockThings: Thing[] = [
     type: "task",
     title: "Review TSLA earnings call highlights",
     list: "Inbox",
-    listId: "l1",
+    listId: null,
     status: "inbox",
     source: "Brett",
     urgency: "today",

@@ -46,6 +46,22 @@ describe("Things routes", () => {
     expect(body.description).toBe("A description");
   });
 
+  it("POST /things creates a thing without listId (inbox)", async () => {
+    const res = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "task",
+        title: "Inbox task",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.title).toBe("Inbox task");
+    expect(body.list).toBe("Inbox");
+    expect(body.listId).toBeNull();
+    expect(body.status).toBe("inbox");
+  });
+
   it("POST /things rejects missing title", async () => {
     const res = await authRequest("/things", token, {
       method: "POST",
@@ -122,6 +138,22 @@ describe("Things routes", () => {
     const body = (await res.json()) as any;
     expect(body.title).toBe("Updated title");
     expect(body.status).toBe("active");
+  });
+
+  it("PATCH /things/:id can move thing to inbox (null listId)", async () => {
+    // Get a thing that has a list
+    const listRes = await authRequest("/things", token);
+    const things = (await listRes.json()) as any[];
+    const withList = things.find((t: any) => t.listId !== null);
+
+    const res = await authRequest(`/things/${withList.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({ listId: null }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.listId).toBeNull();
+    expect(body.list).toBe("Inbox");
   });
 
   it("PATCH /things/:id/toggle toggles completion", async () => {

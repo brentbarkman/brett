@@ -53,7 +53,7 @@ export interface ItemRecord {
   completedAt: Date | null;
   snoozedUntil: Date | null;
   brettObservation: string | null;
-  listId: string;
+  listId: string | null;
   userId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -65,7 +65,7 @@ export interface Thing {
   type: ItemType;
   title: string;
   list: string;
-  listId: string;
+  listId: string | null;
   status: ItemStatus;
   source: string;
   sourceUrl?: string;
@@ -85,7 +85,7 @@ export interface CreateItemInput {
   sourceUrl?: string;
   dueDate?: string; // ISO string
   brettObservation?: string;
-  listId: string;
+  listId?: string;
   status?: ItemStatus;
 }
 
@@ -96,7 +96,7 @@ export interface UpdateItemInput {
   sourceUrl?: string | null;
   dueDate?: string | null; // ISO string
   brettObservation?: string | null;
-  listId?: string;
+  listId?: string | null;
   status?: ItemStatus;
   snoozedUntil?: string | null; // ISO string
 }

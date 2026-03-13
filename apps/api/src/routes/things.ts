@@ -53,12 +53,14 @@ things.post("/", async (c) => {
 
   const { data } = validation;
 
-  // Verify the list belongs to the user
-  const list = await prisma.list.findFirst({
-    where: { id: data.listId, userId: user.id },
-  });
-  if (!list) {
-    return c.json({ error: "List not found" }, 400);
+  // If listId provided, verify the list belongs to the user
+  if (data.listId) {
+    const list = await prisma.list.findFirst({
+      where: { id: data.listId, userId: user.id },
+    });
+    if (!list) {
+      return c.json({ error: "List not found" }, 400);
+    }
   }
 
   const item = await prisma.item.create({
@@ -71,7 +73,7 @@ things.post("/", async (c) => {
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
       brettObservation: data.brettObservation,
       status: data.status ?? "inbox",
-      listId: data.listId,
+      listId: data.listId ?? null,
       userId: user.id,
     },
     include: { list: { select: { name: true } } },
