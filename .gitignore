@@ -9,6 +9,7 @@ build
 .expo
 android
 ios
+.DS_STORE
 
 # Firebase service account keys
 *-firebase-adminsdk-*.json
