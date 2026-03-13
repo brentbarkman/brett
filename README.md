@@ -72,6 +72,21 @@ pnpm db:migrate          # run after editing prisma/schema.prisma
 pnpm db:down             # stop Postgres when done
 ```
 
+## Working in a Git Worktree
+
+Each git worktree needs its own setup since `node_modules` aren't shared (due to `node-linker=hoisted`). The Postgres Docker container _is_ shared across worktrees.
+
+```bash
+cd <your-worktree-directory>
+pnpm install
+cp apps/api/.env.example apps/api/.env
+cp apps/desktop/.env.example apps/desktop/.env
+# Edit apps/api/.env — at minimum set BETTER_AUTH_SECRET (openssl rand -base64 32)
+pnpm dev:full
+```
+
+> **Note:** If Postgres is already running from another worktree, `dev:full` detects it and skips startup. Migrations are idempotent.
+
 ## Project Structure
 
 ```
