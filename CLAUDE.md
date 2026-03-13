@@ -100,6 +100,12 @@ Before starting, ask: **BIG or SMALL change?**
 
 For each issue: description → why it matters → 2-3 options (with effort/risk/impact) → recommendation → wait for approval.
 
+## UX & Design
+
+**Before making any frontend/UI changes, read [`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md).**
+
+It contains the full design system: surface patterns, color system, typography, spacing, animation rules, component patterns, and anti-patterns. All UI work must follow it.
+
 ## Rules
 - Always typecheck after changes
 - Write failing test before fixing a production bug
