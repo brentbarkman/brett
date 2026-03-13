@@ -10,8 +10,9 @@ build
 android
 ios
 .DS_STORE
+.superpowers/
 
 # Firebase service account keys
 *-firebase-adminsdk-*.json
 firebase-service-account.json
-.worktrees/
+.claude/worktrees/
