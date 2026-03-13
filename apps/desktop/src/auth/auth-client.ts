@@ -11,13 +11,18 @@ const electronAPI = (window as any).electronAPI as
     }
   | undefined;
 
+// localStorage key scoped by API URL so multiple worktrees don't collide
+const BROWSER_TOKEN_KEY = `brett_token_${API_URL}`;
+
 // In-memory token for the current session
 let currentToken: string | null = null;
 
-// Load token from secure storage on startup
+// Load token from secure storage (Electron) or localStorage (browser) on startup
 const tokenReady = (async () => {
   if (electronAPI) {
     currentToken = await electronAPI.getToken();
+  } else {
+    currentToken = localStorage.getItem(BROWSER_TOKEN_KEY);
   }
 })();
 
@@ -36,7 +41,11 @@ export const authClient = createAuthClient({
       const body = context.data as Record<string, unknown> | null;
       if (body && typeof body === "object" && "token" in body && typeof body.token === "string") {
         currentToken = body.token;
-        electronAPI?.storeToken(body.token);
+        if (electronAPI) {
+          electronAPI.storeToken(body.token);
+        } else {
+          localStorage.setItem(BROWSER_TOKEN_KEY, body.token);
+        }
       }
     },
   },
@@ -51,6 +60,8 @@ export async function clearStoredToken(): Promise<void> {
   currentToken = null;
   if (electronAPI) {
     await electronAPI.clearToken();
+  } else {
+    localStorage.removeItem(BROWSER_TOKEN_KEY);
   }
 }
 
