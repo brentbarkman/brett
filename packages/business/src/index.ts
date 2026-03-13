@@ -103,6 +103,10 @@ export function computeStalenessDays(
   return days >= 2 ? days : undefined;
 }
 
+// ── Constants ──
+
+export const DEFAULT_LIST_NAME = "Inbox";
+
 // ── Transform ──
 
 export function itemToThing(
@@ -113,7 +117,7 @@ export function itemToThing(
     id: item.id,
     type: item.type as ItemType,
     title: item.title,
-    list: item.list?.name ?? "Inbox",
+    list: item.list?.name ?? DEFAULT_LIST_NAME,
     listId: item.listId,
     status: item.status as ItemStatus,
     source: item.source,

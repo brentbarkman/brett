@@ -1,4 +1,5 @@
 import type { Thing, CalendarEvent, NavList } from "@brett/types";
+import { DEFAULT_LIST_NAME } from "@brett/business";
 
 export const mockLists: NavList[] = [
   { id: "l1", name: "Work", count: 14, colorClass: "bg-blue-500" },
@@ -73,7 +74,7 @@ export const mockThings: Thing[] = [
     id: "t5",
     type: "task",
     title: "Review TSLA earnings call highlights",
-    list: "Inbox",
+    list: DEFAULT_LIST_NAME,
     listId: null,
     status: "inbox",
     source: "Brett",

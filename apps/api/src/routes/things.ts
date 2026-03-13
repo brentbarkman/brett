@@ -5,6 +5,13 @@ import { itemToThing, validateCreateItem } from "@brett/business";
 
 const things = new Hono<AuthEnv>();
 
+async function verifyListOwnership(listId: string, userId: string) {
+  const list = await prisma.list.findFirst({
+    where: { id: listId, userId },
+  });
+  return !!list;
+}
+
 // All routes require auth
 things.use("*", authMiddleware);
 
@@ -54,13 +61,8 @@ things.post("/", async (c) => {
   const { data } = validation;
 
   // If listId provided, verify the list belongs to the user
-  if (data.listId) {
-    const list = await prisma.list.findFirst({
-      where: { id: data.listId, userId: user.id },
-    });
-    if (!list) {
-      return c.json({ error: "List not found" }, 400);
-    }
+  if (data.listId && !(await verifyListOwnership(data.listId, user.id))) {
+    return c.json({ error: "List not found" }, 400);
   }
 
   const item = await prisma.item.create({
@@ -93,11 +95,8 @@ things.patch("/:id", async (c) => {
   if (!existing) return c.json({ error: "Not found" }, 404);
 
   // If changing list, verify ownership
-  if (body.listId) {
-    const list = await prisma.list.findFirst({
-      where: { id: body.listId, userId: user.id },
-    });
-    if (!list) return c.json({ error: "List not found" }, 400);
+  if (body.listId && !(await verifyListOwnership(body.listId, user.id))) {
+    return c.json({ error: "List not found" }, 400);
   }
 
   const updateData: Record<string, unknown> = {};

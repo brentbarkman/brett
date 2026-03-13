@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { createTestUser, authRequest } from "./helpers.js";
 import { app } from "../app.js";
+import { DEFAULT_LIST_NAME } from "@brett/business";
 
 describe("Things routes", () => {
   let token: string;
@@ -57,7 +58,7 @@ describe("Things routes", () => {
     expect(res.status).toBe(201);
     const body = (await res.json()) as any;
     expect(body.title).toBe("Inbox task");
-    expect(body.list).toBe("Inbox");
+    expect(body.list).toBe(DEFAULT_LIST_NAME);
     expect(body.listId).toBeNull();
     expect(body.status).toBe("inbox");
   });
@@ -153,7 +154,7 @@ describe("Things routes", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.listId).toBeNull();
-    expect(body.list).toBe("Inbox");
+    expect(body.list).toBe(DEFAULT_LIST_NAME);
   });
 
   it("PATCH /things/:id/toggle toggles completion", async () => {
