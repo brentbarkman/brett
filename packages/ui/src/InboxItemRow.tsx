@@ -8,11 +8,11 @@ interface InboxItemRowProps {
   isFocused: boolean;
   isSelected: boolean;
   isAnimatingOut: boolean;
+  isNew?: boolean;
   relativeAge: string;
   selectedIds: Set<string>;
   onClick: () => void;
   onSelect: () => void;
-  onAnimationEnd: () => void;
 }
 
 export function InboxItemRow({
@@ -20,11 +20,11 @@ export function InboxItemRow({
   isFocused,
   isSelected,
   isAnimatingOut,
+  isNew,
   relativeAge,
   selectedIds,
   onClick,
   onSelect,
-  onAnimationEnd,
 }: InboxItemRowProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
@@ -42,11 +42,17 @@ export function InboxItemRow({
       <BookOpen size={14} className="text-amber-400" />
     );
 
+  const animationStyle: React.CSSProperties | undefined = isAnimatingOut
+    ? {
+        animation:
+          "inboxSlideOut 220ms cubic-bezier(0.2, 0, 0.6, 1) forwards",
+      }
+    : undefined;
+
   return (
     <div
       ref={setNodeRef}
       onClick={onClick}
-      onAnimationEnd={isAnimatingOut ? onAnimationEnd : undefined}
       {...listeners}
       {...attributes}
       className={`
@@ -60,14 +66,7 @@ export function InboxItemRow({
             : "border border-transparent hover:bg-white/[0.06]"
         }
       `}
-      style={
-        isAnimatingOut
-          ? {
-              animation:
-                "inboxSlideOut 300ms cubic-bezier(0.4, 0, 1, 1) forwards",
-            }
-          : undefined
-      }
+      style={animationStyle}
     >
       {/* Checkbox */}
       <button

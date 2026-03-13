@@ -42,6 +42,7 @@ export function useCreateThing() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
       qc.invalidateQueries({ queryKey: ["lists"] });
     },
   });
@@ -58,6 +59,7 @@ export function useUpdateThing() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
     },
   });
 }
@@ -70,6 +72,7 @@ export function useToggleThing() {
       apiFetch<Thing>(`/things/${id}/toggle`, { method: "PATCH" }),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
     },
   });
 }
@@ -121,6 +124,7 @@ export function useDeleteThing() {
       apiFetch(`/things/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
       qc.invalidateQueries({ queryKey: ["lists"] });
     },
   });

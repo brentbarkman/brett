@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Plus, Check, ChevronDown, ChevronRight } from "lucide-react";
 import type { Thing, NavList } from "@brett/types";
 import { computeRelativeAge } from "@brett/business";
@@ -47,6 +47,18 @@ export function InboxView({
   const [quickAddFocused, setQuickAddFocused] = useState(false);
   const now = useRef(new Date());
 
+  // Snapshots of items being animated out (persist through refetches)
+  const animatingOutItemsRef = useRef<Map<string, Thing>>(new Map());
+
+  // Track previous thing IDs for enter animation
+  const isInitialLoadRef = useRef(true);
+  const prevThingIdsRef = useRef<Set<string>>(new Set());
+
+  // Auto-focus quick-add input on mount
+  useEffect(() => {
+    quickAddRef.current?.focus();
+  }, []);
+
   // Update "now" every minute for relative age
   useEffect(() => {
     const interval = setInterval(() => {
@@ -55,17 +67,59 @@ export function InboxView({
     return () => clearInterval(interval);
   }, []);
 
-  // Visible items (excluding animating out)
-  const visibleThings = things.filter((t) => !animatingOutIds.has(t.id));
+  // Build display list: current things + snapshotted animating-out items removed by refetch
+  const displayThings = useMemo(() => {
+    const currentIds = new Set(things.map((t) => t.id));
+    const result = [...things];
+    for (const [id, item] of animatingOutItemsRef.current) {
+      if (!currentIds.has(id)) {
+        result.push(item);
+      }
+    }
+    return result;
+  }, [things]);
+
+  // Active items (for focus/selection) — excludes animating out
+  const activeThings = useMemo(
+    () => displayThings.filter((t) => !animatingOutIds.has(t.id)),
+    [displayThings, animatingOutIds]
+  );
+
+  // Index map for O(1) focus lookups
+  const activeIndexMap = useMemo(
+    () => new Map(activeThings.map((t, i) => [t.id, i])),
+    [activeThings]
+  );
+
+  // New item IDs for enter animation (skip initial load)
+  const newItemIds = useMemo(() => {
+    if (isInitialLoadRef.current) return new Set<string>();
+    const ids = new Set<string>();
+    for (const t of things) {
+      if (!prevThingIdsRef.current.has(t.id)) {
+        ids.add(t.id);
+      }
+    }
+    return ids;
+  }, [things]);
+
+  // Update previous IDs after render
+  useEffect(() => {
+    // Only clear initial-load flag once we've actually received data
+    if (things.length > 0) {
+      isInitialLoadRef.current = false;
+    }
+    prevThingIdsRef.current = new Set(things.map((t) => t.id));
+  }, [things]);
 
   // Clamp focus index
   useEffect(() => {
-    if (focusedIndex >= visibleThings.length && visibleThings.length > 0) {
-      setFocusedIndex(visibleThings.length - 1);
+    if (focusedIndex >= activeThings.length && activeThings.length > 0) {
+      setFocusedIndex(activeThings.length - 1);
     }
-  }, [visibleThings.length, focusedIndex]);
+  }, [activeThings.length, focusedIndex]);
 
-  const focusedThing = visibleThings[focusedIndex];
+  const focusedThing = activeThings[focusedIndex];
 
   const getTargetIds = useCallback((): string[] => {
     if (selectedIds.size > 0) return [...selectedIds];
@@ -75,17 +129,23 @@ export function InboxView({
 
   const slideOut = useCallback(
     (ids: string[]) => {
+      // Snapshot items before they might disappear from refetch
+      ids.forEach((id) => {
+        const item = things.find((t) => t.id === id);
+        if (item) animatingOutItemsRef.current.set(id, item);
+      });
       setAnimatingOutIds((prev) => {
         const next = new Set(prev);
         ids.forEach((id) => next.add(id));
         return next;
       });
     },
-    []
+    [things]
   );
 
   const handleAnimationEnd = useCallback(
     (id: string) => {
+      animatingOutItemsRef.current.delete(id);
       setAnimatingOutIds((prev) => {
         const next = new Set(prev);
         next.delete(id);
@@ -100,8 +160,9 @@ export function InboxView({
     []
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+  // Document-level keyboard handler — works regardless of which element has focus
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept when input is focused
       if (
         document.activeElement instanceof HTMLInputElement ||
@@ -116,7 +177,6 @@ export function InboxView({
       if (key === "ArrowDown" || key === "j") {
         e.preventDefault();
         if (e.shiftKey) {
-          // Extend selection
           if (focusedThing) {
             setSelectedIds((prev) => {
               const next = new Set(prev);
@@ -124,8 +184,8 @@ export function InboxView({
               return next;
             });
           }
-          setFocusedIndex((i) => Math.min(i + 1, visibleThings.length - 1));
-          const nextThing = visibleThings[Math.min(focusedIndex + 1, visibleThings.length - 1)];
+          setFocusedIndex((i) => Math.min(i + 1, activeThings.length - 1));
+          const nextThing = activeThings[Math.min(focusedIndex + 1, activeThings.length - 1)];
           if (nextThing) {
             setSelectedIds((prev) => {
               const next = new Set(prev);
@@ -134,7 +194,7 @@ export function InboxView({
             });
           }
         } else {
-          setFocusedIndex((i) => Math.min(i + 1, visibleThings.length - 1));
+          setFocusedIndex((i) => Math.min(i + 1, activeThings.length - 1));
         }
         return;
       }
@@ -150,7 +210,7 @@ export function InboxView({
             });
           }
           setFocusedIndex((i) => Math.max(i - 1, 0));
-          const prevThing = visibleThings[Math.max(focusedIndex - 1, 0)];
+          const prevThing = activeThings[Math.max(focusedIndex - 1, 0)];
           if (prevThing) {
             setSelectedIds((prev) => {
               const next = new Set(prev);
@@ -183,7 +243,7 @@ export function InboxView({
       // Select all
       if (key === "a" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setSelectedIds(new Set(visibleThings.map((t) => t.id)));
+        setSelectedIds(new Set(activeThings.map((t) => t.id)));
         return;
       }
 
@@ -245,19 +305,21 @@ export function InboxView({
         onTriageOpen?.("date-first", ids);
         return;
       }
-    },
-    [
-      focusedIndex,
-      focusedThing,
-      visibleThings,
-      getTargetIds,
-      slideOut,
-      onToggle,
-      onArchive,
-      onItemClick,
-      onTriageOpen,
-    ]
-  );
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [
+    focusedIndex,
+    focusedThing,
+    activeThings,
+    getTargetIds,
+    slideOut,
+    onToggle,
+    onArchive,
+    onItemClick,
+    onTriageOpen,
+  ]);
 
   const handleQuickAddSubmit = () => {
     if (!quickAddValue.trim()) return;
@@ -278,23 +340,22 @@ export function InboxView({
     }
   };
 
-  const isEmpty = visibleThings.length === 0 && hiddenCount === 0;
+  const isEmpty = displayThings.length === 0 && hiddenCount === 0;
 
   return (
     <div className="flex flex-col gap-4 pb-20">
       <div
         ref={containerRef}
         tabIndex={0}
-        onKeyDown={handleKeyDown}
         className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4 outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-white">Inbox</h2>
-            {visibleThings.length > 0 && (
+            {activeThings.length > 0 && (
               <span className="text-sm text-white/40">
-                {visibleThings.length} item{visibleThings.length !== 1 ? "s" : ""}
+                {activeThings.length} item{activeThings.length !== 1 ? "s" : ""}
               </span>
             )}
           </div>
@@ -348,36 +409,62 @@ export function InboxView({
         )}
 
         {/* Item list */}
-        {visibleThings.length > 0 && (
-          <div className="flex flex-col gap-0.5">
-            {visibleThings.map((thing, index) => (
-              <InboxItemRow
-                key={thing.id}
-                thing={thing}
-                isFocused={index === focusedIndex}
-                isSelected={selectedIds.has(thing.id)}
-                isAnimatingOut={animatingOutIds.has(thing.id)}
-                selectedIds={selectedIds}
-                relativeAge={
-                  thing.createdAt
-                    ? computeRelativeAge(new Date(thing.createdAt), now.current)
-                    : ""
-                }
-                onClick={() => onItemClick(thing)}
-                onSelect={() => {
-                  setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(thing.id)) {
-                      next.delete(thing.id);
-                    } else {
-                      next.add(thing.id);
+        {displayThings.length > 0 && (
+          <div className="flex flex-col">
+            {displayThings.map((thing) => {
+              const isOut = animatingOutIds.has(thing.id);
+              const isNew = newItemIds.has(thing.id);
+              const activeIdx = activeIndexMap.get(thing.id) ?? -1;
+
+              return (
+                <div
+                  key={thing.id}
+                  className="inbox-item-wrapper"
+                  style={{
+                    overflow: "hidden",
+                    maxHeight: isOut ? 0 : 56,
+                    marginBottom: isOut ? 0 : 2,
+                    transition: isOut
+                      ? "max-height 200ms ease-out 120ms, margin-bottom 200ms ease-out 120ms"
+                      : "none",
+                    animation: isNew
+                      ? "inboxItemExpand 250ms ease-out"
+                      : undefined,
+                  }}
+                  onTransitionEnd={(e) => {
+                    if (isOut && e.propertyName === "max-height") {
+                      handleAnimationEnd(thing.id);
                     }
-                    return next;
-                  });
-                }}
-                onAnimationEnd={() => handleAnimationEnd(thing.id)}
-              />
-            ))}
+                  }}
+                >
+                  <InboxItemRow
+                    thing={thing}
+                    isFocused={activeIdx === focusedIndex}
+                    isSelected={selectedIds.has(thing.id)}
+                    isAnimatingOut={isOut}
+                    isNew={isNew}
+                    selectedIds={selectedIds}
+                    relativeAge={
+                      thing.createdAt
+                        ? computeRelativeAge(new Date(thing.createdAt), now.current)
+                        : ""
+                    }
+                    onClick={() => onItemClick(thing)}
+                    onSelect={() => {
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(thing.id)) {
+                          next.delete(thing.id);
+                        } else {
+                          next.add(thing.id);
+                        }
+                        return next;
+                      });
+                    }}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -411,7 +498,6 @@ export function InboxView({
                     selectedIds={selectedIds}
                     onClick={() => onItemClick(thing)}
                     onSelect={() => {}}
-                    onAnimationEnd={() => {}}
                   />
                 ))}
               </div>
@@ -424,8 +510,9 @@ export function InboxView({
       </div>
 
       {/* Keyboard hint bar */}
-      {visibleThings.length > 0 && (
+      {activeThings.length > 0 && (
         <div className="flex items-center justify-center gap-4 text-[10px] text-white/20 font-mono">
+          <span>esc shortcuts</span>
           <span>j/k navigate</span>
           <span>x select</span>
           <span>l list</span>
@@ -437,19 +524,25 @@ export function InboxView({
 
       <style>{`
         @keyframes inboxSlideOut {
+          from {
+            transform: translateX(0);
+            opacity: 1;
+          }
           to {
-            transform: translateX(-100%);
+            transform: translateX(-24px);
             opacity: 0;
           }
         }
-        @keyframes inboxItemEnter {
+        @keyframes inboxItemExpand {
           from {
+            max-height: 0;
             opacity: 0;
-            transform: translateY(12px);
+            margin-bottom: 0;
           }
           to {
+            max-height: 56px;
             opacity: 1;
-            transform: translateY(0);
+            margin-bottom: 2px;
           }
         }
       `}</style>
