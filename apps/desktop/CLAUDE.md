@@ -41,6 +41,19 @@ Entry point (`src/main.tsx`) wraps the app:
 </AuthProvider>
 ```
 
+### Google OAuth (Desktop)
+
+Google OAuth opens the system browser (not Electron's webview) so passkeys and biometrics work. The flow:
+
+1. Renderer calls `startGoogleOAuth()` → IPC to main process
+2. Main process spins up an ephemeral HTTP server on `127.0.0.1:<random-port>` and generates a `state` nonce
+3. Opens system browser to `API_URL/api/auth/desktop/google?port=<port>&state=<state>`
+4. API serves an HTML page that POSTs to better-auth's `/sign-in/social` (preserving cookies)
+5. Google OAuth completes → better-auth callback → API's `/desktop-callback`
+6. `/desktop-callback` verifies HMAC signature, reads session cookie, redirects to `http://127.0.0.1:<port>/callback?token=<session_token>&state=<state>`
+7. Localhost server verifies state, stores token via `safeStorage`, resolves the IPC promise
+8. Renderer calls `refetch()` to reload the session
+
 ### Preload / IPC
 
 `electron/preload.ts` uses `contextBridge.exposeInMainWorld` to expose `electronAPI` to the renderer. All new IPC should go through this bridge — never enable `nodeIntegration`.
@@ -50,6 +63,7 @@ Available IPC methods:
 - `storeToken(token)` — encrypt and persist a token via `safeStorage` + `electron-store`
 - `getToken()` — decrypt and return stored token
 - `clearToken()` — remove stored token
+- `startGoogleOAuth()` — initiate Google OAuth via system browser with localhost callback
 
 ### Shared Package Imports
 
@@ -67,5 +81,29 @@ Vite resolves these directly to source (`main: "./src/index.ts"` in each package
 
 - `@vitejs/plugin-react` enabled
 - Path alias: `@` → `./src`
+- `base: "./"` — required for Electron; absolute paths (`/assets/...`) break under custom protocols
 - Build output: `dist/renderer/`
 - `src/vite-env.d.ts` provides Vite's `ImportMeta` types (required for `import.meta.env`)
+
+### Environment Variables
+
+- `VITE_API_URL` is split: `.env.development` (localhost) and `.env.production` (prod URL). Vite picks the right one by build mode.
+- The Electron main process does NOT get Vite's `import.meta.env`. It reads API URL from `dist/electron/api-config.json` (generated at build time by `electron:build` script) or falls back to env vars.
+- Never accept security-sensitive config from the renderer process via IPC.
+
+### Production Build
+
+```bash
+pnpm electron:build          # Full build → .dmg in dist/
+npx electron dist/electron/main.js   # Run built app without packaging (faster iteration)
+```
+
+### Electron Gotchas
+
+- **`app://` protocol for production** — avoids insecure `file://` origin (which sends `null`). Registered with `protocol.registerSchemesAsPrivileged` before `app.whenReady()`.
+- **Path traversal on custom protocols** — the `app://` handler must `path.resolve()` and verify the path is within the renderer directory.
+- **`electron-builder` needs pinned electron version** — `^28.0.0` won't resolve, must be exact (e.g., `28.3.3`).
+- **`electron-builder` needs `"build"` config in `package.json`** — `files`, `appId`, `productName` at minimum.
+- **`safeStorage` fallback** — unencrypted token storage is only allowed in dev. Production must throw if encryption is unavailable.
+- **DevTools** — only opened in development (`process.env.NODE_ENV === "development"`).
+- **Concurrent OAuth** — only one OAuth flow at a time; reject if already in progress.

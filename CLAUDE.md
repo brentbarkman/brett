@@ -106,3 +106,18 @@ For each issue: description → why it matters → 2-3 options (with effort/risk
 - Tell me if something is overengineered, underengineered, or just right
 - Prefer adding to shared packages/ over duplicating across apps
 - Do NOT commit .env files
+- When doing deployment/infra work, do a full security review pass before committing
+- When modifying the Docker build, mentally trace the full layer chain — what's copied, what's missing, what symlinks expect
+
+## Process: Exploratory / Infra Work
+
+When doing deployment, infra, or cross-cutting work (anything touching Docker, Railway, auth, Electron packaging):
+
+1. **Before implementing:** Think through the full request lifecycle end-to-end — what runs where, what env vars are available, what protocols/origins are in play, what cookies exist. Write down assumptions.
+2. **Before committing:** Re-read every changed file and ask "what will this look like in production?" Check for:
+   - HTTP vs HTTPS, localhost vs production URLs
+   - Cookie names/prefixes that change by environment
+   - Env vars that exist in dev but not in production (or vice versa)
+   - File paths that differ between dev, built, and packaged contexts
+3. **After a fix:** Don't just fix forward — check if the same category of mistake exists elsewhere. If you fixed a cookie name, check all cookie reads. If you fixed a URL protocol, check all URL constructions.
+4. **Security review:** Do a dedicated pass before merging any auth/infra change. Don't combine it with the implementation — fresh eyes catch more.
