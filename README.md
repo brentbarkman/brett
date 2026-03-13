@@ -19,10 +19,7 @@ cp apps/api/.env.example apps/api/.env     # create API env file
 cp apps/desktop/.env.example apps/desktop/.env  # create desktop env file
 ```
 
-Edit `apps/api/.env` — the only value you **must** set:
-```
-BETTER_AUTH_SECRET=<paste output of: openssl rand -base64 32>
-```
+The `.env.example` files include working defaults for local dev — no manual editing needed.
 
 **If using Homebrew Postgres** (instead of Docker), also create the database and update the URL:
 ```bash
@@ -81,11 +78,14 @@ cd <your-worktree-directory>
 pnpm install
 cp apps/api/.env.example apps/api/.env
 cp apps/desktop/.env.example apps/desktop/.env
-# Edit apps/api/.env — at minimum set BETTER_AUTH_SECRET (openssl rand -base64 32)
 pnpm dev:full
 ```
 
 > **Note:** If Postgres is already running from another worktree, `dev:full` detects it and skips startup. Migrations are idempotent.
+
+If you're running multiple worktrees simultaneously, change the ports in the second worktree's `.env` files to avoid conflicts:
+- `apps/api/.env` → `PORT=3002`
+- `apps/desktop/.env` → `VITE_API_URL=http://localhost:3002`
 
 ## Project Structure
 

@@ -64,7 +64,7 @@ All workspace dependencies use the `workspace:*` protocol.
 
 Copy `.env.example` files (`apps/api/`, `apps/desktop/`) to `.env` and fill in:
 - `DATABASE_URL` — Postgres connection string (defaults to Docker Compose values)
-- `BETTER_AUTH_SECRET` — session signing secret (generate with `openssl rand -base64 32`)
+- `BETTER_AUTH_SECRET` — session signing secret (dev default in `.env.example`, generate a real one for prod)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth (optional for dev)
 - `STORAGE_*` — Railway S3-compatible object storage (optional for dev)
 - `VITE_API_URL` — API server URL for desktop (defaults to `http://localhost:3001`)

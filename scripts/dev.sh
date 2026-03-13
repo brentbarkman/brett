@@ -39,6 +39,9 @@ else
   exit 1
 fi
 
+# Ensure Prisma client is generated (needed after fresh pnpm install)
+pnpm --filter @brett/api exec prisma generate
+
 # Run pending migrations (safe to run if already up to date)
 echo "Checking migrations..."
 pnpm --filter @brett/api exec prisma migrate deploy 2>/dev/null || {
