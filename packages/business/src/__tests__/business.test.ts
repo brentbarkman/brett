@@ -51,8 +51,16 @@ describe("computeUrgency", () => {
     expect(computeUrgency(new Date("2026-03-13"), null, NOW)).toBe("today");
   });
 
-  it("returns 'this_week' when dueDate is in the future", () => {
+  it("returns 'this_week' when dueDate is this week", () => {
     expect(computeUrgency(new Date("2026-03-15"), null, NOW)).toBe("this_week");
+  });
+
+  it("returns 'next_week' when dueDate is next week", () => {
+    expect(computeUrgency(new Date("2026-03-18"), null, NOW)).toBe("next_week");
+  });
+
+  it("returns 'this_week' when dueDate is beyond next week", () => {
+    expect(computeUrgency(new Date("2026-03-25"), null, NOW)).toBe("this_week");
   });
 
   it("returns 'this_week' when no dueDate", () => {
@@ -330,9 +338,9 @@ describe("computeTriageDate", () => {
     expect(result).toBe("2026-03-15T00:00:00.000Z");
   });
 
-  it("next_week returns next Monday", () => {
+  it("next_week returns end-of-next-week Sunday", () => {
     const result = computeTriageDate("next_week", NOW);
-    expect(result).toBe("2026-03-16T00:00:00.000Z");
+    expect(result).toBe("2026-03-22T00:00:00.000Z");
   });
 
   it("next_month returns 1st of next month", () => {

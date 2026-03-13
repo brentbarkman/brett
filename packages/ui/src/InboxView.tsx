@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Plus, Check, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight } from "lucide-react";
 import type { Thing, NavList } from "@brett/types";
 import { computeRelativeAge } from "@brett/business";
 import { InboxItemRow } from "./InboxItemRow";
@@ -53,11 +53,6 @@ export function InboxView({
   // Track previous thing IDs for enter animation
   const isInitialLoadRef = useRef(true);
   const prevThingIdsRef = useRef<Set<string>>(new Set());
-
-  // Auto-focus quick-add input on mount
-  useEffect(() => {
-    quickAddRef.current?.focus();
-  }, []);
 
   // Update "now" every minute for relative age
   useEffect(() => {
@@ -398,12 +393,10 @@ export function InboxView({
 
         {/* Empty state */}
         {isEmpty && (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <div className="w-12 h-12 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
-              <Check size={24} className="text-green-400" />
-            </div>
-            <p className="text-sm text-white/60 font-medium">
-              You're all caught up
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <p className="text-sm text-white/40">Nothing here yet</p>
+            <p className="text-xs text-white/20 font-mono">
+              press <kbd className="px-1 py-0.5 rounded bg-white/5 text-white/30">n</kbd> to add
             </p>
           </div>
         )}
@@ -439,7 +432,7 @@ export function InboxView({
                 >
                   <InboxItemRow
                     thing={thing}
-                    isFocused={activeIdx === focusedIndex}
+                    isFocused={!quickAddFocused && activeIdx === focusedIndex}
                     isSelected={selectedIds.has(thing.id)}
                     isAnimatingOut={isOut}
                     isNew={isNew}
@@ -450,6 +443,13 @@ export function InboxView({
                         : ""
                     }
                     onClick={() => onItemClick(thing)}
+                    onFocus={() => {
+                      if (activeIdx >= 0) setFocusedIndex(activeIdx);
+                    }}
+                    onToggle={(id) => {
+                      slideOut([id]);
+                      onToggle(id);
+                    }}
                     onSelect={() => {
                       setSelectedIds((prev) => {
                         const next = new Set(prev);
@@ -492,12 +492,25 @@ export function InboxView({
                     key={thing.id}
                     thing={thing}
                     isFocused={false}
-                    isSelected={false}
+                    isSelected={selectedIds.has(thing.id)}
                     isAnimatingOut={false}
                     relativeAge={thing.dueDateLabel ?? ""}
                     selectedIds={selectedIds}
                     onClick={() => onItemClick(thing)}
-                    onSelect={() => {}}
+                    onToggle={(id) => {
+                      onToggle(id);
+                    }}
+                    onSelect={() => {
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(thing.id)) {
+                          next.delete(thing.id);
+                        } else {
+                          next.add(thing.id);
+                        }
+                        return next;
+                      });
+                    }}
                   />
                 ))}
               </div>

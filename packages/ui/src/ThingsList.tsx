@@ -21,6 +21,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, header
     overdue: uncompleted.filter((t) => t.urgency === "overdue"),
     today: uncompleted.filter((t) => t.urgency === "today"),
     this_week: uncompleted.filter((t) => t.urgency === "this_week"),
+    next_week: uncompleted.filter((t) => t.urgency === "next_week"),
   };
 
   const hasUncompleted = uncompleted.length > 0;
@@ -56,6 +57,9 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, header
           )}
           {grouped.this_week.length > 0 && (
             <Section title="This Week" things={grouped.this_week} onItemClick={onItemClick} onToggle={onToggle} />
+          )}
+          {grouped.next_week.length > 0 && (
+            <Section title="Next Week" things={grouped.next_week} onItemClick={onItemClick} onToggle={onToggle} />
           )}
 
           {hasUncompleted && (

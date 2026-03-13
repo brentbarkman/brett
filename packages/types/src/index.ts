@@ -38,7 +38,7 @@ export interface Notification {
 
 export type ItemType = "task" | "content";
 export type ItemStatus = "active" | "snoozed" | "done" | "archived";
-export type Urgency = "overdue" | "today" | "this_week" | "done";
+export type Urgency = "overdue" | "today" | "this_week" | "next_week" | "done";
 
 /** DB record — mirrors the Prisma Item model */
 export interface ItemRecord {

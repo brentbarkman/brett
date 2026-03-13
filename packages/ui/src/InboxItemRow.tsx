@@ -1,5 +1,5 @@
-import React from "react";
-import { Zap, BookOpen } from "lucide-react";
+import React, { useState } from "react";
+import { Zap, BookOpen, Check } from "lucide-react";
 import type { Thing } from "@brett/types";
 import { useDraggable } from "@dnd-kit/core";
 
@@ -12,6 +12,8 @@ interface InboxItemRowProps {
   relativeAge: string;
   selectedIds: Set<string>;
   onClick: () => void;
+  onFocus?: () => void;
+  onToggle?: (id: string) => void;
   onSelect: () => void;
 }
 
@@ -24,8 +26,11 @@ export function InboxItemRow({
   relativeAge,
   selectedIds,
   onClick,
+  onFocus,
+  onToggle,
   onSelect,
 }: InboxItemRowProps) {
+  const [completing, setCompleting] = useState(false);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
     data: {
@@ -35,12 +40,9 @@ export function InboxItemRow({
     },
   });
 
-  const icon =
-    thing.type === "task" ? (
-      <Zap size={14} className="text-blue-400" />
-    ) : (
-      <BookOpen size={14} className="text-amber-400" />
-    );
+  const isTask = thing.type === "task";
+  const iconColor = isTask ? "text-blue-400" : "text-amber-400";
+  const Icon = isTask ? Zap : BookOpen;
 
   const animationStyle: React.CSSProperties | undefined = isAnimatingOut
     ? {
@@ -49,15 +51,27 @@ export function InboxItemRow({
       }
     : undefined;
 
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (completing || !onToggle) return;
+    setCompleting(true);
+    setTimeout(() => {
+      onToggle(thing.id);
+    }, 600);
+  };
+
   return (
     <div
       ref={setNodeRef}
       onClick={onClick}
+      onFocus={onFocus}
       {...listeners}
       {...attributes}
+      tabIndex={0}
+      role={undefined}
       className={`
         group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer
-        transition-colors duration-200
+        transition-colors duration-200 outline-none
         ${isDragging ? "opacity-30" : ""}
         ${isFocused
           ? "bg-blue-500/15 border border-blue-500/30"
@@ -68,47 +82,29 @@ export function InboxItemRow({
       `}
       style={animationStyle}
     >
-      {/* Checkbox */}
+      {/* Toggle button */}
       <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect();
-        }}
+        tabIndex={-1}
+        onClick={handleToggle}
         onPointerDown={(e) => e.stopPropagation()}
         className={`
-          flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center
-          transition-all duration-150
-          ${isSelected || isFocused
-            ? "opacity-100"
-            : "opacity-0 group-hover:opacity-100"
-          }
-          ${isSelected
-            ? "bg-blue-500 border-blue-400"
-            : "border-white/30 hover:border-white/50"
+          toggle-btn flex-shrink-0 w-6 h-6 rounded-full border flex items-center justify-center
+          transition-all duration-150 relative outline-none
+          ${completing
+            ? "bg-green-500/20 border-green-500/40"
+            : `border-white/20 hover:border-green-500/40 hover:bg-green-500/10`
           }
         `}
       >
-        {isSelected && (
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
-            fill="none"
-            className="text-white"
-          >
-            <path
-              d="M2 5L4 7L8 3"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+        {completing ? (
+          <Check size={13} className="text-green-400 check-pop" />
+        ) : (
+          <>
+            <span className="toggle-icon"><Icon size={12} className={iconColor} /></span>
+            <span className="toggle-check"><Check size={13} className="text-green-400" /></span>
+          </>
         )}
       </button>
-
-      {/* Type icon */}
-      <div className="flex-shrink-0">{icon}</div>
 
       {/* Title */}
       <span className="flex-1 min-w-0 text-sm text-white/90 truncate">
@@ -126,6 +122,26 @@ export function InboxItemRow({
       <span className="flex-shrink-0 text-xs text-white/30 tabular-nums">
         {relativeAge}
       </span>
+
+      <style>{`
+        .toggle-btn .toggle-check {
+          display: none;
+        }
+        .toggle-btn:hover .toggle-icon {
+          display: none;
+        }
+        .toggle-btn:hover .toggle-check {
+          display: flex;
+        }
+        @keyframes checkPop {
+          0% { transform: scale(0.5); opacity: 0; }
+          50% { transform: scale(1.2); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .check-pop {
+          animation: checkPop 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+      `}</style>
     </div>
   );
 }

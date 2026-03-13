@@ -60,7 +60,16 @@ export function computeUrgency(
 
   if (dueMs < todayMs) return "overdue";
   if (dueMs === todayMs) return "today";
-  return "this_week";
+
+  // End of this week (Sunday)
+  const dayOfWeek = now.getUTCDay(); // 0=Sun
+  const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  const endOfThisWeekMs = todayMs + daysUntilSunday * 86400000;
+  const endOfNextWeekMs = endOfThisWeekMs + 7 * 86400000;
+
+  if (dueMs <= endOfThisWeekMs) return "this_week";
+  if (dueMs <= endOfNextWeekMs) return "next_week";
+  return "this_week"; // beyond next week — default bucket
 }
 
 export function computeDueDateLabel(
@@ -287,10 +296,10 @@ export function computeTriageDate(
       return d.toISOString();
     }
     case "next_week": {
-      // Next Monday
+      // End of next week (Sunday) — matches "this_week" pattern
       const dayOfWeek = d.getUTCDay();
-      const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
-      d.setUTCDate(d.getUTCDate() + daysUntilNextMonday);
+      const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+      d.setUTCDate(d.getUTCDate() + daysUntilSunday + 7);
       return d.toISOString();
     }
     case "next_month":

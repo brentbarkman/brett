@@ -2,6 +2,9 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   DndContext,
   DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -49,6 +52,13 @@ export function App() {
     mode: "list-first" | "date-first";
     ids: string[];
   } | null>(null);
+
+  // Drag: require 8px movement before activating — clicks open detail, drag needs movement
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  );
 
   // Drag state
   const [activeDrag, setActiveDrag] = useState<{
@@ -236,7 +246,7 @@ export function App() {
   const inboxCount = inboxData?.visible.length ?? 0;
 
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="relative flex h-screen w-full overflow-hidden text-white font-sans bg-black">
         {/* Full-bleed Photographic Background */}
         <div
