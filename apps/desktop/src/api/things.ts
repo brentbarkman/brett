@@ -3,7 +3,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { Thing, CreateItemInput, UpdateItemInput } from "@brett/types";
+import type { Thing, CreateItemInput, UpdateItemInput, InboxResponse, BulkUpdateInput } from "@brett/types";
 import { apiFetch } from "./client";
 
 interface ThingsFilters {
@@ -72,6 +72,45 @@ export function useToggleThing() {
       qc.invalidateQueries({ queryKey: ["things"] });
     },
   });
+}
+
+export function useInboxThings(includeHidden = false) {
+  return useQuery({
+    queryKey: ["inbox", { includeHidden }],
+    queryFn: () =>
+      apiFetch<InboxResponse>(
+        `/things/inbox${includeHidden ? "?includeHidden=true" : ""}`
+      ),
+  });
+}
+
+export function useBulkUpdateThings() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: BulkUpdateInput) =>
+      apiFetch<{ updated: number }>("/things/bulk", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["lists"] });
+    },
+  });
+}
+
+export function useArchiveThings() {
+  const bulkUpdate = useBulkUpdateThings();
+
+  return {
+    ...bulkUpdate,
+    mutate: (ids: string[]) =>
+      bulkUpdate.mutate({ ids, updates: { status: "archived" } }),
+    mutateAsync: (ids: string[]) =>
+      bulkUpdate.mutateAsync({ ids, updates: { status: "archived" } }),
+  };
 }
 
 export function useDeleteThing() {

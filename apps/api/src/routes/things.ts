@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { itemToThing, validateCreateItem } from "@brett/business";
+import { itemToThing, validateCreateItem, validateBulkUpdate } from "@brett/business";
 
 const things = new Hono<AuthEnv>();
 
@@ -34,6 +34,99 @@ things.get("/", async (c) => {
 
   const thingsList = items.map((item) => itemToThing(item));
   return c.json(thingsList);
+});
+
+// PATCH /things/bulk — bulk update
+things.patch("/bulk", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json();
+  const validation = validateBulkUpdate(body);
+
+  if (!validation.ok) {
+    return c.json({ error: validation.error }, 400);
+  }
+
+  const { data } = validation;
+
+  // Verify all IDs belong to the user
+  const count = await prisma.item.count({
+    where: { id: { in: data.ids }, userId: user.id },
+  });
+  if (count !== data.ids.length) {
+    return c.json({ error: "One or more items not found" }, 400);
+  }
+
+  // If listId is a non-null string, verify list ownership
+  if (typeof data.updates.listId === "string") {
+    if (!(await verifyListOwnership(data.updates.listId, user.id))) {
+      return c.json({ error: "List not found" }, 400);
+    }
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if (data.updates.listId !== undefined) updateData.listId = data.updates.listId;
+  if (data.updates.dueDate !== undefined)
+    updateData.dueDate = data.updates.dueDate ? new Date(data.updates.dueDate) : null;
+  if (data.updates.status !== undefined) updateData.status = data.updates.status;
+
+  const result = await prisma.item.updateMany({
+    where: { id: { in: data.ids }, userId: user.id },
+    data: updateData,
+  });
+
+  return c.json({ updated: result.count });
+});
+
+// GET /things/inbox — inbox items
+things.get("/inbox", async (c) => {
+  const user = c.get("user");
+  const includeHidden = c.req.query("includeHidden") === "true";
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  const baseWhere = {
+    userId: user.id,
+    listId: null,
+    status: { notIn: ["done", "archived", "snoozed"] },
+  };
+
+  const visibleItems = await prisma.item.findMany({
+    where: {
+      ...baseWhere,
+      OR: [{ dueDate: null }, { dueDate: { lte: todayStart } }],
+      AND: [
+        { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
+      ],
+    },
+    include: { list: { select: { name: true } } },
+    orderBy: [{ createdAt: "desc" }],
+  });
+
+  const hiddenCount = await prisma.item.count({
+    where: {
+      ...baseWhere,
+      dueDate: { gt: todayStart },
+    },
+  });
+
+  const result: { visible: ReturnType<typeof itemToThing>[]; hiddenCount: number; hidden?: ReturnType<typeof itemToThing>[] } = {
+    visible: visibleItems.map((item) => itemToThing(item)),
+    hiddenCount,
+  };
+
+  if (includeHidden && hiddenCount > 0) {
+    const hiddenItems = await prisma.item.findMany({
+      where: {
+        ...baseWhere,
+        dueDate: { gt: todayStart },
+      },
+      include: { list: { select: { name: true } } },
+      orderBy: [{ createdAt: "desc" }],
+    });
+    result.hidden = hiddenItems.map((item) => itemToThing(item));
+  }
+
+  return c.json(result);
 });
 
 // GET /things/:id — single thing
@@ -74,7 +167,7 @@ things.post("/", async (c) => {
       sourceUrl: data.sourceUrl,
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
       brettObservation: data.brettObservation,
-      status: data.status ?? "inbox",
+      status: data.status ?? "active",
       listId: data.listId ?? null,
       userId: user.id,
     },

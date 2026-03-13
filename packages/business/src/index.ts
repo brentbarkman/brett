@@ -7,6 +7,7 @@ import type {
   Urgency,
   CreateItemInput,
   CreateListInput,
+  BulkUpdateInput,
 } from "@brett/types";
 import { generateId } from "@brett/utils";
 
@@ -128,6 +129,7 @@ export function itemToThing(
     brettObservation: item.brettObservation ?? undefined,
     description: item.description ?? undefined,
     stalenessDays: computeStalenessDays(item.updatedAt, now),
+    createdAt: item.createdAt.toISOString(),
   };
 }
 
@@ -135,7 +137,6 @@ export function itemToThing(
 
 const VALID_ITEM_TYPES = new Set(["task", "content"]);
 const VALID_STATUSES = new Set([
-  "inbox",
   "active",
   "snoozed",
   "done",
@@ -203,6 +204,114 @@ export function validateCreateItem(
       status: (obj.status as ItemStatus) ?? undefined,
     },
   };
+}
+
+export function validateBulkUpdate(
+  input: unknown
+): { ok: true; data: BulkUpdateInput } | { ok: false; error: string } {
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Request body is required" };
+  }
+
+  const obj = input as Record<string, unknown>;
+
+  if (!Array.isArray(obj.ids) || obj.ids.length === 0) {
+    return { ok: false, error: "ids must be a non-empty array" };
+  }
+
+  if (obj.ids.length > 100) {
+    return { ok: false, error: "Maximum 100 items per batch" };
+  }
+
+  if (!obj.ids.every((id: unknown) => typeof id === "string")) {
+    return { ok: false, error: "All ids must be strings" };
+  }
+
+  if (!obj.updates || typeof obj.updates !== "object") {
+    return { ok: false, error: "updates object is required" };
+  }
+
+  const updates = obj.updates as Record<string, unknown>;
+
+  if (updates.listId !== undefined && updates.listId !== null && typeof updates.listId !== "string") {
+    return { ok: false, error: "updates.listId must be a string or null" };
+  }
+
+  if (updates.dueDate !== undefined && updates.dueDate !== null) {
+    if (typeof updates.dueDate !== "string" || isNaN(Date.parse(updates.dueDate))) {
+      return { ok: false, error: "updates.dueDate must be a valid ISO date string or null" };
+    }
+  }
+
+  if (updates.status !== undefined) {
+    if (typeof updates.status !== "string" || !VALID_STATUSES.has(updates.status)) {
+      return {
+        ok: false,
+        error: `updates.status must be one of: ${[...VALID_STATUSES].join(", ")}`,
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    data: {
+      ids: obj.ids as string[],
+      updates: {
+        listId: updates.listId as string | null | undefined,
+        dueDate: updates.dueDate as string | null | undefined,
+        status: updates.status as ItemStatus | undefined,
+      },
+    },
+  };
+}
+
+export type TriageDatePreset = "today" | "tomorrow" | "this_week" | "next_week" | "next_month";
+
+export function computeTriageDate(
+  preset: TriageDatePreset,
+  now: Date = new Date()
+): string {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  switch (preset) {
+    case "today":
+      return d.toISOString();
+    case "tomorrow":
+      d.setUTCDate(d.getUTCDate() + 1);
+      return d.toISOString();
+    case "this_week": {
+      // End of current week (Sunday)
+      const dayOfWeek = d.getUTCDay(); // 0=Sun
+      const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+      d.setUTCDate(d.getUTCDate() + daysUntilSunday);
+      return d.toISOString();
+    }
+    case "next_week": {
+      // Next Monday
+      const dayOfWeek = d.getUTCDay();
+      const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+      d.setUTCDate(d.getUTCDate() + daysUntilNextMonday);
+      return d.toISOString();
+    }
+    case "next_month":
+      d.setUTCMonth(d.getUTCMonth() + 1, 1);
+      return d.toISOString();
+  }
+}
+
+export function computeRelativeAge(
+  createdAt: Date,
+  now: Date = new Date()
+): string {
+  const diffMs = now.getTime() - createdAt.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${diffDays}d ago`;
 }
 
 export function validateCreateList(

@@ -79,7 +79,7 @@ model List {
 model Item {
   id               String    @id @default(cuid())
   type             String    // "task" | "saved_web" | "saved_tweet" | future types
-  status           String    @default("inbox") // "inbox" | "active" | "snoozed" | "done" | "archived"
+  status           String    @default("active") // "active" | "snoozed" | "done" | "archived"
   title            String
   description      String?
   source           String    @default("Brett")

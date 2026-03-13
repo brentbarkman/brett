@@ -6,6 +6,9 @@ import {
   itemToThing,
   validateCreateItem,
   validateCreateList,
+  validateBulkUpdate,
+  computeRelativeAge,
+  computeTriageDate,
 } from "../index";
 import type { ItemRecord } from "@brett/types";
 
@@ -184,9 +187,9 @@ describe("validateCreateItem", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("rejects missing listId", () => {
+  it("accepts missing listId (inbox item)", () => {
     const result = validateCreateItem({ ...validInput, listId: undefined });
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
   });
 
   it("rejects invalid status", () => {
@@ -217,8 +220,124 @@ describe("validateCreateItem", () => {
     }
   });
 
+  it("rejects inbox as a status", () => {
+    const result = validateCreateItem({ ...validInput, status: "inbox" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("status");
+  });
+
   it("rejects null body", () => {
     expect(validateCreateItem(null).ok).toBe(false);
+  });
+});
+
+// ── validateBulkUpdate ──
+
+describe("validateBulkUpdate", () => {
+  it("accepts valid bulk update with listId", () => {
+    const result = validateBulkUpdate({
+      ids: ["id-1", "id-2"],
+      updates: { listId: "list-1" },
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts bulk update with dueDate", () => {
+    const result = validateBulkUpdate({
+      ids: ["id-1"],
+      updates: { dueDate: "2026-03-15T00:00:00Z" },
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts bulk update with status", () => {
+    const result = validateBulkUpdate({
+      ids: ["id-1"],
+      updates: { status: "archived" },
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects empty ids", () => {
+    const result = validateBulkUpdate({ ids: [], updates: { listId: "x" } });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects more than 100 ids", () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`);
+    const result = validateBulkUpdate({ ids, updates: { listId: "x" } });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects invalid status", () => {
+    const result = validateBulkUpdate({
+      ids: ["id-1"],
+      updates: { status: "inbox" },
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects missing updates", () => {
+    const result = validateBulkUpdate({ ids: ["id-1"] });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects null body", () => {
+    expect(validateBulkUpdate(null).ok).toBe(false);
+  });
+});
+
+// ── computeRelativeAge ──
+
+describe("computeRelativeAge", () => {
+  it("returns 'just now' for < 1 minute", () => {
+    const created = new Date(NOW.getTime() - 30 * 1000);
+    expect(computeRelativeAge(created, NOW)).toBe("just now");
+  });
+
+  it("returns minutes for < 1 hour", () => {
+    const created = new Date(NOW.getTime() - 25 * 60 * 1000);
+    expect(computeRelativeAge(created, NOW)).toBe("25m ago");
+  });
+
+  it("returns hours for < 24 hours", () => {
+    const created = new Date(NOW.getTime() - 5 * 60 * 60 * 1000);
+    expect(computeRelativeAge(created, NOW)).toBe("5h ago");
+  });
+
+  it("returns days for >= 24 hours", () => {
+    const created = new Date(NOW.getTime() - 3 * 24 * 60 * 60 * 1000);
+    expect(computeRelativeAge(created, NOW)).toBe("3d ago");
+  });
+});
+
+// ── computeTriageDate ──
+
+describe("computeTriageDate", () => {
+  // NOW = 2026-03-13 (Friday)
+  it("today returns today", () => {
+    const result = computeTriageDate("today", NOW);
+    expect(result).toBe("2026-03-13T00:00:00.000Z");
+  });
+
+  it("tomorrow returns next day", () => {
+    const result = computeTriageDate("tomorrow", NOW);
+    expect(result).toBe("2026-03-14T00:00:00.000Z");
+  });
+
+  it("this_week returns Sunday", () => {
+    const result = computeTriageDate("this_week", NOW);
+    expect(result).toBe("2026-03-15T00:00:00.000Z");
+  });
+
+  it("next_week returns next Monday", () => {
+    const result = computeTriageDate("next_week", NOW);
+    expect(result).toBe("2026-03-16T00:00:00.000Z");
+  });
+
+  it("next_month returns 1st of next month", () => {
+    const result = computeTriageDate("next_month", NOW);
+    expect(result).toBe("2026-04-01T00:00:00.000Z");
   });
 });
 

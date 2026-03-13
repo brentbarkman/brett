@@ -37,7 +37,7 @@ export interface Notification {
 // Dashboard types
 
 export type ItemType = "task" | "content";
-export type ItemStatus = "inbox" | "active" | "snoozed" | "done" | "archived";
+export type ItemStatus = "active" | "snoozed" | "done" | "archived";
 export type Urgency = "overdue" | "today" | "this_week" | "done";
 
 /** DB record — mirrors the Prisma Item model */
@@ -75,6 +75,7 @@ export interface Thing {
   brettObservation?: string;
   description?: string;
   stalenessDays?: number;
+  createdAt?: string; // ISO string, populated for inbox items
 }
 
 export interface CreateItemInput {
@@ -109,6 +110,21 @@ export interface CreateListInput {
 export interface UpdateListInput {
   name?: string;
   colorClass?: string;
+}
+
+export interface BulkUpdateInput {
+  ids: string[];
+  updates: {
+    listId?: string | null;
+    dueDate?: string | null;
+    status?: ItemStatus;
+  };
+}
+
+export interface InboxResponse {
+  visible: Thing[];
+  hiddenCount: number;
+  hidden?: Thing[];
 }
 
 export interface CalendarEvent {

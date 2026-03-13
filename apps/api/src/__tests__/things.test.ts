@@ -41,7 +41,7 @@ describe("Things routes", () => {
     expect(body.title).toBe("My first task");
     expect(body.type).toBe("task");
     expect(body.list).toBe("Work");
-    expect(body.status).toBe("inbox");
+    expect(body.status).toBe("active");
     expect(body.isCompleted).toBe(false);
     expect(body.source).toBe("Brett");
     expect(body.description).toBe("A description");
@@ -60,7 +60,7 @@ describe("Things routes", () => {
     expect(body.title).toBe("Inbox task");
     expect(body.list).toBe(DEFAULT_LIST_NAME);
     expect(body.listId).toBeNull();
-    expect(body.status).toBe("inbox");
+    expect(body.status).toBe("active");
   });
 
   it("POST /things rejects missing title", async () => {
@@ -99,9 +99,9 @@ describe("Things routes", () => {
   });
 
   it("GET /things filters by status", async () => {
-    const res = await authRequest("/things?status=inbox", token);
+    const res = await authRequest("/things?status=active", token);
     const body = (await res.json()) as any[];
-    expect(body.every((t: any) => t.status === "inbox")).toBe(true);
+    expect(body.every((t: any) => t.status === "active")).toBe(true);
   });
 
   it("GET /things filters by type", async () => {
@@ -194,6 +194,157 @@ describe("Things routes", () => {
     // Verify gone
     const getRes = await authRequest(`/things/${id}`, token);
     expect(getRes.status).toBe(404);
+  });
+
+  // ── Bulk Update Tests ──
+
+  it("PATCH /things/bulk updates multiple items", async () => {
+    // Create two inbox items
+    const res1 = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Bulk item 1" }),
+    });
+    const res2 = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Bulk item 2" }),
+    });
+    const id1 = ((await res1.json()) as any).id;
+    const id2 = ((await res2.json()) as any).id;
+
+    const res = await authRequest("/things/bulk", token, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ids: [id1, id2],
+        updates: { listId },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.updated).toBe(2);
+  });
+
+  it("PATCH /things/bulk rejects empty ids", async () => {
+    const res = await authRequest("/things/bulk", token, {
+      method: "PATCH",
+      body: JSON.stringify({ ids: [], updates: { listId } }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /things/bulk rejects > 100 ids", async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `fake-${i}`);
+    const res = await authRequest("/things/bulk", token, {
+      method: "PATCH",
+      body: JSON.stringify({ ids, updates: { listId } }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /things/bulk rejects wrong user's ids", async () => {
+    const otherUser = await createTestUser("Bulk Other User");
+    const createRes = await authRequest("/things", otherUser.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Other user item" }),
+    });
+    const otherId = ((await createRes.json()) as any).id;
+
+    const res = await authRequest("/things/bulk", token, {
+      method: "PATCH",
+      body: JSON.stringify({ ids: [otherId], updates: { status: "archived" } }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /things/bulk rejects invalid listId", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Bulk invalid list" }),
+    });
+    const id = ((await createRes.json()) as any).id;
+
+    const res = await authRequest("/things/bulk", token, {
+      method: "PATCH",
+      body: JSON.stringify({ ids: [id], updates: { listId: "nonexistent" } }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /things/bulk with dueDate", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Bulk date item" }),
+    });
+    const id = ((await createRes.json()) as any).id;
+
+    const res = await authRequest("/things/bulk", token, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ids: [id],
+        updates: { dueDate: "2026-03-20T00:00:00Z" },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as any).updated).toBe(1);
+  });
+
+  // ── Inbox Tests ──
+
+  it("GET /things/inbox returns only null-listId items", async () => {
+    const res = await authRequest("/things/inbox", token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.visible).toBeDefined();
+    expect(body.hiddenCount).toBeDefined();
+    // All visible items should have null listId
+    for (const item of body.visible) {
+      expect(item.listId).toBeNull();
+    }
+  });
+
+  it("GET /things/inbox excludes done and archived items", async () => {
+    // Create an inbox item and archive it
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Archived inbox item" }),
+    });
+    const id = ((await createRes.json()) as any).id;
+    await authRequest(`/things/${id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "archived" }),
+    });
+
+    const res = await authRequest("/things/inbox", token);
+    const body = (await res.json()) as any;
+    const archivedInInbox = body.visible.find((t: any) => t.id === id);
+    expect(archivedInInbox).toBeUndefined();
+  });
+
+  it("GET /things/inbox hides future-dated items and returns hiddenCount", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Future inbox item" }),
+    });
+    const id = ((await createRes.json()) as any).id;
+    // Set a future date
+    await authRequest(`/things/${id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({ dueDate: "2099-01-01T00:00:00Z" }),
+    });
+
+    const res = await authRequest("/things/inbox", token);
+    const body = (await res.json()) as any;
+    const futureInVisible = body.visible.find((t: any) => t.id === id);
+    expect(futureInVisible).toBeUndefined();
+    expect(body.hiddenCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("GET /things/inbox?includeHidden=true returns hidden items", async () => {
+    const res = await authRequest("/things/inbox?includeHidden=true", token);
+    const body = (await res.json()) as any;
+    if (body.hiddenCount > 0) {
+      expect(body.hidden).toBeDefined();
+      expect(body.hidden.length).toBe(body.hiddenCount);
+    }
   });
 
   it("GET /things returns 401 without auth", async () => {

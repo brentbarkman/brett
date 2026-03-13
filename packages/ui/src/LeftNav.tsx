@@ -1,6 +1,7 @@
 import React from "react";
 import { Inbox, Calendar, Search } from "lucide-react";
 import type { NavList } from "@brett/types";
+import { useDroppable } from "@dnd-kit/core";
 
 interface LeftNavUser {
   name: string | null;
@@ -14,9 +15,23 @@ interface LeftNavProps {
   user?: LeftNavUser | null;
   /** Number of incomplete things to show on the Today badge */
   incompleteCount?: number;
+  /** Currently active view */
+  activeView?: string;
+  /** Callback when a nav item is clicked */
+  onNavClick?: (view: string) => void;
+  /** Real inbox badge count */
+  inboxCount?: number;
 }
 
-export function LeftNav({ isCollapsed, lists, user, incompleteCount }: LeftNavProps) {
+export function LeftNav({
+  isCollapsed,
+  lists,
+  user,
+  incompleteCount,
+  activeView = "today",
+  onNavClick,
+  inboxCount,
+}: LeftNavProps) {
   return (
     <nav
       className={`
@@ -42,14 +57,17 @@ export function LeftNav({ isCollapsed, lists, user, incompleteCount }: LeftNavPr
           icon={<Calendar size={18} />}
           label="Today"
           badge={incompleteCount}
-          isActive
+          isActive={activeView === "today"}
           isCollapsed={isCollapsed}
+          onClick={() => onNavClick?.("today")}
         />
         <NavItem
           icon={<Inbox size={18} />}
           label="Inbox"
-          badge={5}
+          badge={inboxCount}
+          isActive={activeView === "inbox"}
           isCollapsed={isCollapsed}
+          onClick={() => onNavClick?.("inbox")}
         />
         <NavItem
           icon={<Search size={18} />}
@@ -71,16 +89,11 @@ export function LeftNav({ isCollapsed, lists, user, incompleteCount }: LeftNavPr
         )}
         <div className="space-y-1">
           {lists.map((list) => (
-            <NavItem
+            <DroppableNavItem
               key={list.id}
-              icon={
-                <div
-                  className={`w-2 h-2 rounded-full ${list.colorClass}`}
-                />
-              }
-              label={list.name}
-              count={list.count}
+              list={list}
               isCollapsed={isCollapsed}
+              onClick={() => onNavClick?.(`list:${list.id}`)}
             />
           ))}
         </div>
@@ -124,6 +137,39 @@ export function LeftNav({ isCollapsed, lists, user, incompleteCount }: LeftNavPr
   );
 }
 
+function DroppableNavItem({
+  list,
+  isCollapsed,
+  onClick,
+}: {
+  list: NavList;
+  isCollapsed: boolean;
+  onClick?: () => void;
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `list-drop-${list.id}`,
+    data: { type: "list", listId: list.id },
+  });
+
+  return (
+    <div ref={setNodeRef}>
+      <NavItem
+        icon={
+          <div
+            className={`w-2 h-2 rounded-full ${list.colorClass}`}
+          />
+        }
+        label={list.name}
+        count={list.count}
+        isCollapsed={isCollapsed}
+        isDropTarget={isOver}
+        dropColorClass={list.colorClass}
+        onClick={onClick}
+      />
+    </div>
+  );
+}
+
 interface NavItemProps {
   icon: React.ReactNode;
   label: string;
@@ -131,6 +177,9 @@ interface NavItemProps {
   count?: number;
   isActive?: boolean;
   isCollapsed: boolean;
+  isDropTarget?: boolean;
+  dropColorClass?: string;
+  onClick?: () => void;
 }
 
 function NavItem({
@@ -140,17 +189,31 @@ function NavItem({
   count,
   isActive,
   isCollapsed,
+  isDropTarget,
+  dropColorClass,
+  onClick,
 }: NavItemProps) {
+  // Convert colorClass like "bg-blue-500" to a low-opacity version for drop highlight
+  const dropHighlight = isDropTarget && dropColorClass
+    ? dropColorClass.replace("bg-", "bg-").replace("-500", "-500/20")
+    : "";
+
   return (
     <button
+      onClick={onClick}
       className={`
       flex items-center w-full rounded-lg transition-colors duration-200 group
       ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-3"}
-      ${isActive ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5 hover:text-white/90"}
+      ${isDropTarget
+        ? `${dropHighlight} border border-white/20 text-white`
+        : isActive
+          ? "bg-white/10 text-white"
+          : "text-white/60 hover:bg-white/5 hover:text-white/90"
+      }
     `}
     >
       <div
-        className={`${isActive ? "text-white" : "text-white/50 group-hover:text-white/80"}`}
+        className={`${isActive || isDropTarget ? "text-white" : "text-white/50 group-hover:text-white/80"}`}
       >
         {icon}
       </div>
