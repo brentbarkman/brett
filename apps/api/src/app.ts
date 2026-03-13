@@ -7,16 +7,17 @@ import { lists } from "./routes/lists.js";
 
 export const app = new Hono();
 
-// #9: CORS — only allow localhost origin in local dev
+// #9: CORS — only allow localhost origins in local dev, Electron in all envs
 const isLocal = !process.env.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL.includes("localhost");
-const allowedOrigins = isLocal
-  ? ["http://localhost:5173", "app://."]
-  : ["app://."];
 
 app.use(
   "*",
   cors({
-    origin: allowedOrigins,
+    origin: (origin) => {
+      if (origin === "app://.") return origin;
+      if (isLocal && origin.match(/^http:\/\/localhost:\d+$/)) return origin;
+      return null;
+    },
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,

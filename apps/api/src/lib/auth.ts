@@ -18,7 +18,12 @@ export const auth = betterAuth({
   },
   plugins: [bearer()],
   trustedOrigins: isLocal
-    ? ["http://localhost:5173", "app://."]
+    ? (request) => {
+        const origin = request?.headers.get("origin") ?? "";
+        if (origin === "app://." || /^http:\/\/localhost:\d+$/.test(origin))
+          return [origin];
+        return [];
+      }
     : [
         "app://.",
         process.env.BETTER_AUTH_URL!, // API's own origin (for desktop OAuth HTML page)

@@ -20,8 +20,16 @@ function getApiURL(): string {
 }
 const API_URL = getApiURL();
 
-const store = new Store<{ encryptedToken?: string }>();
 const isDev = process.env.NODE_ENV === "development";
+
+// In dev, give each worktree its own userData directory so multiple instances
+// don't share Chromium sessions, cookies, or electron-store data
+if (isDev) {
+  const cwdHash = crypto.createHash("md5").update(process.cwd()).digest("hex").slice(0, 8);
+  app.setPath("userData", path.join(app.getPath("userData"), `dev-${cwdHash}`));
+}
+
+const store = new Store<{ encryptedToken?: string }>();
 
 // Token storage IPC handlers
 ipcMain.handle("store-token", (_event, token: string) => {
