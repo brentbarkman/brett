@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { Zap, BookOpen, Calendar, Check, RotateCcw } from "lucide-react";
+import { useDraggable } from "@dnd-kit/core";
 import type { Thing } from "@brett/types";
 
 interface ThingCardProps {
@@ -9,6 +10,13 @@ interface ThingCardProps {
 }
 
 export function ThingCard({ thing, onClick, onToggle }: ThingCardProps) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: thing.id,
+    data: {
+      type: "thing-card",
+      thingId: thing.id,
+    },
+  });
   const [completing, setCompleting] = useState(false);
 
   const handleToggleClick = useCallback(
@@ -51,6 +59,9 @@ export function ThingCard({ thing, onClick, onToggle }: ThingCardProps) {
 
   return (
     <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       onClick={onClick}
       className={`
         group relative flex items-center gap-3 p-3 rounded-lg cursor-pointer
@@ -60,6 +71,7 @@ export function ThingCard({ thing, onClick, onToggle }: ThingCardProps) {
           : "bg-white/5 hover:bg-white/10 border-white/5 hover:border-white/10"
         }
         ${thing.isCompleted && !completing ? "opacity-50" : "opacity-100"}
+        ${isDragging ? "opacity-50" : ""}
       `}
     >
       {/* Clickable toggle icon */}

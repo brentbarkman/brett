@@ -144,5 +144,7 @@ export interface NavList {
   id: string;
   name: string;
   count: number;
+  completedCount: number;
   colorClass: string;
+  sortOrder: number;
 }

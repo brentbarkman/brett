@@ -94,8 +94,10 @@ describe("Things routes", () => {
   it("GET /things returns created things", async () => {
     const res = await authRequest("/things", token);
     const body = (await res.json()) as any[];
-    expect(body.length).toBeGreaterThanOrEqual(1);
-    expect(body[0].title).toBe("My first task");
+    expect(body.length).toBeGreaterThanOrEqual(2);
+    // Ordered by createdAt desc — newest first
+    expect(body.map((t: any) => t.title)).toContain("My first task");
+    expect(body.map((t: any) => t.title)).toContain("Inbox task");
   });
 
   it("GET /things filters by status", async () => {
