@@ -14,8 +14,18 @@ lists.get("/", async (c) => {
 
   const userLists = await prisma.list.findMany({
     where: { userId: user.id },
-    include: { _count: { select: { items: true } } },
-    orderBy: { createdAt: "asc" },
+    include: {
+      _count: {
+        select: {
+          items: true,
+        },
+      },
+      items: {
+        where: { status: "done" },
+        select: { id: true },
+      },
+    },
+    orderBy: { sortOrder: "asc" },
   });
 
   return c.json(
@@ -24,6 +34,8 @@ lists.get("/", async (c) => {
       name: l.name,
       colorClass: l.colorClass,
       count: l._count.items,
+      completedCount: l.items.length,
+      sortOrder: l.sortOrder,
     }))
   );
 });
@@ -48,18 +60,67 @@ lists.post("/", async (c) => {
     return c.json({ error: "A list with this name already exists" }, 409);
   }
 
+  // Auto-assign sortOrder as max + 1
+  const maxSort = await prisma.list.aggregate({
+    where: { userId: user.id },
+    _max: { sortOrder: true },
+  });
+  const nextSortOrder = (maxSort._max.sortOrder ?? -1) + 1;
+
   const list = await prisma.list.create({
     data: {
       name: data.name,
       colorClass: data.colorClass ?? "bg-gray-500",
+      sortOrder: nextSortOrder,
       userId: user.id,
     },
   });
 
   return c.json(
-    { id: list.id, name: list.name, colorClass: list.colorClass, count: 0 },
+    { id: list.id, name: list.name, colorClass: list.colorClass, count: 0, completedCount: 0, sortOrder: list.sortOrder },
     201
   );
+});
+
+// PUT /lists/reorder — reorder lists
+lists.put("/reorder", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json();
+  const { ids } = body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json({ error: "ids must be a non-empty array" }, 400);
+  }
+
+  // Validate all IDs belong to the user
+  const userLists = await prisma.list.findMany({
+    where: { userId: user.id },
+    select: { id: true },
+  });
+  const userListIds = new Set(userLists.map((l) => l.id));
+
+  for (const id of ids) {
+    if (!userListIds.has(id)) {
+      return c.json({ error: `List ${id} not found` }, 400);
+    }
+  }
+
+  // Check all user lists are accounted for
+  if (ids.length !== userLists.length) {
+    return c.json({ error: "ids must include all user lists" }, 400);
+  }
+
+  // Update sortOrder for each list
+  await prisma.$transaction(
+    ids.map((id: string, index: number) =>
+      prisma.list.update({
+        where: { id },
+        data: { sortOrder: index },
+      })
+    )
+  );
+
+  return c.json({ ok: true });
 });
 
 // PATCH /lists/:id — update
@@ -79,7 +140,10 @@ lists.patch("/:id", async (c) => {
   const list = await prisma.list.update({
     where: { id: existing.id },
     data: updateData,
-    include: { _count: { select: { items: true } } },
+    include: {
+      _count: { select: { items: true } },
+      items: { where: { status: "done" }, select: { id: true } },
+    },
   });
 
   return c.json({
@@ -87,10 +151,12 @@ lists.patch("/:id", async (c) => {
     name: list.name,
     colorClass: list.colorClass,
     count: list._count.items,
+    completedCount: list.items.length,
+    sortOrder: list.sortOrder,
   });
 });
 
-// DELETE /lists/:id — cascades items
+// DELETE /lists/:id — deletes list and all its items
 lists.delete("/:id", async (c) => {
   const user = c.get("user");
   const existing = await prisma.list.findFirst({
@@ -98,7 +164,10 @@ lists.delete("/:id", async (c) => {
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
 
-  await prisma.list.delete({ where: { id: existing.id } });
+  await prisma.$transaction([
+    prisma.item.deleteMany({ where: { listId: existing.id } }),
+    prisma.list.delete({ where: { id: existing.id } }),
+  ]);
   return c.json({ ok: true });
 });
 

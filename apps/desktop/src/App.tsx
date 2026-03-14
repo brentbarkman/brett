@@ -8,6 +8,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import {
   LeftNav,
   Omnibar,
@@ -22,6 +23,7 @@ import {
   InboxView,
   TriagePopup,
   InboxDragOverlay,
+  ConfirmDialog,
 } from "@brett/ui";
 import type { Thing, CalendarEvent } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
@@ -32,7 +34,7 @@ import {
   useInboxThings,
   useBulkUpdateThings,
 } from "./api/things";
-import { useLists } from "./api/lists";
+import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists } from "./api/lists";
 import { mockEvents, mockBriefingItems } from "./data/mockData";
 
 type ActiveView = "today" | "inbox";
@@ -53,6 +55,13 @@ export function App() {
     ids: string[];
   } | null>(null);
 
+  // Delete list confirmation state
+  const [deleteListConfirm, setDeleteListConfirm] = useState<{
+    id: string;
+    name: string;
+    count: number;
+  } | null>(null);
+
   // Drag: require 8px movement before activating — clicks open detail, drag needs movement
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -69,6 +78,10 @@ export function App() {
 
   const { data: things = [], isLoading: thingsLoading } = useThings();
   const { data: lists = [] } = useLists();
+  const createList = useCreateList();
+  const updateList = useUpdateList();
+  const deleteList = useDeleteList();
+  const reorderLists = useReorderLists();
   const createThing = useCreateThing();
   const toggleThing = useToggleThing();
   const bulkUpdate = useBulkUpdateThings();
@@ -180,9 +193,16 @@ export function App() {
           title: thing?.title ?? "Item",
           count: ids.length,
         });
+      } else if (data?.type === "thing-card") {
+        const thing = things.find((t) => t.id === data.thingId);
+        setActiveDrag({
+          id: data.thingId,
+          title: thing?.title ?? "Item",
+          count: 1,
+        });
       }
     },
-    [inboxData]
+    [inboxData, things]
   );
 
   const handleDragEnd = useCallback(
@@ -191,16 +211,32 @@ export function App() {
       const { active, over } = event;
       if (!over) return;
 
+      const activeData = active.data.current;
       const overData = over.data.current;
-      if (overData?.type === "list") {
+
+      // Handle list reordering (list dragged onto another list)
+      if (activeData?.type === "sortable-list" && overData?.type === "sortable-list") {
+        if (active.id !== over.id) {
+          const sortableIds = lists.map((l) => `sortable-list-${l.id}`);
+          const oldIndex = sortableIds.indexOf(active.id as string);
+          const newIndex = sortableIds.indexOf(over.id as string);
+          if (oldIndex !== -1 && newIndex !== -1) {
+            const reordered = arrayMove(lists, oldIndex, newIndex);
+            reorderLists.mutate(reordered.map((l) => l.id));
+          }
+        }
+        return;
+      }
+
+      // Handle item drop onto list (from inbox or today view)
+      if (overData?.type === "sortable-list" || overData?.type === "list") {
         const listId = overData.listId;
-        const activeData = active.data.current;
         const itemIds: string[] =
           activeData?.selectedIds ?? [active.id as string];
         bulkUpdate.mutate({ ids: itemIds, updates: { listId } });
       }
     },
-    [bulkUpdate]
+    [bulkUpdate, lists, reorderLists]
   );
 
   // Filter things based on active pill
@@ -271,6 +307,17 @@ export function App() {
             activeView={activeView}
             onNavClick={handleNavClick}
             inboxCount={inboxCount}
+            onCreateList={(name) => createList.mutate({ name })}
+            onRenameList={(id, name) => updateList.mutate({ id, name })}
+            onDeleteList={(id) => {
+              const list = lists.find((l) => l.id === id);
+              if (list && list.count > 0) {
+                setDeleteListConfirm({ id, name: list.name, count: list.count });
+              } else {
+                deleteList.mutate(id);
+              }
+            }}
+            onReorderLists={(ids) => reorderLists.mutate(ids)}
           />
 
           {/* Center Column */}
@@ -358,6 +405,21 @@ export function App() {
             />
           )}
         </DragOverlay>
+
+        {/* Delete list confirmation */}
+        {deleteListConfirm && (
+          <ConfirmDialog
+            title={`Delete "${deleteListConfirm.name}"?`}
+            description={`This will permanently delete ${deleteListConfirm.count} item${deleteListConfirm.count === 1 ? "" : "s"} in this list.`}
+            confirmLabel="Delete"
+            variant="danger"
+            onConfirm={() => {
+              deleteList.mutate(deleteListConfirm.id);
+              setDeleteListConfirm(null);
+            }}
+            onCancel={() => setDeleteListConfirm(null)}
+          />
+        )}
       </div>
     </DndContext>
   );

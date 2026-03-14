@@ -1,7 +1,12 @@
-import React from "react";
-import { Inbox, Calendar, Search } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Inbox, Calendar, Search, Plus, MoreHorizontal, GripVertical } from "lucide-react";
 import type { NavList } from "@brett/types";
-import { useDroppable } from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface LeftNavUser {
   name: string | null;
@@ -21,6 +26,10 @@ interface LeftNavProps {
   onNavClick?: (view: string) => void;
   /** Real inbox badge count */
   inboxCount?: number;
+  onCreateList?: (name: string) => void;
+  onRenameList?: (id: string, newName: string) => void;
+  onDeleteList?: (id: string) => void;
+  onReorderLists?: (orderedIds: string[]) => void;
 }
 
 export function LeftNav({
@@ -31,7 +40,41 @@ export function LeftNav({
   activeView = "today",
   onNavClick,
   inboxCount,
+  onCreateList,
+  onRenameList,
+  onDeleteList,
+  onReorderLists,
 }: LeftNavProps) {
+  const [isCreating, setIsCreating] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const createInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isCreating) {
+      createInputRef.current?.focus();
+    }
+  }, [isCreating]);
+
+  const handleCreateSubmit = () => {
+    const name = createName.trim();
+    if (name) {
+      onCreateList?.(name);
+    }
+    setCreateName("");
+    setIsCreating(false);
+  };
+
+  const handleCreateKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleCreateSubmit();
+    } else if (e.key === "Escape") {
+      setCreateName("");
+      setIsCreating(false);
+    }
+  };
+
+  const sortableIds = lists.map((l) => `sortable-list-${l.id}`);
+
   return (
     <nav
       className={`
@@ -83,20 +126,53 @@ export function LeftNav({
       {/* Lists Section */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         {!isCollapsed && (
-          <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-2 mb-3">
-            Lists
-          </h3>
+          <div className="flex items-center justify-between px-2 mb-3">
+            <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+              Lists
+            </h3>
+            {onCreateList && (
+              <button
+                onClick={() => setIsCreating(true)}
+                className="text-white/30 hover:text-white/70 transition-colors p-0.5 rounded hover:bg-white/10"
+              >
+                <Plus size={14} />
+              </button>
+            )}
+          </div>
         )}
-        <div className="space-y-1">
-          {lists.map((list) => (
-            <DroppableNavItem
-              key={list.id}
-              list={list}
-              isCollapsed={isCollapsed}
-              onClick={() => onNavClick?.(`list:${list.id}`)}
+
+        {/* Inline create input */}
+        {isCreating && !isCollapsed && (
+          <div className="px-1 mb-2">
+            <input
+              ref={createInputRef}
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              onKeyDown={handleCreateKeyDown}
+              onBlur={handleCreateSubmit}
+              placeholder="List name…"
+              className="w-full bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
             />
-          ))}
-        </div>
+          </div>
+        )}
+
+        <SortableContext
+          items={sortableIds}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-1">
+            {lists.map((list) => (
+              <SortableListItem
+                key={list.id}
+                list={list}
+                isCollapsed={isCollapsed}
+                onClick={() => onNavClick?.(`list:${list.id}`)}
+                onRename={onRenameList}
+                onDelete={onDeleteList}
+              />
+            ))}
+          </div>
+        </SortableContext>
       </div>
 
       {/* Footer */}
@@ -137,36 +213,268 @@ export function LeftNav({
   );
 }
 
-function DroppableNavItem({
+function SortableListItem({
   list,
   isCollapsed,
   onClick,
+  onRename,
+  onDelete,
 }: {
   list: NavList;
   isCollapsed: boolean;
   onClick?: () => void;
+  onRename?: (id: string, newName: string) => void;
+  onDelete?: (id: string) => void;
 }) {
-  const { isOver, setNodeRef } = useDroppable({
-    id: `list-drop-${list.id}`,
-    data: { type: "list", listId: list.id },
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({
+    id: `sortable-list-${list.id}`,
+    data: { type: "sortable-list", listId: list.id },
   });
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(list.name);
+  const [showMenu, setShowMenu] = useState(false);
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isEditing) {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        menuButtonRef.current &&
+        !menuButtonRef.current.contains(e.target as Node)
+      ) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMenu]);
+
+  const handleRenameSubmit = () => {
+    const name = editName.trim();
+    if (name && name !== list.name) {
+      onRename?.(list.id, name);
+    }
+    setIsEditing(false);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleRenameSubmit();
+    } else if (e.key === "Escape") {
+      setEditName(list.name);
+      setIsEditing(false);
+    }
+  };
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+
+  // Convert colorClass like "bg-blue-500" to a low-opacity version for drop highlight
+  const dropHighlight =
+    isOver && list.colorClass
+      ? list.colorClass.replace("bg-", "bg-").replace("-500", "-500/20")
+      : "";
+
   return (
-    <div ref={setNodeRef}>
-      <NavItem
-        icon={
-          <div
-            className={`w-2 h-2 rounded-full ${list.colorClass}`}
+    <div ref={setNodeRef} style={style} className="relative group">
+      {isEditing && !isCollapsed ? (
+        <div className="px-1">
+          <input
+            ref={editInputRef}
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onKeyDown={handleEditKeyDown}
+            onBlur={handleRenameSubmit}
+            className="w-full bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-white/40 transition-colors"
           />
-        }
-        label={list.name}
-        count={list.count}
-        isCollapsed={isCollapsed}
-        isDropTarget={isOver}
-        dropColorClass={list.colorClass}
-        onClick={onClick}
-      />
+        </div>
+      ) : (
+        <button
+          onClick={onClick}
+          className={`
+            flex items-center w-full rounded-lg transition-colors duration-200 group
+            ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-2.5"}
+            ${
+              isOver
+                ? `${dropHighlight} border border-white/20 text-white`
+                : "text-white/60 hover:bg-white/5 hover:text-white/90"
+            }
+          `}
+          {...attributes}
+          {...listeners}
+        >
+          <ProgressDot
+            count={list.count}
+            completedCount={list.completedCount}
+            colorClass={list.colorClass}
+          />
+
+          {!isCollapsed && (
+            <>
+              <span className="text-sm font-medium flex-1 text-left truncate">
+                {list.name}
+              </span>
+              {(onRename || onDelete) && (
+                <button
+                  ref={menuButtonRef}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(!showMenu);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-white/70 transition-all p-0.5 rounded hover:bg-white/10 flex-shrink-0"
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              )}
+            </>
+          )}
+        </button>
+      )}
+
+      {/* Context menu dropdown */}
+      {showMenu && !isCollapsed && (
+        <div
+          ref={menuRef}
+          className="absolute right-0 top-full mt-1 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 py-1 min-w-[120px] shadow-xl"
+        >
+          {onRename && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(false);
+                setEditName(list.name);
+                setIsEditing(true);
+              }}
+              className="w-full text-left px-3 py-1.5 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              Rename
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(false);
+                onDelete(list.id);
+              }}
+              className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:bg-white/10 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Tiny SVG ring that fills clockwise based on completion percentage */
+function ProgressDot({
+  count,
+  completedCount,
+  colorClass,
+}: {
+  count: number;
+  completedCount: number;
+  colorClass: string;
+}) {
+  const size = 20;
+  const strokeWidth = 3;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = count > 0 ? completedCount / count : 0;
+  const filled = circumference * progress;
+
+  // Map colorClass to an actual CSS color for SVG stroke
+  const colorMap: Record<string, string> = {
+    "bg-blue-500": "#3b82f6",
+    "bg-green-500": "#22c55e",
+    "bg-purple-500": "#a855f7",
+    "bg-amber-500": "#f59e0b",
+    "bg-red-500": "#ef4444",
+    "bg-pink-500": "#ec4899",
+    "bg-cyan-500": "#06b6d4",
+    "bg-orange-500": "#f97316",
+  };
+  const strokeColor = colorMap[colorClass] ?? "rgba(255,255,255,0.4)";
+
+  // Empty list — just a dim dot
+  if (count === 0) {
+    return (
+      <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
+        <div className="w-2.5 h-2.5 rounded-full bg-white/20" />
+      </div>
+    );
+  }
+
+  // All done — filled circle
+  if (progress >= 1) {
+    return (
+      <svg width={size} height={size} className="flex-shrink-0">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill={strokeColor}
+          opacity={0.8}
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      className="flex-shrink-0"
+      style={{ transform: "rotate(-90deg)" }}
+    >
+      {/* Background ring */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="rgba(255,255,255,0.15)"
+        strokeWidth={strokeWidth}
+      />
+      {/* Progress arc */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        strokeDasharray={`${filled} ${circumference - filled}`}
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

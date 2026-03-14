@@ -14,3 +14,4 @@ export { InboxView } from "./InboxView";
 export { InboxItemRow } from "./InboxItemRow";
 export { TriagePopup } from "./TriagePopup";
 export { InboxDragOverlay } from "./InboxDragOverlay";
+export { ConfirmDialog } from "./ConfirmDialog";

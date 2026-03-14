@@ -67,6 +67,7 @@ model List {
   id         String   @id @default(cuid())
   name       String
   colorClass String   @default("bg-gray-500")
+  sortOrder  Int      @default(0)
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   items      Item[]

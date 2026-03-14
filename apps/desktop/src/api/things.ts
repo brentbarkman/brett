@@ -73,6 +73,7 @@ export function useToggleThing() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["things"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["lists"] });
     },
   });
 }
