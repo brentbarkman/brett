@@ -17,6 +17,7 @@ interface AuthContextValue {
   ) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  refetchUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -77,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUpWithEmail,
         signInWithGoogle,
         signOut,
+        refetchUser: refetch,
       }}
     >
       {children}

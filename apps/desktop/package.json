@@ -22,7 +22,9 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"tsc -p tsconfig.electron.json -w\" \"electron .\"",
-    "electron:build": "vite build && tsc -p tsconfig.electron.json && node -e \"require('fs').writeFileSync('dist/electron/api-config.json', JSON.stringify({apiURL: process.env.VITE_API_URL || 'http://localhost:3001'}))\" && electron-builder"
+    "electron:build": "vite build && tsc -p tsconfig.electron.json && node -e \"require('fs').writeFileSync('dist/electron/api-config.json', JSON.stringify({apiURL: process.env.VITE_API_URL || 'http://localhost:3001'}))\" && electron-builder",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@brett/business": "workspace:*",
@@ -32,10 +34,13 @@
     "better-auth": "^1.2.7",
     "electron-store": "^8.2.0",
     "@tanstack/react-query": "^5.60.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.0",
@@ -46,6 +51,8 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.3.3",
-    "vite": "^5.0.0"
+    "jsdom": "^28.1.0",
+    "vite": "^5.0.0",
+    "vitest": "^3.0.0"
   }
 }

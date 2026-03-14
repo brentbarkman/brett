@@ -21,6 +21,8 @@ interface LeftNavProps {
   onNavClick?: (view: string) => void;
   /** Real inbox badge count */
   inboxCount?: number;
+  /** Callback when the user avatar is clicked */
+  onAvatarClick?: () => void;
 }
 
 export function LeftNav({
@@ -31,6 +33,7 @@ export function LeftNav({
   activeView = "today",
   onNavClick,
   inboxCount,
+  onAvatarClick,
 }: LeftNavProps) {
   return (
     <nav
@@ -104,9 +107,10 @@ export function LeftNav({
         {user && (
           <>
             <div className="h-px bg-white/10 w-full" />
-            <div
+            <button
+              onClick={onAvatarClick}
               className={`
-              flex items-center gap-2.5 rounded-lg transition-colors w-full
+              flex items-center gap-2.5 rounded-lg transition-colors w-full cursor-pointer hover:bg-white/5
               ${isCollapsed ? "justify-center p-2" : "px-2 py-1.5"}
             `}
             >
@@ -129,7 +133,7 @@ export function LeftNav({
                   {user.name || user.email}
                 </span>
               )}
-            </div>
+            </button>
           </>
         )}
       </div>
