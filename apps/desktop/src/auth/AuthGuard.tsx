@@ -11,7 +11,7 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background text-foreground">
+      <div className="flex h-screen items-center justify-center bg-black text-white/40">
         <div className="text-lg">Loading...</div>
       </div>
     );
