@@ -1,5 +1,18 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
+import { VideoBackground, VideoBackgroundHandle } from "./VideoBackground";
+
+const LOGIN_VIDEOS = [
+  "/videos/login-bg-1.mp4",
+  "/videos/login-bg-2.mp4",
+  "/videos/login-bg-3.mp4",
+  "/videos/login-bg-4.mp4",
+  "/videos/login-bg-5.mp4",
+  "/videos/login-bg-6.mp4",
+  "/videos/login-bg-7.mp4",
+  "/videos/login-bg-8.mp4",
+  "/videos/login-bg-9.mp4",
+];
 
 export function LoginPage() {
   const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
@@ -9,9 +22,39 @@ export function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const videoBgRef = useRef<VideoBackgroundHandle>(null);
+
+  // Focus email on mount, name when switching to sign-up
+  useEffect(() => {
+    if (isSignUp) {
+      // Wait for the max-height transition to open before focusing
+      const timer = setTimeout(() => nameRef.current?.focus(), 300);
+      return () => clearTimeout(timer);
+    } else {
+      emailRef.current?.focus();
+    }
+  }, [isSignUp]);
+
+  function validate(): string | null {
+    if (isSignUp && !name.trim()) return "Name is required";
+    if (!email.trim()) return "Email is required";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return "Please enter a valid email address";
+    if (!password) return "Password is required";
+    if (password.length < 8)
+      return "Password must be at least 8 characters";
+    return null;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setError(null);
     setSubmitting(true);
 
@@ -22,7 +65,12 @@ export function LoginPage() {
         await signInWithEmail(email, password);
       }
     } catch (err: any) {
-      setError(err.message || "Authentication failed");
+      const msg = err.message || "Authentication failed";
+      if (!isSignUp && /invalid.*(email|password)/i.test(msg)) {
+        setError("NO_ACCOUNT");
+      } else {
+        setError(msg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -38,18 +86,44 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-sm space-y-6 rounded-lg border border-border bg-card p-8">
+    <div
+      className="relative flex h-screen items-center justify-center overflow-hidden bg-black"
+      onClick={() => videoBgRef.current?.skip()}
+    >
+      <VideoBackground ref={videoBgRef} videos={LOGIN_VIDEOS} />
+
+      <style>{`
+        @keyframes cardEntrance {
+          from {
+            opacity: 0;
+            transform: translateY(12px) scale(0.96);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+
+      <div
+        className="relative z-10 w-full max-w-sm space-y-6 rounded-xl border border-white/10 bg-black/40 p-8 backdrop-blur-2xl"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          animation: "cardEntrance 450ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        }}
+      >
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground">Brett</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            Brett
+          </h1>
+          <p className="mt-1 text-sm text-white/60">
             {isSignUp ? "Create your account" : "Sign in to continue"}
           </p>
         </div>
 
         <button
           onClick={handleGoogle}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path
@@ -72,49 +146,56 @@ export function LoginPage() {
           Continue with Google
         </button>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">or</span>
-          </div>
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 border-t border-white/10" />
+          <span className="font-mono text-xs uppercase tracking-wider text-white/40">
+            or
+          </span>
+          <div className="h-px flex-1 border-t border-white/10" />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {isSignUp && (
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <div
+            className="overflow-hidden transition-all duration-300 ease-out"
+            style={{
+              maxHeight: isSignUp ? "80px" : "0px",
+              opacity: isSignUp ? 1 : 0,
+            }}
+          >
             <div>
               <label
                 htmlFor="name"
-                className="block text-sm font-medium text-foreground"
+                className="block font-mono text-xs uppercase tracking-wider text-white/40"
               >
                 Name
               </label>
               <input
+                ref={nameRef}
                 id="name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-blue-500/30 focus:outline-none"
                 placeholder="Your name"
+                tabIndex={isSignUp ? 0 : -1}
               />
             </div>
-          )}
+          </div>
 
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-foreground"
+              className="block font-mono text-xs uppercase tracking-wider text-white/40"
             >
               Email
             </label>
             <input
+              ref={emailRef}
               id="email"
               type="email"
-              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-blue-500/30 focus:outline-none"
               placeholder="you@example.com"
             />
           </div>
@@ -122,28 +203,46 @@ export function LoginPage() {
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-foreground"
+              className="block font-mono text-xs uppercase tracking-wider text-white/40"
             >
               Password
             </label>
             <input
               id="password"
               type="password"
-              required
-              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="Min 6 characters"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-blue-500/30 focus:outline-none"
+              placeholder="Min 8 characters"
             />
           </div>
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+              {error === "NO_ACCOUNT" ? (
+                <p>
+                  No account found.{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSignUp(true);
+                      setError(null);
+                    }}
+                    className="font-medium text-blue-400 hover:text-blue-300"
+                  >
+                    Create one?
+                  </button>
+                </p>
+              ) : (
+                <p>{error}</p>
+              )}
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="w-full rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:opacity-30 disabled:cursor-not-allowed"
           >
             {submitting
               ? "Loading..."
@@ -153,14 +252,14 @@ export function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-white/40">
           {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
           <button
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(null);
             }}
-            className="font-medium text-primary hover:underline"
+            className="text-blue-400 hover:text-blue-300"
           >
             {isSignUp ? "Sign in" : "Sign up"}
           </button>
