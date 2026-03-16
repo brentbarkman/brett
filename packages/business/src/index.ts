@@ -5,6 +5,7 @@ import type {
   ItemType,
   ItemStatus,
   Urgency,
+  DueDatePrecision,
   CreateItemInput,
   CreateListInput,
   BulkUpdateInput,
@@ -49,35 +50,69 @@ function utcDay(d: Date): number {
 
 export function computeUrgency(
   dueDate: Date | null,
+  dueDatePrecision: DueDatePrecision | null,
   completedAt: Date | null,
   now: Date = new Date()
 ): Urgency {
-  if (completedAt) return "done";
-  if (!dueDate) return "this_week"; // no due date → default bucket
+  if (!dueDate) return completedAt ? "done" : "later";
 
+  // Week-precision dates: urgency comes from the range, not the specific date
+  if (dueDatePrecision === "week") {
+    const todayMs = utcDay(now);
+    const dueMs = utcDay(dueDate);
+
+    // End of this week (next Sunday); on Sunday, "this week" means the upcoming week
+    const dayOfWeek = now.getUTCDay();
+    const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
+    const endOfThisWeekMs = todayMs + daysUntilSunday * 86400000;
+    const endOfNextWeekMs = endOfThisWeekMs + 7 * 86400000;
+
+    // If the stored Sunday has passed, it's overdue
+    if (dueMs < todayMs) return "overdue";
+    if (dueMs <= endOfThisWeekMs) return "this_week";
+    if (dueMs <= endOfNextWeekMs) return "next_week";
+    return "later";
+  }
+
+  // Day-precision dates: compare exact days
   const todayMs = utcDay(now);
   const dueMs = utcDay(dueDate);
 
   if (dueMs < todayMs) return "overdue";
   if (dueMs === todayMs) return "today";
 
-  // End of this week (Sunday)
-  const dayOfWeek = now.getUTCDay(); // 0=Sun
-  const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  // End of this week (next Sunday); on Sunday, "this week" means the upcoming week
+  const dayOfWeek = now.getUTCDay();
+  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
   const endOfThisWeekMs = todayMs + daysUntilSunday * 86400000;
   const endOfNextWeekMs = endOfThisWeekMs + 7 * 86400000;
 
   if (dueMs <= endOfThisWeekMs) return "this_week";
   if (dueMs <= endOfNextWeekMs) return "next_week";
-  return "this_week"; // beyond next week — default bucket
+  return "later";
 }
 
 export function computeDueDateLabel(
   dueDate: Date | null,
+  dueDatePrecision: DueDatePrecision | null,
   now: Date = new Date()
 ): string | undefined {
   if (!dueDate) return undefined;
 
+  // Week-precision: show "This Week" / "Next Week" / "Overdue"
+  if (dueDatePrecision === "week") {
+    const urgency = computeUrgency(dueDate, "week", null, now);
+    if (urgency === "overdue") return "Overdue";
+    if (urgency === "this_week") return "This Week";
+    if (urgency === "next_week") return "Next Week";
+    return dueDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  }
+
+  // Day-precision: show specific date labels
   const todayMs = utcDay(now);
   const dueMs = utcDay(dueDate);
   const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24));
@@ -123,6 +158,7 @@ export function itemToThing(
   item: ItemRecord & { list: { name: string } | null },
   now: Date = new Date()
 ): Thing {
+  const precision = (item.dueDatePrecision as DueDatePrecision) ?? null;
   return {
     id: item.id,
     type: item.type as ItemType,
@@ -132,8 +168,10 @@ export function itemToThing(
     status: item.status as ItemStatus,
     source: item.source,
     sourceUrl: item.sourceUrl ?? undefined,
-    urgency: computeUrgency(item.dueDate, item.completedAt, now),
-    dueDateLabel: computeDueDateLabel(item.dueDate, now),
+    urgency: computeUrgency(item.dueDate, precision, item.completedAt, now),
+    dueDate: item.dueDate?.toISOString(),
+    dueDatePrecision: precision ?? undefined,
+    dueDateLabel: computeDueDateLabel(item.dueDate, precision, now),
     isCompleted: item.completedAt !== null,
     brettObservation: item.brettObservation ?? undefined,
     description: item.description ?? undefined,
@@ -151,6 +189,7 @@ const VALID_STATUSES = new Set([
   "done",
   "archived",
 ]);
+const VALID_PRECISIONS = new Set(["day", "week"]);
 
 export function validateCreateItem(
   input: unknown
@@ -195,6 +234,12 @@ export function validateCreateItem(
     }
   }
 
+  if (obj.dueDatePrecision !== undefined && obj.dueDatePrecision !== null) {
+    if (typeof obj.dueDatePrecision !== "string" || !VALID_PRECISIONS.has(obj.dueDatePrecision)) {
+      return { ok: false, error: `dueDatePrecision must be one of: ${[...VALID_PRECISIONS].join(", ")}` };
+    }
+  }
+
   return {
     ok: true,
     data: {
@@ -205,6 +250,7 @@ export function validateCreateItem(
       source: typeof obj.source === "string" ? obj.source : undefined,
       sourceUrl: typeof obj.sourceUrl === "string" ? obj.sourceUrl : undefined,
       dueDate: typeof obj.dueDate === "string" ? obj.dueDate : undefined,
+      dueDatePrecision: typeof obj.dueDatePrecision === "string" ? obj.dueDatePrecision as DueDatePrecision : undefined,
       brettObservation:
         typeof obj.brettObservation === "string"
           ? obj.brettObservation
@@ -252,6 +298,12 @@ export function validateBulkUpdate(
     }
   }
 
+  if (updates.dueDatePrecision !== undefined && updates.dueDatePrecision !== null) {
+    if (typeof updates.dueDatePrecision !== "string" || !VALID_PRECISIONS.has(updates.dueDatePrecision)) {
+      return { ok: false, error: `updates.dueDatePrecision must be one of: ${[...VALID_PRECISIONS].join(", ")}` };
+    }
+  }
+
   if (updates.status !== undefined) {
     if (typeof updates.status !== "string" || !VALID_STATUSES.has(updates.status)) {
       return {
@@ -268,6 +320,7 @@ export function validateBulkUpdate(
       updates: {
         listId: updates.listId as string | null | undefined,
         dueDate: updates.dueDate as string | null | undefined,
+        dueDatePrecision: updates.dueDatePrecision as DueDatePrecision | null | undefined,
         status: updates.status as ItemStatus | undefined,
       },
     },
@@ -276,36 +329,49 @@ export function validateBulkUpdate(
 
 export type TriageDatePreset = "today" | "tomorrow" | "this_week" | "next_week" | "next_month";
 
-export function computeTriageDate(
+export interface TriageResult {
+  dueDate: string; // ISO string
+  dueDatePrecision: DueDatePrecision;
+}
+
+export function computeTriageResult(
   preset: TriageDatePreset,
   now: Date = new Date()
-): string {
+): TriageResult {
   const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
   switch (preset) {
     case "today":
-      return d.toISOString();
+      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
     case "tomorrow":
       d.setUTCDate(d.getUTCDate() + 1);
-      return d.toISOString();
+      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
     case "this_week": {
-      // End of current week (Sunday)
+      // Next Sunday (end of current week); if already Sunday, use next Sunday
       const dayOfWeek = d.getUTCDay(); // 0=Sun
-      const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+      const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
       d.setUTCDate(d.getUTCDate() + daysUntilSunday);
-      return d.toISOString();
+      return { dueDate: d.toISOString(), dueDatePrecision: "week" };
     }
     case "next_week": {
-      // End of next week (Sunday) — matches "this_week" pattern
+      // Sunday after "this_week" Sunday
       const dayOfWeek = d.getUTCDay();
-      const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+      const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
       d.setUTCDate(d.getUTCDate() + daysUntilSunday + 7);
-      return d.toISOString();
+      return { dueDate: d.toISOString(), dueDatePrecision: "week" };
     }
     case "next_month":
       d.setUTCMonth(d.getUTCMonth() + 1, 1);
-      return d.toISOString();
+      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
   }
+}
+
+/** @deprecated Use computeTriageResult instead */
+export function computeTriageDate(
+  preset: TriageDatePreset,
+  now: Date = new Date()
+): string {
+  return computeTriageResult(preset, now).dueDate;
 }
 
 export function computeRelativeAge(

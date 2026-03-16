@@ -86,6 +86,7 @@ model Item {
   source           String    @default("Brett")
   sourceUrl        String?
   dueDate          DateTime?
+  dueDatePrecision String?   // "day" | "week" — null means no due date
   completedAt      DateTime?
   snoozedUntil     DateTime?
   brettObservation String?

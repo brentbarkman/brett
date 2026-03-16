@@ -7,9 +7,10 @@ interface ThingCardProps {
   thing: Thing;
   onClick: () => void;
   onToggle?: (id: string) => void;
+  isFocused?: boolean;
 }
 
-export function ThingCard({ thing, onClick, onToggle }: ThingCardProps) {
+export function ThingCard({ thing, onClick, onToggle, isFocused }: ThingCardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
     data: {
@@ -68,7 +69,9 @@ export function ThingCard({ thing, onClick, onToggle }: ThingCardProps) {
         border transition-all duration-200
         ${completing
           ? "bg-green-500/[0.03] border-green-500/15"
-          : "bg-white/5 hover:bg-white/10 border-white/5 hover:border-white/10"
+          : isFocused
+            ? "bg-white/10 border-blue-500/30"
+            : "bg-white/5 hover:bg-white/10 border-white/5 hover:border-white/10"
         }
         ${thing.isCompleted && !completing ? "opacity-50" : "opacity-100"}
         ${isDragging ? "opacity-50" : ""}

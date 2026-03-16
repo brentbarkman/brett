@@ -38,7 +38,10 @@ export interface Notification {
 
 export type ItemType = "task" | "content";
 export type ItemStatus = "active" | "snoozed" | "done" | "archived";
-export type Urgency = "overdue" | "today" | "this_week" | "next_week" | "done";
+export type Urgency = "overdue" | "today" | "this_week" | "next_week" | "later" | "done";
+
+/** DB record — mirrors the Prisma Item model */
+export type DueDatePrecision = "day" | "week";
 
 /** DB record — mirrors the Prisma Item model */
 export interface ItemRecord {
@@ -50,6 +53,7 @@ export interface ItemRecord {
   source: string;
   sourceUrl: string | null;
   dueDate: Date | null;
+  dueDatePrecision: string | null; // "day" | "week"
   completedAt: Date | null;
   snoozedUntil: Date | null;
   brettObservation: string | null;
@@ -70,6 +74,8 @@ export interface Thing {
   source: string;
   sourceUrl?: string;
   urgency: Urgency;
+  dueDate?: string; // ISO string
+  dueDatePrecision?: DueDatePrecision;
   dueDateLabel?: string;
   isCompleted: boolean;
   brettObservation?: string;
@@ -85,6 +91,7 @@ export interface CreateItemInput {
   source?: string;
   sourceUrl?: string;
   dueDate?: string; // ISO string
+  dueDatePrecision?: DueDatePrecision;
   brettObservation?: string;
   listId?: string;
   status?: ItemStatus;
@@ -96,6 +103,7 @@ export interface UpdateItemInput {
   source?: string;
   sourceUrl?: string | null;
   dueDate?: string | null; // ISO string
+  dueDatePrecision?: DueDatePrecision | null;
   brettObservation?: string | null;
   listId?: string | null;
   status?: ItemStatus;
@@ -117,6 +125,7 @@ export interface BulkUpdateInput {
   updates: {
     listId?: string | null;
     dueDate?: string | null;
+    dueDatePrecision?: DueDatePrecision | null;
     status?: ItemStatus;
   };
 }

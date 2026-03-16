@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Plus } from "lucide-react";
 import type { Thing, NavList } from "@brett/types";
 import { ThingCard } from "./ThingCard";
@@ -9,11 +9,12 @@ interface ThingsListProps {
   onItemClick: (thing: Thing) => void;
   onToggle?: (id: string) => void;
   onAdd: (title: string, listId: string | null) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[]) => void;
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
   header?: React.ReactNode;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, header }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTriageOpen, header }: ThingsListProps) {
   const uncompleted = things.filter((t) => !t.isCompleted);
   const done = things.filter((t) => t.isCompleted);
 
@@ -21,8 +22,84 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, header
     overdue: uncompleted.filter((t) => t.urgency === "overdue"),
     today: uncompleted.filter((t) => t.urgency === "today"),
     this_week: uncompleted.filter((t) => t.urgency === "this_week"),
-    next_week: uncompleted.filter((t) => t.urgency === "next_week"),
   };
+
+  // Flat list of all items for keyboard navigation
+  const allItems = [...grouped.overdue, ...grouped.today, ...grouped.this_week, ...done];
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const focusedThing = allItems[focusedIndex] ?? null;
+
+  const handleItemClick = useCallback((thing: Thing) => {
+    const idx = allItems.findIndex((t) => t.id === thing.id);
+    if (idx !== -1) setFocusedIndex(idx);
+    onItemClick(thing);
+  }, [allItems, onItemClick]);
+
+  // Reset focused index when items change
+  useEffect(() => {
+    setFocusedIndex((i) => Math.min(i, Math.max(allItems.length - 1, 0)));
+  }, [allItems.length]);
+
+  // Keyboard handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      const key = e.key;
+
+      if (key === "ArrowDown" || key === "j") {
+        e.preventDefault();
+        setFocusedIndex((i) => Math.min(i + 1, allItems.length - 1));
+        return;
+      }
+
+      if (key === "ArrowUp" || key === "k") {
+        e.preventDefault();
+        setFocusedIndex((i) => Math.max(i - 1, 0));
+        return;
+      }
+
+      if (key === "Enter") {
+        e.preventDefault();
+        if (focusedThing) onItemClick(focusedThing);
+        return;
+      }
+
+      if (key === "e") {
+        e.preventDefault();
+        if (focusedThing && onToggle) onToggle(focusedThing.id);
+        return;
+      }
+
+      if (key === "l") {
+        e.preventDefault();
+        if (focusedThing && onTriageOpen) onTriageOpen("list-first", [focusedThing.id]);
+        return;
+      }
+
+      if (key === "d") {
+        e.preventDefault();
+        if (focusedThing && onTriageOpen) onTriageOpen("date-first", [focusedThing.id]);
+        return;
+      }
+
+      if (key === "n") {
+        e.preventDefault();
+        quickAddRef.current?.focus();
+        return;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [focusedIndex, focusedThing, allItems, onItemClick, onToggle, onTriageOpen]);
+
+  const quickAddRef = useRef<HTMLInputElement>(null);
 
   const hasUncompleted = uncompleted.length > 0;
 
@@ -34,6 +111,16 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, header
   const hadDone = useRef(done.length > 0);
   const doneIsNew = done.length > 0 && !hadDone.current;
   useEffect(() => { hadDone.current = done.length > 0; }, [done.length]);
+
+  // Compute running offset so Section knows which indices are "focused"
+  let offset = 0;
+  const overdueOffset = offset;
+  offset += grouped.overdue.length;
+  const todayOffset = offset;
+  offset += grouped.today.length;
+  const thisWeekOffset = offset;
+  offset += grouped.this_week.length;
+  const doneOffset = offset;
 
   return (
     <div className="flex flex-col gap-4 pb-20">
@@ -50,20 +137,17 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, header
           )}
 
           {grouped.overdue.length > 0 && (
-            <Section title="Overdue" things={grouped.overdue} onItemClick={onItemClick} onToggle={onToggle} />
+            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={overdueOffset} />
           )}
           {grouped.today.length > 0 && (
-            <Section title="Today" things={grouped.today} onItemClick={onItemClick} onToggle={onToggle} />
+            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={todayOffset} />
           )}
           {grouped.this_week.length > 0 && (
-            <Section title="This Week" things={grouped.this_week} onItemClick={onItemClick} onToggle={onToggle} />
-          )}
-          {grouped.next_week.length > 0 && (
-            <Section title="Next Week" things={grouped.next_week} onItemClick={onItemClick} onToggle={onToggle} />
+            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} />
           )}
 
           {hasUncompleted && (
-            <InlineQuickAdd lists={lists} onAdd={onAdd} />
+            <InlineQuickAdd ref={quickAddRef} lists={lists} onAdd={onAdd} />
           )}
 
           {done.length > 0 && (
@@ -74,11 +158,22 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, header
                 opacity: 0,
               } : undefined}
             >
-              <Section title="Done" things={done} onItemClick={onItemClick} onToggle={onToggle} />
+              <Section title="Done" things={done} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={doneOffset} />
             </div>
           )}
         </div>
       </div>
+
+      {/* Keyboard hint bar */}
+      {allItems.length > 0 && (
+        <div className="flex items-center justify-center gap-4 text-[10px] text-white/20 font-mono">
+          <span>j/k navigate</span>
+          <span>e done</span>
+          <span>l list</span>
+          <span>d date</span>
+          <span>n add</span>
+        </div>
+      )}
 
       <style>{`
         @keyframes sectionEnter {
@@ -101,11 +196,15 @@ function Section({
   things,
   onItemClick,
   onToggle,
+  focusedIndex,
+  indexOffset,
 }: {
   title: string;
   things: Thing[];
   onItemClick: (thing: Thing) => void;
   onToggle?: (id: string) => void;
+  focusedIndex: number;
+  indexOffset: number;
 }) {
   return (
     <div>
@@ -116,12 +215,13 @@ function Section({
         <div className="h-px bg-white/10 flex-1" />
       </div>
       <div className="flex flex-col gap-2">
-        {things.map((item) => (
+        {things.map((item, i) => (
           <ThingCard
             key={item.id}
             thing={item}
             onClick={() => onItemClick(item)}
             onToggle={onToggle}
+            isFocused={focusedIndex === indexOffset + i}
           />
         ))}
       </div>
@@ -129,16 +229,17 @@ function Section({
   );
 }
 
-function InlineQuickAdd({
-  lists,
-  onAdd,
-}: {
-  lists: NavList[];
-  onAdd: (title: string, listId: string | null) => void;
-}) {
+const InlineQuickAdd = React.forwardRef<
+  HTMLInputElement,
+  {
+    lists: NavList[];
+    onAdd: (title: string, listId: string | null) => void;
+  }
+>(function InlineQuickAdd({ lists, onAdd }, ref) {
   const [title, setTitle] = useState("");
   const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const localRef = useRef<HTMLInputElement>(null);
+  const inputRef = (ref as React.RefObject<HTMLInputElement>) || localRef;
 
   const handleSubmit = () => {
     if (!title.trim()) return;
@@ -185,4 +286,4 @@ function InlineQuickAdd({
       )}
     </div>
   );
-}
+});

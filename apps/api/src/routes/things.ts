@@ -67,6 +67,8 @@ things.patch("/bulk", async (c) => {
   if (data.updates.listId !== undefined) updateData.listId = data.updates.listId;
   if (data.updates.dueDate !== undefined)
     updateData.dueDate = data.updates.dueDate ? new Date(data.updates.dueDate) : null;
+  if (data.updates.dueDatePrecision !== undefined)
+    updateData.dueDatePrecision = data.updates.dueDatePrecision;
   if (data.updates.status !== undefined) updateData.status = data.updates.status;
 
   const result = await prisma.item.updateMany({
@@ -166,6 +168,7 @@ things.post("/", async (c) => {
       source: data.source ?? "Brett",
       sourceUrl: data.sourceUrl,
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      dueDatePrecision: data.dueDatePrecision ?? null,
       brettObservation: data.brettObservation,
       status: data.status ?? "active",
       listId: data.listId ?? null,
@@ -199,6 +202,8 @@ things.patch("/:id", async (c) => {
   if (body.sourceUrl !== undefined) updateData.sourceUrl = body.sourceUrl;
   if (body.dueDate !== undefined)
     updateData.dueDate = body.dueDate ? new Date(body.dueDate) : null;
+  if (body.dueDatePrecision !== undefined)
+    updateData.dueDatePrecision = body.dueDatePrecision;
   if (body.brettObservation !== undefined)
     updateData.brettObservation = body.brettObservation;
   if (body.listId !== undefined) updateData.listId = body.listId;

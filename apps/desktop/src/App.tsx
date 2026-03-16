@@ -126,8 +126,11 @@ export function App() {
   };
 
   const handleAddTask = (title: string, listId: string | null) => {
+    // Tasks created in the today view default to due today
+    const now = new Date();
+    const todayISO = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())).toISOString();
     createThing.mutate(
-      { type: "task", title, listId: listId ?? undefined },
+      { type: "task", title, listId: listId ?? undefined, dueDate: todayISO, dueDatePrecision: "day" },
       { onError: (err) => console.error("Failed to create thing:", err) }
     );
   };
@@ -153,7 +156,7 @@ export function App() {
 
   const handleInboxTriage = (
     ids: string[],
-    updates: { listId?: string | null; dueDate?: string | null }
+    updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => {
     bulkUpdate.mutate({ ids, updates });
   };
@@ -165,6 +168,7 @@ export function App() {
   const handleTriageConfirm = (updates: {
     listId?: string | null;
     dueDate?: string | null;
+    dueDatePrecision?: "day" | "week" | null;
   }) => {
     if (triageState) {
       handleInboxTriage(triageState.ids, updates);
@@ -240,8 +244,10 @@ export function App() {
     [bulkUpdate, lists, reorderLists]
   );
 
-  // Filter things based on active pill
+  // Today view shows overdue + today + this week
+  const todayViewUrgencies = new Set(["overdue", "today", "this_week"]);
   const filteredThings = things.filter((thing) => {
+    if (!todayViewUrgencies.has(thing.urgency)) return false;
     if (activeFilter === "All") return true;
     if (activeFilter === "Tasks") return thing.type === "task";
     if (activeFilter === "Content") return thing.type === "content";
@@ -274,10 +280,11 @@ export function App() {
       onItemClick={handleItemClick}
       onToggle={handleToggle}
       onAdd={handleAddTask}
+      onTriageOpen={handleTriageOpen}
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
     />
   ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={handleItemClick} onToggle={handleToggle} onAdd={handleAddTask} />
+    <ThingsList things={filteredThings} lists={lists} onItemClick={handleItemClick} onToggle={handleToggle} onAdd={handleAddTask} onTriageOpen={handleTriageOpen} />
   );
 
   const inboxCount = inboxData?.visible.length ?? 0;
@@ -413,6 +420,18 @@ export function App() {
             />
           )}
         </DragOverlay>
+
+        {/* Triage popup (works from both today and inbox views) */}
+        {triageState && activeView === "today" && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <TriagePopup
+              mode={triageState.mode}
+              lists={lists}
+              onConfirm={handleTriageConfirm}
+              onCancel={handleTriageCancel}
+            />
+          </div>
+        )}
 
         {/* Delete list confirmation */}
         {deleteListConfirm && (

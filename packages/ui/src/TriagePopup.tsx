@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Calendar, List } from "lucide-react";
-import type { NavList } from "@brett/types";
-import { computeTriageDate, type TriageDatePreset } from "@brett/business";
+import type { NavList, DueDatePrecision } from "@brett/types";
+import { computeTriageResult, type TriageDatePreset } from "@brett/business";
 
 interface TriagePopupProps {
   mode: "list-first" | "date-first";
@@ -9,6 +9,7 @@ interface TriagePopupProps {
   onConfirm: (updates: {
     listId?: string | null;
     dueDate?: string | null;
+    dueDatePrecision?: DueDatePrecision | null;
   }) => void;
   onCancel: () => void;
 }
@@ -36,6 +37,7 @@ export function TriagePopup({
   const [currentStep, setCurrentStep] = useState<Step>(primaryStep);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedPrecision, setSelectedPrecision] = useState<DueDatePrecision | null>(null);
   const [filterText, setFilterText] = useState("");
   const [focusedIndex, setFocusedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,7 +67,7 @@ export function TriagePopup({
   }, [filteredLists.length, focusedIndex, currentStep]);
 
   const advanceOrConfirm = useCallback(
-    (listId: string | null, date: string | null) => {
+    (listId: string | null, date: string | null, precision: DueDatePrecision | null) => {
       // If we're on the primary step, advance to secondary
       if (currentStep === primaryStep) {
         setCurrentStep(secondaryStep);
@@ -73,7 +75,7 @@ export function TriagePopup({
         setFocusedIndex(0);
       } else {
         // On secondary step, confirm
-        onConfirm({ listId, dueDate: date });
+        onConfirm({ listId, dueDate: date, dueDatePrecision: precision });
       }
     },
     [currentStep, primaryStep, secondaryStep, onConfirm]
@@ -82,23 +84,25 @@ export function TriagePopup({
   const selectList = useCallback(
     (listId: string) => {
       setSelectedListId(listId);
-      advanceOrConfirm(listId, selectedDate);
+      advanceOrConfirm(listId, selectedDate, selectedPrecision);
     },
-    [advanceOrConfirm, selectedDate]
+    [advanceOrConfirm, selectedDate, selectedPrecision]
   );
 
   const selectDate = useCallback(
     (preset: TriageDatePreset) => {
-      const date = computeTriageDate(preset);
-      setSelectedDate(date);
-      advanceOrConfirm(selectedListId, date);
+      const result = computeTriageResult(preset);
+      setSelectedDate(result.dueDate);
+      setSelectedPrecision(result.dueDatePrecision);
+      advanceOrConfirm(selectedListId, result.dueDate, result.dueDatePrecision);
     },
     [advanceOrConfirm, selectedListId]
   );
 
   const clearDate = useCallback(() => {
     setSelectedDate(null);
-    advanceOrConfirm(selectedListId, null);
+    setSelectedPrecision(null);
+    advanceOrConfirm(selectedListId, null, null);
   }, [advanceOrConfirm, selectedListId]);
 
   const handleKeyDown = useCallback(
@@ -124,24 +128,25 @@ export function TriagePopup({
             setFilterText("");
             setFocusedIndex(0);
           } else {
-            onConfirm({ listId, dueDate: selectedDate });
+            onConfirm({ listId, dueDate: selectedDate, dueDatePrecision: selectedPrecision });
           }
         } else if (currentStep === "date") {
           const preset = DATE_PRESETS[focusedIndex];
           if (preset) {
-            const date = computeTriageDate(preset.preset);
+            const result = computeTriageResult(preset.preset);
             if (currentStep === primaryStep) {
-              setSelectedDate(date);
+              setSelectedDate(result.dueDate);
+              setSelectedPrecision(result.dueDatePrecision);
               setCurrentStep(secondaryStep);
               setFilterText("");
               setFocusedIndex(0);
             } else {
-              onConfirm({ listId: selectedListId, dueDate: date });
+              onConfirm({ listId: selectedListId, dueDate: result.dueDate, dueDatePrecision: result.dueDatePrecision });
             }
           }
         } else {
           // Enter with no selection — confirm what we have so far
-          onConfirm({ listId: selectedListId, dueDate: selectedDate });
+          onConfirm({ listId: selectedListId, dueDate: selectedDate, dueDatePrecision: selectedPrecision });
         }
         return;
       }

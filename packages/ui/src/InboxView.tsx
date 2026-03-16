@@ -15,7 +15,7 @@ interface InboxViewProps {
   onAdd: (title: string) => void;
   onTriage: (
     ids: string[],
-    updates: { listId?: string | null; dueDate?: string | null }
+    updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => void;
   /** Render prop for triage popup — InboxView passes trigger info, parent renders popup */
   triagePopup?: React.ReactNode;
