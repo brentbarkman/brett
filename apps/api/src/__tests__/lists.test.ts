@@ -309,5 +309,26 @@ describe("Lists routes", () => {
       });
       expect(res.status).toBe(400);
     });
+
+    it("succeeds when user has archived lists — only active IDs required", async () => {
+      // Create and archive a list
+      const archRes = await authRequest("/lists", reorderToken, {
+        method: "POST",
+        body: JSON.stringify({ name: "Archived One" }),
+      });
+      const archList = (await archRes.json()) as any;
+      await authRequest(`/lists/${archList.id}/archive`, reorderToken, { method: "PATCH" });
+
+      // Reorder only the active lists (original 3) — should succeed
+      const getRes = await authRequest("/lists", reorderToken);
+      const activeLists = (await getRes.json()) as any[];
+      const activeIds = activeLists.map((l: any) => l.id);
+
+      const res = await authRequest("/lists/reorder", reorderToken, {
+        method: "PUT",
+        body: JSON.stringify({ ids: activeIds }),
+      });
+      expect(res.status).toBe(200);
+    });
   });
 });

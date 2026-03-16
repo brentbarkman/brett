@@ -6,6 +6,7 @@ import {
   itemToThing,
   validateCreateItem,
   validateCreateList,
+  validateUpdateList,
   validateBulkUpdate,
   computeRelativeAge,
   computeTriageResult,
@@ -529,6 +530,78 @@ describe("validateCreateList", () => {
   it("rejects null", () => expect(validateCreateList(null).ok).toBe(false));
 });
 
+// ── validateCreateList extended ──
+
+describe("validateCreateList extended", () => {
+  it("accepts a valid colorClass from the allowlist", () => {
+    const result = validateCreateList({ name: "Test", colorClass: "bg-blue-400" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.colorClass).toBe("bg-blue-400");
+  });
+
+  it("silently ignores an invalid colorClass", () => {
+    const result = validateCreateList({ name: "Test", colorClass: "bg-evil-500" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.colorClass).toBeUndefined();
+  });
+
+  it("rejects name longer than 100 characters", () => {
+    const result = validateCreateList({ name: "a".repeat(101) });
+    expect(result.ok).toBe(false);
+  });
+
+  it("accepts name exactly 100 characters", () => {
+    const result = validateCreateList({ name: "a".repeat(100) });
+    expect(result.ok).toBe(true);
+  });
+});
+
+// ── validateUpdateList ──
+
+describe("validateUpdateList", () => {
+  it("accepts valid name update", () => {
+    const result = validateUpdateList({ name: "New Name" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.name).toBe("New Name");
+  });
+
+  it("accepts valid colorClass update", () => {
+    const result = validateUpdateList({ colorClass: "bg-emerald-400" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.colorClass).toBe("bg-emerald-400");
+  });
+
+  it("rejects invalid colorClass with error", () => {
+    const result = validateUpdateList({ colorClass: "bg-evil-500" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("invalid colorClass");
+  });
+
+  it("rejects name longer than 100 characters", () => {
+    const result = validateUpdateList({ name: "a".repeat(101) });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects empty name", () => {
+    const result = validateUpdateList({ name: "" });
+    expect(result.ok).toBe(false);
+  });
+
+  it("accepts colorClass-only update (name undefined)", () => {
+    const result = validateUpdateList({ colorClass: "bg-blue-400" });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.name).toBeUndefined();
+      expect(result.data.colorClass).toBe("bg-blue-400");
+    }
+  });
+
+  it("rejects null body", () => {
+    const result = validateUpdateList(null);
+    expect(result.ok).toBe(false);
+  });
+});
+
 // ── groupUpcomingThings ──
 
 describe("groupUpcomingThings", () => {
@@ -607,5 +680,28 @@ describe("groupUpcomingThings", () => {
     const sections = groupUpcomingThings(things, NOW);
     expect(sections.length).toBe(1);
     expect(sections[0].label).toBe("Monday");
+  });
+
+  it("items with no dueDate are excluded from all sections", () => {
+    const things = [
+      makeThing({ title: "No date", dueDate: undefined }),
+      makeThing({ title: "Has date", dueDate: "2026-03-14T00:00:00Z", dueDatePrecision: "day" }),
+    ];
+    const sections = groupUpcomingThings(things, NOW);
+    const allTitles = sections.flatMap((s) => s.things.map((t) => t.title));
+    expect(allTitles).toContain("Has date");
+    expect(allTitles).not.toContain("No date");
+  });
+
+  it("week-precision item beyond next week falls into future weekly range", () => {
+    const things = [
+      makeThing({ title: "Far week", dueDate: "2026-04-12T00:00:00Z", dueDatePrecision: "week" }),
+    ];
+    const sections = groupUpcomingThings(things, NOW);
+    expect(sections.length).toBe(1);
+    // Should be in a "Apr X – Y" range, not "This Week" or "Next Week"
+    expect(sections[0].label).not.toBe("This Week");
+    expect(sections[0].label).not.toBe("Next Week");
+    expect(sections[0].label).toMatch(/Apr/);
   });
 });
