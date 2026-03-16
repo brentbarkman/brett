@@ -112,6 +112,52 @@ describe("Lists routes", () => {
     expect(body.length).toBe(0);
   });
 
+  describe("archive filtering", () => {
+    let archiveToken: string;
+    let activeListId: string;
+    let archivedListId: string;
+
+    beforeAll(async () => {
+      const user = await createTestUser("Archive Filter User");
+      archiveToken = user.token;
+
+      const res1 = await authRequest("/lists", archiveToken, {
+        method: "POST",
+        body: JSON.stringify({ name: "Active List" }),
+      });
+      activeListId = ((await res1.json()) as any).id;
+
+      const res2 = await authRequest("/lists", archiveToken, {
+        method: "POST",
+        body: JSON.stringify({ name: "Archived List" }),
+      });
+      archivedListId = ((await res2.json()) as any).id;
+
+      // Archive directly in the database (archive endpoint doesn't exist yet)
+      const { prisma } = await import("../lib/prisma.js");
+      await prisma.list.update({
+        where: { id: archivedListId },
+        data: { archivedAt: new Date() },
+      });
+    });
+
+    it("GET /lists defaults to non-archived only", async () => {
+      const res = await authRequest("/lists", archiveToken);
+      const body = (await res.json()) as any[];
+      expect(body.every((l: any) => l.archivedAt === null)).toBe(true);
+      expect(body.find((l: any) => l.id === activeListId)).toBeDefined();
+      expect(body.find((l: any) => l.id === archivedListId)).toBeUndefined();
+    });
+
+    it("GET /lists?archived=true returns only archived", async () => {
+      const res = await authRequest("/lists?archived=true", archiveToken);
+      const body = (await res.json()) as any[];
+      expect(body.every((l: any) => l.archivedAt !== null)).toBe(true);
+      expect(body.find((l: any) => l.id === archivedListId)).toBeDefined();
+      expect(body.find((l: any) => l.id === activeListId)).toBeUndefined();
+    });
+  });
+
   describe("PUT /lists/reorder", () => {
     let reorderToken: string;
     let listIds: string[];

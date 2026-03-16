@@ -11,9 +11,17 @@ lists.use("*", authMiddleware);
 // GET /lists — all lists for user with item counts
 lists.get("/", async (c) => {
   const user = c.get("user");
+  const archived = c.req.query("archived");
+
+  const where: Record<string, unknown> = { userId: user.id };
+  if (archived === "true") {
+    where.archivedAt = { not: null };
+  } else {
+    where.archivedAt = null;
+  }
 
   const userLists = await prisma.list.findMany({
-    where: { userId: user.id },
+    where,
     include: {
       _count: {
         select: {
@@ -95,7 +103,7 @@ lists.put("/reorder", async (c) => {
 
   // Validate all IDs belong to the user
   const userLists = await prisma.list.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, archivedAt: null },
     select: { id: true },
   });
   const userListIds = new Set(userLists.map((l) => l.id));
