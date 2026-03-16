@@ -221,7 +221,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
                 onChange={(e) => setEditName(e.target.value)}
                 onKeyDown={handleNameKeyDown}
                 onBlur={handleNameSubmit}
-                className="bg-transparent border-none outline-none text-white text-xl font-bold flex-1"
+                className="bg-transparent border-none outline-none text-white text-xl font-bold leading-none flex-1"
               />
             ) : (
               <h2
@@ -231,7 +231,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
                     setIsEditingName(true);
                   }
                 }}
-                className={`text-xl font-bold text-white ${!isArchived ? "cursor-pointer hover:text-white/80" : ""}`}
+                className={`text-xl font-bold text-white leading-none ${!isArchived ? "cursor-pointer hover:text-white/80" : ""}`}
               >
                 {list.name}
               </h2>
