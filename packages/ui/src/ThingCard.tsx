@@ -81,6 +81,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
     >
       {/* Clickable toggle icon */}
       <button
+        tabIndex={-1}
         onClick={handleToggleClick}
         className={`
           toggle-icon relative flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
