@@ -488,13 +488,13 @@ export function groupUpcomingThings(things: Thing[], now: Date = new Date()): Up
     }
   }
 
-  // 2. "This Week" — week-precision items for current week
+  // 2. "This Week" — any unplaced items due within this week's range
   const dayOfWeek = now.getUTCDay(); // 0=Sun
   const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
   const thisWeekEndMs = todayMs + daysUntilSunday * DAY_MS;
 
   const thisWeekThings = things.filter((t) => {
-    if (placed.has(t.id) || t.dueDatePrecision !== "week" || !t.dueDate) return false;
+    if (placed.has(t.id) || !t.dueDate) return false;
     const dueMs = utcDay(new Date(t.dueDate));
     return dueMs > todayMs && dueMs <= thisWeekEndMs;
   });
@@ -503,10 +503,10 @@ export function groupUpcomingThings(things: Thing[], now: Date = new Date()): Up
     thisWeekThings.forEach((t) => placed.add(t.id));
   }
 
-  // 3. "Next Week"
+  // 3. "Next Week" — any unplaced items due within next week's range
   const nextWeekEndMs = thisWeekEndMs + 7 * DAY_MS;
   const nextWeekThings = things.filter((t) => {
-    if (placed.has(t.id) || t.dueDatePrecision !== "week" || !t.dueDate) return false;
+    if (placed.has(t.id) || !t.dueDate) return false;
     const dueMs = utcDay(new Date(t.dueDate));
     return dueMs > thisWeekEndMs && dueMs <= nextWeekEndMs;
   });

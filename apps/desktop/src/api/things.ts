@@ -59,8 +59,8 @@ export function useListThings(listId: string) {
 /** Active items with due dates after today (for Upcoming view) */
 export function useUpcomingThings() {
   const now = new Date();
-  const todayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-  return useThings({ status: "active", dueAfter: todayEnd.toISOString() });
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return useThings({ status: "active", dueAfter: todayStart.toISOString() });
 }
 
 export function useCreateThing() {
