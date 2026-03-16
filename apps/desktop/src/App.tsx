@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -332,6 +332,7 @@ export function App() {
                 <ListView lists={lists} archivedLists={archivedLists} onItemClick={handleItemClick} onArchiveList={handleArchiveList} />
               </MainLayout>
             } />
+            <Route path="*" element={<Navigate to="/today" replace />} />
           </Routes>
         </div>
 

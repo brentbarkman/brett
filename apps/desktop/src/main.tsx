@@ -2,7 +2,7 @@ import "./index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { HashRouter } from "react-router-dom";
 import { App } from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { AuthGuard } from "./auth/AuthGuard";
@@ -22,9 +22,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <AuthProvider>
       <AuthGuard fallback={<LoginPage />}>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={["/today"]}>
+          <HashRouter>
             <App />
-          </MemoryRouter>
+          </HashRouter>
         </QueryClientProvider>
       </AuthGuard>
     </AuthProvider>
