@@ -324,11 +324,6 @@ export function InboxView({
       <div className="flex items-center gap-3">
         <Inbox size={20} className="text-white/50" />
         <h2 className="text-xl font-bold text-white">Inbox</h2>
-        {activeThings.length > 0 && (
-          <span className="text-sm text-white/40">
-            {activeThings.length} item{activeThings.length !== 1 ? "s" : ""}
-          </span>
-        )}
       </div>
       <span className="text-[10px] text-white/25 font-mono">
         n to add

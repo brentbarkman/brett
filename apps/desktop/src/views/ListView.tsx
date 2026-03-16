@@ -170,7 +170,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
         <div className="relative" ref={colorPickerRef}>
           <button
             onClick={() => !isArchived && setShowColorPicker(!showColorPicker)}
-            className={`w-4 h-4 rounded-full flex-shrink-0 transition-transform ${!isArchived ? "hover:scale-125 cursor-pointer" : "cursor-default"}`}
+            className={`w-3.5 h-3.5 rounded-full flex-shrink-0 transition-transform mt-[1px] ${!isArchived ? "hover:scale-125 cursor-pointer" : "cursor-default"}`}
             style={{ backgroundColor: dotColor }}
           />
           {showColorPicker && (
@@ -197,7 +197,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
             onChange={(e) => setEditName(e.target.value)}
             onKeyDown={handleNameKeyDown}
             onBlur={handleNameSubmit}
-            className="bg-transparent border-none outline-none text-white text-xl font-bold leading-none flex-1"
+            className="bg-transparent border-none outline-none text-white text-xl font-bold leading-none"
           />
         ) : (
           <h2
@@ -211,13 +211,6 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
           >
             {list.name}
           </h2>
-        )}
-
-        {/* Item count */}
-        {things.length > 0 && (
-          <span className="text-sm text-white/40">
-            {things.length} item{things.length !== 1 ? "s" : ""}
-          </span>
         )}
       </div>
 
