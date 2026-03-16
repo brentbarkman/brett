@@ -103,13 +103,10 @@ export function useToggleThing() {
   });
 }
 
-export function useInboxThings(includeHidden = false) {
+export function useInboxThings() {
   return useQuery({
-    queryKey: ["inbox", { includeHidden }],
-    queryFn: () =>
-      apiFetch<InboxResponse>(
-        `/things/inbox${includeHidden ? "?includeHidden=true" : ""}`
-      ),
+    queryKey: ["inbox"],
+    queryFn: () => apiFetch<InboxResponse>("/things/inbox"),
   });
 }
 

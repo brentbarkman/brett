@@ -118,8 +118,8 @@ export function App() {
   const endOfWeek = new Date(todayStart.getTime() + daysUntilSunday * 86400000);
   const { data: activeThingsForCount = [] } = useActiveThings(endOfWeek.toISOString());
 
-  // Inbox data — fetch with hidden when inbox is active
-  const { data: inboxData } = useInboxThings(location.pathname === "/inbox");
+  // Inbox data
+  const { data: inboxData } = useInboxThings();
 
   // Apply dark mode to root
   useEffect(() => {
@@ -327,8 +327,6 @@ export function App() {
               <MainLayout onEventClick={handleItemClick}>
                 <InboxView
                   things={inboxData?.visible ?? []}
-                  hiddenCount={inboxData?.hiddenCount ?? 0}
-                  hiddenThings={inboxData?.hidden}
                   lists={lists}
                   onItemClick={handleItemClick}
                   onToggle={handleToggle}

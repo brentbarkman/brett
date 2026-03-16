@@ -91,56 +91,26 @@ things.patch("/bulk", async (c) => {
   return c.json({ updated: result.count });
 });
 
-// GET /things/inbox — inbox items
+// GET /things/inbox — items with no due date and no list
 things.get("/inbox", async (c) => {
   const user = c.get("user");
-  const includeHidden = c.req.query("includeHidden") === "true";
   const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-  const baseWhere = {
-    userId: user.id,
-    listId: null,
-    status: { notIn: ["done", "archived", "snoozed"] },
-  };
-
-  const visibleItems = await prisma.item.findMany({
+  const items = await prisma.item.findMany({
     where: {
-      ...baseWhere,
-      OR: [{ dueDate: null }, { dueDate: { lte: todayStart } }],
-      AND: [
-        { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
-      ],
+      userId: user.id,
+      listId: null,
+      dueDate: null,
+      status: { notIn: ["done", "archived", "snoozed"] },
+      OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }],
     },
     include: { list: { select: { name: true } } },
     orderBy: [{ createdAt: "desc" }],
   });
 
-  const hiddenCount = await prisma.item.count({
-    where: {
-      ...baseWhere,
-      dueDate: { gt: todayStart },
-    },
+  return c.json({
+    visible: items.map((item) => itemToThing(item)),
   });
-
-  const result: { visible: ReturnType<typeof itemToThing>[]; hiddenCount: number; hidden?: ReturnType<typeof itemToThing>[] } = {
-    visible: visibleItems.map((item) => itemToThing(item)),
-    hiddenCount,
-  };
-
-  if (includeHidden && hiddenCount > 0) {
-    const hiddenItems = await prisma.item.findMany({
-      where: {
-        ...baseWhere,
-        dueDate: { gt: todayStart },
-      },
-      include: { list: { select: { name: true } } },
-      orderBy: [{ createdAt: "desc" }],
-    });
-    result.hidden = hiddenItems.map((item) => itemToThing(item));
-  }
-
-  return c.json(result);
 });
 
 // GET /things/:id — single thing

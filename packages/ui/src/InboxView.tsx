@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { ChevronDown, ChevronRight, Inbox } from "lucide-react";
+import { Inbox } from "lucide-react";
 import type { Thing, NavList } from "@brett/types";
 import { computeRelativeAge } from "@brett/business";
 import { InboxItemRow } from "./InboxItemRow";
@@ -8,8 +8,6 @@ import { ItemListShell } from "./ItemListShell";
 
 interface InboxViewProps {
   things: Thing[];
-  hiddenCount: number;
-  hiddenThings?: Thing[];
   lists: NavList[];
   onItemClick: (thing: Thing) => void;
   onToggle: (id: string) => void;
@@ -24,8 +22,6 @@ interface InboxViewProps {
 
 export function InboxView({
   things,
-  hiddenCount,
-  hiddenThings,
   lists,
   onItemClick,
   onToggle,
@@ -39,7 +35,6 @@ export function InboxView({
   const [animatingOutIds, setAnimatingOutIds] = useState<Set<string>>(
     new Set()
   );
-  const [showHidden, setShowHidden] = useState(false);
   const [addInputFocused, setAddInputFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<QuickAddInputHandle>(null);
@@ -317,7 +312,7 @@ export function InboxView({
     onTriageOpen,
   ]);
 
-  const isEmpty = displayThings.length === 0 && hiddenCount === 0;
+  const isEmpty = displayThings.length === 0;
 
   const inboxHeader = (
     <>
@@ -410,56 +405,6 @@ export function InboxView({
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Hidden section */}
-        {hiddenCount > 0 && (
-          <div className="mt-3 pt-3 border-t border-white/5">
-            <button
-              onClick={() => setShowHidden(!showHidden)}
-              className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors"
-            >
-              {showHidden ? (
-                <ChevronDown size={14} />
-              ) : (
-                <ChevronRight size={14} />
-              )}
-              <span>
-                {hiddenCount} item{hiddenCount !== 1 ? "s" : ""} with future
-                dates
-              </span>
-            </button>
-            {showHidden && hiddenThings && (
-              <div className="flex flex-col gap-0.5 mt-2 opacity-60">
-                {hiddenThings.map((thing) => (
-                  <InboxItemRow
-                    key={thing.id}
-                    thing={thing}
-                    isFocused={false}
-                    isSelected={selectedIds.has(thing.id)}
-                    isAnimatingOut={false}
-                    relativeAge={thing.dueDateLabel ?? ""}
-                    selectedIds={selectedIds}
-                    onClick={() => onItemClick(thing)}
-                    onToggle={(id) => {
-                      onToggle(id);
-                    }}
-                    onSelect={() => {
-                      setSelectedIds((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(thing.id)) {
-                          next.delete(thing.id);
-                        } else {
-                          next.add(thing.id);
-                        }
-                        return next;
-                      });
-                    }}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         )}
 

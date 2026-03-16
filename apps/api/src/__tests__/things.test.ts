@@ -296,7 +296,6 @@ describe("Things routes", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.visible).toBeDefined();
-    expect(body.hiddenCount).toBeDefined();
     // All visible items should have null listId
     for (const item of body.visible) {
       expect(item.listId).toBeNull();
@@ -321,32 +320,22 @@ describe("Things routes", () => {
     expect(archivedInInbox).toBeUndefined();
   });
 
-  it("GET /things/inbox hides future-dated items and returns hiddenCount", async () => {
-    const createRes = await authRequest("/things", token, {
+  it("GET /things/inbox excludes items with due dates", async () => {
+    const user = await createTestUser("Inbox Dated User");
+
+    await authRequest("/things", user.token, {
       method: "POST",
-      body: JSON.stringify({ type: "task", title: "Future inbox item" }),
+      body: JSON.stringify({ type: "task", title: "Dated No List", dueDate: "2026-03-20T00:00:00Z", dueDatePrecision: "day" }),
     });
-    const id = ((await createRes.json()) as any).id;
-    // Set a future date
-    await authRequest(`/things/${id}`, token, {
-      method: "PATCH",
-      body: JSON.stringify({ dueDate: "2099-01-01T00:00:00Z" }),
+    await authRequest("/things", user.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "No Date No List" }),
     });
 
-    const res = await authRequest("/things/inbox", token);
+    const res = await authRequest("/things/inbox", user.token);
     const body = (await res.json()) as any;
-    const futureInVisible = body.visible.find((t: any) => t.id === id);
-    expect(futureInVisible).toBeUndefined();
-    expect(body.hiddenCount).toBeGreaterThanOrEqual(1);
-  });
-
-  it("GET /things/inbox?includeHidden=true returns hidden items", async () => {
-    const res = await authRequest("/things/inbox?includeHidden=true", token);
-    const body = (await res.json()) as any;
-    if (body.hiddenCount > 0) {
-      expect(body.hidden).toBeDefined();
-      expect(body.hidden.length).toBe(body.hiddenCount);
-    }
+    expect(body.visible.length).toBe(1);
+    expect(body.visible[0].title).toBe("No Date No List");
   });
 
   it("GET /things returns 401 without auth", async () => {

@@ -133,8 +133,6 @@ export interface BulkUpdateInput {
 
 export interface InboxResponse {
   visible: Thing[];
-  hiddenCount: number;
-  hidden?: Thing[];
 }
 
 export interface CalendarEvent {
