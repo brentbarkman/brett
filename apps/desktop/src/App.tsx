@@ -95,7 +95,9 @@ export function App() {
     count: number;
   } | null>(null);
 
-  const { data: lists = [], isFetching: listsFetching } = useLists();
+  const listsQuery = useLists();
+  const lists = listsQuery.data ?? [];
+  const listsFetching = listsQuery.isFetching || !listsQuery.isFetched;
   const createList = useCreateList();
   const updateList = useUpdateList();
   const deleteList = useDeleteList();
