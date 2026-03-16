@@ -14,6 +14,15 @@ interface ListViewProps {
 }
 
 const colorMap: Record<string, string> = {
+  "bg-blue-400": "#60a5fa",
+  "bg-emerald-400": "#34d399",
+  "bg-violet-400": "#a78bfa",
+  "bg-amber-400": "#fbbf24",
+  "bg-rose-400": "#fb7185",
+  "bg-sky-400": "#38bdf8",
+  "bg-orange-400": "#fb923c",
+  "bg-slate-400": "#94a3b8",
+  // Legacy values from before palette update
   "bg-blue-500": "#3b82f6",
   "bg-green-500": "#22c55e",
   "bg-purple-500": "#a855f7",
@@ -26,14 +35,14 @@ const colorMap: Record<string, string> = {
 };
 
 const colorSwatches = [
-  "bg-blue-500",
-  "bg-red-500",
-  "bg-green-500",
-  "bg-purple-500",
-  "bg-amber-500",
-  "bg-pink-500",
-  "bg-cyan-500",
-  "bg-orange-500",
+  "bg-blue-400",
+  "bg-emerald-400",
+  "bg-violet-400",
+  "bg-amber-400",
+  "bg-rose-400",
+  "bg-sky-400",
+  "bg-orange-400",
+  "bg-slate-400",
 ];
 
 export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: ListViewProps) {

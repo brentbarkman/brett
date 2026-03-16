@@ -79,7 +79,7 @@ lists.post("/", async (c) => {
   const list = await prisma.list.create({
     data: {
       name: data.name,
-      colorClass: data.colorClass ?? "bg-gray-500",
+      colorClass: data.colorClass ?? "bg-blue-400",
       sortOrder: nextSortOrder,
       userId: user.id,
     },

@@ -9,6 +9,15 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 const colorMap: Record<string, string> = {
+  "bg-blue-400": "#60a5fa",
+  "bg-emerald-400": "#34d399",
+  "bg-violet-400": "#a78bfa",
+  "bg-amber-400": "#fbbf24",
+  "bg-rose-400": "#fb7185",
+  "bg-sky-400": "#38bdf8",
+  "bg-orange-400": "#fb923c",
+  "bg-slate-400": "#94a3b8",
+  // Legacy values from before palette update
   "bg-blue-500": "#3b82f6",
   "bg-green-500": "#22c55e",
   "bg-purple-500": "#a855f7",
