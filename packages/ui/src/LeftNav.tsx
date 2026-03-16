@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Inbox, Calendar, Search, Plus, MoreHorizontal, GripVertical, ChevronRight } from "lucide-react";
+import { Inbox, Calendar, Clock, Search, Plus, MoreHorizontal, GripVertical, ChevronRight } from "lucide-react";
 import type { NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
 import {
@@ -46,6 +46,8 @@ interface LeftNavProps {
   currentPath?: string;
   /** Navigation function — called with target path */
   navigate?: (path: string) => void;
+  /** Number of upcoming items to show on the Upcoming badge */
+  upcomingCount?: number;
   /** Real inbox badge count */
   inboxCount?: number;
   onCreateList?: (name: string) => void;
@@ -64,6 +66,7 @@ export function LeftNav({
   incompleteCount,
   currentPath = "/today",
   navigate,
+  upcomingCount,
   inboxCount,
   onCreateList,
   onRenameList,
@@ -134,6 +137,14 @@ export function LeftNav({
           isActive={currentPath === "/today"}
           isCollapsed={isCollapsed}
           onClick={() => navigate?.("/today")}
+        />
+        <NavItem
+          icon={<Clock size={18} />}
+          label="Upcoming"
+          badge={upcomingCount}
+          isActive={currentPath === "/upcoming"}
+          isCollapsed={isCollapsed}
+          onClick={() => navigate?.("/upcoming")}
         />
         <NavItem
           icon={<Inbox size={18} />}

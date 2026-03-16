@@ -24,6 +24,7 @@ import type { Thing, CalendarEvent } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
   useActiveThings,
+  useUpcomingThings,
   useCreateThing,
   useToggleThing,
   useInboxThings,
@@ -34,6 +35,7 @@ import { mockEvents } from "./data/mockData";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
+import { UpcomingView } from "./views/UpcomingView";
 import { NotFoundView } from "./views/NotFoundView";
 
 function MainLayout({ children, onEventClick }: { children: React.ReactNode; onEventClick: (e: any) => void }) {
@@ -117,6 +119,9 @@ export function App() {
   const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
   const endOfWeek = new Date(todayStart.getTime() + daysUntilSunday * 86400000);
   const { data: activeThingsForCount = [] } = useActiveThings(endOfWeek.toISOString());
+
+  // Upcoming badge count
+  const { data: upcomingThings = [] } = useUpcomingThings();
 
   // Inbox data
   const { data: inboxData } = useInboxThings();
@@ -290,6 +295,7 @@ export function App() {
             incompleteCount={activeThingsForCount.length}
             currentPath={location.pathname}
             navigate={navigate}
+            upcomingCount={upcomingThings.length}
             inboxCount={inboxCount}
             onCreateList={(name) => createList.mutate({ name }, {
               onSuccess: () => navigate(`/lists/${slugify(name)}`),
@@ -321,6 +327,11 @@ export function App() {
                   onItemClick={handleItemClick}
                   onTriageOpen={handleTriageOpen}
                 />
+              </MainLayout>
+            } />
+            <Route path="/upcoming" element={
+              <MainLayout onEventClick={handleItemClick}>
+                <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} />
               </MainLayout>
             } />
             <Route path="/inbox" element={
