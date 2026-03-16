@@ -84,8 +84,11 @@ export function LeftNav({
 
   const handleCreateKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
       handleCreateSubmit();
     } else if (e.key === "Escape") {
+      e.stopPropagation();
       setCreateName("");
       setIsCreating(false);
     }

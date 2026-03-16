@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Archive } from "lucide-react";
-import { ThingsList } from "@brett/ui";
+import { ThingCard } from "@brett/ui";
 import type { Thing, NavList } from "@brett/types";
 import { useListThings, useCreateThing, useToggleThing } from "../api/things";
 import { useUpdateList, useUnarchiveList } from "../api/lists";
@@ -10,7 +10,7 @@ interface ListViewProps {
   lists: NavList[];
   archivedLists?: NavList[];
   onItemClick: (item: Thing) => void;
-  onArchiveList?: (id: string) => void;
+  onArchiveList?: (id: string, incompleteCount: number) => void;
 }
 
 const colorMap: Record<string, string> = {
@@ -121,6 +121,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
 
   const handleNameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
+      e.preventDefault();
       handleNameSubmit();
     } else if (e.key === "Escape") {
       setEditName(list.name);
@@ -133,15 +134,8 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
     setShowColorPicker(false);
   };
 
-  const handleToggle = (id: string) => {
-    toggleThing.mutate(id);
-  };
-
-  const handleAdd = (title: string, _listId: string | null) => {
-    createThing.mutate(
-      { type: "task", title, listId: list.id },
-      { onError: (err) => console.error("Failed to create thing:", err) }
-    );
+  const handleToggle = (thingId: string) => {
+    toggleThing.mutate(thingId);
   };
 
   const handleInlineAdd = () => {
@@ -158,11 +152,18 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
 
   const handleAddKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
+      e.preventDefault();
       handleInlineAdd();
     } else if (e.key === "Escape") {
       setAddTitle("");
       setIsAdding(false);
     }
+  };
+
+  const handleArchiveClick = () => {
+    // Use fresh things data for accurate incomplete count
+    const incompleteCount = things.filter((t) => !t.isCompleted).length;
+    onArchiveList?.(list.id, incompleteCount);
   };
 
   const activeThings = things.filter((t) => !t.isCompleted);
@@ -181,13 +182,13 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               style={{ backgroundColor: dotColor }}
             />
             {showColorPicker && (
-              <div className="absolute top-full left-0 mt-2 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 p-2 shadow-xl">
-                <div className="grid grid-cols-4 gap-1.5">
+              <div className="absolute top-full left-0 mt-2 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 p-2.5 shadow-xl">
+                <div className="flex gap-2">
                   {colorSwatches.map((swatch) => (
                     <button
                       key={swatch}
                       onClick={() => handleColorSelect(swatch)}
-                      className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${swatch === list.colorClass ? "ring-2 ring-white/60 ring-offset-1 ring-offset-black/60" : ""}`}
+                      className={`w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0 ${swatch === list.colorClass ? "ring-2 ring-white/60 ring-offset-2 ring-offset-black/60" : ""}`}
                       style={{ backgroundColor: colorMap[swatch] }}
                     />
                   ))}
@@ -226,7 +227,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
           {/* Archive button */}
           {!isArchived && onArchiveList && (
             <button
-              onClick={() => onArchiveList(list.id)}
+              onClick={handleArchiveClick}
               className="text-white/30 hover:text-white/70 transition-colors p-1 rounded hover:bg-white/10"
             >
               <Archive size={16} />
@@ -288,13 +289,16 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-1">
                 Active
               </h2>
-              <ThingsList
-                things={activeThings}
-                lists={[]}
-                onItemClick={onItemClick}
-                onToggle={handleToggle}
-                onAdd={handleAdd}
-              />
+              <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 divide-y divide-white/5">
+                {activeThings.map((thing) => (
+                  <ThingCard
+                    key={thing.id}
+                    thing={thing}
+                    onClick={() => onItemClick(thing)}
+                    onToggle={handleToggle}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -303,13 +307,16 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-1">
                 Done
               </h2>
-              <ThingsList
-                things={doneThings}
-                lists={[]}
-                onItemClick={onItemClick}
-                onToggle={handleToggle}
-                onAdd={handleAdd}
-              />
+              <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 divide-y divide-white/5">
+                {doneThings.map((thing) => (
+                  <ThingCard
+                    key={thing.id}
+                    thing={thing}
+                    onClick={() => onItemClick(thing)}
+                    onToggle={handleToggle}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </>

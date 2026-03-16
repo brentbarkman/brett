@@ -179,10 +179,10 @@ export function App() {
     setTriageState(null);
   };
 
-  const handleArchiveList = (id: string) => {
+  const handleArchiveList = (id: string, knownIncompleteCount?: number) => {
     const list = [...lists, ...archivedLists].find((l) => l.id === id);
     if (!list) return;
-    const incompleteCount = list.count - list.completedCount;
+    const incompleteCount = knownIncompleteCount ?? (list.count - list.completedCount);
     if (incompleteCount > 0) {
       setArchiveListConfirm({ id, name: list.name, incompleteCount });
     } else {
