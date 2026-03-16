@@ -67,7 +67,8 @@ model List {
   id         String   @id @default(cuid())
   name       String
   colorClass String   @default("bg-gray-500")
-  sortOrder  Int      @default(0)
+  sortOrder  Int       @default(0)
+  archivedAt DateTime?
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   items      Item[]

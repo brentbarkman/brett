@@ -157,4 +157,5 @@ export interface NavList {
   completedCount: number;
   colorClass: string;
   sortOrder: number;
+  archivedAt?: string | null;
 }

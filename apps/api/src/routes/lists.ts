@@ -36,6 +36,7 @@ lists.get("/", async (c) => {
       count: l._count.items,
       completedCount: l.items.length,
       sortOrder: l.sortOrder,
+      archivedAt: l.archivedAt?.toISOString() ?? null,
     }))
   );
 });
@@ -77,7 +78,7 @@ lists.post("/", async (c) => {
   });
 
   return c.json(
-    { id: list.id, name: list.name, colorClass: list.colorClass, count: 0, completedCount: 0, sortOrder: list.sortOrder },
+    { id: list.id, name: list.name, colorClass: list.colorClass, count: 0, completedCount: 0, sortOrder: list.sortOrder, archivedAt: null },
     201
   );
 });
@@ -153,6 +154,7 @@ lists.patch("/:id", async (c) => {
     count: list._count.items,
     completedCount: list.items.length,
     sortOrder: list.sortOrder,
+    archivedAt: existing.archivedAt?.toISOString() ?? null,
   });
 });
 
