@@ -31,6 +31,7 @@ import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists 
 import { mockEvents } from "./data/mockData";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
+import { ListView } from "./views/ListView";
 
 function MainLayout({ children, onEventClick }: { children: React.ReactNode; onEventClick: (e: any) => void }) {
   return (
@@ -303,7 +304,7 @@ export function App() {
             } />
             <Route path="/lists/:id" element={
               <MainLayout onEventClick={handleItemClick}>
-                <div className="text-white/40 text-sm p-4">List view — coming soon</div>
+                <ListView lists={lists} onItemClick={handleItemClick} />
               </MainLayout>
             } />
           </Routes>
