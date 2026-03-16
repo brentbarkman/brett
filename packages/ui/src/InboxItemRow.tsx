@@ -57,6 +57,7 @@ export function InboxItemRow({
     setCompleting(true);
     setTimeout(() => {
       onToggle(thing.id);
+      setCompleting(false);
     }, 600);
   };
 
