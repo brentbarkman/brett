@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Archive } from "lucide-react";
+import { Archive, Plus } from "lucide-react";
 import { ThingCard } from "@brett/ui";
 import type { Thing, NavList } from "@brett/types";
 import { useListThings, useCreateThing, useToggleThing } from "../api/things";
@@ -58,9 +58,9 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
 
-  // Inline add
-  const [isAdding, setIsAdding] = useState(false);
-  const [addTitle, setAddTitle] = useState("");
+  // Quick add
+  const [addValue, setAddValue] = useState("");
+  const [addFocused, setAddFocused] = useState(false);
   const addInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -69,12 +69,6 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
       nameInputRef.current?.select();
     }
   }, [isEditingName]);
-
-  useEffect(() => {
-    if (isAdding) {
-      addInputRef.current?.focus();
-    }
-  }, [isAdding]);
 
   // Close color picker on click outside or Escape
   useEffect(() => {
@@ -138,30 +132,28 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
     toggleThing.mutate(thingId);
   };
 
-  const handleInlineAdd = () => {
-    const title = addTitle.trim();
-    if (title) {
-      createThing.mutate(
-        { type: "task", title, listId: list.id },
-        { onError: (err) => console.error("Failed to create thing:", err) }
-      );
-    }
-    setAddTitle("");
-    setIsAdding(false);
+  const handleAddSubmit = () => {
+    if (!addValue.trim()) return;
+    createThing.mutate(
+      { type: "task", title: addValue.trim(), listId: list.id },
+      { onError: (err) => console.error("Failed to create thing:", err) }
+    );
+    setAddValue("");
+    addInputRef.current?.focus();
   };
 
   const handleAddKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      handleInlineAdd();
-    } else if (e.key === "Escape") {
-      setAddTitle("");
-      setIsAdding(false);
+      handleAddSubmit();
+    }
+    if (e.key === "Escape") {
+      setAddValue("");
+      addInputRef.current?.blur();
     }
   };
 
   const handleArchiveClick = () => {
-    // Use fresh things data for accurate incomplete count
     const incompleteCount = things.filter((t) => !t.isCompleted).length;
     onArchiveList?.(list.id, incompleteCount);
   };
@@ -170,72 +162,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
   const doneThings = things.filter((t) => t.isCompleted);
 
   return (
-    <>
-      {/* Header */}
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
-        <div className="flex items-center gap-3">
-          {/* Color dot */}
-          <div className="relative" ref={colorPickerRef}>
-            <button
-              onClick={() => !isArchived && setShowColorPicker(!showColorPicker)}
-              className={`w-4 h-4 rounded-full flex-shrink-0 transition-transform ${!isArchived ? "hover:scale-125 cursor-pointer" : "cursor-default"}`}
-              style={{ backgroundColor: dotColor }}
-            />
-            {showColorPicker && (
-              <div className="absolute top-full left-0 mt-2 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 p-2.5 shadow-xl">
-                <div className="flex gap-2">
-                  {colorSwatches.map((swatch) => (
-                    <button
-                      key={swatch}
-                      onClick={() => handleColorSelect(swatch)}
-                      className={`w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0 ${swatch === list.colorClass ? "ring-2 ring-white/60 ring-offset-2 ring-offset-black/60" : ""}`}
-                      style={{ backgroundColor: colorMap[swatch] }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* List name */}
-          {isEditingName ? (
-            <input
-              ref={nameInputRef}
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onKeyDown={handleNameKeyDown}
-              onBlur={handleNameSubmit}
-              className="bg-transparent border-none outline-none text-white text-lg font-semibold flex-1"
-            />
-          ) : (
-            <h1
-              onClick={() => {
-                if (!isArchived) {
-                  setEditName(list.name);
-                  setIsEditingName(true);
-                }
-              }}
-              className={`text-lg font-semibold text-white flex-1 ${!isArchived ? "cursor-pointer hover:text-white/80" : ""}`}
-            >
-              {list.name}
-            </h1>
-          )}
-
-          {/* Item count */}
-          <span className="text-sm text-white/40">{things.length} item{things.length !== 1 ? "s" : ""}</span>
-
-          {/* Archive button */}
-          {!isArchived && onArchiveList && (
-            <button
-              onClick={handleArchiveClick}
-              className="text-white/30 hover:text-white/70 transition-colors p-1 rounded hover:bg-white/10"
-            >
-              <Archive size={16} />
-            </button>
-          )}
-        </div>
-      </div>
-
+    <div className="flex flex-col gap-4 pb-20">
       {/* Archived banner */}
       {isArchived && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -249,82 +176,175 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
         </div>
       )}
 
-      {/* Inline add row */}
-      {!isArchived && (
-        isAdding ? (
-          <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+      {/* Main card — header + add + items */}
+      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            {/* Color dot */}
+            <div className="relative" ref={colorPickerRef}>
+              <button
+                onClick={() => !isArchived && setShowColorPicker(!showColorPicker)}
+                className={`w-4 h-4 rounded-full flex-shrink-0 transition-transform ${!isArchived ? "hover:scale-125 cursor-pointer" : "cursor-default"}`}
+                style={{ backgroundColor: dotColor }}
+              />
+              {showColorPicker && (
+                <div className="absolute top-full left-0 mt-2 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 p-2.5 shadow-xl">
+                  <div className="flex gap-2">
+                    {colorSwatches.map((swatch) => (
+                      <button
+                        key={swatch}
+                        onClick={() => handleColorSelect(swatch)}
+                        className={`w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0 ${swatch === list.colorClass ? "ring-2 ring-white/60 ring-offset-2 ring-offset-black/60" : ""}`}
+                        style={{ backgroundColor: colorMap[swatch] }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* List name */}
+            {isEditingName ? (
+              <input
+                ref={nameInputRef}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={handleNameKeyDown}
+                onBlur={handleNameSubmit}
+                className="bg-transparent border-none outline-none text-white text-xl font-bold flex-1"
+              />
+            ) : (
+              <h2
+                onClick={() => {
+                  if (!isArchived) {
+                    setEditName(list.name);
+                    setIsEditingName(true);
+                  }
+                }}
+                className={`text-xl font-bold text-white ${!isArchived ? "cursor-pointer hover:text-white/80" : ""}`}
+              >
+                {list.name}
+              </h2>
+            )}
+
+            {/* Item count */}
+            {things.length > 0 && (
+              <span className="text-sm text-white/40">
+                {things.length} item{things.length !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+
+          {/* Archive button */}
+          {!isArchived && onArchiveList && (
+            <button
+              onClick={handleArchiveClick}
+              className="text-white/30 hover:text-white/70 transition-colors p-1 rounded hover:bg-white/10"
+              title="Archive list"
+            >
+              <Archive size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* Quick-add input */}
+        {!isArchived && (
+          <div
+            className={`
+              flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-3
+              ${addFocused
+                ? "bg-white/5 border border-blue-500/20"
+                : "border border-transparent hover:bg-white/[0.03]"
+              }
+            `}
+          >
+            <Plus
+              size={15}
+              className={addFocused ? "text-blue-400" : "text-white/20"}
+            />
             <input
               ref={addInputRef}
-              value={addTitle}
-              onChange={(e) => setAddTitle(e.target.value)}
+              type="text"
+              placeholder="Add a thing..."
+              value={addValue}
+              onChange={(e) => setAddValue(e.target.value)}
               onKeyDown={handleAddKeyDown}
-              onBlur={handleInlineAdd}
-              placeholder="What needs to be done?"
-              className="bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm w-full"
+              onFocus={() => setAddFocused(true)}
+              onBlur={() => {
+                if (!addValue) setAddFocused(false);
+              }}
+              className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/20 text-sm"
             />
+            {addFocused && addValue.trim() && (
+              <span className="text-[10px] text-white/25 font-mono">enter</span>
+            )}
           </div>
-        ) : (
-          <button
-            onClick={() => setIsAdding(true)}
-            className="w-full border border-dashed border-white/20 rounded-xl px-4 py-3 text-sm text-white/40 hover:text-white/60 hover:border-white/30 transition-colors text-left"
-          >
-            + Add a thing...
-          </button>
-        )
-      )}
+        )}
 
-      {/* Content */}
-      {isLoading ? (
-        <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8">
-          <div className="text-center text-white/40 text-sm">Loading...</div>
-        </div>
-      ) : things.length === 0 ? (
-        <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8">
-          <div className="text-center text-white/40 text-sm">No items in this list yet</div>
-        </div>
-      ) : (
-        <>
-          {activeThings.length > 0 && (
-            <div className="space-y-2">
-              <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-1">
+        {/* Empty state */}
+        {!isLoading && things.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <p className="text-sm text-white/40">Nothing here yet</p>
+            {!isArchived && (
+              <p className="text-xs text-white/20 font-mono">
+                press <kbd className="px-1 py-0.5 rounded bg-white/5 text-white/30">n</kbd> to add
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Loading state */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <p className="text-sm text-white/40">Loading...</p>
+          </div>
+        )}
+
+        {/* Active items */}
+        {activeThings.length > 0 && (
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold flex-shrink-0">
                 Active
-              </h2>
-              <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
-                <div className="flex flex-col gap-2">
-                  {activeThings.map((thing) => (
-                    <ThingCard
-                      key={thing.id}
-                      thing={thing}
-                      onClick={() => onItemClick(thing)}
-                      onToggle={handleToggle}
-                    />
-                  ))}
-                </div>
-              </div>
+              </h3>
+              <div className="h-px bg-white/10 flex-1" />
             </div>
-          )}
+            <div className="flex flex-col gap-2">
+              {activeThings.map((thing) => (
+                <ThingCard
+                  key={thing.id}
+                  thing={thing}
+                  onClick={() => onItemClick(thing)}
+                  onToggle={handleToggle}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
-          {doneThings.length > 0 && (
-            <div className="space-y-2">
-              <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-1">
+        {/* Done items */}
+        {doneThings.length > 0 && (
+          <div className={activeThings.length > 0 ? "mt-4" : ""}>
+            <div className="flex items-center gap-3 mb-2">
+              <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold flex-shrink-0">
                 Done
-              </h2>
-              <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
-                <div className="flex flex-col gap-2">
-                  {doneThings.map((thing) => (
-                    <ThingCard
-                      key={thing.id}
-                      thing={thing}
-                      onClick={() => onItemClick(thing)}
-                      onToggle={handleToggle}
-                    />
-                  ))}
-                </div>
-              </div>
+              </h3>
+              <div className="h-px bg-white/10 flex-1" />
             </div>
-          )}
-        </>
-      )}
-    </>
+            <div className="flex flex-col gap-2">
+              {doneThings.map((thing) => (
+                <ThingCard
+                  key={thing.id}
+                  thing={thing}
+                  onClick={() => onItemClick(thing)}
+                  onToggle={handleToggle}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

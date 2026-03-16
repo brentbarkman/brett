@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Inbox } from "lucide-react";
 import type { Thing, NavList } from "@brett/types";
 import { computeRelativeAge } from "@brett/business";
 import { InboxItemRow } from "./InboxItemRow";
@@ -347,6 +347,7 @@ export function InboxView({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
+            <Inbox size={20} className="text-white/50" />
             <h2 className="text-xl font-bold text-white">Inbox</h2>
             {activeThings.length > 0 && (
               <span className="text-sm text-white/40">
