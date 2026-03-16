@@ -131,6 +131,14 @@ export function LeftNav({
       {/* Main Links */}
       <div className="space-y-1 mb-8">
         <NavItem
+          icon={<Inbox size={18} />}
+          label="Inbox"
+          badge={inboxCount}
+          isActive={currentPath === "/inbox"}
+          isCollapsed={isCollapsed}
+          onClick={() => navigate?.("/inbox")}
+        />
+        <NavItem
           icon={<Calendar size={18} />}
           label="Today"
           badge={incompleteCount}
@@ -145,14 +153,6 @@ export function LeftNav({
           isActive={currentPath === "/upcoming"}
           isCollapsed={isCollapsed}
           onClick={() => navigate?.("/upcoming")}
-        />
-        <NavItem
-          icon={<Inbox size={18} />}
-          label="Inbox"
-          badge={inboxCount}
-          isActive={currentPath === "/inbox"}
-          isCollapsed={isCollapsed}
-          onClick={() => navigate?.("/inbox")}
         />
         <NavItem
           icon={<Search size={18} />}
