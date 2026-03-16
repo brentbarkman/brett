@@ -58,6 +58,12 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  /* Remove default browser focus outlines globally — this app uses
+     custom focus indicators (isFocused state, border-blue-500/30).
+     See DESIGN_GUIDE.md § Focus States. */
+  *:focus {
+    outline: none;
+  }
 }
 
 /* Hide scrollbar utility */

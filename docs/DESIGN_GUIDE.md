@@ -212,8 +212,11 @@ group-hover:opacity-100    — reveal child on parent hover
 ```
 
 ### Focus States
-- Inputs: `focus:border-blue-500/20 focus:outline-none` (subtle, no thick rings)
+- **Global:** Browser default focus outlines are removed via `*:focus { outline: none }` in `index.css`. All focus indication is custom.
+- Inputs: `focus:border-blue-500/20` (subtle border shift, no rings)
 - Omnibar special: `border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]` (blue glow)
+- List items: focus tracked via `isFocused` prop → `bg-white/10 border-blue-500/30`
+- **Do not** add `outline-none` to individual elements — the global rule handles it
 
 ### Active States (Pills/Tabs)
 - Active: `bg-blue-500 text-white border-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.3)]`
