@@ -16,15 +16,20 @@ async function verifyListOwnership(listId: string, userId: string) {
 things.use("*", authMiddleware);
 
 // GET /things — list things with optional filters
+// Supports date range filters:
+//   dueBefore=ISO   — items with dueDate <= value (inclusive)
+//   completedAfter=ISO — items with completedAt >= value
 things.get("/", async (c) => {
   const user = c.get("user");
-  const { listId, type, status, source } = c.req.query();
+  const { listId, type, status, source, dueBefore, completedAfter } = c.req.query();
 
   const where: Record<string, unknown> = { userId: user.id };
   if (listId) where.listId = listId;
   if (type) where.type = type;
   if (status) where.status = status;
   if (source) where.source = source;
+  if (dueBefore) where.dueDate = { lte: new Date(dueBefore) };
+  if (completedAfter) where.completedAt = { gte: new Date(completedAfter) };
 
   const items = await prisma.item.findMany({
     where,

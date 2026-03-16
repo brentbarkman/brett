@@ -173,6 +173,7 @@ export function itemToThing(
     dueDatePrecision: precision ?? undefined,
     dueDateLabel: computeDueDateLabel(item.dueDate, precision, now),
     isCompleted: item.completedAt !== null,
+    completedAt: item.completedAt?.toISOString(),
     brettObservation: item.brettObservation ?? undefined,
     description: item.description ?? undefined,
     stalenessDays: computeStalenessDays(item.updatedAt, now),

@@ -28,7 +28,8 @@ import {
 import type { Thing, CalendarEvent } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
-  useThings,
+  useActiveThings,
+  useDoneThings,
   useCreateThing,
   useToggleThing,
   useInboxThings,
@@ -77,7 +78,21 @@ export function App() {
     count: number;
   } | null>(null);
 
-  const { data: things = [], isLoading: thingsLoading } = useThings();
+  // Compute date boundaries for today view queries
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dayOfWeek = todayStart.getUTCDay();
+  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
+  const endOfWeek = new Date(todayStart.getTime() + daysUntilSunday * 86400000);
+  const dueBefore = endOfWeek.toISOString();
+  const completedAfter = todayStart.toISOString();
+
+  // Two explicit queries: active items due this week or earlier, done items from today
+  const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);
+  const { data: doneThings = [], isLoading: doneLoading } = useDoneThings(completedAfter);
+  const things = [...activeThings, ...doneThings];
+  const thingsLoading = activeLoading || doneLoading;
+
   const { data: lists = [] } = useLists();
   const createList = useCreateList();
   const updateList = useUpdateList();
@@ -244,10 +259,8 @@ export function App() {
     [bulkUpdate, lists, reorderLists]
   );
 
-  // Today view shows overdue + today + this week
-  const todayViewUrgencies = new Set(["overdue", "today", "this_week"]);
+  // Server provides the right date range; client just applies type filter
   const filteredThings = things.filter((thing) => {
-    if (!todayViewUrgencies.has(thing.urgency)) return false;
     if (activeFilter === "All") return true;
     if (activeFilter === "Tasks") return thing.type === "task";
     if (activeFilter === "Content") return thing.type === "content";

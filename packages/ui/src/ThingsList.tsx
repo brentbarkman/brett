@@ -158,7 +158,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTria
                 opacity: 0,
               } : undefined}
             >
-              <Section title="Done" things={done} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={doneOffset} />
+              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={doneOffset} />
             </div>
           )}
         </div>

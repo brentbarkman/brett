@@ -78,6 +78,7 @@ export interface Thing {
   dueDatePrecision?: DueDatePrecision;
   dueDateLabel?: string;
   isCompleted: boolean;
+  completedAt?: string; // ISO string
   brettObservation?: string;
   description?: string;
   stalenessDays?: number;

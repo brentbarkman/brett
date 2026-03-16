@@ -11,6 +11,8 @@ interface ThingsFilters {
   type?: string;
   status?: string;
   source?: string;
+  dueBefore?: string;
+  completedAfter?: string;
 }
 
 function buildQuery(filters?: ThingsFilters): string {
@@ -20,6 +22,8 @@ function buildQuery(filters?: ThingsFilters): string {
   if (filters.type) params.set("type", filters.type);
   if (filters.status) params.set("status", filters.status);
   if (filters.source) params.set("source", filters.source);
+  if (filters.dueBefore) params.set("dueBefore", filters.dueBefore);
+  if (filters.completedAfter) params.set("completedAfter", filters.completedAfter);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -29,6 +33,16 @@ export function useThings(filters?: ThingsFilters) {
     queryKey: ["things", filters ?? {}],
     queryFn: () => apiFetch<Thing[]>(`/things${buildQuery(filters)}`),
   });
+}
+
+/** Active items due on or before a date */
+export function useActiveThings(dueBefore: string) {
+  return useThings({ status: "active", dueBefore });
+}
+
+/** Items completed on or after a date */
+export function useDoneThings(completedAfter: string) {
+  return useThings({ status: "done", completedAfter });
 }
 
 export function useCreateThing() {
