@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Inbox, Calendar, Search, Plus, MoreHorizontal, GripVertical } from "lucide-react";
+import { Inbox, Calendar, Search, Plus, MoreHorizontal, GripVertical, ChevronRight } from "lucide-react";
 import type { NavList } from "@brett/types";
 import {
   SortableContext,
@@ -7,6 +7,18 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+const colorMap: Record<string, string> = {
+  "bg-blue-500": "#3b82f6",
+  "bg-green-500": "#22c55e",
+  "bg-purple-500": "#a855f7",
+  "bg-amber-500": "#f59e0b",
+  "bg-red-500": "#ef4444",
+  "bg-pink-500": "#ec4899",
+  "bg-cyan-500": "#06b6d4",
+  "bg-orange-500": "#f97316",
+  "bg-gray-500": "rgba(255,255,255,0.4)",
+};
 
 interface LeftNavUser {
   name: string | null;
@@ -30,6 +42,9 @@ interface LeftNavProps {
   onRenameList?: (id: string, newName: string) => void;
   onDeleteList?: (id: string) => void;
   onReorderLists?: (orderedIds: string[]) => void;
+  onArchiveList?: (id: string) => void;
+  onUnarchiveList?: (id: string) => void;
+  archivedLists?: NavList[];
 }
 
 export function LeftNav({
@@ -44,6 +59,9 @@ export function LeftNav({
   onRenameList,
   onDeleteList,
   onReorderLists,
+  onArchiveList,
+  onUnarchiveList,
+  archivedLists,
 }: LeftNavProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -170,10 +188,21 @@ export function LeftNav({
                 onClick={() => navigate?.(`/lists/${list.id}`)}
                 onRename={onRenameList}
                 onDelete={onDeleteList}
+                onArchive={onArchiveList}
               />
             ))}
           </div>
         </SortableContext>
+
+        {!isCollapsed && archivedLists && archivedLists.length > 0 && (
+          <ArchivedListsSection
+            lists={archivedLists}
+            currentPath={currentPath}
+            navigate={navigate}
+            onUnarchive={onUnarchiveList}
+            onDelete={onDeleteList}
+          />
+        )}
       </div>
 
       {/* Footer */}
@@ -222,6 +251,7 @@ function SortableListItem({
   onClick,
   onRename,
   onDelete,
+  onArchive,
 }: {
   list: NavList;
   isCollapsed: boolean;
@@ -229,6 +259,7 @@ function SortableListItem({
   onClick?: () => void;
   onRename?: (id: string, newName: string) => void;
   onDelete?: (id: string) => void;
+  onArchive?: (id: string) => void;
 }) {
   const {
     attributes,
@@ -381,6 +412,18 @@ function SortableListItem({
               Rename
             </button>
           )}
+          {onArchive && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(false);
+                onArchive(list.id);
+              }}
+              className="w-full text-left px-3 py-1.5 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              Archive
+            </button>
+          )}
           {onDelete && (
             <button
               onClick={(e) => {
@@ -416,17 +459,6 @@ function ProgressDot({
   const progress = count > 0 ? completedCount / count : 0;
   const filled = circumference * progress;
 
-  // Map colorClass to an actual CSS color for SVG stroke
-  const colorMap: Record<string, string> = {
-    "bg-blue-500": "#3b82f6",
-    "bg-green-500": "#22c55e",
-    "bg-purple-500": "#a855f7",
-    "bg-amber-500": "#f59e0b",
-    "bg-red-500": "#ef4444",
-    "bg-pink-500": "#ec4899",
-    "bg-cyan-500": "#06b6d4",
-    "bg-orange-500": "#f97316",
-  };
   const strokeColor = colorMap[colorClass] ?? "rgba(255,255,255,0.4)";
 
   // Empty list — just a dim dot
@@ -548,5 +580,125 @@ function NavItem({
         </>
       )}
     </button>
+  );
+}
+
+function ArchivedListsSection({
+  lists,
+  currentPath,
+  navigate,
+  onUnarchive,
+  onDelete,
+}: {
+  lists: NavList[];
+  currentPath?: string;
+  navigate?: (path: string) => void;
+  onUnarchive?: (id: string) => void;
+  onDelete?: (id: string) => void;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-1.5 px-2 mb-2 text-white/30 hover:text-white/50 transition-colors"
+      >
+        <ChevronRight
+          size={12}
+          className={`transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
+        />
+        <span className="font-mono text-xs uppercase tracking-wider font-semibold">
+          Archived
+        </span>
+      </button>
+      {isExpanded && (
+        <div className="space-y-1">
+          {lists.map((list) => (
+            <ArchivedListItem
+              key={list.id}
+              list={list}
+              isActive={currentPath === `/lists/${list.id}`}
+              onClick={() => navigate?.(`/lists/${list.id}`)}
+              onUnarchive={onUnarchive}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArchivedListItem({
+  list,
+  isActive,
+  onClick,
+  onUnarchive,
+  onDelete,
+}: {
+  list: NavList;
+  isActive?: boolean;
+  onClick?: () => void;
+  onUnarchive?: (id: string) => void;
+  onDelete?: (id: string) => void;
+}) {
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
+          menuButtonRef.current && !menuButtonRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMenu]);
+
+  const dotColor = colorMap[list.colorClass] ?? "rgba(255,255,255,0.4)";
+
+  return (
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        className={`
+          flex items-center w-full rounded-lg transition-colors duration-200 px-2 py-1.5 gap-2.5 opacity-50
+          ${isActive ? "bg-white/10 text-white !opacity-100" : "text-white/60 hover:bg-white/5 hover:text-white/90"}
+        `}
+      >
+        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
+        <span className="text-sm font-medium flex-1 text-left truncate">{list.name}</span>
+        {(onUnarchive || onDelete) && (
+          <button
+            ref={menuButtonRef}
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+            className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-white/70 transition-all p-0.5 rounded hover:bg-white/10 flex-shrink-0"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        )}
+      </button>
+
+      {showMenu && (
+        <div ref={menuRef} className="absolute right-0 top-full mt-1 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 py-1 min-w-[120px] shadow-xl">
+          {onUnarchive && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowMenu(false); onUnarchive(list.id); }}
+              className="w-full text-left px-3 py-1.5 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            >Unarchive</button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowMenu(false); onDelete(list.id); }}
+              className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:bg-white/10 transition-colors"
+            >Delete</button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

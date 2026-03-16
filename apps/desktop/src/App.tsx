@@ -27,7 +27,7 @@ import {
   useInboxThings,
   useBulkUpdateThings,
 } from "./api/things";
-import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists } from "./api/lists";
+import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists, useArchiveList, useUnarchiveList, useArchivedLists } from "./api/lists";
 import { mockEvents } from "./data/mockData";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
@@ -70,6 +70,13 @@ export function App() {
     count: number;
   } | null>(null);
 
+  // Archive list confirmation state
+  const [archiveListConfirm, setArchiveListConfirm] = useState<{
+    id: string;
+    name: string;
+    incompleteCount: number;
+  } | null>(null);
+
   // Drag: require 8px movement before activating — clicks open detail, drag needs movement
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -89,6 +96,9 @@ export function App() {
   const updateList = useUpdateList();
   const deleteList = useDeleteList();
   const reorderLists = useReorderLists();
+  const archiveList = useArchiveList();
+  const unarchiveList = useUnarchiveList();
+  const { data: archivedLists = [] } = useArchivedLists();
   const createThing = useCreateThing();
   const toggleThing = useToggleThing();
   const bulkUpdate = useBulkUpdateThings();
@@ -167,6 +177,18 @@ export function App() {
 
   const handleTriageCancel = () => {
     setTriageState(null);
+  };
+
+  const handleArchiveList = (id: string) => {
+    const list = [...lists, ...archivedLists].find((l) => l.id === id);
+    if (!list) return;
+    const incompleteCount = list.count - list.completedCount;
+    if (incompleteCount > 0) {
+      setArchiveListConfirm({ id, name: list.name, incompleteCount });
+    } else {
+      archiveList.mutate(id);
+      if (location.pathname === `/lists/${id}`) navigate("/today");
+    }
   };
 
   // DnD handlers
@@ -256,7 +278,7 @@ export function App() {
             onCreateList={(name) => createList.mutate({ name })}
             onRenameList={(id, name) => updateList.mutate({ id, name })}
             onDeleteList={(id) => {
-              const list = lists.find((l) => l.id === id);
+              const list = [...lists, ...archivedLists].find((l) => l.id === id);
               if (list && list.count > 0) {
                 setDeleteListConfirm({ id, name: list.name, count: list.count });
               } else {
@@ -267,6 +289,9 @@ export function App() {
               }
             }}
             onReorderLists={(ids) => reorderLists.mutate(ids)}
+            archivedLists={archivedLists}
+            onArchiveList={handleArchiveList}
+            onUnarchiveList={(id) => unarchiveList.mutate(id)}
           />
 
           <Routes>
@@ -304,7 +329,7 @@ export function App() {
             } />
             <Route path="/lists/:id" element={
               <MainLayout onEventClick={handleItemClick}>
-                <ListView lists={lists} onItemClick={handleItemClick} />
+                <ListView lists={lists} archivedLists={archivedLists} onItemClick={handleItemClick} onArchiveList={handleArchiveList} />
               </MainLayout>
             } />
           </Routes>
@@ -340,6 +365,22 @@ export function App() {
               setDeleteListConfirm(null);
             }}
             onCancel={() => setDeleteListConfirm(null)}
+          />
+        )}
+
+        {/* Archive list confirmation */}
+        {archiveListConfirm && (
+          <ConfirmDialog
+            title={`Archive "${archiveListConfirm.name}"?`}
+            description={`${archiveListConfirm.incompleteCount} incomplete item${archiveListConfirm.incompleteCount === 1 ? "" : "s"} will be marked as done.`}
+            confirmLabel="Archive"
+            variant="default"
+            onConfirm={() => {
+              archiveList.mutate(archiveListConfirm.id);
+              if (location.pathname === `/lists/${archiveListConfirm.id}`) navigate("/today");
+              setArchiveListConfirm(null);
+            }}
+            onCancel={() => setArchiveListConfirm(null)}
           />
         )}
       </div>
