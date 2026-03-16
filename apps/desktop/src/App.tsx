@@ -11,15 +11,8 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import {
   LeftNav,
-  Omnibar,
-  MorningBriefing,
-  UpNextCard,
-  FilterPills,
-  ThingsList,
   CalendarTimeline,
   DetailPanel,
-  ThingsEmptyState,
-  CrossFade,
   InboxView,
   TriagePopup,
   InboxDragOverlay,
@@ -28,24 +21,21 @@ import {
 import type { Thing, CalendarEvent } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
-  useActiveThings,
-  useDoneThings,
   useCreateThing,
   useToggleThing,
   useInboxThings,
   useBulkUpdateThings,
 } from "./api/things";
 import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists } from "./api/lists";
-import { mockEvents, mockBriefingItems } from "./data/mockData";
+import { mockEvents } from "./data/mockData";
 import { SettingsPage } from "./settings/SettingsPage";
+import { TodayView } from "./views/TodayView";
 
 type ActiveView = "today" | "inbox" | "settings";
 
 export function App() {
   const { user } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>("today");
-  const [activeFilter, setActiveFilter] = useState("All");
-  const [isBriefingVisible, setIsBriefingVisible] = useState(true);
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEvent | null
   >(null);
@@ -77,21 +67,6 @@ export function App() {
     title: string;
     count: number;
   } | null>(null);
-
-  // Compute date boundaries for today view queries
-  const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  const dayOfWeek = todayStart.getUTCDay();
-  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
-  const endOfWeek = new Date(todayStart.getTime() + daysUntilSunday * 86400000);
-  const dueBefore = endOfWeek.toISOString();
-  const completedAfter = todayStart.toISOString();
-
-  // Two explicit queries: active items due this week or earlier, done items from today
-  const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);
-  const { data: doneThings = [], isLoading: doneLoading } = useDoneThings(completedAfter);
-  const things = [...activeThings, ...doneThings];
-  const thingsLoading = activeLoading || doneLoading;
 
   const { data: lists = [] } = useLists();
   const createList = useCreateList();
@@ -138,23 +113,6 @@ export function App() {
 
   const handleToggle = (id: string) => {
     toggleThing.mutate(id);
-  };
-
-  const handleAddTask = (title: string, listId: string | null) => {
-    // Tasks created in the today view default to due today
-    const now = new Date();
-    const todayISO = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())).toISOString();
-    createThing.mutate(
-      { type: "task", title, listId: listId ?? undefined, dueDate: todayISO, dueDatePrecision: "day" },
-      { onError: (err) => console.error("Failed to create thing:", err) }
-    );
-  };
-
-  const handleAddContent = (url: string, title: string, listId: string | null) => {
-    createThing.mutate(
-      { type: "content", title, sourceUrl: url, listId: listId ?? undefined },
-      { onError: (err) => console.error("Failed to create thing:", err) }
-    );
   };
 
   // Inbox-specific handlers
@@ -214,15 +172,14 @@ export function App() {
           count: ids.length,
         });
       } else if (data?.type === "thing-card") {
-        const thing = things.find((t) => t.id === data.thingId);
         setActiveDrag({
           id: data.thingId,
-          title: thing?.title ?? "Item",
+          title: data.title ?? "Item",
           count: 1,
         });
       }
     },
-    [inboxData, things]
+    [inboxData]
   );
 
   const handleDragEnd = useCallback(
@@ -259,47 +216,6 @@ export function App() {
     [bulkUpdate, lists, reorderLists]
   );
 
-  // Server provides the right date range; client just applies type filter
-  const filteredThings = things.filter((thing) => {
-    if (activeFilter === "All") return true;
-    if (activeFilter === "Tasks") return thing.type === "task";
-    if (activeFilter === "Content") return thing.type === "content";
-    return true;
-  });
-
-  const upNextEvent = mockEvents.find((e) => e.id === "e2");
-
-  // Determine which state the things area is in for cross-fade
-  const allCompleted = filteredThings.length > 0 && filteredThings.every((t) => t.isCompleted);
-  const isEmpty = filteredThings.length === 0;
-  const thingsStateKey = thingsLoading
-    ? "loading"
-    : isEmpty
-      ? "empty"
-      : "has-things";
-
-  const thingsContent = thingsLoading ? (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8">
-      <div className="text-center text-white/40 text-sm">
-        Loading...
-      </div>
-    </div>
-  ) : isEmpty ? (
-    <ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere={things.length > 0} allCompleted={false} lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />
-  ) : allCompleted ? (
-    <ThingsList
-      things={filteredThings}
-      lists={lists}
-      onItemClick={handleItemClick}
-      onToggle={handleToggle}
-      onAdd={handleAddTask}
-      onTriageOpen={handleTriageOpen}
-      header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
-    />
-  ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={handleItemClick} onToggle={handleToggle} onAdd={handleAddTask} onTriageOpen={handleTriageOpen} />
-  );
-
   const inboxCount = inboxData?.visible.length ?? 0;
 
   return (
@@ -324,7 +240,8 @@ export function App() {
             isCollapsed={isDetailOpen}
             lists={lists}
             user={user}
-            incompleteCount={things.filter(t => !t.isCompleted).length}
+            // TODO: restore incompleteCount
+            incompleteCount={0}
             activeView={activeView}
             onNavClick={handleNavClick}
             inboxCount={inboxCount}
@@ -373,34 +290,21 @@ export function App() {
                       }
                     />
                   ) : (
-                    <>
-                      <Omnibar />
-
-                      {isBriefingVisible && (
-                        <MorningBriefing
-                          items={mockBriefingItems}
-                          onDismiss={() => setIsBriefingVisible(false)}
-                        />
-                      )}
-
-                      {upNextEvent && (
-                        <UpNextCard
-                          event={upNextEvent}
-                          onClick={() => handleItemClick(upNextEvent)}
-                        />
-                      )}
-
-                      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 px-4 py-3">
-                        <FilterPills
-                          activeFilter={activeFilter}
-                          onSelectFilter={setActiveFilter}
-                        />
-                      </div>
-
-                      <CrossFade stateKey={thingsStateKey} exitMs={180} enterMs={280}>
-                        {thingsContent}
-                      </CrossFade>
-                    </>
+                    <TodayView
+                      lists={lists}
+                      onItemClick={handleItemClick}
+                      onTriageOpen={handleTriageOpen}
+                      triagePopup={
+                        triageState ? (
+                          <TriagePopup
+                            mode={triageState.mode}
+                            lists={lists}
+                            onConfirm={handleTriageConfirm}
+                            onCancel={handleTriageCancel}
+                          />
+                        ) : null
+                      }
+                    />
                   )}
                 </div>
               </main>
@@ -433,18 +337,6 @@ export function App() {
             />
           )}
         </DragOverlay>
-
-        {/* Triage popup (works from both today and inbox views) */}
-        {triageState && activeView === "today" && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <TriagePopup
-              mode={triageState.mode}
-              lists={lists}
-              onConfirm={handleTriageConfirm}
-              onCancel={handleTriageCancel}
-            />
-          </div>
-        )}
 
         {/* Delete list confirmation */}
         {deleteListConfirm && (
