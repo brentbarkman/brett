@@ -361,3 +361,40 @@ describe("Things routes", () => {
     expect(body.length).toBe(0);
   });
 });
+
+describe("GET /things?dueAfter", () => {
+  let daToken: string;
+
+  beforeAll(async () => {
+    const user = await createTestUser("DueAfter User");
+    daToken = user.token;
+
+    await authRequest("/things", daToken, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Past", dueDate: "2026-03-10T00:00:00Z", dueDatePrecision: "day" }),
+    });
+    await authRequest("/things", daToken, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Today", dueDate: "2026-03-16T00:00:00Z", dueDatePrecision: "day" }),
+    });
+    await authRequest("/things", daToken, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Future", dueDate: "2026-03-20T00:00:00Z", dueDatePrecision: "day" }),
+    });
+  });
+
+  it("filters items with dueDate after the given date", async () => {
+    const res = await authRequest("/things?dueAfter=2026-03-16T00:00:00Z", daToken);
+    const body = (await res.json()) as any[];
+    expect(body.length).toBe(1);
+    expect(body[0].title).toBe("Future");
+  });
+
+  it("works with dueBefore for date range", async () => {
+    const res = await authRequest("/things?dueAfter=2026-03-09T00:00:00Z&dueBefore=2026-03-17T00:00:00Z", daToken);
+    const body = (await res.json()) as any[];
+    expect(body.length).toBe(2);
+    const titles = body.map((t: any) => t.title).sort();
+    expect(titles).toEqual(["Past", "Today"]);
+  });
+});

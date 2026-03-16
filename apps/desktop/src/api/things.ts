@@ -12,6 +12,7 @@ interface ThingsFilters {
   status?: string;
   source?: string;
   dueBefore?: string;
+  dueAfter?: string;
   completedAfter?: string;
 }
 
@@ -23,6 +24,7 @@ function buildQuery(filters?: ThingsFilters): string {
   if (filters.status) params.set("status", filters.status);
   if (filters.source) params.set("source", filters.source);
   if (filters.dueBefore) params.set("dueBefore", filters.dueBefore);
+  if (filters.dueAfter) params.set("dueAfter", filters.dueAfter);
   if (filters.completedAfter) params.set("completedAfter", filters.completedAfter);
   const qs = params.toString();
   return qs ? `?${qs}` : "";

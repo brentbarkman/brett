@@ -18,17 +18,24 @@ things.use("*", authMiddleware);
 // GET /things — list things with optional filters
 // Supports date range filters:
 //   dueBefore=ISO   — items with dueDate <= value (inclusive)
+//   dueAfter=ISO    — items with dueDate > value (exclusive)
 //   completedAfter=ISO — items with completedAt >= value
 things.get("/", async (c) => {
   const user = c.get("user");
-  const { listId, type, status, source, dueBefore, completedAfter } = c.req.query();
+  const { listId, type, status, source, dueBefore, dueAfter, completedAfter } = c.req.query();
 
   const where: Record<string, unknown> = { userId: user.id };
   if (listId) where.listId = listId;
   if (type) where.type = type;
   if (status) where.status = status;
   if (source) where.source = source;
-  if (dueBefore) where.dueDate = { lte: new Date(dueBefore) };
+  if (dueBefore && dueAfter) {
+    where.dueDate = { gt: new Date(dueAfter), lte: new Date(dueBefore) };
+  } else if (dueBefore) {
+    where.dueDate = { lte: new Date(dueBefore) };
+  } else if (dueAfter) {
+    where.dueDate = { gt: new Date(dueAfter) };
+  }
   if (completedAfter) where.completedAt = { gte: new Date(completedAfter) };
 
   const items = await prisma.item.findMany({
