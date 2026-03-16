@@ -20,14 +20,12 @@ interface LeftNavProps {
   user?: LeftNavUser | null;
   /** Number of incomplete things to show on the Today badge */
   incompleteCount?: number;
-  /** Currently active view */
-  activeView?: string;
-  /** Callback when a nav item is clicked */
-  onNavClick?: (view: string) => void;
+  /** Current route path (e.g., "/today", "/lists/abc123") */
+  currentPath?: string;
+  /** Navigation function — called with target path */
+  navigate?: (path: string) => void;
   /** Real inbox badge count */
   inboxCount?: number;
-  /** Callback when the user avatar is clicked */
-  onAvatarClick?: () => void;
   onCreateList?: (name: string) => void;
   onRenameList?: (id: string, newName: string) => void;
   onDeleteList?: (id: string) => void;
@@ -39,10 +37,9 @@ export function LeftNav({
   lists,
   user,
   incompleteCount,
-  activeView = "today",
-  onNavClick,
+  currentPath = "/today",
+  navigate,
   inboxCount,
-  onAvatarClick,
   onCreateList,
   onRenameList,
   onDeleteList,
@@ -103,17 +100,17 @@ export function LeftNav({
           icon={<Calendar size={18} />}
           label="Today"
           badge={incompleteCount}
-          isActive={activeView === "today"}
+          isActive={currentPath === "/today"}
           isCollapsed={isCollapsed}
-          onClick={() => onNavClick?.("today")}
+          onClick={() => navigate?.("/today")}
         />
         <NavItem
           icon={<Inbox size={18} />}
           label="Inbox"
           badge={inboxCount}
-          isActive={activeView === "inbox"}
+          isActive={currentPath === "/inbox"}
           isCollapsed={isCollapsed}
-          onClick={() => onNavClick?.("inbox")}
+          onClick={() => navigate?.("/inbox")}
         />
         <NavItem
           icon={<Search size={18} />}
@@ -169,7 +166,8 @@ export function LeftNav({
                 key={list.id}
                 list={list}
                 isCollapsed={isCollapsed}
-                onClick={() => onNavClick?.(`list:${list.id}`)}
+                isActive={currentPath === `/lists/${list.id}`}
+                onClick={() => navigate?.(`/lists/${list.id}`)}
                 onRename={onRenameList}
                 onDelete={onDeleteList}
               />
@@ -184,7 +182,7 @@ export function LeftNav({
           <>
             <div className="h-px bg-white/10 w-full" />
             <button
-              onClick={onAvatarClick}
+              onClick={() => navigate?.("/settings")}
               className={`
               flex items-center gap-2.5 rounded-lg transition-colors w-full cursor-pointer hover:bg-white/5
               ${isCollapsed ? "justify-center p-2" : "px-2 py-1.5"}
@@ -220,12 +218,14 @@ export function LeftNav({
 function SortableListItem({
   list,
   isCollapsed,
+  isActive,
   onClick,
   onRename,
   onDelete,
 }: {
   list: NavList;
   isCollapsed: boolean;
+  isActive?: boolean;
   onClick?: () => void;
   onRename?: (id: string, newName: string) => void;
   onDelete?: (id: string) => void;
@@ -326,7 +326,9 @@ function SortableListItem({
             ${
               isOver
                 ? `${dropHighlight} border border-white/20 text-white`
-                : "text-white/60 hover:bg-white/5 hover:text-white/90"
+                : isActive
+                  ? "bg-white/10 text-white"
+                  : "text-white/60 hover:bg-white/5 hover:text-white/90"
             }
           `}
           {...attributes}

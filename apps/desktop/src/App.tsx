@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -31,11 +32,25 @@ import { mockEvents } from "./data/mockData";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 
-type ActiveView = "today" | "inbox" | "settings";
+function MainLayout({ children, onEventClick }: { children: React.ReactNode; onEventClick: (e: any) => void }) {
+  return (
+    <>
+      <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
+        <div className="max-w-3xl mx-auto w-full space-y-4">
+          {children}
+        </div>
+      </main>
+      <div className="w-[300px] flex-shrink-0 py-2">
+        <CalendarTimeline events={mockEvents} onEventClick={onEventClick} />
+      </div>
+    </>
+  );
+}
 
 export function App() {
   const { user } = useAuth();
-  const [activeView, setActiveView] = useState<ActiveView>("today");
+  const navigate = useNavigate();
+  const location = useLocation();
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEvent | null
   >(null);
@@ -78,7 +93,7 @@ export function App() {
   const bulkUpdate = useBulkUpdateThings();
 
   // Inbox data — fetch with hidden when inbox is active
-  const { data: inboxData } = useInboxThings(activeView === "inbox");
+  const { data: inboxData } = useInboxThings(location.pathname === "/inbox");
 
   // Apply dark mode to root
   useEffect(() => {
@@ -151,12 +166,6 @@ export function App() {
 
   const handleTriageCancel = () => {
     setTriageState(null);
-  };
-
-  const handleNavClick = (view: string) => {
-    if (view === "today" || view === "inbox") {
-      setActiveView(view);
-    }
   };
 
   // DnD handlers
@@ -240,12 +249,9 @@ export function App() {
             isCollapsed={isDetailOpen}
             lists={lists}
             user={user}
-            // TODO: restore incompleteCount
-            incompleteCount={0}
-            activeView={activeView}
-            onNavClick={handleNavClick}
+            currentPath={location.pathname}
+            navigate={navigate}
             inboxCount={inboxCount}
-            onAvatarClick={() => setActiveView("settings")}
             onCreateList={(name) => createList.mutate({ name })}
             onRenameList={(id, name) => updateList.mutate({ id, name })}
             onDeleteList={(id) => {
@@ -254,70 +260,53 @@ export function App() {
                 setDeleteListConfirm({ id, name: list.name, count: list.count });
               } else {
                 deleteList.mutate(id);
+                if (location.pathname === `/lists/${id}`) {
+                  navigate("/today");
+                }
               }
             }}
             onReorderLists={(ids) => reorderLists.mutate(ids)}
           />
 
-          {activeView === "settings" ? (
-            <SettingsPage onBack={() => setActiveView("today")} />
-          ) : (
-            <>
-              {/* Center Column */}
-              <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
-                <div className="max-w-3xl mx-auto w-full space-y-4">
-                  {activeView === "inbox" ? (
-                    <InboxView
-                      things={inboxData?.visible ?? []}
-                      hiddenCount={inboxData?.hiddenCount ?? 0}
-                      hiddenThings={inboxData?.hidden}
-                      lists={lists}
-                      onItemClick={handleItemClick}
-                      onToggle={handleToggle}
-                      onArchive={handleInboxArchive}
-                      onAdd={handleInboxAdd}
-                      onTriage={handleInboxTriage}
-                      onTriageOpen={handleTriageOpen}
-                      triagePopup={
-                        triageState ? (
-                          <TriagePopup
-                            mode={triageState.mode}
-                            lists={lists}
-                            onConfirm={handleTriageConfirm}
-                            onCancel={handleTriageCancel}
-                          />
-                        ) : undefined
-                      }
-                    />
-                  ) : (
-                    <TodayView
-                      lists={lists}
-                      onItemClick={handleItemClick}
-                      onTriageOpen={handleTriageOpen}
-                      triagePopup={
-                        triageState ? (
-                          <TriagePopup
-                            mode={triageState.mode}
-                            lists={lists}
-                            onConfirm={handleTriageConfirm}
-                            onCancel={handleTriageCancel}
-                          />
-                        ) : null
-                      }
-                    />
-                  )}
-                </div>
-              </main>
-
-              {/* Right Column: Calendar */}
-              <div className="w-[300px] flex-shrink-0 py-2">
-                <CalendarTimeline
-                  events={mockEvents}
-                  onEventClick={handleItemClick}
+          <Routes>
+            <Route path="/settings" element={<SettingsPage onBack={() => navigate("/today")} />} />
+            <Route path="/today" element={
+              <MainLayout onEventClick={handleItemClick}>
+                <TodayView
+                  lists={lists}
+                  onItemClick={handleItemClick}
+                  onTriageOpen={handleTriageOpen}
+                  triagePopup={triageState ? (
+                    <TriagePopup mode={triageState.mode} lists={lists} onConfirm={handleTriageConfirm} onCancel={handleTriageCancel} />
+                  ) : null}
                 />
-              </div>
-            </>
-          )}
+              </MainLayout>
+            } />
+            <Route path="/inbox" element={
+              <MainLayout onEventClick={handleItemClick}>
+                <InboxView
+                  things={inboxData?.visible ?? []}
+                  hiddenCount={inboxData?.hiddenCount ?? 0}
+                  hiddenThings={inboxData?.hidden}
+                  lists={lists}
+                  onItemClick={handleItemClick}
+                  onToggle={handleToggle}
+                  onArchive={handleInboxArchive}
+                  onAdd={handleInboxAdd}
+                  onTriage={handleInboxTriage}
+                  onTriageOpen={handleTriageOpen}
+                  triagePopup={triageState ? (
+                    <TriagePopup mode={triageState.mode} lists={lists} onConfirm={handleTriageConfirm} onCancel={handleTriageCancel} />
+                  ) : undefined}
+                />
+              </MainLayout>
+            } />
+            <Route path="/lists/:id" element={
+              <MainLayout onEventClick={handleItemClick}>
+                <div className="text-white/40 text-sm p-4">List view — coming soon</div>
+              </MainLayout>
+            } />
+          </Routes>
         </div>
 
         {/* Sliding Detail Panel Overlay */}
