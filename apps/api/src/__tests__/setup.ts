@@ -1,3 +1,9 @@
+// Polyfill crypto for Node 18 (better-auth needs it globally)
+import { webcrypto } from "node:crypto";
+if (!globalThis.crypto) {
+  (globalThis as any).crypto = webcrypto;
+}
+
 // Test setup — set env vars before anything imports
 process.env.DATABASE_URL = "postgresql://brett:brett_dev@localhost:5432/brett_test";
 process.env.BETTER_AUTH_SECRET = "test-secret-at-least-32-characters-long";
