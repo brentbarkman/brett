@@ -293,9 +293,35 @@ className="hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg transition
 **Current:** ThingsEmptyState uses static icons.
 **Upgrade:** Add a subtle entrance animation (staggered fade-in for the pills/badges). Empty states are where personality lives — consider a gentle floating/breathing animation on the main icon.
 
-### 3. Skeleton Loading States
-**Current:** No loading states visible — content pops in.
-**Upgrade:** Add glass-style skeleton loaders (`bg-white/5 animate-pulse rounded-lg h-16`) that match the card shapes. Show 3–4 skeleton cards while data loads.
+### 3. Skeleton Loading States ✅ IMPLEMENTED
+**Rule:** All loading states use skeleton loaders — never show "Loading..." text.
+
+**Components:**
+- `SkeletonBar` — single pulsing bar, accepts `className` for sizing
+- `SkeletonListView` — full list skeleton (header + add input + 3 item cards)
+
+**Pattern:**
+```jsx
+// Single bar
+<div className="bg-white/5 animate-pulse rounded-lg h-4 w-3/4" />
+
+// Thing card skeleton
+<div className="flex items-center gap-3 p-3 rounded-lg border border-white/5 bg-white/5">
+  <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse flex-shrink-0" />
+  <div className="flex-1 space-y-2">
+    <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-3/4" />
+    <div className="bg-white/5 animate-pulse rounded-lg h-2.5 w-1/2" />
+  </div>
+  <div className="bg-white/5 animate-pulse rounded-lg h-6 w-16 rounded-full" />
+</div>
+```
+
+**Rules:**
+- Skeletons must match the shape of the content they replace (cards look like cards, inputs look like inputs)
+- Use `bg-white/5` — not `bg-white/10` (too bright) or `bg-white/[0.03]` (invisible)
+- Use `animate-pulse` (Tailwind built-in) — not custom keyframes
+- Show 3 skeleton cards for list views (enough to indicate content, not so many it feels heavy)
+- Full-screen loading (auth init): use pulsing logo, not skeletons
 
 ### 4. Scroll Position Indicators
 **Current:** Lists in LeftNav use `scrollbar-hide` with no overflow indication.

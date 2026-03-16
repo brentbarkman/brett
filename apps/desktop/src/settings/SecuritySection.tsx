@@ -68,7 +68,10 @@ export function SecuritySection() {
         <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
           Security
         </h3>
-        <div className="text-sm text-white/30">Loading...</div>
+        <div className="space-y-3">
+          <div className="bg-white/5 animate-pulse rounded-lg h-10 w-full" />
+          <div className="bg-white/5 animate-pulse rounded-lg h-10 w-3/4" />
+        </div>
       </div>
     );
   }

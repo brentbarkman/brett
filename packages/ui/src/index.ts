@@ -16,6 +16,7 @@ export { TriagePopup } from "./TriagePopup";
 export { InboxDragOverlay } from "./InboxDragOverlay";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { QuickAddInput } from "./QuickAddInput";
+export { SkeletonBar, SkeletonListView } from "./Skeleton";
 export type { QuickAddInputHandle } from "./QuickAddInput";
 export { useListKeyboardNav } from "./useListKeyboardNav";
 export { ItemListShell } from "./ItemListShell";

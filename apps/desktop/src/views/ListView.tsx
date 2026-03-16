@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Archive } from "lucide-react";
-import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav } from "@brett/ui";
+import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav, SkeletonListView } from "@brett/ui";
 import type { QuickAddInputHandle } from "@brett/ui";
 import type { Thing, NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
@@ -103,11 +103,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
 
   // Still loading lists (e.g., after creating a new list)
   if (!list && listsFetching) {
-    return (
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8 text-center">
-        <p className="text-sm text-white/40">Loading...</p>
-      </div>
-    );
+    return <SkeletonListView />;
   }
 
   // Not found
@@ -279,8 +275,17 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
 
         {/* Loading state */}
         {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <p className="text-sm text-white/40">Loading...</p>
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-white/5 bg-white/5">
+                <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-3/4" />
+                  <div className="bg-white/5 animate-pulse rounded-lg h-2.5 w-1/2" />
+                </div>
+                <div className="bg-white/5 animate-pulse rounded-lg h-6 w-16 rounded-full" />
+              </div>
+            ))}
           </div>
         )}
 

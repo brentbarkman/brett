@@ -8,6 +8,7 @@ import {
   ThingsEmptyState,
   CrossFade,
   TriagePopup,
+  SkeletonListView,
 } from "@brett/ui";
 import type { Thing, CalendarEvent, NavList } from "@brett/types";
 import {
@@ -88,11 +89,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, triagePopup }: Tod
       : "has-things";
 
   const thingsContent = thingsLoading ? (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8">
-      <div className="text-center text-white/40 text-sm">
-        Loading...
-      </div>
-    </div>
+    <SkeletonListView />
   ) : isEmpty ? (
     <ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere={things.length > 0} allCompleted={false} lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />
   ) : allCompleted ? (
