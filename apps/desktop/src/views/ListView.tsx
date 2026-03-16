@@ -289,7 +289,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-1">
                 Active
               </h2>
-              <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 divide-y divide-white/5">
+              <div className="space-y-2">
                 {activeThings.map((thing) => (
                   <ThingCard
                     key={thing.id}
@@ -307,7 +307,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-1">
                 Done
               </h2>
-              <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 divide-y divide-white/5">
+              <div className="space-y-2">
                 {doneThings.map((thing) => (
                   <ThingCard
                     key={thing.id}
