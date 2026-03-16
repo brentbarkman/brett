@@ -67,6 +67,7 @@ export function App() {
     mode: "list-first" | "date-first";
     ids: string[];
     currentListId?: string | null;
+    currentDueDate?: string | null;
     currentDueDatePrecision?: "day" | "week" | null;
   } | null>(null);
 
@@ -180,8 +181,8 @@ export function App() {
     bulkUpdate.mutate({ ids, updates });
   };
 
-  const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDatePrecision?: "day" | "week" | null }) => {
-    setTriageState({ mode, ids, currentListId: thing?.listId, currentDueDatePrecision: thing?.dueDatePrecision });
+  const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {
+    setTriageState({ mode, ids, currentListId: thing?.listId, currentDueDate: thing?.dueDate, currentDueDatePrecision: thing?.dueDatePrecision });
   };
 
   const handleTriageConfirm = (updates: {
@@ -387,6 +388,7 @@ export function App() {
               mode={triageState.mode}
               lists={lists}
               currentListId={triageState.currentListId}
+              currentDueDate={triageState.currentDueDate}
               currentDueDatePrecision={triageState.currentDueDatePrecision}
               onConfirm={handleTriageConfirm}
               onCancel={handleTriageCancel}

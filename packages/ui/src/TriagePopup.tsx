@@ -8,6 +8,7 @@ interface TriagePopupProps {
   lists: NavList[];
   /** Current values from the thing being triaged — used to pre-select on secondary step */
   currentListId?: string | null;
+  currentDueDate?: string | null;
   currentDueDatePrecision?: DueDatePrecision | null;
   onConfirm: (updates: {
     listId?: string | null;
@@ -32,6 +33,7 @@ export function TriagePopup({
   mode,
   lists,
   currentListId,
+  currentDueDate,
   currentDueDatePrecision,
   onConfirm,
   onCancel,
@@ -314,6 +316,11 @@ export function TriagePopup({
             <div className="px-3 py-1.5">
               <input
                 type="date"
+                defaultValue={
+                  currentDueDate && currentDueDatePrecision === "day"
+                    ? new Date(currentDueDate).toISOString().split("T")[0]
+                    : undefined
+                }
                 onChange={(e) => {
                   if (e.target.value) {
                     const d = new Date(e.target.value + "T00:00:00Z");

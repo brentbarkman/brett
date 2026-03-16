@@ -17,7 +17,7 @@ interface InboxViewProps {
     ids: string[],
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
 }
 
 export function InboxView({
@@ -283,7 +283,7 @@ export function InboxView({
         if (ids.length === 0) return;
         // Pass focused thing's values for single-item triage
         const singleThing = ids.length === 1 ? activeThings.find((t) => t.id === ids[0]) : undefined;
-        onTriageOpen?.("list-first", ids, singleThing ? { listId: singleThing.listId, dueDatePrecision: singleThing.dueDatePrecision } : undefined);
+        onTriageOpen?.("list-first", ids, singleThing ? { listId: singleThing.listId, dueDate: singleThing.dueDate, dueDatePrecision: singleThing.dueDatePrecision } : undefined);
         return;
       }
 
@@ -293,7 +293,7 @@ export function InboxView({
         const ids = getTargetIds();
         if (ids.length === 0) return;
         const singleThing = ids.length === 1 ? activeThings.find((t) => t.id === ids[0]) : undefined;
-        onTriageOpen?.("date-first", ids, singleThing ? { listId: singleThing.listId, dueDatePrecision: singleThing.dueDatePrecision } : undefined);
+        onTriageOpen?.("date-first", ids, singleThing ? { listId: singleThing.listId, dueDate: singleThing.dueDate, dueDatePrecision: singleThing.dueDatePrecision } : undefined);
         return;
       }
     };

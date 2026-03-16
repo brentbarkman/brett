@@ -7,7 +7,7 @@ import { useUpcomingThings, useToggleThing } from "../api/things";
 
 interface UpcomingViewProps {
   onItemClick: (item: Thing) => void;
-  onTriageOpen: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
 }
 
 export function UpcomingView({ onItemClick, onTriageOpen }: UpcomingViewProps) {

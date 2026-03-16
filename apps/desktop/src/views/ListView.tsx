@@ -14,7 +14,7 @@ interface ListViewProps {
   listsFetching?: boolean;
   onItemClick: (item: Thing) => void;
   onArchiveList?: (id: string, incompleteCount: number) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
 }
 
 const colorMap: Record<string, string> = {
