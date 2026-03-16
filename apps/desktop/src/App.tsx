@@ -92,7 +92,7 @@ export function App() {
     count: number;
   } | null>(null);
 
-  const { data: lists = [] } = useLists();
+  const { data: lists = [], isFetching: listsFetching } = useLists();
   const createList = useCreateList();
   const updateList = useUpdateList();
   const deleteList = useDeleteList();
@@ -332,7 +332,7 @@ export function App() {
             } />
             <Route path="/lists/:slug" element={
               <MainLayout onEventClick={handleItemClick}>
-                <ListView lists={lists} archivedLists={archivedLists} onItemClick={handleItemClick} onArchiveList={handleArchiveList} />
+                <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} />
               </MainLayout>
             } />
             <Route path="*" element={<Navigate to="/today" replace />} />

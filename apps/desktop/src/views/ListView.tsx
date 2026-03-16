@@ -11,6 +11,7 @@ import { useUpdateList, useUnarchiveList } from "../api/lists";
 interface ListViewProps {
   lists: NavList[];
   archivedLists?: NavList[];
+  listsFetching?: boolean;
   onItemClick: (item: Thing) => void;
   onArchiveList?: (id: string, incompleteCount: number) => void;
 }
@@ -47,7 +48,7 @@ const colorSwatches = [
   "bg-slate-400",
 ];
 
-export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: ListViewProps) {
+export function ListView({ lists, archivedLists, listsFetching, onItemClick, onArchiveList }: ListViewProps) {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
 
@@ -99,6 +100,15 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
       document.removeEventListener("keydown", handleEscape);
     };
   }, [showColorPicker]);
+
+  // Still loading lists (e.g., after creating a new list)
+  if (!list && listsFetching) {
+    return (
+      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8 text-center">
+        <p className="text-sm text-white/40">Loading...</p>
+      </div>
+    );
+  }
 
   // Not found
   if (!list) {
