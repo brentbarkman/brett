@@ -23,6 +23,7 @@ import {
 import type { Thing, CalendarEvent } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
+  useActiveThings,
   useCreateThing,
   useToggleThing,
   useInboxThings,
@@ -108,6 +109,14 @@ export function App() {
   const createThing = useCreateThing();
   const toggleThing = useToggleThing();
   const bulkUpdate = useBulkUpdateThings();
+
+  // Today badge count — active items due this week or earlier
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dayOfWeek = todayStart.getUTCDay();
+  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
+  const endOfWeek = new Date(todayStart.getTime() + daysUntilSunday * 86400000);
+  const { data: activeThingsForCount = [] } = useActiveThings(endOfWeek.toISOString());
 
   // Inbox data — fetch with hidden when inbox is active
   const { data: inboxData } = useInboxThings(location.pathname === "/inbox");
@@ -278,6 +287,7 @@ export function App() {
             isCollapsed={isDetailOpen}
             lists={lists}
             user={user}
+            incompleteCount={activeThingsForCount.length}
             currentPath={location.pathname}
             navigate={navigate}
             inboxCount={inboxCount}
