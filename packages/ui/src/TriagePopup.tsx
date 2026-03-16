@@ -311,6 +311,20 @@ export function TriagePopup({
             </button>
           ))}
           <div className="border-t border-white/5 mt-1 pt-1">
+            <div className="px-3 py-1.5">
+              <input
+                type="date"
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const d = new Date(e.target.value + "T00:00:00Z");
+                    setSelectedDate(d.toISOString());
+                    setSelectedPrecision("day");
+                    advanceOrConfirm(selectedListId, d.toISOString(), "day");
+                  }
+                }}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-sm text-white [color-scheme:dark]"
+              />
+            </div>
             <button
               onClick={clearDate}
               className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-white/40 hover:bg-white/5 transition-colors"
