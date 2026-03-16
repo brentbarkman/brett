@@ -66,7 +66,7 @@ export function ThingCard({ thing, onClick, onToggle, isFocused }: ThingCardProp
       onClick={onClick}
       className={`
         group relative flex items-center gap-3 p-3 rounded-lg cursor-pointer
-        border transition-all duration-200
+        border transition-all duration-200 outline-none
         ${completing
           ? "bg-green-500/[0.03] border-green-500/15"
           : isFocused

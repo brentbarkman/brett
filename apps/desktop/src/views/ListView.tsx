@@ -169,6 +169,55 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
 
   const activeThings = things.filter((t) => !t.isCompleted);
   const doneThings = things.filter((t) => t.isCompleted);
+  const allItems = [...activeThings, ...doneThings];
+
+  // Keyboard navigation
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const focusedThing = allItems[focusedIndex] ?? null;
+
+  useEffect(() => {
+    setFocusedIndex((i) => Math.min(i, Math.max(allItems.length - 1, 0)));
+  }, [allItems.length]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        setFocusedIndex((i) => Math.min(i + 1, allItems.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        setFocusedIndex((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (focusedThing) onItemClick(focusedThing);
+        return;
+      }
+      if (e.key === "e") {
+        e.preventDefault();
+        if (focusedThing) handleToggle(focusedThing.id);
+        return;
+      }
+      if (e.key === "n") {
+        e.preventDefault();
+        addInputRef.current?.focus();
+        return;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [focusedIndex, focusedThing, allItems, onItemClick]);
 
   return (
     <div className="flex flex-col gap-4 pb-20">
@@ -320,12 +369,13 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               <div className="h-px bg-white/10 flex-1" />
             </div>
             <div className="flex flex-col gap-2">
-              {activeThings.map((thing) => (
+              {activeThings.map((thing, i) => (
                 <ThingCard
                   key={thing.id}
                   thing={thing}
                   onClick={() => onItemClick(thing)}
                   onToggle={handleToggle}
+                  isFocused={focusedIndex === i}
                 />
               ))}
             </div>
@@ -342,12 +392,13 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               <div className="h-px bg-white/10 flex-1" />
             </div>
             <div className="flex flex-col gap-2">
-              {doneThings.map((thing) => (
+              {doneThings.map((thing, i) => (
                 <ThingCard
                   key={thing.id}
                   thing={thing}
                   onClick={() => onItemClick(thing)}
                   onToggle={handleToggle}
+                  isFocused={focusedIndex === activeThings.length + i}
                 />
               ))}
             </div>
