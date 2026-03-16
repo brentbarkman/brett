@@ -156,7 +156,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
   const doneThings = things.filter((t) => t.isCompleted);
   const allItems = [...activeThings, ...doneThings];
 
-  const { focusedIndex } = useListKeyboardNav({
+  const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
     items: allItems,
     onItemClick,
     onToggle: handleToggle,
@@ -294,6 +294,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
                   thing={thing}
                   onClick={() => onItemClick(thing)}
                   onToggle={handleToggle}
+                  onFocus={() => setFocusedIndex(i)}
                   isFocused={focusedIndex === i}
                 />
               ))}
@@ -317,6 +318,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
                   thing={thing}
                   onClick={() => onItemClick(thing)}
                   onToggle={handleToggle}
+                  onFocus={() => setFocusedIndex(activeThings.length + i)}
                   isFocused={focusedIndex === activeThings.length + i}
                 />
               ))}

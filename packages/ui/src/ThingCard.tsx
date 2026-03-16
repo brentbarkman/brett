@@ -7,10 +7,11 @@ interface ThingCardProps {
   thing: Thing;
   onClick: () => void;
   onToggle?: (id: string) => void;
+  onFocus?: () => void;
   isFocused?: boolean;
 }
 
-export function ThingCard({ thing, onClick, onToggle, isFocused }: ThingCardProps) {
+export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: ThingCardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
     data: {
@@ -63,7 +64,8 @@ export function ThingCard({ thing, onClick, onToggle, isFocused }: ThingCardProp
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      onClick={onClick}
+      onClick={() => { onFocus?.(); onClick(); }}
+      onFocus={onFocus}
       className={`
         group relative flex items-center gap-3 p-3 rounded-lg cursor-pointer
         border transition-all duration-200 outline-none
