@@ -364,14 +364,14 @@ function SortableListItem({
         <button
           onClick={onClick}
           className={`
-            flex items-center w-full rounded-lg transition-colors duration-200 group
+            flex items-center w-full rounded-lg transition-colors duration-200 group outline-none
             ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-2.5"}
             ${
               isOver
                 ? `${dropHighlight} border border-white/20 text-white`
                 : isActive
-                  ? "bg-white/10 text-white"
-                  : "text-white/60 hover:bg-white/5 hover:text-white/90"
+                  ? "bg-white/10 text-white border border-transparent"
+                  : "text-white/60 hover:bg-white/5 hover:text-white/90 border border-transparent"
             }
           `}
           {...attributes}
