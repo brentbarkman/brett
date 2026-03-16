@@ -157,3 +157,8 @@ export interface NavList {
   sortOrder: number;
   archivedAt?: string | null;
 }
+
+export interface UpcomingSection {
+  label: string;
+  things: Thing[];
+}

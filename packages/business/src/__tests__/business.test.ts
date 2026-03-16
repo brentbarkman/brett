@@ -10,8 +10,9 @@ import {
   computeRelativeAge,
   computeTriageResult,
   computeTriageDate,
+  groupUpcomingThings,
 } from "../index";
-import type { ItemRecord, Urgency, DueDatePrecision } from "@brett/types";
+import type { ItemRecord, Urgency, DueDatePrecision, Thing } from "@brett/types";
 
 const NOW = new Date("2026-03-13T12:00:00Z"); // Friday
 
@@ -526,4 +527,85 @@ describe("validateCreateList", () => {
     if (r.ok) expect(r.data.name).toBe("Work");
   });
   it("rejects null", () => expect(validateCreateList(null).ok).toBe(false));
+});
+
+// ── groupUpcomingThings ──
+
+describe("groupUpcomingThings", () => {
+  // NOW is Friday March 13, 2026
+  // Next 7 days: Sat 14, Sun 15, Mon 16, Tue 17, Wed 18, Thu 19, Fri 20
+  // This week's Sunday: March 15
+  // Next week's Sunday: March 22
+
+  function makeThing(overrides: Partial<Thing> = {}): Thing {
+    return {
+      id: "t-" + Math.random().toString(36).slice(2),
+      type: "task",
+      title: "Test",
+      list: "Inbox",
+      listId: null,
+      status: "active",
+      source: "Brett",
+      urgency: "later",
+      isCompleted: false,
+      ...overrides,
+    };
+  }
+
+  it("returns empty array for empty input", () => {
+    expect(groupUpcomingThings([], NOW)).toEqual([]);
+  });
+
+  it("groups day-precision items into per-day sections for next 7 days", () => {
+    const things = [
+      makeThing({ title: "Sat task", dueDate: "2026-03-14T00:00:00Z", dueDatePrecision: "day" }),
+      makeThing({ title: "Mon task", dueDate: "2026-03-16T00:00:00Z", dueDatePrecision: "day" }),
+    ];
+    const sections = groupUpcomingThings(things, NOW);
+    expect(sections[0].label).toBe("Tomorrow");
+    expect(sections[0].things[0].title).toBe("Sat task");
+    expect(sections[1].label).toBe("Monday");
+    expect(sections[1].things[0].title).toBe("Mon task");
+  });
+
+  it("groups week-precision items into This Week / Next Week", () => {
+    const things = [
+      makeThing({ title: "This wk", dueDate: "2026-03-15T00:00:00Z", dueDatePrecision: "week" }),
+      makeThing({ title: "Next wk", dueDate: "2026-03-22T00:00:00Z", dueDatePrecision: "week" }),
+    ];
+    const sections = groupUpcomingThings(things, NOW);
+    expect(sections.find((s) => s.label === "This Week")?.things[0].title).toBe("This wk");
+    expect(sections.find((s) => s.label === "Next Week")?.things[0].title).toBe("Next wk");
+  });
+
+  it("groups far-future items into weekly ranges", () => {
+    const things = [
+      makeThing({ title: "Far out", dueDate: "2026-04-01T00:00:00Z", dueDatePrecision: "day" }),
+    ];
+    const sections = groupUpcomingThings(things, NOW);
+    const last = sections[sections.length - 1];
+    expect(last.label).toMatch(/Mar 30.*Apr 5/);
+    expect(last.things[0].title).toBe("Far out");
+  });
+
+  it("sections are chronologically ordered", () => {
+    const things = [
+      makeThing({ title: "Next wk", dueDate: "2026-03-22T00:00:00Z", dueDatePrecision: "week" }),
+      makeThing({ title: "Tomorrow", dueDate: "2026-03-14T00:00:00Z", dueDatePrecision: "day" }),
+      makeThing({ title: "This wk", dueDate: "2026-03-15T00:00:00Z", dueDatePrecision: "week" }),
+    ];
+    const sections = groupUpcomingThings(things, NOW);
+    const labels = sections.map((s) => s.label);
+    expect(labels.indexOf("Tomorrow")).toBeLessThan(labels.indexOf("This Week"));
+    expect(labels.indexOf("This Week")).toBeLessThan(labels.indexOf("Next Week"));
+  });
+
+  it("does not include day-precision items in weekly ranges if within 7 days", () => {
+    const things = [
+      makeThing({ title: "Day item", dueDate: "2026-03-16T00:00:00Z", dueDatePrecision: "day" }),
+    ];
+    const sections = groupUpcomingThings(things, NOW);
+    expect(sections.length).toBe(1);
+    expect(sections[0].label).toBe("Monday");
+  });
 });

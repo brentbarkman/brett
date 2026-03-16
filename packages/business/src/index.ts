@@ -10,6 +10,7 @@ import type {
   CreateListInput,
   UpdateListInput,
   BulkUpdateInput,
+  UpcomingSection,
 } from "@brett/types";
 import { generateId } from "@brett/utils";
 
@@ -459,4 +460,88 @@ export function validateUpdateList(
   }
 
   return { ok: true, data };
+}
+
+// ── Upcoming grouping ──
+
+export function groupUpcomingThings(things: Thing[], now: Date = new Date()): UpcomingSection[] {
+  if (things.length === 0) return [];
+
+  const todayMs = utcDay(now);
+  const sections: UpcomingSection[] = [];
+  const placed = new Set<string>();
+  const DAY_MS = 86400000;
+
+  // 1. Per-day sections for next 7 days (day-precision only)
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  for (let offset = 1; offset <= 7; offset++) {
+    const dayMs = todayMs + offset * DAY_MS;
+    const dayThings = things.filter((t) => {
+      if (t.dueDatePrecision !== "day" || !t.dueDate) return false;
+      return utcDay(new Date(t.dueDate)) === dayMs;
+    });
+    if (dayThings.length > 0) {
+      const d = new Date(dayMs);
+      const label = offset === 1 ? "Tomorrow" : dayNames[d.getUTCDay()];
+      sections.push({ label, things: dayThings });
+      dayThings.forEach((t) => placed.add(t.id));
+    }
+  }
+
+  // 2. "This Week" — week-precision items for current week
+  const dayOfWeek = now.getUTCDay(); // 0=Sun
+  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
+  const thisWeekEndMs = todayMs + daysUntilSunday * DAY_MS;
+
+  const thisWeekThings = things.filter((t) => {
+    if (placed.has(t.id) || t.dueDatePrecision !== "week" || !t.dueDate) return false;
+    const dueMs = utcDay(new Date(t.dueDate));
+    return dueMs > todayMs && dueMs <= thisWeekEndMs;
+  });
+  if (thisWeekThings.length > 0) {
+    sections.push({ label: "This Week", things: thisWeekThings });
+    thisWeekThings.forEach((t) => placed.add(t.id));
+  }
+
+  // 3. "Next Week"
+  const nextWeekEndMs = thisWeekEndMs + 7 * DAY_MS;
+  const nextWeekThings = things.filter((t) => {
+    if (placed.has(t.id) || t.dueDatePrecision !== "week" || !t.dueDate) return false;
+    const dueMs = utcDay(new Date(t.dueDate));
+    return dueMs > thisWeekEndMs && dueMs <= nextWeekEndMs;
+  });
+  if (nextWeekThings.length > 0) {
+    sections.push({ label: "Next Week", things: nextWeekThings });
+    nextWeekThings.forEach((t) => placed.add(t.id));
+  }
+
+  // 4. Future weekly ranges (Mon-Sun) for remaining items
+  const remaining = things.filter((t) => !placed.has(t.id) && t.dueDate);
+  if (remaining.length > 0) {
+    const rangeStartMs = nextWeekEndMs + DAY_MS; // Monday after next week
+
+    let maxDueMs = 0;
+    remaining.forEach((t) => {
+      const dueMs = utcDay(new Date(t.dueDate!));
+      if (dueMs > maxDueMs) maxDueMs = dueMs;
+    });
+
+    let weekStart = rangeStartMs;
+    while (weekStart <= maxDueMs) {
+      const weekEnd = weekStart + 6 * DAY_MS;
+      const weekThings = remaining.filter((t) => {
+        const dueMs = utcDay(new Date(t.dueDate!));
+        return dueMs >= weekStart && dueMs <= weekEnd;
+      });
+      if (weekThings.length > 0) {
+        const startDate = new Date(weekStart);
+        const endDate = new Date(weekEnd);
+        const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+        sections.push({ label: `${fmt(startDate)} – ${fmt(endDate)}`, things: weekThings });
+      }
+      weekStart += 7 * DAY_MS;
+    }
+  }
+
+  return sections;
 }
