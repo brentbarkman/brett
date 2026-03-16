@@ -33,6 +33,7 @@ import { mockEvents } from "./data/mockData";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
+import { NotFoundView } from "./views/NotFoundView";
 
 function MainLayout({ children, onEventClick }: { children: React.ReactNode; onEventClick: (e: any) => void }) {
   return (
@@ -335,7 +336,12 @@ export function App() {
                 <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} />
               </MainLayout>
             } />
-            <Route path="*" element={<Navigate to="/today" replace />} />
+            <Route path="/" element={<Navigate to="/today" replace />} />
+            <Route path="*" element={
+              <MainLayout onEventClick={handleItemClick}>
+                <NotFoundView />
+              </MainLayout>
+            } />
           </Routes>
         </div>
 

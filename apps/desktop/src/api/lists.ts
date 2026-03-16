@@ -22,7 +22,12 @@ export function useCreateList() {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    onSuccess: () => {
+    onSuccess: (newList) => {
+      // Optimistically prepend the new list to the cache so navigation
+      // to its slug works immediately (before invalidation refetches)
+      qc.setQueryData<NavList[]>(["lists"], (old) =>
+        old ? [newList, ...old] : [newList]
+      );
       qc.invalidateQueries({ queryKey: ["lists"] });
     },
   });
