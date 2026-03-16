@@ -8,6 +8,7 @@ import type {
   DueDatePrecision,
   CreateItemInput,
   CreateListInput,
+  UpdateListInput,
   BulkUpdateInput,
 } from "@brett/types";
 import { generateId } from "@brett/utils";
@@ -390,6 +391,31 @@ export function computeRelativeAge(
   return `${diffDays}d ago`;
 }
 
+const VALID_COLOR_CLASSES = new Set([
+  "bg-blue-400", "bg-emerald-400", "bg-violet-400", "bg-amber-400",
+  "bg-rose-400", "bg-sky-400", "bg-orange-400", "bg-slate-400",
+  // Legacy values
+  "bg-blue-500", "bg-green-500", "bg-purple-500", "bg-amber-500",
+  "bg-red-500", "bg-pink-500", "bg-cyan-500", "bg-orange-500", "bg-gray-500",
+]);
+
+const MAX_LIST_NAME_LENGTH = 100;
+
+function validateListName(name: unknown): { ok: true; value: string } | { ok: false; error: string } {
+  if (!name || typeof name !== "string" || name.trim() === "") {
+    return { ok: false, error: "name is required" };
+  }
+  if (name.trim().length > MAX_LIST_NAME_LENGTH) {
+    return { ok: false, error: `name must be ${MAX_LIST_NAME_LENGTH} characters or fewer` };
+  }
+  return { ok: true, value: name.trim() };
+}
+
+function validateColorClass(colorClass: unknown): string | undefined {
+  if (typeof colorClass !== "string") return undefined;
+  return VALID_COLOR_CLASSES.has(colorClass) ? colorClass : undefined;
+}
+
 export function validateCreateList(
   input: unknown
 ): { ok: true; data: CreateListInput } | { ok: false; error: string } {
@@ -398,17 +424,39 @@ export function validateCreateList(
   }
 
   const obj = input as Record<string, unknown>;
-
-  if (!obj.name || typeof obj.name !== "string" || obj.name.trim() === "") {
-    return { ok: false, error: "name is required" };
-  }
+  const nameResult = validateListName(obj.name);
+  if (!nameResult.ok) return nameResult;
 
   return {
     ok: true,
     data: {
-      name: (obj.name as string).trim(),
-      colorClass:
-        typeof obj.colorClass === "string" ? obj.colorClass : undefined,
+      name: nameResult.value,
+      colorClass: validateColorClass(obj.colorClass),
     },
   };
+}
+
+export function validateUpdateList(
+  input: unknown
+): { ok: true; data: UpdateListInput } | { ok: false; error: string } {
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Request body is required" };
+  }
+
+  const obj = input as Record<string, unknown>;
+  const data: UpdateListInput = {};
+
+  if (obj.name !== undefined) {
+    const nameResult = validateListName(obj.name);
+    if (!nameResult.ok) return nameResult;
+    data.name = nameResult.value;
+  }
+
+  if (obj.colorClass !== undefined) {
+    const validated = validateColorClass(obj.colorClass);
+    if (!validated) return { ok: false, error: "invalid colorClass" };
+    data.colorClass = validated;
+  }
+
+  return { ok: true, data };
 }

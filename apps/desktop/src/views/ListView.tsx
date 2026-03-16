@@ -4,6 +4,7 @@ import { Archive } from "lucide-react";
 import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav } from "@brett/ui";
 import type { QuickAddInputHandle } from "@brett/ui";
 import type { Thing, NavList } from "@brett/types";
+import { slugify } from "@brett/utils";
 import { useListThings, useCreateThing, useToggleThing } from "../api/things";
 import { useUpdateList, useUnarchiveList } from "../api/lists";
 
@@ -47,13 +48,13 @@ const colorSwatches = [
 ];
 
 export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: ListViewProps) {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
 
-  const list = lists.find((l) => l.id === id) ?? archivedLists?.find((l) => l.id === id);
+  const list = [...lists, ...(archivedLists ?? [])].find((l) => slugify(l.name) === slug);
   const isArchived = !!list?.archivedAt;
 
-  const { data: things = [], isLoading } = useListThings(id!);
+  const { data: things = [], isLoading } = useListThings(list?.id ?? "");
   const updateList = useUpdateList();
   const createThing = useCreateThing();
   const toggleThing = useToggleThing();
@@ -117,6 +118,8 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
     const name = editName.trim();
     if (name && name !== list.name) {
       updateList.mutate({ id: list.id, name });
+      // Update URL to reflect new name
+      navigate(`/lists/${slugify(name)}`, { replace: true });
     }
     setIsEditingName(false);
   };

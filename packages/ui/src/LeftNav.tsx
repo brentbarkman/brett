@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Inbox, Calendar, Search, Plus, MoreHorizontal, GripVertical, ChevronRight } from "lucide-react";
 import type { NavList } from "@brett/types";
+import { slugify } from "@brett/utils";
 import {
   SortableContext,
   useSortable,
@@ -196,8 +197,8 @@ export function LeftNav({
                 key={list.id}
                 list={list}
                 isCollapsed={isCollapsed}
-                isActive={currentPath === `/lists/${list.id}`}
-                onClick={() => navigate?.(`/lists/${list.id}`)}
+                isActive={currentPath === `/lists/${slugify(list.name)}`}
+                onClick={() => navigate?.(`/lists/${slugify(list.name)}`)}
                 onRename={onRenameList}
                 onDelete={onDeleteList}
                 onArchive={onArchiveList}
@@ -630,8 +631,8 @@ function ArchivedListsSection({
             <ArchivedListItem
               key={list.id}
               list={list}
-              isActive={currentPath === `/lists/${list.id}`}
-              onClick={() => navigate?.(`/lists/${list.id}`)}
+              isActive={currentPath === `/lists/${slugify(list.name)}`}
+              onClick={() => navigate?.(`/lists/${slugify(list.name)}`)}
               onUnarchive={onUnarchive}
               onDelete={onDelete}
             />

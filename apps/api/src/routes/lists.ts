@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { validateCreateList } from "@brett/business";
+import { validateCreateList, validateUpdateList } from "@brett/business";
 
 const lists = new Hono<AuthEnv>();
 
@@ -101,6 +101,10 @@ lists.put("/reorder", async (c) => {
     return c.json({ error: "ids must be a non-empty array" }, 400);
   }
 
+  if (!ids.every((id: unknown) => typeof id === "string")) {
+    return c.json({ error: "ids must be strings" }, 400);
+  }
+
   // Validate all IDs belong to the user
   const userLists = await prisma.list.findMany({
     where: { userId: user.id, archivedAt: null },
@@ -191,6 +195,11 @@ lists.patch("/:id/unarchive", async (c) => {
 lists.patch("/:id", async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
+  const validation = validateUpdateList(body);
+
+  if (!validation.ok) {
+    return c.json({ error: validation.error }, 400);
+  }
 
   const existing = await prisma.list.findFirst({
     where: { id: c.req.param("id"), userId: user.id },
@@ -198,8 +207,8 @@ lists.patch("/:id", async (c) => {
   if (!existing) return c.json({ error: "Not found" }, 404);
 
   const updateData: Record<string, unknown> = {};
-  if (body.name !== undefined) updateData.name = body.name;
-  if (body.colorClass !== undefined) updateData.colorClass = body.colorClass;
+  if (validation.data.name !== undefined) updateData.name = validation.data.name;
+  if (validation.data.colorClass !== undefined) updateData.colorClass = validation.data.colorClass;
 
   const list = await prisma.list.update({
     where: { id: existing.id },

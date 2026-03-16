@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { slugify } from "@brett/utils";
 import {
   DndContext,
   DragOverlay,
@@ -187,7 +188,7 @@ export function App() {
       setArchiveListConfirm({ id, name: list.name, incompleteCount });
     } else {
       archiveList.mutate(id);
-      if (location.pathname === `/lists/${id}`) navigate("/today");
+      if (location.pathname === `/lists/${slugify(list.name)}`) navigate("/today");
     }
   };
 
@@ -283,7 +284,7 @@ export function App() {
                 setDeleteListConfirm({ id, name: list.name, count: list.count });
               } else {
                 deleteList.mutate(id);
-                if (location.pathname === `/lists/${id}`) {
+                if (list && location.pathname === `/lists/${slugify(list.name)}`) {
                   navigate("/today");
                 }
               }
@@ -327,7 +328,7 @@ export function App() {
                 />
               </MainLayout>
             } />
-            <Route path="/lists/:id" element={
+            <Route path="/lists/:slug" element={
               <MainLayout onEventClick={handleItemClick}>
                 <ListView lists={lists} archivedLists={archivedLists} onItemClick={handleItemClick} onArchiveList={handleArchiveList} />
               </MainLayout>
@@ -378,7 +379,7 @@ export function App() {
             variant="default"
             onConfirm={() => {
               archiveList.mutate(archiveListConfirm.id);
-              if (location.pathname === `/lists/${archiveListConfirm.id}`) navigate("/today");
+              if (location.pathname === `/lists/${slugify(archiveListConfirm.name)}`) navigate("/today");
               setArchiveListConfirm(null);
             }}
             onCancel={() => setArchiveListConfirm(null)}
