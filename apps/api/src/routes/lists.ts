@@ -69,20 +69,20 @@ lists.post("/", async (c) => {
     return c.json({ error: "A list with this name already exists" }, 409);
   }
 
-  // Auto-assign sortOrder as max + 1
-  const maxSort = await prisma.list.aggregate({
-    where: { userId: user.id },
-    _max: { sortOrder: true },
-  });
-  const nextSortOrder = (maxSort._max.sortOrder ?? -1) + 1;
-
-  const list = await prisma.list.create({
-    data: {
-      name: data.name,
-      colorClass: data.colorClass ?? "bg-blue-400",
-      sortOrder: nextSortOrder,
-      userId: user.id,
-    },
+  // New lists go to the top — shift existing lists down, insert at 0
+  const list = await prisma.$transaction(async (tx) => {
+    await tx.list.updateMany({
+      where: { userId: user.id },
+      data: { sortOrder: { increment: 1 } },
+    });
+    return tx.list.create({
+      data: {
+        name: data.name,
+        colorClass: data.colorClass ?? "bg-blue-400",
+        sortOrder: 0,
+        userId: user.id,
+      },
+    });
   });
 
   return c.json(

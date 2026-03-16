@@ -276,7 +276,9 @@ export function App() {
             currentPath={location.pathname}
             navigate={navigate}
             inboxCount={inboxCount}
-            onCreateList={(name) => createList.mutate({ name })}
+            onCreateList={(name) => createList.mutate({ name }, {
+              onSuccess: () => navigate(`/lists/${slugify(name)}`),
+            })}
             onRenameList={(id, name) => updateList.mutate({ id, name })}
             onDeleteList={(id) => {
               const list = [...lists, ...archivedLists].find((l) => l.id === id);

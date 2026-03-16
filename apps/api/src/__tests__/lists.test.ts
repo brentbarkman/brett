@@ -47,23 +47,23 @@ describe("Lists routes", () => {
     expect(res.status).toBe(400);
   });
 
-  it("POST /lists auto-assigns incrementing sortOrder", async () => {
+  it("POST /lists puts new list at top (sortOrder 0)", async () => {
     const res = await authRequest("/lists", token, {
       method: "POST",
       body: JSON.stringify({ name: "Personal" }),
     });
     expect(res.status).toBe(201);
     const body = (await res.json()) as any;
-    expect(body.sortOrder).toBe(1);
+    expect(body.sortOrder).toBe(0);
   });
 
-  it("GET /lists returns lists ordered by sortOrder", async () => {
+  it("GET /lists returns lists ordered by sortOrder (newest first)", async () => {
     const res = await authRequest("/lists", token);
     const body = (await res.json()) as any[];
     expect(body.length).toBe(2);
-    expect(body[0].name).toBe("Work");
+    expect(body[0].name).toBe("Personal");
     expect(body[0].sortOrder).toBe(0);
-    expect(body[1].name).toBe("Personal");
+    expect(body[1].name).toBe("Work");
     expect(body[1].sortOrder).toBe(1);
   });
 
