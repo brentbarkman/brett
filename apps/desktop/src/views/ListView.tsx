@@ -14,6 +14,7 @@ interface ListViewProps {
   listsFetching?: boolean;
   onItemClick: (item: Thing) => void;
   onArchiveList?: (id: string, incompleteCount: number) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[]) => void;
 }
 
 const colorMap: Record<string, string> = {
@@ -48,7 +49,7 @@ const colorSwatches = [
   "bg-slate-400",
 ];
 
-export function ListView({ lists, archivedLists, listsFetching, onItemClick, onArchiveList }: ListViewProps) {
+export function ListView({ lists, archivedLists, listsFetching, onItemClick, onArchiveList, onTriageOpen }: ListViewProps) {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
 
@@ -170,6 +171,20 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     onItemClick,
     onToggle: handleToggle,
     onFocusAdd: () => quickAddRef.current?.focus(),
+    onExtraKey: (e, focusedThing) => {
+      if (!focusedThing || !onTriageOpen) return false;
+      if (e.key === "l") {
+        e.preventDefault();
+        onTriageOpen("list-first", [focusedThing.id]);
+        return true;
+      }
+      if (e.key === "d") {
+        e.preventDefault();
+        onTriageOpen("date-first", [focusedThing.id]);
+        return true;
+      }
+      return false;
+    },
   });
 
   const listHeader = (

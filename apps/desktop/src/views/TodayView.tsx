@@ -23,10 +23,9 @@ interface TodayViewProps {
   lists: NavList[];
   onItemClick: (item: Thing | CalendarEvent) => void;
   onTriageOpen: (mode: "list-first" | "date-first", ids: string[]) => void;
-  triagePopup: React.ReactNode | null;
 }
 
-export function TodayView({ lists, onItemClick, onTriageOpen, triagePopup }: TodayViewProps) {
+export function TodayView({ lists, onItemClick, onTriageOpen }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState("All");
   const [isBriefingVisible, setIsBriefingVisible] = useState(true);
 
@@ -135,11 +134,6 @@ export function TodayView({ lists, onItemClick, onTriageOpen, triagePopup }: Tod
         {thingsContent}
       </CrossFade>
 
-      {triagePopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          {triagePopup}
-        </div>
-      )}
     </>
   );
 }

@@ -19,8 +19,6 @@ interface InboxViewProps {
     ids: string[],
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => void;
-  /** Render prop for triage popup — InboxView passes trigger info, parent renders popup */
-  triagePopup?: React.ReactNode;
   onTriageOpen?: (mode: "list-first" | "date-first", ids: string[]) => void;
 }
 
@@ -34,7 +32,6 @@ export function InboxView({
   onArchive,
   onAdd,
   onTriage,
-  triagePopup,
   onTriageOpen,
 }: InboxViewProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -325,9 +322,6 @@ export function InboxView({
         <Inbox size={20} className="text-white/50" />
         <h2 className="text-xl font-bold text-white">Inbox</h2>
       </div>
-      <span className="text-[10px] text-white/25 font-mono">
-        n to add
-      </span>
     </>
   );
 
@@ -465,9 +459,6 @@ export function InboxView({
             )}
           </div>
         )}
-
-        {/* Triage popup (rendered by parent) */}
-        {triagePopup}
 
       <style>{`
         @keyframes inboxSlideOut {

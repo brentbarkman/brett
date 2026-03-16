@@ -306,9 +306,6 @@ export function App() {
                   lists={lists}
                   onItemClick={handleItemClick}
                   onTriageOpen={handleTriageOpen}
-                  triagePopup={triageState ? (
-                    <TriagePopup mode={triageState.mode} lists={lists} onConfirm={handleTriageConfirm} onCancel={handleTriageCancel} />
-                  ) : null}
                 />
               </MainLayout>
             } />
@@ -325,15 +322,12 @@ export function App() {
                   onAdd={handleInboxAdd}
                   onTriage={handleInboxTriage}
                   onTriageOpen={handleTriageOpen}
-                  triagePopup={triageState ? (
-                    <TriagePopup mode={triageState.mode} lists={lists} onConfirm={handleTriageConfirm} onCancel={handleTriageCancel} />
-                  ) : undefined}
                 />
               </MainLayout>
             } />
             <Route path="/lists/:slug" element={
               <MainLayout onEventClick={handleItemClick}>
-                <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} />
+                <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} />
               </MainLayout>
             } />
             <Route path="/" element={<Navigate to="/today" replace />} />
@@ -362,6 +356,18 @@ export function App() {
             />
           )}
         </DragOverlay>
+
+        {/* Triage popup (global — works from any view) */}
+        {triageState && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <TriagePopup
+              mode={triageState.mode}
+              lists={lists}
+              onConfirm={handleTriageConfirm}
+              onCancel={handleTriageCancel}
+            />
+          </div>
+        )}
 
         {/* Delete list confirmation */}
         {deleteListConfirm && (
