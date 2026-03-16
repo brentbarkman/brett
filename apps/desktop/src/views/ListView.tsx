@@ -289,15 +289,17 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-1">
                 Active
               </h2>
-              <div className="space-y-2">
-                {activeThings.map((thing) => (
-                  <ThingCard
-                    key={thing.id}
-                    thing={thing}
-                    onClick={() => onItemClick(thing)}
-                    onToggle={handleToggle}
-                  />
-                ))}
+              <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                <div className="flex flex-col gap-2">
+                  {activeThings.map((thing) => (
+                    <ThingCard
+                      key={thing.id}
+                      thing={thing}
+                      onClick={() => onItemClick(thing)}
+                      onToggle={handleToggle}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -307,15 +309,17 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
               <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold px-1">
                 Done
               </h2>
-              <div className="space-y-2">
-                {doneThings.map((thing) => (
-                  <ThingCard
-                    key={thing.id}
-                    thing={thing}
-                    onClick={() => onItemClick(thing)}
-                    onToggle={handleToggle}
-                  />
-                ))}
+              <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                <div className="flex flex-col gap-2">
+                  {doneThings.map((thing) => (
+                    <ThingCard
+                      key={thing.id}
+                      thing={thing}
+                      onClick={() => onItemClick(thing)}
+                      onToggle={handleToggle}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           )}
