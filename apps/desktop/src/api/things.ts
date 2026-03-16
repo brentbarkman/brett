@@ -45,6 +45,15 @@ export function useDoneThings(completedAfter: string) {
   return useThings({ status: "done", completedAfter });
 }
 
+/** Things belonging to a specific list */
+export function useListThings(listId: string) {
+  return useQuery({
+    queryKey: ["things", "list", listId],
+    queryFn: () => apiFetch<Thing[]>(`/things?listId=${listId}`),
+    enabled: !!listId,
+  });
+}
+
 export function useCreateThing() {
   const qc = useQueryClient();
 

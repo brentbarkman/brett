@@ -92,3 +92,39 @@ export function useReorderLists() {
     },
   });
 }
+
+export function useArchiveList() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ archivedAt: string; itemsCompleted: number }>(`/lists/${id}/archive`, {
+        method: "PATCH",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lists"] });
+      qc.invalidateQueries({ queryKey: ["things"] });
+    },
+  });
+}
+
+export function useUnarchiveList() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<NavList>(`/lists/${id}/unarchive`, {
+        method: "PATCH",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lists"] });
+    },
+  });
+}
+
+export function useArchivedLists() {
+  return useQuery({
+    queryKey: ["lists", "archived"],
+    queryFn: () => apiFetch<NavList[]>("/lists?archived=true"),
+  });
+}
