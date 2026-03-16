@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Archive, Plus } from "lucide-react";
-import { ThingCard } from "@brett/ui";
+import { Archive } from "lucide-react";
+import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav } from "@brett/ui";
+import type { QuickAddInputHandle } from "@brett/ui";
 import type { Thing, NavList } from "@brett/types";
 import { useListThings, useCreateThing, useToggleThing } from "../api/things";
 import { useUpdateList, useUnarchiveList } from "../api/lists";
@@ -68,9 +69,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
   const colorPickerRef = useRef<HTMLDivElement>(null);
 
   // Quick add
-  const [addValue, setAddValue] = useState("");
-  const [addFocused, setAddFocused] = useState(false);
-  const addInputRef = useRef<HTMLInputElement>(null);
+  const quickAddRef = useRef<QuickAddInputHandle>(null);
 
   useEffect(() => {
     if (isEditingName) {
@@ -141,25 +140,11 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
     toggleThing.mutate(thingId);
   };
 
-  const handleAddSubmit = () => {
-    if (!addValue.trim()) return;
+  const handleAdd = (title: string) => {
     createThing.mutate(
-      { type: "task", title: addValue.trim(), listId: list.id },
+      { type: "task", title, listId: list.id },
       { onError: (err) => console.error("Failed to create thing:", err) }
     );
-    setAddValue("");
-    addInputRef.current?.focus();
-  };
-
-  const handleAddKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleAddSubmit();
-    }
-    if (e.key === "Escape") {
-      setAddValue("");
-      addInputRef.current?.blur();
-    }
   };
 
   const handleArchiveClick = () => {
@@ -171,56 +156,90 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
   const doneThings = things.filter((t) => t.isCompleted);
   const allItems = [...activeThings, ...doneThings];
 
-  // Keyboard navigation
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  const focusedThing = allItems[focusedIndex] ?? null;
+  const { focusedIndex } = useListKeyboardNav({
+    items: allItems,
+    onItemClick,
+    onToggle: handleToggle,
+    onFocusAdd: () => quickAddRef.current?.focus(),
+  });
 
-  useEffect(() => {
-    setFocusedIndex((i) => Math.min(i, Math.max(allItems.length - 1, 0)));
-  }, [allItems.length]);
+  const listHeader = (
+    <>
+      <div className="flex items-center gap-3">
+        {/* Color dot */}
+        <div className="relative" ref={colorPickerRef}>
+          <button
+            onClick={() => !isArchived && setShowColorPicker(!showColorPicker)}
+            className={`w-4 h-4 rounded-full flex-shrink-0 transition-transform ${!isArchived ? "hover:scale-125 cursor-pointer" : "cursor-default"}`}
+            style={{ backgroundColor: dotColor }}
+          />
+          {showColorPicker && (
+            <div className="absolute top-full left-0 mt-2 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 p-2.5 shadow-xl">
+              <div className="flex gap-2">
+                {colorSwatches.map((swatch) => (
+                  <button
+                    key={swatch}
+                    onClick={() => handleColorSelect(swatch)}
+                    className={`w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0 ${swatch === list.colorClass ? "ring-2 ring-white/60 ring-offset-2 ring-offset-black/60" : ""}`}
+                    style={{ backgroundColor: colorMap[swatch] }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
+        {/* List name */}
+        {isEditingName ? (
+          <input
+            ref={nameInputRef}
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onKeyDown={handleNameKeyDown}
+            onBlur={handleNameSubmit}
+            className="bg-transparent border-none outline-none text-white text-xl font-bold leading-none flex-1"
+          />
+        ) : (
+          <h2
+            onClick={() => {
+              if (!isArchived) {
+                setEditName(list.name);
+                setIsEditingName(true);
+              }
+            }}
+            className={`text-xl font-bold text-white leading-none ${!isArchived ? "cursor-pointer hover:text-white/80" : ""}`}
+          >
+            {list.name}
+          </h2>
+        )}
 
-      if (e.key === "ArrowDown" || e.key === "j") {
-        e.preventDefault();
-        setFocusedIndex((i) => Math.min(i + 1, allItems.length - 1));
-        return;
-      }
-      if (e.key === "ArrowUp" || e.key === "k") {
-        e.preventDefault();
-        setFocusedIndex((i) => Math.max(i - 1, 0));
-        return;
-      }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (focusedThing) onItemClick(focusedThing);
-        return;
-      }
-      if (e.key === "e") {
-        e.preventDefault();
-        if (focusedThing) handleToggle(focusedThing.id);
-        return;
-      }
-      if (e.key === "n") {
-        e.preventDefault();
-        addInputRef.current?.focus();
-        return;
-      }
-    };
+        {/* Item count */}
+        {things.length > 0 && (
+          <span className="text-sm text-white/40">
+            {things.length} item{things.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [focusedIndex, focusedThing, allItems, onItemClick]);
+      {/* Archive button */}
+      {!isArchived && onArchiveList && (
+        <button
+          onClick={handleArchiveClick}
+          className="text-white/30 hover:text-white/70 transition-colors p-1 rounded hover:bg-white/10"
+          title="Archive list"
+        >
+          <Archive size={16} />
+        </button>
+      )}
+    </>
+  );
+
+  const listHints = allItems.length > 0
+    ? ["j/k navigate", "e done", "n add"]
+    : [];
 
   return (
-    <div className="flex flex-col gap-4 pb-20">
+    <>
       {/* Archived banner */}
       {isArchived && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -234,110 +253,10 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
         </div>
       )}
 
-      {/* Main card — header + add + items */}
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            {/* Color dot */}
-            <div className="relative" ref={colorPickerRef}>
-              <button
-                onClick={() => !isArchived && setShowColorPicker(!showColorPicker)}
-                className={`w-4 h-4 rounded-full flex-shrink-0 transition-transform ${!isArchived ? "hover:scale-125 cursor-pointer" : "cursor-default"}`}
-                style={{ backgroundColor: dotColor }}
-              />
-              {showColorPicker && (
-                <div className="absolute top-full left-0 mt-2 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 p-2.5 shadow-xl">
-                  <div className="flex gap-2">
-                    {colorSwatches.map((swatch) => (
-                      <button
-                        key={swatch}
-                        onClick={() => handleColorSelect(swatch)}
-                        className={`w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0 ${swatch === list.colorClass ? "ring-2 ring-white/60 ring-offset-2 ring-offset-black/60" : ""}`}
-                        style={{ backgroundColor: colorMap[swatch] }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* List name */}
-            {isEditingName ? (
-              <input
-                ref={nameInputRef}
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={handleNameKeyDown}
-                onBlur={handleNameSubmit}
-                className="bg-transparent border-none outline-none text-white text-xl font-bold leading-none flex-1"
-              />
-            ) : (
-              <h2
-                onClick={() => {
-                  if (!isArchived) {
-                    setEditName(list.name);
-                    setIsEditingName(true);
-                  }
-                }}
-                className={`text-xl font-bold text-white leading-none ${!isArchived ? "cursor-pointer hover:text-white/80" : ""}`}
-              >
-                {list.name}
-              </h2>
-            )}
-
-            {/* Item count */}
-            {things.length > 0 && (
-              <span className="text-sm text-white/40">
-                {things.length} item{things.length !== 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-
-          {/* Archive button */}
-          {!isArchived && onArchiveList && (
-            <button
-              onClick={handleArchiveClick}
-              className="text-white/30 hover:text-white/70 transition-colors p-1 rounded hover:bg-white/10"
-              title="Archive list"
-            >
-              <Archive size={16} />
-            </button>
-          )}
-        </div>
-
+      <ItemListShell header={listHeader} hints={listHints}>
         {/* Quick-add input */}
         {!isArchived && (
-          <div
-            className={`
-              flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-3
-              ${addFocused
-                ? "bg-white/5 border border-blue-500/20"
-                : "border border-transparent hover:bg-white/[0.03]"
-              }
-            `}
-          >
-            <Plus
-              size={15}
-              className={addFocused ? "text-blue-400" : "text-white/20"}
-            />
-            <input
-              ref={addInputRef}
-              type="text"
-              placeholder="Add a thing..."
-              value={addValue}
-              onChange={(e) => setAddValue(e.target.value)}
-              onKeyDown={handleAddKeyDown}
-              onFocus={() => setAddFocused(true)}
-              onBlur={() => {
-                if (!addValue) setAddFocused(false);
-              }}
-              className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/20 text-sm"
-            />
-            {addFocused && addValue.trim() && (
-              <span className="text-[10px] text-white/25 font-mono">enter</span>
-            )}
-          </div>
+          <QuickAddInput ref={quickAddRef} placeholder="Add a thing..." onAdd={handleAdd} />
         )}
 
         {/* Empty state */}
@@ -404,7 +323,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </ItemListShell>
+    </>
   );
 }

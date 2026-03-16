@@ -15,3 +15,7 @@ export { InboxItemRow } from "./InboxItemRow";
 export { TriagePopup } from "./TriagePopup";
 export { InboxDragOverlay } from "./InboxDragOverlay";
 export { ConfirmDialog } from "./ConfirmDialog";
+export { QuickAddInput } from "./QuickAddInput";
+export type { QuickAddInputHandle } from "./QuickAddInput";
+export { useListKeyboardNav } from "./useListKeyboardNav";
+export { ItemListShell } from "./ItemListShell";

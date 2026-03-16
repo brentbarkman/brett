@@ -1,8 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Plus, ChevronDown, ChevronRight, Inbox } from "lucide-react";
+import { ChevronDown, ChevronRight, Inbox } from "lucide-react";
 import type { Thing, NavList } from "@brett/types";
 import { computeRelativeAge } from "@brett/business";
 import { InboxItemRow } from "./InboxItemRow";
+import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
+import { ItemListShell } from "./ItemListShell";
 
 interface InboxViewProps {
   things: Thing[];
@@ -42,9 +44,7 @@ export function InboxView({
   );
   const [showHidden, setShowHidden] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const quickAddRef = useRef<HTMLInputElement>(null);
-  const [quickAddValue, setQuickAddValue] = useState("");
-  const [quickAddFocused, setQuickAddFocused] = useState(false);
+  const quickAddRef = useRef<QuickAddInputHandle>(null);
   const now = useRef(new Date());
 
   // Snapshots of items being animated out (persist through refetches)
@@ -276,8 +276,8 @@ export function InboxView({
         return;
       }
 
-      // Escape — deselect
-      if (key === "Escape") {
+      // Escape — deselect (only if there's a selection)
+      if (key === "Escape" && selectedIds.size > 0) {
         e.preventDefault();
         setSelectedIds(new Set());
         return;
@@ -316,81 +316,32 @@ export function InboxView({
     onTriageOpen,
   ]);
 
-  const handleQuickAddSubmit = () => {
-    if (!quickAddValue.trim()) return;
-    onAdd(quickAddValue.trim());
-    setQuickAddValue("");
-    quickAddRef.current?.focus();
-  };
-
-  const handleQuickAddKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleQuickAddSubmit();
-    }
-    if (e.key === "Escape") {
-      setQuickAddValue("");
-      quickAddRef.current?.blur();
-      containerRef.current?.focus();
-    }
-  };
-
   const isEmpty = displayThings.length === 0 && hiddenCount === 0;
 
-  return (
-    <div className="flex flex-col gap-4 pb-20">
-      <div
-        ref={containerRef}
-        tabIndex={0}
-        className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4 outline-none"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <Inbox size={20} className="text-white/50" />
-            <h2 className="text-xl font-bold text-white">Inbox</h2>
-            {activeThings.length > 0 && (
-              <span className="text-sm text-white/40">
-                {activeThings.length} item{activeThings.length !== 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] text-white/25 font-mono">
-            n to add
+  const inboxHeader = (
+    <>
+      <div className="flex items-center gap-3">
+        <Inbox size={20} className="text-white/50" />
+        <h2 className="text-xl font-bold text-white">Inbox</h2>
+        {activeThings.length > 0 && (
+          <span className="text-sm text-white/40">
+            {activeThings.length} item{activeThings.length !== 1 ? "s" : ""}
           </span>
-        </div>
+        )}
+      </div>
+      <span className="text-[10px] text-white/25 font-mono">
+        n to add
+      </span>
+    </>
+  );
 
-        {/* Quick-add input */}
-        <div
-          className={`
-            flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-3
-            ${quickAddFocused
-              ? "bg-white/5 border border-blue-500/20"
-              : "border border-transparent hover:bg-white/[0.03]"
-            }
-          `}
-        >
-          <Plus
-            size={15}
-            className={quickAddFocused ? "text-blue-400" : "text-white/20"}
-          />
-          <input
-            ref={quickAddRef}
-            type="text"
-            placeholder="Add to inbox..."
-            value={quickAddValue}
-            onChange={(e) => setQuickAddValue(e.target.value)}
-            onKeyDown={handleQuickAddKeyDown}
-            onFocus={() => setQuickAddFocused(true)}
-            onBlur={() => {
-              if (!quickAddValue) setQuickAddFocused(false);
-            }}
-            className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/20 text-sm"
-          />
-          {quickAddFocused && quickAddValue.trim() && (
-            <span className="text-[10px] text-white/25 font-mono">enter</span>
-          )}
-        </div>
+  const inboxHints = activeThings.length > 0
+    ? ["esc shortcuts", "j/k navigate", "x select", "l list", "d date", "e done", "# archive"]
+    : [];
+
+  return (
+    <ItemListShell header={inboxHeader} hints={inboxHints}>
+        <QuickAddInput ref={quickAddRef} placeholder="Add to inbox..." onAdd={onAdd} />
 
         {/* Empty state */}
         {isEmpty && (
@@ -433,7 +384,7 @@ export function InboxView({
                 >
                   <InboxItemRow
                     thing={thing}
-                    isFocused={!quickAddFocused && activeIdx === focusedIndex}
+                    isFocused={activeIdx === focusedIndex}
                     isSelected={selectedIds.has(thing.id)}
                     isAnimatingOut={isOut}
                     isNew={isNew}
@@ -521,20 +472,6 @@ export function InboxView({
 
         {/* Triage popup (rendered by parent) */}
         {triagePopup}
-      </div>
-
-      {/* Keyboard hint bar */}
-      {activeThings.length > 0 && (
-        <div className="flex items-center justify-center gap-4 text-[10px] text-white/20 font-mono">
-          <span>esc shortcuts</span>
-          <span>j/k navigate</span>
-          <span>x select</span>
-          <span>l list</span>
-          <span>d date</span>
-          <span>e done</span>
-          <span># archive</span>
-        </div>
-      )}
 
       <style>{`
         @keyframes inboxSlideOut {
@@ -560,6 +497,6 @@ export function InboxView({
           }
         }
       `}</style>
-    </div>
+    </ItemListShell>
   );
 }
