@@ -19,7 +19,7 @@ interface InboxViewProps {
     ids: string[],
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[]) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDatePrecision?: "day" | "week" | null }) => void;
 }
 
 export function InboxView({
@@ -286,7 +286,9 @@ export function InboxView({
         e.preventDefault();
         const ids = getTargetIds();
         if (ids.length === 0) return;
-        onTriageOpen?.("list-first", ids);
+        // Pass focused thing's values for single-item triage
+        const singleThing = ids.length === 1 ? activeThings.find((t) => t.id === ids[0]) : undefined;
+        onTriageOpen?.("list-first", ids, singleThing ? { listId: singleThing.listId, dueDatePrecision: singleThing.dueDatePrecision } : undefined);
         return;
       }
 
@@ -295,7 +297,8 @@ export function InboxView({
         e.preventDefault();
         const ids = getTargetIds();
         if (ids.length === 0) return;
-        onTriageOpen?.("date-first", ids);
+        const singleThing = ids.length === 1 ? activeThings.find((t) => t.id === ids[0]) : undefined;
+        onTriageOpen?.("date-first", ids, singleThing ? { listId: singleThing.listId, dueDatePrecision: singleThing.dueDatePrecision } : undefined);
         return;
       }
     };

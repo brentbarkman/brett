@@ -63,6 +63,8 @@ export function App() {
   const [triageState, setTriageState] = useState<{
     mode: "list-first" | "date-first";
     ids: string[];
+    currentListId?: string | null;
+    currentDueDatePrecision?: "day" | "week" | null;
   } | null>(null);
 
   // Delete list confirmation state
@@ -162,8 +164,8 @@ export function App() {
     bulkUpdate.mutate({ ids, updates });
   };
 
-  const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[]) => {
-    setTriageState({ mode, ids });
+  const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDatePrecision?: "day" | "week" | null }) => {
+    setTriageState({ mode, ids, currentListId: thing?.listId, currentDueDatePrecision: thing?.dueDatePrecision });
   };
 
   const handleTriageConfirm = (updates: {
@@ -363,6 +365,8 @@ export function App() {
             <TriagePopup
               mode={triageState.mode}
               lists={lists}
+              currentListId={triageState.currentListId}
+              currentDueDatePrecision={triageState.currentDueDatePrecision}
               onConfirm={handleTriageConfirm}
               onCancel={handleTriageCancel}
             />

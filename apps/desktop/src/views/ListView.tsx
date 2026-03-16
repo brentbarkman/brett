@@ -14,7 +14,7 @@ interface ListViewProps {
   listsFetching?: boolean;
   onItemClick: (item: Thing) => void;
   onArchiveList?: (id: string, incompleteCount: number) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[]) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDatePrecision?: "day" | "week" | null }) => void;
 }
 
 const colorMap: Record<string, string> = {
@@ -175,12 +175,12 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
       if (!focusedThing || !onTriageOpen) return false;
       if (e.key === "l") {
         e.preventDefault();
-        onTriageOpen("list-first", [focusedThing.id]);
+        onTriageOpen("list-first", [focusedThing.id], focusedThing);
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
-        onTriageOpen("date-first", [focusedThing.id]);
+        onTriageOpen("date-first", [focusedThing.id], focusedThing);
         return true;
       }
       return false;

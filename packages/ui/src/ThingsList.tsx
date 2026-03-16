@@ -9,7 +9,7 @@ interface ThingsListProps {
   onItemClick: (thing: Thing) => void;
   onToggle?: (id: string) => void;
   onAdd: (title: string, listId: string | null) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[]) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDatePrecision?: "day" | "week" | null }) => void;
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
   header?: React.ReactNode;
 }
@@ -78,13 +78,13 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTria
 
       if (key === "l") {
         e.preventDefault();
-        if (focusedThing && onTriageOpen) onTriageOpen("list-first", [focusedThing.id]);
+        if (focusedThing && onTriageOpen) onTriageOpen("list-first", [focusedThing.id], { listId: focusedThing.listId, dueDatePrecision: focusedThing.dueDatePrecision });
         return;
       }
 
       if (key === "d") {
         e.preventDefault();
-        if (focusedThing && onTriageOpen) onTriageOpen("date-first", [focusedThing.id]);
+        if (focusedThing && onTriageOpen) onTriageOpen("date-first", [focusedThing.id], { listId: focusedThing.listId, dueDatePrecision: focusedThing.dueDatePrecision });
         return;
       }
 

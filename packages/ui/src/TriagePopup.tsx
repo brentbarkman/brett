@@ -6,6 +6,9 @@ import { computeTriageResult, type TriageDatePreset } from "@brett/business";
 interface TriagePopupProps {
   mode: "list-first" | "date-first";
   lists: NavList[];
+  /** Current values from the thing being triaged — used to pre-select on secondary step */
+  currentListId?: string | null;
+  currentDueDatePrecision?: DueDatePrecision | null;
   onConfirm: (updates: {
     listId?: string | null;
     dueDate?: string | null;
@@ -28,6 +31,8 @@ type Step = "list" | "date";
 export function TriagePopup({
   mode,
   lists,
+  currentListId,
+  currentDueDatePrecision,
   onConfirm,
   onCancel,
 }: TriagePopupProps) {
@@ -72,13 +77,20 @@ export function TriagePopup({
       if (currentStep === primaryStep) {
         setCurrentStep(secondaryStep);
         setFilterText("");
-        setFocusedIndex(-1); // Nothing selected on secondary step — Enter skips
+
+        // Pre-select the current value on the secondary step if it exists
+        if (secondaryStep === "list" && currentListId) {
+          const idx = lists.findIndex((l) => l.id === currentListId);
+          setFocusedIndex(idx >= 0 ? idx : -1);
+        } else {
+          setFocusedIndex(-1); // No current value — nothing selected, Enter skips
+        }
       } else {
         // On secondary step, confirm
         onConfirm({ listId, dueDate: date, dueDatePrecision: precision });
       }
     },
-    [currentStep, primaryStep, secondaryStep, onConfirm]
+    [currentStep, primaryStep, secondaryStep, onConfirm, currentListId, lists]
   );
 
   const selectList = useCallback(
