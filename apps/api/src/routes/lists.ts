@@ -132,6 +132,61 @@ lists.put("/reorder", async (c) => {
   return c.json({ ok: true });
 });
 
+// PATCH /lists/:id/archive — archive a list and mark incomplete items as done
+lists.patch("/:id/archive", async (c) => {
+  const user = c.get("user");
+  const existing = await prisma.list.findFirst({
+    where: { id: c.req.param("id"), userId: user.id },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const now = new Date();
+
+  const [, updateResult] = await prisma.$transaction([
+    prisma.list.update({
+      where: { id: existing.id },
+      data: { archivedAt: now },
+    }),
+    prisma.item.updateMany({
+      where: { listId: existing.id, status: { not: "done" } },
+      data: { status: "done", completedAt: now },
+    }),
+  ]);
+
+  return c.json({
+    archivedAt: now.toISOString(),
+    itemsCompleted: updateResult.count,
+  });
+});
+
+// PATCH /lists/:id/unarchive — unarchive a list
+lists.patch("/:id/unarchive", async (c) => {
+  const user = c.get("user");
+  const existing = await prisma.list.findFirst({
+    where: { id: c.req.param("id"), userId: user.id },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const list = await prisma.list.update({
+    where: { id: existing.id },
+    data: { archivedAt: null },
+    include: {
+      _count: { select: { items: true } },
+      items: { where: { status: "done" }, select: { id: true } },
+    },
+  });
+
+  return c.json({
+    id: list.id,
+    name: list.name,
+    colorClass: list.colorClass,
+    count: list._count.items,
+    completedCount: list.items.length,
+    sortOrder: list.sortOrder,
+    archivedAt: list.archivedAt?.toISOString() ?? null,
+  });
+});
+
 // PATCH /lists/:id — update
 lists.patch("/:id", async (c) => {
   const user = c.get("user");

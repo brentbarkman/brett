@@ -158,6 +158,96 @@ describe("Lists routes", () => {
     });
   });
 
+  describe("PATCH /lists/:id/archive", () => {
+    let archToken: string;
+
+    beforeAll(async () => {
+      const user = await createTestUser("Archive User");
+      archToken = user.token;
+    });
+
+    it("archives a list and marks incomplete items as done", async () => {
+      const listRes = await authRequest("/lists", archToken, {
+        method: "POST",
+        body: JSON.stringify({ name: "To Archive" }),
+      });
+      const list = (await listRes.json()) as any;
+
+      await authRequest("/things", archToken, {
+        method: "POST",
+        body: JSON.stringify({ type: "task", title: "Item 1", listId: list.id }),
+      });
+      await authRequest("/things", archToken, {
+        method: "POST",
+        body: JSON.stringify({ type: "task", title: "Item 2", listId: list.id }),
+      });
+
+      const res = await authRequest(`/lists/${list.id}/archive`, archToken, { method: "PATCH" });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.archivedAt).toBeTruthy();
+      expect(body.itemsCompleted).toBe(2);
+
+      const thingsRes = await authRequest(`/things?listId=${list.id}`, archToken);
+      const things = (await thingsRes.json()) as any[];
+      expect(things.every((t: any) => t.isCompleted)).toBe(true);
+    });
+
+    it("archives list with all done items without completing any", async () => {
+      const listRes = await authRequest("/lists", archToken, {
+        method: "POST",
+        body: JSON.stringify({ name: "All Done List" }),
+      });
+      const list = (await listRes.json()) as any;
+
+      const itemRes = await authRequest("/things", archToken, {
+        method: "POST",
+        body: JSON.stringify({ type: "task", title: "Done Item", listId: list.id }),
+      });
+      const item = (await itemRes.json()) as any;
+      await authRequest(`/things/${item.id}/toggle`, archToken, { method: "PATCH" });
+
+      const res = await authRequest(`/lists/${list.id}/archive`, archToken, { method: "PATCH" });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.itemsCompleted).toBe(0);
+    });
+
+    it("returns 404 for non-existent list", async () => {
+      const res = await authRequest("/lists/fake-id/archive", archToken, { method: "PATCH" });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("PATCH /lists/:id/unarchive", () => {
+    let unarchToken: string;
+
+    beforeAll(async () => {
+      const user = await createTestUser("Unarchive User");
+      unarchToken = user.token;
+    });
+
+    it("unarchives a list, items stay as-is", async () => {
+      const listRes = await authRequest("/lists", unarchToken, {
+        method: "POST",
+        body: JSON.stringify({ name: "To Unarchive" }),
+      });
+      const list = (await listRes.json()) as any;
+
+      await authRequest(`/lists/${list.id}/archive`, unarchToken, { method: "PATCH" });
+
+      const res = await authRequest(`/lists/${list.id}/unarchive`, unarchToken, { method: "PATCH" });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.archivedAt).toBeNull();
+    });
+
+    it("returns 404 for non-existent list", async () => {
+      const res = await authRequest("/lists/fake-id/unarchive", unarchToken, { method: "PATCH" });
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe("PUT /lists/reorder", () => {
     let reorderToken: string;
     let listIds: string[];
