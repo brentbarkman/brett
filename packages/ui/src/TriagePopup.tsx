@@ -56,13 +56,13 @@ export function TriagePopup({
     l.name.toLowerCase().includes(filterText.toLowerCase())
   );
 
-  // Clamp focus index
+  // Clamp focus index (allow -1 for "none selected")
   useEffect(() => {
     if (currentStep === "list" && focusedIndex >= filteredLists.length) {
-      setFocusedIndex(Math.max(0, filteredLists.length - 1));
+      setFocusedIndex(Math.max(-1, filteredLists.length - 1));
     }
     if (currentStep === "date" && focusedIndex >= DATE_PRESETS.length) {
-      setFocusedIndex(Math.max(0, DATE_PRESETS.length - 1));
+      setFocusedIndex(Math.max(-1, DATE_PRESETS.length - 1));
     }
   }, [filteredLists.length, focusedIndex, currentStep]);
 
@@ -72,7 +72,7 @@ export function TriagePopup({
       if (currentStep === primaryStep) {
         setCurrentStep(secondaryStep);
         setFilterText("");
-        setFocusedIndex(0);
+        setFocusedIndex(-1); // Nothing selected on secondary step — Enter skips
       } else {
         // On secondary step, confirm
         onConfirm({ listId, dueDate: date, dueDatePrecision: precision });
@@ -115,37 +115,29 @@ export function TriagePopup({
         return;
       }
 
-      // Enter confirms with current selections and skips secondary step
+      // Enter — select focused item, or skip if nothing focused
       if (e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
-        if (currentStep === "list" && filteredLists[focusedIndex]) {
-          const listId = filteredLists[focusedIndex].id;
-          setSelectedListId(listId);
-          // If primary step, advance; if secondary, confirm
+
+        // Nothing focused (-1) → skip this step
+        if (focusedIndex === -1) {
           if (currentStep === primaryStep) {
             setCurrentStep(secondaryStep);
             setFilterText("");
-            setFocusedIndex(0);
+            setFocusedIndex(0); // Primary step: pre-select first item
           } else {
-            onConfirm({ listId, dueDate: selectedDate, dueDatePrecision: selectedPrecision });
+            // Secondary step: confirm with whatever we have (skip this field)
+            onConfirm({ listId: selectedListId, dueDate: selectedDate, dueDatePrecision: selectedPrecision });
           }
-        } else if (currentStep === "date") {
-          const preset = DATE_PRESETS[focusedIndex];
-          if (preset) {
-            const result = computeTriageResult(preset.preset);
-            if (currentStep === primaryStep) {
-              setSelectedDate(result.dueDate);
-              setSelectedPrecision(result.dueDatePrecision);
-              setCurrentStep(secondaryStep);
-              setFilterText("");
-              setFocusedIndex(0);
-            } else {
-              onConfirm({ listId: selectedListId, dueDate: result.dueDate, dueDatePrecision: result.dueDatePrecision });
-            }
-          }
+          return;
+        }
+
+        if (currentStep === "list" && filteredLists[focusedIndex]) {
+          selectList(filteredLists[focusedIndex].id);
+        } else if (currentStep === "date" && DATE_PRESETS[focusedIndex]) {
+          selectDate(DATE_PRESETS[focusedIndex].preset);
         } else {
-          // Enter with no selection — confirm what we have so far
           onConfirm({ listId: selectedListId, dueDate: selectedDate, dueDatePrecision: selectedPrecision });
         }
         return;
@@ -163,7 +155,7 @@ export function TriagePopup({
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setFocusedIndex((i) => Math.max(i - 1, 0));
+        setFocusedIndex((i) => Math.max(i - 1, -1));
         return;
       }
 
@@ -322,8 +314,7 @@ export function TriagePopup({
 
       {/* Footer hint */}
       <div className="px-3 py-1.5 border-t border-white/5 text-[10px] text-white/20 font-mono text-center">
-        enter to{" "}
-        {currentStep === primaryStep ? "skip & confirm" : "confirm"}
+        {focusedIndex === -1 ? "enter to skip" : "enter to select"}
       </div>
 
       <style>{`
