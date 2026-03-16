@@ -156,7 +156,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
   const doneThings = things.filter((t) => t.isCompleted);
   const allItems = [...activeThings, ...doneThings];
 
-  const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
+  const { focusedIndex, setFocusedIndex, setAddInputFocused } = useListKeyboardNav({
     items: allItems,
     onItemClick,
     onToggle: handleToggle,
@@ -256,7 +256,7 @@ export function ListView({ lists, archivedLists, onItemClick, onArchiveList }: L
       <ItemListShell header={listHeader} hints={listHints}>
         {/* Quick-add input */}
         {!isArchived && (
-          <QuickAddInput ref={quickAddRef} placeholder="Add a thing..." onAdd={handleAdd} />
+          <QuickAddInput ref={quickAddRef} placeholder="Add a thing..." onAdd={handleAdd} onFocusChange={setAddInputFocused} />
         )}
 
         {/* Empty state */}

@@ -43,6 +43,7 @@ export function InboxView({
     new Set()
   );
   const [showHidden, setShowHidden] = useState(false);
+  const [addInputFocused, setAddInputFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<QuickAddInputHandle>(null);
   const now = useRef(new Date());
@@ -341,7 +342,7 @@ export function InboxView({
 
   return (
     <ItemListShell header={inboxHeader} hints={inboxHints}>
-        <QuickAddInput ref={quickAddRef} placeholder="Add to inbox..." onAdd={onAdd} />
+        <QuickAddInput ref={quickAddRef} placeholder="Add to inbox..." onAdd={onAdd} onFocusChange={setAddInputFocused} />
 
         {/* Empty state */}
         {isEmpty && (
@@ -384,7 +385,7 @@ export function InboxView({
                 >
                   <InboxItemRow
                     thing={thing}
-                    isFocused={activeIdx === focusedIndex}
+                    isFocused={!addInputFocused && activeIdx === focusedIndex}
                     isSelected={selectedIds.has(thing.id)}
                     isAnimatingOut={isOut}
                     isNew={isNew}

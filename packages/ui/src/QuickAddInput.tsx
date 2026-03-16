@@ -8,10 +8,11 @@ export interface QuickAddInputHandle {
 interface QuickAddInputProps {
   placeholder?: string;
   onAdd: (title: string) => void;
+  onFocusChange?: (focused: boolean) => void;
 }
 
 export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>(
-  function QuickAddInput({ placeholder = "Add a thing...", onAdd }, ref) {
+  function QuickAddInput({ placeholder = "Add a thing...", onAdd, onFocusChange }, ref) {
     const [value, setValue] = useState("");
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -59,9 +60,10 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
+          onFocus={() => { setIsFocused(true); onFocusChange?.(true); }}
           onBlur={() => {
             if (!value) setIsFocused(false);
+            onFocusChange?.(false);
           }}
           className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/20 text-sm"
         />

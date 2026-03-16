@@ -78,5 +78,10 @@ export function useListKeyboardNav({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  return { focusedIndex, setFocusedIndex, focusedThing };
+  const [addInputFocused, setAddInputFocused] = useState(false);
+
+  // When add input is focused, return -1 so no item appears highlighted
+  const effectiveIndex = addInputFocused ? -1 : focusedIndex;
+
+  return { focusedIndex: effectiveIndex, setFocusedIndex, focusedThing, setAddInputFocused };
 }
