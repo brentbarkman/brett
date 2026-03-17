@@ -7,13 +7,15 @@ export function useUploadAttachment() {
   return useMutation({
     mutationFn: async ({ itemId, file }: { itemId: string; file: File }) => {
       const buffer = await file.arrayBuffer();
+      // Use Blob to ensure fetch sets Content-Length correctly
+      const blob = new Blob([buffer], { type: file.type || "application/octet-stream" });
       return apiFetch<Attachment>(`/things/${itemId}/attachments`, {
         method: "POST",
         headers: {
           "Content-Type": file.type || "application/octet-stream",
           "X-Filename": encodeURIComponent(file.name),
         },
-        body: buffer,
+        body: blob,
       });
     },
     onSuccess: (_, { itemId }) => {
