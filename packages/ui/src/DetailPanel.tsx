@@ -1,6 +1,14 @@
 import React from "react";
 import { X, Calendar, MapPin, Users, Loader2 } from "lucide-react";
-import type { Thing, CalendarEvent, ThingDetail } from "@brett/types";
+import type {
+  Thing,
+  CalendarEvent,
+  ThingDetail,
+  DueDatePrecision,
+  ReminderType,
+  RecurrenceType,
+  BrettMessage,
+} from "@brett/types";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 
 interface DetailPanelProps {
@@ -14,6 +22,26 @@ interface DetailPanelProps {
   onDelete?: (id: string) => void;
   onDuplicate?: (id: string) => void;
   onMoveToList?: (id: string) => void;
+  // Schedule
+  onUpdateDueDate?: (dueDate: string | null, precision: DueDatePrecision) => void;
+  onUpdateReminder?: (reminder: ReminderType | null) => void;
+  onUpdateRecurrence?: (recurrence: RecurrenceType | null) => void;
+  // Notes
+  onUpdateNotes?: (notes: string) => void;
+  // Attachments
+  onUploadAttachment?: (file: File) => void;
+  onDeleteAttachment?: (attachmentId: string) => void;
+  isUploadingAttachment?: boolean;
+  // Links
+  onAddLink?: (toItemId: string, toItemType: string) => void;
+  onRemoveLink?: (linkId: string) => void;
+  searchItems?: (query: string) => Promise<Thing[]>;
+  // Brett thread
+  brettMessages?: BrettMessage[];
+  brettHasMore?: boolean;
+  onSendBrettMessage?: (content: string) => void;
+  onLoadMoreBrettMessages?: () => void;
+  isSendingBrettMessage?: boolean;
 }
 
 export function DetailPanel({
@@ -27,6 +55,21 @@ export function DetailPanel({
   onDelete,
   onDuplicate,
   onMoveToList,
+  onUpdateDueDate,
+  onUpdateReminder,
+  onUpdateRecurrence,
+  onUpdateNotes,
+  onUploadAttachment,
+  onDeleteAttachment,
+  isUploadingAttachment,
+  onAddLink,
+  onRemoveLink,
+  searchItems,
+  brettMessages,
+  brettHasMore,
+  onSendBrettMessage,
+  onLoadMoreBrettMessages,
+  isSendingBrettMessage,
 }: DetailPanelProps) {
   if (!item) return null;
   const isTask = !("startTime" in item);
@@ -66,6 +109,21 @@ export function DetailPanel({
             onDelete={onDelete ?? (() => {})}
             onDuplicate={onDuplicate ?? (() => {})}
             onMoveToList={onMoveToList ?? (() => {})}
+            onUpdateDueDate={onUpdateDueDate}
+            onUpdateReminder={onUpdateReminder}
+            onUpdateRecurrence={onUpdateRecurrence}
+            onUpdateNotes={onUpdateNotes}
+            onUploadAttachment={onUploadAttachment}
+            onDeleteAttachment={onDeleteAttachment}
+            isUploadingAttachment={isUploadingAttachment}
+            onAddLink={onAddLink}
+            onRemoveLink={onRemoveLink}
+            searchItems={searchItems}
+            brettMessages={brettMessages}
+            brettHasMore={brettHasMore}
+            onSendBrettMessage={onSendBrettMessage}
+            onLoadMoreBrettMessages={onLoadMoreBrettMessages}
+            isSendingBrettMessage={isSendingBrettMessage}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">

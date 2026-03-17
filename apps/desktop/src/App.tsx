@@ -21,7 +21,7 @@ import {
   InboxDragOverlay,
   ConfirmDialog,
 } from "@brett/ui";
-import type { Thing, CalendarEvent } from "@brett/types";
+import type { Thing, CalendarEvent, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
   useActiveThings,
@@ -33,8 +33,12 @@ import {
   useThingDetail,
   useDeleteThing,
   useUpdateThing,
+  useThings,
 } from "./api/things";
 import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists, useArchiveList, useUnarchiveList, useArchivedLists } from "./api/lists";
+import { useUploadAttachment, useDeleteAttachment } from "./api/attachments";
+import { useBrettMessages, useSendBrettMessage } from "./api/brett";
+import { useCreateLink, useDeleteLink } from "./api/links";
 import { mockEvents } from "./data/mockData";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
@@ -119,11 +123,42 @@ export function App() {
   const deleteThing = useDeleteThing();
   const bulkUpdate = useBulkUpdateThings();
 
+  // Attachment hooks
+  const uploadAttachment = useUploadAttachment();
+  const deleteAttachment = useDeleteAttachment();
+
+  // Link hooks
+  const createLink = useCreateLink();
+  const deleteLink = useDeleteLink();
+
+  // Brett thread hooks
+  const sendBrettMessage = useSendBrettMessage();
+
   // Fetch detail when panel is open and item is a task (not a CalendarEvent)
   const selectedId = selectedItem?.id ?? null;
   const isTaskSelected = selectedItem ? !("startTime" in selectedItem) : false;
   const { data: thingDetail, isLoading: isLoadingDetail } = useThingDetail(
     isDetailOpen && isTaskSelected ? selectedId : null,
+  );
+
+  // Brett messages for selected item
+  const { data: brettData } = useBrettMessages(
+    isDetailOpen && isTaskSelected ? selectedId : null,
+  );
+
+  // Active things for link search
+  const { data: allActiveThings = [] } = useThings({ status: "active" });
+
+  // Search items for linked items
+  const handleSearchItems = useCallback(
+    async (query: string) => {
+      const q = query.toLowerCase();
+      return allActiveThings.filter(
+        (t) =>
+          t.id !== selectedId && t.title.toLowerCase().includes(q),
+      );
+    },
+    [allActiveThings, selectedId],
   );
 
   // Today badge count — active items due this week or earlier
@@ -411,6 +446,41 @@ export function App() {
           onDelete={handleDeleteThing}
           onDuplicate={handleDuplicateThing}
           onMoveToList={handleMoveToList}
+          onUpdateDueDate={(dueDate, precision) => {
+            if (selectedId) updateThing.mutate({ id: selectedId, dueDate, dueDatePrecision: precision });
+          }}
+          onUpdateReminder={(reminder) => {
+            if (selectedId) updateThing.mutate({ id: selectedId, reminder });
+          }}
+          onUpdateRecurrence={(recurrence) => {
+            if (selectedId) updateThing.mutate({ id: selectedId, recurrence });
+          }}
+          onUpdateNotes={(notes) => {
+            if (selectedId) updateThing.mutate({ id: selectedId, notes });
+          }}
+          onUploadAttachment={(file) => {
+            if (selectedId) uploadAttachment.mutate({ itemId: selectedId, file });
+          }}
+          onDeleteAttachment={(attachmentId) => {
+            if (selectedId) deleteAttachment.mutate({ itemId: selectedId, attachmentId });
+          }}
+          isUploadingAttachment={uploadAttachment.isPending}
+          onAddLink={(toItemId, toItemType) => {
+            if (selectedId) createLink.mutate({ itemId: selectedId, toItemId, toItemType });
+          }}
+          onRemoveLink={(linkId) => {
+            if (selectedId) deleteLink.mutate({ itemId: selectedId, linkId });
+          }}
+          searchItems={handleSearchItems}
+          brettMessages={brettData?.messages ?? []}
+          brettHasMore={brettData?.hasMore ?? false}
+          onSendBrettMessage={(content) => {
+            if (selectedId) sendBrettMessage.mutate({ itemId: selectedId, content });
+          }}
+          onLoadMoreBrettMessages={() => {
+            // TODO: implement cursor-based pagination
+          }}
+          isSendingBrettMessage={sendBrettMessage.isPending}
         />
 
         {/* Drag overlay */}

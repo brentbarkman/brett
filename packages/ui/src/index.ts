@@ -26,3 +26,8 @@ export { SectionHeader } from "./SectionHeader";
 export { useClickOutside } from "./useClickOutside";
 export { TaskDetailPanel } from "./TaskDetailPanel";
 export { OverflowMenu } from "./OverflowMenu";
+export { ScheduleRow } from "./ScheduleRow";
+export { RichTextEditor } from "./RichTextEditor";
+export { AttachmentList } from "./AttachmentList";
+export { LinkedItemsList } from "./LinkedItemsList";
+export { BrettThread } from "./BrettThread";
