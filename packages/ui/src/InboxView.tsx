@@ -100,26 +100,6 @@ export function InboxView({
     prevThingIdsRef.current = new Set(things.map((t) => t.id));
   }, [things]);
 
-  // Clean up animating-out state once items are gone from source data
-  useEffect(() => {
-    if (animatingOutIds.size === 0) return;
-    const currentIds = new Set(things.map((t) => t.id));
-    const gone = [...animatingOutIds].filter((id) => !currentIds.has(id));
-    if (gone.length > 0) {
-      gone.forEach((id) => animatingOutItemsRef.current.delete(id));
-      setAnimatingOutIds((prev) => {
-        const next = new Set(prev);
-        gone.forEach((id) => next.delete(id));
-        return next;
-      });
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        gone.forEach((id) => next.delete(id));
-        return next;
-      });
-    }
-  }, [things, animatingOutIds]);
-
   // Clamp focus index
   useEffect(() => {
     if (focusedIndex >= activeThings.length && activeThings.length > 0) {
@@ -153,10 +133,17 @@ export function InboxView({
 
   const handleAnimationEnd = useCallback(
     (id: string) => {
-      // Remove snapshot (DOM node no longer needed for transition)
       animatingOutItemsRef.current.delete(id);
-      // Keep id in animatingOutIds — cleaned up by the effect below
-      // when the item is actually gone from things (refetch complete)
+      setAnimatingOutIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     },
     []
   );

@@ -102,6 +102,24 @@ export function useToggleThing() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<Thing>(`/things/${id}/toggle`, { method: "PATCH" }),
+    onMutate: async (id) => {
+      // Optimistically remove from inbox cache so the item doesn't
+      // flash back after the slide-out animation completes
+      await qc.cancelQueries({ queryKey: ["inbox"] });
+      const prev = qc.getQueryData<InboxResponse>(["inbox"]);
+      if (prev) {
+        qc.setQueryData<InboxResponse>(["inbox"], {
+          visible: prev.visible.filter((t) => t.id !== id),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _id, context) => {
+      // Revert on error
+      if (context?.prev) {
+        qc.setQueryData(["inbox"], context.prev);
+      }
+    },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["things"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
