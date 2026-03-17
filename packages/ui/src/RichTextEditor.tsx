@@ -75,7 +75,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "tiptap-editor prose prose-invert prose-sm max-w-none focus:outline-none min-h-[80px] text-white/80 p-3",
+          "tiptap-editor focus:outline-none min-h-[80px] text-white/80 text-sm leading-relaxed p-3",
       },
     },
     onUpdate: ({ editor: ed }) => {
