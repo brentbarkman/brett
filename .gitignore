@@ -16,3 +16,4 @@ ios
 *-firebase-adminsdk-*.json
 firebase-service-account.json
 .claude/worktrees/
+.worktrees/
