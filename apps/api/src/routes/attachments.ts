@@ -47,7 +47,8 @@ attachments.post("/:itemId/attachments", async (c) => {
   });
   if (!item) return c.json({ error: "Not found" }, 404);
 
-  const filename = sanitizeFilename(c.req.header("X-Filename") || "unnamed");
+  const rawFilename = c.req.header("X-Filename") || "unnamed";
+  const filename = sanitizeFilename(decodeURIComponent(rawFilename));
   const mimeType = c.req.header("Content-Type") || "application/octet-stream";
   const contentLength = parseInt(c.req.header("Content-Length") || "0", 10);
 

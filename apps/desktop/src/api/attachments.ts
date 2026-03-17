@@ -11,7 +11,7 @@ export function useUploadAttachment() {
         method: "POST",
         headers: {
           "Content-Type": file.type || "application/octet-stream",
-          "X-Filename": file.name,
+          "X-Filename": encodeURIComponent(file.name),
         },
         body: buffer,
       });
