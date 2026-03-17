@@ -8,9 +8,10 @@ import { useUpcomingThings, useToggleThing } from "../api/things";
 interface UpcomingViewProps {
   onItemClick: (item: Thing) => void;
   onTriageOpen: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onFocusChange?: (thing: Thing) => void;
 }
 
-export function UpcomingView({ onItemClick, onTriageOpen }: UpcomingViewProps) {
+export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange }: UpcomingViewProps) {
   const { data: things = [], isLoading } = useUpcomingThings();
   const toggleThing = useToggleThing();
   const sections = groupUpcomingThings(things);
@@ -24,6 +25,7 @@ export function UpcomingView({ onItemClick, onTriageOpen }: UpcomingViewProps) {
     items: allItems,
     onItemClick,
     onToggle: handleToggle,
+    onFocusChange,
     onExtraKey: (e, focusedThing) => {
       if (!focusedThing) return false;
       if (e.key === "l") {

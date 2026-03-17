@@ -6,6 +6,8 @@ interface UseListKeyboardNavOptions {
   onItemClick: (thing: Thing) => void;
   onToggle?: (id: string) => void;
   onFocusAdd?: () => void;
+  /** Called when the focused item changes via keyboard navigation */
+  onFocusChange?: (thing: Thing) => void;
   /** Extra keyboard handler for view-specific shortcuts (return true if handled) */
   onExtraKey?: (e: KeyboardEvent, focusedThing: Thing | null, focusedIndex: number) => boolean;
 }
@@ -15,6 +17,7 @@ export function useListKeyboardNav({
   onItemClick,
   onToggle,
   onFocusAdd,
+  onFocusChange,
   onExtraKey,
 }: UseListKeyboardNavOptions) {
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -44,13 +47,21 @@ export function useListKeyboardNav({
 
       if (key === "ArrowDown" || key === "j") {
         e.preventDefault();
-        setFocusedIndex((i) => Math.min(i + 1, items.length - 1));
+        setFocusedIndex((i) => {
+          const next = Math.min(i + 1, items.length - 1);
+          if (next !== i && items[next] && onFocusChange) onFocusChange(items[next]);
+          return next;
+        });
         return;
       }
 
       if (key === "ArrowUp" || key === "k") {
         e.preventDefault();
-        setFocusedIndex((i) => Math.max(i - 1, 0));
+        setFocusedIndex((i) => {
+          const next = Math.max(i - 1, 0);
+          if (next !== i && items[next] && onFocusChange) onFocusChange(items[next]);
+          return next;
+        });
         return;
       }
 

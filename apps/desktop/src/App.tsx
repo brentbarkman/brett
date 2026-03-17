@@ -197,6 +197,13 @@ export function App() {
     setIsDetailOpen(true);
   };
 
+  // Update panel when keyboard nav changes focus (only if panel is open)
+  const handleFocusChange = useCallback((thing: Thing) => {
+    if (isDetailOpen) {
+      setSelectedItem(thing);
+    }
+  }, [isDetailOpen]);
+
   const handleCloseDetail = () => {
     setIsDetailOpen(false);
     setTimeout(() => setSelectedItem(null), 300);
@@ -398,12 +405,13 @@ export function App() {
                   lists={lists}
                   onItemClick={handleItemClick}
                   onTriageOpen={handleTriageOpen}
+                  onFocusChange={handleFocusChange}
                 />
               </MainLayout>
             } />
             <Route path="/upcoming" element={
               <MainLayout onEventClick={handleItemClick}>
-                <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} />
+                <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/inbox" element={
@@ -417,12 +425,13 @@ export function App() {
                   onAdd={handleInboxAdd}
                   onTriage={handleInboxTriage}
                   onTriageOpen={handleTriageOpen}
+                  onFocusChange={handleFocusChange}
                 />
               </MainLayout>
             } />
             <Route path="/lists/:slug" element={
               <MainLayout onEventClick={handleItemClick}>
-                <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} />
+                <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/" element={<Navigate to="/today" replace />} />
