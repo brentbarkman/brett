@@ -5,6 +5,8 @@ import type {
   ItemStatus,
   Urgency,
   DueDatePrecision,
+  ReminderType,
+  RecurrenceType,
   CreateItemInput,
   UpdateItemInput,
   CreateListInput,
@@ -12,6 +14,7 @@ import type {
   BulkUpdateInput,
   UpcomingSection,
 } from "@brett/types";
+import { RRule } from "rrule";
 
 // ── Compute helpers ──
 
@@ -324,6 +327,37 @@ export function validateUpdateItem(
     data.source = obj.source;
   }
 
+  // New detail panel fields
+  if (obj.notes !== undefined) {
+    data.notes = obj.notes === null ? null : typeof obj.notes === "string" ? obj.notes : undefined;
+  }
+  if (data.notes !== undefined && data.notes !== null && data.notes.length > 100_000) {
+    return { ok: false, error: "notes must be 100KB or less" };
+  }
+
+  const VALID_REMINDERS = new Set(["morning_of", "1_hour_before", "day_before", "custom"]);
+  if (obj.reminder !== undefined) {
+    if (obj.reminder !== null && (typeof obj.reminder !== "string" || !VALID_REMINDERS.has(obj.reminder))) {
+      return { ok: false, error: `reminder must be one of: ${[...VALID_REMINDERS].join(", ")}` };
+    }
+    data.reminder = obj.reminder as ReminderType | null;
+  }
+
+  const VALID_RECURRENCES = new Set(["daily", "weekly", "monthly", "custom"]);
+  if (obj.recurrence !== undefined) {
+    if (obj.recurrence !== null && (typeof obj.recurrence !== "string" || !VALID_RECURRENCES.has(obj.recurrence))) {
+      return { ok: false, error: `recurrence must be one of: ${[...VALID_RECURRENCES].join(", ")}` };
+    }
+    data.recurrence = obj.recurrence as RecurrenceType | null;
+  }
+
+  if (obj.recurrenceRule !== undefined) {
+    data.recurrenceRule = obj.recurrenceRule === null ? null : typeof obj.recurrenceRule === "string" ? obj.recurrenceRule : undefined;
+  }
+  if (data.recurrenceRule !== undefined && data.recurrenceRule !== null && data.recurrenceRule.length > 500) {
+    return { ok: false, error: "recurrenceRule must be 500 characters or less" };
+  }
+
   return { ok: true, data };
 }
 
@@ -633,4 +667,79 @@ export function groupUpcomingThings(things: Thing[], now: Date = new Date()): Up
   }
 
   return sections;
+}
+
+// ── Detail panel validation ──
+
+export function validateCreateItemLink(
+  input: unknown
+): { ok: true; data: { toItemId: string; toItemType: string } } | { ok: false; error: string } {
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Request body is required" };
+  }
+  const obj = input as Record<string, unknown>;
+  if (!obj.toItemId || typeof obj.toItemId !== "string") {
+    return { ok: false, error: "toItemId is required" };
+  }
+  if (!obj.toItemType || typeof obj.toItemType !== "string") {
+    return { ok: false, error: "toItemType is required" };
+  }
+  const VALID_LINK_TYPES = new Set(["task", "content"]);
+  if (!VALID_LINK_TYPES.has(obj.toItemType)) {
+    return { ok: false, error: `toItemType must be one of: ${[...VALID_LINK_TYPES].join(", ")}` };
+  }
+  return { ok: true, data: { toItemId: obj.toItemId, toItemType: obj.toItemType } };
+}
+
+export function validateCreateBrettMessage(
+  input: unknown
+): { ok: true; data: { content: string } } | { ok: false; error: string } {
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Request body is required" };
+  }
+  const obj = input as Record<string, unknown>;
+  if (!obj.content || typeof obj.content !== "string" || obj.content.trim() === "") {
+    return { ok: false, error: "content is required" };
+  }
+  if (obj.content.trim().length > 10_000) {
+    return { ok: false, error: "content must be 10KB or less" };
+  }
+  return { ok: true, data: { content: obj.content.trim() } };
+}
+
+// ── Recurrence ──
+
+export function computeNextDueDate(
+  currentDueDate: Date | null,
+  recurrence: string,
+  recurrenceRule: string | null
+): Date | null {
+  if (!currentDueDate) return null;
+
+  const base = new Date(currentDueDate);
+
+  switch (recurrence) {
+    case "daily":
+      base.setUTCDate(base.getUTCDate() + 1);
+      return base;
+    case "weekly":
+      base.setUTCDate(base.getUTCDate() + 7);
+      return base;
+    case "monthly":
+      base.setUTCMonth(base.getUTCMonth() + 1);
+      return base;
+    case "custom":
+      if (recurrenceRule) {
+        try {
+          const rule = RRule.fromString(recurrenceRule);
+          const next = rule.after(currentDueDate);
+          return next || null;
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    default:
+      return null;
+  }
 }

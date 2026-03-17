@@ -338,6 +338,60 @@ describe("Things routes", () => {
     expect(body.visible[0].title).toBe("No Date No List");
   });
 
+  it("GET /things/:id returns ThingDetail with relations", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Detail test", listId }),
+    });
+    const thing = (await createRes.json()) as any;
+
+    const res = await authRequest(`/things/${thing.id}`, token);
+    expect(res.status).toBe(200);
+    const detail = (await res.json()) as any;
+    expect(detail.id).toBe(thing.id);
+    expect(detail.attachments).toEqual([]);
+    expect(detail.links).toEqual([]);
+    expect(detail.brettMessages).toEqual([]);
+  });
+
+  it("PATCH /things/:id updates notes, reminder, and recurrence", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Update fields test", listId }),
+    });
+    const thing = (await createRes.json()) as any;
+
+    const res = await authRequest(`/things/${thing.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({
+        notes: "# Hello\nSome **bold** text",
+        reminder: "morning_of",
+        recurrence: "weekly",
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    const detailRes = await authRequest(`/things/${thing.id}`, token);
+    const detail = (await detailRes.json()) as any;
+    expect(detail.notes).toBe("# Hello\nSome **bold** text");
+    expect(detail.reminder).toBe("morning_of");
+    expect(detail.recurrence).toBe("weekly");
+  });
+
+  it("PATCH /things/:id rejects oversized notes", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Notes limit test", listId }),
+    });
+    const thing = (await createRes.json()) as any;
+
+    const res = await authRequest(`/things/${thing.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({ notes: "x".repeat(100_001) }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("GET /things returns 401 without auth", async () => {
     const res = await app.request("/things");
     expect(res.status).toBe(401);

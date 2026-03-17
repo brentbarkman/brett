@@ -1,26 +1,99 @@
 import React from "react";
-import { X, Calendar, MapPin, Users, CheckCircle } from "lucide-react";
-import type { Thing, CalendarEvent } from "@brett/types";
+import { X, Calendar, MapPin, Users, Loader2 } from "lucide-react";
+import type {
+  Thing,
+  CalendarEvent,
+  ThingDetail,
+  DueDatePrecision,
+  ReminderType,
+  RecurrenceType,
+  BrettMessage,
+} from "@brett/types";
+import { TaskDetailPanel } from "./TaskDetailPanel";
 
 interface DetailPanelProps {
   isOpen: boolean;
   item: Thing | CalendarEvent | null;
   onClose: () => void;
   onToggle?: (id: string) => void;
+  detail?: ThingDetail | null;
+  isLoadingDetail?: boolean;
+  onUpdate?: (updates: Record<string, unknown>) => void;
+  onDelete?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
+  onMoveToList?: (id: string) => void;
+  // Schedule
+  onUpdateDueDate?: (dueDate: string | null, precision: DueDatePrecision) => void;
+  onUpdateReminder?: (reminder: ReminderType | null) => void;
+  onUpdateRecurrence?: (recurrence: RecurrenceType | null) => void;
+  // Notes
+  onUpdateNotes?: (notes: string) => void;
+  // Attachments
+  onUploadAttachment?: (file: File) => void;
+  onDeleteAttachment?: (attachmentId: string) => void;
+  isUploadingAttachment?: boolean;
+  // Links
+  onAddLink?: (toItemId: string, toItemType: string) => void;
+  onRemoveLink?: (linkId: string) => void;
+  searchItems?: (query: string) => Promise<Thing[]>;
+  // Brett thread
+  brettMessages?: BrettMessage[];
+  brettHasMore?: boolean;
+  onSendBrettMessage?: (content: string) => void;
+  onLoadMoreBrettMessages?: () => void;
+  isSendingBrettMessage?: boolean;
+  isLoadingMoreBrettMessages?: boolean;
+  brettTotalCount?: number;
 }
 
-export function DetailPanel({ isOpen, item, onClose, onToggle }: DetailPanelProps) {
+export function DetailPanel({
+  isOpen,
+  item,
+  onClose,
+  onToggle,
+  detail,
+  isLoadingDetail,
+  onUpdate,
+  onDelete,
+  onDuplicate,
+  onMoveToList,
+  onUpdateDueDate,
+  onUpdateReminder,
+  onUpdateRecurrence,
+  onUpdateNotes,
+  onUploadAttachment,
+  onDeleteAttachment,
+  isUploadingAttachment,
+  onAddLink,
+  onRemoveLink,
+  searchItems,
+  brettMessages,
+  brettHasMore,
+  onSendBrettMessage,
+  onLoadMoreBrettMessages,
+  isSendingBrettMessage,
+  isLoadingMoreBrettMessages,
+  brettTotalCount,
+}: DetailPanelProps) {
   if (!item) return null;
   const isTask = !("startTime" in item);
 
   return (
-    <div
-      className={`
-        fixed top-0 right-0 bottom-0 w-[400px] bg-black/60 backdrop-blur-2xl border-l border-white/10
-        shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col
-        ${isOpen ? "translate-x-0" : "translate-x-full"}
-      `}
-    >
+    <>
+      {/* Backdrop — click to dismiss */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/20 transition-opacity"
+          onClick={onClose}
+        />
+      )}
+      <div
+        className={`
+          fixed top-0 right-0 bottom-0 w-[550px] bg-black/60 backdrop-blur-2xl border-l border-white/10
+          shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col overscroll-contain
+          ${isOpen ? "translate-x-0" : "translate-x-full"}
+        `}
+      >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <span className="font-mono text-xs uppercase tracking-wider text-white/40">
@@ -35,62 +108,66 @@ export function DetailPanel({ isOpen, item, onClose, onToggle }: DetailPanelProp
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-        <h2 className="text-2xl font-semibold text-white mb-6 leading-tight">
-          {item.title}
-        </h2>
-
-        {/* Brett's Take */}
-        {item.brettObservation && (
-          <div className="mb-8 bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-              <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
-                Brett's Take
-              </span>
-            </div>
-            <p className="text-sm italic text-blue-300/90 leading-relaxed">
-              "{item.brettObservation}"
-            </p>
+      {isTask ? (
+        isLoadingDetail ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 size={24} className="text-white/30 animate-spin" />
           </div>
-        )}
-
-        {/* Task Specific Details */}
-        {isTask && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap gap-2">
-              <div className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-white/70">
-                List: {(item as Thing).list}
-              </div>
-              <div className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-white/70">
-                Source: {(item as Thing).source}
-              </div>
-              {(item as Thing).dueDateLabel && (
-                <div className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-white/70 flex items-center gap-1.5">
-                  <Calendar size={12} />
-                  {(item as Thing).dueDateLabel}
-                </div>
-              )}
-            </div>
-
-            {(item as Thing).description && (
-              <div className="text-sm text-white/80 leading-relaxed">
-                {(item as Thing).description}
-              </div>
-            )}
-
-            <button
-              onClick={() => onToggle?.(item.id)}
-              className="w-full mt-4 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg transition-colors font-medium text-sm border border-white/10"
-            >
-              <CheckCircle size={16} />
-              {(item as Thing).isCompleted ? "Mark Incomplete" : "Mark Complete"}
-            </button>
+        ) : detail ? (
+          <TaskDetailPanel
+            detail={detail}
+            onUpdate={onUpdate ?? (() => {})}
+            onToggle={onToggle ?? (() => {})}
+            onDelete={onDelete ?? (() => {})}
+            onDuplicate={onDuplicate ?? (() => {})}
+            onMoveToList={onMoveToList ?? (() => {})}
+            onUpdateDueDate={onUpdateDueDate}
+            onUpdateReminder={onUpdateReminder}
+            onUpdateRecurrence={onUpdateRecurrence}
+            onUpdateNotes={onUpdateNotes}
+            onUploadAttachment={onUploadAttachment}
+            onDeleteAttachment={onDeleteAttachment}
+            isUploadingAttachment={isUploadingAttachment}
+            onAddLink={onAddLink}
+            onRemoveLink={onRemoveLink}
+            searchItems={searchItems}
+            brettMessages={brettMessages}
+            brettHasMore={brettHasMore}
+            onSendBrettMessage={onSendBrettMessage}
+            onLoadMoreBrettMessages={onLoadMoreBrettMessages}
+            isSendingBrettMessage={isSendingBrettMessage}
+            isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
+            brettTotalCount={brettTotalCount}
+          />
+        ) : (
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+            <h2 className="text-2xl font-semibold text-white mb-6 leading-tight">
+              {item.title}
+            </h2>
           </div>
-        )}
+        )
+      ) : (
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+          <h2 className="text-2xl font-semibold text-white mb-6 leading-tight">
+            {item.title}
+          </h2>
 
-        {/* Event Specific Details */}
-        {!isTask && (
+          {/* Brett's Take */}
+          {item.brettObservation && (
+            <div className="mb-8 bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
+                  Brett's Take
+                </span>
+              </div>
+              <p className="text-sm italic text-blue-300/90 leading-relaxed">
+                &ldquo;{item.brettObservation}&rdquo;
+              </p>
+            </div>
+          )}
+
+          {/* Event Specific Details */}
           <div className="space-y-6">
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-sm text-white/80">
@@ -134,8 +211,9 @@ export function DetailPanel({ isOpen, item, onClose, onToggle }: DetailPanelProp
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
       </div>
-    </div>
+    </>
   );
 }

@@ -4,6 +4,9 @@ import { authRouter } from "./routes/auth.js";
 import { users } from "./routes/users.js";
 import { things } from "./routes/things.js";
 import { lists } from "./routes/lists.js";
+import { attachments } from "./routes/attachments.js";
+import { links } from "./routes/links.js";
+import { brett } from "./routes/brett.js";
 
 export const app = new Hono();
 
@@ -18,7 +21,7 @@ app.use(
       if (isLocal && origin.match(/^http:\/\/localhost:\d+$/)) return origin;
       return null;
     },
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Filename"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })
@@ -32,3 +35,6 @@ app.route("/api/auth", authRouter);
 app.route("/users", users);
 app.route("/things", things);
 app.route("/lists", lists);
+app.route("/things", attachments);
+app.route("/things", links);
+app.route("/things", brett);

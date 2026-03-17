@@ -12,11 +12,13 @@ interface ThingsListProps {
   onToggle?: (id: string) => void;
   onAdd: (title: string, listId: string | null) => void;
   onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  /** Called when keyboard nav changes focused item (for live detail panel updates) */
+  onFocusChange?: (thing: Thing) => void;
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
   header?: React.ReactNode;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTriageOpen, header }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTriageOpen, onFocusChange, header }: ThingsListProps) {
   const { uncompleted, done, grouped, allItems } = useMemo(() => {
     const uncompleted = things.filter((t) => !t.isCompleted);
     const done = things.filter((t) => t.isCompleted);
@@ -34,6 +36,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTria
     items: allItems,
     onItemClick,
     onToggle,
+    onFocusChange,
     onFocusAdd: () => quickAddRef.current?.focus(),
     onExtraKey: (e, focusedThing) => {
       if (!focusedThing || !onTriageOpen) return false;

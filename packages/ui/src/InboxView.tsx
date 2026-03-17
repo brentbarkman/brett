@@ -18,6 +18,7 @@ interface InboxViewProps {
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => void;
   onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onFocusChange?: (thing: Thing) => void;
 }
 
 export function InboxView({
@@ -29,6 +30,7 @@ export function InboxView({
   onAdd,
   onTriage,
   onTriageOpen,
+  onFocusChange,
 }: InboxViewProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -182,7 +184,11 @@ export function InboxView({
             });
           }
         } else {
-          setFocusedIndex((i) => Math.min(i + 1, activeThings.length - 1));
+          setFocusedIndex((i) => {
+            const next = Math.min(i + 1, activeThings.length - 1);
+            if (next !== i && activeThings[next] && onFocusChange) onFocusChange(activeThings[next]);
+            return next;
+          });
         }
         return;
       }
@@ -207,7 +213,11 @@ export function InboxView({
             });
           }
         } else {
-          setFocusedIndex((i) => Math.max(i - 1, 0));
+          setFocusedIndex((i) => {
+            const next = Math.max(i - 1, 0);
+            if (next !== i && activeThings[next] && onFocusChange) onFocusChange(activeThings[next]);
+            return next;
+          });
         }
         return;
       }

@@ -42,6 +42,8 @@ export type Urgency = "overdue" | "today" | "this_week" | "next_week" | "later" 
 
 /** DB record — mirrors the Prisma Item model */
 export type DueDatePrecision = "day" | "week";
+export type ReminderType = "morning_of" | "1_hour_before" | "day_before" | "custom";
+export type RecurrenceType = "daily" | "weekly" | "monthly" | "custom";
 
 /** DB record — mirrors the Prisma Item model */
 export interface ItemRecord {
@@ -57,6 +59,11 @@ export interface ItemRecord {
   completedAt: Date | null;
   snoozedUntil: Date | null;
   brettObservation: string | null;
+  notes: string | null;
+  reminder: string | null;
+  recurrence: string | null;
+  recurrenceRule: string | null;
+  brettTakeGeneratedAt: Date | null;
   listId: string | null;
   userId: string;
   createdAt: Date;
@@ -85,6 +92,41 @@ export interface Thing {
   createdAt?: string; // ISO string, populated for inbox items
 }
 
+export interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string; // presigned S3 URL
+  createdAt: string; // ISO string
+}
+
+export interface ItemLink {
+  id: string;
+  toItemId: string;
+  toItemType: string;
+  toItemTitle?: string; // resolved on read
+  createdAt: string;
+}
+
+export interface BrettMessage {
+  id: string;
+  role: "user" | "brett";
+  content: string;
+  createdAt: string;
+}
+
+export interface ThingDetail extends Thing {
+  notes?: string;
+  reminder?: ReminderType;
+  recurrence?: RecurrenceType;
+  recurrenceRule?: string;
+  brettTakeGeneratedAt?: string;
+  attachments: Attachment[];
+  links: ItemLink[];
+  brettMessages: BrettMessage[];
+}
+
 export interface CreateItemInput {
   type: string;
   title: string;
@@ -109,6 +151,10 @@ export interface UpdateItemInput {
   listId?: string | null;
   status?: ItemStatus;
   snoozedUntil?: string | null; // ISO string
+  notes?: string | null;
+  reminder?: ReminderType | null;
+  recurrence?: RecurrenceType | null;
+  recurrenceRule?: string | null;
 }
 
 export interface CreateListInput {
@@ -164,3 +210,12 @@ export interface UpcomingSection {
 }
 
 export type FilterType = "All" | "Tasks" | "Content";
+
+export interface CreateItemLinkInput {
+  toItemId: string;
+  toItemType: string;
+}
+
+export interface CreateBrettMessageInput {
+  content: string;
+}

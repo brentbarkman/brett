@@ -1,9 +1,88 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem } from "@brett/business";
+import { getPresignedUrl } from "../lib/storage.js";
+import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem, computeNextDueDate } from "@brett/business";
+import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
 
 const things = new Hono<AuthEnv>();
+
+async function itemToThingDetail(item: any): Promise<ThingDetail> {
+  const thing = itemToThing(item);
+
+  const attachments: AttachmentType[] = await Promise.all(
+    (item.attachments || []).map(async (a: any) => ({
+      id: a.id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      sizeBytes: a.sizeBytes,
+      url: await getPresignedUrl(a.storageKey, a.filename),
+      createdAt: a.createdAt.toISOString(),
+    }))
+  );
+
+  // Bidirectional links: query both directions
+  const forwardLinks: any[] = item.linksFrom || [];
+
+  // Reverse links: where this item is the target
+  const reverseLinks = await prisma.itemLink.findMany({
+    where: { toItemId: item.id, userId: item.userId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Collect all linked item IDs for title resolution
+  const linkedItemIds = new Set<string>();
+  forwardLinks.forEach((l: any) => linkedItemIds.add(l.toItemId));
+  reverseLinks.forEach((l) => linkedItemIds.add(l.fromItemId));
+
+  const linkedItems = linkedItemIds.size > 0
+    ? await prisma.item.findMany({
+        where: { id: { in: [...linkedItemIds] }, userId: item.userId },
+        select: { id: true, title: true, type: true },
+      })
+    : [];
+  const itemMap = new Map(linkedItems.map((t) => [t.id, t]));
+
+  const links: ItemLinkType[] = [
+    // Forward: A→B, shown on A as linking to B
+    ...forwardLinks.map((l: any) => ({
+      id: l.id,
+      toItemId: l.toItemId,
+      toItemType: l.toItemType,
+      toItemTitle: itemMap.get(l.toItemId)?.title,
+      createdAt: l.createdAt.toISOString(),
+    })),
+    // Reverse: B→A stored as fromItemId=B, shown on A as linking to B
+    ...reverseLinks.map((l) => ({
+      id: l.id,
+      toItemId: l.fromItemId,
+      toItemType: itemMap.get(l.fromItemId)?.type ?? "task",
+      toItemTitle: itemMap.get(l.fromItemId)?.title,
+      createdAt: l.createdAt.toISOString(),
+    })),
+  ];
+
+  const brettMessages: BrettMessageType[] = (item.brettMessages || [])
+    .slice(0, 20)
+    .map((m: any) => ({
+      id: m.id,
+      role: m.role as "user" | "brett",
+      content: m.content,
+      createdAt: m.createdAt.toISOString(),
+    }));
+
+  return {
+    ...thing,
+    notes: item.notes ?? undefined,
+    reminder: item.reminder ?? undefined,
+    recurrence: item.recurrence ?? undefined,
+    recurrenceRule: item.recurrenceRule ?? undefined,
+    brettTakeGeneratedAt: item.brettTakeGeneratedAt?.toISOString(),
+    attachments,
+    links,
+    brettMessages,
+  };
+}
 
 async function verifyListOwnership(listId: string, userId: string) {
   const list = await prisma.list.findFirst({
@@ -113,16 +192,21 @@ things.get("/inbox", async (c) => {
   });
 });
 
-// GET /things/:id — single thing
+// GET /things/:id — single thing (returns ThingDetail with relations)
 things.get("/:id", async (c) => {
   const user = c.get("user");
   const item = await prisma.item.findFirst({
     where: { id: c.req.param("id"), userId: user.id },
-    include: { list: { select: { name: true } } },
+    include: {
+      list: { select: { name: true } },
+      attachments: { orderBy: { createdAt: "asc" } },
+      linksFrom: { orderBy: { createdAt: "asc" } },
+      brettMessages: { orderBy: { createdAt: "desc" }, take: 20 },
+    },
   });
 
   if (!item) return c.json({ error: "Not found" }, 404);
-  return c.json(itemToThing(item));
+  return c.json(await itemToThingDetail(item));
 });
 
 // POST /things — create
@@ -161,6 +245,47 @@ things.post("/", async (c) => {
 
   return c.json(itemToThing(item), 201);
 });
+
+/** Spawn the next occurrence of a recurring task */
+async function spawnNextRecurrence(
+  item: { id: string; type: string; title: string; notes: string | null; description: string | null; source: string; dueDate: Date | null; dueDatePrecision: string | null; recurrence: string | null; recurrenceRule: string | null; listId: string | null; userId: string },
+  linksFrom: { toItemId: string; toItemType: string }[],
+) {
+  if (!item.recurrence) return;
+
+  const newDueDate = computeNextDueDate(
+    item.dueDate,
+    item.recurrence,
+    item.recurrenceRule,
+  );
+
+  const newItem = await prisma.item.create({
+    data: {
+      type: item.type,
+      title: item.title,
+      notes: item.notes,
+      description: item.description,
+      source: item.source,
+      dueDate: newDueDate,
+      dueDatePrecision: item.dueDatePrecision,
+      recurrence: item.recurrence,
+      recurrenceRule: item.recurrenceRule,
+      listId: item.listId,
+      userId: item.userId,
+    },
+  });
+
+  if (linksFrom.length > 0) {
+    await prisma.itemLink.createMany({
+      data: linksFrom.map((l) => ({
+        fromItemId: newItem.id,
+        toItemId: l.toItemId,
+        toItemType: l.toItemType,
+        userId: item.userId,
+      })),
+    });
+  }
+}
 
 // PATCH /things/:id — update
 things.patch("/:id", async (c) => {
@@ -203,12 +328,28 @@ things.patch("/:id", async (c) => {
     updateData.snoozedUntil = data.snoozedUntil
       ? new Date(data.snoozedUntil)
       : null;
+  if (data.notes !== undefined)
+    updateData.notes = data.notes;
+  if (data.reminder !== undefined)
+    updateData.reminder = data.reminder;
+  if (data.recurrence !== undefined)
+    updateData.recurrence = data.recurrence;
+  if (data.recurrenceRule !== undefined)
+    updateData.recurrenceRule = data.recurrenceRule;
 
   const item = await prisma.item.update({
     where: { id: existing.id },
     data: updateData,
-    include: { list: { select: { name: true } } },
+    include: { list: { select: { name: true } }, linksFrom: true },
   });
+
+  // If recurrence was just set on an already-completed task, spawn next occurrence now
+  const recurrenceJustSet = data.recurrence !== undefined && data.recurrence !== null;
+  const wasAlreadyCompleted = existing.completedAt !== null;
+  const hadNoRecurrence = !existing.recurrence;
+  if (recurrenceJustSet && wasAlreadyCompleted && hadNoRecurrence) {
+    await spawnNextRecurrence(item, item.linksFrom);
+  }
 
   return c.json(itemToThing(item));
 });
@@ -218,6 +359,7 @@ things.patch("/:id/toggle", async (c) => {
   const user = c.get("user");
   const existing = await prisma.item.findFirst({
     where: { id: c.req.param("id"), userId: user.id },
+    include: { list: { select: { name: true } }, linksFrom: true },
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
 
@@ -230,6 +372,11 @@ things.patch("/:id/toggle", async (c) => {
     },
     include: { list: { select: { name: true } } },
   });
+
+  // If completing a recurring task, spawn a new independent task
+  if (!isCompleted && existing.recurrence) {
+    await spawnNextRecurrence(existing, existing.linksFrom);
+  }
 
   return c.json(itemToThing(item));
 });

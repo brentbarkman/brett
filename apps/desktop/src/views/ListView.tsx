@@ -16,9 +16,10 @@ interface ListViewProps {
   onItemClick: (item: Thing) => void;
   onArchiveList?: (id: string, incompleteCount: number) => void;
   onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onFocusChange?: (thing: Thing) => void;
 }
 
-export function ListView({ lists, archivedLists, listsFetching, onItemClick, onArchiveList, onTriageOpen }: ListViewProps) {
+export function ListView({ lists, archivedLists, listsFetching, onItemClick, onArchiveList, onTriageOpen, onFocusChange }: ListViewProps) {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
 
@@ -130,6 +131,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     items: allItems,
     onItemClick,
     onToggle: handleToggle,
+    onFocusChange,
     onFocusAdd: () => quickAddRef.current?.focus(),
     onExtraKey: (e, focusedThing) => {
       if (!focusedThing || !onTriageOpen) return false;

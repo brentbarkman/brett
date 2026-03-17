@@ -24,9 +24,10 @@ interface TodayViewProps {
   lists: NavList[];
   onItemClick: (item: Thing | CalendarEvent) => void;
   onTriageOpen: (mode: "list-first" | "date-first", ids: string[]) => void;
+  onFocusChange?: (thing: Thing) => void;
 }
 
-export function TodayView({ lists, onItemClick, onTriageOpen }: TodayViewProps) {
+export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [isBriefingVisible, setIsBriefingVisible] = useState(true);
 
@@ -94,10 +95,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen }: TodayViewProps) 
       onToggle={handleToggle}
       onAdd={handleAddTask}
       onTriageOpen={onTriageOpen}
+      onFocusChange={onFocusChange}
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
     />
   ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onTriageOpen={onTriageOpen} />
+    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} />
   );
 
   return (

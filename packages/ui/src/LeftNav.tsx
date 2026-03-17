@@ -340,10 +340,15 @@ function SortableListItem({
           />
         </div>
       ) : (
-        <button
+        <div
+          {...attributes}
+          {...listeners}
+          role="button"
+          tabIndex={0}
           onClick={onClick}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}
           className={`
-            flex items-center w-full rounded-lg transition-colors duration-200 group outline-none
+            flex items-center w-full rounded-lg transition-colors duration-200 group outline-none cursor-pointer
             ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-2.5"}
             ${
               isOver
@@ -353,8 +358,6 @@ function SortableListItem({
                   : "text-white/60 hover:bg-white/5 hover:text-white/90 border border-transparent"
             }
           `}
-          {...attributes}
-          {...listeners}
         >
           <ProgressDot
             count={list.count}
@@ -381,7 +384,7 @@ function SortableListItem({
               )}
             </>
           )}
-        </button>
+        </div>
       )}
 
       {/* Context menu dropdown */}
