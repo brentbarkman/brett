@@ -5,6 +5,8 @@ import type {
   ItemStatus,
   Urgency,
   DueDatePrecision,
+  ReminderType,
+  RecurrenceType,
   CreateItemInput,
   UpdateItemInput,
   CreateListInput,
@@ -324,6 +326,31 @@ export function validateUpdateItem(
     data.source = obj.source;
   }
 
+  // New detail panel fields
+  if (obj.notes !== undefined) {
+    data.notes = obj.notes === null ? null : typeof obj.notes === "string" ? obj.notes : undefined;
+  }
+
+  const VALID_REMINDERS = new Set(["morning_of", "1_hour_before", "day_before", "custom"]);
+  if (obj.reminder !== undefined) {
+    if (obj.reminder !== null && (typeof obj.reminder !== "string" || !VALID_REMINDERS.has(obj.reminder))) {
+      return { ok: false, error: `reminder must be one of: ${[...VALID_REMINDERS].join(", ")}` };
+    }
+    data.reminder = obj.reminder as ReminderType | null;
+  }
+
+  const VALID_RECURRENCES = new Set(["daily", "weekly", "monthly", "custom"]);
+  if (obj.recurrence !== undefined) {
+    if (obj.recurrence !== null && (typeof obj.recurrence !== "string" || !VALID_RECURRENCES.has(obj.recurrence))) {
+      return { ok: false, error: `recurrence must be one of: ${[...VALID_RECURRENCES].join(", ")}` };
+    }
+    data.recurrence = obj.recurrence as RecurrenceType | null;
+  }
+
+  if (obj.recurrenceRule !== undefined) {
+    data.recurrenceRule = obj.recurrenceRule === null ? null : typeof obj.recurrenceRule === "string" ? obj.recurrenceRule : undefined;
+  }
+
   return { ok: true, data };
 }
 
@@ -633,4 +660,35 @@ export function groupUpcomingThings(things: Thing[], now: Date = new Date()): Up
   }
 
   return sections;
+}
+
+// ── Detail panel validation ──
+
+export function validateCreateItemLink(
+  input: unknown
+): { ok: true; data: { toItemId: string; toItemType: string } } | { ok: false; error: string } {
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Request body is required" };
+  }
+  const obj = input as Record<string, unknown>;
+  if (!obj.toItemId || typeof obj.toItemId !== "string") {
+    return { ok: false, error: "toItemId is required" };
+  }
+  if (!obj.toItemType || typeof obj.toItemType !== "string") {
+    return { ok: false, error: "toItemType is required" };
+  }
+  return { ok: true, data: { toItemId: obj.toItemId, toItemType: obj.toItemType } };
+}
+
+export function validateCreateBrettMessage(
+  input: unknown
+): { ok: true; data: { content: string } } | { ok: false; error: string } {
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Request body is required" };
+  }
+  const obj = input as Record<string, unknown>;
+  if (!obj.content || typeof obj.content !== "string" || obj.content.trim() === "") {
+    return { ok: false, error: "content is required" };
+  }
+  return { ok: true, data: { content: obj.content.trim() } };
 }
