@@ -1,6 +1,8 @@
 import React, { useState, useRef, useCallback } from "react";
-import { Paperclip, Image, FileText, Film, Music, X, Loader2 } from "lucide-react";
+import { Paperclip, Image, FileText, Film, Music, X, Loader2, AlertCircle } from "lucide-react";
 import type { Attachment } from "@brett/types";
+
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
 interface AttachmentListProps {
   attachments: Attachment[];
@@ -33,7 +35,21 @@ export function AttachmentList({
   isUploading,
 }: AttachmentListProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const validateAndUpload = useCallback(
+    (file: File) => {
+      setError(null);
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`"${file.name}" is too large (${formatFileSize(file.size)}). Max is 25 MB.`);
+        return;
+      }
+      onUpload(file);
+    },
+    [onUpload],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -49,20 +65,17 @@ export function AttachmentList({
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      const files = Array.from(e.dataTransfer.files);
-      files.forEach((file) => onUpload(file));
+      Array.from(e.dataTransfer.files).forEach(validateAndUpload);
     },
-    [onUpload],
+    [validateAndUpload],
   );
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files ?? []);
-      files.forEach((file) => onUpload(file));
-      // Reset so same file can be re-selected
+      Array.from(e.target.files ?? []).forEach(validateAndUpload);
       e.target.value = "";
     },
-    [onUpload],
+    [validateAndUpload],
   );
 
   return (
@@ -74,6 +87,17 @@ export function AttachmentList({
       <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-2 block">
         Attachments
       </span>
+
+      {/* Error message */}
+      {error && (
+        <div className="flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+          <AlertCircle size={14} className="flex-shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400/60 hover:text-red-400">
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Attachment cards */}
       {attachments.length > 0 && (
@@ -87,7 +111,8 @@ export function AttachmentList({
                 <img
                   src={att.url}
                   alt={att.filename}
-                  className="w-10 h-10 rounded object-cover flex-shrink-0"
+                  className="w-10 h-10 rounded object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => setPreviewUrl(att.url)}
                 />
               ) : (
                 <div className="w-10 h-10 rounded bg-white/5 flex items-center justify-center flex-shrink-0">
@@ -95,14 +120,9 @@ export function AttachmentList({
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <a
-                  href={att.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-white/80 hover:text-white truncate block transition-colors"
-                >
+                <span className="text-sm text-white/80 truncate block">
                   {att.filename}
-                </a>
+                </span>
                 <span className="text-xs text-white/40">
                   {formatFileSize(att.sizeBytes)}
                 </span>
@@ -141,6 +161,28 @@ export function AttachmentList({
         onChange={handleFileChange}
         className="hidden"
       />
+
+      {/* Image preview overlay */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div className="relative max-w-full max-h-full">
+            <img
+              src={previewUrl}
+              alt="Preview"
+              className="max-w-full max-h-[80vh] rounded-lg shadow-2xl object-contain"
+            />
+            <button
+              onClick={() => setPreviewUrl(null)}
+              className="absolute -top-3 -right-3 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white/80 hover:text-white transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
