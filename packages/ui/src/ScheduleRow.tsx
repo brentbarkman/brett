@@ -77,21 +77,24 @@ function DropdownOption({
 }
 
 function getTodayISO(): string {
-  return new Date().toISOString().split("T")[0] + "T00:00:00.000Z";
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
 }
 
 function getTomorrowISO(): string {
   const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0] + "T00:00:00.000Z";
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)).toISOString();
 }
 
 function getThisWeekISO(): string {
   const d = new Date();
-  const day = d.getDay();
-  const diff = day === 0 ? 0 : 7 - day;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().split("T")[0] + "T00:00:00.000Z";
+  const day = d.getUTCDay();
+  const daysUntilSun = day === 0 ? 7 : 7 - day;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + daysUntilSun)).toISOString();
+}
+
+function getUTCDatePrefix(iso: string): string {
+  return iso.slice(0, 10);
 }
 
 const reminderLabels: Record<ReminderType, string> = {
@@ -133,12 +136,12 @@ export function ScheduleRow({
             <>
               <DropdownOption
                 label="Today"
-                isActive={!!dueDate && dueDatePrecision === "day" && dueDate.startsWith(getTodayISO().split("T")[0])}
+                isActive={!!dueDate && dueDatePrecision === "day" && getUTCDatePrefix(dueDate) === getUTCDatePrefix(getTodayISO())}
                 onClick={() => { onUpdateDueDate(getTodayISO(), "day"); close(); }}
               />
               <DropdownOption
                 label="Tomorrow"
-                isActive={!!dueDate && dueDatePrecision === "day" && dueDate.startsWith(getTomorrowISO().split("T")[0])}
+                isActive={!!dueDate && dueDatePrecision === "day" && getUTCDatePrefix(dueDate) === getUTCDatePrefix(getTomorrowISO())}
                 onClick={() => { onUpdateDueDate(getTomorrowISO(), "day"); close(); }}
               />
               <DropdownOption

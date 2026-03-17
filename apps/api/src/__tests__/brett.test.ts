@@ -73,4 +73,24 @@ describe("Brett message routes", () => {
     expect(body.brettObservation).toBeTruthy();
     expect(body.brettTakeGeneratedAt).toBeTruthy();
   });
+
+  it("POST /things/:id/brett rejects non-existent item", async () => {
+    const res = await authRequest("/things/nonexistent/brett", token, {
+      method: "POST",
+      body: JSON.stringify({ content: "hello" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("GET /things/:id/brett rejects non-existent item", async () => {
+    const res = await authRequest("/things/nonexistent/brett", token);
+    expect(res.status).toBe(404);
+  });
+
+  it("POST /things/:id/brett-take rejects non-existent item", async () => {
+    const res = await authRequest("/things/nonexistent/brett-take", token, {
+      method: "POST",
+    });
+    expect(res.status).toBe(404);
+  });
 });

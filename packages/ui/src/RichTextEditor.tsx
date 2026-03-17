@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -46,6 +46,17 @@ export function RichTextEditor({
   onChange,
   placeholder = "Add notes\u2026",
 }: RichTextEditorProps) {
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const debouncedSave = useCallback((ed: any) => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const storage = ed.storage as Record<string, any>;
+      const md = storage.markdown.getMarkdown() as string;
+      onChange(md);
+    }, 500);
+  }, [onChange]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -61,12 +72,20 @@ export function RichTextEditor({
           "prose prose-invert prose-sm max-w-none focus:outline-none min-h-[100px] text-white/80 p-3",
       },
     },
+    onUpdate: ({ editor: ed }) => {
+      debouncedSave(ed);
+    },
     onBlur: ({ editor: ed }) => {
+      clearTimeout(debounceRef.current);
       const storage = ed.storage as Record<string, any>;
       const md = storage.markdown.getMarkdown() as string;
       onChange(md);
     },
   });
+
+  useEffect(() => {
+    return () => clearTimeout(debounceRef.current);
+  }, []);
 
   // Sync external content changes (but not while focused)
   useEffect(() => {

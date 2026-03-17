@@ -20,6 +20,10 @@ links.post("/:itemId/links", async (c) => {
 
   const { data } = validation;
 
+  if (data.toItemId === itemId) {
+    return c.json({ error: "Cannot link an item to itself" }, 400);
+  }
+
   const existing = await prisma.itemLink.findUnique({
     where: { fromItemId_toItemId: { fromItemId: itemId, toItemId: data.toItemId } },
   });

@@ -71,4 +71,14 @@ describe("Attachment routes", () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it("cross-user cannot upload to another user's item", async () => {
+    const user2 = await createTestUser("Attachment User 2");
+    const res = await authRequest(`/things/${itemId}/attachments`, user2.token, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain", "X-Filename": "test.txt" },
+      body: "hello",
+    });
+    expect(res.status).toBe(404);
+  });
 });

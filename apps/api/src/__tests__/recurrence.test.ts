@@ -47,6 +47,28 @@ describe("Recurring task toggle", () => {
     expect(matches.length).toBe(1);
   });
 
+  it("completing a recurring task without dueDate creates new task with null dueDate", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "No date recurring" }),
+    });
+    const task = (await createRes.json()) as any;
+
+    await authRequest(`/things/${task.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({ recurrence: "daily" }),
+    });
+
+    await authRequest(`/things/${task.id}/toggle`, token, { method: "PATCH" });
+
+    const allRes = await authRequest("/things?status=active", token);
+    const all = (await allRes.json()) as any[];
+    const newTask = all.find((t: any) => t.title === "No date recurring" && t.id !== task.id);
+    expect(newTask).toBeTruthy();
+    // No dueDate on original → no dueDate on new task
+    expect(newTask.dueDate).toBeUndefined();
+  });
+
   it("uncompleting a task does NOT create a new task", async () => {
     const createRes = await authRequest("/things", token, {
       method: "POST",

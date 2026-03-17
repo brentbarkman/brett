@@ -678,6 +678,10 @@ export function validateCreateItemLink(
   if (!obj.toItemType || typeof obj.toItemType !== "string") {
     return { ok: false, error: "toItemType is required" };
   }
+  const VALID_LINK_TYPES = new Set(["task", "content"]);
+  if (!VALID_LINK_TYPES.has(obj.toItemType)) {
+    return { ok: false, error: `toItemType must be one of: ${[...VALID_LINK_TYPES].join(", ")}` };
+  }
   return { ok: true, data: { toItemId: obj.toItemId, toItemType: obj.toItemType } };
 }
 

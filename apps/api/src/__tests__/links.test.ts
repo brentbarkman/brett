@@ -58,4 +58,42 @@ describe("Link routes", () => {
     const after = (await afterRes.json()) as any;
     expect(after.links.length).toBe(0);
   });
+
+  it("POST /things/:id/links rejects self-link", async () => {
+    const res = await authRequest(`/things/${itemAId}/links`, token, {
+      method: "POST",
+      body: JSON.stringify({ toItemId: itemAId, toItemType: "task" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /things/:id/links rejects invalid toItemType", async () => {
+    const res = await authRequest(`/things/${itemAId}/links`, token, {
+      method: "POST",
+      body: JSON.stringify({ toItemId: itemBId, toItemType: "banana" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /things/:id/links to other user's item does not leak title", async () => {
+    const user2 = await createTestUser("Link User 2");
+    const resC = await authRequest("/things", user2.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Secret Task" }),
+    });
+    const itemCId = ((await resC.json()) as any).id;
+
+    // User 1 links to user 2's item
+    await authRequest(`/things/${itemAId}/links`, token, {
+      method: "POST",
+      body: JSON.stringify({ toItemId: itemCId, toItemType: "task" }),
+    });
+
+    // Get detail — toItemTitle should be undefined (not "Secret Task")
+    const detailRes = await authRequest(`/things/${itemAId}`, token);
+    const detail = (await detailRes.json()) as any;
+    const crossLink = detail.links.find((l: any) => l.toItemId === itemCId);
+    expect(crossLink).toBeTruthy();
+    expect(crossLink.toItemTitle).toBeUndefined();
+  });
 });

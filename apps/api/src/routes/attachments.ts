@@ -35,18 +35,26 @@ attachments.post("/:itemId/attachments", async (c) => {
 
   const storageKey = `attachments/${user.id}/${itemId}/${randomUUID()}-${filename}`;
 
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: STORAGE_BUCKET,
-      Key: storageKey,
-      Body: Buffer.from(body),
-      ContentType: mimeType,
-    })
-  );
-
+  // Create DB record first — if S3 fails we roll back the record.
+  // This avoids orphaned S3 objects when the DB write fails.
   const attachment = await prisma.attachment.create({
     data: { filename, mimeType, sizeBytes: body.byteLength, storageKey, itemId, userId: user.id },
   });
+
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: STORAGE_BUCKET,
+        Key: storageKey,
+        Body: Buffer.from(body),
+        ContentType: mimeType,
+      })
+    );
+  } catch {
+    // Rollback DB record on S3 failure
+    await prisma.attachment.delete({ where: { id: attachment.id } });
+    return c.json({ error: "Failed to upload file" }, 500);
+  }
 
   return c.json({
     id: attachment.id,
@@ -68,7 +76,11 @@ attachments.delete("/:itemId/attachments/:attachmentId", async (c) => {
   });
   if (!attachment) return c.json({ error: "Not found" }, 404);
 
-  await s3.send(new DeleteObjectCommand({ Bucket: STORAGE_BUCKET, Key: attachment.storageKey }));
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: STORAGE_BUCKET, Key: attachment.storageKey }));
+  } catch {
+    // Log but continue — DB record must be deleted regardless
+  }
   await prisma.attachment.delete({ where: { id: attachment.id } });
 
   return c.json({ ok: true });

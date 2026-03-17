@@ -25,7 +25,7 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
   const linkTargetIds = (item.linksFrom || []).map((l: any) => l.toItemId);
   const linkTargets = linkTargetIds.length > 0
     ? await prisma.item.findMany({
-        where: { id: { in: linkTargetIds } },
+        where: { id: { in: linkTargetIds }, userId: item.userId },
         select: { id: true, title: true },
       })
     : [];
