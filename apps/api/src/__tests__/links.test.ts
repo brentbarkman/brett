@@ -59,6 +59,38 @@ describe("Link routes", () => {
     expect(after.links.length).toBe(0);
   });
 
+  it("links are bidirectional — both items show the link", async () => {
+    // Create a fresh link (previous test deleted the A→B link)
+    await authRequest(`/things/${itemAId}/links`, token, {
+      method: "POST",
+      body: JSON.stringify({ toItemId: itemBId, toItemType: "task" }),
+    });
+
+    // Task A should show link to Task B
+    const detailA = (await (await authRequest(`/things/${itemAId}`, token)).json()) as any;
+    expect(detailA.links.length).toBe(1);
+    expect(detailA.links[0].toItemId).toBe(itemBId);
+    expect(detailA.links[0].toItemTitle).toBe("Task B");
+
+    // Task B should also show link to Task A (reverse direction, same link record)
+    const detailB = (await (await authRequest(`/things/${itemBId}`, token)).json()) as any;
+    expect(detailB.links.length).toBe(1);
+    expect(detailB.links[0].toItemId).toBe(itemAId);
+    expect(detailB.links[0].toItemTitle).toBe("Task A");
+
+    // Both should reference the same link ID
+    expect(detailA.links[0].id).toBe(detailB.links[0].id);
+
+    // Deleting from either side removes it from both
+    const linkId = detailB.links[0].id;
+    await authRequest(`/things/${itemBId}/links/${linkId}`, token, { method: "DELETE" });
+
+    const afterA = (await (await authRequest(`/things/${itemAId}`, token)).json()) as any;
+    const afterB = (await (await authRequest(`/things/${itemBId}`, token)).json()) as any;
+    expect(afterA.links.length).toBe(0);
+    expect(afterB.links.length).toBe(0);
+  });
+
   it("POST /things/:id/links rejects self-link", async () => {
     const res = await authRequest(`/things/${itemAId}/links`, token, {
       method: "POST",

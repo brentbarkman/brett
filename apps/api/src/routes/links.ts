@@ -32,8 +32,14 @@ links.post("/:itemId/links", async (c) => {
     return c.json({ error: "Target item not found" }, 404);
   }
 
-  const existing = await prisma.itemLink.findUnique({
-    where: { fromItemId_toItemId: { fromItemId: itemId, toItemId: data.toItemId } },
+  // Check both directions — links are bidirectional
+  const existing = await prisma.itemLink.findFirst({
+    where: {
+      OR: [
+        { fromItemId: itemId, toItemId: data.toItemId },
+        { fromItemId: data.toItemId, toItemId: itemId },
+      ],
+    },
   });
   if (existing) return c.json({ error: "Link already exists" }, 409);
 

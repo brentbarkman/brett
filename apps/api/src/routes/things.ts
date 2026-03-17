@@ -21,23 +21,46 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
     }))
   );
 
-  // Resolve link titles
-  const linkTargetIds = (item.linksFrom || []).map((l: any) => l.toItemId);
-  const linkTargets = linkTargetIds.length > 0
+  // Bidirectional links: query both directions
+  const forwardLinks: any[] = item.linksFrom || [];
+
+  // Reverse links: where this item is the target
+  const reverseLinks = await prisma.itemLink.findMany({
+    where: { toItemId: item.id, userId: item.userId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Collect all linked item IDs for title resolution
+  const linkedItemIds = new Set<string>();
+  forwardLinks.forEach((l: any) => linkedItemIds.add(l.toItemId));
+  reverseLinks.forEach((l) => linkedItemIds.add(l.fromItemId));
+
+  const linkedItems = linkedItemIds.size > 0
     ? await prisma.item.findMany({
-        where: { id: { in: linkTargetIds }, userId: item.userId },
-        select: { id: true, title: true },
+        where: { id: { in: [...linkedItemIds] }, userId: item.userId },
+        select: { id: true, title: true, type: true },
       })
     : [];
-  const titleMap = new Map(linkTargets.map((t: any) => [t.id, t.title]));
+  const itemMap = new Map(linkedItems.map((t) => [t.id, t]));
 
-  const links: ItemLinkType[] = (item.linksFrom || []).map((l: any) => ({
-    id: l.id,
-    toItemId: l.toItemId,
-    toItemType: l.toItemType,
-    toItemTitle: titleMap.get(l.toItemId),
-    createdAt: l.createdAt.toISOString(),
-  }));
+  const links: ItemLinkType[] = [
+    // Forward: A→B, shown on A as linking to B
+    ...forwardLinks.map((l: any) => ({
+      id: l.id,
+      toItemId: l.toItemId,
+      toItemType: l.toItemType,
+      toItemTitle: itemMap.get(l.toItemId)?.title,
+      createdAt: l.createdAt.toISOString(),
+    })),
+    // Reverse: B→A stored as fromItemId=B, shown on A as linking to B
+    ...reverseLinks.map((l) => ({
+      id: l.id,
+      toItemId: l.fromItemId,
+      toItemType: itemMap.get(l.fromItemId)?.type ?? "task",
+      toItemTitle: itemMap.get(l.fromItemId)?.title,
+      createdAt: l.createdAt.toISOString(),
+    })),
+  ];
 
   const brettMessages: BrettMessageType[] = (item.brettMessages || [])
     .slice(0, 20)
