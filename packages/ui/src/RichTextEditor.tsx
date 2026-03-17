@@ -10,7 +10,6 @@ import {
   Heading2,
   List,
   ListOrdered,
-  Code2,
 } from "lucide-react";
 
 interface RichTextEditorProps {
@@ -62,11 +61,8 @@ export function RichTextEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [2] },
-        codeBlock: {
-          HTMLAttributes: {
-            class: "not-prose",
-          },
-        },
+        codeBlock: false,
+        code: false,
       }),
       Placeholder.configure({ placeholder }),
       Markdown.configure({ html: false, transformCopiedText: true }),
@@ -124,10 +120,6 @@ export function RichTextEditor({
     editor?.chain().focus().toggleOrderedList().run();
   }, [editor]);
 
-  const toggleCodeBlock = useCallback(() => {
-    editor?.chain().focus().toggleCodeBlock().run();
-  }, [editor]);
-
   if (!editor) return null;
 
   return (
@@ -163,12 +155,6 @@ export function RichTextEditor({
           isActive={editor.isActive("orderedList")}
           onClick={toggleOrderedList}
           label="Ordered List"
-        />
-        <ToolbarButton
-          icon={<Code2 size={14} />}
-          isActive={editor.isActive("codeBlock")}
-          onClick={toggleCodeBlock}
-          label="Code Block"
         />
       </div>
 

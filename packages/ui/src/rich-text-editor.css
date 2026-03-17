@@ -1,39 +1,4 @@
-/* Tiptap editor overrides — code blocks, inline code, lists */
-
-/* Code block container */
-.tiptap-editor pre {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border-radius: 0.5rem !important;
-  padding: 0.75rem 1rem !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  overflow-x: auto;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-/* Everything inside pre — nuke all backgrounds/borders/padding */
-.tiptap-editor pre * {
-  background: none !important;
-  background-color: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  box-shadow: none !important;
-  font-size: inherit !important;
-  color: inherit !important;
-  font-family: inherit !important;
-}
-
-/* Inline code only (not inside pre) */
-.tiptap-editor :not(pre) > code {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border-radius: 0.25rem !important;
-  padding: 0.1rem 0.35rem !important;
-  font-size: 0.8125rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
+/* Tiptap editor overrides */
 
 /* Lists */
 .tiptap-editor ul {
@@ -58,7 +23,7 @@
   color: rgba(255, 255, 255, 0.9);
 }
 
-/* Paragraphs inside editor */
+/* Paragraphs */
 .tiptap-editor p {
   margin: 0.25rem 0;
 }
