@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -38,6 +38,48 @@ function ToolbarButton({ icon, isActive, onClick, label }: ToolbarButtonProps) {
     >
       {icon}
     </button>
+  );
+}
+
+function EditorScrollArea({ editor }: { editor: any }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollDown, setCanScrollDown] = useState(false);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    setCanScrollUp(scrollTop > 4);
+    setCanScrollDown(scrollTop + clientHeight < scrollHeight - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", checkScroll, { passive: true });
+    // Check on mount and when content changes
+    const observer = new ResizeObserver(checkScroll);
+    observer.observe(el);
+    checkScroll();
+    return () => {
+      el.removeEventListener("scroll", checkScroll);
+      observer.disconnect();
+    };
+  }, [checkScroll]);
+
+  return (
+    <div className="relative">
+      {canScrollUp && (
+        <div className="pointer-events-none absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-white/[0.06] to-transparent z-10" />
+      )}
+      <div ref={scrollRef} className="max-h-[50vh] overflow-y-auto scrollbar-hide">
+        <EditorContent editor={editor} />
+      </div>
+      {canScrollDown && (
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white/[0.06] to-transparent z-10" />
+      )}
+    </div>
   );
 }
 
@@ -158,10 +200,8 @@ export function RichTextEditor({
         />
       </div>
 
-      {/* Editor — max 50vh then scroll */}
-      <div className="max-h-[50vh] overflow-y-auto scrollbar-hide">
-        <EditorContent editor={editor} />
-      </div>
+      {/* Editor — max 50vh then scroll with fade hints */}
+      <EditorScrollArea editor={editor} />
     </div>
   );
 }
