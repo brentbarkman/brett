@@ -105,7 +105,7 @@ export function BrettThread({
       {/* Expanded message history */}
       {isExpanded && displayMessages.length > 0 && (
         <div ref={scrollRef} className="max-h-64 overflow-y-auto px-4 scrollbar-hide overscroll-contain">
-          {hasMore && (
+          {hasMore && displayMessages.length >= 20 && (
             <button
               onClick={onLoadMore}
               disabled={isLoadingMore}
