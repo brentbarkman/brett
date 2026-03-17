@@ -95,9 +95,10 @@ export function useUpdateThing() {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["things"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["thing-detail", variables.id] });
     },
   });
 }
