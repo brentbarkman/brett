@@ -489,6 +489,7 @@ export function App() {
           onLoadMoreBrettMessages={brett.loadMore}
           isSendingBrettMessage={sendBrettMessage.isPending}
           isLoadingMoreBrettMessages={brett.isLoadingMore}
+          brettTotalCount={brett.totalCount}
         />
 
         {/* Drag overlay */}

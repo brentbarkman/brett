@@ -45,6 +45,7 @@ interface TaskDetailPanelProps {
   onLoadMoreBrettMessages?: () => void;
   isSendingBrettMessage?: boolean;
   isLoadingMoreBrettMessages?: boolean;
+  brettTotalCount?: number;
 }
 
 export function TaskDetailPanel({
@@ -70,6 +71,7 @@ export function TaskDetailPanel({
   onLoadMoreBrettMessages,
   isSendingBrettMessage,
   isLoadingMoreBrettMessages,
+  brettTotalCount,
 }: TaskDetailPanelProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(detail.title);
@@ -251,6 +253,7 @@ export function TaskDetailPanel({
           onLoadMore={onLoadMoreBrettMessages}
           isSending={isSendingBrettMessage}
           isLoadingMore={isLoadingMoreBrettMessages}
+          totalCount={brettTotalCount}
         />
       )}
     </>

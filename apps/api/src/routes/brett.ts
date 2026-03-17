@@ -48,11 +48,14 @@ brett.get("/:itemId/brett", async (c) => {
     return c.json({ error: "Invalid cursor" }, 400);
   }
 
-  const messages = await prisma.brettMessage.findMany({
-    where: { itemId, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
-    orderBy: { createdAt: "desc" },
-    take: limit + 1,
-  });
+  const [messages, totalCount] = await Promise.all([
+    prisma.brettMessage.findMany({
+      where: { itemId, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
+    }),
+    prisma.brettMessage.count({ where: { itemId } }),
+  ]);
 
   const hasMore = messages.length > limit;
   const page = hasMore ? messages.slice(0, limit) : messages;
@@ -61,6 +64,7 @@ brett.get("/:itemId/brett", async (c) => {
     messages: page.map((m) => ({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt.toISOString() })),
     hasMore,
     cursor: hasMore ? page[page.length - 1].createdAt.toISOString() : null,
+    totalCount,
   });
 });
 

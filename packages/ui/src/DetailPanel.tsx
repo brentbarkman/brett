@@ -43,6 +43,7 @@ interface DetailPanelProps {
   onLoadMoreBrettMessages?: () => void;
   isSendingBrettMessage?: boolean;
   isLoadingMoreBrettMessages?: boolean;
+  brettTotalCount?: number;
 }
 
 export function DetailPanel({
@@ -72,6 +73,7 @@ export function DetailPanel({
   onLoadMoreBrettMessages,
   isSendingBrettMessage,
   isLoadingMoreBrettMessages,
+  brettTotalCount,
 }: DetailPanelProps) {
   if (!item) return null;
   const isTask = !("startTime" in item);
@@ -135,6 +137,7 @@ export function DetailPanel({
             onLoadMoreBrettMessages={onLoadMoreBrettMessages}
             isSendingBrettMessage={isSendingBrettMessage}
             isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
+            brettTotalCount={brettTotalCount}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">

@@ -4,6 +4,7 @@ import type { BrettMessage } from "@brett/types";
 
 interface BrettThreadProps {
   messages: BrettMessage[];
+  totalCount?: number;
   hasMore: boolean;
   onSend: (content: string) => void;
   onLoadMore: () => void;
@@ -43,6 +44,7 @@ function MessageBubble({ message }: { message: BrettMessage }) {
 
 export function BrettThread({
   messages,
+  totalCount,
   hasMore,
   onSend,
   onLoadMore,
@@ -92,7 +94,7 @@ export function BrettThread({
         <div className="flex items-center gap-2">
           <Bot size={14} className="text-blue-400" />
           <span className="text-xs font-medium text-white/60">
-            Brett Thread ({messages.length})
+            Brett Thread ({totalCount ?? messages.length})
           </span>
         </div>
         {isExpanded ? (
@@ -105,7 +107,7 @@ export function BrettThread({
       {/* Expanded message history */}
       {isExpanded && displayMessages.length > 0 && (
         <div ref={scrollRef} className="max-h-64 overflow-y-auto px-4 scrollbar-hide overscroll-contain">
-          {hasMore && displayMessages.length >= 20 && (
+          {hasMore && (
             <button
               onClick={onLoadMore}
               disabled={isLoadingMore}
