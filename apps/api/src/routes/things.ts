@@ -223,6 +223,47 @@ things.post("/", async (c) => {
   return c.json(itemToThing(item), 201);
 });
 
+/** Spawn the next occurrence of a recurring task */
+async function spawnNextRecurrence(
+  item: { id: string; type: string; title: string; notes: string | null; description: string | null; source: string; dueDate: Date | null; dueDatePrecision: string | null; recurrence: string | null; recurrenceRule: string | null; listId: string | null; userId: string },
+  linksFrom: { toItemId: string; toItemType: string }[],
+) {
+  if (!item.recurrence) return;
+
+  const newDueDate = computeNextDueDate(
+    item.dueDate,
+    item.recurrence,
+    item.recurrenceRule,
+  );
+
+  const newItem = await prisma.item.create({
+    data: {
+      type: item.type,
+      title: item.title,
+      notes: item.notes,
+      description: item.description,
+      source: item.source,
+      dueDate: newDueDate,
+      dueDatePrecision: item.dueDatePrecision,
+      recurrence: item.recurrence,
+      recurrenceRule: item.recurrenceRule,
+      listId: item.listId,
+      userId: item.userId,
+    },
+  });
+
+  if (linksFrom.length > 0) {
+    await prisma.itemLink.createMany({
+      data: linksFrom.map((l) => ({
+        fromItemId: newItem.id,
+        toItemId: l.toItemId,
+        toItemType: l.toItemType,
+        userId: item.userId,
+      })),
+    });
+  }
+}
+
 // PATCH /things/:id — update
 things.patch("/:id", async (c) => {
   const user = c.get("user");
@@ -276,8 +317,16 @@ things.patch("/:id", async (c) => {
   const item = await prisma.item.update({
     where: { id: existing.id },
     data: updateData,
-    include: { list: { select: { name: true } } },
+    include: { list: { select: { name: true } }, linksFrom: true },
   });
+
+  // If recurrence was just set on an already-completed task, spawn next occurrence now
+  const recurrenceJustSet = data.recurrence !== undefined && data.recurrence !== null;
+  const wasAlreadyCompleted = existing.completedAt !== null;
+  const hadNoRecurrence = !existing.recurrence;
+  if (recurrenceJustSet && wasAlreadyCompleted && hadNoRecurrence) {
+    await spawnNextRecurrence(item, item.linksFrom);
+  }
 
   return c.json(itemToThing(item));
 });
@@ -303,39 +352,7 @@ things.patch("/:id/toggle", async (c) => {
 
   // If completing a recurring task, spawn a new independent task
   if (!isCompleted && existing.recurrence) {
-    const newDueDate = computeNextDueDate(
-      existing.dueDate,
-      existing.recurrence,
-      existing.recurrenceRule
-    );
-
-    const newItem = await prisma.item.create({
-      data: {
-        type: existing.type,
-        title: existing.title,
-        notes: existing.notes,
-        description: existing.description,
-        source: existing.source,
-        dueDate: newDueDate,
-        dueDatePrecision: existing.dueDatePrecision,
-        recurrence: existing.recurrence,
-        recurrenceRule: existing.recurrenceRule,
-        listId: existing.listId,
-        userId: existing.userId,
-      },
-    });
-
-    // Copy links (not attachments or brett messages per spec)
-    if (existing.linksFrom.length > 0) {
-      await prisma.itemLink.createMany({
-        data: existing.linksFrom.map((l) => ({
-          fromItemId: newItem.id,
-          toItemId: l.toItemId,
-          toItemType: l.toItemType,
-          userId: user.id,
-        })),
-      });
-    }
+    await spawnNextRecurrence(existing, existing.linksFrom);
   }
 
   return c.json(itemToThing(item));
