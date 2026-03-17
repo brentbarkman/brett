@@ -74,6 +74,11 @@ describe("Brett message routes", () => {
     expect(body.brettTakeGeneratedAt).toBeTruthy();
   });
 
+  it("GET /things/:id/brett rejects invalid cursor", async () => {
+    const res = await authRequest(`/things/${itemId}/brett?cursor=not-a-date`, token);
+    expect(res.status).toBe(400);
+  });
+
   it("POST /things/:id/brett rejects non-existent item", async () => {
     const res = await authRequest("/things/nonexistent/brett", token, {
       method: "POST",

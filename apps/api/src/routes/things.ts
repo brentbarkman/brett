@@ -16,7 +16,7 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
       filename: a.filename,
       mimeType: a.mimeType,
       sizeBytes: a.sizeBytes,
-      url: await getPresignedUrl(a.storageKey),
+      url: await getPresignedUrl(a.storageKey, a.filename),
       createdAt: a.createdAt.toISOString(),
     }))
   );

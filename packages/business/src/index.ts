@@ -331,6 +331,9 @@ export function validateUpdateItem(
   if (obj.notes !== undefined) {
     data.notes = obj.notes === null ? null : typeof obj.notes === "string" ? obj.notes : undefined;
   }
+  if (data.notes !== undefined && data.notes !== null && data.notes.length > 100_000) {
+    return { ok: false, error: "notes must be 100KB or less" };
+  }
 
   const VALID_REMINDERS = new Set(["morning_of", "1_hour_before", "day_before", "custom"]);
   if (obj.reminder !== undefined) {
@@ -350,6 +353,9 @@ export function validateUpdateItem(
 
   if (obj.recurrenceRule !== undefined) {
     data.recurrenceRule = obj.recurrenceRule === null ? null : typeof obj.recurrenceRule === "string" ? obj.recurrenceRule : undefined;
+  }
+  if (data.recurrenceRule !== undefined && data.recurrenceRule !== null && data.recurrenceRule.length > 500) {
+    return { ok: false, error: "recurrenceRule must be 500 characters or less" };
   }
 
   return { ok: true, data };
@@ -694,6 +700,9 @@ export function validateCreateBrettMessage(
   const obj = input as Record<string, unknown>;
   if (!obj.content || typeof obj.content !== "string" || obj.content.trim() === "") {
     return { ok: false, error: "content is required" };
+  }
+  if (obj.content.trim().length > 10_000) {
+    return { ok: false, error: "content must be 10KB or less" };
   }
   return { ok: true, data: { content: obj.content.trim() } };
 }

@@ -24,6 +24,14 @@ links.post("/:itemId/links", async (c) => {
     return c.json({ error: "Cannot link an item to itself" }, 400);
   }
 
+  // Verify target item exists and belongs to user
+  const targetItem = await prisma.item.findFirst({
+    where: { id: data.toItemId, userId: user.id },
+  });
+  if (!targetItem) {
+    return c.json({ error: "Target item not found" }, 404);
+  }
+
   const existing = await prisma.itemLink.findUnique({
     where: { fromItemId_toItemId: { fromItemId: itemId, toItemId: data.toItemId } },
   });

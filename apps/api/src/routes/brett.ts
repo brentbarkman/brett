@@ -44,6 +44,10 @@ brett.get("/:itemId/brett", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "20", 10), 50);
   const cursor = c.req.query("cursor");
 
+  if (cursor && isNaN(new Date(cursor).getTime())) {
+    return c.json({ error: "Invalid cursor" }, 400);
+  }
+
   const messages = await prisma.brettMessage.findMany({
     where: { itemId, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
     orderBy: { createdAt: "desc" },

@@ -13,10 +13,13 @@ export const s3 = new S3Client({
 
 export const STORAGE_BUCKET = process.env.STORAGE_BUCKET || "brett";
 
-export async function getPresignedUrl(storageKey: string): Promise<string> {
+export async function getPresignedUrl(storageKey: string, filename?: string): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: STORAGE_BUCKET,
     Key: storageKey,
+    ResponseContentDisposition: filename
+      ? `attachment; filename="${filename}"`
+      : "attachment",
   });
   return getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour
 }

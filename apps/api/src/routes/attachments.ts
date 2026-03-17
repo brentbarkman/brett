@@ -4,6 +4,33 @@ import { prisma } from "../lib/prisma.js";
 import { s3, STORAGE_BUCKET } from "../lib/storage.js";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+
+function sanitizeFilename(raw: string): string {
+  // Extract basename, strip path traversal
+  let name = path.basename(raw);
+  // Remove null bytes and control characters
+  name = name.replace(/[\x00-\x1f\x7f]/g, "");
+  // Replace any remaining path separators (Windows)
+  name = name.replace(/[/\\]/g, "_");
+  // Enforce max length
+  if (name.length > 255) name = name.slice(0, 255);
+  // Fallback if empty after sanitization
+  return name || "unnamed";
+}
+
+const SAFE_MIME_TYPES = new Set([
+  "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
+  "application/pdf",
+  "text/plain",
+  "application/zip", "application/gzip",
+  "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+function getSafeContentType(mimeType: string): string {
+  return SAFE_MIME_TYPES.has(mimeType) ? mimeType : "application/octet-stream";
+}
 
 const attachments = new Hono<AuthEnv>();
 attachments.use("*", authMiddleware);
@@ -20,7 +47,7 @@ attachments.post("/:itemId/attachments", async (c) => {
   });
   if (!item) return c.json({ error: "Not found" }, 404);
 
-  const filename = c.req.header("X-Filename") || "unnamed";
+  const filename = sanitizeFilename(c.req.header("X-Filename") || "unnamed");
   const mimeType = c.req.header("Content-Type") || "application/octet-stream";
   const contentLength = parseInt(c.req.header("Content-Length") || "0", 10);
 
@@ -47,7 +74,8 @@ attachments.post("/:itemId/attachments", async (c) => {
         Bucket: STORAGE_BUCKET,
         Key: storageKey,
         Body: Buffer.from(body),
-        ContentType: mimeType,
+        ContentType: getSafeContentType(mimeType),
+        ContentDisposition: `attachment; filename="${filename}"`,
       })
     );
   } catch {

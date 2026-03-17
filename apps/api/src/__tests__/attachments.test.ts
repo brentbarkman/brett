@@ -72,6 +72,22 @@ describe("Attachment routes", () => {
     expect(res.status).toBe(404);
   });
 
+  it("sanitizes path traversal in filename", async () => {
+    const res = await authRequest(`/things/${itemId}/attachments`, token, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+        "X-Filename": "../../../etc/passwd",
+      },
+      body: "test",
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    // Filename should be sanitized — no path traversal
+    expect(body.filename).not.toContain("..");
+    expect(body.filename).not.toContain("/");
+  });
+
   it("cross-user cannot upload to another user's item", async () => {
     const user2 = await createTestUser("Attachment User 2");
     const res = await authRequest(`/things/${itemId}/attachments`, user2.token, {
