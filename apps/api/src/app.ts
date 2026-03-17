@@ -6,6 +6,7 @@ import { things } from "./routes/things.js";
 import { lists } from "./routes/lists.js";
 import { attachments } from "./routes/attachments.js";
 import { links } from "./routes/links.js";
+import { brett } from "./routes/brett.js";
 
 export const app = new Hono();
 
@@ -36,3 +37,4 @@ app.route("/things", things);
 app.route("/lists", lists);
 app.route("/things", attachments);
 app.route("/things", links);
+app.route("/things", brett);
