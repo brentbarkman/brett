@@ -386,10 +386,7 @@ export function InboxView({
                     onFocus={() => {
                       if (activeIdx >= 0) setFocusedIndex(activeIdx);
                     }}
-                    onToggle={(id) => {
-                      slideOut([id]);
-                      onToggle(id);
-                    }}
+                    onToggle={onToggle}
                     onSelect={() => {
                       setSelectedIds((prev) => {
                         const next = new Set(prev);
