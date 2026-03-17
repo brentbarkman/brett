@@ -59,6 +59,11 @@ export interface ItemRecord {
   completedAt: Date | null;
   snoozedUntil: Date | null;
   brettObservation: string | null;
+  notes: string | null;
+  reminder: string | null;
+  recurrence: string | null;
+  recurrenceRule: string | null;
+  brettTakeGeneratedAt: Date | null;
   listId: string | null;
   userId: string;
   createdAt: Date;
