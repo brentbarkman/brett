@@ -76,7 +76,7 @@ attachments.post("/:itemId/attachments", async (c) => {
         Key: storageKey,
         Body: Buffer.from(body),
         ContentType: getSafeContentType(mimeType),
-        ContentDisposition: `attachment; filename="${filename}"`,
+        ContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
       })
     );
   } catch (err) {

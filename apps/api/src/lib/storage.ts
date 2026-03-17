@@ -22,7 +22,7 @@ export async function getPresignedUrl(storageKey: string, filename?: string): Pr
     Bucket: STORAGE_BUCKET,
     Key: storageKey,
     ResponseContentDisposition: filename
-      ? `attachment; filename="${filename}"`
+      ? `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`
       : "attachment",
   });
   return getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour
