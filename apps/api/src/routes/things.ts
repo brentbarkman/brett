@@ -264,6 +264,14 @@ things.patch("/:id", async (c) => {
     updateData.snoozedUntil = data.snoozedUntil
       ? new Date(data.snoozedUntil)
       : null;
+  if (data.notes !== undefined)
+    updateData.notes = data.notes;
+  if (data.reminder !== undefined)
+    updateData.reminder = data.reminder;
+  if (data.recurrence !== undefined)
+    updateData.recurrence = data.recurrence;
+  if (data.recurrenceRule !== undefined)
+    updateData.recurrenceRule = data.recurrenceRule;
 
   const item = await prisma.item.update({
     where: { id: existing.id },
