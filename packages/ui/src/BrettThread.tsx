@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from "react";
-import { ChevronDown, ChevronUp, User, Bot, Send } from "lucide-react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { ChevronDown, ChevronUp, User, Bot, Send, Loader2 } from "lucide-react";
 import type { BrettMessage } from "@brett/types";
 
 interface BrettThreadProps {
@@ -8,6 +8,7 @@ interface BrettThreadProps {
   onSend: (content: string) => void;
   onLoadMore: () => void;
   isSending?: boolean;
+  isLoadingMore?: boolean;
 }
 
 function MessageBubble({ message }: { message: BrettMessage }) {
@@ -46,20 +47,28 @@ export function BrettThread({
   onSend,
   onLoadMore,
   isSending,
+  isLoadingMore,
 }: BrettThreadProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // API returns newest first; reverse for display (oldest first)
+  // API returns newest first; reverse for display (oldest at top, newest at bottom)
   const displayMessages = [...messages].reverse();
+
+  // Scroll to bottom when expanded or when messages change
+  useEffect(() => {
+    if (isExpanded && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [isExpanded, messages.length]);
 
   const handleSend = useCallback(() => {
     const trimmed = inputValue.trim();
     if (!trimmed || isSending) return;
     onSend(trimmed);
     setInputValue("");
-    // Auto-expand thread when user sends a message
     setIsExpanded(true);
   }, [inputValue, isSending, onSend]);
 
@@ -83,7 +92,7 @@ export function BrettThread({
         <div className="flex items-center gap-2">
           <Bot size={14} className="text-blue-400" />
           <span className="text-xs font-medium text-white/60">
-            Brett Thread ({messages.length})
+            Brett Thread{messages.length > 0 ? ` (${messages.length})` : ""}
           </span>
         </div>
         {isExpanded ? (
@@ -95,13 +104,21 @@ export function BrettThread({
 
       {/* Expanded message history */}
       {isExpanded && displayMessages.length > 0 && (
-        <div className="max-h-64 overflow-y-auto px-4 scrollbar-hide">
+        <div ref={scrollRef} className="max-h-64 overflow-y-auto px-4 scrollbar-hide">
           {hasMore && (
             <button
               onClick={onLoadMore}
-              className="w-full text-center py-2 text-xs text-white/40 hover:text-white/60 transition-colors"
+              disabled={isLoadingMore}
+              className="w-full text-center py-2 text-xs text-white/40 hover:text-white/60 transition-colors disabled:opacity-50"
             >
-              Load older messages&hellip;
+              {isLoadingMore ? (
+                <span className="flex items-center justify-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin" />
+                  Loading…
+                </span>
+              ) : (
+                "Load older messages\u2026"
+              )}
             </button>
           )}
           {displayMessages.map((msg) => (

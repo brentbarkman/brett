@@ -142,7 +142,7 @@ export function App() {
   );
 
   // Brett messages for selected item
-  const { data: brettData } = useBrettMessages(
+  const brett = useBrettMessages(
     isDetailOpen && isTaskSelected ? selectedId : null,
   );
 
@@ -481,15 +481,14 @@ export function App() {
             if (selectedId) deleteLink.mutate({ itemId: selectedId, linkId });
           }}
           searchItems={handleSearchItems}
-          brettMessages={brettData?.messages ?? []}
-          brettHasMore={brettData?.hasMore ?? false}
+          brettMessages={brett.messages}
+          brettHasMore={brett.hasMore}
           onSendBrettMessage={(content) => {
             if (selectedId) sendBrettMessage.mutate({ itemId: selectedId, content });
           }}
-          onLoadMoreBrettMessages={() => {
-            // TODO: implement cursor-based pagination
-          }}
+          onLoadMoreBrettMessages={brett.loadMore}
           isSendingBrettMessage={sendBrettMessage.isPending}
+          isLoadingMoreBrettMessages={brett.isLoadingMore}
         />
 
         {/* Drag overlay */}
