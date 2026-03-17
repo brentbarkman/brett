@@ -1,9 +1,65 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { getPresignedUrl } from "../lib/storage.js";
 import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem } from "@brett/business";
+import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
 
 const things = new Hono<AuthEnv>();
+
+async function itemToThingDetail(item: any): Promise<ThingDetail> {
+  const thing = itemToThing(item);
+
+  const attachments: AttachmentType[] = await Promise.all(
+    (item.attachments || []).map(async (a: any) => ({
+      id: a.id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      sizeBytes: a.sizeBytes,
+      url: await getPresignedUrl(a.storageKey),
+      createdAt: a.createdAt.toISOString(),
+    }))
+  );
+
+  // Resolve link titles
+  const linkTargetIds = (item.linksFrom || []).map((l: any) => l.toItemId);
+  const linkTargets = linkTargetIds.length > 0
+    ? await prisma.item.findMany({
+        where: { id: { in: linkTargetIds } },
+        select: { id: true, title: true },
+      })
+    : [];
+  const titleMap = new Map(linkTargets.map((t: any) => [t.id, t.title]));
+
+  const links: ItemLinkType[] = (item.linksFrom || []).map((l: any) => ({
+    id: l.id,
+    toItemId: l.toItemId,
+    toItemType: l.toItemType,
+    toItemTitle: titleMap.get(l.toItemId),
+    createdAt: l.createdAt.toISOString(),
+  }));
+
+  const brettMessages: BrettMessageType[] = (item.brettMessages || [])
+    .slice(0, 20)
+    .map((m: any) => ({
+      id: m.id,
+      role: m.role as "user" | "brett",
+      content: m.content,
+      createdAt: m.createdAt.toISOString(),
+    }));
+
+  return {
+    ...thing,
+    notes: item.notes ?? undefined,
+    reminder: item.reminder ?? undefined,
+    recurrence: item.recurrence ?? undefined,
+    recurrenceRule: item.recurrenceRule ?? undefined,
+    brettTakeGeneratedAt: item.brettTakeGeneratedAt?.toISOString(),
+    attachments,
+    links,
+    brettMessages,
+  };
+}
 
 async function verifyListOwnership(listId: string, userId: string) {
   const list = await prisma.list.findFirst({
@@ -113,16 +169,21 @@ things.get("/inbox", async (c) => {
   });
 });
 
-// GET /things/:id — single thing
+// GET /things/:id — single thing (returns ThingDetail with relations)
 things.get("/:id", async (c) => {
   const user = c.get("user");
   const item = await prisma.item.findFirst({
     where: { id: c.req.param("id"), userId: user.id },
-    include: { list: { select: { name: true } } },
+    include: {
+      list: { select: { name: true } },
+      attachments: { orderBy: { createdAt: "asc" } },
+      linksFrom: { orderBy: { createdAt: "asc" } },
+      brettMessages: { orderBy: { createdAt: "desc" }, take: 20 },
+    },
   });
 
   if (!item) return c.json({ error: "Not found" }, 404);
-  return c.json(itemToThing(item));
+  return c.json(await itemToThingDetail(item));
 });
 
 // POST /things — create

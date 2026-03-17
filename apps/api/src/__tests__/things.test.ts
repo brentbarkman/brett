@@ -338,6 +338,22 @@ describe("Things routes", () => {
     expect(body.visible[0].title).toBe("No Date No List");
   });
 
+  it("GET /things/:id returns ThingDetail with relations", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Detail test", listId }),
+    });
+    const thing = (await createRes.json()) as any;
+
+    const res = await authRequest(`/things/${thing.id}`, token);
+    expect(res.status).toBe(200);
+    const detail = (await res.json()) as any;
+    expect(detail.id).toBe(thing.id);
+    expect(detail.attachments).toEqual([]);
+    expect(detail.links).toEqual([]);
+    expect(detail.brettMessages).toEqual([]);
+  });
+
   it("GET /things returns 401 without auth", async () => {
     const res = await app.request("/things");
     expect(res.status).toBe(401);

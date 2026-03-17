@@ -1,4 +1,5 @@
-import { S3Client } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const s3 = new S3Client({
   endpoint: process.env.STORAGE_ENDPOINT,
@@ -11,3 +12,11 @@ export const s3 = new S3Client({
 });
 
 export const STORAGE_BUCKET = process.env.STORAGE_BUCKET || "brett";
+
+export async function getPresignedUrl(storageKey: string): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: STORAGE_BUCKET,
+    Key: storageKey,
+  });
+  return getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour
+}
