@@ -21,6 +21,9 @@ model User {
   accounts      Account[]
   lists         List[]
   items         Item[]
+  attachments    Attachment[]
+  itemLinks      ItemLink[]
+  brettMessages  BrettMessage[]
 }
 
 model Session {
@@ -91,10 +94,18 @@ model Item {
   completedAt      DateTime?
   snoozedUntil     DateTime?
   brettObservation String?
+  notes            String?   @db.Text
+  reminder         String?   // "morning_of" | "1_hour_before" | "day_before" | "custom"
+  recurrence       String?   // "daily" | "weekly" | "monthly" | "custom"
+  recurrenceRule   String?   // iCal RRULE string for custom recurrence
+  brettTakeGeneratedAt DateTime?
   listId           String?
   list             List?     @relation(fields: [listId], references: [id], onDelete: SetNull)
   userId           String
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments    Attachment[]
+  linksFrom      ItemLink[]     @relation("linksFrom")
+  brettMessages  BrettMessage[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -102,4 +113,47 @@ model Item {
   @@index([userId, listId])
   @@index([userId, type])
   @@index([userId, source])
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([itemId])
+}
+
+model ItemLink {
+  id         String   @id @default(cuid())
+  fromItemId String
+  fromItem   Item     @relation("linksFrom", fields: [fromItemId], references: [id], onDelete: Cascade)
+  toItemId   String   // polymorphic — no FK constraint
+  toItemType String   // "task" | "content" | future types
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([fromItemId, toItemId])
+  @@index([fromItemId])
+  @@index([toItemId])
+}
+
+model BrettMessage {
+  id      String   @id @default(cuid())
+  itemId  String
+  item    Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  role    String   // "user" | "brett"
+  content String   @db.Text
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([itemId, createdAt])
 }
