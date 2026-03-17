@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from "react";
-import { Paperclip, Image, FileText, Film, Music, X, Loader2, AlertCircle } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Paperclip, Image, FileText, Film, Music, X, Loader2, AlertCircle, Download } from "lucide-react";
 import type { Attachment } from "@brett/types";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
@@ -181,10 +182,10 @@ export function AttachmentList({
         className="hidden"
       />
 
-      {/* Fullscreen image preview */}
-      {previewUrl && (
+      {/* Fullscreen image preview — portaled to body to escape panel stacking context */}
+      {previewUrl && createPortal(
         <div
-          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center cursor-pointer"
+          className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center cursor-pointer"
           onClick={() => setPreviewUrl(null)}
         >
           <img
@@ -193,13 +194,27 @@ export function AttachmentList({
             className="max-w-[calc(100vw-4rem)] max-h-[calc(100vh-4rem)] object-contain"
             onClick={(e) => e.stopPropagation()}
           />
-          <button
-            onClick={() => setPreviewUrl(null)}
-            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition-colors"
+              title="Download"
+            >
+              <Download size={20} />
+            </a>
+            <button
+              onClick={() => setPreviewUrl(null)}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition-colors"
+              title="Close"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
