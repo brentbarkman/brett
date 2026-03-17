@@ -21,7 +21,7 @@ Edit `apps/api/.env`:
 | `BETTER_AUTH_URL` | Yes (has default) | `http://localhost:3001` for local dev |
 | `GOOGLE_CLIENT_ID` | No | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) — create OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | No | Same as above |
-| `STORAGE_*` | No | Only needed when using Railway object storage |
+| `STORAGE_*` | Yes (has default) | Defaults to local MinIO via `docker-compose.yml`. Required for file attachments. |
 | `FCM_*` | No | Only needed for push notifications |
 
 ### 2. Start Postgres + run migrations
@@ -57,7 +57,7 @@ pnpm typecheck               # type-check all packages
 - **Framework:** [Hono](https://hono.dev) (lightweight, Web Standards-based)
 - **Auth:** [better-auth](https://www.better-auth.com) (email/password + Google OAuth, JWT bearer tokens)
 - **Database:** [Prisma](https://www.prisma.io) + PostgreSQL
-- **Storage:** AWS SDK S3 client (Railway's S3-compatible object storage)
+- **Storage:** AWS SDK S3 client (MinIO locally, Railway Object Storage in prod)
 - **Tests:** [Vitest](https://vitest.dev)
 
 ## Project Structure
@@ -77,11 +77,22 @@ apps/api/
 │   │   └── auth.ts           # Session verification middleware
 │   ├── routes/
 │   │   ├── auth.ts           # Mounts better-auth at /api/auth/*
-│   │   └── users.ts          # GET /users/me
+│   │   ├── users.ts          # GET /users/me
+│   │   ├── things.ts         # CRUD for items/tasks
+│   │   ├── lists.ts          # CRUD for lists
+│   │   ├── attachments.ts    # File upload/delete (S3)
+│   │   ├── links.ts          # Item link CRUD
+│   │   └── brett.ts          # Brett AI messages + brett-take
 │   └── __tests__/
 │       ├── setup.ts          # Test env vars
 │       ├── health.test.ts    # Health check (no DB required)
-│       └── auth.test.ts      # Auth flow tests (requires Postgres)
+│       ├── auth.test.ts      # Auth flow tests (requires Postgres)
+│       ├── things.test.ts    # Things CRUD tests
+│       ├── lists.test.ts     # Lists CRUD tests
+│       ├── attachments.test.ts # Attachment upload/delete tests
+│       ├── links.test.ts     # Item link tests
+│       ├── brett.test.ts     # Brett message tests
+│       └── recurrence.test.ts # Recurring task tests
 ├── Dockerfile                # Multi-stage build for Railway
 ├── railway.json              # Railway deploy config
 └── vitest.config.ts

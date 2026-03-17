@@ -149,7 +149,7 @@ pnpm workspaces + Turborepo monorepo. All workspace deps use `workspace:*`.
 
 ### Object Storage
 
-**Railway Object Storage** (S3-compatible). Client configured in `apps/api/src/lib/storage.ts`.
+**S3-compatible object storage** — MinIO locally (included in `docker-compose.yml`), Railway Object Storage in prod. Client configured in `apps/api/src/lib/storage.ts`. Used for file attachments on tasks.
 
 ### Notifications (planned)
 
@@ -163,7 +163,7 @@ Key variables:
 - `DATABASE_URL` — Postgres connection string (defaults to Docker Compose values)
 - `BETTER_AUTH_SECRET` — Session signing secret (generate with `openssl rand -base64 32`)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth (optional for dev)
-- `STORAGE_*` — Railway S3-compatible object storage (optional for dev)
+- `STORAGE_*` — S3-compatible object storage (defaults to local MinIO via Docker Compose)
 
 ## Deployment
 

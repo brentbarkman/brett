@@ -50,7 +50,9 @@ When modifying the schema:
 
 ### Storage
 
-S3 client in `src/lib/storage.ts` connects to Railway's S3-compatible object storage. Not yet used in routes — infrastructure is in place.
+S3 client in `src/lib/storage.ts` connects to S3-compatible object storage (MinIO locally, Railway in prod). Used by the attachment routes (`src/routes/attachments.ts`) for file upload/delete. Presigned URLs (1-hour expiry) are generated at response time via `getPresignedUrl()` in `storage.ts`.
+
+Local dev uses MinIO via `docker-compose.yml`. The `minio-setup` service auto-creates the `brett` bucket on first run. Defaults in `.env.example` point to the local MinIO instance.
 
 ### Testing
 

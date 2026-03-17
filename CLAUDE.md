@@ -15,7 +15,7 @@ pnpm typecheck          # Type-check all packages
 pnpm lint               # Lint all packages
 pnpm test               # Run API tests (requires Postgres)
 pnpm setup              # Start Postgres + run migrations
-pnpm db:up / db:down    # Start/stop local Postgres via Docker
+pnpm db:up / db:down    # Start/stop local Postgres + MinIO via Docker
 pnpm db:migrate         # Run Prisma migrations
 pnpm db:studio          # Open Prisma Studio (DB GUI)
 ```
@@ -66,7 +66,7 @@ Copy `.env.example` files (`apps/api/`, `apps/desktop/`) to `.env` and fill in:
 - `DATABASE_URL` — Postgres connection string (defaults to Docker Compose values)
 - `BETTER_AUTH_SECRET` — session signing secret (dev default in `.env.example`, generate a real one for prod)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth (optional for dev)
-- `STORAGE_*` — Railway S3-compatible object storage (optional for dev)
+- `STORAGE_*` — S3-compatible object storage (MinIO locally via Docker, Railway in prod). Required for file attachments.
 - `VITE_API_URL` — API server URL for desktop (defaults to `http://localhost:3001`)
 
 Do NOT commit `.env` files.
