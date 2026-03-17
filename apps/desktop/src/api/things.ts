@@ -3,7 +3,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { Thing, CreateItemInput, UpdateItemInput, InboxResponse, BulkUpdateInput } from "@brett/types";
+import type { Thing, ThingDetail, CreateItemInput, UpdateItemInput, InboxResponse, BulkUpdateInput } from "@brett/types";
 import { getTodayUTC } from "@brett/business";
 import { apiFetch } from "./client";
 import { invalidateAllThings } from "./invalidate";
@@ -30,6 +30,14 @@ function buildQuery(filters?: ThingsFilters): string {
   if (filters.completedAfter) params.set("completedAfter", filters.completedAfter);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
+}
+
+export function useThingDetail(id: string | null) {
+  return useQuery({
+    queryKey: ["thing-detail", id],
+    queryFn: () => apiFetch<ThingDetail>(`/things/${id}`),
+    enabled: !!id,
+  });
 }
 
 export function useThings(filters?: ThingsFilters) {

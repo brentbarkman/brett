@@ -30,6 +30,9 @@ import {
   useToggleThing,
   useInboxThings,
   useBulkUpdateThings,
+  useThingDetail,
+  useDeleteThing,
+  useUpdateThing,
 } from "./api/things";
 import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists, useArchiveList, useUnarchiveList, useArchivedLists } from "./api/lists";
 import { mockEvents } from "./data/mockData";
@@ -112,7 +115,16 @@ export function App() {
   const { data: archivedLists = [] } = useArchivedLists();
   const createThing = useCreateThing();
   const toggleThing = useToggleThing();
+  const updateThing = useUpdateThing();
+  const deleteThing = useDeleteThing();
   const bulkUpdate = useBulkUpdateThings();
+
+  // Fetch detail when panel is open and item is a task (not a CalendarEvent)
+  const selectedId = selectedItem?.id ?? null;
+  const isTaskSelected = selectedItem ? !("startTime" in selectedItem) : false;
+  const { data: thingDetail, isLoading: isLoadingDetail } = useThingDetail(
+    isDetailOpen && isTaskSelected ? selectedId : null,
+  );
 
   // Today badge count — active items due this week or earlier
   const endOfWeekISO = useMemo(() => getEndOfWeekUTC().toISOString(), []);
@@ -176,6 +188,33 @@ export function App() {
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => {
     bulkUpdate.mutate({ ids, updates });
+  };
+
+  const handleUpdateThing = (updates: Record<string, unknown>) => {
+    if (selectedId) {
+      updateThing.mutate({ id: selectedId, ...updates });
+    }
+  };
+
+  const handleDeleteThing = (id: string) => {
+    deleteThing.mutate(id);
+    handleCloseDetail();
+  };
+
+  const handleDuplicateThing = (id: string) => {
+    // Duplicate: create a new thing with the same title + list
+    const item = selectedItem as Thing | null;
+    if (item) {
+      createThing.mutate({ type: "task", title: `${item.title} (copy)`, listId: item.listId ?? undefined });
+    }
+  };
+
+  const handleMoveToList = (id: string) => {
+    // Open triage in list-first mode for moving
+    const item = selectedItem as Thing | null;
+    if (item) {
+      handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
+    }
   };
 
   const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {
@@ -366,6 +405,12 @@ export function App() {
           item={selectedItem}
           onClose={handleCloseDetail}
           onToggle={handleToggle}
+          detail={thingDetail ?? null}
+          isLoadingDetail={isLoadingDetail}
+          onUpdate={handleUpdateThing}
+          onDelete={handleDeleteThing}
+          onDuplicate={handleDuplicateThing}
+          onMoveToList={handleMoveToList}
         />
 
         {/* Drag overlay */}

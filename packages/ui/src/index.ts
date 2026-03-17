@@ -24,3 +24,5 @@ export { useListKeyboardNav } from "./useListKeyboardNav";
 export { ItemListShell } from "./ItemListShell";
 export { SectionHeader } from "./SectionHeader";
 export { useClickOutside } from "./useClickOutside";
+export { TaskDetailPanel } from "./TaskDetailPanel";
+export { OverflowMenu } from "./OverflowMenu";

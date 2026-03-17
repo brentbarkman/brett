@@ -1,0 +1,145 @@
+import React, { useState, useRef, useEffect } from "react";
+import { CheckCircle, RotateCw } from "lucide-react";
+import type { ThingDetail } from "@brett/types";
+import { OverflowMenu } from "./OverflowMenu";
+
+interface TaskDetailPanelProps {
+  detail: ThingDetail;
+  onUpdate: (updates: Record<string, unknown>) => void;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onMoveToList: (id: string) => void;
+}
+
+export function TaskDetailPanel({
+  detail,
+  onUpdate,
+  onToggle,
+  onDelete,
+  onDuplicate,
+  onMoveToList,
+}: TaskDetailPanelProps) {
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState(detail.title);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTitleValue(detail.title);
+  }, [detail.title]);
+
+  useEffect(() => {
+    if (editingTitle) titleRef.current?.focus();
+  }, [editingTitle]);
+
+  const commitTitle = () => {
+    setEditingTitle(false);
+    const trimmed = titleValue.trim();
+    if (trimmed && trimmed !== detail.title) {
+      onUpdate({ title: trimmed });
+    } else {
+      setTitleValue(detail.title);
+    }
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto scrollbar-hide">
+      <div className="p-6 space-y-6">
+        {/* Header label + recurrence badge */}
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+            Task
+          </span>
+          {detail.recurrence && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/20">
+              <RotateCw size={10} />
+              {detail.recurrence}
+            </span>
+          )}
+        </div>
+
+        {/* Editable title */}
+        {editingTitle ? (
+          <input
+            ref={titleRef}
+            value={titleValue}
+            onChange={(e) => setTitleValue(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitTitle();
+              if (e.key === "Escape") {
+                setTitleValue(detail.title);
+                setEditingTitle(false);
+              }
+            }}
+            className="w-full text-2xl font-semibold text-white bg-transparent border-b border-blue-500/30 outline-none pb-1"
+          />
+        ) : (
+          <h2
+            onClick={() => setEditingTitle(true)}
+            className="text-2xl font-semibold text-white leading-tight cursor-text hover:border-b hover:border-white/20 pb-1 transition-colors"
+          >
+            {detail.title}
+          </h2>
+        )}
+
+        {/* Metadata badges */}
+        <div className="flex flex-wrap gap-2">
+          <div className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-white/70 cursor-pointer hover:bg-white/10 transition-colors">
+            List: {detail.list}
+          </div>
+          <div className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-white/40">
+            Source: {detail.source}
+          </div>
+        </div>
+
+        {/* Schedule Row placeholder -- Chunk 8 */}
+        {/* Rich Notes placeholder -- Chunk 9 */}
+
+        {/* Brett's Take */}
+        {detail.brettObservation && (
+          <div className="bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
+                Brett's Take
+              </span>
+            </div>
+            <p className="text-sm italic text-blue-300/90 leading-relaxed">
+              &ldquo;{detail.brettObservation}&rdquo;
+            </p>
+          </div>
+        )}
+
+        {/* Description fallback */}
+        {detail.description && !detail.notes && (
+          <div className="text-sm text-white/80 leading-relaxed">
+            {detail.description}
+          </div>
+        )}
+
+        {/* Attachments placeholder -- Chunk 10 */}
+        {/* Linked Items placeholder -- Chunk 11 */}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-2">
+          <button
+            onClick={() => onToggle(detail.id)}
+            className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg transition-colors font-medium text-sm border border-white/10"
+          >
+            <CheckCircle size={16} />
+            {detail.isCompleted ? "Mark Incomplete" : "Mark Complete"}
+          </button>
+          <OverflowMenu
+            onDelete={() => onDelete(detail.id)}
+            onDuplicate={() => onDuplicate(detail.id)}
+            onMoveToList={() => onMoveToList(detail.id)}
+            onCopyLink={() =>
+              navigator.clipboard.writeText(`brett://things/${detail.id}`)
+            }
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
