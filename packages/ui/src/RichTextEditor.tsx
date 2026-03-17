@@ -61,6 +61,11 @@ export function RichTextEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [2] },
+        codeBlock: {
+          HTMLAttributes: {
+            class: "not-prose",
+          },
+        },
       }),
       Placeholder.configure({ placeholder }),
       Markdown.configure({ html: false, transformCopiedText: true }),
@@ -69,7 +74,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-invert prose-sm max-w-none focus:outline-none min-h-[100px] text-white/80 p-3",
+          "prose prose-invert prose-sm max-w-none focus:outline-none min-h-[80px] text-white/80 p-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_pre]:bg-white/10 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-sm [&_pre]:font-mono [&_code]:bg-white/10 [&_code]:rounded [&_code]:px-1 [&_code]:text-sm",
       },
     },
     onUpdate: ({ editor: ed }) => {
@@ -166,8 +171,10 @@ export function RichTextEditor({
         />
       </div>
 
-      {/* Editor */}
-      <EditorContent editor={editor} />
+      {/* Editor — max 50vh then scroll */}
+      <div className="max-h-[50vh] overflow-y-auto scrollbar-hide">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

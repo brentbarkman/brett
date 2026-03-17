@@ -95,17 +95,40 @@ export function TaskDetailPanel({
     <>
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         <div className="p-6 space-y-6">
-          {/* Header label + recurrence badge */}
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
-              Task
-            </span>
-            {detail.recurrence && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/20">
-                <RotateCw size={10} />
-                {detail.recurrence}
+          {/* Header: label + recurrence badge + actions */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+                Task
               </span>
-            )}
+              {detail.recurrence && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/20">
+                  <RotateCw size={10} />
+                  {detail.recurrence}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => onToggle(detail.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
+                  detail.isCompleted
+                    ? "bg-green-500/20 text-green-400 border-green-500/20 hover:bg-green-500/30"
+                    : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <CheckCircle size={12} />
+                {detail.isCompleted ? "Done" : "Complete"}
+              </button>
+              <OverflowMenu
+                onDelete={() => onDelete(detail.id)}
+                onDuplicate={() => onDuplicate(detail.id)}
+                onMoveToList={() => onMoveToList(detail.id)}
+                onCopyLink={() =>
+                  navigator.clipboard.writeText(`brett://things/${detail.id}`)
+                }
+              />
+            </div>
           </div>
 
           {/* Editable title */}
@@ -212,24 +235,8 @@ export function TaskDetailPanel({
             />
           )}
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 pt-2">
-            <button
-              onClick={() => onToggle(detail.id)}
-              className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg transition-colors font-medium text-sm border border-white/10"
-            >
-              <CheckCircle size={16} />
-              {detail.isCompleted ? "Mark Incomplete" : "Mark Complete"}
-            </button>
-            <OverflowMenu
-              onDelete={() => onDelete(detail.id)}
-              onDuplicate={() => onDuplicate(detail.id)}
-              onMoveToList={() => onMoveToList(detail.id)}
-              onCopyLink={() =>
-                navigator.clipboard.writeText(`brett://things/${detail.id}`)
-              }
-            />
-          </div>
+          {/* Bottom spacer for scroll breathing room */}
+          <div className="h-2" />
         </div>
       </div>
 
