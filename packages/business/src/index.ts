@@ -14,6 +14,7 @@ import type {
   BulkUpdateInput,
   UpcomingSection,
 } from "@brett/types";
+import { RRule } from "rrule";
 
 // ── Compute helpers ──
 
@@ -691,4 +692,41 @@ export function validateCreateBrettMessage(
     return { ok: false, error: "content is required" };
   }
   return { ok: true, data: { content: obj.content.trim() } };
+}
+
+// ── Recurrence ──
+
+export function computeNextDueDate(
+  currentDueDate: Date | null,
+  recurrence: string,
+  recurrenceRule: string | null
+): Date | null {
+  if (!currentDueDate) return null;
+
+  const base = new Date(currentDueDate);
+
+  switch (recurrence) {
+    case "daily":
+      base.setUTCDate(base.getUTCDate() + 1);
+      return base;
+    case "weekly":
+      base.setUTCDate(base.getUTCDate() + 7);
+      return base;
+    case "monthly":
+      base.setUTCMonth(base.getUTCMonth() + 1);
+      return base;
+    case "custom":
+      if (recurrenceRule) {
+        try {
+          const rule = RRule.fromString(recurrenceRule);
+          const next = rule.after(currentDueDate);
+          return next || null;
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    default:
+      return null;
+  }
 }

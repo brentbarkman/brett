@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@brett/types": "workspace:*",
-    "@brett/utils": "workspace:*"
+    "@brett/utils": "workspace:*",
+    "rrule": "^2.8.1"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

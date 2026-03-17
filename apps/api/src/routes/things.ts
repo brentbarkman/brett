@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { getPresignedUrl } from "../lib/storage.js";
-import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem } from "@brett/business";
+import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem, computeNextDueDate } from "@brett/business";
 import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
 
 const things = new Hono<AuthEnv>();
@@ -287,6 +287,7 @@ things.patch("/:id/toggle", async (c) => {
   const user = c.get("user");
   const existing = await prisma.item.findFirst({
     where: { id: c.req.param("id"), userId: user.id },
+    include: { list: { select: { name: true } }, linksFrom: true },
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
 
@@ -299,6 +300,43 @@ things.patch("/:id/toggle", async (c) => {
     },
     include: { list: { select: { name: true } } },
   });
+
+  // If completing a recurring task, spawn a new independent task
+  if (!isCompleted && existing.recurrence) {
+    const newDueDate = computeNextDueDate(
+      existing.dueDate,
+      existing.recurrence,
+      existing.recurrenceRule
+    );
+
+    const newItem = await prisma.item.create({
+      data: {
+        type: existing.type,
+        title: existing.title,
+        notes: existing.notes,
+        description: existing.description,
+        source: existing.source,
+        dueDate: newDueDate,
+        dueDatePrecision: existing.dueDatePrecision,
+        recurrence: existing.recurrence,
+        recurrenceRule: existing.recurrenceRule,
+        listId: existing.listId,
+        userId: existing.userId,
+      },
+    });
+
+    // Copy links (not attachments or brett messages per spec)
+    if (existing.linksFrom.length > 0) {
+      await prisma.itemLink.createMany({
+        data: existing.linksFrom.map((l) => ({
+          fromItemId: newItem.id,
+          toItemId: l.toItemId,
+          toItemType: l.toItemType,
+          userId: user.id,
+        })),
+      });
+    }
+  }
 
   return c.json(itemToThing(item));
 });
