@@ -75,13 +75,21 @@ export function DetailPanel({
   const isTask = !("startTime" in item);
 
   return (
-    <div
-      className={`
-        fixed top-0 right-0 bottom-0 w-[550px] bg-black/60 backdrop-blur-2xl border-l border-white/10
-        shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col
-        ${isOpen ? "translate-x-0" : "translate-x-full"}
-      `}
-    >
+    <>
+      {/* Backdrop — click to dismiss */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/20 transition-opacity"
+          onClick={onClose}
+        />
+      )}
+      <div
+        className={`
+          fixed top-0 right-0 bottom-0 w-[550px] bg-black/60 backdrop-blur-2xl border-l border-white/10
+          shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col
+          ${isOpen ? "translate-x-0" : "translate-x-full"}
+        `}
+      >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <span className="font-mono text-xs uppercase tracking-wider text-white/40">
@@ -199,6 +207,7 @@ export function DetailPanel({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

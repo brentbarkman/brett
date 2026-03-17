@@ -19,6 +19,9 @@ export function useUploadAttachment() {
     onSuccess: (_, { itemId }) => {
       qc.invalidateQueries({ queryKey: ["thing-detail", itemId] });
     },
+    onError: (err) => {
+      console.error("Attachment upload failed:", err);
+    },
   });
 }
 

@@ -32,17 +32,19 @@ function ScheduleCard({ icon, label, value, children }: ScheduleCardProps) {
     <div ref={ref} className="relative flex-1">
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className="w-full flex flex-col items-center gap-1.5 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer"
+        className="w-full flex flex-col items-center gap-1.5 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer min-h-[76px] justify-center"
       >
         <span className="text-white/40">{icon}</span>
         <span className="text-[10px] font-mono uppercase tracking-wider text-white/40 font-semibold">
           {label}
         </span>
-        {value && (
-          <span className="text-xs text-white/70 truncate max-w-full">
-            {value}
-          </span>
-        )}
+        <span className="text-xs truncate max-w-full" style={{ minHeight: '1rem' }}>
+          {value ? (
+            <span className="text-white/70">{value}</span>
+          ) : (
+            <span className="text-white/20">Not set</span>
+          )}
+        </span>
       </button>
       {open && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-black/80 backdrop-blur-xl rounded-lg border border-white/10 overflow-hidden z-10">

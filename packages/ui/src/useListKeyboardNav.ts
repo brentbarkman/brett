@@ -27,10 +27,12 @@ export function useListKeyboardNav({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // Don't intercept when input is focused
+      // Don't intercept when input, textarea, or contenteditable is focused
+      const el = document.activeElement;
       if (
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        (el instanceof HTMLElement && el.isContentEditable)
       ) {
         return;
       }

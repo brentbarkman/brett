@@ -59,6 +59,8 @@ export function BrettThread({
     if (!trimmed || isSending) return;
     onSend(trimmed);
     setInputValue("");
+    // Auto-expand thread when user sends a message
+    setIsExpanded(true);
   }, [inputValue, isSending, onSend]);
 
   const handleKeyDown = useCallback(
