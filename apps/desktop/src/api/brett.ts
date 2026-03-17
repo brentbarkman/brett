@@ -80,7 +80,7 @@ export function useBrettMessages(itemId: string | null) {
       );
       setOlderMessages((prev) => [...prev, ...res.messages]);
       setOlderCursor(res.cursor);
-      setOlderHasMore(res.hasMore);
+      setOlderHasMore(res.hasMore && res.messages.length > 0);
     } finally {
       setIsLoadingMore(false);
     }
