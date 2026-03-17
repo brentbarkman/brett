@@ -13,6 +13,10 @@ export const s3 = new S3Client({
 
 export const STORAGE_BUCKET = process.env.STORAGE_BUCKET || "brett";
 
+if (!process.env.STORAGE_ENDPOINT) {
+  console.warn("[Storage] STORAGE_ENDPOINT not set — file uploads will fail. Set it in .env (see .env.example)");
+}
+
 export async function getPresignedUrl(storageKey: string, filename?: string): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: STORAGE_BUCKET,

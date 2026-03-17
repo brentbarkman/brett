@@ -79,9 +79,10 @@ attachments.post("/:itemId/attachments", async (c) => {
         ContentDisposition: `attachment; filename="${filename}"`,
       })
     );
-  } catch {
+  } catch (err) {
     // Rollback DB record on S3 failure
     await prisma.attachment.delete({ where: { id: attachment.id } });
+    console.error("S3 upload failed:", err);
     return c.json({ error: "Failed to upload file" }, 500);
   }
 
