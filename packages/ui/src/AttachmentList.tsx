@@ -115,14 +115,33 @@ export function AttachmentList({
                   onClick={() => setPreviewUrl(att.url)}
                 />
               ) : (
-                <div className="w-10 h-10 rounded bg-white/5 flex items-center justify-center flex-shrink-0">
+                <a
+                  href={att.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-colors"
+                >
                   {getMimeIcon(att.mimeType)}
-                </div>
+                </a>
               )}
               <div className="flex-1 min-w-0">
-                <span className="text-sm text-white/80 truncate block">
-                  {att.filename}
-                </span>
+                {isImageMime(att.mimeType) ? (
+                  <button
+                    onClick={() => setPreviewUrl(att.url)}
+                    className="text-sm text-white/80 hover:text-white truncate block transition-colors text-left"
+                  >
+                    {att.filename}
+                  </button>
+                ) : (
+                  <a
+                    href={att.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-white/80 hover:text-white truncate block transition-colors"
+                  >
+                    {att.filename}
+                  </a>
+                )}
                 <span className="text-xs text-white/40">
                   {formatFileSize(att.sizeBytes)}
                 </span>
@@ -162,25 +181,24 @@ export function AttachmentList({
         className="hidden"
       />
 
-      {/* Image preview overlay */}
+      {/* Fullscreen image preview */}
       {previewUrl && (
         <div
-          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center cursor-pointer"
           onClick={() => setPreviewUrl(null)}
         >
-          <div className="relative max-w-full max-h-full">
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className="max-w-full max-h-[80vh] rounded-lg shadow-2xl object-contain"
-            />
-            <button
-              onClick={() => setPreviewUrl(null)}
-              className="absolute -top-3 -right-3 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white/80 hover:text-white transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </div>
+          <img
+            src={previewUrl}
+            alt="Preview"
+            className="max-w-[calc(100vw-4rem)] max-h-[calc(100vh-4rem)] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setPreviewUrl(null)}
+            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition-colors"
+          >
+            <X size={20} />
+          </button>
         </div>
       )}
     </div>
