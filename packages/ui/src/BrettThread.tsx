@@ -55,16 +55,46 @@ export function BrettThread({
   const [inputValue, setInputValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // API returns newest first; reverse for display (oldest at top, newest at bottom)
   const displayMessages = [...messages].reverse();
 
-  // Scroll to bottom when expanded or when messages change
+  // Scroll to bottom when expanded or when new messages arrive
   useEffect(() => {
     if (isExpanded && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [isExpanded, messages.length]);
+
+  // Infinite scroll: load more when sentinel at top becomes visible
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const container = scrollRef.current;
+    if (!sentinel || !container || !isExpanded || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+          // Save scroll position so we can restore after load
+          const prevHeight = container.scrollHeight;
+          const prevTop = container.scrollTop;
+
+          onLoadMore();
+
+          // After DOM updates, restore scroll so content doesn't jump
+          requestAnimationFrame(() => {
+            const newHeight = container.scrollHeight;
+            container.scrollTop = prevTop + (newHeight - prevHeight);
+          });
+        }
+      },
+      { root: container, threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isExpanded, hasMore, isLoadingMore, onLoadMore]);
 
   const handleSend = useCallback(() => {
     const trimmed = inputValue.trim();
@@ -107,21 +137,12 @@ export function BrettThread({
       {/* Expanded message history */}
       {isExpanded && displayMessages.length > 0 && (
         <div ref={scrollRef} className="max-h-64 overflow-y-auto px-4 scrollbar-hide overscroll-contain">
-          {hasMore && (
-            <button
-              onClick={onLoadMore}
-              disabled={isLoadingMore}
-              className="w-full text-center py-2 text-xs text-white/40 hover:text-white/60 transition-colors disabled:opacity-50"
-            >
-              {isLoadingMore ? (
-                <span className="flex items-center justify-center gap-1.5">
-                  <Loader2 size={12} className="animate-spin" />
-                  Loading…
-                </span>
-              ) : (
-                "Load older messages\u2026"
-              )}
-            </button>
+          {/* Sentinel + loading indicator at top */}
+          <div ref={sentinelRef} className="h-1" />
+          {isLoadingMore && (
+            <div className="flex justify-center py-2">
+              <Loader2 size={14} className="animate-spin text-white/30" />
+            </div>
           )}
           {displayMessages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
