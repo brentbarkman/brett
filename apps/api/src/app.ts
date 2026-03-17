@@ -4,6 +4,7 @@ import { authRouter } from "./routes/auth.js";
 import { users } from "./routes/users.js";
 import { things } from "./routes/things.js";
 import { lists } from "./routes/lists.js";
+import { attachments } from "./routes/attachments.js";
 
 export const app = new Hono();
 
@@ -32,3 +33,4 @@ app.route("/api/auth", authRouter);
 app.route("/users", users);
 app.route("/things", things);
 app.route("/lists", lists);
+app.route("/things", attachments);
