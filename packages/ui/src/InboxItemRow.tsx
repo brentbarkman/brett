@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Zap, BookOpen, Check } from "lucide-react";
 import type { Thing } from "@brett/types";
 import { useDraggable } from "@dnd-kit/core";
@@ -51,11 +51,19 @@ export function InboxItemRow({
       }
     : undefined;
 
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (completing || !onToggle) return;
     setCompleting(true);
-    setTimeout(() => {
+    timerRef.current = setTimeout(() => {
       onToggle(thing.id);
       setCompleting(false);
     }, 600);
@@ -124,25 +132,6 @@ export function InboxItemRow({
         {relativeAge}
       </span>
 
-      <style>{`
-        .toggle-btn .toggle-check {
-          display: none;
-        }
-        .toggle-btn:hover .toggle-icon {
-          display: none;
-        }
-        .toggle-btn:hover .toggle-check {
-          display: flex;
-        }
-        @keyframes checkPop {
-          0% { transform: scale(0.5); opacity: 0; }
-          50% { transform: scale(1.2); }
-          100% { transform: scale(1); opacity: 1; }
-        }
-        .check-pop {
-          animation: checkPop 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-      `}</style>
     </div>
   );
 }

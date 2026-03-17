@@ -162,3 +162,5 @@ export interface UpcomingSection {
   label: string;
   things: Thing[];
 }
+
+export type FilterType = "All" | "Tasks" | "Content";

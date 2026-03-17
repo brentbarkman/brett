@@ -1,6 +1,6 @@
 import React from "react";
 import { Clock } from "lucide-react";
-import { ThingCard, ItemListShell, useListKeyboardNav, SkeletonListView } from "@brett/ui";
+import { ThingCard, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader } from "@brett/ui";
 import type { Thing } from "@brett/types";
 import { groupUpcomingThings } from "@brett/business";
 import { useUpcomingThings, useToggleThing } from "../api/things";
@@ -72,12 +72,7 @@ export function UpcomingView({ onItemClick, onTriageOpen }: UpcomingViewProps) {
 
         return (
           <div key={section.label} className={sectionIdx > 0 ? "mt-4" : ""}>
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold flex-shrink-0">
-                {section.label}
-              </h3>
-              <div className="h-px bg-white/10 flex-1" />
-            </div>
+            <SectionHeader title={section.label} />
             <div className="flex flex-col gap-2">
               {section.things.map((thing, i) => (
                 <ThingCard

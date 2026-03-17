@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { slugify } from "@brett/utils";
+import { getEndOfWeekUTC } from "@brett/business";
 import {
   DndContext,
   DragOverlay,
@@ -114,12 +115,8 @@ export function App() {
   const bulkUpdate = useBulkUpdateThings();
 
   // Today badge count — active items due this week or earlier
-  const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  const dayOfWeek = todayStart.getUTCDay();
-  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
-  const endOfWeek = new Date(todayStart.getTime() + daysUntilSunday * 86400000);
-  const { data: activeThingsForCount = [] } = useActiveThings(endOfWeek.toISOString());
+  const endOfWeekISO = useMemo(() => getEndOfWeekUTC().toISOString(), []);
+  const { data: activeThingsForCount = [] } = useActiveThings(endOfWeekISO);
 
   // Upcoming badge count
   const { data: upcomingThings = [] } = useUpcomingThings();

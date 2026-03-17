@@ -315,12 +315,10 @@ export function InboxView({
   const isEmpty = displayThings.length === 0;
 
   const inboxHeader = (
-    <>
-      <div className="flex items-center gap-3">
-        <Inbox size={20} className="text-white/50" />
-        <h2 className="text-xl font-bold text-white">Inbox</h2>
-      </div>
-    </>
+    <div className="flex items-center gap-3">
+      <Inbox size={20} className="text-white/50" />
+      <h2 className="text-xl font-bold text-white">Inbox</h2>
+    </div>
   );
 
   const inboxHints = activeThings.length > 0
@@ -405,30 +403,6 @@ export function InboxView({
           </div>
         )}
 
-      <style>{`
-        @keyframes inboxSlideOut {
-          from {
-            transform: translateX(0);
-            opacity: 1;
-          }
-          to {
-            transform: translateX(-24px);
-            opacity: 0;
-          }
-        }
-        @keyframes inboxItemExpand {
-          from {
-            max-height: 0;
-            opacity: 0;
-            margin-bottom: 0;
-          }
-          to {
-            max-height: 56px;
-            opacity: 1;
-            margin-bottom: 2px;
-          }
-        }
-      `}</style>
     </ItemListShell>
   );
 }

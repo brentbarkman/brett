@@ -4,7 +4,9 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { Thing, CreateItemInput, UpdateItemInput, InboxResponse, BulkUpdateInput } from "@brett/types";
+import { getTodayUTC } from "@brett/business";
 import { apiFetch } from "./client";
+import { invalidateAllThings } from "./invalidate";
 
 interface ThingsFilters {
   listId?: string;
@@ -50,7 +52,7 @@ export function useDoneThings(completedAfter: string) {
 /** Things belonging to a specific list */
 export function useListThings(listId: string) {
   return useQuery({
-    queryKey: ["things", "list", listId],
+    queryKey: ["things", { listId }],
     queryFn: () => apiFetch<Thing[]>(`/things?listId=${listId}`),
     enabled: !!listId,
   });
@@ -58,9 +60,7 @@ export function useListThings(listId: string) {
 
 /** Active items with due dates after today (for Upcoming view) */
 export function useUpcomingThings() {
-  const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  return useThings({ status: "active", dueAfter: todayStart.toISOString() });
+  return useThings({ status: "active", dueAfter: getTodayUTC().toISOString() });
 }
 
 export function useCreateThing() {
@@ -73,9 +73,7 @@ export function useCreateThing() {
         body: JSON.stringify(input),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["things"] });
-      qc.invalidateQueries({ queryKey: ["inbox"] });
-      qc.invalidateQueries({ queryKey: ["lists"] });
+      invalidateAllThings(qc);
     },
   });
 }
@@ -121,9 +119,7 @@ export function useToggleThing() {
       }
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["things"] });
-      qc.invalidateQueries({ queryKey: ["inbox"] });
-      qc.invalidateQueries({ queryKey: ["lists"] });
+      invalidateAllThings(qc);
     },
   });
 }
@@ -145,9 +141,7 @@ export function useBulkUpdateThings() {
         body: JSON.stringify(input),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["things"] });
-      qc.invalidateQueries({ queryKey: ["inbox"] });
-      qc.invalidateQueries({ queryKey: ["lists"] });
+      invalidateAllThings(qc);
     },
   });
 }
@@ -171,9 +165,7 @@ export function useDeleteThing() {
     mutationFn: (id: string) =>
       apiFetch(`/things/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["things"] });
-      qc.invalidateQueries({ queryKey: ["inbox"] });
-      qc.invalidateQueries({ queryKey: ["lists"] });
+      invalidateAllThings(qc);
     },
   });
 }

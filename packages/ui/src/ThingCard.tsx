@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Zap, BookOpen, Calendar, Check, RotateCcw } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Thing } from "@brett/types";
@@ -20,6 +20,13 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
     },
   });
   const [completing, setCompleting] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const handleToggleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -28,7 +35,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
 
       if (!thing.isCompleted) {
         setCompleting(true);
-        setTimeout(() => {
+        timerRef.current = setTimeout(() => {
           onToggle(thing.id);
           setCompleting(false);
         }, 600);
@@ -163,30 +170,6 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
         )}
       </div>
 
-      <style>{`
-        @keyframes togglePulse {
-          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.3); }
-          30% { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-          100% { transform: scale(1.05); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-        }
-        @keyframes checkPop {
-          0% { opacity: 0; transform: scale(0) rotate(-45deg); }
-          50% { opacity: 1; transform: scale(1.2) rotate(0deg); }
-          100% { opacity: 1; transform: scale(1) rotate(0deg); }
-        }
-        .check-overlay {
-          opacity: 0;
-          transform: scale(0.75);
-        }
-        .toggle-icon:hover .check-overlay {
-          opacity: 1;
-          transform: scale(1);
-        }
-        .toggle-icon:hover > span:first-child {
-          opacity: 0;
-          transform: scale(0.75);
-        }
-      `}</style>
     </div>
   );
 }

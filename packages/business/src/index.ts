@@ -1,5 +1,4 @@
 import type {
-  Task,
   ItemRecord,
   Thing,
   ItemType,
@@ -7,47 +6,31 @@ import type {
   Urgency,
   DueDatePrecision,
   CreateItemInput,
+  UpdateItemInput,
   CreateListInput,
   UpdateListInput,
   BulkUpdateInput,
   UpcomingSection,
 } from "@brett/types";
-import { generateId } from "@brett/utils";
-
-// ── Legacy (deprecated) ──
-
-/** @deprecated Use itemToThing() pipeline instead */
-export function createTask(
-  title: string,
-  userId: string,
-  description?: string
-): Task {
-  const now = new Date();
-  return {
-    id: generateId(),
-    title,
-    description,
-    completed: false,
-    userId,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-/** @deprecated Use itemToThing() pipeline instead */
-export function toggleTask(task: Task): Task {
-  return {
-    ...task,
-    completed: !task.completed,
-    updatedAt: new Date(),
-  };
-}
 
 // ── Compute helpers ──
 
 /** Strip time component using UTC to avoid timezone drift */
 function utcDay(d: Date): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/** UTC start-of-day as a Date — stable for cache keys and date comparisons */
+export function getTodayUTC(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/** End-of-week (next Sunday midnight UTC) — for "this week" date boundaries */
+export function getEndOfWeekUTC(now: Date = new Date()): Date {
+  const today = getTodayUTC(now);
+  const dayOfWeek = today.getUTCDay(); // 0=Sun
+  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
+  return new Date(today.getTime() + daysUntilSunday * 86400000);
 }
 
 export function computeUrgency(
@@ -264,6 +247,86 @@ export function validateCreateItem(
   };
 }
 
+export function validateUpdateItem(
+  input: unknown
+): { ok: true; data: UpdateItemInput } | { ok: false; error: string } {
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Request body is required" };
+  }
+
+  const obj = input as Record<string, unknown>;
+  const data: UpdateItemInput = {};
+
+  if (obj.title !== undefined) {
+    if (typeof obj.title !== "string" || obj.title.trim() === "") {
+      return { ok: false, error: "title must be a non-empty string" };
+    }
+    data.title = obj.title.trim();
+  }
+
+  if (obj.status !== undefined) {
+    if (typeof obj.status !== "string" || !VALID_STATUSES.has(obj.status)) {
+      return {
+        ok: false,
+        error: `status must be one of: ${[...VALID_STATUSES].join(", ")}`,
+      };
+    }
+    data.status = obj.status as ItemStatus;
+  }
+
+  if (obj.dueDate !== undefined) {
+    if (obj.dueDate !== null) {
+      if (typeof obj.dueDate !== "string" || isNaN(Date.parse(obj.dueDate))) {
+        return { ok: false, error: "dueDate must be a valid ISO date string or null" };
+      }
+      data.dueDate = obj.dueDate;
+    } else {
+      data.dueDate = null;
+    }
+  }
+
+  if (obj.dueDatePrecision !== undefined) {
+    if (obj.dueDatePrecision !== null) {
+      if (typeof obj.dueDatePrecision !== "string" || !VALID_PRECISIONS.has(obj.dueDatePrecision)) {
+        return { ok: false, error: `dueDatePrecision must be one of: ${[...VALID_PRECISIONS].join(", ")}` };
+      }
+      data.dueDatePrecision = obj.dueDatePrecision as DueDatePrecision;
+    } else {
+      data.dueDatePrecision = null;
+    }
+  }
+
+  if (obj.snoozedUntil !== undefined) {
+    if (obj.snoozedUntil !== null) {
+      if (typeof obj.snoozedUntil !== "string" || isNaN(Date.parse(obj.snoozedUntil))) {
+        return { ok: false, error: "snoozedUntil must be a valid ISO date string or null" };
+      }
+      data.snoozedUntil = obj.snoozedUntil;
+    } else {
+      data.snoozedUntil = null;
+    }
+  }
+
+  // Nullable string fields
+  if (obj.description !== undefined) {
+    data.description = obj.description === null ? null : typeof obj.description === "string" ? obj.description : undefined;
+  }
+  if (obj.sourceUrl !== undefined) {
+    data.sourceUrl = obj.sourceUrl === null ? null : typeof obj.sourceUrl === "string" ? obj.sourceUrl : undefined;
+  }
+  if (obj.brettObservation !== undefined) {
+    data.brettObservation = obj.brettObservation === null ? null : typeof obj.brettObservation === "string" ? obj.brettObservation : undefined;
+  }
+  if (obj.listId !== undefined) {
+    data.listId = obj.listId === null ? null : typeof obj.listId === "string" ? obj.listId : undefined;
+  }
+  if (obj.source !== undefined && typeof obj.source === "string") {
+    data.source = obj.source;
+  }
+
+  return { ok: true, data };
+}
+
 export function validateBulkUpdate(
   input: unknown
 ): { ok: true; data: BulkUpdateInput } | { ok: false; error: string } {
@@ -369,14 +432,6 @@ export function computeTriageResult(
   }
 }
 
-/** @deprecated Use computeTriageResult instead */
-export function computeTriageDate(
-  preset: TriageDatePreset,
-  now: Date = new Date()
-): string {
-  return computeTriageResult(preset, now).dueDate;
-}
-
 export function computeRelativeAge(
   createdAt: Date,
   now: Date = new Date()
@@ -391,6 +446,40 @@ export function computeRelativeAge(
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${diffDays}d ago`;
 }
+
+/** Tailwind colorClass → hex value map (used by LeftNav, ListView, etc.) */
+export const COLOR_MAP: Record<string, string> = {
+  "bg-blue-400": "#60a5fa",
+  "bg-emerald-400": "#34d399",
+  "bg-violet-400": "#a78bfa",
+  "bg-amber-400": "#fbbf24",
+  "bg-rose-400": "#fb7185",
+  "bg-sky-400": "#38bdf8",
+  "bg-orange-400": "#fb923c",
+  "bg-slate-400": "#94a3b8",
+  // Legacy values from before palette update
+  "bg-blue-500": "#3b82f6",
+  "bg-green-500": "#22c55e",
+  "bg-purple-500": "#a855f7",
+  "bg-amber-500": "#f59e0b",
+  "bg-red-500": "#ef4444",
+  "bg-pink-500": "#ec4899",
+  "bg-cyan-500": "#06b6d4",
+  "bg-orange-500": "#f97316",
+  "bg-gray-500": "rgba(255,255,255,0.4)",
+};
+
+/** Current-palette color swatches for the color picker UI */
+export const COLOR_SWATCHES = [
+  "bg-blue-400",
+  "bg-emerald-400",
+  "bg-violet-400",
+  "bg-amber-400",
+  "bg-rose-400",
+  "bg-sky-400",
+  "bg-orange-400",
+  "bg-slate-400",
+];
 
 const VALID_COLOR_CLASSES = new Set([
   "bg-blue-400", "bg-emerald-400", "bg-violet-400", "bg-amber-400",

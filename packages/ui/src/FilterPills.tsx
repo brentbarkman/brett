@@ -1,11 +1,12 @@
 import React from "react";
+import type { FilterType } from "@brett/types";
 
 interface FilterPillsProps {
-  activeFilter: string;
-  onSelectFilter: (filter: string) => void;
+  activeFilter: FilterType;
+  onSelectFilter: (filter: FilterType) => void;
 }
 
-const FILTERS = ["All", "Tasks", "Content"];
+const FILTERS: FilterType[] = ["All", "Tasks", "Content"];
 
 export function FilterPills({ activeFilter, onSelectFilter }: FilterPillsProps) {
   return (

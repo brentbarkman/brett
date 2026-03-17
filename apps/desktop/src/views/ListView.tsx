@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Archive } from "lucide-react";
-import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav, SkeletonListView } from "@brett/ui";
+import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader, useClickOutside } from "@brett/ui";
 import type { QuickAddInputHandle } from "@brett/ui";
 import type { Thing, NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
+import { COLOR_MAP, COLOR_SWATCHES } from "@brett/business";
 import { useListThings, useCreateThing, useToggleThing } from "../api/things";
 import { useUpdateList, useUnarchiveList } from "../api/lists";
 
@@ -16,38 +17,6 @@ interface ListViewProps {
   onArchiveList?: (id: string, incompleteCount: number) => void;
   onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
 }
-
-const colorMap: Record<string, string> = {
-  "bg-blue-400": "#60a5fa",
-  "bg-emerald-400": "#34d399",
-  "bg-violet-400": "#a78bfa",
-  "bg-amber-400": "#fbbf24",
-  "bg-rose-400": "#fb7185",
-  "bg-sky-400": "#38bdf8",
-  "bg-orange-400": "#fb923c",
-  "bg-slate-400": "#94a3b8",
-  // Legacy values from before palette update
-  "bg-blue-500": "#3b82f6",
-  "bg-green-500": "#22c55e",
-  "bg-purple-500": "#a855f7",
-  "bg-amber-500": "#f59e0b",
-  "bg-red-500": "#ef4444",
-  "bg-pink-500": "#ec4899",
-  "bg-cyan-500": "#06b6d4",
-  "bg-orange-500": "#f97316",
-  "bg-gray-500": "rgba(255,255,255,0.4)",
-};
-
-const colorSwatches = [
-  "bg-blue-400",
-  "bg-emerald-400",
-  "bg-violet-400",
-  "bg-amber-400",
-  "bg-rose-400",
-  "bg-sky-400",
-  "bg-orange-400",
-  "bg-slate-400",
-];
 
 export function ListView({ lists, archivedLists, listsFetching, onItemClick, onArchiveList, onTriageOpen }: ListViewProps) {
   const { slug } = useParams<{ slug: string }>();
@@ -82,24 +51,15 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
   }, [isEditingName]);
 
   // Close color picker on click outside or Escape
+  useClickOutside(colorPickerRef, () => setShowColorPicker(false), showColorPicker);
+
   useEffect(() => {
     if (!showColorPicker) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
-        setShowColorPicker(false);
-      }
-    };
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setShowColorPicker(false);
-      }
+      if (e.key === "Escape") setShowColorPicker(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
+    return () => document.removeEventListener("keydown", handleEscape);
   }, [showColorPicker]);
 
   // Still loading lists (e.g., after creating a new list)
@@ -119,7 +79,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     );
   }
 
-  const dotColor = colorMap[list.colorClass] ?? "rgba(255,255,255,0.4)";
+  const dotColor = COLOR_MAP[list.colorClass] ?? "rgba(255,255,255,0.4)";
 
   const handleNameSubmit = () => {
     const name = editName.trim();
@@ -200,12 +160,12 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
           {showColorPicker && (
             <div className="absolute top-full left-0 mt-2 z-50 bg-black/60 backdrop-blur-2xl rounded-lg border border-white/10 p-2.5 shadow-xl">
               <div className="flex gap-2">
-                {colorSwatches.map((swatch) => (
+                {COLOR_SWATCHES.map((swatch) => (
                   <button
                     key={swatch}
                     onClick={() => handleColorSelect(swatch)}
                     className={`w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0 ${swatch === list.colorClass ? "ring-2 ring-white/60 ring-offset-2 ring-offset-black/60" : ""}`}
-                    style={{ backgroundColor: colorMap[swatch] }}
+                    style={{ backgroundColor: COLOR_MAP[swatch] }}
                   />
                 ))}
               </div>
@@ -307,12 +267,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
         {/* Active items */}
         {activeThings.length > 0 && (
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold flex-shrink-0">
-                Active
-              </h3>
-              <div className="h-px bg-white/10 flex-1" />
-            </div>
+            <SectionHeader title="Active" />
             <div className="flex flex-col gap-2">
               {activeThings.map((thing, i) => (
                 <ThingCard
@@ -331,12 +286,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
         {/* Done items */}
         {doneThings.length > 0 && (
           <div className={activeThings.length > 0 ? "mt-4" : ""}>
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold flex-shrink-0">
-                Done
-              </h3>
-              <div className="h-px bg-white/10 flex-1" />
-            </div>
+            <SectionHeader title="Done" />
             <div className="flex flex-col gap-2">
               {doneThings.map((thing, i) => (
                 <ThingCard

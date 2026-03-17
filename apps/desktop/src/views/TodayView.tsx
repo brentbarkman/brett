@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Omnibar,
   MorningBriefing,
@@ -10,7 +10,8 @@ import {
   TriagePopup,
   SkeletonListView,
 } from "@brett/ui";
-import type { Thing, CalendarEvent, NavList } from "@brett/types";
+import type { Thing, CalendarEvent, NavList, FilterType } from "@brett/types";
+import { getTodayUTC, getEndOfWeekUTC } from "@brett/business";
 import {
   useActiveThings,
   useDoneThings,
@@ -26,17 +27,14 @@ interface TodayViewProps {
 }
 
 export function TodayView({ lists, onItemClick, onTriageOpen }: TodayViewProps) {
-  const [activeFilter, setActiveFilter] = useState("All");
+  const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [isBriefingVisible, setIsBriefingVisible] = useState(true);
 
-  // Compute date boundaries for today view queries
-  const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  const dayOfWeek = todayStart.getUTCDay();
-  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
-  const endOfWeek = new Date(todayStart.getTime() + daysUntilSunday * 86400000);
-  const dueBefore = endOfWeek.toISOString();
-  const completedAfter = todayStart.toISOString();
+  // Stable date boundaries for the day — memoized to avoid re-fetches on re-render
+  const { dueBefore, completedAfter } = useMemo(() => ({
+    dueBefore: getEndOfWeekUTC().toISOString(),
+    completedAfter: getTodayUTC().toISOString(),
+  }), []);
 
   // Two explicit queries: active items due this week or earlier, done items from today
   const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);
@@ -52,11 +50,8 @@ export function TodayView({ lists, onItemClick, onTriageOpen }: TodayViewProps) 
   };
 
   const handleAddTask = (title: string, listId: string | null) => {
-    // Tasks created in the today view default to due today
-    const now = new Date();
-    const todayISO = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())).toISOString();
     createThing.mutate(
-      { type: "task", title, listId: listId ?? undefined, dueDate: todayISO, dueDatePrecision: "day" },
+      { type: "task", title, listId: listId ?? undefined, dueDate: getTodayUTC().toISOString(), dueDatePrecision: "day" },
       { onError: (err) => console.error("Failed to create thing:", err) }
     );
   };

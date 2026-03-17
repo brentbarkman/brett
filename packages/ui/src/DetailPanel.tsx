@@ -11,7 +11,7 @@ interface DetailPanelProps {
 
 export function DetailPanel({ isOpen, item, onClose, onToggle }: DetailPanelProps) {
   if (!item) return null;
-  const isTask = "type" in item;
+  const isTask = !("startTime" in item);
 
   return (
     <div

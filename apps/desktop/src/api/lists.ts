@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import type { NavList } from "@brett/types";
 import { apiFetch } from "./client";
+import { invalidateAllThings } from "./invalidate";
 
 export function useLists() {
   return useQuery({
@@ -55,9 +56,7 @@ export function useDeleteList() {
     mutationFn: (id: string) =>
       apiFetch(`/lists/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["lists"] });
-      qc.invalidateQueries({ queryKey: ["things"] });
-      qc.invalidateQueries({ queryKey: ["inbox"] });
+      invalidateAllThings(qc);
     },
   });
 }

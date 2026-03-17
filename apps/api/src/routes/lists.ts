@@ -5,6 +5,27 @@ import { validateCreateList, validateUpdateList } from "@brett/business";
 
 const lists = new Hono<AuthEnv>();
 
+/** Map a Prisma list with counts to the NavList API response shape */
+function toNavList(l: {
+  id: string;
+  name: string;
+  colorClass: string;
+  sortOrder: number;
+  archivedAt: Date | null;
+  _count: { items: number };
+  items: { id: string }[];
+}): { id: string; name: string; colorClass: string; count: number; completedCount: number; sortOrder: number; archivedAt: string | null } {
+  return {
+    id: l.id,
+    name: l.name,
+    colorClass: l.colorClass,
+    count: l._count.items,
+    completedCount: l.items.length,
+    sortOrder: l.sortOrder,
+    archivedAt: l.archivedAt?.toISOString() ?? null,
+  };
+}
+
 // All routes require auth
 lists.use("*", authMiddleware);
 
@@ -36,17 +57,7 @@ lists.get("/", async (c) => {
     orderBy: { sortOrder: "asc" },
   });
 
-  return c.json(
-    userLists.map((l) => ({
-      id: l.id,
-      name: l.name,
-      colorClass: l.colorClass,
-      count: l._count.items,
-      completedCount: l.items.length,
-      sortOrder: l.sortOrder,
-      archivedAt: l.archivedAt?.toISOString() ?? null,
-    }))
-  );
+  return c.json(userLists.map(toNavList));
 });
 
 // POST /lists — create
@@ -86,7 +97,7 @@ lists.post("/", async (c) => {
   });
 
   return c.json(
-    { id: list.id, name: list.name, colorClass: list.colorClass, count: 0, completedCount: 0, sortOrder: list.sortOrder, archivedAt: null },
+    toNavList({ ...list, archivedAt: null, _count: { items: 0 }, items: [] }),
     201
   );
 });
@@ -180,15 +191,7 @@ lists.patch("/:id/unarchive", async (c) => {
     },
   });
 
-  return c.json({
-    id: list.id,
-    name: list.name,
-    colorClass: list.colorClass,
-    count: list._count.items,
-    completedCount: list.items.length,
-    sortOrder: list.sortOrder,
-    archivedAt: list.archivedAt?.toISOString() ?? null,
-  });
+  return c.json(toNavList(list));
 });
 
 // PATCH /lists/:id — update
@@ -219,15 +222,7 @@ lists.patch("/:id", async (c) => {
     },
   });
 
-  return c.json({
-    id: list.id,
-    name: list.name,
-    colorClass: list.colorClass,
-    count: list._count.items,
-    completedCount: list.items.length,
-    sortOrder: list.sortOrder,
-    archivedAt: existing.archivedAt?.toISOString() ?? null,
-  });
+  return c.json(toNavList({ ...list, archivedAt: existing.archivedAt }));
 });
 
 // DELETE /lists/:id — deletes list and all its items

@@ -1,3 +1,5 @@
+import "./animations.css";
+
 export { Button } from "./button";
 export { LeftNav } from "./LeftNav";
 export { Omnibar } from "./Omnibar";
@@ -20,3 +22,5 @@ export { SkeletonBar, SkeletonListView } from "./Skeleton";
 export type { QuickAddInputHandle } from "./QuickAddInput";
 export { useListKeyboardNav } from "./useListKeyboardNav";
 export { ItemListShell } from "./ItemListShell";
+export { SectionHeader } from "./SectionHeader";
+export { useClickOutside } from "./useClickOutside";

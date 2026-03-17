@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { itemToThing, validateCreateItem, validateBulkUpdate } from "@brett/business";
+import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem } from "@brett/business";
 
 const things = new Hono<AuthEnv>();
 
@@ -166,37 +166,46 @@ things.post("/", async (c) => {
 things.patch("/:id", async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
+  const validation = validateUpdateItem(body);
 
+  if (!validation.ok) {
+    return c.json({ error: validation.error }, 400);
+  }
+
+  const { data } = validation;
+  const id = c.req.param("id");
+
+  // Verify ownership
   const existing = await prisma.item.findFirst({
-    where: { id: c.req.param("id"), userId: user.id },
+    where: { id, userId: user.id },
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
 
   // If changing list, verify ownership
-  if (body.listId && !(await verifyListOwnership(body.listId, user.id))) {
+  if (data.listId && !(await verifyListOwnership(data.listId, user.id))) {
     return c.json({ error: "List not found" }, 400);
   }
 
   const updateData: Record<string, unknown> = {};
-  if (body.title !== undefined) updateData.title = body.title;
-  if (body.description !== undefined) updateData.description = body.description;
-  if (body.source !== undefined) updateData.source = body.source;
-  if (body.sourceUrl !== undefined) updateData.sourceUrl = body.sourceUrl;
-  if (body.dueDate !== undefined)
-    updateData.dueDate = body.dueDate ? new Date(body.dueDate) : null;
-  if (body.dueDatePrecision !== undefined)
-    updateData.dueDatePrecision = body.dueDatePrecision;
-  if (body.brettObservation !== undefined)
-    updateData.brettObservation = body.brettObservation;
-  if (body.listId !== undefined) updateData.listId = body.listId;
-  if (body.status !== undefined) updateData.status = body.status;
-  if (body.snoozedUntil !== undefined)
-    updateData.snoozedUntil = body.snoozedUntil
-      ? new Date(body.snoozedUntil)
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.source !== undefined) updateData.source = data.source;
+  if (data.sourceUrl !== undefined) updateData.sourceUrl = data.sourceUrl;
+  if (data.dueDate !== undefined)
+    updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+  if (data.dueDatePrecision !== undefined)
+    updateData.dueDatePrecision = data.dueDatePrecision;
+  if (data.brettObservation !== undefined)
+    updateData.brettObservation = data.brettObservation;
+  if (data.listId !== undefined) updateData.listId = data.listId;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.snoozedUntil !== undefined)
+    updateData.snoozedUntil = data.snoozedUntil
+      ? new Date(data.snoozedUntil)
       : null;
 
   const item = await prisma.item.update({
-    where: { id: c.req.param("id") },
+    where: { id: existing.id },
     data: updateData,
     include: { list: { select: { name: true } } },
   });

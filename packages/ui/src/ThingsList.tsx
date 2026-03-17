@@ -1,7 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Plus } from "lucide-react";
+import React, { useRef, useEffect, useCallback, useMemo } from "react";
 import type { Thing, NavList } from "@brett/types";
 import { ThingCard } from "./ThingCard";
+import { SectionHeader } from "./SectionHeader";
+import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
+import { useListKeyboardNav } from "./useListKeyboardNav";
 
 interface ThingsListProps {
   things: Thing[];
@@ -15,91 +17,45 @@ interface ThingsListProps {
 }
 
 export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTriageOpen, header }: ThingsListProps) {
-  const uncompleted = things.filter((t) => !t.isCompleted);
-  const done = things.filter((t) => t.isCompleted);
+  const { uncompleted, done, grouped, allItems } = useMemo(() => {
+    const uncompleted = things.filter((t) => !t.isCompleted);
+    const done = things.filter((t) => t.isCompleted);
+    const grouped = {
+      overdue: uncompleted.filter((t) => t.urgency === "overdue"),
+      today: uncompleted.filter((t) => t.urgency === "today"),
+      this_week: uncompleted.filter((t) => t.urgency === "this_week"),
+    };
+    const allItems = [...grouped.overdue, ...grouped.today, ...grouped.this_week, ...done];
+    return { uncompleted, done, grouped, allItems };
+  }, [things]);
+  const quickAddRef = useRef<QuickAddInputHandle>(null);
 
-  const grouped = {
-    overdue: uncompleted.filter((t) => t.urgency === "overdue"),
-    today: uncompleted.filter((t) => t.urgency === "today"),
-    this_week: uncompleted.filter((t) => t.urgency === "this_week"),
-  };
-
-  // Flat list of all items for keyboard navigation
-  const allItems = [...grouped.overdue, ...grouped.today, ...grouped.this_week, ...done];
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  const focusedThing = allItems[focusedIndex] ?? null;
+  const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
+    items: allItems,
+    onItemClick,
+    onToggle,
+    onFocusAdd: () => quickAddRef.current?.focus(),
+    onExtraKey: (e, focusedThing) => {
+      if (!focusedThing || !onTriageOpen) return false;
+      if (e.key === "l") {
+        e.preventDefault();
+        onTriageOpen("list-first", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        return true;
+      }
+      if (e.key === "d") {
+        e.preventDefault();
+        onTriageOpen("date-first", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        return true;
+      }
+      return false;
+    },
+  });
 
   const handleItemClick = useCallback((thing: Thing) => {
     const idx = allItems.findIndex((t) => t.id === thing.id);
     if (idx !== -1) setFocusedIndex(idx);
     onItemClick(thing);
-  }, [allItems, onItemClick]);
-
-  // Reset focused index when items change
-  useEffect(() => {
-    setFocusedIndex((i) => Math.min(i, Math.max(allItems.length - 1, 0)));
-  }, [allItems.length]);
-
-  // Keyboard handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-
-      const key = e.key;
-
-      if (key === "ArrowDown" || key === "j") {
-        e.preventDefault();
-        setFocusedIndex((i) => Math.min(i + 1, allItems.length - 1));
-        return;
-      }
-
-      if (key === "ArrowUp" || key === "k") {
-        e.preventDefault();
-        setFocusedIndex((i) => Math.max(i - 1, 0));
-        return;
-      }
-
-      if (key === "Enter") {
-        e.preventDefault();
-        if (focusedThing) onItemClick(focusedThing);
-        return;
-      }
-
-      if (key === "e") {
-        e.preventDefault();
-        if (focusedThing && onToggle) onToggle(focusedThing.id);
-        return;
-      }
-
-      if (key === "l") {
-        e.preventDefault();
-        if (focusedThing && onTriageOpen) onTriageOpen("list-first", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
-        return;
-      }
-
-      if (key === "d") {
-        e.preventDefault();
-        if (focusedThing && onTriageOpen) onTriageOpen("date-first", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
-        return;
-      }
-
-      if (key === "n") {
-        e.preventDefault();
-        quickAddRef.current?.focus();
-        return;
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [focusedIndex, focusedThing, allItems, onItemClick, onToggle, onTriageOpen]);
-
-  const quickAddRef = useRef<HTMLInputElement>(null);
+  }, [allItems, onItemClick, setFocusedIndex]);
 
   const hasUncompleted = uncompleted.length > 0;
 
@@ -147,7 +103,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTria
           )}
 
           {hasUncompleted && (
-            <InlineQuickAdd ref={quickAddRef} lists={lists} onAdd={onAdd} />
+            <QuickAddInput ref={quickAddRef} placeholder="Add a task..." onAdd={(title) => onAdd(title, lists[0]?.id ?? null)} />
           )}
 
           {done.length > 0 && (
@@ -175,18 +131,6 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTria
         </div>
       )}
 
-      <style>{`
-        @keyframes sectionEnter {
-          from {
-            opacity: 0;
-            transform: translateY(12px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
     </div>
   );
 }
@@ -208,12 +152,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="flex items-center gap-3 mb-2">
-        <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold flex-shrink-0">
-          {title}
-        </h3>
-        <div className="h-px bg-white/10 flex-1" />
-      </div>
+      <SectionHeader title={title} />
       <div className="flex flex-col gap-2">
         {things.map((item, i) => (
           <ThingCard
@@ -228,62 +167,3 @@ function Section({
     </div>
   );
 }
-
-const InlineQuickAdd = React.forwardRef<
-  HTMLInputElement,
-  {
-    lists: NavList[];
-    onAdd: (title: string, listId: string | null) => void;
-  }
->(function InlineQuickAdd({ lists, onAdd }, ref) {
-  const [title, setTitle] = useState("");
-  const [isFocused, setIsFocused] = useState(false);
-  const localRef = useRef<HTMLInputElement>(null);
-  const inputRef = (ref as React.RefObject<HTMLInputElement>) || localRef;
-
-  const handleSubmit = () => {
-    if (!title.trim()) return;
-    onAdd(title.trim(), lists[0]?.id ?? null);
-    setTitle("");
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
-    }
-    if (e.key === "Escape") {
-      setTitle("");
-      inputRef.current?.blur();
-    }
-  };
-
-  return (
-    <div
-      className={`
-        flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all
-        ${isFocused
-          ? "bg-white/5 border border-blue-500/20"
-          : "border border-transparent hover:bg-white/[0.03]"
-        }
-      `}
-    >
-      <Plus size={15} className={isFocused ? "text-blue-400" : "text-white/20"} />
-      <input
-        ref={inputRef}
-        type="text"
-        placeholder="Add a task..."
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => { if (!title) setIsFocused(false); }}
-        className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/20 text-sm"
-      />
-      {isFocused && title.trim() && (
-        <span className="text-[10px] text-white/25 font-mono">enter</span>
-      )}
-    </div>
-  );
-});

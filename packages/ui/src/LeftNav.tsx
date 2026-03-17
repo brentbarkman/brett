@@ -2,33 +2,14 @@ import React, { useState, useRef, useEffect } from "react";
 import { Inbox, Calendar, Clock, Search, Plus, MoreHorizontal, GripVertical, ChevronRight } from "lucide-react";
 import type { NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
+import { COLOR_MAP } from "@brett/business";
 import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-
-const colorMap: Record<string, string> = {
-  "bg-blue-400": "#60a5fa",
-  "bg-emerald-400": "#34d399",
-  "bg-violet-400": "#a78bfa",
-  "bg-amber-400": "#fbbf24",
-  "bg-rose-400": "#fb7185",
-  "bg-sky-400": "#38bdf8",
-  "bg-orange-400": "#fb923c",
-  "bg-slate-400": "#94a3b8",
-  // Legacy values from before palette update
-  "bg-blue-500": "#3b82f6",
-  "bg-green-500": "#22c55e",
-  "bg-purple-500": "#a855f7",
-  "bg-amber-500": "#f59e0b",
-  "bg-red-500": "#ef4444",
-  "bg-pink-500": "#ec4899",
-  "bg-cyan-500": "#06b6d4",
-  "bg-orange-500": "#f97316",
-  "bg-gray-500": "rgba(255,255,255,0.4)",
-};
+import { useClickOutside } from "./useClickOutside";
 
 interface LeftNavUser {
   name: string | null;
@@ -313,21 +294,7 @@ function SortableListItem({
   }, [isEditing]);
 
   // Close menu when clicking outside
-  useEffect(() => {
-    if (!showMenu) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(e.target as Node) &&
-        menuButtonRef.current &&
-        !menuButtonRef.current.contains(e.target as Node)
-      ) {
-        setShowMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showMenu]);
+  useClickOutside([menuRef, menuButtonRef], () => setShowMenu(false), showMenu);
 
   const handleRenameSubmit = () => {
     const name = editName.trim();
@@ -356,7 +323,7 @@ function SortableListItem({
   // Convert colorClass like "bg-blue-500" to a low-opacity version for drop highlight
   const dropHighlight =
     isOver && list.colorClass
-      ? list.colorClass.replace("bg-", "bg-").replace("-500", "-500/20")
+      ? list.colorClass.replace(/(-\d+)$/, "$1/20")
       : "";
 
   return (
@@ -483,7 +450,7 @@ function ProgressDot({
   const progress = count > 0 ? completedCount / count : 0;
   const filled = circumference * progress;
 
-  const strokeColor = colorMap[colorClass] ?? "rgba(255,255,255,0.4)";
+  const strokeColor = COLOR_MAP[colorClass] ?? "rgba(255,255,255,0.4)";
 
   // Empty list — just a dim dot
   if (count === 0) {
@@ -544,11 +511,8 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   badge?: number;
-  count?: number;
   isActive?: boolean;
   isCollapsed: boolean;
-  isDropTarget?: boolean;
-  dropColorClass?: string;
   onClick?: () => void;
 }
 
@@ -556,34 +520,24 @@ function NavItem({
   icon,
   label,
   badge,
-  count,
   isActive,
   isCollapsed,
-  isDropTarget,
-  dropColorClass,
   onClick,
 }: NavItemProps) {
-  // Convert colorClass like "bg-blue-500" to a low-opacity version for drop highlight
-  const dropHighlight = isDropTarget && dropColorClass
-    ? dropColorClass.replace("bg-", "bg-").replace("-500", "-500/20")
-    : "";
-
   return (
     <button
       onClick={onClick}
       className={`
       flex items-center w-full rounded-lg transition-colors duration-200 group
       ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-3"}
-      ${isDropTarget
-        ? `${dropHighlight} border border-white/20 text-white`
-        : isActive
-          ? "bg-white/10 text-white"
-          : "text-white/60 hover:bg-white/5 hover:text-white/90"
+      ${isActive
+        ? "bg-white/10 text-white"
+        : "text-white/60 hover:bg-white/5 hover:text-white/90"
       }
     `}
     >
       <div
-        className={`${isActive || isDropTarget ? "text-white" : "text-white/50 group-hover:text-white/80"}`}
+        className={`${isActive ? "text-white" : "text-white/50 group-hover:text-white/80"}`}
       >
         {icon}
       </div>
@@ -597,9 +551,6 @@ function NavItem({
             <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
               {badge}
             </span>
-          )}
-          {count !== undefined && (
-            <span className="text-xs text-white/30 font-medium">{count}</span>
           )}
         </>
       )}
@@ -671,19 +622,9 @@ function ArchivedListItem({
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!showMenu) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
-          menuButtonRef.current && !menuButtonRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showMenu]);
+  useClickOutside([menuRef, menuButtonRef], () => setShowMenu(false), showMenu);
 
-  const dotColor = colorMap[list.colorClass] ?? "rgba(255,255,255,0.4)";
+  const dotColor = COLOR_MAP[list.colorClass] ?? "rgba(255,255,255,0.4)";
 
   return (
     <div className="relative group">
