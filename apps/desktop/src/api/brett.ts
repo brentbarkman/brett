@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type { BrettMessage } from "@brett/types";
@@ -16,57 +16,82 @@ interface BrettSendResponse {
 
 /** Fetches brett messages with manual "load more" pagination */
 export function useBrettMessages(itemId: string | null) {
-  const [allMessages, setAllMessages] = useState<BrettMessage[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [olderMessages, setOlderMessages] = useState<BrettMessage[]>([]);
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  const [olderHasMore, setOlderHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const prevItemId = useRef(itemId);
 
-  // Initial fetch
+  // Reset older pages when item changes
+  useEffect(() => {
+    if (itemId !== prevItemId.current) {
+      setOlderMessages([]);
+      setOlderCursor(null);
+      setOlderHasMore(false);
+      prevItemId.current = itemId;
+    }
+  }, [itemId]);
+
+  // Initial page — React Query handles caching/refetching
   const query = useQuery({
     queryKey: ["brett-messages", itemId],
     queryFn: () => apiFetch<BrettMessagesResponse>(`/things/${itemId}/brett`),
     enabled: !!itemId,
   });
 
-  // Sync initial data
+  // When initial data changes (refetch after send), reset older pages
+  // because the initial page now has the newest messages
+  const dataRef = useRef(query.data);
   useEffect(() => {
-    if (query.data) {
-      setAllMessages(query.data.messages);
-      setCursor(query.data.cursor);
-      setHasMore(query.data.hasMore);
+    if (query.data && query.data !== dataRef.current) {
+      dataRef.current = query.data;
+      // Only reset if we had older pages loaded
+      if (olderMessages.length > 0) {
+        setOlderMessages([]);
+        setOlderCursor(null);
+        setOlderHasMore(false);
+      }
     }
-  }, [query.data]);
+  }, [query.data, olderMessages.length]);
 
-  // Reset when item changes
-  useEffect(() => {
-    setAllMessages([]);
-    setCursor(null);
-    setHasMore(false);
-  }, [itemId]);
+  const firstPage = query.data;
+
+  // Combine: first page (newest) + older pages
+  const messages = firstPage
+    ? [...firstPage.messages, ...olderMessages]
+    : [];
+
+  // hasMore: if we have older pages loaded, use that flag; otherwise use first page's
+  const hasMore = olderMessages.length > 0
+    ? olderHasMore
+    : (firstPage?.hasMore ?? false);
+
+  // Cursor for next load: use older cursor if we've loaded pages, otherwise first page cursor
+  const nextCursor = olderMessages.length > 0
+    ? olderCursor
+    : (firstPage?.cursor ?? null);
 
   const loadMore = useCallback(async () => {
-    if (!itemId || !cursor || isLoadingMore) return;
+    if (!itemId || !nextCursor || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
       const res = await apiFetch<BrettMessagesResponse>(
-        `/things/${itemId}/brett?cursor=${encodeURIComponent(cursor)}`
+        `/things/${itemId}/brett?cursor=${encodeURIComponent(nextCursor)}`
       );
-      // API returns newest-first; append older messages to end
-      setAllMessages((prev) => [...prev, ...res.messages]);
-      setCursor(res.cursor);
-      setHasMore(res.hasMore);
+      setOlderMessages((prev) => [...prev, ...res.messages]);
+      setOlderCursor(res.cursor);
+      setOlderHasMore(res.hasMore);
     } finally {
       setIsLoadingMore(false);
     }
-  }, [itemId, cursor, isLoadingMore]);
+  }, [itemId, nextCursor, isLoadingMore]);
 
   return {
-    messages: allMessages,
+    messages,
     hasMore,
     isLoadingMore,
     loadMore,
     isLoading: query.isLoading,
-    refetch: query.refetch,
   };
 }
 
