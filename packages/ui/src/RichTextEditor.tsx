@@ -71,13 +71,13 @@ function EditorScrollArea({ editor }: { editor: any }) {
   return (
     <div className="relative">
       {canScrollUp && (
-        <div className="pointer-events-none absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-black/40 to-transparent z-10" />
+        <div className="pointer-events-none absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-white/[0.1] to-transparent z-10" />
       )}
       <div ref={scrollRef} className="max-h-[35vh] overflow-y-auto scrollbar-hide">
         <EditorContent editor={editor} />
       </div>
       {canScrollDown && (
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/40 to-transparent z-10" />
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white/[0.1] to-transparent z-10" />
       )}
     </div>
   );
