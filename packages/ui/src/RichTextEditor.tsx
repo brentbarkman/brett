@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
+import "./rich-text-editor.css";
 import {
   Bold,
   Italic,
@@ -74,7 +75,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-invert prose-sm max-w-none focus:outline-none min-h-[80px] text-white/80 p-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_pre]:bg-white/10 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-sm [&_pre]:font-mono [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none [&_pre_code]:border-none [&_:not(pre)>code]:bg-white/10 [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:text-sm",
+          "tiptap-editor prose prose-invert prose-sm max-w-none focus:outline-none min-h-[80px] text-white/80 p-3",
       },
     },
     onUpdate: ({ editor: ed }) => {
