@@ -21,7 +21,7 @@ app.use(
       if (isLocal && origin.match(/^http:\/\/localhost:\d+$/)) return origin;
       return null;
     },
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Filename"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })
