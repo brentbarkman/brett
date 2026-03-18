@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   MapPin,
   Video,
@@ -20,6 +20,37 @@ import type {
 import { isSafeUrl } from "@brett/utils";
 import { RichTextEditor } from "./RichTextEditor";
 import { BrettThread } from "./BrettThread";
+
+/** Attendee avatar — tries Google profile photo, falls back to initials */
+function AttendeeAvatar({ email, name }: { email?: string; name: string }) {
+  const [imgError, setImgError] = useState(false);
+  const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+
+  // Google Workspace profile photo URL — works for org accounts with public photos
+  const photoUrl = useMemo(() => {
+    if (!email) return null;
+    // Google's public profile photo endpoint (works for Workspace accounts)
+    return `https://contacts.google.com/widget/hovercard/photo?email=${encodeURIComponent(email)}`;
+  }, [email]);
+
+  if (!photoUrl || imgError) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white shadow-inner flex-shrink-0">
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={photoUrl}
+      alt={name}
+      onError={() => setImgError(true)}
+      className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+      referrerPolicy="no-referrer"
+    />
+  );
+}
 
 interface CalendarEventDetailPanelProps {
   detail: CalendarEventDetailResponse;
@@ -318,14 +349,7 @@ export function CalendarEventDetailPanel({
                     key={idx}
                     className="flex items-center gap-3 bg-white/5 p-2 rounded-lg border border-white/5"
                   >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white shadow-inner flex-shrink-0">
-                      {name
-                        .split(" ")
-                        .map((n: string) => n[0])
-                        .join("")
-                        .slice(0, 2)
-                        .toUpperCase()}
-                    </div>
+                    <AttendeeAvatar email={attendee.email} name={name} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-white/90 truncate">
