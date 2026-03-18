@@ -84,7 +84,9 @@ export interface CalendarAttendee {
   name: string;
   email: string;
   responseStatus?: "accepted" | "declined" | "tentative" | "needsAction";
+  comment?: string | null;
   organizer?: boolean;
+  self?: boolean;
 }
 
 export interface CalendarAttachment {

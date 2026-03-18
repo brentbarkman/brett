@@ -121,15 +121,13 @@ export function CalendarEventDetailPanel({
   );
   const rsvpNoteRef = useRef<HTMLInputElement>(null);
 
-  // Find the current user's existing comment from attendees
+  // Restore RSVP state from the self-attendee on event change
   useEffect(() => {
     const selfAttendee = detail.attendees?.find(
-      (a: CalendarAttendee) => a.responseStatus === detail.myResponseStatus,
+      (a: CalendarAttendee) => a.self === true,
     );
-    // If no comment field on attendee, leave blank
-    setRsvpNote("");
+    setRsvpNote(selfAttendee?.comment ?? "");
     setSelectedRsvp(detail.myResponseStatus);
-    // Reset attendee expansion when detail changes
     setShowAllAttendees(false);
   }, [detail.id, detail.myResponseStatus, detail.attendees]);
 

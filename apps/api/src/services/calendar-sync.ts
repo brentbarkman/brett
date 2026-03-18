@@ -298,6 +298,7 @@ async function upsertEvents(
           email: a.email ?? null,
           displayName: a.displayName ?? null,
           responseStatus: a.responseStatus ?? null,
+          comment: a.comment ?? null,
           self: a.self ?? false,
           organizer: a.organizer ?? false,
         }))
