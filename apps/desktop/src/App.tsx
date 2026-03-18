@@ -94,12 +94,15 @@ function recordToDisplay(r: CalendarEventRecord): CalendarEventDisplay {
     durationMinutes: Math.max((new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 60000, 0),
     color,
     location: r.location ?? undefined,
-    attendees: r.attendees?.map((a) => ({
-      name: a.name,
-      initials: a.name.split(" ").map((n) => n[0]).join("").toUpperCase(),
-      email: a.email,
-      responseStatus: a.responseStatus,
-    })),
+    attendees: r.attendees?.map((a) => {
+      const name = a.name || a.email || "Unknown";
+      return {
+        name,
+        initials: name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+        email: a.email,
+        responseStatus: a.responseStatus,
+      };
+    }),
     hasBrettContext: false,
     meetingLink: r.meetingLink ?? undefined,
     isAllDay: r.isAllDay,
