@@ -37,6 +37,8 @@ export interface CalendarEventRecord {
   recurringEventId: string | null;
   meetingLink: string | null;
   googleColorId: string | null;
+  calendarName?: string;
+  calendarColor?: string;
   organizer: CalendarAttendee | null;
   attendees: CalendarAttendee[];
   attachments: CalendarAttachment[];
