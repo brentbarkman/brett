@@ -20,10 +20,12 @@
     "@prisma/client": "^6.4.1",
     "better-auth": "^1.2.7",
     "googleapis": "^171.4.0",
-    "hono": "^4.7.4"
+    "hono": "^4.7.4",
+    "node-cron": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "@types/node-cron": "^3.0.11",
     "prisma": "^6.4.1",
     "tsx": "^4.19.2",
     "typescript": "^5.3.3",
