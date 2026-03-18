@@ -707,6 +707,10 @@ export function validateCreateBrettMessage(
   return { ok: true, data: { content: obj.content.trim() } };
 }
 
+// ── Calendar validation ──
+
+export { validateRsvpInput, validateCalendarNoteInput } from "./calendar-validation";
+
 // ── Recurrence ──
 
 export function computeNextDueDate(
