@@ -1,15 +1,148 @@
-import React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { CalendarEventDisplay } from "@brett/types";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { ChevronLeft, ChevronRight, Video } from "lucide-react";
+import type {
+  CalendarEventDisplay,
+  CalendarRsvpStatus,
+} from "@brett/types";
+
+// TODO: Import EventHoverTooltip once available
+// import { EventHoverTooltip } from "./EventHoverTooltip";
 
 interface CalendarTimelineProps {
   events: CalendarEventDisplay[];
   onEventClick: (event: CalendarEventDisplay) => void;
+  onQuickRsvp?: (eventId: string, status: CalendarRsvpStatus) => void;
+  isLoading?: boolean;
+}
+
+interface ContextMenuState {
+  eventId: string;
+  x: number;
+  y: number;
+}
+
+/** Parse "HH:MM" or ISO string to minutes since midnight */
+function parseTimeToMinutes(timeStr: string): number {
+  // Handle ISO strings
+  if (timeStr.includes("T")) {
+    const d = new Date(timeStr);
+    return d.getHours() * 60 + d.getMinutes();
+  }
+  const [h, m] = timeStr.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/** Detect overlapping event groups and assign column positions */
+function layoutEvents(events: CalendarEventDisplay[]) {
+  const sorted = [...events].sort(
+    (a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime)
+  );
+
+  const layout: Map<
+    string,
+    { column: number; totalColumns: number }
+  > = new Map();
+
+  // Track active columns: each entry is the end time (in minutes) of the event in that column
+  const columns: number[] = [];
+
+  for (const event of sorted) {
+    const start = parseTimeToMinutes(event.startTime);
+    const end = start + event.durationMinutes;
+
+    // Find the first available column (one whose event has ended)
+    let placed = false;
+    for (let i = 0; i < columns.length; i++) {
+      if (columns[i] <= start) {
+        columns[i] = end;
+        layout.set(event.id, { column: i, totalColumns: 0 }); // totalColumns set later
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      layout.set(event.id, { column: columns.length, totalColumns: 0 });
+      columns.push(end);
+    }
+  }
+
+  // Now determine totalColumns for each overlapping group
+  // Re-scan: for each event, find how many columns overlap at its time
+  for (const event of sorted) {
+    const start = parseTimeToMinutes(event.startTime);
+    const end = start + event.durationMinutes;
+
+    let maxCols = 1;
+    for (const other of sorted) {
+      if (other.id === event.id) continue;
+      const oStart = parseTimeToMinutes(other.startTime);
+      const oEnd = oStart + other.durationMinutes;
+      // Overlap check
+      if (oStart < end && start < oEnd) {
+        const entry = layout.get(other.id)!;
+        const myEntry = layout.get(event.id)!;
+        maxCols = Math.max(maxCols, entry.column + 1, myEntry.column + 1);
+      }
+    }
+
+    const entry = layout.get(event.id)!;
+    entry.totalColumns = Math.max(entry.totalColumns, maxCols);
+  }
+
+  // Second pass: normalize totalColumns within each overlap group
+  for (const event of sorted) {
+    const start = parseTimeToMinutes(event.startTime);
+    const end = start + event.durationMinutes;
+    const entry = layout.get(event.id)!;
+
+    // Find max totalColumns among all overlapping events
+    let groupMax = entry.totalColumns;
+    for (const other of sorted) {
+      if (other.id === event.id) continue;
+      const oStart = parseTimeToMinutes(other.startTime);
+      const oEnd = oStart + other.durationMinutes;
+      if (oStart < end && start < oEnd) {
+        groupMax = Math.max(groupMax, layout.get(other.id)!.totalColumns);
+      }
+    }
+    entry.totalColumns = groupMax;
+  }
+
+  return layout;
+}
+
+/** Find buffer gaps between consecutive non-overlapping events */
+function findBuffers(events: CalendarEventDisplay[]) {
+  const sorted = [...events].sort(
+    (a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime)
+  );
+
+  const buffers: { afterEventId: string; gapMinutes: number; topOffset: number }[] = [];
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const curr = sorted[i];
+    const next = sorted[i + 1];
+    const currEnd = parseTimeToMinutes(curr.startTime) + curr.durationMinutes;
+    const nextStart = parseTimeToMinutes(next.startTime);
+    const gap = nextStart - currEnd;
+
+    if (gap >= 0 && gap < 15) {
+      buffers.push({
+        afterEventId: curr.id,
+        gapMinutes: gap,
+        topOffset: currEnd, // in minutes from midnight
+      });
+    }
+  }
+
+  return buffers;
 }
 
 export function CalendarTimeline({
   events,
   onEventClick,
+  onQuickRsvp,
+  isLoading,
 }: CalendarTimelineProps) {
   const startHour = 8;
   const endHour = 18;
@@ -17,28 +150,131 @@ export function CalendarTimeline({
   const hourHeight = 60;
   const hours = Array.from({ length: totalHours + 1 }, (_, i) => startHour + i);
 
+  // Real-time current time
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const currentHour = currentTime.getHours();
+  const currentMinute = currentTime.getMinutes();
+  const currentTimeOffset =
+    (currentHour - startHour + currentMinute / 60) * hourHeight;
+
+  // Auto-scroll to current time on mount
+  const currentTimeRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (currentTimeRef.current) {
+      currentTimeRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, []);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, [contextMenu]);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, event: CalendarEventDisplay) => {
+      if (!onQuickRsvp) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({ eventId: event.id, x: e.clientX, y: e.clientY });
+    },
+    [onQuickRsvp]
+  );
+
+  const handleRsvp = useCallback(
+    (status: CalendarRsvpStatus) => {
+      if (contextMenu && onQuickRsvp) {
+        onQuickRsvp(contextMenu.eventId, status);
+      }
+      setContextMenu(null);
+    },
+    [contextMenu, onQuickRsvp]
+  );
+
+  // Layout computation
+  const layout = layoutEvents(events);
+  const buffers = findBuffers(events);
+
+  // Countdown: find next upcoming event
+  const nowMinutes = currentHour * 60 + currentMinute;
+  const sortedEvents = [...events].sort(
+    (a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime)
+  );
+
+  let countdownEvent: CalendarEventDisplay | null = null;
+  let countdownText: string | null = null;
+
+  for (const ev of sortedEvents) {
+    const evStart = parseTimeToMinutes(ev.startTime);
+    const evEnd = evStart + ev.durationMinutes;
+
+    if (evStart > nowMinutes) {
+      // Upcoming
+      const diff = evStart - nowMinutes;
+      countdownEvent = ev;
+      countdownText = `Starts in ${diff} min`;
+      break;
+    } else if (nowMinutes >= evStart && nowMinutes < evEnd) {
+      // Currently happening
+      countdownEvent = ev;
+      countdownText = "Now";
+      break;
+    }
+  }
+
   const getEventStyle = (event: CalendarEventDisplay) => {
-    const [h, m] = event.startTime.split(":").map(Number);
-    const startOffset = (h - startHour + m / 60) * hourHeight;
+    const startMin = parseTimeToMinutes(event.startTime);
+    const startOffset = ((startMin - startHour * 60) / 60) * hourHeight;
     const height = (event.durationMinutes / 60) * hourHeight;
+    const info = layout.get(event.id);
+    const column = info?.column ?? 0;
+    const totalColumns = info?.totalColumns ?? 1;
+    const isOverlapping = totalColumns > 1;
+    const widthPercent = 100 / totalColumns;
+    const leftPercent = column * widthPercent;
+
     return {
       top: `${startOffset}px`,
       height: `${height}px`,
-      className: `${event.color.bg} ${event.color.border} ${event.color.text}`,
+      left: `${leftPercent}%`,
+      width: `${widthPercent}%`,
+      isOverlapping,
     };
   };
 
-  // Mock current time (10:45 AM)
-  const currentHour = 10;
-  const currentMinute = 45;
-  const currentTimeOffset =
-    (currentHour - startHour + currentMinute / 60) * hourHeight;
+  // Format today's date
+  const today = currentTime.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 
   return (
     <div className="flex flex-col h-full bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
-        <h2 className="text-white font-medium">Today, Jan 15</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-white font-medium">{today}</h2>
+          {countdownText && countdownEvent && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/70 font-medium">
+              {countdownText}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <button className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded">
             <ChevronLeft size={16} />
@@ -49,8 +285,15 @@ export function CalendarTimeline({
         </div>
       </div>
 
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+        </div>
+      )}
+
       {/* Timeline Scroll Area */}
-      <div className="flex-1 overflow-y-auto relative scrollbar-hide">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative scrollbar-hide">
         <div
           className="relative min-h-[600px]"
           style={{ height: `${totalHours * hourHeight}px` }}
@@ -77,6 +320,7 @@ export function CalendarTimeline({
 
           {/* Current Time Indicator */}
           <div
+            ref={currentTimeRef}
             className="absolute left-12 right-0 flex items-center z-20 pointer-events-none"
             style={{ top: `${currentTimeOffset}px` }}
           >
@@ -84,28 +328,79 @@ export function CalendarTimeline({
             <div className="flex-1 border-t border-red-500/50" />
           </div>
 
+          {/* Buffer indicators */}
+          {buffers.map((buf) => {
+            const topPx = ((buf.topOffset - startHour * 60) / 60) * hourHeight;
+            return (
+              <div
+                key={`buffer-${buf.afterEventId}`}
+                className="absolute left-12 right-4 flex items-center justify-center z-10 pointer-events-none"
+                style={{ top: `${topPx}px`, height: "12px" }}
+              >
+                <span
+                  className={`text-[9px] font-medium ${
+                    buf.gapMinutes === 0 ? "text-red-400" : "text-amber-400/60"
+                  }`}
+                >
+                  {buf.gapMinutes === 0
+                    ? "0 min buffer"
+                    : `${buf.gapMinutes} min`}
+                </span>
+              </div>
+            );
+          })}
+
           {/* Events Container */}
           <div className="absolute top-0 left-12 right-4 bottom-0">
             {events.map((event) => {
               const style = getEventStyle(event);
+              const isOverlapping = style.isOverlapping;
+
               return (
+                // TODO: Wrap with <EventHoverTooltip event={event} side="left"> once available
                 <div
                   key={event.id}
                   onClick={() => onEventClick(event)}
+                  onContextMenu={(e) => handleContextMenu(e, event)}
                   className={`
-                    absolute left-0 right-0 rounded-md border-l-2 p-2 cursor-pointer
+                    absolute rounded-md border-l-2 p-2 cursor-pointer
                     hover:brightness-125 transition-all duration-200 overflow-hidden
-                    ${style.className}
+                    ${isOverlapping ? "border-amber-500/30" : ""}
                   `}
-                  style={{ top: style.top, height: style.height }}
+                  style={{
+                    top: style.top,
+                    height: style.height,
+                    left: style.left,
+                    width: style.width,
+                    backgroundColor: event.color.bg,
+                    borderColor: isOverlapping
+                      ? undefined
+                      : event.color.border,
+                    borderLeftColor: event.color.border,
+                    color: event.color.text,
+                  }}
                 >
                   <div className="flex justify-between items-start">
                     <h4 className="text-xs font-semibold truncate pr-4">
                       {event.title}
                     </h4>
-                    {event.hasBrettContext && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_5px_rgba(96,165,250,0.8)] flex-shrink-0 mt-1" />
-                    )}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {event.meetingLink && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(event.meetingLink, "_blank");
+                          }}
+                          className="p-0.5 rounded hover:bg-white/10 transition-colors"
+                          title="Join meeting"
+                        >
+                          <Video size={12} className="opacity-70" />
+                        </button>
+                      )}
+                      {event.hasBrettContext && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_5px_rgba(96,165,250,0.8)] mt-1" />
+                      )}
+                    </div>
                   </div>
                   {event.durationMinutes >= 30 && (
                     <p className="text-[10px] opacity-70 truncate mt-0.5">
@@ -115,12 +410,51 @@ export function CalendarTimeline({
                           : "")}
                     </p>
                   )}
+                  {/* Countdown badge on the specific event */}
+                  {countdownEvent?.id === event.id && countdownText && (
+                    <div className="absolute bottom-1 right-1">
+                      <span
+                        className={`text-[9px] px-1 py-0.5 rounded-full font-medium ${
+                          countdownText === "Now"
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-amber-500/20 text-amber-400"
+                        }`}
+                      >
+                        {countdownText}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {/* Context Menu for Quick RSVP */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-black/80 backdrop-blur-xl border border-white/10 rounded-lg py-1 shadow-2xl"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(
+            [
+              { label: "Accept", status: "accepted" as CalendarRsvpStatus },
+              { label: "Tentative", status: "tentative" as CalendarRsvpStatus },
+              { label: "Decline", status: "declined" as CalendarRsvpStatus },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.status}
+              onClick={() => handleRsvp(item.status)}
+              className="w-full text-left px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 transition-colors"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
