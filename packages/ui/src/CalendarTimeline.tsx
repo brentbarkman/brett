@@ -1,10 +1,10 @@
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { CalendarEvent } from "@brett/types";
+import type { CalendarEventDisplay } from "@brett/types";
 
 interface CalendarTimelineProps {
-  events: CalendarEvent[];
-  onEventClick: (event: CalendarEvent) => void;
+  events: CalendarEventDisplay[];
+  onEventClick: (event: CalendarEventDisplay) => void;
 }
 
 export function CalendarTimeline({
@@ -17,20 +17,14 @@ export function CalendarTimeline({
   const hourHeight = 60;
   const hours = Array.from({ length: totalHours + 1 }, (_, i) => startHour + i);
 
-  const getEventStyle = (event: CalendarEvent) => {
+  const getEventStyle = (event: CalendarEventDisplay) => {
     const [h, m] = event.startTime.split(":").map(Number);
     const startOffset = (h - startHour + m / 60) * hourHeight;
     const height = (event.durationMinutes / 60) * hourHeight;
-    const colorMap = {
-      blue: "bg-blue-500/20 border-blue-500/50 text-blue-100",
-      green: "bg-emerald-500/20 border-emerald-500/50 text-emerald-100",
-      purple: "bg-purple-500/20 border-purple-500/50 text-purple-100",
-      amber: "bg-amber-500/20 border-amber-500/50 text-amber-100",
-    };
     return {
       top: `${startOffset}px`,
       height: `${height}px`,
-      className: colorMap[event.color],
+      className: `${event.color.bg} ${event.color.border} ${event.color.text}`,
     };
   };
 

@@ -2,7 +2,7 @@ import React from "react";
 import { X, Calendar, MapPin, Users, Loader2 } from "lucide-react";
 import type {
   Thing,
-  CalendarEvent,
+  CalendarEventDisplay,
   ThingDetail,
   DueDatePrecision,
   ReminderType,
@@ -13,7 +13,7 @@ import { TaskDetailPanel } from "./TaskDetailPanel";
 
 interface DetailPanelProps {
   isOpen: boolean;
-  item: Thing | CalendarEvent | null;
+  item: Thing | CalendarEventDisplay | null;
   onClose: () => void;
   onToggle?: (id: string) => void;
   detail?: ThingDetail | null;
@@ -76,7 +76,7 @@ export function DetailPanel({
   brettTotalCount,
 }: DetailPanelProps) {
   if (!item) return null;
-  const isTask = !("startTime" in item);
+  const isTask = !("googleEventId" in item);
 
   return (
     <>
@@ -173,19 +173,19 @@ export function DetailPanel({
               <div className="flex items-center gap-3 text-sm text-white/80">
                 <Calendar size={16} className="text-white/40" />
                 <span>
-                  Today, {(item as CalendarEvent).startTime} -{" "}
-                  {(item as CalendarEvent).endTime}
+                  Today, {(item as CalendarEventDisplay).startTime} -{" "}
+                  {(item as CalendarEventDisplay).endTime}
                 </span>
               </div>
-              {(item as CalendarEvent).location && (
+              {(item as CalendarEventDisplay).location && (
                 <div className="flex items-center gap-3 text-sm text-white/80">
                   <MapPin size={16} className="text-white/40" />
-                  <span>{(item as CalendarEvent).location}</span>
+                  <span>{(item as CalendarEventDisplay).location}</span>
                 </div>
               )}
             </div>
 
-            {(item as CalendarEvent).attendees && (
+            {(item as CalendarEventDisplay).attendees && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <Users size={14} className="text-white/40" />
@@ -194,7 +194,7 @@ export function DetailPanel({
                   </span>
                 </div>
                 <div className="flex flex-col gap-2">
-                  {(item as CalendarEvent).attendees!.map((attendee, idx) => (
+                  {(item as CalendarEventDisplay).attendees!.map((attendee, idx) => (
                     <div
                       key={idx}
                       className="flex items-center gap-3 bg-white/5 p-2 rounded-lg border border-white/5"

@@ -1,8 +1,8 @@
 import React from "react";
-import type { CalendarEvent } from "@brett/types";
+import type { CalendarEventDisplay } from "@brett/types";
 
 interface UpNextCardProps {
-  event: CalendarEvent;
+  event: CalendarEventDisplay;
   onClick: () => void;
 }
 

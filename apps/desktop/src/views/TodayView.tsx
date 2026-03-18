@@ -10,7 +10,7 @@ import {
   TriagePopup,
   SkeletonListView,
 } from "@brett/ui";
-import type { Thing, CalendarEvent, NavList, FilterType } from "@brett/types";
+import type { Thing, CalendarEventDisplay, NavList, FilterType } from "@brett/types";
 import { getTodayUTC, getEndOfWeekUTC } from "@brett/business";
 import {
   useActiveThings,
@@ -22,7 +22,7 @@ import { mockEvents, mockBriefingItems } from "../data/mockData";
 
 interface TodayViewProps {
   lists: NavList[];
-  onItemClick: (item: Thing | CalendarEvent) => void;
+  onItemClick: (item: Thing | CalendarEventDisplay) => void;
   onTriageOpen: (mode: "list-first" | "date-first", ids: string[]) => void;
   onFocusChange?: (thing: Thing) => void;
 }

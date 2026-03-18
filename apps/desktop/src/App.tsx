@@ -21,7 +21,7 @@ import {
   InboxDragOverlay,
   ConfirmDialog,
 } from "@brett/ui";
-import type { Thing, CalendarEvent, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
+import type { Thing, CalendarEventDisplay, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
   useActiveThings,
@@ -66,7 +66,7 @@ export function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [selectedItem, setSelectedItem] = useState<
-    Thing | CalendarEvent | null
+    Thing | CalendarEventDisplay | null
   >(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -136,7 +136,7 @@ export function App() {
 
   // Fetch detail when panel is open and item is a task (not a CalendarEvent)
   const selectedId = selectedItem?.id ?? null;
-  const isTaskSelected = selectedItem ? !("startTime" in selectedItem) : false;
+  const isTaskSelected = selectedItem ? !("googleEventId" in selectedItem) : false;
   const { data: thingDetail, isLoading: isLoadingDetail } = useThingDetail(
     isDetailOpen && isTaskSelected ? selectedId : null,
   );
@@ -192,7 +192,7 @@ export function App() {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [triageState]);
 
-  const handleItemClick = (item: Thing | CalendarEvent) => {
+  const handleItemClick = (item: Thing | CalendarEventDisplay) => {
     setSelectedItem(item);
     setIsDetailOpen(true);
   };
