@@ -310,15 +310,17 @@ export function CalendarEventDetailPanel({
                 Attendees &middot; {detail.attendees.length}
               </span>
               <div className="flex flex-col gap-1.5">
-                {visibleAttendees?.map((attendee, idx) => (
+                {visibleAttendees?.map((attendee, idx) => {
+                  const name = attendee.name || attendee.email || "Unknown";
+                  return (
                   <div
                     key={idx}
                     className="flex items-center gap-3 bg-white/5 p-2 rounded-lg border border-white/5"
                   >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white shadow-inner flex-shrink-0">
-                      {attendee.name
+                      {name
                         .split(" ")
-                        .map((n) => n[0])
+                        .map((n: string) => n[0])
                         .join("")
                         .slice(0, 2)
                         .toUpperCase()}
@@ -326,7 +328,7 @@ export function CalendarEventDetailPanel({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-white/90 truncate">
-                          {attendee.name}
+                          {name}
                         </span>
                         {attendee.organizer && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white/10 text-white/50">
@@ -340,7 +342,8 @@ export function CalendarEventDetailPanel({
                     </div>
                     <ResponseStatusIcon status={attendee.responseStatus} />
                   </div>
-                ))}
+                  );
+                })}
               </div>
               {!showAllAttendees && hiddenCount > 0 && (
                 <button
