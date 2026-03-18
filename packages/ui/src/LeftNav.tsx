@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Inbox, Calendar, Clock, Search, Plus, MoreHorizontal, GripVertical, ChevronRight } from "lucide-react";
+import { Inbox, Calendar, CalendarDays, Clock, Search, Plus, MoreHorizontal, GripVertical, ChevronRight } from "lucide-react";
 import type { NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
 import { COLOR_MAP } from "@brett/business";
@@ -134,6 +134,13 @@ export function LeftNav({
           isActive={currentPath === "/upcoming"}
           isCollapsed={isCollapsed}
           onClick={() => navigate?.("/upcoming")}
+        />
+        <NavItem
+          icon={<CalendarDays size={18} />}
+          label="Calendar"
+          isActive={currentPath === "/calendar"}
+          isCollapsed={isCollapsed}
+          onClick={() => navigate?.("/calendar")}
         />
         <NavItem
           icon={<Search size={18} />}

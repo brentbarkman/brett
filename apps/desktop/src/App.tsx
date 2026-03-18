@@ -21,7 +21,7 @@ import {
   InboxDragOverlay,
   ConfirmDialog,
 } from "@brett/ui";
-import type { Thing, CalendarEventDisplay, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
+import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
   useActiveThings,
@@ -39,14 +39,28 @@ import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists,
 import { useUploadAttachment, useDeleteAttachment } from "./api/attachments";
 import { useBrettMessages, useSendBrettMessage } from "./api/brett";
 import { useCreateLink, useDeleteLink } from "./api/links";
-import { mockEvents } from "./data/mockData";
+import {
+  useCalendarEvents,
+  useCalendarEventDetail,
+  useUpdateRsvp,
+  useUpdateCalendarEventNotes,
+  useCalendarEventBrettMessages,
+  useSendCalendarBrettMessage,
+} from "./api/calendar";
+import { useEventStream } from "./api/sse";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
 import { UpcomingView } from "./views/UpcomingView";
 import { NotFoundView } from "./views/NotFoundView";
+import CalendarPage from "./pages/CalendarPage";
 
-function MainLayout({ children, onEventClick }: { children: React.ReactNode; onEventClick: (e: any) => void }) {
+function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar }: {
+  children: React.ReactNode;
+  onEventClick: (e: any) => void;
+  calendarEvents: CalendarEventDisplay[];
+  isLoadingCalendar?: boolean;
+}) {
   return (
     <>
       <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
@@ -55,16 +69,50 @@ function MainLayout({ children, onEventClick }: { children: React.ReactNode; onE
         </div>
       </main>
       <div className="w-[300px] flex-shrink-0 py-2">
-        <CalendarTimeline events={mockEvents} onEventClick={onEventClick} />
+        <CalendarTimeline events={calendarEvents} onEventClick={onEventClick} isLoading={isLoadingCalendar} />
       </div>
     </>
   );
+}
+
+/** Map CalendarEventRecord to CalendarEventDisplay for the sidebar timeline */
+function recordToDisplay(r: CalendarEventRecord): CalendarEventDisplay {
+  const defaultColor = {
+    bg: "rgba(59, 130, 246, 0.12)",
+    border: "rgba(59, 130, 246, 0.25)",
+    text: "rgb(147, 197, 253)",
+    name: "blue",
+  };
+  return {
+    id: r.id,
+    title: r.title,
+    startTime: r.startTime,
+    endTime: r.endTime,
+    durationMinutes: Math.max((new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 60000, 0),
+    color: defaultColor,
+    location: r.location ?? undefined,
+    attendees: r.attendees?.map((a) => ({
+      name: a.name,
+      initials: a.name.split(" ").map((n) => n[0]).join("").toUpperCase(),
+      email: a.email,
+      responseStatus: a.responseStatus,
+    })),
+    hasBrettContext: false,
+    meetingLink: r.meetingLink ?? undefined,
+    isAllDay: r.isAllDay,
+    myResponseStatus: r.myResponseStatus,
+    description: r.description ?? undefined,
+    googleEventId: r.googleEventId,
+  };
 }
 
 export function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Initialize SSE for real-time updates
+  useEventStream();
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEventDisplay | null
   >(null);
@@ -134,9 +182,18 @@ export function App() {
   // Brett thread hooks
   const sendBrettMessage = useSendBrettMessage();
 
+  // Today's calendar events for sidebar timeline
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const { data: todayCalendarData, isLoading: isLoadingTodayCalendar } = useCalendarEvents({ date: todayStr });
+  const todayCalendarEvents: CalendarEventDisplay[] = useMemo(
+    () => (todayCalendarData?.events ?? []).filter((e) => !e.isAllDay).map(recordToDisplay),
+    [todayCalendarData],
+  );
+
   // Fetch detail when panel is open and item is a task (not a CalendarEvent)
   const selectedId = selectedItem?.id ?? null;
   const isTaskSelected = selectedItem ? !("googleEventId" in selectedItem) : false;
+  const isCalendarSelected = selectedItem ? "googleEventId" in selectedItem : false;
   const { data: thingDetail, isLoading: isLoadingDetail } = useThingDetail(
     isDetailOpen && isTaskSelected ? selectedId : null,
   );
@@ -145,6 +202,17 @@ export function App() {
   const brett = useBrettMessages(
     isDetailOpen && isTaskSelected ? selectedId : null,
   );
+
+  // Calendar event detail panel hooks
+  const { data: calendarEventDetail, isLoading: isLoadingCalendarDetail } = useCalendarEventDetail(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const updateRsvp = useUpdateRsvp();
+  const updateCalendarNotes = useUpdateCalendarEventNotes();
+  const calendarBrett = useCalendarEventBrettMessages(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const sendCalendarBrettMessage = useSendCalendarBrettMessage();
 
   // Active things for link search
   const { data: allActiveThings = [] } = useThings({ status: "active" });
@@ -196,6 +264,11 @@ export function App() {
     setSelectedItem(item);
     setIsDetailOpen(true);
   };
+
+  // Adapter for CalendarPage which passes CalendarEventRecord
+  const handleCalendarEventClick = useCallback((event: CalendarEventRecord) => {
+    handleItemClick(recordToDisplay(event));
+  }, []);
 
   // Update panel when keyboard nav changes focus (only if panel is open)
   const handleFocusChange = useCallback((thing: Thing) => {
@@ -399,8 +472,9 @@ export function App() {
 
           <Routes>
             <Route path="/settings" element={<SettingsPage onBack={() => navigate("/today")} />} />
+            <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
             <Route path="/today" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
                 <TodayView
                   lists={lists}
                   onItemClick={handleItemClick}
@@ -410,12 +484,12 @@ export function App() {
               </MainLayout>
             } />
             <Route path="/upcoming" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
                 <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/inbox" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
                 <InboxView
                   things={inboxData?.visible ?? []}
                   lists={lists}
@@ -430,13 +504,13 @@ export function App() {
               </MainLayout>
             } />
             <Route path="/lists/:slug" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
                 <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/" element={<Navigate to="/today" replace />} />
             <Route path="*" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
                 <NotFoundView />
               </MainLayout>
             } />
@@ -490,6 +564,23 @@ export function App() {
           isSendingBrettMessage={sendBrettMessage.isPending}
           isLoadingMoreBrettMessages={brett.isLoadingMore}
           brettTotalCount={brett.totalCount}
+          calendarEventDetail={calendarEventDetail ?? null}
+          isLoadingCalendarDetail={isLoadingCalendarDetail}
+          onUpdateRsvp={(status, comment) => {
+            if (selectedId) updateRsvp.mutate({ eventId: selectedId, status, comment });
+          }}
+          onUpdateCalendarNotes={(content) => {
+            if (selectedId) updateCalendarNotes.mutate({ eventId: selectedId, content });
+          }}
+          calendarBrettMessages={calendarBrett.messages}
+          calendarBrettTotalCount={calendarBrett.totalCount}
+          calendarBrettHasMore={calendarBrett.hasMore}
+          onSendCalendarBrettMessage={(content) => {
+            if (selectedId) sendCalendarBrettMessage.mutate({ eventId: selectedId, content });
+          }}
+          onLoadMoreCalendarBrettMessages={calendarBrett.loadMore}
+          isSendingCalendarBrettMessage={sendCalendarBrettMessage.isPending}
+          isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
         />
 
         {/* Drag overlay */}
