@@ -170,9 +170,16 @@ export async function updateRsvp(
     (a) => a.self === true || a.email?.toLowerCase() === selfEmail.toLowerCase(),
   );
 
-  if (selfAttendee) {
-    selfAttendee.responseStatus = status;
-    if (comment) selfAttendee.comment = comment;
+  if (!selfAttendee) {
+    console.warn(`[google-calendar] RSVP: self attendee not found for ${selfEmail} in event ${eventId} (${attendees.length} attendees)`);
+    // Return the event as-is — can't RSVP if we're not an attendee
+    return event;
+  }
+
+  selfAttendee.responseStatus = status;
+  // Set or clear the comment
+  if (comment !== undefined) {
+    selfAttendee.comment = comment || undefined;
   }
 
   const res = await calendarClient.events.patch({

@@ -163,6 +163,7 @@ calendar.patch("/events/:id/rsvp", async (c) => {
 
   // Update on Google Calendar — returns the patched event
   const client = await getCalendarClient(event.googleAccountId);
+  console.log(`[calendar] RSVP: ${validation.data.status} on event ${event.googleEventId} (calendar: ${event.calendarList.googleCalendarId})`);
   const updatedGoogleEvent = await updateRsvp(
     client,
     event.calendarList.googleCalendarId,
@@ -173,6 +174,13 @@ calendar.patch("/events/:id/rsvp", async (c) => {
   );
 
   // Update local cache — sync both myResponseStatus AND attendees from Google's response
+  // Preserve photoUrl from existing attendees (resolved by People API, not in Google's response)
+  const existingAttendees = (event.attendees as any[] | null) ?? [];
+  const photoLookup = new Map<string, string>();
+  for (const a of existingAttendees) {
+    if (a.email && a.photoUrl) photoLookup.set(a.email.toLowerCase(), a.photoUrl);
+  }
+
   const updatedAttendees = updatedGoogleEvent.attendees
     ? updatedGoogleEvent.attendees.map((a) => ({
         email: a.email ?? null,
@@ -181,6 +189,7 @@ calendar.patch("/events/:id/rsvp", async (c) => {
         comment: a.comment ?? null,
         self: a.self ?? false,
         organizer: a.organizer ?? false,
+        photoUrl: a.email ? photoLookup.get(a.email.toLowerCase()) ?? null : null,
       }))
     : undefined;
 
