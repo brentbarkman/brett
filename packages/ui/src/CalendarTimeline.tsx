@@ -257,8 +257,8 @@ export function CalendarTimeline({
     );
   }
 
-  const startHour = 8;
-  const endHour = 18;
+  const startHour = 0;
+  const endHour = 24;
   const totalHours = endHour - startHour;
   const hourHeight = 60;
   const hours = Array.from({ length: totalHours + 1 }, (_, i) => startHour + i);
