@@ -65,6 +65,12 @@ calendarAccounts.post("/connect", async (c) => {
 // NOTE: Desktop flow works via an ephemeral localhost server in Electron that
 // catches the redirect and forwards to this endpoint.
 calendarAccounts.get("/callback", async (c) => {
+  // Handle denial — Google redirects with ?error= instead of ?code=
+  const error = c.req.query("error");
+  if (error) {
+    return c.json({ error: error === "access_denied" ? "Calendar access was denied" : `OAuth error: ${error}` }, 400);
+  }
+
   const code = c.req.query("code");
   const state = c.req.query("state");
 
@@ -106,9 +112,28 @@ calendarAccounts.get("/callback", async (c) => {
   }
 
   // Exchange the auth code for tokens
-  const tokens = await exchangeCalendarCode(code);
+  let tokens;
+  try {
+    tokens = await exchangeCalendarCode(code);
+  } catch {
+    return c.json({ error: "Failed to exchange authorization code. It may have expired — please try connecting again." }, 400);
+  }
   if (!tokens.access_token || !tokens.refresh_token) {
     return c.json({ error: "Failed to obtain tokens" }, 400);
+  }
+
+  // Verify required calendar scopes were granted (Google granular consent can omit them)
+  const grantedScopes = (tokens.scope ?? "").split(" ");
+  const requiredScopes = [
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.readonly",
+  ];
+  const missingScopes = requiredScopes.filter((s) => !grantedScopes.includes(s));
+  if (missingScopes.length > 0) {
+    return c.json({
+      error: "Calendar permissions are required. Please grant full calendar access when prompted.",
+      missingScopes,
+    }, 403);
   }
 
   // Get Google user info
