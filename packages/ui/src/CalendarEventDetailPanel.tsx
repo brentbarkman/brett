@@ -17,6 +17,7 @@ import type {
   BrettMessageRecord,
   CalendarAttendee,
 } from "@brett/types";
+import { isSafeUrl } from "@brett/utils";
 import { RichTextEditor } from "./RichTextEditor";
 import { BrettThread } from "./BrettThread";
 
@@ -182,7 +183,7 @@ export function CalendarEventDetailPanel({
                 </span>
               )}
               {/* Meeting link */}
-              {detail.meetingLink && (
+              {detail.meetingLink && isSafeUrl(detail.meetingLink) && (
                 <a
                   href={detail.meetingLink}
                   target="_blank"
@@ -278,9 +279,10 @@ export function CalendarEventDetailPanel({
                   {detail.attachments.map((att, idx) => (
                     <a
                       key={idx}
-                      href={att.url}
+                      href={isSafeUrl(att.url) ? att.url : "#"}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => { if (!isSafeUrl(att.url)) e.preventDefault(); }}
                       className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group"
                     >
                       <AttachmentIcon mimeType={att.mimeType} />

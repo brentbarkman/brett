@@ -31,7 +31,7 @@ export function useEventStream(): void {
     const token = await getToken();
     if (!token) return;
 
-    // Fetch a short-lived ticket instead of passing the raw token
+    // Fetch a short-lived ticket — never pass the raw token in the URL
     let ticketParam: string;
     try {
       const res = await fetch(`${API_URL}/events/ticket`, {
@@ -42,8 +42,11 @@ export function useEventStream(): void {
       const { ticket } = await res.json();
       ticketParam = `ticket=${encodeURIComponent(ticket)}`;
     } catch {
-      // Fallback to raw token if ticket endpoint is unavailable
-      ticketParam = `token=${encodeURIComponent(token)}`;
+      console.warn("[SSE] Failed to obtain ticket, will retry");
+      const delay = retryDelay.current;
+      retryDelay.current = Math.min(delay * 2, 30000);
+      setTimeout(connect, delay);
+      return;
     }
 
     if (cancelledRef.current) return;
@@ -68,7 +71,13 @@ export function useEventStream(): void {
     };
 
     const calendarHandler = (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
+      let data: unknown;
+      try {
+        data = JSON.parse(e.data);
+      } catch {
+        console.warn("[SSE] Failed to parse event data:", e.data);
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["calendar-events"] });
       qc.invalidateQueries({ queryKey: ["calendar-event-detail"] });
       const eventHandlers = handlers.get(e.type);

@@ -43,9 +43,9 @@ export function startCronJobs(): void {
 
       console.log(`[cron] Renewing ${expiring.length} expiring webhook watches`);
 
-      const hmacSecret = process.env.CALENDAR_WEBHOOK_HMAC_KEY ?? process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+      const hmacSecret = process.env.CALENDAR_WEBHOOK_HMAC_KEY;
       if (!hmacSecret) {
-        console.warn("[cron] CALENDAR_WEBHOOK_HMAC_KEY / CALENDAR_TOKEN_ENCRYPTION_KEY not set, skipping webhook renewal");
+        console.warn("[cron] CALENDAR_WEBHOOK_HMAC_KEY not set, skipping webhook renewal");
         return;
       }
 

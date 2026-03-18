@@ -27,6 +27,16 @@ export function slugify(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
+/** Check if a URL is safe to render as an href (https/http only, no javascript: etc.) */
+export function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 // ── Calendar color mapping ──
 
 /** Google's default calendar blue */

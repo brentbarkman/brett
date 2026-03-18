@@ -7,6 +7,7 @@ interface SSEConnection {
 }
 
 const connections = new Map<string, SSEConnection[]>();
+const MAX_CONNECTIONS_PER_USER = 5;
 
 export function addSSEConnection(
   userId: string,
@@ -14,6 +15,14 @@ export function addSSEConnection(
 ): () => void {
   const conn: SSEConnection = { controller, userId, cleanup: () => {} };
   const userConns = connections.get(userId) ?? [];
+
+  // Evict oldest connections if at cap
+  while (userConns.length >= MAX_CONNECTIONS_PER_USER) {
+    const oldest = userConns[0];
+    oldest.cleanup();
+    try { oldest.controller.close(); } catch { /* already closed */ }
+  }
+
   userConns.push(conn);
   connections.set(userId, userConns);
 

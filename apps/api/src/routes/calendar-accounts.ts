@@ -90,6 +90,7 @@ calendarAccounts.get("/callback", async (c) => {
     .digest("hex");
 
   if (
+    parts[2].length !== expectedHmac.length ||
     !timingSafeEqual(
       Buffer.from(expectedHmac, "hex"),
       Buffer.from(parts[2], "hex"),

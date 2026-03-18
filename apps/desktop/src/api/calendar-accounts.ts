@@ -15,6 +15,11 @@ export function useConnectCalendar() {
       const { url } = await apiFetch<{ url: string }>("/calendar/accounts/connect", {
         method: "POST",
       });
+      // Validate the OAuth URL points to Google before opening
+      const parsed = new URL(url);
+      if (parsed.hostname !== "accounts.google.com") {
+        throw new Error("Unexpected OAuth redirect URL");
+      }
       window.open(url, "_blank");
     },
   });

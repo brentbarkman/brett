@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
-import { getEventGlassColor } from "@brett/utils";
+import { getEventGlassColor, isSafeUrl } from "@brett/utils";
 
 export interface CalendarDayViewProps {
   date: Date;
@@ -221,7 +221,7 @@ export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewP
                     <h4 className="text-xs font-semibold truncate pr-2">
                       {event.title}
                     </h4>
-                    {event.meetingLink && (
+                    {event.meetingLink && isSafeUrl(event.meetingLink) && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

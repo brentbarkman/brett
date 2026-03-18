@@ -370,9 +370,9 @@ async function registerWebhook(
   const webhookBaseUrl = process.env.GOOGLE_WEBHOOK_BASE_URL;
   if (!webhookBaseUrl) return;
 
-  const hmacSecret = process.env.CALENDAR_WEBHOOK_HMAC_KEY ?? process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+  const hmacSecret = process.env.CALENDAR_WEBHOOK_HMAC_KEY;
   if (!hmacSecret) {
-    console.warn("[calendar-sync] CALENDAR_WEBHOOK_HMAC_KEY / CALENDAR_TOKEN_ENCRYPTION_KEY not set, skipping webhook registration");
+    console.warn("[calendar-sync] CALENDAR_WEBHOOK_HMAC_KEY not set, skipping webhook registration");
     return;
   }
 
@@ -406,7 +406,7 @@ async function registerWebhook(
 
 /** Strip PII from raw Google event before storing. Keep structure for debugging. */
 function scrubRawEvent(event: calendar_v3.Schema$Event): Record<string, unknown> {
-  const { attendees, creator, organizer, description, ...safe } = event;
+  const { attendees, creator, organizer, description, conferenceData, extendedProperties, ...safe } = event;
   return {
     ...safe,
     attendees: attendees?.map((a) => ({

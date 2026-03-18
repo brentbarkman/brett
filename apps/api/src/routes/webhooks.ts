@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma.js";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const router = new Hono();
 const syncDebounce = new Map<string, NodeJS.Timeout>();
@@ -22,15 +22,19 @@ router.post("/google-calendar", async (c) => {
   if (!calendarList) return c.json({ error: "Unknown channel" }, 404);
 
   // Verify HMAC token — always require valid signature
-  const hmacKey = process.env.CALENDAR_WEBHOOK_HMAC_KEY ?? process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+  const hmacKey = process.env.CALENDAR_WEBHOOK_HMAC_KEY;
   if (!hmacKey) {
-    console.error("[webhooks] CALENDAR_WEBHOOK_HMAC_KEY / CALENDAR_TOKEN_ENCRYPTION_KEY not set, rejecting webhook");
+    console.error("[webhooks] CALENDAR_WEBHOOK_HMAC_KEY not set, rejecting webhook");
     return c.json({ error: "Server misconfigured" }, 500);
   }
   const expectedToken = createHmac("sha256", hmacKey)
     .update(channelId)
     .digest("hex");
-  if (!channelToken || channelToken !== expectedToken) {
+  if (
+    !channelToken ||
+    channelToken.length !== expectedToken.length ||
+    !timingSafeEqual(Buffer.from(channelToken), Buffer.from(expectedToken))
+  ) {
     return c.json({ error: "Invalid token" }, 403);
   }
 

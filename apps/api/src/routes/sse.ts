@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { randomBytes } from "node:crypto";
 import { addSSEConnection } from "../lib/sse.js";
-import { auth } from "../lib/auth.js";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 
 const router = new Hono();
@@ -22,9 +21,21 @@ setInterval(() => {
   }
 }, 60_000);
 
+const MAX_TICKETS_PER_USER = 5;
+
 // Issue a short-lived ticket for SSE connection
 authedRouter.post("/ticket", authMiddleware, async (c) => {
   const user = c.get("user");
+
+  // Enforce per-user cap to prevent unbounded growth
+  let userTicketCount = 0;
+  for (const entry of sseTickets.values()) {
+    if (entry.userId === user.id) userTicketCount++;
+  }
+  if (userTicketCount >= MAX_TICKETS_PER_USER) {
+    return c.json({ error: "Too many pending tickets" }, 429);
+  }
+
   const ticket = randomBytes(32).toString("hex");
   sseTickets.set(ticket, { userId: user.id, createdAt: Date.now() });
   return c.json({ ticket });
@@ -36,28 +47,16 @@ router.route("/", authedRouter);
 router.get("/stream", async (c) => {
   let userId: string | null = null;
 
-  // Try ticket-based auth first
+  // Ticket-based auth only — no raw token fallback to avoid token-in-URL exposure
   const ticket = c.req.query("ticket");
-  if (ticket) {
-    const entry = sseTickets.get(ticket);
-    if (entry && Date.now() - entry.createdAt <= TICKET_TTL_MS) {
-      sseTickets.delete(ticket); // single-use
-      userId = entry.userId;
-    }
-  }
+  if (!ticket) return c.json({ error: "Missing ticket" }, 401);
 
-  // Fall back to token-based auth
-  if (!userId) {
-    const token = c.req.query("token");
-    const headers = new Headers(c.req.raw.headers);
-    if (token && !headers.get("Authorization")) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-
-    const session = await auth.api.getSession({ headers });
-    if (!session) return c.json({ error: "Unauthorized" }, 401);
-    userId = session.user.id;
+  const entry = sseTickets.get(ticket);
+  if (!entry || Date.now() - entry.createdAt > TICKET_TTL_MS) {
+    return c.json({ error: "Invalid or expired ticket" }, 401);
   }
+  sseTickets.delete(ticket); // single-use
+  userId = entry.userId;
 
   const streamUserId = userId;
 
@@ -66,7 +65,7 @@ router.get("/stream", async (c) => {
       const encoder = new TextEncoder();
       controller.enqueue(
         encoder.encode(
-          `event: connected\ndata: ${JSON.stringify({ userId: streamUserId })}\n\n`,
+          `event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`,
         ),
       );
 
