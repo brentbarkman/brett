@@ -1,0 +1,218 @@
+import { Hono } from "hono";
+import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
+import { prisma } from "../lib/prisma.js";
+import {
+  getCalendarAuthUrl,
+  exchangeCalendarCode,
+  getCalendarClient,
+  stopWatch,
+} from "../lib/google-calendar.js";
+import { encryptToken } from "../lib/token-encryption.js";
+import { initialSync } from "../services/calendar-sync.js";
+import { generateId } from "@brett/utils";
+import { google } from "googleapis";
+
+const calendarAccounts = new Hono<AuthEnv>();
+
+// All routes require auth
+calendarAccounts.use("*", authMiddleware);
+
+// GET / — List connected accounts with their calendars
+calendarAccounts.get("/", async (c) => {
+  const user = c.get("user");
+
+  const accounts = await prisma.googleAccount.findMany({
+    where: { userId: user.id },
+    include: {
+      calendars: {
+        orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
+      },
+    },
+    orderBy: { connectedAt: "asc" },
+  });
+
+  return c.json(
+    accounts.map((a) => ({
+      id: a.id,
+      googleEmail: a.googleEmail,
+      connectedAt: a.connectedAt.toISOString(),
+      calendars: a.calendars.map((cal) => ({
+        id: cal.id,
+        googleCalendarId: cal.googleCalendarId,
+        name: cal.name,
+        color: cal.color,
+        isPrimary: cal.isPrimary,
+        isVisible: cal.isVisible,
+      })),
+    })),
+  );
+});
+
+// POST /connect — Initiate OAuth (returns URL, state encodes userId as base64url)
+calendarAccounts.post("/connect", async (c) => {
+  const user = c.get("user");
+  const state = Buffer.from(user.id).toString("base64url");
+  const url = getCalendarAuthUrl(state);
+  return c.json({ url });
+});
+
+// GET /callback — OAuth callback: exchange code, get Google user info, upsert GoogleAccount
+// NOTE: Desktop flow works via an ephemeral localhost server in Electron that
+// catches the redirect and forwards to this endpoint.
+calendarAccounts.get("/callback", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+
+  if (!code || !state) {
+    return c.json({ error: "Missing code or state" }, 400);
+  }
+
+  let userId: string;
+  try {
+    userId = Buffer.from(state, "base64url").toString("utf8");
+  } catch {
+    return c.json({ error: "Invalid state" }, 400);
+  }
+
+  // Verify the state matches the authenticated user
+  const user = c.get("user");
+  if (userId !== user.id) {
+    return c.json({ error: "State mismatch" }, 403);
+  }
+
+  // Exchange the auth code for tokens
+  const tokens = await exchangeCalendarCode(code);
+  if (!tokens.access_token || !tokens.refresh_token) {
+    return c.json({ error: "Failed to obtain tokens" }, 400);
+  }
+
+  // Get Google user info
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({ access_token: tokens.access_token });
+  const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+  const userInfo = await oauth2.userinfo.get();
+
+  const googleEmail = userInfo.data.email;
+  const googleUserId = userInfo.data.id;
+
+  if (!googleEmail || !googleUserId) {
+    return c.json({ error: "Failed to get Google user info" }, 400);
+  }
+
+  // Upsert GoogleAccount with encrypted tokens
+  const account = await prisma.googleAccount.upsert({
+    where: {
+      userId_googleUserId: {
+        userId: user.id,
+        googleUserId,
+      },
+    },
+    create: {
+      id: generateId(),
+      userId: user.id,
+      googleEmail,
+      googleUserId,
+      accessToken: encryptToken(tokens.access_token),
+      refreshToken: encryptToken(tokens.refresh_token),
+      tokenExpiresAt: tokens.expiry_date
+        ? new Date(tokens.expiry_date)
+        : new Date(Date.now() + 3600 * 1000),
+    },
+    update: {
+      googleEmail,
+      accessToken: encryptToken(tokens.access_token),
+      refreshToken: encryptToken(tokens.refresh_token),
+      tokenExpiresAt: tokens.expiry_date
+        ? new Date(tokens.expiry_date)
+        : new Date(Date.now() + 3600 * 1000),
+    },
+  });
+
+  // Trigger initial sync in background
+  initialSync(account.id).catch((err) => {
+    console.error(`[calendar-accounts] Initial sync failed for account ${account.id}:`, err);
+  });
+
+  return c.json({
+    id: account.id,
+    googleEmail: account.googleEmail,
+    connectedAt: account.connectedAt.toISOString(),
+  });
+});
+
+// DELETE /:id — Disconnect: stop watches, cascade delete
+calendarAccounts.delete("/:id", async (c) => {
+  const user = c.get("user");
+  const accountId = c.req.param("id");
+
+  const account = await prisma.googleAccount.findFirst({
+    where: { id: accountId, userId: user.id },
+    include: { calendars: true },
+  });
+
+  if (!account) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  // Stop all webhook watches
+  try {
+    const client = await getCalendarClient(account.id);
+    for (const cal of account.calendars) {
+      if (cal.watchChannelId && cal.watchResourceId) {
+        try {
+          await stopWatch(client, cal.watchChannelId, cal.watchResourceId);
+        } catch {
+          // Watch may already be expired, safe to ignore
+        }
+      }
+    }
+  } catch {
+    // If we can't get a client (e.g. tokens revoked), just proceed with deletion
+  }
+
+  // Cascade delete (GoogleAccount -> CalendarList -> CalendarEvent, etc.)
+  await prisma.googleAccount.delete({ where: { id: account.id } });
+
+  return c.json({ ok: true });
+});
+
+// PATCH /:accountId/calendars/:calId — Toggle calendar visibility
+calendarAccounts.patch("/:accountId/calendars/:calId", async (c) => {
+  const user = c.get("user");
+  const accountId = c.req.param("accountId");
+  const calId = c.req.param("calId");
+
+  // Verify account ownership
+  const account = await prisma.googleAccount.findFirst({
+    where: { id: accountId, userId: user.id },
+  });
+  if (!account) {
+    return c.json({ error: "Account not found" }, 404);
+  }
+
+  const calendar = await prisma.calendarList.findFirst({
+    where: { id: calId, googleAccountId: accountId },
+  });
+  if (!calendar) {
+    return c.json({ error: "Calendar not found" }, 404);
+  }
+
+  const body = await c.req.json();
+  const isVisible = typeof body.isVisible === "boolean" ? body.isVisible : calendar.isVisible;
+
+  const updated = await prisma.calendarList.update({
+    where: { id: calendar.id },
+    data: { isVisible },
+  });
+
+  return c.json({
+    id: updated.id,
+    googleCalendarId: updated.googleCalendarId,
+    name: updated.name,
+    color: updated.color,
+    isPrimary: updated.isPrimary,
+    isVisible: updated.isVisible,
+  });
+});
+
+export default calendarAccounts;
