@@ -7,14 +7,10 @@ import {
   watchCalendar,
 } from "../lib/google-calendar.js";
 import { extractMeetingLink } from "./meeting-link.js";
+import { publishSSE } from "../lib/sse.js";
 import { generateId } from "@brett/utils";
 import { createHmac } from "crypto";
 import type { calendar_v3 } from "googleapis";
-
-// Stub until SSE module is available
-const publishSSE = (_userId: string, _event: unknown) => {
-  /* no-op for now */
-};
 
 const SYNC_WINDOW_PAST_DAYS = 30;
 const SYNC_WINDOW_FUTURE_DAYS = 90;
@@ -90,7 +86,7 @@ export async function initialSync(googleAccountId: string): Promise<void> {
 
   publishSSE(account.userId, {
     type: "calendar.sync.complete",
-    googleAccountId,
+    payload: { googleAccountId },
   });
 }
 
@@ -219,8 +215,7 @@ async function upsertEvents(
         await prisma.calendarEvent.delete({ where: { id: existing.id } });
         publishSSE(userId, {
           type: "calendar.event.deleted",
-          eventId: existing.id,
-          googleEventId: event.id,
+          payload: { eventId: existing.id, googleEventId: event.id },
         });
       }
       continue;
@@ -313,15 +308,13 @@ async function upsertEvents(
       });
       publishSSE(userId, {
         type: "calendar.event.updated",
-        eventId: existing.id,
-        googleEventId: event.id,
+        payload: { eventId: existing.id, googleEventId: event.id },
       });
     } else {
       const created = await prisma.calendarEvent.create({ data: eventData });
       publishSSE(userId, {
         type: "calendar.event.created",
-        eventId: created.id,
-        googleEventId: event.id,
+        payload: { eventId: created.id, googleEventId: event.id },
       });
     }
   }

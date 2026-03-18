@@ -1,6 +1,9 @@
 import cron from "node-cron";
 import { sendHeartbeats, getConnectionCount } from "../lib/sse.js";
 import { prisma } from "../lib/prisma.js";
+import { getCalendarClient, watchCalendar, stopWatch } from "../lib/google-calendar.js";
+import { generateId } from "@brett/utils";
+import { createHmac } from "crypto";
 
 export function startCronJobs(): void {
   // SSE heartbeat — every 30 seconds
@@ -25,15 +28,50 @@ export function startCronJobs(): void {
 
       console.log(`[cron] Renewing ${expiring.length} expiring webhook watches`);
 
-      // TODO: implement renewWatch in calendar-sync service
-      // const { renewWatch } = await import("../services/calendar-sync.js");
-      // for (const cal of expiring) {
-      //   try {
-      //     await renewWatch(cal);
-      //   } catch (err) {
-      //     console.error(`[cron] Failed to renew watch for calendar ${cal.id}:`, err);
-      //   }
-      // }
+      const encryptionKey = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+      if (!encryptionKey) {
+        console.warn("[cron] CALENDAR_TOKEN_ENCRYPTION_KEY not set, skipping webhook renewal");
+        return;
+      }
+
+      for (const cal of expiring) {
+        try {
+          const client = await getCalendarClient(cal.googleAccountId);
+
+          // Stop the old watch if we have the resourceId
+          if (cal.watchChannelId && cal.watchResourceId) {
+            try {
+              await stopWatch(client, cal.watchChannelId, cal.watchResourceId);
+            } catch {
+              // Old watch may already be expired, safe to ignore
+            }
+          }
+
+          // Register a new watch
+          const channelId = generateId();
+          const token = createHmac("sha256", encryptionKey)
+            .update(channelId)
+            .digest("hex");
+
+          const channel = await watchCalendar(client, cal.googleCalendarId, channelId, token);
+
+          await prisma.calendarList.update({
+            where: { id: cal.id },
+            data: {
+              watchChannelId: channelId,
+              watchResourceId: channel.resourceId ?? null,
+              watchToken: token,
+              watchExpiration: channel.expiration
+                ? new Date(Number(channel.expiration))
+                : null,
+            },
+          });
+
+          console.log(`[cron] Renewed watch for calendar ${cal.googleCalendarId}`);
+        } catch (err) {
+          console.error(`[cron] Failed to renew watch for calendar ${cal.id}:`, err);
+        }
+      }
     } catch (err) {
       console.error("[cron] Webhook renewal failed:", err);
     }
