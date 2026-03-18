@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Video } from "lucide-react";
+import { ChevronLeft, ChevronRight, Video, X } from "lucide-react";
 import type {
   CalendarEventDisplay,
   CalendarRsvpStatus,
@@ -13,6 +13,8 @@ interface CalendarTimelineProps {
   onEventClick: (event: CalendarEventDisplay) => void;
   onQuickRsvp?: (eventId: string, status: CalendarRsvpStatus) => void;
   isLoading?: boolean;
+  onConnect?: () => void;
+  onDismiss?: () => void;
 }
 
 interface ContextMenuState {
@@ -143,7 +145,118 @@ export function CalendarTimeline({
   onEventClick,
   onQuickRsvp,
   isLoading,
+  onConnect,
+  onDismiss,
 }: CalendarTimelineProps) {
+  // Empty state: real-looking timeline with ghost events + one live CTA at current time
+  if (!isLoading && events.length === 0 && onConnect && onDismiss) {
+    const now = new Date();
+    const ghostToday = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    const gh = 60; // hourHeight
+    const s = 8; // startHour
+    const totalH = 10;
+    const ghostHours = Array.from({ length: totalH + 1 }, (_, i) => s + i);
+    const nowH = now.getHours();
+    const nowM = now.getMinutes();
+    const nowOffset = ((nowH - s) + nowM / 60) * gh;
+
+    // Place the "live" CTA event at the current hour, clamped to working hours
+    const ctaHour = Math.max(s, Math.min(nowH, s + totalH - 2));
+    const ctaTop = (ctaHour - s) * gh + (nowM > 30 ? 30 : 0);
+
+    // Ghost events — a full realistic day, positioned to avoid the CTA slot
+    const ghostEvents = [
+      { top: 0 * gh, h: 0.5 * gh, label: "Daily standup", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.25)", text: "rgb(147,197,253)" },
+      { top: 0.75 * gh, h: 1.25 * gh, label: "Sprint planning", bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.25)", text: "rgb(134,239,172)" },
+      { top: 2.5 * gh, h: 0.5 * gh, label: "Coffee chat w/ Alex", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.25)", text: "rgb(252,211,77)" },
+      { top: 3.5 * gh, h: 1 * gh, label: "Lunch", bg: "rgba(249,115,22,0.10)", border: "rgba(249,115,22,0.22)", text: "rgb(253,186,116)" },
+      { top: 5 * gh, h: 2 * gh, label: "Deep work", bg: "rgba(168,85,247,0.10)", border: "rgba(168,85,247,0.22)", text: "rgb(216,180,254)" },
+      { top: 7.5 * gh, h: 0.75 * gh, label: "Design review", bg: "rgba(6,182,212,0.10)", border: "rgba(6,182,212,0.22)", text: "rgb(103,232,249)" },
+      { top: 8.5 * gh, h: 0.5 * gh, label: "1:1 w/ manager", bg: "rgba(99,102,241,0.10)", border: "rgba(99,102,241,0.22)", text: "rgb(165,180,252)" },
+      { top: 9.25 * gh, h: 0.75 * gh, label: "Retro", bg: "rgba(236,72,153,0.10)", border: "rgba(236,72,153,0.22)", text: "rgb(249,168,212)" },
+    ].filter((evt) => {
+      // Remove any ghost event that overlaps with the CTA
+      const ctaBottom = ctaTop + 1.5 * gh;
+      return evt.top + evt.h <= ctaTop || evt.top >= ctaBottom;
+    });
+
+    return (
+      <div className="flex flex-col h-full bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden relative">
+        {/* Header — looks real */}
+        <div className="flex items-center justify-between p-4 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <h2 className="text-white font-medium">{ghostToday}</h2>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onDismiss}
+              className="p-1 text-white/30 hover:text-white/60 transition-colors rounded"
+              title="Hide calendar"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Timeline */}
+        <div className="flex-1 overflow-y-auto relative scrollbar-hide">
+          <div className="relative" style={{ height: `${totalH * gh}px` }}>
+            {/* Hour grid — fully visible */}
+            {ghostHours.map((hour, i) => (
+              <div key={hour} className="absolute w-full flex items-start" style={{ top: `${i * gh}px` }}>
+                <div className="w-12 text-right pr-2 -mt-2.5">
+                  <span className="text-[10px] text-white/30 font-medium">
+                    {hour === 12 ? "12 PM" : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+                  </span>
+                </div>
+                <div className="flex-1 border-t border-white/5" />
+              </div>
+            ))}
+
+            {/* Current time line */}
+            {nowH >= s && nowH < s + totalH && (
+              <div className="absolute left-12 right-0 flex items-center z-20 pointer-events-none" style={{ top: `${nowOffset}px` }}>
+                <div className="w-2 h-2 rounded-full bg-red-500 -ml-1" />
+                <div className="flex-1 border-t border-red-500/50" />
+              </div>
+            )}
+
+            {/* Ghost events — slightly faded to hint they're placeholders */}
+            <div className="absolute top-0 left-12 right-4 bottom-0">
+              {ghostEvents.map((evt, i) => (
+                <div
+                  key={i}
+                  className="absolute left-0 right-0 rounded-md border-l-2 px-2.5 py-1.5 opacity-50 select-none"
+                  style={{ top: `${evt.top}px`, height: `${evt.h}px`, backgroundColor: evt.bg, borderLeftColor: evt.border }}
+                >
+                  <span className="text-[10px] font-semibold" style={{ color: evt.text }}>{evt.label}</span>
+                </div>
+              ))}
+
+              {/* Live CTA event — looks real, clickable */}
+              <button
+                onClick={onConnect}
+                className="absolute left-0 right-0 rounded-md border-l-2 px-2.5 py-2 text-left cursor-pointer transition-all hover:brightness-125 group"
+                style={{
+                  top: `${ctaTop}px`,
+                  height: `${1.5 * gh}px`,
+                  backgroundColor: "rgba(59, 130, 246, 0.15)",
+                  borderLeftColor: "rgba(59, 130, 246, 0.4)",
+                }}
+              >
+                <span className="text-[11px] font-semibold text-blue-300 block">Connect your calendar</span>
+                <span className="text-[10px] text-blue-300/50 block mt-0.5">See your real schedule, summaries & alerts</span>
+                <span className="text-[9px] text-blue-400/70 font-medium mt-1.5 block group-hover:text-blue-300 transition-colors">
+                  Click to connect Google Calendar →
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const startHour = 8;
   const endHour = 18;
   const totalHours = endHour - startHour;

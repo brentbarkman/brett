@@ -47,6 +47,7 @@ import {
   useCalendarEventBrettMessages,
   useSendCalendarBrettMessage,
 } from "./api/calendar";
+import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
@@ -55,11 +56,16 @@ import { UpcomingView } from "./views/UpcomingView";
 import { NotFoundView } from "./views/NotFoundView";
 import CalendarPage from "./pages/CalendarPage";
 
-function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar }: {
+const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
+
+function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar }: {
   children: React.ReactNode;
   onEventClick: (e: any) => void;
   calendarEvents: CalendarEventDisplay[];
   isLoadingCalendar?: boolean;
+  showSidebar: boolean;
+  onConnectCalendar?: () => void;
+  onDismissSidebar?: () => void;
 }) {
   return (
     <>
@@ -68,9 +74,11 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar 
           {children}
         </div>
       </main>
-      <div className="w-[300px] flex-shrink-0 py-2">
-        <CalendarTimeline events={calendarEvents} onEventClick={onEventClick} isLoading={isLoadingCalendar} />
-      </div>
+      {showSidebar && (
+        <div className="w-[300px] flex-shrink-0 py-2">
+          <CalendarTimeline events={calendarEvents} onEventClick={onEventClick} isLoading={isLoadingCalendar} onConnect={onConnectCalendar} onDismiss={onDismissSidebar} />
+        </div>
+      )}
     </>
   );
 }
@@ -176,6 +184,32 @@ export function App() {
 
   // Brett thread hooks
   const sendBrettMessage = useSendBrettMessage();
+
+  // Calendar account state — for sidebar visibility
+  const { data: calendarAccounts = [] } = useCalendarAccounts();
+  const connectCalendar = useConnectCalendar();
+  const hasCalendarAccounts = calendarAccounts.length > 0;
+  const [sidebarDismissed, setSidebarDismissed] = useState(
+    () => localStorage.getItem(SIDEBAR_DISMISSED_KEY) === "true",
+  );
+  const showCalendarSidebar = hasCalendarAccounts || !sidebarDismissed;
+
+  const handleConnectCalendar = useCallback(() => {
+    connectCalendar.mutate();
+  }, [connectCalendar]);
+
+  const handleDismissSidebar = useCallback(() => {
+    setSidebarDismissed(true);
+    localStorage.setItem(SIDEBAR_DISMISSED_KEY, "true");
+  }, []);
+
+  // Clear dismissed state when accounts are connected
+  useEffect(() => {
+    if (hasCalendarAccounts && sidebarDismissed) {
+      setSidebarDismissed(false);
+      localStorage.removeItem(SIDEBAR_DISMISSED_KEY);
+    }
+  }, [hasCalendarAccounts, sidebarDismissed]);
 
   // Today's calendar events for sidebar timeline
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
@@ -471,7 +505,7 @@ export function App() {
             <Route path="/settings" element={<SettingsPage onBack={() => navigate("/today")} />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
             <Route path="/today" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={handleConnectCalendar} onDismissSidebar={handleDismissSidebar}>
                 <TodayView
                   lists={lists}
                   onItemClick={handleItemClick}
@@ -481,12 +515,12 @@ export function App() {
               </MainLayout>
             } />
             <Route path="/upcoming" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={handleConnectCalendar} onDismissSidebar={handleDismissSidebar}>
                 <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/inbox" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={handleConnectCalendar} onDismissSidebar={handleDismissSidebar}>
                 <InboxView
                   things={inboxData?.visible ?? []}
                   lists={lists}
@@ -501,13 +535,13 @@ export function App() {
               </MainLayout>
             } />
             <Route path="/lists/:slug" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={handleConnectCalendar} onDismissSidebar={handleDismissSidebar}>
                 <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/" element={<Navigate to="/today" replace />} />
             <Route path="*" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={handleConnectCalendar} onDismissSidebar={handleDismissSidebar}>
                 <NotFoundView />
               </MainLayout>
             } />
