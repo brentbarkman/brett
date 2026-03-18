@@ -1,12 +1,15 @@
 import React, { useState } from "react";
-import { Calendar, Plus, Trash2 } from "lucide-react";
+import { Calendar, Plus, Trash2, RefreshCw } from "lucide-react";
 import {
   useCalendarAccounts,
   useConnectCalendar,
   useDisconnectCalendar,
   useToggleCalendarVisibility,
 } from "../api/calendar-accounts";
+import { useFetchCalendarRange } from "../api/calendar";
 import type { ConnectedCalendarAccount } from "@brett/types";
+
+const isDev = import.meta.env.DEV;
 
 function GoogleIcon() {
   return (
@@ -128,6 +131,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
 export function CalendarSection() {
   const { data: accounts = [], isLoading, error } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
+  const fetchRange = useFetchCalendarRange();
 
   return (
     <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
@@ -175,6 +179,27 @@ export function CalendarSection() {
           {accounts.map((account) => (
             <ConnectedAccountRow key={account.id} account={account} />
           ))}
+        </div>
+      )}
+
+      {isDev && !isLoading && accounts.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-white/5">
+          <button
+            onClick={() => {
+              const now = new Date();
+              const start = new Date(now);
+              start.setDate(start.getDate() - 30);
+              const end = new Date(now);
+              end.setDate(end.getDate() + 90);
+              const fmt = (d: Date) => d.toISOString().split("T")[0];
+              fetchRange.mutate({ startDate: fmt(start), endDate: fmt(end) });
+            }}
+            disabled={fetchRange.isPending}
+            className="flex items-center gap-1.5 text-xs text-amber-400/60 hover:text-amber-400 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw size={12} className={fetchRange.isPending ? "animate-spin" : ""} />
+            {fetchRange.isPending ? "Resyncing..." : "Force resync (dev)"}
+          </button>
         </div>
       )}
     </div>
