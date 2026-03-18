@@ -4,12 +4,16 @@ import type {
   Thing,
   CalendarEventDisplay,
   ThingDetail,
+  CalendarEventDetailResponse,
+  CalendarRsvpStatus,
+  BrettMessageRecord,
   DueDatePrecision,
   ReminderType,
   RecurrenceType,
   BrettMessage,
 } from "@brett/types";
 import { TaskDetailPanel } from "./TaskDetailPanel";
+import { CalendarEventDetailPanel } from "./CalendarEventDetailPanel";
 
 interface DetailPanelProps {
   isOpen: boolean;
@@ -44,6 +48,18 @@ interface DetailPanelProps {
   isSendingBrettMessage?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
+  // Calendar event callbacks
+  calendarEventDetail?: CalendarEventDetailResponse | null;
+  isLoadingCalendarDetail?: boolean;
+  onUpdateRsvp?: (status: CalendarRsvpStatus, comment?: string) => void;
+  onUpdateCalendarNotes?: (content: string) => void;
+  calendarBrettMessages?: BrettMessageRecord[];
+  calendarBrettTotalCount?: number;
+  calendarBrettHasMore?: boolean;
+  onSendCalendarBrettMessage?: (content: string) => void;
+  onLoadMoreCalendarBrettMessages?: () => void;
+  isSendingCalendarBrettMessage?: boolean;
+  isLoadingMoreCalendarBrettMessages?: boolean;
 }
 
 export function DetailPanel({
@@ -74,6 +90,17 @@ export function DetailPanel({
   isSendingBrettMessage,
   isLoadingMoreBrettMessages,
   brettTotalCount,
+  calendarEventDetail,
+  isLoadingCalendarDetail,
+  onUpdateRsvp,
+  onUpdateCalendarNotes,
+  calendarBrettMessages,
+  calendarBrettTotalCount,
+  calendarBrettHasMore,
+  onSendCalendarBrettMessage,
+  onLoadMoreCalendarBrettMessages,
+  isSendingCalendarBrettMessage,
+  isLoadingMoreCalendarBrettMessages,
 }: DetailPanelProps) {
   if (!item) return null;
   const isTask = !("googleEventId" in item);
@@ -146,71 +173,28 @@ export function DetailPanel({
             </h2>
           </div>
         )
+      ) : isLoadingCalendarDetail ? (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 size={24} className="text-white/30 animate-spin" />
+        </div>
+      ) : calendarEventDetail ? (
+        <CalendarEventDetailPanel
+          detail={calendarEventDetail}
+          onUpdateRsvp={onUpdateRsvp ?? (() => {})}
+          onUpdateNotes={onUpdateCalendarNotes ?? (() => {})}
+          brettMessages={calendarBrettMessages ?? []}
+          brettTotalCount={calendarBrettTotalCount ?? 0}
+          brettHasMore={calendarBrettHasMore ?? false}
+          onSendBrettMessage={onSendCalendarBrettMessage ?? (() => {})}
+          onLoadMoreBrettMessages={onLoadMoreCalendarBrettMessages ?? (() => {})}
+          isSendingBrettMessage={isSendingCalendarBrettMessage ?? false}
+          isLoadingMoreBrettMessages={isLoadingMoreCalendarBrettMessages ?? false}
+        />
       ) : (
         <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
           <h2 className="text-2xl font-semibold text-white mb-6 leading-tight">
             {item.title}
           </h2>
-
-          {/* Brett's Take */}
-          {item.brettObservation && (
-            <div className="mb-8 bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
-                  Brett's Take
-                </span>
-              </div>
-              <p className="text-sm italic text-blue-300/90 leading-relaxed">
-                &ldquo;{item.brettObservation}&rdquo;
-              </p>
-            </div>
-          )}
-
-          {/* Event Specific Details */}
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-sm text-white/80">
-                <Calendar size={16} className="text-white/40" />
-                <span>
-                  Today, {(item as CalendarEventDisplay).startTime} -{" "}
-                  {(item as CalendarEventDisplay).endTime}
-                </span>
-              </div>
-              {(item as CalendarEventDisplay).location && (
-                <div className="flex items-center gap-3 text-sm text-white/80">
-                  <MapPin size={16} className="text-white/40" />
-                  <span>{(item as CalendarEventDisplay).location}</span>
-                </div>
-              )}
-            </div>
-
-            {(item as CalendarEventDisplay).attendees && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Users size={14} className="text-white/40" />
-                  <span className="text-xs font-medium text-white/50 uppercase tracking-wider">
-                    Attendees
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {(item as CalendarEventDisplay).attendees!.map((attendee, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-3 bg-white/5 p-2 rounded-lg border border-white/5"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white shadow-inner">
-                        {attendee.initials}
-                      </div>
-                      <span className="text-sm text-white/90">
-                        {attendee.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       )}
       </div>
