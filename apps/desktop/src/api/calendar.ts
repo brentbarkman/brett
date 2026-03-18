@@ -64,11 +64,19 @@ export function useUpdateRsvp() {
         method: "PATCH",
         body: JSON.stringify(input),
       }),
-    onMutate: async ({ eventId, status }) => {
+    onMutate: async ({ eventId, status, comment }) => {
       await qc.cancelQueries({ queryKey: ["calendar-event-detail", eventId] });
       const prev = qc.getQueryData<CalendarEventDetailResponse>(["calendar-event-detail", eventId]);
       if (prev) {
-        qc.setQueryData(["calendar-event-detail", eventId], { ...prev, myResponseStatus: status });
+        // Update both myResponseStatus and the self-attendee in the attendees array
+        const updatedAttendees = prev.attendees?.map((a: any) =>
+          a.self ? { ...a, responseStatus: status, comment: comment ?? a.comment } : a,
+        );
+        qc.setQueryData(["calendar-event-detail", eventId], {
+          ...prev,
+          myResponseStatus: status,
+          attendees: updatedAttendees,
+        });
       }
       return { prev };
     },
