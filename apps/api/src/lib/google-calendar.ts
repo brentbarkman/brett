@@ -1,0 +1,205 @@
+import { google, type calendar_v3 } from "googleapis";
+import { prisma } from "./prisma.js";
+import { decryptToken, encryptToken } from "./token-encryption.js";
+
+const SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "openid",
+  "email",
+  "profile",
+];
+
+function getOAuthClient() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    `${process.env.BETTER_AUTH_URL}/calendar/accounts/callback`,
+  );
+}
+
+/** Generate OAuth URL for calendar connection */
+export function getCalendarAuthUrl(state: string): string {
+  const oauth2Client = getOAuthClient();
+  return oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: SCOPES,
+    state,
+    prompt: "consent",
+  });
+}
+
+/** Exchange auth code for tokens */
+export async function exchangeCalendarCode(code: string) {
+  const oauth2Client = getOAuthClient();
+  const { tokens } = await oauth2Client.getToken(code);
+  return tokens;
+}
+
+/** Get authenticated Calendar API client for a GoogleAccount. Auto-refreshes tokens. */
+export async function getCalendarClient(
+  googleAccountId: string,
+): Promise<calendar_v3.Calendar> {
+  const account = await prisma.googleAccount.findUniqueOrThrow({
+    where: { id: googleAccountId },
+  });
+
+  const oauth2Client = getOAuthClient();
+  oauth2Client.setCredentials({
+    access_token: decryptToken(account.accessToken),
+    refresh_token: decryptToken(account.refreshToken),
+    expiry_date: account.tokenExpiresAt.getTime(),
+  });
+
+  // Auto-refresh: when googleapis refreshes the token, persist it
+  oauth2Client.on("tokens", async (tokens) => {
+    const updateData: Record<string, unknown> = {};
+    if (tokens.access_token) {
+      updateData.accessToken = encryptToken(tokens.access_token);
+    }
+    if (tokens.refresh_token) {
+      updateData.refreshToken = encryptToken(tokens.refresh_token);
+    }
+    if (tokens.expiry_date) {
+      updateData.tokenExpiresAt = new Date(tokens.expiry_date);
+    }
+    if (Object.keys(updateData).length > 0) {
+      await prisma.googleAccount.update({
+        where: { id: googleAccountId },
+        data: updateData,
+      });
+    }
+  });
+
+  return google.calendar({ version: "v3", auth: oauth2Client });
+}
+
+/** Fetch all calendars for the authenticated user */
+export async function fetchCalendarList(
+  calendarClient: calendar_v3.Calendar,
+): Promise<calendar_v3.Schema$CalendarListEntry[]> {
+  const res = await calendarClient.calendarList.list();
+  return res.data.items ?? [];
+}
+
+interface FetchEventsOptions {
+  timeMin?: string;
+  timeMax?: string;
+  syncToken?: string;
+  maxResults?: number;
+}
+
+interface FetchEventsResult {
+  events: calendar_v3.Schema$Event[];
+  nextSyncToken: string | null | undefined;
+}
+
+/** Fetch events with optional syncToken for incremental sync. Handles pagination. */
+export async function fetchEvents(
+  calendarClient: calendar_v3.Calendar,
+  calendarId: string,
+  options: FetchEventsOptions = {},
+): Promise<FetchEventsResult> {
+  const allEvents: calendar_v3.Schema$Event[] = [];
+  let pageToken: string | undefined;
+  let nextSyncToken: string | null | undefined;
+
+  do {
+    const params: calendar_v3.Params$Resource$Events$List = {
+      calendarId,
+      maxResults: options.maxResults ?? 250,
+      singleEvents: true,
+      orderBy: "startTime",
+      pageToken,
+    };
+
+    if (options.syncToken) {
+      params.syncToken = options.syncToken;
+    } else {
+      if (options.timeMin) params.timeMin = options.timeMin;
+      if (options.timeMax) params.timeMax = options.timeMax;
+    }
+
+    const res = await calendarClient.events.list(params);
+    const items = res.data.items ?? [];
+    allEvents.push(...items);
+
+    pageToken = res.data.nextPageToken ?? undefined;
+    nextSyncToken = res.data.nextSyncToken;
+  } while (pageToken);
+
+  return { events: allEvents, nextSyncToken };
+}
+
+/** Update RSVP status for an event */
+export async function updateRsvp(
+  calendarClient: calendar_v3.Calendar,
+  calendarId: string,
+  eventId: string,
+  selfEmail: string,
+  status: "accepted" | "declined" | "tentative",
+  comment?: string,
+): Promise<calendar_v3.Schema$Event> {
+  const eventRes = await calendarClient.events.get({ calendarId, eventId });
+  const event = eventRes.data;
+
+  const attendees = event.attendees ?? [];
+  const selfAttendee = attendees.find(
+    (a) => a.self === true || a.email?.toLowerCase() === selfEmail.toLowerCase(),
+  );
+
+  if (selfAttendee) {
+    selfAttendee.responseStatus = status;
+    if (comment) selfAttendee.comment = comment;
+  }
+
+  const res = await calendarClient.events.patch({
+    calendarId,
+    eventId,
+    sendUpdates: "none",
+    requestBody: { attendees },
+  });
+
+  return res.data;
+}
+
+/** Register webhook watch on a calendar */
+export async function watchCalendar(
+  calendarClient: calendar_v3.Calendar,
+  calendarId: string,
+  channelId: string,
+  token: string,
+): Promise<calendar_v3.Schema$Channel> {
+  const res = await calendarClient.events.watch({
+    calendarId,
+    requestBody: {
+      id: channelId,
+      type: "web_hook",
+      address: `${process.env.BETTER_AUTH_URL}/calendar/webhook`,
+      token,
+    },
+  });
+  return res.data;
+}
+
+/** Stop webhook watch */
+export async function stopWatch(
+  calendarClient: calendar_v3.Calendar,
+  channelId: string,
+  resourceId: string,
+): Promise<void> {
+  await calendarClient.channels.stop({
+    requestBody: {
+      id: channelId,
+      resourceId,
+    },
+  });
+}
+
+/** Fetch Google color definitions */
+export async function fetchColors(
+  calendarClient: calendar_v3.Calendar,
+): Promise<calendar_v3.Schema$Colors> {
+  const res = await calendarClient.colors.get();
+  return res.data;
+}
