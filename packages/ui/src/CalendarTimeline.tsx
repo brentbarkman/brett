@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Video } from "lucide-react";
 import type {
   CalendarEventDisplay,
@@ -177,12 +177,19 @@ export function CalendarTimeline({
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
-  // Close context menu on click outside
+  // Close context menu on click outside or Escape
   useEffect(() => {
     if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
-    window.addEventListener("click", handler);
-    return () => window.removeEventListener("click", handler);
+    const clickHandler = () => setContextMenu(null);
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("click", clickHandler);
+    window.addEventListener("keydown", keyHandler);
+    return () => {
+      window.removeEventListener("click", clickHandler);
+      window.removeEventListener("keydown", keyHandler);
+    };
   }, [contextMenu]);
 
   const handleContextMenu = useCallback(
@@ -205,9 +212,9 @@ export function CalendarTimeline({
     [contextMenu, onQuickRsvp]
   );
 
-  // Layout computation
-  const layout = layoutEvents(events);
-  const buffers = findBuffers(events);
+  // Layout computation (memoized to avoid O(n²) recalc on unrelated re-renders)
+  const layout = useMemo(() => layoutEvents(events), [events]);
+  const buffers = useMemo(() => findBuffers(events), [events]);
 
   // Countdown: find next upcoming event
   const nowMinutes = currentHour * 60 + currentMinute;

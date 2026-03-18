@@ -2,6 +2,9 @@ import { google, type calendar_v3 } from "googleapis";
 import { prisma } from "./prisma.js";
 import { decryptToken, encryptToken } from "./token-encryption.js";
 
+/** Per-account mutex to prevent concurrent token refreshes */
+const clientCache = new Map<string, Promise<calendar_v3.Calendar>>();
+
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
@@ -40,6 +43,20 @@ export async function exchangeCalendarCode(code: string) {
 export async function getCalendarClient(
   googleAccountId: string,
 ): Promise<calendar_v3.Calendar> {
+  // Return existing pending client creation to prevent concurrent token refreshes
+  const pending = clientCache.get(googleAccountId);
+  if (pending) return pending;
+
+  const promise = createCalendarClient(googleAccountId);
+  clientCache.set(googleAccountId, promise);
+  promise.finally(() => clientCache.delete(googleAccountId));
+
+  return promise;
+}
+
+async function createCalendarClient(
+  googleAccountId: string,
+): Promise<calendar_v3.Calendar> {
   const account = await prisma.googleAccount.findUniqueOrThrow({
     where: { id: googleAccountId },
   });
@@ -58,6 +75,7 @@ export async function getCalendarClient(
       updateData.accessToken = encryptToken(tokens.access_token);
     }
     if (tokens.refresh_token) {
+      console.log(`[google-calendar] Refresh token rotated for account ${googleAccountId}`);
       updateData.refreshToken = encryptToken(tokens.refresh_token);
     }
     if (tokens.expiry_date) {
@@ -67,6 +85,8 @@ export async function getCalendarClient(
       await prisma.googleAccount.update({
         where: { id: googleAccountId },
         data: updateData,
+      }).catch((err) => {
+        console.error(`[google-calendar] Failed to persist refreshed tokens for ${googleAccountId}:`, err);
       });
     }
   });

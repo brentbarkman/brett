@@ -15,6 +15,11 @@ import type { calendar_v3 } from "googleapis";
 const SYNC_WINDOW_PAST_DAYS = 30;
 const SYNC_WINDOW_FUTURE_DAYS = 90;
 
+/** Guards against concurrent syncs for the same account */
+const inFlightSyncs = new Set<string>();
+
+type SyncChangeset = { created: string[]; updated: string[]; deleted: string[] };
+
 function getSyncTimeRange(): { timeMin: string; timeMax: string } {
   const now = new Date();
   const timeMin = new Date(now);
@@ -41,6 +46,7 @@ export async function initialSync(googleAccountId: string): Promise<void> {
   const calendars = await fetchCalendarList(client);
 
   const { timeMin, timeMax } = getSyncTimeRange();
+  const changeset: SyncChangeset = { created: [], updated: [], deleted: [] };
 
   for (const cal of calendars) {
     if (!cal.id) continue;
@@ -72,7 +78,10 @@ export async function initialSync(googleAccountId: string): Promise<void> {
       timeMax,
     });
 
-    await upsertEvents(events, account.userId, googleAccountId, calendarList.id);
+    const calChanges = await upsertEvents(events, account.userId, googleAccountId, calendarList.id);
+    changeset.created.push(...calChanges.created);
+    changeset.updated.push(...calChanges.updated);
+    changeset.deleted.push(...calChanges.deleted);
 
     if (nextSyncToken) {
       await prisma.calendarList.update({
@@ -86,7 +95,7 @@ export async function initialSync(googleAccountId: string): Promise<void> {
 
   publishSSE(account.userId, {
     type: "calendar.sync.complete",
-    payload: { googleAccountId },
+    payload: { googleAccountId, changeset },
   });
 }
 
@@ -96,66 +105,92 @@ export async function initialSync(googleAccountId: string): Promise<void> {
  * Falls back to full fetch if syncToken is missing or expired (410).
  */
 export async function incrementalSync(googleAccountId: string): Promise<void> {
-  const account = await prisma.googleAccount.findUniqueOrThrow({
-    where: { id: googleAccountId },
-  });
+  if (inFlightSyncs.has(googleAccountId)) return;
+  inFlightSyncs.add(googleAccountId);
 
-  const client = await getCalendarClient(googleAccountId);
+  try {
+    const account = await prisma.googleAccount.findUniqueOrThrow({
+      where: { id: googleAccountId },
+    });
 
-  const calendarLists = await prisma.calendarList.findMany({
-    where: { googleAccountId, isVisible: true },
-  });
+    const client = await getCalendarClient(googleAccountId);
 
-  for (const cal of calendarLists) {
-    try {
-      if (!cal.syncToken) {
-        // No syncToken — do a full fetch for this calendar
-        const { timeMin, timeMax } = getSyncTimeRange();
-        const { events, nextSyncToken } = await fetchEvents(
-          client,
-          cal.googleCalendarId,
-          { timeMin, timeMax },
-        );
+    const calendarLists = await prisma.calendarList.findMany({
+      where: { googleAccountId },
+    });
 
-        await upsertEvents(events, account.userId, googleAccountId, cal.id);
+    const changeset: SyncChangeset = { created: [], updated: [], deleted: [] };
 
-        if (nextSyncToken) {
+    for (const cal of calendarLists) {
+      try {
+        if (!cal.syncToken) {
+          // No syncToken — do a full fetch for this calendar
+          const { timeMin, timeMax } = getSyncTimeRange();
+          const { events, nextSyncToken } = await fetchEvents(
+            client,
+            cal.googleCalendarId,
+            { timeMin, timeMax },
+          );
+
+          const calChanges = await upsertEvents(events, account.userId, googleAccountId, cal.id);
+          changeset.created.push(...calChanges.created);
+          changeset.updated.push(...calChanges.updated);
+          changeset.deleted.push(...calChanges.deleted);
+
+          if (nextSyncToken) {
+            await prisma.calendarList.update({
+              where: { id: cal.id },
+              data: { syncToken: nextSyncToken },
+            });
+          }
+        } else {
+          // Incremental fetch using syncToken
+          const { events, nextSyncToken } = await fetchEvents(
+            client,
+            cal.googleCalendarId,
+            { syncToken: cal.syncToken },
+          );
+
+          const calChanges = await upsertEvents(events, account.userId, googleAccountId, cal.id);
+          changeset.created.push(...calChanges.created);
+          changeset.updated.push(...calChanges.updated);
+          changeset.deleted.push(...calChanges.deleted);
+
+          if (nextSyncToken) {
+            await prisma.calendarList.update({
+              where: { id: cal.id },
+              data: { syncToken: nextSyncToken },
+            });
+          }
+        }
+      } catch (err: unknown) {
+        if (isGoogleApiError(err) && err.code === 410) {
+          // 410 Gone — syncToken is invalid, clear it for next sync
           await prisma.calendarList.update({
             where: { id: cal.id },
-            data: { syncToken: nextSyncToken },
+            data: { syncToken: null },
           });
+          console.warn(
+            `[calendar-sync] syncToken expired for calendar ${cal.googleCalendarId}, cleared for re-sync`,
+          );
+        } else if (isGoogleApiError(err) && (err.code === 401 || err.code === 403)) {
+          // Token revoked or permission denied — stop syncing this account
+          console.error(
+            `[calendar-sync] Auth failed for account ${googleAccountId} (${err.code}): ${err.message}. Account needs re-authorization.`,
+          );
+          return;
+        } else {
+          throw err;
         }
-      } else {
-        // Incremental fetch using syncToken
-        const { events, nextSyncToken } = await fetchEvents(
-          client,
-          cal.googleCalendarId,
-          { syncToken: cal.syncToken },
-        );
-
-        await upsertEvents(events, account.userId, googleAccountId, cal.id);
-
-        if (nextSyncToken) {
-          await prisma.calendarList.update({
-            where: { id: cal.id },
-            data: { syncToken: nextSyncToken },
-          });
-        }
-      }
-    } catch (err: unknown) {
-      // 410 Gone — syncToken is invalid, clear it for next sync
-      if (isGoogleApiError(err) && err.code === 410) {
-        await prisma.calendarList.update({
-          where: { id: cal.id },
-          data: { syncToken: null },
-        });
-        console.warn(
-          `[calendar-sync] syncToken expired for calendar ${cal.googleCalendarId}, cleared for re-sync`,
-        );
-      } else {
-        throw err;
       }
     }
+
+    publishSSE(account.userId, {
+      type: "calendar.sync.complete",
+      payload: { googleAccountId, changeset },
+    });
+  } finally {
+    inFlightSyncs.delete(googleAccountId);
   }
 }
 
@@ -178,14 +213,24 @@ export async function onDemandFetch(
     where: { googleAccountId, isVisible: true },
   });
 
+  const changeset: SyncChangeset = { created: [], updated: [], deleted: [] };
+
   for (const cal of calendarLists) {
     const { events } = await fetchEvents(client, cal.googleCalendarId, {
       timeMin,
       timeMax,
     });
 
-    await upsertEvents(events, account.userId, googleAccountId, cal.id);
+    const calChanges = await upsertEvents(events, account.userId, googleAccountId, cal.id);
+    changeset.created.push(...calChanges.created);
+    changeset.updated.push(...calChanges.updated);
+    changeset.deleted.push(...calChanges.deleted);
   }
+
+  publishSSE(account.userId, {
+    type: "calendar.sync.complete",
+    payload: { googleAccountId, changeset },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +242,11 @@ async function upsertEvents(
   userId: string,
   googleAccountId: string,
   calendarListId: string,
-): Promise<void> {
+): Promise<SyncChangeset> {
+  const created: string[] = [];
+  const updated: string[] = [];
+  const deleted: string[] = [];
+
   for (const event of events) {
     if (!event.id) continue;
 
@@ -213,10 +262,7 @@ async function upsertEvents(
       });
       if (existing) {
         await prisma.calendarEvent.delete({ where: { id: existing.id } });
-        publishSSE(userId, {
-          type: "calendar.event.deleted",
-          payload: { eventId: existing.id, googleEventId: event.id },
-        });
+        deleted.push(existing.id);
       }
       continue;
     }
@@ -268,6 +314,7 @@ async function upsertEvents(
         }))
       : Prisma.DbNull;
 
+    const syncedAt = new Date();
     const eventData = {
       userId,
       googleAccountId,
@@ -288,36 +335,31 @@ async function upsertEvents(
       organizer,
       attendees,
       attachments,
-      rawGoogleEvent: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
-      syncedAt: new Date(),
+      rawGoogleEvent: scrubRawEvent(event) as Prisma.InputJsonValue,
+      syncedAt,
     };
 
-    const existing = await prisma.calendarEvent.findUnique({
+    const result = await prisma.calendarEvent.upsert({
       where: {
         googleAccountId_googleEventId: {
           googleAccountId,
           googleEventId: event.id,
         },
       },
+      create: eventData,
+      update: eventData,
     });
 
-    if (existing) {
-      await prisma.calendarEvent.update({
-        where: { id: existing.id },
-        data: eventData,
-      });
-      publishSSE(userId, {
-        type: "calendar.event.updated",
-        payload: { eventId: existing.id, googleEventId: event.id },
-      });
+    // Determine create vs update: if createdAt is within 1s of syncedAt, it was just created
+    const isNew = Math.abs(result.createdAt.getTime() - syncedAt.getTime()) < 1000;
+    if (isNew) {
+      created.push(result.id);
     } else {
-      const created = await prisma.calendarEvent.create({ data: eventData });
-      publishSSE(userId, {
-        type: "calendar.event.created",
-        payload: { eventId: created.id, googleEventId: event.id },
-      });
+      updated.push(result.id);
     }
   }
+
+  return { created, updated, deleted };
 }
 
 async function registerWebhook(
@@ -328,15 +370,15 @@ async function registerWebhook(
   const webhookBaseUrl = process.env.GOOGLE_WEBHOOK_BASE_URL;
   if (!webhookBaseUrl) return;
 
-  const encryptionKey = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
-  if (!encryptionKey) {
-    console.warn("[calendar-sync] CALENDAR_TOKEN_ENCRYPTION_KEY not set, skipping webhook registration");
+  const hmacSecret = process.env.CALENDAR_WEBHOOK_HMAC_KEY ?? process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+  if (!hmacSecret) {
+    console.warn("[calendar-sync] CALENDAR_WEBHOOK_HMAC_KEY / CALENDAR_TOKEN_ENCRYPTION_KEY not set, skipping webhook registration");
     return;
   }
 
   try {
     const channelId = generateId();
-    const token = createHmac("sha256", encryptionKey)
+    const token = createHmac("sha256", hmacSecret)
       .update(channelId)
       .digest("hex");
 
@@ -360,6 +402,23 @@ async function registerWebhook(
     );
     // Non-fatal: don't throw
   }
+}
+
+/** Strip PII from raw Google event before storing. Keep structure for debugging. */
+function scrubRawEvent(event: calendar_v3.Schema$Event): Record<string, unknown> {
+  const { attendees, creator, organizer, description, ...safe } = event;
+  return {
+    ...safe,
+    attendees: attendees?.map((a) => ({
+      responseStatus: a.responseStatus,
+      self: a.self,
+      organizer: a.organizer,
+    })),
+    organizer: organizer ? { self: organizer.self } : undefined,
+    creator: creator ? { self: creator.self } : undefined,
+    // Strip description — may contain sensitive content like dial-in PINs
+    description: description ? "[redacted]" : undefined,
+  };
 }
 
 function isGoogleApiError(err: unknown): err is { code: number; message: string } {

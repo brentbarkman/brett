@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { slugify } from "@brett/utils";
+import { slugify, getEventGlassColor } from "@brett/utils";
 import { getEndOfWeekUTC } from "@brett/business";
 import {
   DndContext,
@@ -47,7 +47,7 @@ import {
   useCalendarEventBrettMessages,
   useSendCalendarBrettMessage,
 } from "./api/calendar";
-import { useEventStream } from "./api/sse";
+import { useEventStream, useSSEHandler } from "./api/sse";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
@@ -77,19 +77,14 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar 
 
 /** Map CalendarEventRecord to CalendarEventDisplay for the sidebar timeline */
 function recordToDisplay(r: CalendarEventRecord): CalendarEventDisplay {
-  const defaultColor = {
-    bg: "rgba(59, 130, 246, 0.12)",
-    border: "rgba(59, 130, 246, 0.25)",
-    text: "rgb(147, 197, 253)",
-    name: "blue",
-  };
+  const color = getEventGlassColor(r.calendarColor);
   return {
     id: r.id,
     title: r.title,
     startTime: r.startTime,
     endTime: r.endTime,
     durationMinutes: Math.max((new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 60000, 0),
-    color: defaultColor,
+    color,
     location: r.location ?? undefined,
     attendees: r.attendees?.map((a) => ({
       name: a.name,
@@ -277,10 +272,16 @@ export function App() {
     }
   }, [isDetailOpen]);
 
-  const handleCloseDetail = () => {
+  const handleCloseDetail = useCallback(() => {
     setIsDetailOpen(false);
     setTimeout(() => setSelectedItem(null), 300);
-  };
+  }, []);
+
+  useSSEHandler("calendar.event.deleted", useCallback((data: { eventId: string }) => {
+    if (selectedItem && selectedItem.id === data.eventId) {
+      handleCloseDetail();
+    }
+  }, [selectedItem, handleCloseDetail]));
 
   const handleToggle = (id: string) => {
     toggleThing.mutate(id);
@@ -317,19 +318,15 @@ export function App() {
   };
 
   const handleDuplicateThing = (id: string) => {
-    // Duplicate: create a new thing with the same title + list
-    const item = selectedItem as Thing | null;
-    if (item) {
-      createThing.mutate({ type: "task", title: `${item.title} (copy)`, listId: item.listId ?? undefined });
-    }
+    if (!selectedItem || "googleEventId" in selectedItem) return;
+    const item = selectedItem as Thing;
+    createThing.mutate({ type: "task", title: `${item.title} (copy)`, listId: item.listId ?? undefined });
   };
 
   const handleMoveToList = (id: string) => {
-    // Open triage in list-first mode for moving
-    const item = selectedItem as Thing | null;
-    if (item) {
-      handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
-    }
+    if (!selectedItem || "googleEventId" in selectedItem) return;
+    const item = selectedItem as Thing;
+    handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
   };
 
   const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {

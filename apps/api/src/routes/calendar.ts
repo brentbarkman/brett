@@ -25,6 +25,8 @@ calendar.get("/events", async (c) => {
   let start: Date;
   let end: Date;
 
+  // Note: all-day events are stored with UTC midnight times. Clients should
+  // treat dates as calendar dates (ignoring time component) for all-day events.
   if (date) {
     start = new Date(date);
     start.setUTCHours(0, 0, 0, 0);
@@ -102,7 +104,7 @@ calendar.get("/events/:id", async (c) => {
     include: {
       calendarList: { select: { name: true, color: true } },
       notes: { where: { userId: user.id }, take: 1 },
-      brettMessages: { orderBy: { createdAt: "desc" }, take: 20 },
+      brettMessages: { where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 },
     },
   });
 
@@ -265,12 +267,13 @@ calendar.get("/events/:id/brett", async (c) => {
     prisma.brettMessage.findMany({
       where: {
         calendarEventId: eventId,
+        userId: user.id,
         ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
       },
       orderBy: { createdAt: "desc" },
       take: limit + 1,
     }),
-    prisma.brettMessage.count({ where: { calendarEventId: eventId } }),
+    prisma.brettMessage.count({ where: { calendarEventId: eventId, userId: user.id } }),
   ]);
 
   const hasMore = messages.length > limit;
@@ -358,6 +361,14 @@ calendar.post("/events/fetch-range", async (c) => {
 
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
     return c.json({ error: "Invalid date format" }, 400);
+  }
+
+  const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  if (diffDays > 366) {
+    return c.json({ error: "Date range cannot exceed 366 days" }, 400);
+  }
+  if (diffDays < 0) {
+    return c.json({ error: "endDate must be after startDate" }, 400);
   }
 
   // Fetch from Google for all connected accounts

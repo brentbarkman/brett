@@ -11,6 +11,7 @@ import { encryptToken } from "../lib/token-encryption.js";
 import { initialSync } from "../services/calendar-sync.js";
 import { generateId } from "@brett/utils";
 import { google } from "googleapis";
+import { randomBytes, createHmac, timingSafeEqual } from "crypto";
 
 const calendarAccounts = new Hono<AuthEnv>();
 
@@ -48,10 +49,14 @@ calendarAccounts.get("/", async (c) => {
   );
 });
 
-// POST /connect — Initiate OAuth (returns URL, state encodes userId as base64url)
+// POST /connect — Initiate OAuth (returns URL, state = base64url(userId).nonce.hmac)
 calendarAccounts.post("/connect", async (c) => {
   const user = c.get("user");
-  const state = Buffer.from(user.id).toString("base64url");
+  const nonce = randomBytes(16).toString("hex");
+  const hmac = createHmac("sha256", process.env.BETTER_AUTH_SECRET!)
+    .update(user.id + ":" + nonce)
+    .digest("hex");
+  const state = `${Buffer.from(user.id).toString("base64url")}.${nonce}.${hmac}`;
   const url = getCalendarAuthUrl(state);
   return c.json({ url });
 });
@@ -67,11 +72,30 @@ calendarAccounts.get("/callback", async (c) => {
     return c.json({ error: "Missing code or state" }, 400);
   }
 
+  // Verify signed state: base64url(userId).nonce.hmac
+  const parts = state.split(".");
+  if (parts.length !== 3) {
+    return c.json({ error: "Invalid state" }, 400);
+  }
+
   let userId: string;
   try {
-    userId = Buffer.from(state, "base64url").toString("utf8");
+    userId = Buffer.from(parts[0], "base64url").toString("utf8");
   } catch {
     return c.json({ error: "Invalid state" }, 400);
+  }
+
+  const expectedHmac = createHmac("sha256", process.env.BETTER_AUTH_SECRET!)
+    .update(userId + ":" + parts[1])
+    .digest("hex");
+
+  if (
+    !timingSafeEqual(
+      Buffer.from(expectedHmac, "hex"),
+      Buffer.from(parts[2], "hex"),
+    )
+  ) {
+    return c.json({ error: "State signature invalid" }, 403);
   }
 
   // Verify the state matches the authenticated user

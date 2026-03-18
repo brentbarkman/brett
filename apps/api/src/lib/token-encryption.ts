@@ -5,6 +5,7 @@ function getKey(): Buffer {
   if (!hex) {
     throw new Error("CALENDAR_TOKEN_ENCRYPTION_KEY environment variable is required");
   }
+  if (hex.length !== 64) throw new Error("CALENDAR_TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes)");
   return Buffer.from(hex, "hex");
 }
 
@@ -19,7 +20,9 @@ export function encryptToken(plaintext: string): string {
 
 export function decryptToken(ciphertext: string): string {
   const key = getKey();
-  const [ivHex, encHex, tagHex] = ciphertext.split(":");
+  const parts = ciphertext.split(":");
+  if (parts.length !== 3) throw new Error("Malformed encrypted token");
+  const [ivHex, encHex, tagHex] = parts;
   const iv = Buffer.from(ivHex, "hex");
   const encrypted = Buffer.from(encHex, "hex");
   const tag = Buffer.from(tagHex, "hex");

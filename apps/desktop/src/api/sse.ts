@@ -23,22 +23,45 @@ export function useEventStream(): void {
   const qc = useQueryClient();
   const retryDelay = useRef(1000);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const cancelledRef = useRef(false);
 
   const connect = useCallback(async () => {
+    if (cancelledRef.current) return;
+
     const token = await getToken();
     if (!token) return;
 
-    const url = `${API_URL}/events/stream?token=${encodeURIComponent(token)}`;
+    // Fetch a short-lived ticket instead of passing the raw token
+    let ticketParam: string;
+    try {
+      const res = await fetch(`${API_URL}/events/ticket`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("ticket fetch failed");
+      const { ticket } = await res.json();
+      ticketParam = `ticket=${encodeURIComponent(ticket)}`;
+    } catch {
+      // Fallback to raw token if ticket endpoint is unavailable
+      ticketParam = `token=${encodeURIComponent(token)}`;
+    }
+
+    if (cancelledRef.current) return;
+
+    const url = `${API_URL}/events/stream?${ticketParam}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
 
     es.onopen = () => {
       retryDelay.current = 1000;
+      qc.invalidateQueries({ queryKey: ["calendar-events"] });
+      qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
     };
 
     es.onerror = () => {
       es.close();
       eventSourceRef.current = null;
+      if (cancelledRef.current) return;
       const delay = retryDelay.current;
       retryDelay.current = Math.min(delay * 2, 30000);
       setTimeout(connect, delay);
@@ -64,6 +87,7 @@ export function useEventStream(): void {
   useEffect(() => {
     connect();
     return () => {
+      cancelledRef.current = true;
       eventSourceRef.current?.close();
       eventSourceRef.current = null;
     };

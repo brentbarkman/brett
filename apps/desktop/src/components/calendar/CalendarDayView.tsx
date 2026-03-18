@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
+import { getEventGlassColor } from "@brett/utils";
 
 export interface CalendarDayViewProps {
   date: Date;
@@ -10,11 +11,6 @@ export interface CalendarDayViewProps {
 
 const HOUR_HEIGHT = 60;
 const TOTAL_HOURS = 24;
-const DEFAULT_COLOR = {
-  bg: "rgba(59, 130, 246, 0.12)",
-  border: "rgba(59, 130, 246, 0.25)",
-  text: "rgb(147, 197, 253)",
-};
 
 function parseToMinutes(isoStr: string): number {
   const d = new Date(isoStr);
@@ -106,9 +102,9 @@ export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewP
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const allDayEvents = events.filter((e) => e.isAllDay);
-  const timedEvents = events.filter((e) => !e.isAllDay);
-  const layout = layoutEvents(timedEvents);
+  const allDayEvents = useMemo(() => events.filter((e) => e.isAllDay), [events]);
+  const timedEvents = useMemo(() => events.filter((e) => !e.isAllDay), [events]);
+  const layout = useMemo(() => layoutEvents(timedEvents), [timedEvents]);
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => i);
 
   // Real-time clock
@@ -138,20 +134,23 @@ export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewP
             All day
           </span>
           <div className="flex gap-1.5 flex-wrap">
-            {allDayEvents.map((event) => (
+            {allDayEvents.map((event) => {
+              const ec = getEventGlassColor(event.calendarColor);
+              return (
               <button
                 key={event.id}
                 onClick={() => onEventClick(event)}
                 className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer hover:brightness-125 transition-all truncate max-w-[200px]"
                 style={{
-                  backgroundColor: DEFAULT_COLOR.bg,
-                  borderLeft: `2px solid ${DEFAULT_COLOR.border}`,
-                  color: DEFAULT_COLOR.text,
+                  backgroundColor: ec.bg,
+                  borderLeft: `2px solid ${ec.border}`,
+                  color: ec.text,
                 }}
               >
                 {event.title}
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -201,6 +200,7 @@ export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewP
               const total = info?.totalColumns ?? 1;
               const widthPct = 100 / total;
               const leftPct = col * widthPct;
+              const ec = getEventGlassColor(event.calendarColor);
 
               return (
                 <div
@@ -212,9 +212,9 @@ export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewP
                     height: `${Math.max(height, 20)}px`,
                     left: `${leftPct}%`,
                     width: `${widthPct}%`,
-                    backgroundColor: DEFAULT_COLOR.bg,
-                    borderLeftColor: DEFAULT_COLOR.border,
-                    color: DEFAULT_COLOR.text,
+                    backgroundColor: ec.bg,
+                    borderLeftColor: ec.border,
+                    color: ec.text,
                   }}
                 >
                   <div className="flex justify-between items-start">

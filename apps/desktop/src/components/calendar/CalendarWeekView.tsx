@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
+import { getEventGlassColor } from "@brett/utils";
 
 export interface CalendarWeekViewProps {
   startDate: Date;
@@ -11,11 +12,6 @@ export interface CalendarWeekViewProps {
 
 const HOUR_HEIGHT = 60;
 const TOTAL_HOURS = 24;
-const DEFAULT_COLOR = {
-  bg: "rgba(59, 130, 246, 0.12)",
-  border: "rgba(59, 130, 246, 0.25)",
-  text: "rgb(147, 197, 253)",
-};
 
 function parseToMinutes(isoStr: string): number {
   const d = new Date(isoStr);
@@ -115,41 +111,47 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => i);
 
   // Build days array
-  const days: Date[] = [];
-  for (let i = 0; i < daysPerWeek; i++) {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + i);
-    days.push(d);
-  }
+  const days = useMemo(() => {
+    const result: Date[] = [];
+    for (let i = 0; i < daysPerWeek; i++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + i);
+      result.push(d);
+    }
+    return result;
+  }, [startDate, daysPerWeek]);
 
-  // Group events by day
-  const allDayEvents = events.filter((e) => e.isAllDay);
-  const timedEvents = events.filter((e) => !e.isAllDay);
+  // Group events by day (memoized)
+  const { eventsByDay, allDayByDay, layoutByDay } = useMemo(() => {
+    const allDayEvents = events.filter((e) => e.isAllDay);
+    const timedEvents = events.filter((e) => !e.isAllDay);
 
-  const eventsByDay = new Map<string, CalendarEventRecord[]>();
-  const allDayByDay = new Map<string, CalendarEventRecord[]>();
+    const ebd = new Map<string, CalendarEventRecord[]>();
+    const abd = new Map<string, CalendarEventRecord[]>();
 
-  for (const day of days) {
-    const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
-    eventsByDay.set(key, []);
-    allDayByDay.set(key, []);
-  }
+    for (const day of days) {
+      const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+      ebd.set(key, []);
+      abd.set(key, []);
+    }
 
-  for (const event of timedEvents) {
-    const key = getEventDay(event);
-    eventsByDay.get(key)?.push(event);
-  }
+    for (const event of timedEvents) {
+      const key = getEventDay(event);
+      ebd.get(key)?.push(event);
+    }
 
-  for (const event of allDayEvents) {
-    const key = getEventDay(event);
-    allDayByDay.get(key)?.push(event);
-  }
+    for (const event of allDayEvents) {
+      const key = getEventDay(event);
+      abd.get(key)?.push(event);
+    }
 
-  // Layout per day
-  const layoutByDay = new Map<string, Map<string, LayoutInfo>>();
-  for (const [key, dayEvents] of eventsByDay) {
-    layoutByDay.set(key, layoutEventsForDay(dayEvents));
-  }
+    const lbd = new Map<string, Map<string, LayoutInfo>>();
+    for (const [key, dayEvents] of ebd) {
+      lbd.set(key, layoutEventsForDay(dayEvents));
+    }
+
+    return { eventsByDay: ebd, allDayByDay: abd, layoutByDay: lbd };
+  }, [events, days]);
 
   // Real-time clock
   useEffect(() => {
@@ -213,19 +215,22 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
             const dayAllDay = allDayByDay.get(key) ?? [];
             return (
               <div key={key} className="flex-1 min-w-0 px-0.5 py-1 flex flex-wrap gap-0.5">
-                {dayAllDay.map((event) => (
+                {dayAllDay.map((event) => {
+                  const ec = getEventGlassColor(event.calendarColor);
+                  return (
                   <button
                     key={event.id}
                     onClick={() => onEventClick(event)}
                     className="px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer hover:brightness-125 transition-all truncate w-full text-left"
                     style={{
-                      backgroundColor: DEFAULT_COLOR.bg,
-                      color: DEFAULT_COLOR.text,
+                      backgroundColor: ec.bg,
+                      color: ec.text,
                     }}
                   >
                     {event.title}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             );
           })}
@@ -299,6 +304,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
                     const total = info?.totalColumns ?? 1;
                     const widthPct = 100 / total;
                     const leftPct = col * widthPct;
+                    const ec = getEventGlassColor(event.calendarColor);
 
                     return (
                       <div
@@ -310,9 +316,9 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
                           height: `${Math.max(height, 18)}px`,
                           left: `${leftPct}%`,
                           width: `${widthPct}%`,
-                          backgroundColor: DEFAULT_COLOR.bg,
-                          borderLeftColor: DEFAULT_COLOR.border,
-                          color: DEFAULT_COLOR.text,
+                          backgroundColor: ec.bg,
+                          borderLeftColor: ec.border,
+                          color: ec.text,
                         }}
                       >
                         <h4 className="text-[10px] font-semibold truncate leading-tight">

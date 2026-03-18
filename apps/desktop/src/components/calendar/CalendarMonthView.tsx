@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { CalendarEventRecord } from "@brett/types";
+import { getEventGlassColor } from "@brett/utils";
 
 export interface CalendarMonthViewProps {
   month: Date;
@@ -7,12 +8,6 @@ export interface CalendarMonthViewProps {
   onEventClick: (event: CalendarEventRecord) => void;
   onDayClick: (date: Date) => void;
 }
-
-const DEFAULT_COLOR = {
-  bg: "rgba(59, 130, 246, 0.12)",
-  border: "rgba(59, 130, 246, 0.25)",
-  text: "rgb(147, 197, 253)",
-};
 
 const MAX_VISIBLE_EVENTS = 3;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -118,7 +113,9 @@ export function CalendarMonthView({ month, events, onEventClick, onDayClick }: C
 
                   {/* Event pills */}
                   <div className="space-y-0.5">
-                    {visibleEvents.map((event) => (
+                    {visibleEvents.map((event) => {
+                      const ec = getEventGlassColor(event.calendarColor);
+                      return (
                       <button
                         key={event.id}
                         onClick={(e) => {
@@ -127,8 +124,8 @@ export function CalendarMonthView({ month, events, onEventClick, onDayClick }: C
                         }}
                         className="w-full text-left rounded px-1 py-0.5 text-[10px] font-medium truncate cursor-pointer hover:brightness-125 transition-all leading-tight"
                         style={{
-                          backgroundColor: DEFAULT_COLOR.bg,
-                          color: DEFAULT_COLOR.text,
+                          backgroundColor: ec.bg,
+                          color: ec.text,
                         }}
                       >
                         {!event.isAllDay && (
@@ -136,7 +133,8 @@ export function CalendarMonthView({ month, events, onEventClick, onDayClick }: C
                         )}
                         {event.title}
                       </button>
-                    ))}
+                      );
+                    })}
                     {overflowCount > 0 && (
                       <div className="text-[9px] text-white/40 font-medium px-1">
                         +{overflowCount} more

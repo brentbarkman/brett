@@ -64,6 +64,19 @@ export function useUpdateRsvp() {
         method: "PATCH",
         body: JSON.stringify(input),
       }),
+    onMutate: async ({ eventId, status }) => {
+      await qc.cancelQueries({ queryKey: ["calendar-event-detail", eventId] });
+      const prev = qc.getQueryData<CalendarEventDetailResponse>(["calendar-event-detail", eventId]);
+      if (prev) {
+        qc.setQueryData(["calendar-event-detail", eventId], { ...prev, myResponseStatus: status });
+      }
+      return { prev };
+    },
+    onError: (_err, { eventId }, context) => {
+      if (context?.prev) {
+        qc.setQueryData(["calendar-event-detail", eventId], context.prev);
+      }
+    },
     onSuccess: (_, { eventId }) => {
       qc.invalidateQueries({ queryKey: ["calendar-event-detail", eventId] });
       qc.invalidateQueries({ queryKey: ["calendar-events"] });

@@ -21,15 +21,17 @@ router.post("/google-calendar", async (c) => {
   });
   if (!calendarList) return c.json({ error: "Unknown channel" }, 404);
 
-  // Verify HMAC token
-  if (calendarList.watchToken && channelToken !== calendarList.watchToken) {
-    const hmacKey = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY ?? "";
-    const expectedToken = createHmac("sha256", hmacKey)
-      .update(channelId)
-      .digest("hex");
-    if (channelToken !== expectedToken) {
-      return c.json({ error: "Invalid token" }, 403);
-    }
+  // Verify HMAC token — always require valid signature
+  const hmacKey = process.env.CALENDAR_WEBHOOK_HMAC_KEY ?? process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+  if (!hmacKey) {
+    console.error("[webhooks] CALENDAR_WEBHOOK_HMAC_KEY / CALENDAR_TOKEN_ENCRYPTION_KEY not set, rejecting webhook");
+    return c.json({ error: "Server misconfigured" }, 500);
+  }
+  const expectedToken = createHmac("sha256", hmacKey)
+    .update(channelId)
+    .digest("hex");
+  if (!channelToken || channelToken !== expectedToken) {
+    return c.json({ error: "Invalid token" }, 403);
   }
 
   // Debounced sync — Google often sends multiple notifications for the same change

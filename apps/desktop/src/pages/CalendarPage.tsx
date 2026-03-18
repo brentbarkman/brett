@@ -24,9 +24,10 @@ function formatDateParam(d: Date): string {
 export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [daysPerWeek, setDaysPerWeek] = useState(() =>
-    Number(localStorage.getItem("brett-calendar-days") ?? 7)
-  );
+  const [daysPerWeek, setDaysPerWeek] = useState(() => {
+    const stored = Number(localStorage.getItem("brett-calendar-days"));
+    return stored >= 1 && stored <= 14 ? stored : 7;
+  });
 
   useEffect(() => {
     localStorage.setItem("brett-calendar-days", String(daysPerWeek));
