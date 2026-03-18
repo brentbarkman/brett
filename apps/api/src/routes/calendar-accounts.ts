@@ -12,6 +12,23 @@ import { initialSync } from "../services/calendar-sync.js";
 import { generateId } from "@brett/utils";
 import { google } from "googleapis";
 import { randomBytes, createHmac, timingSafeEqual } from "crypto";
+import type { Context } from "hono";
+
+/** Return an HTML page for the OAuth callback (shown in the browser tab that opened Google) */
+function callbackHtml(c: Context, { title, message, isError }: { title: string; message: string; isError?: boolean }) {
+  const color = isError ? "#f87171" : "#60a5fa";
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"></head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;font-family:system-ui,-apple-system,sans-serif;">
+<div style="text-align:center;max-width:360px;padding:40px;">
+<div style="font-size:36px;margin-bottom:16px;">${isError ? "😕" : "✅"}</div>
+<h1 style="color:${color};font-size:20px;font-weight:700;margin:0 0 8px;">${title}</h1>
+<p style="color:rgba(255,255,255,0.4);font-size:14px;line-height:1.6;margin:0 0 20px;">${message}</p>
+<p style="color:rgba(255,255,255,0.2);font-size:12px;">You can close this tab.</p>
+<script>setTimeout(()=>window.close(),3000);</script>
+</div></body></html>`;
+  return c.html(html);
+}
 
 const calendarAccounts = new Hono<AuthEnv>();
 
@@ -68,27 +85,31 @@ calendarAccounts.get("/callback", async (c) => {
   // Handle denial — Google redirects with ?error= instead of ?code=
   const error = c.req.query("error");
   if (error) {
-    return c.json({ error: error === "access_denied" ? "Calendar access was denied" : `OAuth error: ${error}` }, 400);
+    return callbackHtml(c, {
+      title: "Access denied",
+      message: "Calendar access wasn't granted. Head back to Brett and try again from Settings if you change your mind.",
+      isError: true,
+    });
   }
 
   const code = c.req.query("code");
   const state = c.req.query("state");
 
   if (!code || !state) {
-    return c.json({ error: "Missing code or state" }, 400);
+    return callbackHtml(c, { title: "Something went wrong", message: "Missing authorization data. Please try connecting again from Brett.", isError: true });
   }
 
   // Verify signed state: base64url(userId).nonce.hmac
   const parts = state.split(".");
   if (parts.length !== 3) {
-    return c.json({ error: "Invalid state" }, 400);
+    return callbackHtml(c, { title: "Invalid request", message: "The authorization state was malformed. Please try again.", isError: true });
   }
 
   let userId: string;
   try {
     userId = Buffer.from(parts[0], "base64url").toString("utf8");
   } catch {
-    return c.json({ error: "Invalid state" }, 400);
+    return callbackHtml(c, { title: "Invalid request", message: "The authorization state couldn't be read. Please try again.", isError: true });
   }
 
   const expectedHmac = createHmac("sha256", process.env.BETTER_AUTH_SECRET!)
@@ -102,13 +123,13 @@ calendarAccounts.get("/callback", async (c) => {
       Buffer.from(parts[2], "hex"),
     )
   ) {
-    return c.json({ error: "State signature invalid" }, 403);
+    return callbackHtml(c, { title: "Security check failed", message: "The authorization signature didn't match. Please try connecting again.", isError: true });
   }
 
   // Verify the state matches the authenticated user
   const user = c.get("user");
   if (userId !== user.id) {
-    return c.json({ error: "State mismatch" }, 403);
+    return callbackHtml(c, { title: "Session mismatch", message: "The authorization was started by a different session. Please try again.", isError: true });
   }
 
   // Exchange the auth code for tokens
@@ -116,10 +137,10 @@ calendarAccounts.get("/callback", async (c) => {
   try {
     tokens = await exchangeCalendarCode(code);
   } catch {
-    return c.json({ error: "Failed to exchange authorization code. It may have expired — please try connecting again." }, 400);
+    return callbackHtml(c, { title: "Authorization expired", message: "The authorization code has expired. Head back to Brett and try connecting again.", isError: true });
   }
   if (!tokens.access_token || !tokens.refresh_token) {
-    return c.json({ error: "Failed to obtain tokens" }, 400);
+    return callbackHtml(c, { title: "Something went wrong", message: "We couldn't get the right tokens from Google. Please try again.", isError: true });
   }
 
   // Verify required calendar scopes were granted (Google granular consent can omit them)
@@ -130,10 +151,11 @@ calendarAccounts.get("/callback", async (c) => {
   ];
   const missingScopes = requiredScopes.filter((s) => !grantedScopes.includes(s));
   if (missingScopes.length > 0) {
-    return c.json({
-      error: "Calendar permissions are required. Please grant full calendar access when prompted.",
-      missingScopes,
-    }, 403);
+    return callbackHtml(c, {
+      title: "Permissions needed",
+      message: "Brett needs full calendar access to work. Please try again and make sure all calendar permissions are checked.",
+      isError: true,
+    });
   }
 
   // Get Google user info
@@ -146,7 +168,7 @@ calendarAccounts.get("/callback", async (c) => {
   const googleUserId = userInfo.data.id;
 
   if (!googleEmail || !googleUserId) {
-    return c.json({ error: "Failed to get Google user info" }, 400);
+    return callbackHtml(c, { title: "Something went wrong", message: "Couldn't get your Google account info. Please try again.", isError: true });
   }
 
   // Upsert GoogleAccount with encrypted tokens
@@ -183,10 +205,9 @@ calendarAccounts.get("/callback", async (c) => {
     console.error(`[calendar-accounts] Initial sync failed for account ${account.id}:`, err);
   });
 
-  return c.json({
-    id: account.id,
-    googleEmail: account.googleEmail,
-    connectedAt: account.connectedAt.toISOString(),
+  return callbackHtml(c, {
+    title: "Calendar connected!",
+    message: `${account.googleEmail} is now syncing. Head back to Brett — your events will appear shortly.`,
   });
 });
 
