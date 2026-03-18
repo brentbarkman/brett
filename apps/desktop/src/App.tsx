@@ -58,7 +58,7 @@ import CalendarPage from "./pages/CalendarPage";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
-function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar }: {
+function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay }: {
   children: React.ReactNode;
   onEventClick: (e: any) => void;
   calendarEvents: CalendarEventDisplay[];
@@ -66,6 +66,9 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar,
   showSidebar: boolean;
   onConnectCalendar?: () => void;
   onDismissSidebar?: () => void;
+  sidebarDate?: Date;
+  onPrevDay?: () => void;
+  onNextDay?: () => void;
 }) {
   return (
     <>
@@ -76,7 +79,7 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar,
       </main>
       {showSidebar && (
         <div className="w-[300px] flex-shrink-0 py-2">
-          <CalendarTimeline events={calendarEvents} onEventClick={onEventClick} isLoading={isLoadingCalendar} onConnect={onConnectCalendar} onDismiss={onDismissSidebar} />
+          <CalendarTimeline events={calendarEvents} onEventClick={onEventClick} isLoading={isLoadingCalendar} onConnect={onConnectCalendar} onDismiss={onDismissSidebar} date={sidebarDate} onPrevDay={onPrevDay} onNextDay={onNextDay} />
         </div>
       )}
     </>
@@ -214,12 +217,24 @@ export function App() {
     }
   }, [hasCalendarAccounts, sidebarDismissed]);
 
-  // Today's calendar events for sidebar timeline
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const { data: todayCalendarData, isLoading: isLoadingTodayCalendar } = useCalendarEvents({ date: todayStr });
-  const todayCalendarEvents: CalendarEventDisplay[] = useMemo(
-    () => (todayCalendarData?.events ?? []).filter((e) => !e.isAllDay).map(recordToDisplay),
-    [todayCalendarData],
+  // Sidebar calendar date navigation
+  const [sidebarDate, setSidebarDate] = useState(() => new Date());
+  const sidebarDateStr = useMemo(() => {
+    const d = sidebarDate;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, [sidebarDate]);
+
+  const handleSidebarPrevDay = useCallback(() => {
+    setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
+  }, []);
+  const handleSidebarNextDay = useCallback(() => {
+    setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
+  }, []);
+
+  const { data: sidebarCalendarData, isLoading: isLoadingSidebarCalendar } = useCalendarEvents({ date: sidebarDateStr });
+  const sidebarCalendarEvents: CalendarEventDisplay[] = useMemo(
+    () => (sidebarCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay),
+    [sidebarCalendarData],
   );
 
   // Fetch detail when panel is open and item is a task (not a CalendarEvent)
@@ -508,7 +523,7 @@ export function App() {
             <Route path="/settings" element={<SettingsPage onBack={() => navigate("/today")} />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
             <Route path="/today" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <TodayView
                   lists={lists}
                   onItemClick={handleItemClick}
@@ -518,12 +533,12 @@ export function App() {
               </MainLayout>
             } />
             <Route path="/upcoming" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/inbox" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <InboxView
                   things={inboxData?.visible ?? []}
                   lists={lists}
@@ -538,13 +553,13 @@ export function App() {
               </MainLayout>
             } />
             <Route path="/lists/:slug" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/" element={<Navigate to="/today" replace />} />
             <Route path="*" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={todayCalendarEvents} isLoadingCalendar={isLoadingTodayCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <NotFoundView />
               </MainLayout>
             } />

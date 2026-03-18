@@ -15,6 +15,9 @@ interface CalendarTimelineProps {
   isLoading?: boolean;
   onConnect?: () => void;
   onDismiss?: () => void;
+  date?: Date;
+  onPrevDay?: () => void;
+  onNextDay?: () => void;
 }
 
 interface ContextMenuState {
@@ -147,6 +150,9 @@ export function CalendarTimeline({
   isLoading,
   onConnect,
   onDismiss,
+  date,
+  onPrevDay,
+  onNextDay,
 }: CalendarTimelineProps) {
   // Empty state: real-looking timeline with ghost events + one live CTA at current time
   if (!isLoading && events.length === 0 && onConnect && onDismiss) {
@@ -376,30 +382,32 @@ export function CalendarTimeline({
     };
   };
 
-  // Format today's date
-  const today = currentTime.toLocaleDateString("en-US", {
+  // Format displayed date
+  const displayDate = date ?? currentTime;
+  const dateLabel = displayDate.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
+  const isDisplayToday = displayDate.toDateString() === currentTime.toDateString();
 
   return (
     <div className="flex flex-col h-full bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <h2 className="text-white font-medium">{today}</h2>
-          {countdownText && countdownEvent && (
+          <h2 className="text-white font-medium">{dateLabel}</h2>
+          {isDisplayToday && countdownText && countdownEvent && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/70 font-medium">
               {countdownText}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1">
-          <button className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded">
+          <button onClick={onPrevDay} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors">
             <ChevronLeft size={16} />
           </button>
-          <button className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded">
+          <button onClick={onNextDay} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors">
             <ChevronRight size={16} />
           </button>
         </div>
@@ -438,15 +446,17 @@ export function CalendarTimeline({
             </div>
           ))}
 
-          {/* Current Time Indicator */}
-          <div
-            ref={currentTimeRef}
-            className="absolute left-12 right-0 flex items-center z-20 pointer-events-none"
-            style={{ top: `${currentTimeOffset}px` }}
-          >
-            <div className="w-2 h-2 rounded-full bg-red-500 -ml-1" />
-            <div className="flex-1 border-t border-red-500/50" />
-          </div>
+          {/* Current Time Indicator — only on today */}
+          {isDisplayToday && (
+            <div
+              ref={currentTimeRef}
+              className="absolute left-12 right-0 flex items-center z-20 pointer-events-none"
+              style={{ top: `${currentTimeOffset}px` }}
+            >
+              <div className="w-2 h-2 rounded-full bg-red-500 -ml-1" />
+              <div className="flex-1 border-t border-red-500/50" />
+            </div>
+          )}
 
           {/* Buffer indicators */}
           {buffers.map((buf) => {
