@@ -85,6 +85,7 @@ export interface CalendarAttendee {
   email: string;
   responseStatus?: "accepted" | "declined" | "tentative" | "needsAction";
   comment?: string | null;
+  photoUrl?: string | null;
   organizer?: boolean;
   self?: boolean;
 }

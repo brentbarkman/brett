@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   MapPin,
   Video,
@@ -21,17 +21,10 @@ import { isSafeUrl } from "@brett/utils";
 import { RichTextEditor } from "./RichTextEditor";
 import { BrettThread } from "./BrettThread";
 
-/** Attendee avatar — tries Google profile photo, falls back to initials */
-function AttendeeAvatar({ email, name }: { email?: string; name: string }) {
+/** Attendee avatar — uses stored photo URL from People API, falls back to initials */
+function AttendeeAvatar({ photoUrl, name }: { photoUrl?: string | null; name: string }) {
   const [imgError, setImgError] = useState(false);
   const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-
-  // Google Workspace profile photo URL — works for org accounts with public photos
-  const photoUrl = useMemo(() => {
-    if (!email) return null;
-    // Google's public profile photo endpoint (works for Workspace accounts)
-    return `https://contacts.google.com/widget/hovercard/photo?email=${encodeURIComponent(email)}`;
-  }, [email]);
 
   if (!photoUrl || imgError) {
     return (
@@ -349,7 +342,7 @@ export function CalendarEventDetailPanel({
                     key={idx}
                     className="flex items-center gap-3 bg-white/5 p-2 rounded-lg border border-white/5"
                   >
-                    <AttendeeAvatar email={attendee.email} name={name} />
+                    <AttendeeAvatar photoUrl={attendee.photoUrl} name={name} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-white/90 truncate">

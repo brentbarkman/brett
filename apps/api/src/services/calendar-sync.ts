@@ -5,6 +5,7 @@ import {
   fetchCalendarList,
   fetchEvents,
   watchCalendar,
+  fetchAttendeePhotos,
 } from "../lib/google-calendar.js";
 import { extractMeetingLink } from "./meeting-link.js";
 import { publishSSE } from "../lib/sse.js";
@@ -92,6 +93,9 @@ export async function initialSync(googleAccountId: string): Promise<void> {
 
     await registerWebhook(client, calendarList.id, cal.id);
   }
+
+  // Batch-resolve attendee photos after all events are synced
+  await resolveAttendeePhotos(googleAccountId, account.userId);
 
   publishSSE(account.userId, {
     type: "calendar.sync.complete",
@@ -236,6 +240,62 @@ export async function onDemandFetch(
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+/** Batch-resolve attendee photos via People API and update stored attendees JSON */
+async function resolveAttendeePhotos(
+  googleAccountId: string,
+  userId: string,
+): Promise<void> {
+  try {
+    // Collect all unique attendee emails from this account's events
+    const events = await prisma.calendarEvent.findMany({
+      where: { googleAccountId },
+      select: { id: true, attendees: true },
+    });
+
+    const allEmails = new Set<string>();
+    for (const event of events) {
+      const attendees = event.attendees as any[] | null;
+      if (!attendees) continue;
+      for (const a of attendees) {
+        if (a.email) allEmails.add(a.email.toLowerCase());
+      }
+    }
+
+    if (allEmails.size === 0) return;
+
+    const photoMap = await fetchAttendeePhotos(googleAccountId, [...allEmails]);
+    if (photoMap.size === 0) return;
+
+    // Update attendees JSON with photo URLs
+    for (const event of events) {
+      const attendees = event.attendees as any[] | null;
+      if (!attendees) continue;
+
+      let updated = false;
+      const newAttendees = attendees.map((a) => {
+        if (a.email) {
+          const photo = photoMap.get(a.email.toLowerCase());
+          if (photo && photo !== a.photoUrl) {
+            updated = true;
+            return { ...a, photoUrl: photo };
+          }
+        }
+        return a;
+      });
+
+      if (updated) {
+        await prisma.calendarEvent.update({
+          where: { id: event.id },
+          data: { attendees: newAttendees },
+        });
+      }
+    }
+  } catch (err) {
+    // Non-fatal — photos are a nice-to-have
+    console.warn("[calendar-sync] Failed to resolve attendee photos:", err);
+  }
+}
 
 async function upsertEvents(
   events: calendar_v3.Schema$Event[],

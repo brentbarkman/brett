@@ -1,4 +1,4 @@
-import { google, type calendar_v3 } from "googleapis";
+import { google, type calendar_v3, type people_v1 } from "googleapis";
 import { prisma } from "./prisma.js";
 import { decryptToken, encryptToken } from "./token-encryption.js";
 
@@ -8,6 +8,7 @@ const clientCache = new Map<string, Promise<calendar_v3.Calendar>>();
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/contacts.other.readonly",
   "openid",
   "email",
   "profile",
@@ -222,4 +223,57 @@ export async function fetchColors(
 ): Promise<calendar_v3.Schema$Colors> {
   const res = await calendarClient.colors.get();
   return res.data;
+}
+
+/** Batch-resolve profile photos from email addresses via People API */
+export async function fetchAttendeePhotos(
+  googleAccountId: string,
+  emails: string[],
+): Promise<Map<string, string>> {
+  if (emails.length === 0) return new Map();
+
+  const account = await prisma.googleAccount.findUniqueOrThrow({
+    where: { id: googleAccountId },
+  });
+
+  const oauth2Client = getOAuthClient();
+  oauth2Client.setCredentials({
+    access_token: decryptToken(account.accessToken),
+    refresh_token: decryptToken(account.refreshToken),
+    expiry_date: account.tokenExpiresAt.getTime(),
+  });
+
+  const people = google.people({ version: "v1", auth: oauth2Client });
+  const photoMap = new Map<string, string>();
+
+  try {
+    // People API searchContacts or otherContacts.list can't search by email in batch.
+    // Use people.searchDirectoryPeople for Workspace, or people.otherContacts for personal.
+    // The most reliable approach: use people.people.searchContacts for each email.
+    // But batching is better — use people.otherContacts.list to get all "other contacts"
+    // (people you've interacted with) and build a lookup.
+    const res = await people.otherContacts.list({
+      readMask: "emailAddresses,photos",
+      pageSize: 1000,
+    });
+
+    const contacts = res.data.otherContacts ?? [];
+    for (const contact of contacts) {
+      const emailAddresses = contact.emailAddresses ?? [];
+      const photos = contact.photos ?? [];
+      const photo = photos.find((p) => !p.default)?.url ?? photos[0]?.url;
+      if (!photo) continue;
+
+      for (const ea of emailAddresses) {
+        if (ea.value) {
+          photoMap.set(ea.value.toLowerCase(), photo);
+        }
+      }
+    }
+  } catch (err) {
+    // Non-fatal — photos are a nice-to-have
+    console.warn("[google-calendar] Failed to fetch attendee photos:", err);
+  }
+
+  return photoMap;
 }
