@@ -8,6 +8,7 @@ const clientCache = new Map<string, Promise<calendar_v3.Calendar>>();
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/contacts.other.readonly",
   "openid",
   "email",
@@ -225,7 +226,8 @@ export async function fetchColors(
   return res.data;
 }
 
-/** Batch-resolve profile photos from email addresses via People API */
+/** Batch-resolve profile photos from email addresses via People API.
+ *  Fetches from three sources: user's own profile, My Contacts, and Other Contacts. */
 export async function fetchAttendeePhotos(
   googleAccountId: string,
   emails: string[],
@@ -246,33 +248,56 @@ export async function fetchAttendeePhotos(
   const people = google.people({ version: "v1", auth: oauth2Client });
   const photoMap = new Map<string, string>();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function extractPhotos(contacts: any[]) {
+    for (const contact of contacts) {
+      const emails = contact.emailAddresses ?? [];
+      const photos = contact.photos ?? [];
+      const photo = photos.find((p: any) => !p.default)?.url ?? photos[0]?.url;
+      if (!photo) continue;
+      for (const ea of emails) {
+        if (ea.value) photoMap.set(ea.value.toLowerCase(), photo);
+      }
+    }
+  }
+
   try {
-    // People API searchContacts or otherContacts.list can't search by email in batch.
-    // Use people.searchDirectoryPeople for Workspace, or people.otherContacts for personal.
-    // The most reliable approach: use people.people.searchContacts for each email.
-    // But batching is better — use people.otherContacts.list to get all "other contacts"
-    // (people you've interacted with) and build a lookup.
+    // 1. The authenticated user's own profile photo
+    const meRes = await people.people.get({
+      resourceName: "people/me",
+      personFields: "emailAddresses,photos",
+    });
+    if (meRes.data) extractPhotos([meRes.data]);
+  } catch {
+    // profile scope may not cover this — non-fatal
+  }
+
+  try {
+    // 2. My Contacts (requires contacts.readonly)
+    let nextPageToken: string | undefined;
+    do {
+      const res = await people.people.connections.list({
+        resourceName: "people/me",
+        personFields: "emailAddresses,photos",
+        pageSize: 1000,
+        pageToken: nextPageToken,
+      });
+      extractPhotos(res.data.connections ?? []);
+      nextPageToken = res.data.nextPageToken ?? undefined;
+    } while (nextPageToken);
+  } catch {
+    // contacts.readonly not granted — non-fatal
+  }
+
+  try {
+    // 3. Other Contacts (requires contacts.other.readonly)
     const res = await people.otherContacts.list({
       readMask: "emailAddresses,photos",
       pageSize: 1000,
     });
-
-    const contacts = res.data.otherContacts ?? [];
-    for (const contact of contacts) {
-      const emailAddresses = contact.emailAddresses ?? [];
-      const photos = contact.photos ?? [];
-      const photo = photos.find((p) => !p.default)?.url ?? photos[0]?.url;
-      if (!photo) continue;
-
-      for (const ea of emailAddresses) {
-        if (ea.value) {
-          photoMap.set(ea.value.toLowerCase(), photo);
-        }
-      }
-    }
-  } catch (err) {
-    // Non-fatal — photos are a nice-to-have
-    console.warn("[google-calendar] Failed to fetch attendee photos:", err);
+    extractPhotos(res.data.otherContacts ?? []);
+  } catch {
+    // contacts.other.readonly not granted — non-fatal
   }
 
   return photoMap;
