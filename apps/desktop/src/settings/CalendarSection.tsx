@@ -98,7 +98,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
               <span className="flex-1 text-sm text-white/70 truncate">{cal.name}</span>
               {/* Visibility toggle */}
               <button
-                role="checkbox"
+                role="switch"
                 aria-checked={cal.isVisible}
                 onClick={() =>
                   toggleVisibility.mutate({
@@ -107,14 +107,13 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
                     isVisible: !cal.isVisible,
                   })
                 }
-                className={`w-8 h-4.5 rounded-full relative transition-colors flex-shrink-0 ${
-                  cal.isVisible ? "bg-blue-500/70" : "bg-white/10"
+                className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
+                  cal.isVisible ? "bg-blue-500" : "bg-white/15"
                 }`}
-                style={{ height: "18px", width: "32px" }}
               >
                 <span
-                  className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-transform ${
-                    cal.isVisible ? "translate-x-[15px]" : "translate-x-0.5"
+                  className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
+                    cal.isVisible ? "translate-x-[16px]" : "translate-x-[2px]"
                   }`}
                 />
               </button>
