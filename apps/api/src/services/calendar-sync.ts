@@ -340,6 +340,11 @@ async function upsertEvents(
       syncedAt,
     };
 
+    // On update, don't overwrite myResponseStatus or attendees — the local
+    // RSVP handler may have set them more recently than Google's data.
+    // These fields will converge on the next full sync when Google has propagated.
+    const { myResponseStatus: _mrs, attendees: _att, ...updateData } = eventData;
+
     const result = await prisma.calendarEvent.upsert({
       where: {
         googleAccountId_googleEventId: {
@@ -348,7 +353,7 @@ async function upsertEvents(
         },
       },
       create: eventData,
-      update: eventData,
+      update: updateData,
     });
 
     // Determine create vs update: if createdAt is within 1s of syncedAt, it was just created

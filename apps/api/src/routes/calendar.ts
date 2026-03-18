@@ -161,9 +161,9 @@ calendar.patch("/events/:id/rsvp", async (c) => {
   const validation = validateRsvpInput(body);
   if (!validation.ok) return c.json({ error: validation.error }, 400);
 
-  // Update on Google Calendar
+  // Update on Google Calendar — returns the patched event
   const client = await getCalendarClient(event.googleAccountId);
-  await updateRsvp(
+  const updatedGoogleEvent = await updateRsvp(
     client,
     event.calendarList.googleCalendarId,
     event.googleEventId,
@@ -172,10 +172,24 @@ calendar.patch("/events/:id/rsvp", async (c) => {
     validation.data.comment,
   );
 
-  // Update local cache
+  // Update local cache — sync both myResponseStatus AND attendees from Google's response
+  const updatedAttendees = updatedGoogleEvent.attendees
+    ? updatedGoogleEvent.attendees.map((a) => ({
+        email: a.email ?? null,
+        displayName: a.displayName ?? null,
+        responseStatus: a.responseStatus ?? null,
+        comment: a.comment ?? null,
+        self: a.self ?? false,
+        organizer: a.organizer ?? false,
+      }))
+    : undefined;
+
   const updated = await prisma.calendarEvent.update({
     where: { id: event.id },
-    data: { myResponseStatus: validation.data.status },
+    data: {
+      myResponseStatus: validation.data.status,
+      ...(updatedAttendees ? { attendees: updatedAttendees } : {}),
+    },
   });
 
   return c.json({
