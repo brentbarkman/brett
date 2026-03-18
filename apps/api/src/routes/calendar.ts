@@ -54,7 +54,7 @@ calendar.get("/events", async (c) => {
 
   const calendarListIds = visibleCalendars.map((cal) => cal.id);
   if (calendarListIds.length === 0) {
-    return c.json([]);
+    return c.json({ events: [] });
   }
 
   const events = await prisma.calendarEvent.findMany({
@@ -70,8 +70,8 @@ calendar.get("/events", async (c) => {
     orderBy: { startTime: "asc" },
   });
 
-  return c.json(
-    events.map((e) => ({
+  return c.json({
+    events: events.map((e) => ({
       id: e.id,
       googleEventId: e.googleEventId,
       title: e.title,
@@ -91,7 +91,7 @@ calendar.get("/events", async (c) => {
       recurrence: e.recurrence,
       recurringEventId: e.recurringEventId,
     })),
-  );
+  });
 });
 
 // GET /events/:id — Single event with detail
