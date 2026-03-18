@@ -121,7 +121,9 @@ export function CalendarEventDetailPanel({
   );
   const rsvpNoteRef = useRef<HTMLInputElement>(null);
 
-  // Restore RSVP state from the self-attendee on event change
+  // Sync RSVP state from server only when switching to a different event.
+  // After that, local state is authoritative (managed by handleRsvpClick
+  // and the optimistic update). This prevents refetch-induced flicker.
   useEffect(() => {
     const selfAttendee = detail.attendees?.find(
       (a: CalendarAttendee) => a.self === true,
@@ -129,7 +131,8 @@ export function CalendarEventDetailPanel({
     setRsvpNote(selfAttendee?.comment ?? "");
     setSelectedRsvp(detail.myResponseStatus);
     setShowAllAttendees(false);
-  }, [detail.id, detail.myResponseStatus, detail.attendees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail.id]);
 
   const handleRsvpClick = useCallback(
     (status: CalendarRsvpStatus) => {
