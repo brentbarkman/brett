@@ -31,7 +31,6 @@ Google Calendar integration for Brett. Connects one or more Google accounts, syn
 | accessToken | String | Encrypted (AES-256-GCM, see Token Encryption) |
 | refreshToken | String | Encrypted (AES-256-GCM, see Token Encryption) |
 | tokenExpiresAt | DateTime | For refresh logic |
-| syncToken | String? | Google incremental sync token |
 | connectedAt | DateTime | |
 | updatedAt | DateTime | |
 
@@ -52,6 +51,7 @@ Google Calendar integration for Brett. Connects one or more Google accounts, syn
 | watchResourceId | String? | Webhook subscription |
 | watchToken | String? | HMAC-signed token for webhook verification |
 | watchExpiration | DateTime? | Webhook expiry |
+| syncToken | String? | Google incremental sync token (per-calendar, not per-account) |
 
 ### CalendarEvent
 
