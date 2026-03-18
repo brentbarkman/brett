@@ -7,6 +7,8 @@ import { lists } from "./routes/lists.js";
 import { attachments } from "./routes/attachments.js";
 import { links } from "./routes/links.js";
 import { brett } from "./routes/brett.js";
+import calendar from "./routes/calendar.js";
+import calendarAccounts from "./routes/calendar-accounts.js";
 import sse from "./routes/sse.js";
 import webhooks from "./routes/webhooks.js";
 import { startCronJobs } from "./jobs/cron.js";
@@ -41,6 +43,8 @@ app.route("/lists", lists);
 app.route("/things", attachments);
 app.route("/things", links);
 app.route("/things", brett);
+app.route("/calendar", calendar);
+app.route("/calendar/accounts", calendarAccounts);
 app.route("/events", sse);
 app.route("/webhooks", webhooks);
 
