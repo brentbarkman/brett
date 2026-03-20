@@ -31,3 +31,5 @@ export { RichTextEditor } from "./RichTextEditor";
 export { AttachmentList } from "./AttachmentList";
 export { LinkedItemsList } from "./LinkedItemsList";
 export { BrettThread } from "./BrettThread";
+export { CalendarEventDetailPanel } from "./CalendarEventDetailPanel";
+export { EventHoverTooltip } from "./EventHoverTooltip";

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { slugify } from "@brett/utils";
+import { slugify, getEventGlassColor } from "@brett/utils";
 import { getEndOfWeekUTC } from "@brett/business";
 import {
   DndContext,
@@ -21,7 +21,7 @@ import {
   InboxDragOverlay,
   ConfirmDialog,
 } from "@brett/ui";
-import type { Thing, CalendarEvent, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
+import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
   useActiveThings,
@@ -39,14 +39,37 @@ import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists,
 import { useUploadAttachment, useDeleteAttachment } from "./api/attachments";
 import { useBrettMessages, useSendBrettMessage } from "./api/brett";
 import { useCreateLink, useDeleteLink } from "./api/links";
-import { mockEvents } from "./data/mockData";
+import {
+  useCalendarEvents,
+  useCalendarEventDetail,
+  useUpdateRsvp,
+  useUpdateCalendarEventNotes,
+  useCalendarEventBrettMessages,
+  useSendCalendarBrettMessage,
+} from "./api/calendar";
+import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
+import { useEventStream, useSSEHandler } from "./api/sse";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
 import { UpcomingView } from "./views/UpcomingView";
 import { NotFoundView } from "./views/NotFoundView";
+import CalendarPage from "./pages/CalendarPage";
 
-function MainLayout({ children, onEventClick }: { children: React.ReactNode; onEventClick: (e: any) => void }) {
+const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
+
+function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay }: {
+  children: React.ReactNode;
+  onEventClick: (e: any) => void;
+  calendarEvents: CalendarEventDisplay[];
+  isLoadingCalendar?: boolean;
+  showSidebar: boolean;
+  onConnectCalendar?: () => void;
+  onDismissSidebar?: () => void;
+  sidebarDate?: Date;
+  onPrevDay?: () => void;
+  onNextDay?: () => void;
+}) {
   return (
     <>
       <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
@@ -54,19 +77,53 @@ function MainLayout({ children, onEventClick }: { children: React.ReactNode; onE
           {children}
         </div>
       </main>
-      <div className="w-[300px] flex-shrink-0 py-2">
-        <CalendarTimeline events={mockEvents} onEventClick={onEventClick} />
-      </div>
+      {showSidebar && (
+        <div className="w-[300px] flex-shrink-0 py-2">
+          <CalendarTimeline events={calendarEvents} onEventClick={onEventClick} isLoading={isLoadingCalendar} onConnect={onConnectCalendar} onDismiss={onDismissSidebar} date={sidebarDate} onPrevDay={onPrevDay} onNextDay={onNextDay} />
+        </div>
+      )}
     </>
   );
+}
+
+/** Map CalendarEventRecord to CalendarEventDisplay for the sidebar timeline */
+function recordToDisplay(r: CalendarEventRecord): CalendarEventDisplay {
+  const color = getEventGlassColor(r.calendarColor);
+  return {
+    id: r.id,
+    title: r.title,
+    startTime: r.startTime,
+    endTime: r.endTime,
+    durationMinutes: Math.max((new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 60000, 0),
+    color,
+    location: r.location ?? undefined,
+    attendees: r.attendees?.map((a) => {
+      const name = a.name || a.email || "Unknown";
+      return {
+        name,
+        initials: name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+        email: a.email,
+        responseStatus: a.responseStatus,
+      };
+    }),
+    hasBrettContext: false,
+    meetingLink: r.meetingLink ?? undefined,
+    isAllDay: r.isAllDay,
+    myResponseStatus: r.myResponseStatus,
+    description: r.description ?? undefined,
+    googleEventId: r.googleEventId,
+  };
 }
 
 export function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Initialize SSE for real-time updates
+  useEventStream();
   const [selectedItem, setSelectedItem] = useState<
-    Thing | CalendarEvent | null
+    Thing | CalendarEventDisplay | null
   >(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -134,9 +191,56 @@ export function App() {
   // Brett thread hooks
   const sendBrettMessage = useSendBrettMessage();
 
+  // Calendar account state — for sidebar visibility
+  const { data: calendarAccounts = [] } = useCalendarAccounts();
+  const connectCalendar = useConnectCalendar();
+  const hasCalendarAccounts = calendarAccounts.length > 0;
+  const [sidebarDismissed, setSidebarDismissed] = useState(
+    () => localStorage.getItem(SIDEBAR_DISMISSED_KEY) === "true",
+  );
+  const showCalendarSidebar = hasCalendarAccounts || !sidebarDismissed;
+
+  const handleConnectCalendar = useCallback(() => {
+    connectCalendar.mutate();
+  }, [connectCalendar]);
+
+  const handleDismissSidebar = useCallback(() => {
+    setSidebarDismissed(true);
+    localStorage.setItem(SIDEBAR_DISMISSED_KEY, "true");
+  }, []);
+
+  // Clear dismissed state when accounts are connected
+  useEffect(() => {
+    if (hasCalendarAccounts && sidebarDismissed) {
+      setSidebarDismissed(false);
+      localStorage.removeItem(SIDEBAR_DISMISSED_KEY);
+    }
+  }, [hasCalendarAccounts, sidebarDismissed]);
+
+  // Sidebar calendar date navigation
+  const [sidebarDate, setSidebarDate] = useState(() => new Date());
+  const sidebarDateStr = useMemo(() => {
+    const d = sidebarDate;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, [sidebarDate]);
+
+  const handleSidebarPrevDay = useCallback(() => {
+    setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
+  }, []);
+  const handleSidebarNextDay = useCallback(() => {
+    setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
+  }, []);
+
+  const { data: sidebarCalendarData, isLoading: isLoadingSidebarCalendar } = useCalendarEvents({ date: sidebarDateStr });
+  const sidebarCalendarEvents: CalendarEventDisplay[] = useMemo(
+    () => (sidebarCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay),
+    [sidebarCalendarData],
+  );
+
   // Fetch detail when panel is open and item is a task (not a CalendarEvent)
   const selectedId = selectedItem?.id ?? null;
-  const isTaskSelected = selectedItem ? !("startTime" in selectedItem) : false;
+  const isTaskSelected = selectedItem ? !("googleEventId" in selectedItem) : false;
+  const isCalendarSelected = selectedItem ? "googleEventId" in selectedItem : false;
   const { data: thingDetail, isLoading: isLoadingDetail } = useThingDetail(
     isDetailOpen && isTaskSelected ? selectedId : null,
   );
@@ -145,6 +249,17 @@ export function App() {
   const brett = useBrettMessages(
     isDetailOpen && isTaskSelected ? selectedId : null,
   );
+
+  // Calendar event detail panel hooks
+  const { data: calendarEventDetail, isLoading: isLoadingCalendarDetail } = useCalendarEventDetail(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const updateRsvp = useUpdateRsvp();
+  const updateCalendarNotes = useUpdateCalendarEventNotes();
+  const calendarBrett = useCalendarEventBrettMessages(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const sendCalendarBrettMessage = useSendCalendarBrettMessage();
 
   // Active things for link search
   const { data: allActiveThings = [] } = useThings({ status: "active" });
@@ -192,10 +307,15 @@ export function App() {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [triageState]);
 
-  const handleItemClick = (item: Thing | CalendarEvent) => {
+  const handleItemClick = (item: Thing | CalendarEventDisplay) => {
     setSelectedItem(item);
     setIsDetailOpen(true);
   };
+
+  // Adapter for CalendarPage which passes CalendarEventRecord
+  const handleCalendarEventClick = useCallback((event: CalendarEventRecord) => {
+    handleItemClick(recordToDisplay(event));
+  }, []);
 
   // Update panel when keyboard nav changes focus (only if panel is open)
   const handleFocusChange = useCallback((thing: Thing) => {
@@ -204,10 +324,16 @@ export function App() {
     }
   }, [isDetailOpen]);
 
-  const handleCloseDetail = () => {
+  const handleCloseDetail = useCallback(() => {
     setIsDetailOpen(false);
     setTimeout(() => setSelectedItem(null), 300);
-  };
+  }, []);
+
+  useSSEHandler("calendar.event.deleted", useCallback((data: { eventId: string }) => {
+    if (selectedItem && selectedItem.id === data.eventId) {
+      handleCloseDetail();
+    }
+  }, [selectedItem, handleCloseDetail]));
 
   const handleToggle = (id: string) => {
     toggleThing.mutate(id);
@@ -244,19 +370,15 @@ export function App() {
   };
 
   const handleDuplicateThing = (id: string) => {
-    // Duplicate: create a new thing with the same title + list
-    const item = selectedItem as Thing | null;
-    if (item) {
-      createThing.mutate({ type: "task", title: `${item.title} (copy)`, listId: item.listId ?? undefined });
-    }
+    if (!selectedItem || "googleEventId" in selectedItem) return;
+    const item = selectedItem as Thing;
+    createThing.mutate({ type: "task", title: `${item.title} (copy)`, listId: item.listId ?? undefined });
   };
 
   const handleMoveToList = (id: string) => {
-    // Open triage in list-first mode for moving
-    const item = selectedItem as Thing | null;
-    if (item) {
-      handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
-    }
+    if (!selectedItem || "googleEventId" in selectedItem) return;
+    const item = selectedItem as Thing;
+    handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
   };
 
   const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {
@@ -399,8 +521,9 @@ export function App() {
 
           <Routes>
             <Route path="/settings" element={<SettingsPage onBack={() => navigate("/today")} />} />
+            <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
             <Route path="/today" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <TodayView
                   lists={lists}
                   onItemClick={handleItemClick}
@@ -410,12 +533,12 @@ export function App() {
               </MainLayout>
             } />
             <Route path="/upcoming" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/inbox" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <InboxView
                   things={inboxData?.visible ?? []}
                   lists={lists}
@@ -430,13 +553,13 @@ export function App() {
               </MainLayout>
             } />
             <Route path="/lists/:slug" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
               </MainLayout>
             } />
             <Route path="/" element={<Navigate to="/today" replace />} />
             <Route path="*" element={
-              <MainLayout onEventClick={handleItemClick}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <NotFoundView />
               </MainLayout>
             } />
@@ -490,6 +613,23 @@ export function App() {
           isSendingBrettMessage={sendBrettMessage.isPending}
           isLoadingMoreBrettMessages={brett.isLoadingMore}
           brettTotalCount={brett.totalCount}
+          calendarEventDetail={calendarEventDetail ?? null}
+          isLoadingCalendarDetail={isLoadingCalendarDetail}
+          onUpdateRsvp={(status, comment) => {
+            if (selectedId) updateRsvp.mutate({ eventId: selectedId, status, comment });
+          }}
+          onUpdateCalendarNotes={(content) => {
+            if (selectedId) updateCalendarNotes.mutate({ eventId: selectedId, content });
+          }}
+          calendarBrettMessages={calendarBrett.messages}
+          calendarBrettTotalCount={calendarBrett.totalCount}
+          calendarBrettHasMore={calendarBrett.hasMore}
+          onSendCalendarBrettMessage={(content) => {
+            if (selectedId) sendCalendarBrettMessage.mutate({ eventId: selectedId, content });
+          }}
+          onLoadMoreCalendarBrettMessages={calendarBrett.loadMore}
+          isSendingCalendarBrettMessage={sendCalendarBrettMessage.isPending}
+          isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
         />
 
         {/* Drag overlay */}

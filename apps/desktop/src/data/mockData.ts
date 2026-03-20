@@ -1,4 +1,4 @@
-import type { Thing, CalendarEvent, NavList } from "@brett/types";
+import type { Thing, CalendarEventDisplay, NavList } from "@brett/types";
 import { DEFAULT_LIST_NAME } from "@brett/business";
 
 export const mockLists: NavList[] = [
@@ -146,16 +146,19 @@ export const mockThings: Thing[] = [
   },
 ];
 
-export const mockEvents: CalendarEvent[] = [
+export const mockEvents: CalendarEventDisplay[] = [
   {
     id: "e1",
     title: "Morning Standup",
     startTime: "09:00",
     endTime: "09:30",
     durationMinutes: 30,
-    color: "blue",
+    color: { bg: "bg-blue-500/20", border: "border-blue-500/50", text: "text-blue-100", name: "blue" },
     location: "Zoom",
     hasBrettContext: false,
+    isAllDay: false,
+    myResponseStatus: "accepted",
+    googleEventId: "mock-e1",
   },
   {
     id: "e2",
@@ -163,7 +166,7 @@ export const mockEvents: CalendarEvent[] = [
     startTime: "10:00",
     endTime: "11:00",
     durationMinutes: 60,
-    color: "green",
+    color: { bg: "bg-emerald-500/20", border: "border-emerald-500/50", text: "text-emerald-100", name: "green" },
     location: "Conference Room A",
     hasBrettContext: true,
     brettObservation:
@@ -172,6 +175,9 @@ export const mockEvents: CalendarEvent[] = [
       { name: "Alex", initials: "A" },
       { name: "Jordan", initials: "J" },
     ],
+    isAllDay: false,
+    myResponseStatus: "accepted",
+    googleEventId: "mock-e2",
   },
   {
     id: "e3",
@@ -179,12 +185,15 @@ export const mockEvents: CalendarEvent[] = [
     startTime: "11:30",
     endTime: "12:00",
     durationMinutes: 30,
-    color: "purple",
+    color: { bg: "bg-purple-500/20", border: "border-purple-500/50", text: "text-purple-100", name: "purple" },
     location: "Blue Bottle Coffee",
     hasBrettContext: true,
     brettObservation:
       "Sarah recently closed the Acme deal. Good opportunity to recognize her effort.",
     attendees: [{ name: "Sarah Chen", initials: "SC" }],
+    isAllDay: false,
+    myResponseStatus: "accepted",
+    googleEventId: "mock-e3",
   },
   {
     id: "e4",
@@ -192,11 +201,14 @@ export const mockEvents: CalendarEvent[] = [
     startTime: "13:00",
     endTime: "14:00",
     durationMinutes: 60,
-    color: "amber",
+    color: { bg: "bg-amber-500/20", border: "border-amber-500/50", text: "text-amber-100", name: "amber" },
     location: "Office",
     hasBrettContext: true,
     brettObservation:
       "Focus on the Q3 revenue projections. The board is looking for a 15% increase in ARR.",
+    isAllDay: false,
+    myResponseStatus: "accepted",
+    googleEventId: "mock-e4",
   },
   {
     id: "e5",
@@ -204,9 +216,12 @@ export const mockEvents: CalendarEvent[] = [
     startTime: "14:30",
     endTime: "15:00",
     durationMinutes: 30,
-    color: "blue",
+    color: { bg: "bg-blue-500/20", border: "border-blue-500/50", text: "text-blue-100", name: "blue" },
     location: "Figma / Zoom",
     hasBrettContext: false,
+    isAllDay: false,
+    myResponseStatus: "accepted",
+    googleEventId: "mock-e5",
   },
   {
     id: "e6",
@@ -214,7 +229,7 @@ export const mockEvents: CalendarEvent[] = [
     startTime: "16:00",
     endTime: "16:30",
     durationMinutes: 30,
-    color: "green",
+    color: { bg: "bg-emerald-500/20", border: "border-emerald-500/50", text: "text-emerald-100", name: "green" },
     location: "Google Meet",
     hasBrettContext: true,
     brettObservation:
@@ -223,6 +238,9 @@ export const mockEvents: CalendarEvent[] = [
       { name: "David", initials: "D" },
       { name: "Elena", initials: "E" },
     ],
+    isAllDay: false,
+    myResponseStatus: "accepted",
+    googleEventId: "mock-e6",
   },
 ];
 

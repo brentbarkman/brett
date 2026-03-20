@@ -181,19 +181,6 @@ export interface InboxResponse {
   visible: Thing[];
 }
 
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  startTime: string;
-  endTime: string;
-  durationMinutes: number;
-  color: "blue" | "green" | "purple" | "amber";
-  location?: string;
-  attendees?: { name: string; initials: string }[];
-  brettObservation?: string;
-  hasBrettContext: boolean;
-}
-
 export interface NavList {
   id: string;
   name: string;
@@ -219,3 +206,5 @@ export interface CreateItemLinkInput {
 export interface CreateBrettMessageInput {
   content: string;
 }
+
+export * from "./calendar";
