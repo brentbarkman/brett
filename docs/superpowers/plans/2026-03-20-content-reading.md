@@ -472,6 +472,18 @@ When prompted for migration name, use: `add_content_fields`
 
 Expected: Migration created and applied successfully.
 
+- [ ] **Step 2b: Add data migration SQL for legacy type values**
+
+After the migration is created, edit the generated migration SQL file to append data migration at the end:
+
+```sql
+-- Migrate legacy type values to new "content" type
+UPDATE "Item" SET type = 'content', "contentType" = 'web_page', "contentStatus" = 'pending' WHERE type = 'saved_web';
+UPDATE "Item" SET type = 'content', "contentType" = 'tweet', "contentStatus" = 'pending' WHERE type = 'saved_tweet';
+```
+
+Then re-apply: `cd /Users/brentbarkman/code/brett && npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma`
+
 - [ ] **Step 3: Write failing tests for content API endpoints**
 
 Add to `apps/api/src/__tests__/things.test.ts`, inside the existing `describe("Things routes")` block:
@@ -576,7 +588,8 @@ In `apps/api/src/routes/things.ts`, update the `POST /` handler (lines 229-242).
         type: data.type,
         title: data.title,
         description: data.description,
-        source: data.source ?? "Brett",
+        source: data.source ?? (data.type === "content" && data.sourceUrl
+          ? new URL(data.sourceUrl).hostname : "Brett"),
         sourceUrl: data.sourceUrl,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         dueDatePrecision: data.dueDatePrecision ?? null,
@@ -901,6 +914,7 @@ export interface SafeFetchOptions {
 /**
  * Fetch a URL with SSRF protections:
  * - Resolves DNS and rejects private IPs
+ * - Pins resolved IP to prevent DNS rebinding
  * - Enforces timeout and response size limits
  * - Only allows http/https protocols
  */
@@ -915,24 +929,39 @@ export async function safeFetch(
     throw new Error(`Blocked protocol: ${parsed.protocol}`);
   }
 
-  // Resolve DNS and check for private IPs
+  // Resolve DNS, validate IP, and pin it to prevent DNS rebinding
   const { address } = await lookup(parsed.hostname);
   if (isPrivateIP(address)) {
     throw new Error(`Blocked private IP: ${address}`);
   }
 
+  // Connect directly to the resolved IP with Host header set
+  // This prevents DNS rebinding attacks where re-resolution returns a different IP
+  const pinnedUrl = new URL(url);
+  pinnedUrl.hostname = address;
+  const hostHeader = parsed.port ? `${parsed.hostname}:${parsed.port}` : parsed.hostname;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(pinnedUrl.href, {
       signal: controller.signal,
-      redirect: "follow",
+      redirect: "manual", // Handle redirects manually to re-check IPs
       headers: {
+        Host: hostHeader,
         "User-Agent": "Brett/1.0 (+https://brett.app)",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
     });
+
+    // Handle redirects manually — re-validate each redirect target
+    if (response.status >= 300 && response.status < 400 && maxRedirects > 0) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("Redirect with no Location header");
+      const redirectUrl = new URL(location, url).href;
+      return safeFetch(redirectUrl, { ...options, maxRedirects: maxRedirects - 1 });
+    }
 
     // Check content length before reading body
     const contentLength = response.headers.get("content-length");
@@ -1112,7 +1141,8 @@ interface ExtractionResult {
 export async function extractContent(url: string): Promise<ExtractionResult> {
   const contentType = detectContentType(url);
 
-  // For PDFs, we don't fetch the full file here — that's handled separately
+  // For PDFs from URLs, download and store via attachment system
+  // (drag-dropped PDFs are handled separately in the frontend)
   if (contentType === "pdf") {
     const parsed = new URL(url);
     return {
@@ -1125,7 +1155,10 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
       contentFavicon: `${parsed.origin}/favicon.ico`,
       contentDomain: parsed.hostname,
       contentMetadata: { type: "pdf" },
-    };
+      // Note: PDF download + S3 upload happens in runExtraction after this returns
+      // using safeFetch with 60s timeout and 50MB limit
+      _needsPdfDownload: true,
+    } as ExtractionResult & { _needsPdfDownload?: boolean };
   }
 
   // Fetch the page
@@ -1263,7 +1296,26 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
  */
 export async function runExtraction(itemId: string, url: string, userId: string): Promise<void> {
   try {
-    const result = await extractContent(url);
+    const result = await extractContent(url) as ExtractionResult & { _needsPdfDownload?: boolean };
+
+    // For URL-based PDFs, download the file and store as attachment
+    if (result._needsPdfDownload) {
+      try {
+        const pdfResponse = await safeFetch(url, { timeoutMs: 60_000, maxSizeBytes: 50 * 1024 * 1024 });
+        const buffer = Buffer.from(await pdfResponse.arrayBuffer());
+        const filename = new URL(url).pathname.split("/").pop() || "document.pdf";
+        // Upload to S3 via the storage module (same as attachment system)
+        const { uploadToStorage } = await import("./storage.js");
+        const storageKey = `attachments/${userId}/${itemId}/${crypto.randomUUID()}-${filename}`;
+        await uploadToStorage(storageKey, buffer, "application/pdf");
+        await prisma.attachment.create({
+          data: { itemId, userId, filename, mimeType: "application/pdf", sizeBytes: buffer.length, storageKey },
+        });
+      } catch (pdfErr) {
+        console.error(`[content-extractor] PDF download failed for ${url}:`, pdfErr);
+        // Continue with extraction — PDF preview will fall back to external URL
+      }
+    }
 
     const updateData: Record<string, unknown> = {
       contentType: result.contentType,
@@ -1298,15 +1350,31 @@ export async function runExtraction(itemId: string, url: string, userId: string)
   } catch (error) {
     console.error(`[content-extractor] Failed to extract ${url}:`, error);
 
-    await prisma.item.update({
-      where: { id: itemId },
-      data: { contentStatus: "failed" },
-    });
+    // Check if this was a DNS/connection failure — auto-convert to task
+    const isDnsOrConnectionError = error instanceof Error &&
+      (error.message.includes("ENOTFOUND") || error.message.includes("Blocked") ||
+       error.message.includes("ECONNREFUSED") || error.message.includes("fetch failed"));
 
-    publishSSE(userId, {
-      type: "content.extracted",
-      payload: { itemId, contentStatus: "failed" },
-    });
+    if (isDnsOrConnectionError) {
+      // URL is not reachable — convert to task
+      await prisma.item.update({
+        where: { id: itemId },
+        data: { type: "task", contentStatus: null, contentType: null, source: "Brett" },
+      });
+      publishSSE(userId, {
+        type: "content.extracted",
+        payload: { itemId, contentStatus: "converted_to_task" },
+      });
+    } else {
+      await prisma.item.update({
+        where: { id: itemId },
+        data: { contentStatus: "failed" },
+      });
+      publishSSE(userId, {
+        type: "content.extracted",
+        payload: { itemId, contentStatus: "failed" },
+      });
+    }
   }
 }
 ```
@@ -1324,7 +1392,7 @@ Expected: All tests PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/api/src/lib/ssrf-guard.ts apps/api/src/lib/content-extractor.ts apps/api/src/__tests__/content-extractor.test.ts apps/api/package.json apps/api/pnpm-lock.yaml
+git add apps/api/src/lib/ssrf-guard.ts apps/api/src/lib/content-extractor.ts apps/api/src/__tests__/content-extractor.test.ts apps/api/package.json pnpm-lock.yaml
 git commit -m "feat: content extraction pipeline with SSRF guard"
 ```
 
@@ -1450,13 +1518,14 @@ extract.post("/:id/extract", authMiddleware, async (c) => {
   if (item.contentStatus === "extracted") return c.json({ error: "Already extracted" }, 400);
 
   // Atomic update to prevent race conditions
+  // Include "pending" for stuck items (e.g., server crashed during extraction)
   const result = await prisma.item.updateMany({
-    where: { id: item.id, contentStatus: { in: ["failed", null] } },
+    where: { id: item.id, contentStatus: { in: ["failed", "pending", null] } },
     data: { contentStatus: "pending" },
   });
 
   if (result.count === 0) {
-    return c.json({ error: "Extraction already in progress" }, 409);
+    return c.json({ error: "Extraction already in progress or already extracted" }, 409);
   }
 
   // Fire-and-forget
@@ -1525,37 +1594,31 @@ git commit -m "feat: extract endpoint with retry, trigger extraction on content 
 ### Task 7: Quick-Add URL Detection (Frontend)
 
 **Files:**
+- Modify: `packages/business/src/index.ts` (add `detectUrl` export — shared between server and client)
 - Modify: `packages/ui/src/QuickAddInput.tsx`
 - Modify: `apps/desktop/src/api/things.ts`
+- Modify: `apps/api/src/lib/url-detector.ts` (import `detectUrl` from `@brett/business` instead of duplicating)
 
-- [ ] **Step 1: Add client-side URL detection to QuickAddInput**
+**Important: DRY.** The URL detection logic (`detectUrl`) must live in `packages/business` so it's shared between the API server (Task 4's `url-detector.ts`) and the frontend (`QuickAddInput`). Move the `detectUrl` function and TLD list from `apps/api/src/lib/url-detector.ts` to `packages/business/src/index.ts`, then import it in both places. `detectContentType` stays in `apps/api/src/lib/url-detector.ts` since it's server-only.
 
-The URL detection logic needs to live client-side too (subset of server logic). Update `packages/ui/src/QuickAddInput.tsx`:
+- [ ] **Step 1: Move detectUrl to business package**
 
-Replace the `onAdd` prop type and add URL detection:
+In `packages/business/src/index.ts`, add the `detectUrl` function and `VALID_TLDS` set (from Task 4). Export it.
+
+Then in `apps/api/src/lib/url-detector.ts`, replace the local `detectUrl` and `VALID_TLDS` with:
+
+```typescript
+export { detectUrl } from "@brett/business";
+```
+
+- [ ] **Step 2: Update QuickAddInput to use shared detectUrl**
+
+Update `packages/ui/src/QuickAddInput.tsx`:
 
 ```typescript
 import React, { useState, useRef, useImperativeHandle, forwardRef } from "react";
 import { Plus, Link } from "lucide-react";
-
-const VALID_TLDS = new Set([
-  "com", "org", "net", "io", "co", "dev", "app", "me", "info", "edu", "gov",
-  "biz", "us", "uk", "de", "fr", "jp", "au", "ca", "in", "br", "it", "nl",
-]);
-
-function looksLikeUrl(input: string): { isUrl: true; url: string } | { isUrl: false } {
-  const trimmed = input.trim();
-  if (/\s/.test(trimmed)) return { isUrl: false };
-  if (/^https?:\/\//i.test(trimmed)) return { isUrl: true, url: trimmed };
-  if (!trimmed.includes(".")) return { isUrl: false };
-  const hostPart = trimmed.split("/")[0];
-  const segments = hostPart.split(".");
-  if (segments.length < 2) return { isUrl: false };
-  const tld = segments[segments.length - 1].toLowerCase();
-  if (!VALID_TLDS.has(tld)) return { isUrl: false };
-  if (!segments[segments.length - 2]) return { isUrl: false };
-  return { isUrl: true, url: `https://${trimmed}` };
-}
+import { detectUrl } from "@brett/business";
 
 export interface QuickAddInputHandle {
   focus: () => void;
@@ -1689,9 +1752,28 @@ git commit -m "feat: SSE handler for content extraction events"
 Create `packages/ui/src/ContentPreview.tsx`:
 
 ```typescript
-import React from "react";
+import React, { useMemo } from "react";
 import { ExternalLink, RefreshCw, AlertCircle } from "lucide-react";
+import DOMPurify from "dompurify";
 import type { ContentType, ContentStatus, ContentMetadata } from "@brett/types";
+
+// Sanitize HTML from Readability extraction to prevent XSS in Electron
+function ArticleBody({ html }: { html: string }) {
+  const sanitized = useMemo(() => DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "img", "ul", "ol", "li",
+      "blockquote", "pre", "code", "em", "strong", "br", "hr", "figure", "figcaption"],
+    ALLOWED_ATTR: ["href", "src", "alt", "title", "class"],
+    ALLOW_DATA_ATTR: false,
+  }), [html]);
+  return (
+    <div
+      className="prose prose-invert prose-sm max-w-none max-h-[50vh] overflow-y-auto
+        text-white/70 prose-headings:text-white/90 prose-a:text-blue-400
+        scrollbar-thin scrollbar-thumb-white/10"
+      dangerouslySetInnerHTML={{ __html: sanitized }}
+    />
+  );
+}
 
 interface ContentPreviewProps {
   contentType?: ContentType;
@@ -1843,14 +1925,9 @@ function ArticlePreview({ contentBody, contentFavicon, contentDomain, sourceUrl 
           </a>
         )}
       </div>
-      {/* Article body */}
+      {/* Article body — sanitized to prevent XSS in Electron renderer */}
       {contentBody && (
-        <div
-          className="prose prose-invert prose-sm max-w-none max-h-[50vh] overflow-y-auto
-            text-white/70 prose-headings:text-white/90 prose-a:text-blue-400
-            scrollbar-thin scrollbar-thumb-white/10"
-          dangerouslySetInnerHTML={{ __html: contentBody }}
-        />
+        <ArticleBody html={contentBody} />
       )}
     </div>
   );
@@ -1936,7 +2013,11 @@ export function ContentPreview(props: ContentPreviewProps) {
 }
 ```
 
-- [ ] **Step 2: Export from UI package**
+- [ ] **Step 2: Install DOMPurify**
+
+Run: `cd /Users/brentbarkman/code/brett/packages/ui && pnpm add dompurify && pnpm add -D @types/dompurify`
+
+- [ ] **Step 3: Export from UI package**
 
 Add to `packages/ui/src/index.ts`:
 
@@ -1944,16 +2025,16 @@ Add to `packages/ui/src/index.ts`:
 export { ContentPreview } from "./ContentPreview";
 ```
 
-- [ ] **Step 3: Run typecheck**
+- [ ] **Step 4: Run typecheck**
 
 Run: `cd /Users/brentbarkman/code/brett && pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add packages/ui/src/ContentPreview.tsx packages/ui/src/index.ts
+git add packages/ui/src/ContentPreview.tsx packages/ui/src/index.ts packages/ui/package.json
 git commit -m "feat: ContentPreview component with type-specific renderers"
 ```
 
