@@ -45,8 +45,24 @@ contentImageUrl    String?   — OG image / thumbnail URL
 contentBody        String?   @db.Text — extracted article text as markdown (articles, X articles). Max 500KB.
 contentFavicon     String?   — source site favicon URL
 contentDomain      String?   — display domain (e.g., "medium.com")
-contentMetadata    Json?     — type-specific data (video duration, podcast episode, author, publish date, embed HTML, etc.)
+contentMetadata    Json?     — type-specific data, typed per contentType (see ContentMetadata union below)
 ```
+
+**Invariant:** When `contentType` is non-null, `contentStatus` must also be non-null. Validation enforces this on create.
+
+**ContentMetadata discriminated union** (TypeScript, in types package):
+
+```typescript
+type ContentMetadata =
+  | { type: 'tweet'; embedHtml?: string; author?: string; tweetText?: string }
+  | { type: 'video'; embedUrl: string; duration?: number; channel?: string }
+  | { type: 'podcast'; embedUrl: string; provider: 'spotify' | 'apple'; episodeName?: string; showName?: string }
+  | { type: 'article'; author?: string; publishDate?: string; wordCount?: number }
+  | { type: 'web_page' }
+  | { type: 'pdf' }
+```
+
+**Database index:** Add index on `[userId, contentType]` for content-type-specific queries.
 
 **URL storage:** Reuse the existing `sourceUrl` field on Item for the content source URL. No new `contentUrl` field. For content items, `sourceUrl` is the URL the user provided. The `source` field is set to the domain name (e.g., "medium.com", "x.com") rather than the default "Brett".
 
@@ -56,7 +72,12 @@ Content items use `type: 'content'` on the existing Item type field. All existin
 
 **PDF storage:** Drag-dropped PDFs upload to S3 via the existing attachment system. `sourceUrl` is left null (no external URL). The PDF renders from the attachment's presigned URL.
 
-**Prisma schema cleanup:** Update the stale comment on `Item.type` from `"task" | "saved_web" | "saved_tweet"` to `"task" | "content"`. Verify no production rows use the old type values; if any exist, migrate them to `type: 'content'` with appropriate `contentType`.
+**Prisma schema cleanup:** Update the stale comment on `Item.type` from `"task" | "saved_web" | "saved_tweet"` to `"task" | "content"`. Migration includes data cleanup SQL:
+
+```sql
+UPDATE "Item" SET type = 'content', "contentType" = 'web_page', "contentStatus" = 'pending' WHERE type = 'saved_web';
+UPDATE "Item" SET type = 'content', "contentType" = 'tweet', "contentStatus" = 'pending' WHERE type = 'saved_tweet';
+```
 
 ## Type Interface Changes
 
@@ -95,6 +116,7 @@ The existing quick-add input gains URL detection:
    - `v2.0.1` → task (no TLD pattern — `.0` is not a TLD)
    - `file.pdf` → task (single segment with extension, no domain structure)
    - `fix the api.controller bug` → task (contains spaces)
+   - TLD allowlist for pattern matching: `.com`, `.org`, `.net`, `.io`, `.co`, `.dev`, `.app`, `.me`, `.info`, `.edu`, `.gov`, plus country codes (`.uk`, `.de`, etc.). Not a regex like `\.\w{2,}` which would false-positive on `config.local` or `myapp.test`.
 4. Plain text with spaces → task (existing behavior)
 5. Extraction pipeline kicks off. If URL resolution fails (HEAD request 4xx/5xx or DNS failure) → auto-convert to task with original text as title, subtle toast notification: "Couldn't reach URL — saved as task instead"
 
@@ -128,7 +150,7 @@ On extraction failure: set `contentStatus: failed`, preserve the `sourceUrl`. UI
 
 `POST /things/:id/extract` triggers extraction. Rules:
 - Only callable on items with `contentStatus: failed` or `contentStatus: pending` (stuck). Returns 400 for already-extracted items.
-- Sets `contentStatus: pending` before starting, so double-clicks are idempotent (second call sees `pending` and returns 409).
+- Uses atomic update to prevent race conditions: `UPDATE "Item" SET "contentStatus" = 'pending' WHERE id = :id AND "contentStatus" IN ('failed')`. If `rowsAffected === 0`, return 409 (already in progress or already extracted). This prevents double-click races without a read-then-write TOCTOU.
 - No rate limiting needed in v1 — extraction is per-item and user-initiated.
 
 ### Dependencies
@@ -148,7 +170,9 @@ The extraction pipeline fetches arbitrary user-provided URLs. Mitigations:
 - **Timeout:** 10-second timeout per fetch
 - **Response size limit:** 5MB max for HTML pages, 50MB max for PDFs
 - **Redirect limit:** Follow max 5 redirects, re-check IP on each redirect
+- **DNS rebinding prevention:** Pin the resolved IP for the connection — do not re-resolve between check and connect. Resolve DNS first, validate the IP, then connect directly to the IP with the Host header set manually (or use a library like `ssrf-req-filter`)
 - **User-Agent:** Set a descriptive User-Agent header (e.g., `Brett/1.0 (+https://brett.app)`)
+- **Timeouts:** 10-second timeout for HTML pages; 60-second timeout for PDF downloads
 
 ### Embed Isolation
 
