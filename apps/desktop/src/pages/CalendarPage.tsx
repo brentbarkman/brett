@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import type { CalendarEventRecord } from "@brett/types";
 import { useCalendarEvents } from "../api/calendar";
 import { useCalendarAccounts, useConnectCalendar, useToggleCalendarVisibility } from "../api/calendar-accounts";
@@ -34,8 +34,15 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
     [accounts],
   );
 
-  const [view, setView] = useState<CalendarView>("5day");
+  const [view, setView] = useState<CalendarView>(() => {
+    const stored = localStorage.getItem("brett-calendar-view");
+    return (["day", "5day", "week", "month"].includes(stored ?? "") ? stored : "week") as CalendarView;
+  });
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    localStorage.setItem("brett-calendar-view", view);
+  }, [view]);
 
   // Compute date range based on view
   const { startDate, endDate } = useMemo(() => {

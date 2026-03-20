@@ -108,7 +108,7 @@ export function CalendarHeader({
   const totalCount = calendars?.length ?? 0;
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10">
+    <div className="flex items-center justify-between px-4 py-3 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 relative z-10">
       {/* Left: Navigation */}
       <div className="flex items-center gap-2">
         <button
