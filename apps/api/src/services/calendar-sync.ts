@@ -119,6 +119,24 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
 
     const client = await getCalendarClient(googleAccountId);
 
+    // Refresh calendar list metadata (name, color) from Google
+    try {
+      const googleCalendars = await fetchCalendarList(client);
+      for (const gcal of googleCalendars) {
+        if (!gcal.id) continue;
+        await prisma.calendarList.updateMany({
+          where: { googleAccountId, googleCalendarId: gcal.id },
+          data: {
+            name: gcal.summary ?? gcal.id,
+            color: gcal.backgroundColor ?? "#4285f4",
+          },
+        });
+      }
+    } catch (err) {
+      // Non-fatal — calendar metadata refresh is best-effort
+      console.warn("[calendar-sync] Failed to refresh calendar list metadata:", err);
+    }
+
     const calendarLists = await prisma.calendarList.findMany({
       where: { googleAccountId },
     });
