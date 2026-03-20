@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from "react";
 import type { CalendarEventRecord } from "@brett/types";
 import { useCalendarEvents } from "../api/calendar";
-import { useCalendarAccounts, useConnectCalendar } from "../api/calendar-accounts";
-import { CalendarHeader, getSunday, type CalendarView } from "../components/calendar/CalendarHeader";
+import { useCalendarAccounts, useConnectCalendar, useToggleCalendarVisibility } from "../api/calendar-accounts";
+import { CalendarHeader, getSunday, type CalendarView, type CalendarInfo } from "../components/calendar/CalendarHeader";
 import { CalendarDayView } from "../components/calendar/CalendarDayView";
 import { CalendarWeekView } from "../components/calendar/CalendarWeekView";
 import { CalendarMonthView } from "../components/calendar/CalendarMonthView";
@@ -18,6 +18,21 @@ function formatDateParam(d: Date): string {
 export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   const { data: accounts = [], isLoading: isLoadingAccounts } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
+  const toggleVisibility = useToggleCalendarVisibility();
+
+  // Flatten all calendars from all accounts for the header dropdown
+  const allCalendars: CalendarInfo[] = useMemo(
+    () => accounts.flatMap((a) =>
+      a.calendars.map((cal) => ({
+        id: cal.id,
+        name: cal.name,
+        color: cal.color,
+        isVisible: cal.isVisible,
+        accountId: a.id,
+      })),
+    ),
+    [accounts],
+  );
 
   const [view, setView] = useState<CalendarView>("5day");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -199,6 +214,10 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
         currentDate={currentDate}
         onDateChange={setCurrentDate}
         onToday={handleToday}
+        calendars={allCalendars}
+        onToggleCalendar={(accountId, calendarId, isVisible) =>
+          toggleVisibility.mutate({ accountId, calendarId, isVisible })
+        }
       />
 
       <div className="flex-1 min-h-0 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">

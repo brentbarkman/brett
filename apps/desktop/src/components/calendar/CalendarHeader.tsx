@@ -1,7 +1,15 @@
-import React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { ChevronLeft, ChevronRight, ListFilter } from "lucide-react";
 
 export type CalendarView = "day" | "5day" | "week" | "month";
+
+export interface CalendarInfo {
+  id: string;
+  name: string;
+  color: string;
+  isVisible: boolean;
+  accountId: string;
+}
 
 export interface CalendarHeaderProps {
   view: CalendarView;
@@ -9,6 +17,8 @@ export interface CalendarHeaderProps {
   currentDate: Date;
   onDateChange: (date: Date) => void;
   onToday: () => void;
+  calendars?: CalendarInfo[];
+  onToggleCalendar?: (accountId: string, calendarId: string, isVisible: boolean) => void;
 }
 
 /** Get Sunday (start of week) containing the given date */
@@ -69,7 +79,34 @@ export function CalendarHeader({
   currentDate,
   onDateChange,
   onToday,
+  calendars,
+  onToggleCalendar,
 }: CalendarHeaderProps) {
+  const [showCalendars, setShowCalendars] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click or Escape
+  useEffect(() => {
+    if (!showCalendars) return;
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowCalendars(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowCalendars(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [showCalendars]);
+
+  const visibleCount = calendars?.filter((c) => c.isVisible).length ?? 0;
+  const totalCount = calendars?.length ?? 0;
+
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10">
       {/* Left: Navigation */}
@@ -97,21 +134,70 @@ export function CalendarHeader({
         </h2>
       </div>
 
-      {/* Right: View toggle */}
-      <div className="flex bg-white/5 rounded-lg border border-white/10 overflow-hidden">
-        {views.map((v) => (
-          <button
-            key={v.key}
-            onClick={() => onViewChange(v.key)}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-              view === v.key
-                ? "bg-white/15 text-white"
-                : "text-white/50 hover:text-white/80 hover:bg-white/5"
-            }`}
-          >
-            {v.label}
-          </button>
-        ))}
+      {/* Right: Calendars dropdown + View toggle */}
+      <div className="flex items-center gap-3">
+        {/* Calendars filter dropdown */}
+        {calendars && calendars.length > 0 && onToggleCalendar && (
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setShowCalendars(!showCalendars)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                showCalendars
+                  ? "bg-white/15 text-white border-white/20"
+                  : "text-white/50 hover:text-white border-white/10 hover:border-white/20 hover:bg-white/5"
+              }`}
+            >
+              <ListFilter size={14} />
+              <span>{visibleCount}/{totalCount}</span>
+            </button>
+
+            {showCalendars && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-gray-900/95 backdrop-blur-xl rounded-lg border border-white/10 shadow-2xl z-50 py-1.5 overflow-hidden">
+                <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-white/30 font-semibold">
+                  Calendars
+                </div>
+                {calendars.map((cal) => (
+                  <button
+                    key={cal.id}
+                    onClick={() => onToggleCalendar(cal.accountId, cal.id, !cal.isVisible)}
+                    className="flex items-center gap-2.5 w-full px-3 py-1.5 hover:bg-white/5 transition-colors text-left"
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-opacity"
+                      style={{
+                        backgroundColor: cal.color,
+                        opacity: cal.isVisible ? 1 : 0.25,
+                      }}
+                    />
+                    <span className={`text-xs truncate flex-1 transition-colors ${cal.isVisible ? "text-white/80" : "text-white/30"}`}>
+                      {cal.name}
+                    </span>
+                    {cal.isVisible && (
+                      <span className="text-blue-400 text-xs">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* View toggle */}
+        <div className="flex bg-white/5 rounded-lg border border-white/10 overflow-hidden">
+          {views.map((v) => (
+            <button
+              key={v.key}
+              onClick={() => onViewChange(v.key)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                view === v.key
+                  ? "bg-white/15 text-white"
+                  : "text-white/50 hover:text-white/80 hover:bg-white/5"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
