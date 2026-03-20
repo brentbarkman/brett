@@ -161,14 +161,16 @@ calendar.patch("/events/:id/rsvp", async (c) => {
   const validation = validateRsvpInput(body);
   if (!validation.ok) return c.json({ error: validation.error }, 400);
 
-  // Update on Google Calendar — returns the patched event
+  // Update on Google Calendar — use the authenticated user's own email as the calendar ID.
+  // Events from shared/subscribed calendars can only be patched via the user's own calendar.
   const client = await getCalendarClient(event.googleAccountId);
-  console.log(`[calendar] RSVP: ${validation.data.status} on event ${event.googleEventId} (calendar: ${event.calendarList.googleCalendarId})`);
+  const selfCalendarId = event.googleAccount.googleEmail;
+  console.log(`[calendar] RSVP: ${validation.data.status} on event ${event.googleEventId} (via: ${selfCalendarId})`);
   const updatedGoogleEvent = await updateRsvp(
     client,
-    event.calendarList.googleCalendarId,
+    selfCalendarId,
     event.googleEventId,
-    event.googleAccount.googleEmail,
+    selfCalendarId,
     validation.data.status as "accepted" | "declined" | "tentative",
     validation.data.comment,
   );
