@@ -32,11 +32,18 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
       return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
     }
 
-    if (view === "5day" || view === "week") {
+    if (view === "5day") {
+      const start = new Date(currentDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 5);
+      return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
+    }
+
+    if (view === "week") {
       const monday = getMonday(currentDate);
-      const numDays = view === "5day" ? 5 : 7;
       const end = new Date(monday);
-      end.setDate(end.getDate() + numDays);
+      end.setDate(end.getDate() + 7);
       return { startDate: formatDateParam(monday), endDate: formatDateParam(end) };
     }
 
@@ -204,7 +211,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
         )}
         {(view === "5day" || view === "week") && (
           <CalendarWeekView
-            startDate={getMonday(currentDate)}
+            startDate={view === "5day" ? currentDate : getMonday(currentDate)}
             daysPerWeek={view === "5day" ? 5 : 7}
             events={events}
             onEventClick={onEventClick}

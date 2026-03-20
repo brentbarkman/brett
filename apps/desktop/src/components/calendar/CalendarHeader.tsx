@@ -27,27 +27,29 @@ function formatDateLabel(view: CalendarView, date: Date): string {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   }
 
-  // 5day and week — show Mon–Fri or Mon–Sun range
-  const monday = getMonday(date);
+  // 5day starts from currentDate, week starts from Monday
+  const start = view === "5day" ? new Date(date) : getMonday(date);
   const numDays = view === "5day" ? 5 : 7;
-  const end = new Date(monday);
+  const end = new Date(start);
   end.setDate(end.getDate() + numDays - 1);
 
-  const startMonth = monday.toLocaleDateString("en-US", { month: "short" });
+  const startMonth = start.toLocaleDateString("en-US", { month: "short" });
   const endMonth = end.toLocaleDateString("en-US", { month: "short" });
-  const year = monday.getFullYear();
+  const year = start.getFullYear();
 
   if (startMonth !== endMonth) {
-    return `${startMonth} ${monday.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
+    return `${startMonth} ${start.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
   }
-  return `${startMonth} ${monday.getDate()}–${end.getDate()}, ${year}`;
+  return `${startMonth} ${start.getDate()}–${end.getDate()}, ${year}`;
 }
 
 function navigateDate(view: CalendarView, date: Date, direction: -1 | 1): Date {
   const next = new Date(date);
   if (view === "day") {
     next.setDate(next.getDate() + direction);
-  } else if (view === "5day" || view === "week") {
+  } else if (view === "5day") {
+    next.setDate(next.getDate() + direction * 5);
+  } else if (view === "week") {
     next.setDate(next.getDate() + direction * 7);
   } else {
     next.setMonth(next.getMonth() + direction);
