@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import type { CalendarEventRecord } from "@brett/types";
 import { useCalendarEvents } from "../api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "../api/calendar-accounts";
-import { CalendarHeader } from "../components/calendar/CalendarHeader";
+import { CalendarHeader, getMonday, type CalendarView } from "../components/calendar/CalendarHeader";
 import { CalendarDayView } from "../components/calendar/CalendarDayView";
 import { CalendarWeekView } from "../components/calendar/CalendarWeekView";
 import { CalendarMonthView } from "../components/calendar/CalendarMonthView";
@@ -19,16 +19,8 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   const { data: accounts = [], isLoading: isLoadingAccounts } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
 
-  const [view, setView] = useState<"day" | "days" | "month">("days");
+  const [view, setView] = useState<CalendarView>("5day");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [numDays, setNumDays] = useState(() => {
-    const stored = Number(localStorage.getItem("brett-calendar-days"));
-    return [2, 3, 4, 5, 6, 7, 10, 14].includes(stored) ? stored : 5;
-  });
-
-  useEffect(() => {
-    localStorage.setItem("brett-calendar-days", String(numDays));
-  }, [numDays]);
 
   // Compute date range based on view
   const { startDate, endDate } = useMemo(() => {
@@ -40,12 +32,12 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
       return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
     }
 
-    if (view === "days") {
-      const start = new Date(currentDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
+    if (view === "5day" || view === "week") {
+      const monday = getMonday(currentDate);
+      const numDays = view === "5day" ? 5 : 7;
+      const end = new Date(monday);
       end.setDate(end.getDate() + numDays);
-      return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
+      return { startDate: formatDateParam(monday), endDate: formatDateParam(end) };
     }
 
     // Month view — include padding days
@@ -59,7 +51,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
     const end = new Date(start);
     end.setDate(end.getDate() + totalCells);
     return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
-  }, [view, currentDate, numDays]);
+  }, [view, currentDate]);
 
   const { data } = useCalendarEvents({ startDate, endDate });
   const events: CalendarEventRecord[] = data?.events ?? [];
@@ -200,8 +192,6 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
         currentDate={currentDate}
         onDateChange={setCurrentDate}
         onToday={handleToday}
-        numDays={numDays}
-        onNumDaysChange={setNumDays}
       />
 
       <div className="flex-1 min-h-0 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
@@ -212,10 +202,10 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
             onEventClick={onEventClick}
           />
         )}
-        {view === "days" && (
+        {(view === "5day" || view === "week") && (
           <CalendarWeekView
-            startDate={currentDate}
-            daysPerWeek={numDays}
+            startDate={getMonday(currentDate)}
+            daysPerWeek={view === "5day" ? 5 : 7}
             events={events}
             onEventClick={onEventClick}
           />
