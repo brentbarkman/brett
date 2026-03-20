@@ -51,9 +51,11 @@ function navigateDate(view: "day" | "days" | "month", date: Date, direction: -1 
   return next;
 }
 
-const views: Array<{ key: "day" | "days" | "month"; label: string }> = [
+type ViewButton = { key: "day" | "days" | "month"; label: string; numDays?: number };
+const viewButtons: ViewButton[] = [
   { key: "day", label: "Day" },
   { key: "days", label: "Days" },
+  { key: "days", label: "Week", numDays: 7 },
   { key: "month", label: "Month" },
 ];
 
@@ -97,19 +99,27 @@ export function CalendarHeader({
       <div className="flex items-center gap-3">
         {/* View toggle */}
         <div className="flex bg-white/5 rounded-lg border border-white/10 overflow-hidden">
-          {views.map((v) => (
-            <button
-              key={v.key}
-              onClick={() => onViewChange(v.key)}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                view === v.key
-                  ? "bg-white/15 text-white"
-                  : "text-white/50 hover:text-white/80 hover:bg-white/5"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
+          {viewButtons.map((v) => {
+            const isActive = v.numDays
+              ? view === "days" && numDays === v.numDays
+              : view === v.key && !(v.key === "days" && numDays === 7);
+            return (
+              <button
+                key={v.label}
+                onClick={() => {
+                  onViewChange(v.key);
+                  if (v.numDays) onNumDaysChange(v.numDays);
+                }}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-white/15 text-white"
+                    : "text-white/50 hover:text-white/80 hover:bg-white/5"
+                }`}
+              >
+                {v.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Num days dropdown (only in days view) */}
