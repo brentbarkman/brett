@@ -11,11 +11,10 @@ export interface CalendarHeaderProps {
   onToday: () => void;
 }
 
-/** Get Monday of the week containing the given date */
-function getMonday(date: Date): Date {
+/** Get Sunday (start of week) containing the given date */
+function getSunday(date: Date): Date {
   const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - ((day + 6) % 7)); // Monday = 0 offset
+  d.setDate(d.getDate() - d.getDay());
   return d;
 }
 
@@ -28,7 +27,7 @@ function formatDateLabel(view: CalendarView, date: Date): string {
   }
 
   // 5day starts from currentDate, week starts from Monday
-  const start = view === "5day" ? new Date(date) : getMonday(date);
+  const start = view === "5day" ? new Date(date) : getSunday(date);
   const numDays = view === "5day" ? 5 : 7;
   const end = new Date(start);
   end.setDate(end.getDate() + numDays - 1);
@@ -119,4 +118,4 @@ export function CalendarHeader({
 }
 
 /** Exported for use by CalendarPage */
-export { getMonday };
+export { getSunday };

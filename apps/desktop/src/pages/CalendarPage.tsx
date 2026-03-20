@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import type { CalendarEventRecord } from "@brett/types";
 import { useCalendarEvents } from "../api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "../api/calendar-accounts";
-import { CalendarHeader, getMonday, type CalendarView } from "../components/calendar/CalendarHeader";
+import { CalendarHeader, getSunday, type CalendarView } from "../components/calendar/CalendarHeader";
 import { CalendarDayView } from "../components/calendar/CalendarDayView";
 import { CalendarWeekView } from "../components/calendar/CalendarWeekView";
 import { CalendarMonthView } from "../components/calendar/CalendarMonthView";
@@ -41,7 +41,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
     }
 
     if (view === "week") {
-      const monday = getMonday(currentDate);
+      const monday = getSunday(currentDate);
       const end = new Date(monday);
       end.setDate(end.getDate() + 7);
       return { startDate: formatDateParam(monday), endDate: formatDateParam(end) };
@@ -211,7 +211,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
         )}
         {(view === "5day" || view === "week") && (
           <CalendarWeekView
-            startDate={view === "5day" ? currentDate : getMonday(currentDate)}
+            startDate={view === "5day" ? currentDate : getSunday(currentDate)}
             daysPerWeek={view === "5day" ? 5 : 7}
             events={events}
             onEventClick={onEventClick}
