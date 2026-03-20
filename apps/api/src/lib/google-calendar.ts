@@ -177,10 +177,8 @@ export async function updateRsvp(
   }
 
   selfAttendee.responseStatus = status;
-  // Set or clear the comment
-  if (comment !== undefined) {
-    selfAttendee.comment = comment || undefined;
-  }
+  // Always sync the comment — empty string or undefined clears it
+  selfAttendee.comment = comment || undefined;
 
   const res = await calendarClient.events.patch({
     calendarId,

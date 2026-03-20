@@ -161,8 +161,7 @@ export function CalendarEventDetailPanel({
   const handleRsvpClick = useCallback(
     (status: CalendarRsvpStatus) => {
       setSelectedRsvp(status);
-      const note = rsvpNote.trim() || undefined;
-      onUpdateRsvp(status, note);
+      onUpdateRsvp(status, rsvpNote.trim());
     },
     [rsvpNote, onUpdateRsvp],
   );
