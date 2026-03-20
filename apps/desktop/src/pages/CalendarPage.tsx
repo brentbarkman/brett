@@ -11,13 +11,6 @@ interface CalendarPageProps {
   onEventClick: (event: CalendarEventRecord) => void;
 }
 
-function getWeekStartDate(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - day); // Sunday start
-  return d;
-}
-
 function formatDateParam(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -26,16 +19,16 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   const { data: accounts = [], isLoading: isLoadingAccounts } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
 
-  const [view, setView] = useState<"day" | "week" | "month">("week");
+  const [view, setView] = useState<"day" | "days" | "month">("days");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [daysPerWeek, setDaysPerWeek] = useState(() => {
+  const [numDays, setNumDays] = useState(() => {
     const stored = Number(localStorage.getItem("brett-calendar-days"));
-    return stored >= 1 && stored <= 14 ? stored : 7;
+    return [2, 3, 4, 5, 6, 7, 10, 14].includes(stored) ? stored : 5;
   });
 
   useEffect(() => {
-    localStorage.setItem("brett-calendar-days", String(daysPerWeek));
-  }, [daysPerWeek]);
+    localStorage.setItem("brett-calendar-days", String(numDays));
+  }, [numDays]);
 
   // Compute date range based on view
   const { startDate, endDate } = useMemo(() => {
@@ -47,10 +40,11 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
       return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
     }
 
-    if (view === "week") {
-      const start = getWeekStartDate(currentDate);
+    if (view === "days") {
+      const start = new Date(currentDate);
+      start.setHours(0, 0, 0, 0);
       const end = new Date(start);
-      end.setDate(end.getDate() + daysPerWeek);
+      end.setDate(end.getDate() + numDays);
       return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
     }
 
@@ -65,14 +59,12 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
     const end = new Date(start);
     end.setDate(end.getDate() + totalCells);
     return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
-  }, [view, currentDate, daysPerWeek]);
+  }, [view, currentDate, numDays]);
 
   const { data } = useCalendarEvents({ startDate, endDate });
   const events: CalendarEventRecord[] = data?.events ?? [];
 
   const handleToday = () => setCurrentDate(new Date());
-
-  const weekStartDate = useMemo(() => getWeekStartDate(currentDate), [currentDate]);
 
   const handleDayClick = (date: Date) => {
     setCurrentDate(date);
@@ -208,8 +200,8 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
         currentDate={currentDate}
         onDateChange={setCurrentDate}
         onToday={handleToday}
-        daysPerWeek={daysPerWeek}
-        onDaysPerWeekChange={setDaysPerWeek}
+        numDays={numDays}
+        onNumDaysChange={setNumDays}
       />
 
       <div className="flex-1 min-h-0 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
@@ -220,10 +212,10 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
             onEventClick={onEventClick}
           />
         )}
-        {view === "week" && (
+        {view === "days" && (
           <CalendarWeekView
-            startDate={weekStartDate}
-            daysPerWeek={daysPerWeek}
+            startDate={currentDate}
+            daysPerWeek={numDays}
             events={events}
             onEventClick={onEventClick}
           />
