@@ -129,7 +129,8 @@ export type SSEEventType =
   | "calendar.event.created"
   | "calendar.event.updated"
   | "calendar.event.deleted"
-  | "calendar.sync.complete";
+  | "calendar.sync.complete"
+  | "content.extracted";
 
 export interface SSEEvent {
   type: SSEEventType;

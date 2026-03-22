@@ -45,6 +45,17 @@ export type DueDatePrecision = "day" | "week";
 export type ReminderType = "morning_of" | "1_hour_before" | "day_before" | "custom";
 export type RecurrenceType = "daily" | "weekly" | "monthly" | "custom";
 
+export type ContentType = "tweet" | "article" | "video" | "pdf" | "podcast" | "web_page";
+export type ContentStatus = "pending" | "extracted" | "failed";
+
+export type ContentMetadata =
+  | { type: "tweet"; embedHtml?: string; author?: string; tweetText?: string }
+  | { type: "video"; embedUrl: string; duration?: number; channel?: string }
+  | { type: "podcast"; embedUrl: string; provider: "spotify" | "apple"; episodeName?: string; showName?: string }
+  | { type: "article"; author?: string; publishDate?: string; wordCount?: number }
+  | { type: "web_page" }
+  | { type: "pdf" };
+
 /** DB record — mirrors the Prisma Item model */
 export interface ItemRecord {
   id: string;
@@ -64,6 +75,15 @@ export interface ItemRecord {
   recurrence: string | null;
   recurrenceRule: string | null;
   brettTakeGeneratedAt: Date | null;
+  contentType: string | null;
+  contentStatus: string | null;
+  contentTitle: string | null;
+  contentDescription: string | null;
+  contentImageUrl: string | null;
+  contentBody: string | null;
+  contentFavicon: string | null;
+  contentDomain: string | null;
+  contentMetadata: Record<string, unknown> | null;
   listId: string | null;
   userId: string;
   createdAt: Date;
@@ -90,6 +110,10 @@ export interface Thing {
   description?: string;
   stalenessDays?: number;
   createdAt?: string; // ISO string, populated for inbox items
+  contentType?: ContentType;
+  contentStatus?: ContentStatus;
+  contentDomain?: string;
+  contentImageUrl?: string;
 }
 
 export interface Attachment {
@@ -122,6 +146,11 @@ export interface ThingDetail extends Thing {
   recurrence?: RecurrenceType;
   recurrenceRule?: string;
   brettTakeGeneratedAt?: string;
+  contentTitle?: string;
+  contentDescription?: string;
+  contentBody?: string;
+  contentFavicon?: string;
+  contentMetadata?: ContentMetadata;
   attachments: Attachment[];
   links: ItemLink[];
   brettMessages: BrettMessage[];
@@ -138,6 +167,7 @@ export interface CreateItemInput {
   brettObservation?: string;
   listId?: string;
   status?: ItemStatus;
+  contentType?: ContentType;
 }
 
 export interface UpdateItemInput {
@@ -155,6 +185,15 @@ export interface UpdateItemInput {
   reminder?: ReminderType | null;
   recurrence?: RecurrenceType | null;
   recurrenceRule?: string | null;
+  contentType?: ContentType | null;
+  contentStatus?: ContentStatus | null;
+  contentTitle?: string | null;
+  contentDescription?: string | null;
+  contentImageUrl?: string | null;
+  contentBody?: string | null;
+  contentFavicon?: string | null;
+  contentDomain?: string | null;
+  contentMetadata?: Record<string, unknown> | null;
 }
 
 export interface CreateListInput {
