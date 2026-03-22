@@ -7,6 +7,8 @@ import type {
   DueDatePrecision,
   ReminderType,
   RecurrenceType,
+  ContentType,
+  ContentStatus,
   CreateItemInput,
   UpdateItemInput,
   CreateListInput,
@@ -166,6 +168,12 @@ export function itemToThing(
     description: item.description ?? undefined,
     stalenessDays: computeStalenessDays(item.updatedAt, now),
     createdAt: item.createdAt.toISOString(),
+    ...(item.type === "content" && {
+      contentType: (item.contentType as ContentType) ?? undefined,
+      contentStatus: (item.contentStatus as ContentStatus) ?? undefined,
+      contentDomain: item.contentDomain ?? undefined,
+      contentImageUrl: item.contentImageUrl ?? undefined,
+    }),
   };
 }
 
@@ -229,6 +237,13 @@ export function validateCreateItem(
     }
   }
 
+  const VALID_CONTENT_TYPES = new Set(["tweet", "article", "video", "pdf", "podcast", "web_page"]);
+  if (obj.contentType !== undefined && obj.contentType !== null) {
+    if (typeof obj.contentType !== "string" || !VALID_CONTENT_TYPES.has(obj.contentType)) {
+      return { ok: false, error: `contentType must be one of: ${[...VALID_CONTENT_TYPES].join(", ")}` };
+    }
+  }
+
   return {
     ok: true,
     data: {
@@ -246,6 +261,7 @@ export function validateCreateItem(
           : undefined,
       listId: typeof obj.listId === "string" ? obj.listId : undefined,
       status: (obj.status as ItemStatus) ?? undefined,
+      contentType: typeof obj.contentType === "string" ? obj.contentType as ContentType : undefined,
     },
   };
 }
@@ -356,6 +372,51 @@ export function validateUpdateItem(
   }
   if (data.recurrenceRule !== undefined && data.recurrenceRule !== null && data.recurrenceRule.length > 500) {
     return { ok: false, error: "recurrenceRule must be 500 characters or less" };
+  }
+
+  // Content fields
+  const VALID_CONTENT_TYPES = new Set(["tweet", "article", "video", "pdf", "podcast", "web_page"]);
+  if (obj.contentType !== undefined) {
+    if (obj.contentType !== null && (typeof obj.contentType !== "string" || !VALID_CONTENT_TYPES.has(obj.contentType))) {
+      return { ok: false, error: `contentType must be one of: ${[...VALID_CONTENT_TYPES].join(", ")}` };
+    }
+    data.contentType = obj.contentType as ContentType | null;
+  }
+
+  const VALID_CONTENT_STATUSES = new Set(["pending", "extracted", "failed"]);
+  if (obj.contentStatus !== undefined) {
+    if (obj.contentStatus !== null && (typeof obj.contentStatus !== "string" || !VALID_CONTENT_STATUSES.has(obj.contentStatus))) {
+      return { ok: false, error: `contentStatus must be one of: ${[...VALID_CONTENT_STATUSES].join(", ")}` };
+    }
+    data.contentStatus = obj.contentStatus as ContentStatus | null;
+  }
+
+  // Nullable string content fields
+  for (const field of ["contentTitle", "contentDescription", "contentImageUrl", "contentFavicon", "contentDomain"] as const) {
+    if (obj[field] !== undefined) {
+      (data as Record<string, unknown>)[field] = obj[field] === null ? null : typeof obj[field] === "string" ? obj[field] : undefined;
+    }
+  }
+
+  if (obj.contentBody !== undefined) {
+    if (obj.contentBody === null) {
+      data.contentBody = null;
+    } else if (typeof obj.contentBody === "string") {
+      if (obj.contentBody.length > 500_000) {
+        return { ok: false, error: "contentBody must be 500KB or less" };
+      }
+      data.contentBody = obj.contentBody;
+    }
+  }
+
+  if (obj.contentMetadata !== undefined) {
+    if (obj.contentMetadata === null) {
+      data.contentMetadata = null;
+    } else if (typeof obj.contentMetadata === "object" && !Array.isArray(obj.contentMetadata)) {
+      data.contentMetadata = obj.contentMetadata as Record<string, unknown>;
+    } else {
+      return { ok: false, error: "contentMetadata must be an object or null" };
+    }
   }
 
   return { ok: true, data };
