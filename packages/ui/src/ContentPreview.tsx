@@ -14,6 +14,7 @@ interface ContentPreviewProps {
   contentFavicon?: string;
   contentDomain?: string;
   contentMetadata?: ContentMetadata;
+  attachmentUrl?: string; // presigned S3 URL for drag-dropped PDFs
   onRetry?: () => void;
 }
 
@@ -78,7 +79,7 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
     return (
       <iframe
         srcDoc={`<!DOCTYPE html><html><head><style>body{margin:0;background:transparent;color:#fff;font-family:system-ui;}</style></head><body>${metadata.embedHtml}</body></html>`}
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts allow-popups"
         className="w-full min-h-[200px] rounded-lg border border-white/10"
         style={{ colorScheme: "dark" }}
       />
@@ -205,12 +206,13 @@ function ArticlePreview({
   );
 }
 
-function PdfPreview({ sourceUrl }: { sourceUrl?: string }) {
-  if (!sourceUrl) return null;
+function PdfPreview({ sourceUrl, attachmentUrl }: { sourceUrl?: string; attachmentUrl?: string }) {
+  const pdfUrl = attachmentUrl ?? sourceUrl;
+  if (!pdfUrl) return null;
 
   return (
     <div className="w-full aspect-[3/4] rounded-lg overflow-hidden border border-white/10">
-      <iframe src={sourceUrl} className="w-full h-full" />
+      <iframe src={pdfUrl} className="w-full h-full" />
     </div>
   );
 }
@@ -278,6 +280,7 @@ export function ContentPreview({
   contentFavicon,
   contentDomain,
   contentMetadata,
+  attachmentUrl,
   onRetry,
 }: ContentPreviewProps) {
   // Loading state
@@ -308,7 +311,7 @@ export function ContentPreview({
         />
       );
     case "pdf":
-      return <PdfPreview sourceUrl={sourceUrl} />;
+      return <PdfPreview sourceUrl={sourceUrl} attachmentUrl={attachmentUrl} />;
     case "web_page":
     default:
       return (

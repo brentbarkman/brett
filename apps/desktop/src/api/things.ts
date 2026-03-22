@@ -167,6 +167,22 @@ export function useArchiveThings() {
   };
 }
 
+export function useRetryExtraction() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      const res = await apiFetch<Thing>(`/things/${itemId}/extract`, {
+        method: "POST",
+      });
+      return res;
+    },
+    onSuccess: (_data, itemId) => {
+      qc.invalidateQueries({ queryKey: ["thing-detail", itemId] });
+    },
+  });
+}
+
 export function useDeleteThing() {
   const qc = useQueryClient();
 

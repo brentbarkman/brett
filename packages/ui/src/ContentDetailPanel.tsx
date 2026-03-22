@@ -197,6 +197,11 @@ export function ContentDetailPanel({
             contentFavicon={detail.contentFavicon}
             contentDomain={detail.contentDomain}
             contentMetadata={detail.contentMetadata}
+            attachmentUrl={
+              detail.contentType === "pdf" && detail.attachments?.length
+                ? detail.attachments[0]?.url
+                : undefined
+            }
             onRetry={onRetryExtraction}
           />
 

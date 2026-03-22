@@ -123,7 +123,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
 
   const handleAddContent = (url: string) => {
     createThing.mutate(
-      { type: "content", title: url, sourceUrl: url },
+      { type: "content", title: url, sourceUrl: url, listId: list.id },
       { onError: (err) => console.error("Failed to create content item:", err) }
     );
   };

@@ -35,6 +35,7 @@ import {
   useThingDetail,
   useDeleteThing,
   useUpdateThing,
+  useRetryExtraction,
   useThings,
 } from "./api/things";
 import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists, useArchiveList, useUnarchiveList, useArchivedLists } from "./api/lists";
@@ -180,6 +181,7 @@ export function App() {
   const toggleThing = useToggleThing();
   const updateThing = useUpdateThing();
   const deleteThing = useDeleteThing();
+  const retryExtraction = useRetryExtraction();
   const bulkUpdate = useBulkUpdateThings();
 
   // Attachment hooks
@@ -631,7 +633,7 @@ export function App() {
           isLoadingMoreBrettMessages={brett.isLoadingMore}
           brettTotalCount={brett.totalCount}
           onRetryExtraction={() => {
-            if (selectedId) updateThing.mutate({ id: selectedId, contentStatus: "pending" });
+            if (selectedId) retryExtraction.mutate(selectedId);
           }}
           calendarEventDetail={calendarEventDetail ?? null}
           isLoadingCalendarDetail={isLoadingCalendarDetail}
