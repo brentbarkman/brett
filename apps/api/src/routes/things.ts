@@ -3,6 +3,7 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { getPresignedUrl } from "../lib/storage.js";
 import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem, computeNextDueDate } from "@brett/business";
+import { runExtraction } from "../lib/content-extractor.js";
 import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
 
 const things = new Hono<AuthEnv>();
@@ -251,7 +252,16 @@ things.post("/", async (c) => {
     include: { list: { select: { name: true } } },
   });
 
-  return c.json(itemToThing(item as any), 201);
+  const thing = itemToThing(item as any);
+
+  // Fire-and-forget extraction for content items
+  if (data.type === "content" && data.sourceUrl) {
+    runExtraction(item.id, data.sourceUrl, user.id).catch((err) =>
+      console.error(`[things] Background extraction failed for ${item.id}:`, err)
+    );
+  }
+
+  return c.json(thing, 201);
 });
 
 /** Spawn the next occurrence of a recurring task */

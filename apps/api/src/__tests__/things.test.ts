@@ -431,12 +431,12 @@ describe("Things routes", () => {
   });
 
   it("GET /things/:id returns content detail fields", async () => {
+    // Create without sourceUrl to avoid triggering auto-extraction (which races with the PATCH below)
     const createRes = await authRequest("/things", token, {
       method: "POST",
       body: JSON.stringify({
         type: "content",
         title: "Test Article",
-        sourceUrl: "https://example.com/article",
       }),
     });
     const created = (await createRes.json()) as any;
@@ -444,6 +444,7 @@ describe("Things routes", () => {
     await authRequest(`/things/${created.id}`, token, {
       method: "PATCH",
       body: JSON.stringify({
+        sourceUrl: "https://example.com/article",
         contentType: "article",
         contentStatus: "extracted",
         contentTitle: "Original Title",

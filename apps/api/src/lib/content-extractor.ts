@@ -320,9 +320,15 @@ export async function runExtraction(itemId: string, url: string, userId: string)
     console.error(`[content-extractor] Failed to extract ${url}:`, error);
 
     // Check if this was a DNS/connection failure — auto-convert to task
+    // Note: only match true unreachability (ENOTFOUND, ECONNREFUSED, SSRF block).
+    // SSL errors and other fetch failures indicate the server exists — mark as failed, not converted.
+    const causeCode = (error instanceof Error && (error as any).cause instanceof Error)
+      ? ((error as any).cause as NodeJS.ErrnoException).code ?? ""
+      : "";
     const isDnsOrConnectionError = error instanceof Error &&
       (error.message.includes("ENOTFOUND") || error.message.includes("Blocked") ||
-       error.message.includes("ECONNREFUSED") || error.message.includes("fetch failed"));
+       error.message.includes("ECONNREFUSED") ||
+       causeCode === "ENOTFOUND" || causeCode === "ECONNREFUSED");
 
     if (isDnsOrConnectionError) {
       // URL is not reachable — convert to task

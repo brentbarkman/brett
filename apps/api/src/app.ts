@@ -11,6 +11,7 @@ import calendar from "./routes/calendar.js";
 import calendarAccounts from "./routes/calendar-accounts.js";
 import sse from "./routes/sse.js";
 import webhooks from "./routes/webhooks.js";
+import extract from "./routes/extract.js";
 import { startCronJobs } from "./jobs/cron.js";
 
 export const app = new Hono();
@@ -43,6 +44,7 @@ app.route("/lists", lists);
 app.route("/things", attachments);
 app.route("/things", links);
 app.route("/things", brett);
+app.route("/things", extract);
 app.route("/calendar", calendar);
 app.route("/calendar/accounts", calendarAccounts);
 app.route("/events", sse);
