@@ -397,6 +397,85 @@ describe("Things routes", () => {
     expect(res.status).toBe(401);
   });
 
+  it("POST /things creates a content item with sourceUrl", async () => {
+    const res = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "content",
+        title: "https://medium.com/some-article",
+        sourceUrl: "https://medium.com/some-article",
+        source: "medium.com",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.type).toBe("content");
+    expect(body.sourceUrl).toBe("https://medium.com/some-article");
+    expect(body.source).toBe("medium.com");
+  });
+
+  it("POST /things creates content with contentType and auto-sets pending status", async () => {
+    const res = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "content",
+        title: "https://youtube.com/watch?v=abc",
+        sourceUrl: "https://youtube.com/watch?v=abc",
+        contentType: "video",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.contentType).toBe("video");
+    expect(body.contentStatus).toBe("pending");
+  });
+
+  it("GET /things/:id returns content detail fields", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "content",
+        title: "Test Article",
+        sourceUrl: "https://example.com/article",
+      }),
+    });
+    const created = (await createRes.json()) as any;
+
+    await authRequest(`/things/${created.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({
+        contentType: "article",
+        contentStatus: "extracted",
+        contentTitle: "Original Title",
+        contentDescription: "A great article",
+        contentBody: "# Hello\n\nWorld",
+        contentDomain: "example.com",
+        contentFavicon: "https://example.com/favicon.ico",
+        contentMetadata: { type: "article", author: "Test" },
+      }),
+    });
+
+    const detailRes = await authRequest(`/things/${created.id}`, token);
+    expect(detailRes.status).toBe(200);
+    const detail = (await detailRes.json()) as any;
+    expect(detail.contentType).toBe("article");
+    expect(detail.contentStatus).toBe("extracted");
+    expect(detail.contentTitle).toBe("Original Title");
+    expect(detail.contentDescription).toBe("A great article");
+    expect(detail.contentBody).toBe("# Hello\n\nWorld");
+    expect(detail.contentDomain).toBe("example.com");
+    expect(detail.contentMetadata).toEqual({ type: "article", author: "Test" });
+  });
+
+  it("GET /things filters by type=content", async () => {
+    const res = await authRequest("/things?type=content", token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any[];
+    for (const item of body) {
+      expect(item.type).toBe("content");
+    }
+  });
+
   it("things are isolated between users", async () => {
     const otherUser = await createTestUser("Other Things User");
     const res = await authRequest("/things", otherUser.token);

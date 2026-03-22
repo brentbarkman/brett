@@ -86,7 +86,7 @@ model List {
 
 model Item {
   id               String    @id @default(cuid())
-  type             String    // "task" | "saved_web" | "saved_tweet" | future types
+  type             String    // "task" | "content"
   status           String    @default("active") // "active" | "snoozed" | "done" | "archived"
   title            String
   description      String?
@@ -102,6 +102,15 @@ model Item {
   recurrence       String?   // "daily" | "weekly" | "monthly" | "custom"
   recurrenceRule   String?   // iCal RRULE string for custom recurrence
   brettTakeGeneratedAt DateTime?
+  contentType        String?   // "tweet" | "article" | "video" | "pdf" | "podcast" | "web_page"
+  contentStatus      String?   // "pending" | "extracted" | "failed"
+  contentTitle       String?
+  contentDescription String?
+  contentImageUrl    String?
+  contentBody        String?   @db.Text
+  contentFavicon     String?
+  contentDomain      String?
+  contentMetadata    Json?
   listId           String?
   list             List?     @relation(fields: [listId], references: [id], onDelete: SetNull)
   userId           String
@@ -116,6 +125,7 @@ model Item {
   @@index([userId, listId])
   @@index([userId, type])
   @@index([userId, source])
+  @@index([userId, contentType])
 }
 
 model Attachment {

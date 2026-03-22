@@ -78,6 +78,12 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
     recurrence: item.recurrence ?? undefined,
     recurrenceRule: item.recurrenceRule ?? undefined,
     brettTakeGeneratedAt: item.brettTakeGeneratedAt?.toISOString(),
+    // Content detail fields
+    contentTitle: item.contentTitle ?? undefined,
+    contentDescription: item.contentDescription ?? undefined,
+    contentBody: item.contentBody ?? undefined,
+    contentFavicon: item.contentFavicon ?? undefined,
+    contentMetadata: item.contentMetadata ?? undefined,
     attachments,
     links,
     brettMessages,
@@ -123,7 +129,7 @@ things.get("/", async (c) => {
     orderBy: [{ createdAt: "desc" }],
   });
 
-  const thingsList = items.map((item) => itemToThing(item));
+  const thingsList = items.map((item) => itemToThing(item as any));
   return c.json(thingsList);
 });
 
@@ -188,7 +194,7 @@ things.get("/inbox", async (c) => {
   });
 
   return c.json({
-    visible: items.map((item) => itemToThing(item)),
+    visible: items.map((item) => itemToThing(item as any)),
   });
 });
 
@@ -231,8 +237,10 @@ things.post("/", async (c) => {
       type: data.type,
       title: data.title,
       description: data.description,
-      source: data.source ?? "Brett",
+      source: data.source ?? (data.type === "content" && data.sourceUrl ? new URL(data.sourceUrl).hostname : "Brett"),
       sourceUrl: data.sourceUrl,
+      contentType: data.contentType ?? null,
+      contentStatus: data.type === "content" ? "pending" : null,
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
       dueDatePrecision: data.dueDatePrecision ?? null,
       brettObservation: data.brettObservation,
@@ -243,7 +251,7 @@ things.post("/", async (c) => {
     include: { list: { select: { name: true } } },
   });
 
-  return c.json(itemToThing(item), 201);
+  return c.json(itemToThing(item as any), 201);
 });
 
 /** Spawn the next occurrence of a recurring task */
@@ -336,6 +344,15 @@ things.patch("/:id", async (c) => {
     updateData.recurrence = data.recurrence;
   if (data.recurrenceRule !== undefined)
     updateData.recurrenceRule = data.recurrenceRule;
+  if (data.contentType !== undefined) updateData.contentType = data.contentType;
+  if (data.contentStatus !== undefined) updateData.contentStatus = data.contentStatus;
+  if (data.contentTitle !== undefined) updateData.contentTitle = data.contentTitle;
+  if (data.contentDescription !== undefined) updateData.contentDescription = data.contentDescription;
+  if (data.contentImageUrl !== undefined) updateData.contentImageUrl = data.contentImageUrl;
+  if (data.contentBody !== undefined) updateData.contentBody = data.contentBody;
+  if (data.contentFavicon !== undefined) updateData.contentFavicon = data.contentFavicon;
+  if (data.contentDomain !== undefined) updateData.contentDomain = data.contentDomain;
+  if (data.contentMetadata !== undefined) updateData.contentMetadata = data.contentMetadata;
 
   const item = await prisma.item.update({
     where: { id: existing.id },
@@ -351,7 +368,7 @@ things.patch("/:id", async (c) => {
     await spawnNextRecurrence(item, item.linksFrom);
   }
 
-  return c.json(itemToThing(item));
+  return c.json(itemToThing(item as any));
 });
 
 // PATCH /things/:id/toggle — toggle completion
@@ -378,7 +395,7 @@ things.patch("/:id/toggle", async (c) => {
     await spawnNextRecurrence(existing, existing.linksFrom);
   }
 
-  return c.json(itemToThing(item));
+  return c.json(itemToThing(item as any));
 });
 
 // DELETE /things/:id
