@@ -768,6 +768,31 @@ export function validateCreateBrettMessage(
   return { ok: true, data: { content: obj.content.trim() } };
 }
 
+// ── URL detection ──
+
+// Common TLDs — conservative list to avoid false positives
+const VALID_TLDS = new Set([
+  "com", "org", "net", "io", "co", "dev", "app", "me", "info", "edu", "gov",
+  "biz", "us", "uk", "de", "fr", "jp", "au", "ca", "in", "br", "it", "nl",
+  "es", "ch", "se", "no", "fi", "dk", "at", "be", "pl", "ru", "kr", "cn",
+  "tw", "sg", "nz", "ie", "za", "mx", "ar", "cl", "pt", "cz", "hu", "il",
+]);
+
+export function detectUrl(input: string): { isUrl: true; url: string } | { isUrl: false } {
+  const trimmed = input.trim();
+  if (/\s/.test(trimmed)) return { isUrl: false };
+  if (/^https?:\/\//i.test(trimmed)) return { isUrl: true, url: trimmed };
+  if (!trimmed.includes(".")) return { isUrl: false };
+  const hostPart = trimmed.split("/")[0];
+  const segments = hostPart.split(".");
+  if (segments.length < 2) return { isUrl: false };
+  const tld = segments[segments.length - 1].toLowerCase();
+  if (!VALID_TLDS.has(tld)) return { isUrl: false };
+  const domainName = segments[segments.length - 2];
+  if (!domainName || domainName.length === 0) return { isUrl: false };
+  return { isUrl: true, url: `https://${trimmed}` };
+}
+
 // ── Calendar validation ──
 
 export { validateRsvpInput, validateCalendarNoteInput } from "./calendar-validation";

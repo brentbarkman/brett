@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateCreateItem, validateUpdateItem, itemToThing } from "../index";
+import { validateCreateItem, validateUpdateItem, itemToThing, detectUrl } from "../index";
 import type { ItemRecord } from "@brett/types";
 
 function makeContentItem(overrides: Partial<ItemRecord> = {}): ItemRecord & { list: { name: string } } {
@@ -107,6 +107,45 @@ describe("validateUpdateItem — content fields", () => {
       contentDescription: null,
     });
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("detectUrl", () => {
+  it("detects https:// URLs", () => {
+    expect(detectUrl("https://medium.com/article")).toEqual({ isUrl: true, url: "https://medium.com/article" });
+  });
+  it("detects http:// URLs", () => {
+    expect(detectUrl("http://example.com")).toEqual({ isUrl: true, url: "http://example.com" });
+  });
+  it("detects youtube.com without protocol", () => {
+    expect(detectUrl("youtube.com/watch?v=abc")).toEqual({ isUrl: true, url: "https://youtube.com/watch?v=abc" });
+  });
+  it("detects x.com/user/status/123", () => {
+    expect(detectUrl("x.com/user/status/123")).toEqual({ isUrl: true, url: "https://x.com/user/status/123" });
+  });
+  it("detects lennysnewsletter.substack.com/p/some-post", () => {
+    expect(detectUrl("lennysnewsletter.substack.com/p/some-post")).toEqual({ isUrl: true, url: "https://lennysnewsletter.substack.com/p/some-post" });
+  });
+  it("detects somesite.com/article", () => {
+    expect(detectUrl("somesite.com/article")).toEqual({ isUrl: true, url: "https://somesite.com/article" });
+  });
+  it("rejects plain text", () => {
+    expect(detectUrl("buy groceries")).toEqual({ isUrl: false });
+  });
+  it("rejects text with spaces even with dot", () => {
+    expect(detectUrl("fix the api.controller bug")).toEqual({ isUrl: false });
+  });
+  it("rejects version numbers", () => {
+    expect(detectUrl("v2.0.1")).toEqual({ isUrl: false });
+  });
+  it("rejects file.pdf (no domain structure)", () => {
+    expect(detectUrl("file.pdf")).toEqual({ isUrl: false });
+  });
+  it("rejects config.local", () => {
+    expect(detectUrl("config.local")).toEqual({ isUrl: false });
+  });
+  it("rejects myapp.test", () => {
+    expect(detectUrl("myapp.test")).toEqual({ isUrl: false });
   });
 });
 
