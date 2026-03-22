@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Zap, BookOpen, Calendar, Check, RotateCcw } from "lucide-react";
+import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Thing } from "@brett/types";
 
@@ -47,12 +47,24 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
   );
 
   const getIcon = () => {
-    switch (thing.type) {
-      case "task":
-        return <Zap size={16} className="text-blue-500" />;
-      case "content":
-        return <BookOpen size={16} className="text-amber-400" />;
+    if (thing.type === "content") {
+      switch (thing.contentType) {
+        case "tweet":
+          return <MessageSquare size={16} className="text-amber-400" />;
+        case "article":
+          return <FileText size={16} className="text-amber-400" />;
+        case "video":
+          return <Play size={16} className="text-amber-400" />;
+        case "pdf":
+          return <File size={16} className="text-amber-400" />;
+        case "podcast":
+          return <Headphones size={16} className="text-amber-400" />;
+        case "web_page":
+        default:
+          return <Globe size={16} className="text-amber-400" />;
+      }
     }
+    return <Zap size={16} className="text-blue-500" />;
   };
 
   const getUrgencyColor = () => {
@@ -148,6 +160,9 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
           <span className="text-xs text-white/40 truncate">
             {thing.list} · {thing.source}
           </span>
+          {thing.type === "content" && thing.contentDomain && (
+            <span className="text-xs text-white/40">{thing.contentDomain}</span>
+          )}
           {thing.stalenessDays && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/40 border border-white/5">
               No update in {thing.stalenessDays} days

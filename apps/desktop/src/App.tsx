@@ -20,6 +20,8 @@ import {
   TriagePopup,
   InboxDragOverlay,
   ConfirmDialog,
+  AppDropZone,
+  cleanFilename,
 } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
@@ -469,10 +471,25 @@ export function App() {
     [bulkUpdate, lists, reorderLists]
   );
 
+  const handleDropPdf = useCallback((file: File) => {
+    const title = cleanFilename(file.name);
+    createThing.mutate(
+      { type: "content", title, contentType: "pdf" },
+      {
+        onSuccess: (newItem: Thing) => {
+          // Upload the file as an attachment
+          uploadAttachment.mutate({ itemId: newItem.id, file });
+        },
+        onError: (err) => console.error("Failed to create PDF item:", err),
+      },
+    );
+  }, [createThing, uploadAttachment]);
+
   const inboxCount = inboxData?.visible.length ?? 0;
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <AppDropZone onDropPdf={handleDropPdf}>
       <div className="relative flex h-screen w-full overflow-hidden text-white font-sans bg-black">
         {/* Full-bleed Photographic Background */}
         <div
@@ -613,6 +630,9 @@ export function App() {
           isSendingBrettMessage={sendBrettMessage.isPending}
           isLoadingMoreBrettMessages={brett.isLoadingMore}
           brettTotalCount={brett.totalCount}
+          onRetryExtraction={() => {
+            if (selectedId) updateThing.mutate({ id: selectedId, contentStatus: "pending" });
+          }}
           calendarEventDetail={calendarEventDetail ?? null}
           isLoadingCalendarDetail={isLoadingCalendarDetail}
           onUpdateRsvp={(status, comment) => {
@@ -688,6 +708,7 @@ export function App() {
           />
         )}
       </div>
+      </AppDropZone>
     </DndContext>
   );
 }

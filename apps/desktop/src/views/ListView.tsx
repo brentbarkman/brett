@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Archive } from "lucide-react";
-import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader, useClickOutside } from "@brett/ui";
+import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader, useClickOutside, TypeFilter } from "@brett/ui";
 import type { QuickAddInputHandle } from "@brett/ui";
-import type { Thing, NavList } from "@brett/types";
+import type { Thing, NavList, FilterType } from "@brett/types";
 import { slugify } from "@brett/utils";
 import { COLOR_MAP, COLOR_SWATCHES } from "@brett/business";
 import { useListThings, useCreateThing, useToggleThing } from "../api/things";
@@ -31,6 +31,9 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
   const createThing = useCreateThing();
   const toggleThing = useToggleThing();
   const unarchiveList = useUnarchiveList();
+
+  // Type filter
+  const [typeFilter, setTypeFilter] = useState<FilterType>("All");
 
   // Inline name editing
   const [isEditingName, setIsEditingName] = useState(false);
@@ -130,8 +133,14 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     onArchiveList?.(list.id, incompleteCount);
   };
 
-  const activeThings = things.filter((t) => !t.isCompleted);
-  const doneThings = things.filter((t) => t.isCompleted);
+  const filteredThings = things.filter((t) => {
+    if (typeFilter === "All") return true;
+    if (typeFilter === "Tasks") return t.type === "task";
+    if (typeFilter === "Content") return t.type === "content";
+    return true;
+  });
+  const activeThings = filteredThings.filter((t) => !t.isCompleted);
+  const doneThings = filteredThings.filter((t) => t.isCompleted);
   const allItems = [...activeThings, ...doneThings];
 
   const { focusedIndex, setFocusedIndex, setAddInputFocused } = useListKeyboardNav({
@@ -207,16 +216,19 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
         )}
       </div>
 
-      {/* Archive button */}
-      {!isArchived && onArchiveList && (
-        <button
-          onClick={handleArchiveClick}
-          className="text-white/30 hover:text-white/70 transition-colors p-1 rounded hover:bg-white/10"
-          title="Archive list"
-        >
-          <Archive size={16} />
-        </button>
-      )}
+      <div className="flex items-center gap-2">
+        <TypeFilter value={typeFilter} onChange={setTypeFilter} />
+        {/* Archive button */}
+        {!isArchived && onArchiveList && (
+          <button
+            onClick={handleArchiveClick}
+            className="text-white/30 hover:text-white/70 transition-colors p-1 rounded hover:bg-white/10"
+            title="Archive list"
+          >
+            <Archive size={16} />
+          </button>
+        )}
+      </div>
     </>
   );
 

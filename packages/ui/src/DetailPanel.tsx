@@ -13,6 +13,7 @@ import type {
   BrettMessage,
 } from "@brett/types";
 import { TaskDetailPanel } from "./TaskDetailPanel";
+import { ContentDetailPanel } from "./ContentDetailPanel";
 import { CalendarEventDetailPanel } from "./CalendarEventDetailPanel";
 
 interface DetailPanelProps {
@@ -48,6 +49,8 @@ interface DetailPanelProps {
   isSendingBrettMessage?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
+  // Content extraction
+  onRetryExtraction?: () => void;
   // Calendar event callbacks
   calendarEventDetail?: CalendarEventDetailResponse | null;
   isLoadingCalendarDetail?: boolean;
@@ -90,6 +93,7 @@ export function DetailPanel({
   isSendingBrettMessage,
   isLoadingMoreBrettMessages,
   brettTotalCount,
+  onRetryExtraction,
   calendarEventDetail,
   isLoadingCalendarDetail,
   onUpdateRsvp,
@@ -103,7 +107,9 @@ export function DetailPanel({
   isLoadingMoreCalendarBrettMessages,
 }: DetailPanelProps) {
   if (!item) return null;
-  const isTask = !("googleEventId" in item);
+  const isCalendarEvent = "googleEventId" in item;
+  const isContent = !isCalendarEvent && "type" in item && (item as Thing).type === "content";
+  const isTask = !isCalendarEvent && !isContent;
 
   return (
     <>
@@ -124,7 +130,7 @@ export function DetailPanel({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <span className="font-mono text-xs uppercase tracking-wider text-white/40">
-          {isTask ? "Detail" : "Event"}
+          {isCalendarEvent ? "Event" : isContent ? "Content" : "Detail"}
         </span>
         <button
           onClick={onClose}
@@ -165,6 +171,45 @@ export function DetailPanel({
             isSendingBrettMessage={isSendingBrettMessage}
             isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
             brettTotalCount={brettTotalCount}
+          />
+        ) : (
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+            <h2 className="text-2xl font-semibold text-white mb-6 leading-tight">
+              {item.title}
+            </h2>
+          </div>
+        )
+      ) : isContent ? (
+        isLoadingDetail ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 size={24} className="text-white/30 animate-spin" />
+          </div>
+        ) : detail ? (
+          <ContentDetailPanel
+            detail={detail}
+            onUpdate={onUpdate ?? (() => {})}
+            onToggle={onToggle ?? (() => {})}
+            onDelete={onDelete ?? (() => {})}
+            onDuplicate={onDuplicate ?? (() => {})}
+            onMoveToList={onMoveToList ?? (() => {})}
+            onUpdateDueDate={onUpdateDueDate}
+            onUpdateReminder={onUpdateReminder}
+            onUpdateRecurrence={onUpdateRecurrence}
+            onUpdateNotes={onUpdateNotes}
+            onUploadAttachment={onUploadAttachment}
+            onDeleteAttachment={onDeleteAttachment}
+            isUploadingAttachment={isUploadingAttachment}
+            onAddLink={onAddLink}
+            onRemoveLink={onRemoveLink}
+            searchItems={searchItems}
+            brettMessages={brettMessages}
+            brettHasMore={brettHasMore}
+            onSendBrettMessage={onSendBrettMessage}
+            onLoadMoreBrettMessages={onLoadMoreBrettMessages}
+            isSendingBrettMessage={isSendingBrettMessage}
+            isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
+            brettTotalCount={brettTotalCount}
+            onRetryExtraction={onRetryExtraction}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
