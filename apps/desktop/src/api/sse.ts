@@ -91,6 +91,21 @@ export function useEventStream(): void {
       qc.invalidateQueries({ queryKey: ["calendar-events"] });
       qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
     });
+
+    // Content extraction events
+    es.addEventListener("content.extracted", (e: MessageEvent) => {
+      let data: { itemId?: string; contentStatus?: string } | undefined;
+      try {
+        data = JSON.parse(e.data);
+      } catch {
+        return;
+      }
+      if (data?.itemId) {
+        qc.invalidateQueries({ queryKey: ["thing-detail", data.itemId] });
+      }
+      qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+    });
   }, [qc]);
 
   useEffect(() => {

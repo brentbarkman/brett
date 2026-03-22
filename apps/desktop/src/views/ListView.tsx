@@ -118,6 +118,13 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     );
   };
 
+  const handleAddContent = (url: string) => {
+    createThing.mutate(
+      { type: "content", title: url, sourceUrl: url },
+      { onError: (err) => console.error("Failed to create content item:", err) }
+    );
+  };
+
   const handleArchiveClick = () => {
     const incompleteCount = things.filter((t) => !t.isCompleted).length;
     onArchiveList?.(list.id, incompleteCount);
@@ -235,7 +242,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
       <ItemListShell header={listHeader} hints={listHints}>
         {/* Quick-add input */}
         {!isArchived && (
-          <QuickAddInput ref={quickAddRef} placeholder="Add a thing..." onAdd={handleAdd} onFocusChange={setAddInputFocused} />
+          <QuickAddInput ref={quickAddRef} placeholder="Add a thing..." onAdd={handleAdd} onAddContent={handleAddContent} onFocusChange={setAddInputFocused} />
         )}
 
         {/* Empty state */}

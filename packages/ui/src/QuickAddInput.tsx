@@ -1,5 +1,6 @@
 import React, { useState, useRef, useImperativeHandle, forwardRef } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Link } from "lucide-react";
+import { detectUrl } from "@brett/business";
 
 export interface QuickAddInputHandle {
   focus: () => void;
@@ -8,11 +9,12 @@ export interface QuickAddInputHandle {
 interface QuickAddInputProps {
   placeholder?: string;
   onAdd: (title: string) => void;
+  onAddContent?: (url: string) => void;
   onFocusChange?: (focused: boolean) => void;
 }
 
 export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>(
-  function QuickAddInput({ placeholder = "Add a thing...", onAdd, onFocusChange }, ref) {
+  function QuickAddInput({ placeholder = "Add a thing...", onAdd, onAddContent, onFocusChange }, ref) {
     const [value, setValue] = useState("");
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -23,7 +25,12 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
 
     const handleSubmit = () => {
       if (!value.trim()) return;
-      onAdd(value.trim());
+      const detected = detectUrl(value.trim());
+      if (detected.isUrl && onAddContent) {
+        onAddContent(detected.url);
+      } else {
+        onAdd(value.trim());
+      }
       setValue("");
       inputRef.current?.focus();
     };
@@ -39,6 +46,8 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
       }
     };
 
+    const isUrlLike = value.trim().length > 0 && !value.trim().includes(" ") && detectUrl(value.trim()).isUrl;
+
     return (
       <div
         className={`
@@ -49,10 +58,11 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
           }
         `}
       >
-        <Plus
-          size={15}
-          className={isFocused ? "text-blue-400" : "text-white/20"}
-        />
+        {isUrlLike ? (
+          <Link size={15} className="text-amber-400" />
+        ) : (
+          <Plus size={15} className={isFocused ? "text-blue-400" : "text-white/20"} />
+        )}
         <input
           ref={inputRef}
           type="text"
