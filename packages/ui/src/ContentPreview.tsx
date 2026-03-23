@@ -111,10 +111,10 @@ function VideoPreview({ metadata }: { metadata?: ContentMetadata }) {
 
   return (
     <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10">
-      {/* allow-same-origin is safe here because embedUrl is validated against TRUSTED_VIDEO_ORIGINS */}
+      {/* No sandbox — embedUrl is validated against TRUSTED_VIDEO_ORIGINS before rendering.
+          YouTube's own embed code doesn't use sandbox. The URL allowlist is the security boundary. */}
       <iframe
         src={embedUrl}
-        sandbox="allow-scripts allow-same-origin allow-popups"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
         title="Video player"
@@ -130,10 +130,10 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
   if (embedUrl && TRUSTED_PODCAST_ORIGINS.some(o => embedUrl.startsWith(o))) {
     return (
       <div className="rounded-lg overflow-hidden border border-white/10">
-        {/* allow-same-origin is safe here because embedUrl is validated against TRUSTED_PODCAST_ORIGINS */}
+        {/* No sandbox — embedUrl is validated against TRUSTED_PODCAST_ORIGINS before rendering. */}
         <iframe
           src={embedUrl}
-          sandbox="allow-scripts allow-same-origin allow-popups"
+          allow="autoplay; clipboard-write; encrypted-media"
           title="Podcast player"
           className="w-full h-[152px]"
         />
