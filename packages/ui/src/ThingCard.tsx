@@ -158,11 +158,10 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
         </h4>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-xs text-white/40 truncate">
-            {thing.list} · {thing.source}
+            {thing.type === "content"
+              ? (thing.contentDomain ?? thing.source)
+              : `${thing.list} · ${thing.source}`}
           </span>
-          {thing.type === "content" && thing.contentDomain && (
-            <span className="text-xs text-white/40">{thing.contentDomain}</span>
-          )}
           {thing.stalenessDays && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/40 border border-white/5">
               No update in {thing.stalenessDays} days

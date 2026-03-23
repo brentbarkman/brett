@@ -383,6 +383,9 @@ export function validateUpdateItem(
     data.contentType = obj.contentType as ContentType | null;
   }
 
+  // Known limitation: we don't validate that contentType is present when setting
+  // contentStatus to "extracted" — the validator doesn't have access to existing item state.
+  // The API route should enforce this invariant if needed.
   const VALID_CONTENT_STATUSES = new Set(["pending", "extracted", "failed"]);
   if (obj.contentStatus !== undefined) {
     if (obj.contentStatus !== null && (typeof obj.contentStatus !== "string" || !VALID_CONTENT_STATUSES.has(obj.contentStatus))) {

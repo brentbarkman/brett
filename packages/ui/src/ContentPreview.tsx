@@ -80,6 +80,7 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
       <iframe
         srcDoc={`<!DOCTYPE html><html><head><style>body{margin:0;background:transparent;color:#fff;font-family:system-ui;}</style></head><body>${metadata.embedHtml}</body></html>`}
         sandbox="allow-scripts allow-popups"
+        title="Tweet embed"
         className="w-full min-h-[200px] rounded-lg border border-white/10"
         style={{ colorScheme: "dark" }}
       />
@@ -119,6 +120,7 @@ function VideoPreview({ metadata }: { metadata?: ContentMetadata }) {
         sandbox="allow-scripts allow-same-origin allow-popups"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
+        title="Video player"
         className="w-full h-full"
       />
     </div>
@@ -132,6 +134,7 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
         <iframe
           src={metadata.embedUrl}
           sandbox="allow-scripts allow-same-origin allow-popups"
+          title="Podcast player"
           className="w-full h-[152px]"
         />
       </div>
@@ -212,7 +215,7 @@ function PdfPreview({ sourceUrl, attachmentUrl }: { sourceUrl?: string; attachme
 
   return (
     <div className="w-full aspect-[3/4] rounded-lg overflow-hidden border border-white/10">
-      <iframe src={pdfUrl} className="w-full h-full" />
+      <iframe src={pdfUrl} title="PDF viewer" className="w-full h-full" />
     </div>
   );
 }

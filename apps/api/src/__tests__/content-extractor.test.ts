@@ -55,7 +55,7 @@ describe("parseOgTags", () => {
   it("extracts domain from URL", () => {
     const html = `<html><head></head><body></body></html>`;
     const result = parseOgTags(html, "https://www.example.com/some/path");
-    expect(result.domain).toBe("www.example.com");
+    expect(result.domain).toBe("example.com");
   });
 
   it("falls back to twitter:title when og:title is missing", () => {

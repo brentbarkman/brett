@@ -17,30 +17,30 @@ export interface OgTags {
 
 export function parseOgTags(html: string, url: string): OgTags {
   const parsed = new URL(url);
-  const domain = parsed.hostname;
+  const domain = parsed.hostname.replace(/^www\./, "");
 
-  // Simple regex-based OG tag extraction (avoids full DOM parse for metadata)
-  const getMetaContent = (property: string): string | undefined => {
-    const re = new RegExp(`<meta[^>]+(?:property|name)=["']${property}["'][^>]+content=["']([^"']*)["']`, "i");
-    const altRe = new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${property}["']`, "i");
-    return re.exec(html)?.[1] ?? altRe.exec(html)?.[1];
+  // Use JSDOM for robust HTML parsing (handles mismatched quotes, special chars)
+  const dom = new JSDOM(html, { url });
+  const doc = dom.window.document;
+
+  const getMeta = (prop: string): string | undefined => {
+    const el = doc.querySelector(`meta[property="${prop}"], meta[name="${prop}"]`);
+    return el?.getAttribute("content") ?? undefined;
   };
 
-  // Favicon extraction
-  const faviconRe = /<link[^>]+rel=["'](?:icon|shortcut icon)["'][^>]+href=["']([^"']*)["']/i;
-  const altFaviconRe = /<link[^>]+href=["']([^"']*)["'][^>]+rel=["'](?:icon|shortcut icon)["']/i;
-  const faviconHref = faviconRe.exec(html)?.[1] ?? altFaviconRe.exec(html)?.[1];
+  const faviconEl = doc.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
+  const faviconHref = faviconEl?.getAttribute("href");
   const favicon = faviconHref
     ? faviconHref.startsWith("http") ? faviconHref : new URL(faviconHref, url).href
     : `${parsed.origin}/favicon.ico`;
 
   return {
-    title: getMetaContent("og:title") ?? getMetaContent("twitter:title"),
-    description: getMetaContent("og:description") ?? getMetaContent("twitter:description") ?? getMetaContent("description"),
-    imageUrl: getMetaContent("og:image") ?? getMetaContent("twitter:image"),
+    title: getMeta("og:title") ?? getMeta("twitter:title"),
+    description: getMeta("og:description") ?? getMeta("twitter:description") ?? getMeta("description"),
+    imageUrl: getMeta("og:image") ?? getMeta("twitter:image"),
     favicon,
     domain,
-    ogType: getMetaContent("og:type"),
+    ogType: getMeta("og:type"),
   };
 }
 
@@ -107,6 +107,7 @@ interface ExtractionResult {
   contentDomain: string;
   contentMetadata: ContentMetadata;
   title?: string; // Updated title from OG tags
+  needsPdfDownload?: boolean;
 }
 
 export async function extractContent(url: string): Promise<ExtractionResult> {
@@ -124,10 +125,10 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
       contentImageUrl: null,
       contentBody: null,
       contentFavicon: `${parsed.origin}/favicon.ico`,
-      contentDomain: parsed.hostname,
+      contentDomain: parsed.hostname.replace(/^www\./, ""),
       contentMetadata: { type: "pdf" },
-      _needsPdfDownload: true,
-    } as ExtractionResult & { _needsPdfDownload?: boolean };
+      needsPdfDownload: true,
+    };
   }
 
   // Fetch the page
@@ -148,8 +149,9 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
       contentImageUrl: null,
       contentBody: null,
       contentFavicon: `${parsed.origin}/favicon.ico`,
-      contentDomain: parsed.hostname,
+      contentDomain: parsed.hostname.replace(/^www\./, ""),
       contentMetadata: { type: "pdf" },
+      needsPdfDownload: true,
     };
   }
 
@@ -265,10 +267,10 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
  */
 export async function runExtraction(itemId: string, url: string, userId: string): Promise<void> {
   try {
-    const result = await extractContent(url) as ExtractionResult & { _needsPdfDownload?: boolean };
+    const result = await extractContent(url);
 
     // For URL-based PDFs, download the file and store as attachment
-    if (result._needsPdfDownload) {
+    if (result.needsPdfDownload) {
       try {
         const pdfResponse = await safeFetch(url, { timeoutMs: 60_000, maxSizeBytes: 50 * 1024 * 1024 });
         const buffer = Buffer.from(await pdfResponse.arrayBuffer());

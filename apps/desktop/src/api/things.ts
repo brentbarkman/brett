@@ -172,7 +172,7 @@ export function useRetryExtraction() {
 
   return useMutation({
     mutationFn: async (itemId: string) => {
-      const res = await apiFetch<Thing>(`/things/${itemId}/extract`, {
+      const res = await apiFetch<{ status: string }>(`/things/${itemId}/extract`, {
         method: "POST",
       });
       return res;

@@ -108,7 +108,9 @@ export function DetailPanel({
 }: DetailPanelProps) {
   if (!item) return null;
   const isCalendarEvent = "googleEventId" in item;
-  const isContent = !isCalendarEvent && "type" in item && (item as Thing).type === "content";
+  // Derive type from freshly-fetched detail when available (handles converted_to_task transitions)
+  const effectiveType = (detail?.type) ?? (!isCalendarEvent && "type" in item ? (item as Thing).type : undefined);
+  const isContent = !isCalendarEvent && effectiveType === "content";
   const isTask = !isCalendarEvent && !isContent;
 
   return (
