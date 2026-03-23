@@ -35,15 +35,18 @@ export function useEventStream(): void {
     // Fetch a short-lived ticket — never pass the raw token in the URL
     let ticketParam: string;
     try {
+      console.log("[SSE] Fetching ticket from", `${API_URL}/events/ticket`);
       const res = await fetch(`${API_URL}/events/ticket`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("ticket fetch failed");
+      console.log("[SSE] Ticket response status:", res.status);
+      if (!res.ok) throw new Error(`ticket fetch failed: ${res.status}`);
       const { ticket } = await res.json();
       ticketParam = `ticket=${encodeURIComponent(ticket)}`;
-    } catch {
-      console.warn("[SSE] Failed to obtain ticket, will retry");
+      console.log("[SSE] Got ticket, connecting to stream...");
+    } catch (err) {
+      console.warn("[SSE] Failed to obtain ticket, will retry:", err);
       const delay = retryDelay.current;
       retryDelay.current = Math.min(delay * 2, 30000);
       setTimeout(connect, delay);
@@ -53,6 +56,7 @@ export function useEventStream(): void {
     if (cancelledRef.current) return;
 
     const url = `${API_URL}/events/stream?${ticketParam}`;
+    console.log("[SSE] Opening EventSource:", url);
     const es = new EventSource(url);
     eventSourceRef.current = es;
 
