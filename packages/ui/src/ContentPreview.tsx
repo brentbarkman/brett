@@ -315,13 +315,20 @@ function WebPagePreview({
         />
       )}
       <div className="p-4 space-y-2">
-        {contentTitle && (
+        {contentTitle ? (
           <h4 className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
             {contentTitle}
+          </h4>
+        ) : (
+          <h4 className="text-sm font-medium text-white/60 group-hover:text-white/80 transition-colors">
+            Open in browser
           </h4>
         )}
         {contentDescription && (
           <p className="text-xs text-white/60 line-clamp-2">{contentDescription}</p>
+        )}
+        {!contentTitle && !contentDescription && sourceUrl && (
+          <p className="text-xs text-white/40 truncate">{sourceUrl}</p>
         )}
         <div className="flex items-center gap-2">
           {contentFavicon && (

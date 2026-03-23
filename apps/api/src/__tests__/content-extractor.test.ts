@@ -4,6 +4,7 @@ import {
   buildSpotifyEmbedUrl,
   buildApplePodcastEmbedUrl,
   extractYouTubeVideoId,
+  extractArticle,
 } from "../lib/content-extractor.js";
 // cleanFilename is from @brett/ui — import directly since API doesn't depend on ui package
 function cleanFilename(filename: string): string {
@@ -159,6 +160,58 @@ describe("cleanFilename", () => {
 
   it("handles mixed consecutive separators", () => {
     expect(cleanFilename("my-_-report.pdf")).toBe("My Report");
+  });
+});
+
+describe("extractArticle", () => {
+  it("extracts article content from valid HTML", () => {
+    const html = `
+      <html><head><title>Test</title></head>
+      <body>
+        <article>
+          <h1>My Article</h1>
+          <p>This is a real article with enough content to pass the word count threshold. It needs at least twenty words to be considered valid content by the extraction logic.</p>
+        </article>
+      </body></html>
+    `;
+    const result = extractArticle(html, "https://example.com/article");
+    expect(result).not.toBeNull();
+    expect(result!.wordCount).toBeGreaterThan(20);
+  });
+
+  it("returns null for JS-rendered shell pages (ScriptLoadFailure)", () => {
+    const html = `
+      <html><head></head>
+      <body>
+        <div id="ScriptLoadFailure">
+          <form action="" method="GET">
+            <button>Retry</button>
+          </form>
+        </div>
+      </body></html>
+    `;
+    const result = extractArticle(html, "https://x.com/article/123");
+    expect(result).toBeNull();
+  });
+
+  it("returns null for pages with very little content", () => {
+    const html = `
+      <html><head></head>
+      <body><p>Just a few words.</p></body></html>
+    `;
+    const result = extractArticle(html, "https://example.com/page");
+    expect(result).toBeNull();
+  });
+
+  it("returns null for noscript fallback pages", () => {
+    const html = `
+      <html><head></head>
+      <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
+      </body></html>
+    `;
+    const result = extractArticle(html, "https://example.com/spa");
+    expect(result).toBeNull();
   });
 });
 

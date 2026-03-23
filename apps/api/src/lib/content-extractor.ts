@@ -50,7 +50,7 @@ export function parseOgTags(html: string, url: string): OgTags {
 // Note: contentBody stores Readability's cleaned HTML output, not markdown.
 // The frontend renders it via DOMPurify.sanitize() + dangerouslySetInnerHTML.
 // Converting to markdown was deferred — the HTML output works well enough for v1.
-function extractArticle(html: string, url: string): { content: string; wordCount: number } | null {
+export function extractArticle(html: string, url: string): { content: string; wordCount: number } | null {
   // Strip <style> tags before JSDOM parsing to prevent CSS ReDoS via pathological stylesheets
   const cleanedHtml = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
   const dom = new JSDOM(cleanedHtml, { url });
@@ -60,6 +60,12 @@ function extractArticle(html: string, url: string): { content: string; wordCount
 
   const content = article.content ?? article.textContent ?? "";
   const wordCount = (article.textContent ?? "").split(/\s+/).length;
+
+  // Detect JS-rendered shell pages that Readability extracts as junk
+  // (e.g., X/Twitter returns a ScriptLoadFailure page for server-side fetches)
+  if (wordCount < 20 || content.includes("ScriptLoadFailure") || content.includes("noscript")) {
+    return null;
+  }
 
   return { content, wordCount };
 }
