@@ -109,12 +109,16 @@ function VideoPreview({ metadata }: { metadata?: ContentMetadata }) {
   const embedUrl = metadata?.type === "video" ? metadata.embedUrl : undefined;
   if (!embedUrl || !TRUSTED_VIDEO_ORIGINS.some(o => embedUrl.startsWith(o))) return null;
 
+  // Set origin param so YouTube restricts postMessage to our origin
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const srcWithOrigin = `${embedUrl}${embedUrl.includes("?") ? "&" : "?"}origin=${encodeURIComponent(origin)}`;
+
   return (
     <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10">
       {/* No sandbox — embedUrl is validated against TRUSTED_VIDEO_ORIGINS before rendering.
           YouTube's own embed code doesn't use sandbox. The URL allowlist is the security boundary. */}
       <iframe
-        src={embedUrl}
+        src={srcWithOrigin}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
         title="Video player"
