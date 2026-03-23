@@ -17,6 +17,7 @@ import type {
   BrettMessageRecord,
   CalendarAttendee,
 } from "@brett/types";
+import DOMPurify from "dompurify";
 import { isSafeUrl } from "@brett/utils";
 import { RichTextEditor } from "./RichTextEditor";
 import { BrettThread } from "./BrettThread";
@@ -294,9 +295,16 @@ export function CalendarEventDetailPanel({
                 Agenda
               </span>
               {detail.description && (
-                <div className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap mb-3">
-                  {detail.description}
-                </div>
+                <div
+                  className="text-sm text-white/80 leading-relaxed mb-3 prose prose-invert prose-sm max-w-none prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline"
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(detail.description, {
+                      ALLOWED_TAGS: ["p", "br", "b", "i", "em", "strong", "a", "ul", "ol", "li", "h1", "h2", "h3", "blockquote", "pre", "code"],
+                      ALLOWED_ATTR: ["href", "target", "rel"],
+                      ALLOW_DATA_ATTR: false,
+                    }),
+                  }}
+                />
               )}
               {detail.attachments && detail.attachments.length > 0 && (
                 <div className="flex flex-col gap-1.5">
