@@ -122,6 +122,7 @@ export function useEventStream(): void {
   }, [qc]);
 
   useEffect(() => {
+    cancelledRef.current = false; // Reset on mount (StrictMode unmount sets this to true)
     connect();
     return () => {
       cancelledRef.current = true;
