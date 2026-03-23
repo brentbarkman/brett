@@ -101,6 +101,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange }: T
       onItemClick={onItemClick}
       onToggle={handleToggle}
       onAdd={handleAddTask}
+      onAddContent={handleQuickAddContent}
       onTriageOpen={onTriageOpen}
       onFocusChange={onFocusChange}
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
