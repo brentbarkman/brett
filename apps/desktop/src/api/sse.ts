@@ -29,7 +29,8 @@ export function useEventStream(): void {
     if (cancelledRef.current) return;
 
     const token = await getToken();
-    if (!token) return;
+    if (!token) { console.warn("[SSE] No token, skipping connection"); return; }
+    console.log("[SSE] Connecting...");
 
     // Fetch a short-lived ticket — never pass the raw token in the URL
     let ticketParam: string;
@@ -56,12 +57,14 @@ export function useEventStream(): void {
     eventSourceRef.current = es;
 
     es.onopen = () => {
+      console.log("[SSE] Connection established");
       retryDelay.current = 1000;
       qc.invalidateQueries({ queryKey: ["calendar-events"] });
       qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
     };
 
-    es.onerror = () => {
+    es.onerror = (err) => {
+      console.warn("[SSE] Connection error, reconnecting...", err);
       es.close();
       eventSourceRef.current = null;
       if (cancelledRef.current) return;
