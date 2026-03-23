@@ -66,7 +66,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange }: T
 
   const handleQuickAddContent = (url: string) => {
     createThing.mutate(
-      { type: "content", title: url, sourceUrl: url },
+      { type: "content", title: url, sourceUrl: url, dueDate: getTodayUTC().toISOString(), dueDatePrecision: "day" as const },
       { onError: (err) => console.error("Failed to create thing:", err) }
     );
   };

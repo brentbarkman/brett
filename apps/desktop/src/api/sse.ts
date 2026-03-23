@@ -103,8 +103,10 @@ export function useEventStream(): void {
       if (data?.itemId) {
         qc.invalidateQueries({ queryKey: ["thing-detail", data.itemId] });
       }
+      // Invalidate all thing lists so titles/metadata refresh everywhere
       qc.invalidateQueries({ queryKey: ["things"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["lists"] });
     });
   }, [qc]);
 
