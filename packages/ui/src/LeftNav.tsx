@@ -152,7 +152,7 @@ export function LeftNav({
       </div>
 
       {/* Divider */}
-      <div className="h-px bg-white/10 w-full mb-6" />
+      <div className="h-px bg-white/15 w-full mb-6" />
 
       {/* Lists Section */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -164,7 +164,7 @@ export function LeftNav({
             {onCreateList && (
               <button
                 onClick={() => setIsCreating(true)}
-                className="text-white/45 hover:text-white/70 transition-colors p-0.5 rounded hover:bg-white/10"
+                className="text-white/55 hover:text-white/70 transition-colors p-0.5 rounded hover:bg-white/10"
               >
                 <Plus size={14} />
               </button>
@@ -222,7 +222,7 @@ export function LeftNav({
       <div className="mt-auto pt-4 space-y-2">
         {user && (
           <>
-            <div className="h-px bg-white/10 w-full" />
+            <div className="h-px bg-white/15 w-full" />
             <button
               onClick={() => navigate?.("/settings")}
               className={`
