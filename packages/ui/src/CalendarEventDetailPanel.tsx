@@ -296,7 +296,7 @@ export function CalendarEventDetailPanel({
               </span>
               {detail.description && (
                 <div
-                  className="text-sm text-white/80 leading-relaxed mb-3 prose prose-invert prose-sm max-w-none prose-a:text-blue-400 prose-a:underline prose-a:underline-offset-2 hover:prose-a:text-blue-300"
+                  className="text-sm text-white/80 leading-relaxed mb-3 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-blue-300"
                   dangerouslySetInnerHTML={{
                     __html: DOMPurify.sanitize(detail.description, {
                       ALLOWED_TAGS: ["p", "br", "b", "i", "em", "strong", "a", "ul", "ol", "li", "h1", "h2", "h3", "blockquote", "pre", "code"],
