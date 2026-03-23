@@ -158,13 +158,13 @@ export function LeftNav({
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         {!isCollapsed && (
           <div className="flex items-center justify-between px-3 mb-3">
-            <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+            <h3 className="font-mono text-xs uppercase tracking-wider text-white/55 font-semibold">
               Lists
             </h3>
             {onCreateList && (
               <button
                 onClick={() => setIsCreating(true)}
-                className="text-white/30 hover:text-white/70 transition-colors p-0.5 rounded hover:bg-white/10"
+                className="text-white/45 hover:text-white/70 transition-colors p-0.5 rounded hover:bg-white/10"
               >
                 <Plus size={14} />
               </button>
@@ -245,7 +245,7 @@ export function LeftNav({
                 </div>
               )}
               {!isCollapsed && (
-                <span className="text-xs text-white/60 truncate">
+                <span className="text-xs text-white/75 truncate">
                   {user.name || user.email}
                 </span>
               )}
@@ -363,7 +363,7 @@ function SortableListItem({
                 ? `${dropHighlight} border border-white/20 text-white`
                 : isActive
                   ? "bg-white/10 text-white border border-transparent relative before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-blue-500 before:rounded-full"
-                  : "text-white/60 hover:bg-white/5 hover:text-white/90 border border-transparent"
+                  : "text-white/75 hover:bg-white/5 hover:text-white/90 border border-transparent"
             }
           `}
         >
@@ -546,12 +546,12 @@ function NavItem({
       ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-3"}
       ${isActive
         ? "bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-blue-500 before:rounded-full"
-        : "text-white/60 hover:bg-white/5 hover:text-white/90"
+        : "text-white/75 hover:bg-white/5 hover:text-white/90"
       }
     `}
     >
       <div
-        className={`${isActive ? "text-white" : "text-white/50 group-hover:text-white/80"}`}
+        className={`${isActive ? "text-white" : "text-white/65 group-hover:text-white/80"}`}
       >
         {icon}
       </div>
@@ -646,7 +646,7 @@ function ArchivedListItem({
         onClick={onClick}
         className={`
           flex items-center w-full rounded-lg transition-colors duration-200 px-2 py-1.5 gap-2.5 opacity-50
-          ${isActive ? "bg-white/10 text-white !opacity-100" : "text-white/60 hover:bg-white/5 hover:text-white/90"}
+          ${isActive ? "bg-white/10 text-white !opacity-100" : "text-white/75 hover:bg-white/5 hover:text-white/90"}
         `}
       >
         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />

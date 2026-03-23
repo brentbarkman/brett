@@ -502,7 +502,7 @@ export function App() {
       <div className="relative flex h-screen w-full overflow-hidden text-white font-sans bg-black">
         {/* Full-bleed Photographic Background */}
         <div
-          className="absolute inset-0 z-0 bg-cover bg-center opacity-60"
+          className="absolute inset-0 z-0 bg-cover bg-center opacity-80"
           style={{
             backgroundImage:
               'url("https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80")',
@@ -511,6 +511,9 @@ export function App() {
 
         {/* Vignette overlay for better text readability */}
         <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
+
+        {/* Left-side scrim for nav readability over any background */}
+        <div className="absolute inset-y-0 left-0 w-[312px] z-0 bg-gradient-to-r from-black/60 to-transparent pointer-events-none" />
 
         {/* Main Layout Shell */}
         <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
