@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import DOMPurify from "dompurify";
 import { AlertTriangle, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import type { ContentType, ContentStatus, ContentMetadata } from "@brett/types";
@@ -90,13 +90,23 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
 
   // The oEmbed HTML is a <blockquote> with the tweet text + a <script> tag.
   // Sanitize to keep just the blockquote content (strips the script tag).
-  const sanitizedEmbed = embedHtml
-    ? DOMPurify.sanitize(embedHtml, {
-        ALLOWED_TAGS: ["blockquote", "p", "a", "br", "em", "strong", "span"],
-        ALLOWED_ATTR: ["href", "dir", "lang"],
-        ALLOW_DATA_ATTR: false,
-      })
-    : undefined;
+  const sanitizedEmbed = useMemo(() => {
+    if (!embedHtml) return undefined;
+    // Force all links to open in new tab
+    DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+      if (node.tagName === "A") {
+        node.setAttribute("target", "_blank");
+        node.setAttribute("rel", "noopener noreferrer");
+      }
+    });
+    const result = DOMPurify.sanitize(embedHtml, {
+      ALLOWED_TAGS: ["blockquote", "p", "a", "br", "em", "strong", "span"],
+      ALLOWED_ATTR: ["href", "dir", "lang", "target", "rel"],
+      ALLOW_DATA_ATTR: false,
+    });
+    DOMPurify.removeHook("afterSanitizeAttributes");
+    return result;
+  }, [embedHtml]);
 
   // If we have neither oEmbed HTML nor OG text, nothing to show
   if (!sanitizedEmbed && !text) {
