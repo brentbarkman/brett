@@ -92,7 +92,9 @@ export function useEventStream(): void {
       qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
     });
 
-    // Content extraction events
+    // Content extraction events — use refetchQueries (not invalidateQueries)
+    // because the 30s staleTime would prevent invalidated queries from refetching
+    // if they were just fetched when the content item was created
     es.addEventListener("content.extracted", (e: MessageEvent) => {
       let data: { itemId?: string; contentStatus?: string } | undefined;
       try {
@@ -101,12 +103,10 @@ export function useEventStream(): void {
         return;
       }
       if (data?.itemId) {
-        qc.invalidateQueries({ queryKey: ["thing-detail", data.itemId] });
+        qc.refetchQueries({ queryKey: ["thing-detail", data.itemId] });
       }
-      // Invalidate all thing lists so titles/metadata refresh everywhere
-      qc.invalidateQueries({ queryKey: ["things"] });
-      qc.invalidateQueries({ queryKey: ["inbox"] });
-      qc.invalidateQueries({ queryKey: ["lists"] });
+      qc.refetchQueries({ queryKey: ["things"] });
+      qc.refetchQueries({ queryKey: ["inbox"] });
     });
   }, [qc]);
 
