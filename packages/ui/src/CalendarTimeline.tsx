@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Video, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Video, X } from "lucide-react";
 import type {
   CalendarEventDisplay,
   CalendarRsvpStatus,
@@ -239,22 +239,27 @@ export function CalendarTimeline({
                 </div>
               ))}
 
-              {/* Live CTA event — looks real, clickable */}
+              {/* Live CTA event — prominent, clickable */}
               <button
                 onClick={onConnect}
-                className="absolute left-0 right-0 rounded-md border-l-2 px-2.5 py-2 text-left cursor-pointer transition-all hover:brightness-125 group"
+                className="absolute left-0 right-0 rounded-lg border border-blue-500/30 px-3 py-2.5 text-left cursor-pointer transition-all hover:brightness-125 hover:border-blue-500/50 group bg-blue-500/10 backdrop-blur-sm"
                 style={{
                   top: `${ctaTop}px`,
                   height: `${1.5 * gh}px`,
-                  backgroundColor: "rgba(59, 130, 246, 0.15)",
-                  borderLeftColor: "rgba(59, 130, 246, 0.4)",
                 }}
               >
-                <span className="text-[11px] font-semibold text-blue-300 block">Connect your calendar</span>
-                <span className="text-[10px] text-blue-300/50 block mt-0.5">See your real schedule, summaries & alerts</span>
-                <span className="text-[9px] text-blue-400/70 font-medium mt-1.5 block group-hover:text-blue-300 transition-colors">
-                  Click to connect Google Calendar →
-                </span>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <CalendarDays size={14} className="text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[11px] font-semibold text-blue-300 block">Connect your calendar</span>
+                    <span className="text-[10px] text-white/40 block mt-0.5">See your real schedule, summaries & alerts</span>
+                    <span className="text-[9px] text-blue-400/70 font-medium mt-1.5 block group-hover:text-blue-300 transition-colors">
+                      Click to connect Google Calendar →
+                    </span>
+                  </div>
+                </div>
               </button>
             </div>
           </div>

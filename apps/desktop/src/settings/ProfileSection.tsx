@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { authClient } from "../auth/auth-client";
+import { getAvatarColor } from "@brett/ui";
 
 export function ProfileSection() {
   const { user, refetchUser } = useAuth();
@@ -49,8 +50,8 @@ export function ProfileSection() {
             referrerPolicy="no-referrer"
           />
         ) : (
-          <div className="w-14 h-14 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
-            <span className="text-xl font-bold text-white">
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${getAvatarColor(user?.name || user?.email || "?")}`}>
+            <span className="text-xl font-bold">
               {(user?.name || user?.email || "?")[0].toUpperCase()}
             </span>
           </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Archive } from "lucide-react";
+import { Archive, Sparkles } from "lucide-react";
 import { ThingCard, QuickAddInput, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader, useClickOutside, TypeFilter } from "@brett/ui";
 import type { QuickAddInputHandle } from "@brett/ui";
 import type { Thing, NavList, FilterType } from "@brett/types";
@@ -259,13 +259,16 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
 
         {/* Empty state */}
         {!isLoading && things.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 gap-2">
-            <p className="text-sm text-white/40">Nothing here yet</p>
-            {!isArchived && (
-              <p className="text-xs text-white/20 font-mono">
-                press <kbd className="px-1 py-0.5 rounded bg-white/5 text-white/30">n</kbd> to add
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+              <Sparkles size={22} className="text-white/40" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">Nothing here yet</h3>
+              <p className="text-white/40 text-sm leading-relaxed max-w-xs">
+                {isArchived ? "This list has been archived." : "Add tasks or save links to start building this list."}
               </p>
-            )}
+            </div>
           </div>
         )}
 

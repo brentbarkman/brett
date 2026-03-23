@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { CalendarDays } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { useCalendarEvents } from "../api/calendar";
 import { useCalendarAccounts, useConnectCalendar, useToggleCalendarVisibility } from "../api/calendar-accounts";
@@ -132,14 +133,29 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
     return (
       <div className="flex flex-col flex-1 min-w-0 h-full p-4">
         <div className="flex-1 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden relative">
-          {/* Week header — real */}
+          {/* Week header — ghost with real dates */}
           <div className="flex border-b border-white/10">
             <div className="w-14 flex-shrink-0" />
-            {ghostDays.map((day, i) => (
-              <div key={day} className={`flex-1 py-2.5 text-center text-xs font-medium ${i === todayDow ? "text-white/80" : "text-white/30"} ${i < 6 ? "border-r border-white/5" : ""}`}>
-                {day}
-              </div>
-            ))}
+            {ghostDays.map((day, i) => {
+              const now = new Date();
+              const currentDow = now.getDay();
+              const diff = i - currentDow;
+              const date = new Date(now);
+              date.setDate(date.getDate() + diff);
+              const dayNum = date.getDate();
+              const isToday = i === todayDow;
+
+              return (
+                <div key={day} className={`flex-1 py-2 text-center ${i < 6 ? "border-r border-white/5" : ""}`}>
+                  <div className={`text-[10px] font-medium uppercase tracking-wider ${isToday ? "text-white/60" : "text-white/30"}`}>
+                    {day}
+                  </div>
+                  <div className={`text-lg font-semibold mt-0.5 ${isToday ? "text-blue-400" : "text-white/20"}`}>
+                    {dayNum}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Week grid */}
@@ -188,19 +204,24 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
                     {isToday && (
                       <button
                         onClick={() => connectCalendar.mutate()}
-                        className="absolute left-0 right-0 rounded-md border-l-2 px-2 py-2 text-left cursor-pointer transition-all hover:brightness-125 group"
+                        className="absolute left-0 right-0 rounded-lg border border-blue-500/30 px-2.5 py-2 text-left cursor-pointer transition-all hover:brightness-125 hover:border-blue-500/50 group bg-blue-500/10 backdrop-blur-sm"
                         style={{
                           top: `${ctaTop}px`,
                           height: `${1.5 * gh}px`,
-                          backgroundColor: "rgba(59, 130, 246, 0.15)",
-                          borderLeftColor: "rgba(59, 130, 246, 0.4)",
                         }}
                       >
-                        <span className="text-[10px] font-semibold text-blue-300 block">Connect your calendar</span>
-                        <span className="text-[9px] text-blue-300/50 block mt-0.5">Summaries, alerts & RSVP</span>
-                        <span className="text-[8px] text-blue-400/60 font-medium mt-1 block group-hover:text-blue-300 transition-colors">
-                          Click to connect →
-                        </span>
+                        <div className="flex items-start gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <CalendarDays size={12} className="text-blue-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-semibold text-blue-300 block">Connect your calendar</span>
+                            <span className="text-[9px] text-white/40 block mt-0.5">Summaries, alerts & RSVP</span>
+                            <span className="text-[8px] text-blue-400/60 font-medium mt-1 block group-hover:text-blue-300 transition-colors">
+                              Click to connect →
+                            </span>
+                          </div>
+                        </div>
                       </button>
                     )}
                   </div>

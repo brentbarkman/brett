@@ -104,10 +104,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange }: T
       onAddContent={handleQuickAddContent}
       onTriageOpen={onTriageOpen}
       onFocusChange={onFocusChange}
+      activeFilter={activeFilter}
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
     />
   ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} />
+    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} />
   );
 
   return (

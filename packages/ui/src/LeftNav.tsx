@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { getAvatarColor } from "./avatarColor";
 import { Inbox, Calendar, CalendarDays, Clock, Search, Plus, MoreHorizontal, GripVertical, ChevronRight } from "lucide-react";
 import type { NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
@@ -156,7 +157,7 @@ export function LeftNav({
       {/* Lists Section */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         {!isCollapsed && (
-          <div className="flex items-center justify-between px-2 mb-3">
+          <div className="flex items-center justify-between px-3 mb-3">
             <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
               Lists
             </h3>
@@ -237,8 +238,8 @@ export function LeftNav({
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[10px] font-bold text-white/80">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${getAvatarColor(user.name || user.email)}`}>
+                  <span className="text-[10px] font-bold">
                     {(user.name || user.email)[0].toUpperCase()}
                   </span>
                 </div>
@@ -361,7 +362,7 @@ function SortableListItem({
               isOver
                 ? `${dropHighlight} border border-white/20 text-white`
                 : isActive
-                  ? "bg-white/10 text-white border border-transparent"
+                  ? "bg-white/10 text-white border border-transparent relative before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-blue-500 before:rounded-full"
                   : "text-white/60 hover:bg-white/5 hover:text-white/90 border border-transparent"
             }
           `}
@@ -538,10 +539,10 @@ function NavItem({
     <button
       onClick={onClick}
       className={`
-      flex items-center w-full rounded-lg transition-colors duration-200 group
+      relative flex items-center w-full rounded-lg transition-colors duration-200 group
       ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-3"}
       ${isActive
-        ? "bg-white/10 text-white"
+        ? "bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-blue-500 before:rounded-full"
         : "text-white/60 hover:bg-white/5 hover:text-white/90"
       }
     `}

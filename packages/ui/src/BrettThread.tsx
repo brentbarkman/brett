@@ -124,7 +124,7 @@ export function BrettThread({
         <div className="flex items-center gap-2">
           <Bot size={14} className="text-blue-400" />
           <span className="text-xs font-medium text-white/60">
-            Brett Thread ({totalCount ?? messages.length})
+            Brett Thread{(totalCount ?? messages.length) > 0 ? ` (${totalCount ?? messages.length})` : ""}
           </span>
         </div>
         {isExpanded ? (

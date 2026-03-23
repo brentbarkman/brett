@@ -13,7 +13,7 @@ interface SettingsPageProps {
 export function SettingsPage({ onBack }: SettingsPageProps) {
   return (
     <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
-      <div className="max-w-xl mx-auto w-full space-y-5 px-4">
+      <div className="max-w-xl mx-auto w-full space-y-5 px-4 pb-12">
         {/* Header */}
         <div className="flex items-center gap-3 pt-2">
           <button
