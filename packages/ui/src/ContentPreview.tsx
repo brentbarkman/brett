@@ -152,20 +152,12 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
             className="w-full h-[152px]"
           />
         </div>
-        <div className="flex items-center gap-3">
-          {sourceUrl && isSafeHref(sourceUrl) && (
-            <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
-              className="text-xs text-white/40 hover:text-white/60 inline-flex items-center gap-1 transition-colors">
-              Source <ExternalLink size={10} />
-            </a>
-          )}
-          {isSpotify && (
-            <a href={sourceUrl ?? embedUrl.replace("/embed/", "/")} target="_blank" rel="noopener noreferrer"
-              className="text-xs text-green-400/60 hover:text-green-400 inline-flex items-center gap-1 transition-colors">
-              Open in Spotify <ExternalLink size={10} />
-            </a>
-          )}
-        </div>
+        {sourceUrl && isSafeHref(sourceUrl) && (
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-white/40 hover:text-white/60 inline-flex items-center gap-1 transition-colors">
+            {isSpotify ? "Open in Spotify" : "Source"} <ExternalLink size={10} />
+          </a>
+        )}
       </div>
     );
   }
