@@ -14,6 +14,7 @@ interface InboxViewProps {
   onToggle: (id: string) => void;
   onArchive: (ids: string[]) => void;
   onAdd: (title: string) => void;
+  onAddContent?: (url: string) => void;
   onTriage: (
     ids: string[],
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
@@ -29,6 +30,7 @@ export function InboxView({
   onToggle,
   onArchive,
   onAdd,
+  onAddContent,
   onTriage,
   onTriageOpen,
   onFocusChange,
@@ -350,7 +352,7 @@ export function InboxView({
 
   return (
     <ItemListShell header={inboxHeader} hints={inboxHints}>
-        <QuickAddInput ref={quickAddRef} placeholder="Add to inbox..." onAdd={onAdd} onFocusChange={setAddInputFocused} />
+        <QuickAddInput ref={quickAddRef} placeholder="Add to inbox..." onAdd={onAdd} onAddContent={onAddContent} onFocusChange={setAddInputFocused} />
 
         {/* Empty state */}
         {isEmpty && (

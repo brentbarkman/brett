@@ -64,6 +64,13 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange }: T
     );
   };
 
+  const handleQuickAddContent = (url: string) => {
+    createThing.mutate(
+      { type: "content", title: url, sourceUrl: url },
+      { onError: (err) => console.error("Failed to create thing:", err) }
+    );
+  };
+
   // Server provides the right date range; client just applies type filter
   const filteredThings = things.filter((thing) => {
     if (activeFilter === "All") return true;
@@ -99,7 +106,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange }: T
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
     />
   ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} />
+    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} />
   );
 
   return (

@@ -351,6 +351,13 @@ export function App() {
     );
   };
 
+  const handleInboxAddContent = (url: string) => {
+    createThing.mutate(
+      { type: "content", title: url, sourceUrl: url },
+      { onError: (err) => console.error("Failed to create thing:", err) }
+    );
+  };
+
   const handleInboxArchive = (ids: string[]) => {
     bulkUpdate.mutate({ ids, updates: { status: "archived" } });
   };
@@ -565,6 +572,7 @@ export function App() {
                   onToggle={handleToggle}
                   onArchive={handleInboxArchive}
                   onAdd={handleInboxAdd}
+                  onAddContent={handleInboxAddContent}
                   onTriage={handleInboxTriage}
                   onTriageOpen={handleTriageOpen}
                   onFocusChange={handleFocusChange}

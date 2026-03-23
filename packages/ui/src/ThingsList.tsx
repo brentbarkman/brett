@@ -11,6 +11,7 @@ interface ThingsListProps {
   onItemClick: (thing: Thing) => void;
   onToggle?: (id: string) => void;
   onAdd: (title: string, listId: string | null) => void;
+  onAddContent?: (url: string) => void;
   onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   /** Called when keyboard nav changes focused item (for live detail panel updates) */
   onFocusChange?: (thing: Thing) => void;
@@ -18,7 +19,7 @@ interface ThingsListProps {
   header?: React.ReactNode;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTriageOpen, onFocusChange, header }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header }: ThingsListProps) {
   const { uncompleted, done, grouped, allItems } = useMemo(() => {
     const uncompleted = things.filter((t) => !t.isCompleted);
     const done = things.filter((t) => t.isCompleted);
@@ -106,7 +107,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onTria
           )}
 
           {hasUncompleted && (
-            <QuickAddInput ref={quickAddRef} placeholder="Add a task..." onAdd={(title) => onAdd(title, lists[0]?.id ?? null)} />
+            <QuickAddInput ref={quickAddRef} placeholder="Add a task..." onAdd={(title) => onAdd(title, lists[0]?.id ?? null)} onAddContent={onAddContent} />
           )}
 
           {done.length > 0 && (
