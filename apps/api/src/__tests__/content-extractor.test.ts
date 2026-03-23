@@ -1,5 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { parseOgTags } from "../lib/content-extractor.js";
+import {
+  parseOgTags,
+  buildSpotifyEmbedUrl,
+  buildApplePodcastEmbedUrl,
+  extractYouTubeVideoId,
+} from "../lib/content-extractor.js";
+// cleanFilename is from @brett/ui — import directly since API doesn't depend on ui package
+function cleanFilename(filename: string): string {
+  return filename
+    .replace(/\.pdf$/i, "")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+import { sanitizeFilename } from "../lib/sanitize-filename.js";
 
 describe("parseOgTags", () => {
   it("extracts og:title and og:description", () => {
@@ -76,5 +90,101 @@ describe("parseOgTags", () => {
     `;
     const result = parseOgTags(html, "https://example.com/page");
     expect(result.title).toBe("Reversed Title");
+  });
+
+  it("strips style tags before parsing to prevent CSS ReDoS", () => {
+    const html = `
+      <html><head>
+        <meta property="og:title" content="Safe Title" />
+        <style>.evil { background: red; }</style>
+      </head><body></body></html>
+    `;
+    const result = parseOgTags(html, "https://example.com/page");
+    expect(result.title).toBe("Safe Title");
+  });
+});
+
+describe("buildSpotifyEmbedUrl", () => {
+  it("converts episode URL to embed URL", () => {
+    const url = "https://open.spotify.com/episode/abc123";
+    expect(buildSpotifyEmbedUrl(url)).toBe("https://open.spotify.com/embed/episode/abc123");
+  });
+
+  it("returns null for non-episode URL", () => {
+    expect(buildSpotifyEmbedUrl("https://open.spotify.com/album/xyz")).toBeNull();
+  });
+});
+
+describe("buildApplePodcastEmbedUrl", () => {
+  it("converts podcast URL to embed URL", () => {
+    const url = "https://podcasts.apple.com/us/podcast/my-show/id123456";
+    expect(buildApplePodcastEmbedUrl(url)).toBe("https://embed.podcasts.apple.com/us/podcast/my-show/id123456");
+  });
+
+  it("returns null for non-podcast URL", () => {
+    expect(buildApplePodcastEmbedUrl("https://example.com/not-a-podcast")).toBeNull();
+  });
+});
+
+describe("extractYouTubeVideoId", () => {
+  it("extracts ID from youtube.com/watch", () => {
+    expect(extractYouTubeVideoId("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
+  });
+
+  it("extracts ID from youtu.be", () => {
+    expect(extractYouTubeVideoId("https://youtu.be/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
+  });
+
+  it("returns null for non-YouTube URL", () => {
+    expect(extractYouTubeVideoId("https://example.com/video")).toBeNull();
+  });
+});
+
+describe("cleanFilename", () => {
+  it("strips .pdf extension", () => {
+    expect(cleanFilename("report.pdf")).toBe("Report");
+  });
+
+  it("replaces hyphens with spaces", () => {
+    expect(cleanFilename("my-report.pdf")).toBe("My Report");
+  });
+
+  it("replaces underscores with spaces", () => {
+    expect(cleanFilename("my_report.pdf")).toBe("My Report");
+  });
+
+  it("collapses consecutive separators", () => {
+    expect(cleanFilename("my--report.pdf")).toBe("My Report");
+  });
+
+  it("handles mixed consecutive separators", () => {
+    expect(cleanFilename("my-_-report.pdf")).toBe("My Report");
+  });
+});
+
+describe("sanitizeFilename", () => {
+  it("keeps safe characters", () => {
+    expect(sanitizeFilename("document.pdf")).toBe("document.pdf");
+  });
+
+  it("replaces unsafe characters with underscores and collapses them", () => {
+    expect(sanitizeFilename("file name (1).pdf")).toBe("file_name_1_.pdf");
+  });
+
+  it("collapses consecutive underscores", () => {
+    expect(sanitizeFilename("file   name.pdf")).toBe("file_name.pdf");
+  });
+
+  it("strips path traversal", () => {
+    expect(sanitizeFilename("../../etc/passwd")).toBe("passwd");
+  });
+
+  it("limits length to 255 characters", () => {
+    const longName = "a".repeat(300) + ".pdf";
+    expect(sanitizeFilename(longName).length).toBeLessThanOrEqual(255);
+  });
+
+  it("returns 'unnamed' for empty input", () => {
+    expect(sanitizeFilename("")).toBe("unnamed");
   });
 });

@@ -1,5 +1,4 @@
 import type { ContentType } from "@brett/types";
-export { detectUrl } from "@brett/business";
 
 const CONTENT_TYPE_PATTERNS: [RegExp, ContentType][] = [
   [/^https?:\/\/(www\.)?(x|twitter)\.com\/[^/]+\/article\//i, "article"],

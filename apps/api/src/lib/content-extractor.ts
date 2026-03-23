@@ -2,6 +2,7 @@ import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { safeFetch, readBodyWithLimit, readBinaryWithLimit } from "./ssrf-guard.js";
 import { detectContentType } from "./url-detector.js";
+import { sanitizeFilename } from "./sanitize-filename.js";
 import { prisma } from "./prisma.js";
 import { publishSSE } from "./sse.js";
 import type { ContentType, ContentMetadata, ContentStatus } from "@brett/types";
@@ -19,8 +20,10 @@ export function parseOgTags(html: string, url: string): OgTags {
   const parsed = new URL(url);
   const domain = parsed.hostname.replace(/^www\./, "");
 
+  // Strip <style> tags before JSDOM parsing to prevent CSS ReDoS via pathological stylesheets
+  const cleanedHtml = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
   // Use JSDOM for robust HTML parsing (handles mismatched quotes, special chars)
-  const dom = new JSDOM(html, { url });
+  const dom = new JSDOM(cleanedHtml, { url });
   const doc = dom.window.document;
 
   const getMeta = (prop: string): string | undefined => {
@@ -44,14 +47,17 @@ export function parseOgTags(html: string, url: string): OgTags {
   };
 }
 
+// Note: contentBody stores Readability's cleaned HTML output, not markdown.
+// The frontend renders it via DOMPurify.sanitize() + dangerouslySetInnerHTML.
+// Converting to markdown was deferred — the HTML output works well enough for v1.
 function extractArticle(html: string, url: string): { content: string; wordCount: number } | null {
-  const dom = new JSDOM(html, { url });
+  // Strip <style> tags before JSDOM parsing to prevent CSS ReDoS via pathological stylesheets
+  const cleanedHtml = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+  const dom = new JSDOM(cleanedHtml, { url });
   const reader = new Readability(dom.window.document);
   const article = reader.parse();
   if (!article?.textContent) return null;
 
-  // Readability returns HTML in article.content — we store the HTML content
-  // and can enhance to proper markdown later
   const content = article.content ?? article.textContent ?? "";
   const wordCount = (article.textContent ?? "").split(/\s+/).length;
 
@@ -72,19 +78,19 @@ async function fetchOEmbed(
   }
 }
 
-function buildSpotifyEmbedUrl(url: string): string | null {
+export function buildSpotifyEmbedUrl(url: string): string | null {
   // https://open.spotify.com/episode/abc → https://open.spotify.com/embed/episode/abc
   const match = url.match(/open\.spotify\.com\/(episode\/[^?#]+)/);
   return match ? `https://open.spotify.com/embed/${match[1]}` : null;
 }
 
-function buildApplePodcastEmbedUrl(url: string): string | null {
+export function buildApplePodcastEmbedUrl(url: string): string | null {
   // https://podcasts.apple.com/us/podcast/show/id123 → https://embed.podcasts.apple.com/us/podcast/show/id123
   const match = url.match(/podcasts\.apple\.com(\/[^?#]+)/);
   return match ? `https://embed.podcasts.apple.com${match[1]}` : null;
 }
 
-function extractYouTubeVideoId(url: string): string | null {
+export function extractYouTubeVideoId(url: string): string | null {
   const patterns = [
     /youtube\.com\/watch\?v=([^&#]+)/,
     /youtu\.be\/([^?&#]+)/,
@@ -274,7 +280,8 @@ export async function runExtraction(itemId: string, url: string, userId: string)
       try {
         const pdfResponse = await safeFetch(url, { timeoutMs: 60_000, maxSizeBytes: 50 * 1024 * 1024 });
         const buffer = Buffer.from(await readBinaryWithLimit(pdfResponse, 50 * 1024 * 1024));
-        const filename = new URL(url).pathname.split("/").pop() || "document.pdf";
+        const rawFilename = new URL(url).pathname.split("/").pop() || "document.pdf";
+        const filename = sanitizeFilename(rawFilename);
         // Upload to S3 via the storage module (same as attachment system)
         const { uploadToStorage } = await import("./storage.js");
         const storageKey = `attachments/${userId}/${itemId}/${crypto.randomUUID()}-${filename}`;

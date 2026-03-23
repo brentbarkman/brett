@@ -2,22 +2,9 @@ import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { s3, STORAGE_BUCKET } from "../lib/storage.js";
+import { sanitizeFilename } from "../lib/sanitize-filename.js";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
-
-function sanitizeFilename(raw: string): string {
-  // Extract basename, strip path traversal
-  let name = path.basename(raw);
-  // Remove null bytes and control characters
-  name = name.replace(/[\x00-\x1f\x7f]/g, "");
-  // Replace any remaining path separators (Windows)
-  name = name.replace(/[/\\]/g, "_");
-  // Enforce max length
-  if (name.length > 255) name = name.slice(0, 255);
-  // Fallback if empty after sanitization
-  return name || "unnamed";
-}
 
 const SAFE_MIME_TYPES = new Set([
   "image/jpeg", "image/png", "image/gif", "image/webp",

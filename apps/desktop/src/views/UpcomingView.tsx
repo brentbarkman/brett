@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { Clock } from "lucide-react";
-import { ThingCard, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader } from "@brett/ui";
-import type { Thing } from "@brett/types";
+import { ThingCard, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
+import type { Thing, FilterType } from "@brett/types";
 import { groupUpcomingThings } from "@brett/business";
 import { useUpcomingThings, useToggleThing } from "../api/things";
 
@@ -12,9 +12,18 @@ interface UpcomingViewProps {
 }
 
 export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange }: UpcomingViewProps) {
+  const [typeFilter, setTypeFilter] = useState<FilterType>("All");
   const { data: things = [], isLoading } = useUpcomingThings();
   const toggleThing = useToggleThing();
-  const sections = groupUpcomingThings(things);
+
+  const filteredThings = useMemo(() => {
+    if (typeFilter === "All") return things;
+    if (typeFilter === "Tasks") return things.filter((t) => t.type === "task");
+    if (typeFilter === "Content") return things.filter((t) => t.type === "content");
+    return things;
+  }, [things, typeFilter]);
+
+  const sections = groupUpcomingThings(filteredThings);
   const allItems = sections.flatMap((s) => s.things);
 
   const handleToggle = (id: string) => {
@@ -43,10 +52,13 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange }: Upcom
   });
 
   const header = (
-    <div className="flex items-center gap-3">
-      <Clock size={20} className="text-white/50" />
-      <h2 className="text-xl font-bold text-white">Upcoming</h2>
-    </div>
+    <>
+      <div className="flex items-center gap-3">
+        <Clock size={20} className="text-white/50" />
+        <h2 className="text-xl font-bold text-white">Upcoming</h2>
+      </div>
+      <TypeFilter value={typeFilter} onChange={setTypeFilter} />
+    </>
   );
 
   const hints = allItems.length > 0

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Inbox } from "lucide-react";
-import type { Thing, NavList } from "@brett/types";
+import type { Thing, NavList, FilterType } from "@brett/types";
 import { computeRelativeAge } from "@brett/business";
 import { InboxItemRow } from "./InboxItemRow";
 import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
 import { ItemListShell } from "./ItemListShell";
+import { TypeFilter } from "./TypeFilter";
 
 interface InboxViewProps {
   things: Thing[];
@@ -32,6 +33,7 @@ export function InboxView({
   onTriageOpen,
   onFocusChange,
 }: InboxViewProps) {
+  const [typeFilter, setTypeFilter] = useState<FilterType>("All");
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [animatingOutIds, setAnimatingOutIds] = useState<Set<string>>(
@@ -57,17 +59,25 @@ export function InboxView({
     return () => clearInterval(interval);
   }, []);
 
+  // Apply type filter
+  const filteredThings = useMemo(() => {
+    if (typeFilter === "All") return things;
+    if (typeFilter === "Tasks") return things.filter((t) => t.type === "task");
+    if (typeFilter === "Content") return things.filter((t) => t.type === "content");
+    return things;
+  }, [things, typeFilter]);
+
   // Build display list: current things + snapshotted animating-out items removed by refetch
   const displayThings = useMemo(() => {
-    const currentIds = new Set(things.map((t) => t.id));
-    const result = [...things];
+    const currentIds = new Set(filteredThings.map((t) => t.id));
+    const result = [...filteredThings];
     for (const [id, item] of animatingOutItemsRef.current) {
       if (!currentIds.has(id)) {
         result.push(item);
       }
     }
     return result;
-  }, [things]);
+  }, [filteredThings]);
 
   // Active items (for focus/selection) — excludes animating out
   const activeThings = useMemo(
@@ -325,10 +335,13 @@ export function InboxView({
   const isEmpty = displayThings.length === 0;
 
   const inboxHeader = (
-    <div className="flex items-center gap-3">
-      <Inbox size={20} className="text-white/50" />
-      <h2 className="text-xl font-bold text-white">Inbox</h2>
-    </div>
+    <>
+      <div className="flex items-center gap-3">
+        <Inbox size={20} className="text-white/50" />
+        <h2 className="text-xl font-bold text-white">Inbox</h2>
+      </div>
+      <TypeFilter value={typeFilter} onChange={setTypeFilter} />
+    </>
   );
 
   const inboxHints = activeThings.length > 0

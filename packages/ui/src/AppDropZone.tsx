@@ -9,7 +9,8 @@ interface AppDropZoneProps {
 export function cleanFilename(filename: string): string {
   return filename
     .replace(/\.pdf$/i, "")
-    .replace(/[-_]/g, " ")
+    .replace(/[-_]+/g, " ")
+    .trim()
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

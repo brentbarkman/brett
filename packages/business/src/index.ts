@@ -188,6 +188,7 @@ function isValidHttpUrl(url: string): boolean {
   }
 }
 
+const VALID_CONTENT_TYPES = new Set(["tweet", "article", "video", "pdf", "podcast", "web_page"]);
 const VALID_ITEM_TYPES = new Set(["task", "content"]);
 const VALID_STATUSES = new Set([
   "active",
@@ -246,7 +247,6 @@ export function validateCreateItem(
     }
   }
 
-  const VALID_CONTENT_TYPES = new Set(["tweet", "article", "video", "pdf", "podcast", "web_page"]);
   if (obj.contentType !== undefined && obj.contentType !== null) {
     if (typeof obj.contentType !== "string" || !VALID_CONTENT_TYPES.has(obj.contentType)) {
       return { ok: false, error: `contentType must be one of: ${[...VALID_CONTENT_TYPES].join(", ")}` };
@@ -391,7 +391,6 @@ export function validateUpdateItem(
   }
 
   // Content fields
-  const VALID_CONTENT_TYPES = new Set(["tweet", "article", "video", "pdf", "podcast", "web_page"]);
   if (obj.contentType !== undefined) {
     if (obj.contentType !== null && (typeof obj.contentType !== "string" || !VALID_CONTENT_TYPES.has(obj.contentType))) {
       return { ok: false, error: `contentType must be one of: ${[...VALID_CONTENT_TYPES].join(", ")}` };
