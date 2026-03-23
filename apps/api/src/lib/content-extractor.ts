@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
-import { safeFetch } from "./ssrf-guard.js";
+import { safeFetch, readBodyWithLimit, readBinaryWithLimit } from "./ssrf-guard.js";
 import { detectContentType } from "./url-detector.js";
 import { prisma } from "./prisma.js";
 import { publishSSE } from "./sse.js";
@@ -155,7 +155,7 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
     };
   }
 
-  const html = await response.text();
+  const html = await readBodyWithLimit(response, 5 * 1024 * 1024);
   const ogTags = parseOgTags(html, url);
 
   const base: Omit<ExtractionResult, "contentType" | "contentMetadata" | "contentBody"> = {
@@ -273,7 +273,7 @@ export async function runExtraction(itemId: string, url: string, userId: string)
     if (result.needsPdfDownload) {
       try {
         const pdfResponse = await safeFetch(url, { timeoutMs: 60_000, maxSizeBytes: 50 * 1024 * 1024 });
-        const buffer = Buffer.from(await pdfResponse.arrayBuffer());
+        const buffer = Buffer.from(await readBinaryWithLimit(pdfResponse, 50 * 1024 * 1024));
         const filename = new URL(url).pathname.split("/").pop() || "document.pdf";
         // Upload to S3 via the storage module (same as attachment system)
         const { uploadToStorage } = await import("./storage.js");

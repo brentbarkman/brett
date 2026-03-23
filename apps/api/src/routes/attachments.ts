@@ -20,7 +20,7 @@ function sanitizeFilename(raw: string): string {
 }
 
 const SAFE_MIME_TYPES = new Set([
-  "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
+  "image/jpeg", "image/png", "image/gif", "image/webp",
   "application/pdf",
   "text/plain",
   "application/zip", "application/gzip",

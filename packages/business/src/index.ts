@@ -179,6 +179,15 @@ export function itemToThing(
 
 // ── Validation ──
 
+function isValidHttpUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 const VALID_ITEM_TYPES = new Set(["task", "content"]);
 const VALID_STATUSES = new Set([
   "active",
@@ -242,6 +251,10 @@ export function validateCreateItem(
     if (typeof obj.contentType !== "string" || !VALID_CONTENT_TYPES.has(obj.contentType)) {
       return { ok: false, error: `contentType must be one of: ${[...VALID_CONTENT_TYPES].join(", ")}` };
     }
+  }
+
+  if (typeof obj.sourceUrl === "string" && !isValidHttpUrl(obj.sourceUrl)) {
+    return { ok: false, error: "sourceUrl must be a valid http or https URL" };
   }
 
   return {
@@ -333,6 +346,9 @@ export function validateUpdateItem(
   if (obj.sourceUrl !== undefined) {
     data.sourceUrl = obj.sourceUrl === null ? null : typeof obj.sourceUrl === "string" ? obj.sourceUrl : undefined;
   }
+  if (data.sourceUrl !== undefined && data.sourceUrl !== null && !isValidHttpUrl(data.sourceUrl)) {
+    return { ok: false, error: "sourceUrl must be a valid http or https URL" };
+  }
   if (obj.brettObservation !== undefined) {
     data.brettObservation = obj.brettObservation === null ? null : typeof obj.brettObservation === "string" ? obj.brettObservation : undefined;
   }
@@ -416,7 +432,19 @@ export function validateUpdateItem(
     if (obj.contentMetadata === null) {
       data.contentMetadata = null;
     } else if (typeof obj.contentMetadata === "object" && !Array.isArray(obj.contentMetadata)) {
-      data.contentMetadata = obj.contentMetadata as Record<string, unknown>;
+      const meta = obj.contentMetadata as Record<string, unknown>;
+      // Validate embedUrl if present — only trusted providers allowed
+      if (typeof meta.embedUrl === "string") {
+        const trustedPrefixes = [
+          "https://www.youtube.com/embed/",
+          "https://open.spotify.com/embed/",
+          "https://embed.podcasts.apple.com/",
+        ];
+        if (!trustedPrefixes.some(p => (meta.embedUrl as string).startsWith(p))) {
+          return { ok: false, error: "contentMetadata.embedUrl must be from a trusted provider" };
+        }
+      }
+      data.contentMetadata = meta;
     } else {
       return { ok: false, error: "contentMetadata must be an object or null" };
     }

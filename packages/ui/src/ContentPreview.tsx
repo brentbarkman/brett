@@ -3,6 +3,15 @@ import DOMPurify from "dompurify";
 import { AlertTriangle, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import type { ContentType, ContentStatus, ContentMetadata } from "@brett/types";
 
+function isSafeHref(url?: string): boolean {
+  if (!url) return false;
+  try { return ["http:", "https:"].includes(new URL(url).protocol); }
+  catch { return false; }
+}
+
+const TRUSTED_VIDEO_ORIGINS = ["https://www.youtube.com/embed/", "https://youtube.com/embed/"];
+const TRUSTED_PODCAST_ORIGINS = ["https://open.spotify.com/embed/", "https://embed.podcasts.apple.com/"];
+
 interface ContentPreviewProps {
   contentType?: ContentType;
   contentStatus?: ContentStatus;
@@ -51,7 +60,7 @@ function ErrorState({ sourceUrl, onRetry }: { sourceUrl?: string; onRetry?: () =
         <AlertTriangle size={16} className="text-red-400" />
         <span className="text-sm text-red-400 font-medium">Couldn't load preview</span>
       </div>
-      {sourceUrl && (
+      {sourceUrl && isSafeHref(sourceUrl) && (
         <a
           href={sourceUrl}
           target="_blank"
@@ -75,19 +84,6 @@ function ErrorState({ sourceUrl, onRetry }: { sourceUrl?: string; onRetry?: () =
 }
 
 function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sourceUrl?: string }) {
-  if (metadata?.type === "tweet" && metadata.embedHtml) {
-    return (
-      <iframe
-        srcDoc={`<!DOCTYPE html><html><head><style>body{margin:0;background:transparent;color:#fff;font-family:system-ui;}</style></head><body>${metadata.embedHtml}</body></html>`}
-        sandbox="allow-scripts allow-popups"
-        title="Tweet embed"
-        className="w-full min-h-[200px] rounded-lg border border-white/10"
-        style={{ colorScheme: "dark" }}
-      />
-    );
-  }
-
-  // Fallback: blockquote card
   const author = metadata?.type === "tweet" ? metadata.author : undefined;
   const text = metadata?.type === "tweet" ? metadata.tweetText : undefined;
 
@@ -95,7 +91,7 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
     <div className="bg-white/5 rounded-lg border border-white/10 p-4 space-y-2">
       {author && <span className="text-xs text-white/60 font-medium">@{author}</span>}
       {text && <p className="text-sm text-white/80 leading-relaxed italic">{text}</p>}
-      {sourceUrl && (
+      {sourceUrl && isSafeHref(sourceUrl) && (
         <a
           href={sourceUrl}
           target="_blank"
@@ -111,13 +107,13 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
 
 function VideoPreview({ metadata }: { metadata?: ContentMetadata }) {
   const embedUrl = metadata?.type === "video" ? metadata.embedUrl : undefined;
-  if (!embedUrl) return null;
+  if (!embedUrl || !TRUSTED_VIDEO_ORIGINS.some(o => embedUrl.startsWith(o))) return null;
 
   return (
     <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10">
       <iframe
         src={embedUrl}
-        sandbox="allow-scripts allow-same-origin allow-popups"
+        sandbox="allow-scripts allow-popups"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
         title="Video player"
@@ -128,12 +124,14 @@ function VideoPreview({ metadata }: { metadata?: ContentMetadata }) {
 }
 
 function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sourceUrl?: string }) {
-  if (metadata?.type === "podcast" && metadata.embedUrl) {
+  const embedUrl = metadata?.type === "podcast" ? metadata.embedUrl : undefined;
+
+  if (embedUrl && TRUSTED_PODCAST_ORIGINS.some(o => embedUrl.startsWith(o))) {
     return (
       <div className="rounded-lg overflow-hidden border border-white/10">
         <iframe
-          src={metadata.embedUrl}
-          sandbox="allow-scripts allow-same-origin allow-popups"
+          src={embedUrl}
+          sandbox="allow-scripts allow-popups"
           title="Podcast player"
           className="w-full h-[152px]"
         />
@@ -141,7 +139,7 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
     );
   }
 
-  // Fallback
+  // Fallback — untrusted embed or no embed URL
   const episodeName = metadata?.type === "podcast" ? metadata.episodeName : undefined;
   const showName = metadata?.type === "podcast" ? metadata.showName : undefined;
 
@@ -149,7 +147,7 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
     <div className="bg-white/5 rounded-lg border border-white/10 p-4 space-y-2">
       {showName && <span className="text-xs text-white/40 font-mono uppercase tracking-wider">{showName}</span>}
       {episodeName && <p className="text-sm text-white/80">{episodeName}</p>}
-      {sourceUrl && (
+      {sourceUrl && isSafeHref(sourceUrl) && (
         <a
           href={sourceUrl}
           target="_blank"
@@ -184,7 +182,7 @@ function ArticlePreview({
         {contentDomain && (
           <span className="text-xs text-white/40">{contentDomain}</span>
         )}
-        {sourceUrl && (
+        {sourceUrl && isSafeHref(sourceUrl) && (
           <a
             href={sourceUrl}
             target="_blank"
@@ -201,7 +199,14 @@ function ArticlePreview({
         <div
           className="max-h-[50vh] overflow-y-auto scrollbar-hide text-sm text-white/80 leading-relaxed prose-invert prose-sm"
           dangerouslySetInnerHTML={{
-            __html: DOMPurify.sanitize(contentBody),
+            __html: DOMPurify.sanitize(contentBody, {
+              ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "img", "ul", "ol", "li",
+                "blockquote", "pre", "code", "em", "strong", "br", "hr", "figure", "figcaption", "b", "i"],
+              ALLOWED_ATTR: ["href", "src", "alt", "title", "class"],
+              ALLOW_DATA_ATTR: false,
+              FORBID_TAGS: ["form", "input", "button", "textarea", "select", "script", "style", "iframe", "object", "embed"],
+              FORBID_ATTR: ["style", "onerror", "onload", "onclick", "onmouseover"],
+            }),
           }}
         />
       )}
@@ -212,10 +217,15 @@ function ArticlePreview({
 function PdfPreview({ sourceUrl, attachmentUrl }: { sourceUrl?: string; attachmentUrl?: string }) {
   const pdfUrl = attachmentUrl ?? sourceUrl;
   if (!pdfUrl) return null;
+  // Only allow https URLs
+  try {
+    const u = new URL(pdfUrl);
+    if (u.protocol !== "https:") return null;
+  } catch { return null; }
 
   return (
     <div className="w-full aspect-[3/4] rounded-lg overflow-hidden border border-white/10">
-      <iframe src={pdfUrl} title="PDF viewer" className="w-full h-full" />
+      <iframe src={pdfUrl} sandbox="allow-same-origin" title="PDF viewer" className="w-full h-full" />
     </div>
   );
 }
@@ -235,9 +245,11 @@ function WebPagePreview({
   contentDomain?: string;
   sourceUrl?: string;
 }) {
+  const safeHref = isSafeHref(sourceUrl) ? sourceUrl : undefined;
+
   return (
     <a
-      href={sourceUrl}
+      href={safeHref}
       target="_blank"
       rel="noopener noreferrer"
       className="block bg-white/5 rounded-lg border border-white/10 overflow-hidden hover:bg-white/10 transition-colors group"

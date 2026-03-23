@@ -5,7 +5,16 @@ const PRIVATE_RANGES = [
 ];
 
 function isPrivateIP(ip: string): boolean {
-  if (ip === "::1" || ip.startsWith("fc") || ip.startsWith("fd")) return true;
+  // Unwrap IPv4-mapped IPv6 (::ffff:x.x.x.x)
+  const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (mapped) return isPrivateIP(mapped[1]);
+
+  // IPv6 private/reserved
+  if (ip === "::1" || ip === "::" || ip === "0:0:0:0:0:0:0:1") return true;
+  if (ip.startsWith("fc") || ip.startsWith("fd")) return true;
+  if (ip.startsWith("fe80")) return true; // link-local
+
+  // IPv4 private ranges
   return PRIVATE_RANGES.some((re) => re.test(ip));
 }
 
@@ -23,7 +32,7 @@ export async function safeFetch(url: string, options: SafeFetchOptions = {}): Pr
   // Resolve DNS and validate IP (blocks obvious SSRF)
   // Note: small TOCTOU window for DNS rebinding — acceptable for v1.
   // A future enhancement can use a custom undici dispatcher for IP pinning.
-  const { address } = await lookup(parsed.hostname);
+  const { address } = await lookup(parsed.hostname, { family: 4 });
   if (isPrivateIP(address)) throw new Error(`Blocked private IP: ${address}`);
 
   const controller = new AbortController();
@@ -61,4 +70,52 @@ export async function safeFetch(url: string, options: SafeFetchOptions = {}): Pr
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function readBodyWithLimit(response: Response, maxBytes: number): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      reader.cancel();
+      throw new Error(`Response body exceeds ${maxBytes} bytes`);
+    }
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(combined);
+}
+
+export async function readBinaryWithLimit(response: Response, maxBytes: number): Promise<Uint8Array> {
+  const reader = response.body?.getReader();
+  if (!reader) return new Uint8Array(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      reader.cancel();
+      throw new Error(`Response body exceeds ${maxBytes} bytes`);
+    }
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return combined;
 }
