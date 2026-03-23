@@ -355,7 +355,7 @@ export function InboxView({
   );
 
   const inboxHints = activeThings.length > 0
-    ? ["esc shortcuts", "j/k navigate", "x select", "l list", "d date", "e done", "# archive"]
+    ? ["j/k navigate", "x select", "l list", "d date", "e done", "# archive"]
     : [];
 
   return (

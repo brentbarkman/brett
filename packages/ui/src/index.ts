@@ -39,4 +39,3 @@ export { ContentDetailPanel } from "./ContentDetailPanel";
 export { TypeFilter } from "./TypeFilter";
 export { AppDropZone, cleanFilename } from "./AppDropZone";
 export { getAvatarColor } from "./avatarColor";
-export { ToastContainer, showToast } from "./Toast";
