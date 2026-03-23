@@ -105,7 +105,7 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
   );
 }
 
-function VideoPreview({ metadata }: { metadata?: ContentMetadata }) {
+function VideoPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sourceUrl?: string }) {
   const embedUrl = metadata?.type === "video" ? metadata.embedUrl : undefined;
   if (!embedUrl || !TRUSTED_VIDEO_ORIGINS.some(o => embedUrl.startsWith(o))) return null;
 
@@ -114,16 +114,24 @@ function VideoPreview({ metadata }: { metadata?: ContentMetadata }) {
   const srcWithOrigin = `${embedUrl}${embedUrl.includes("?") ? "&" : "?"}origin=${encodeURIComponent(origin)}`;
 
   return (
-    <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10">
-      {/* No sandbox — embedUrl is validated against TRUSTED_VIDEO_ORIGINS before rendering.
-          YouTube's own embed code doesn't use sandbox. The URL allowlist is the security boundary. */}
-      <iframe
-        src={srcWithOrigin}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        title="Video player"
-        className="w-full h-full"
-      />
+    <div className="space-y-1.5">
+      <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10">
+        {/* No sandbox — embedUrl is validated against TRUSTED_VIDEO_ORIGINS before rendering.
+            YouTube's own embed code doesn't use sandbox. The URL allowlist is the security boundary. */}
+        <iframe
+          src={srcWithOrigin}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          title="Video player"
+          className="w-full h-full"
+        />
+      </div>
+      {sourceUrl && isSafeHref(sourceUrl) && (
+        <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
+          className="text-xs text-white/40 hover:text-white/60 inline-flex items-center gap-1 transition-colors">
+          Source <ExternalLink size={10} />
+        </a>
+      )}
     </div>
   );
 }
@@ -319,7 +327,7 @@ export function ContentPreview({
     case "tweet":
       return <TweetPreview metadata={contentMetadata} sourceUrl={sourceUrl} />;
     case "video":
-      return <VideoPreview metadata={contentMetadata} />;
+      return <VideoPreview metadata={contentMetadata} sourceUrl={sourceUrl} />;
     case "podcast":
       return <PodcastPreview metadata={contentMetadata} sourceUrl={sourceUrl} />;
     case "article":
