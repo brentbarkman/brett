@@ -86,18 +86,48 @@ function ErrorState({ sourceUrl, onRetry }: { sourceUrl?: string; onRetry?: () =
 function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sourceUrl?: string }) {
   const author = metadata?.type === "tweet" ? metadata.author : undefined;
   const text = metadata?.type === "tweet" ? metadata.tweetText : undefined;
+  const embedHtml = metadata?.type === "tweet" ? metadata.embedHtml : undefined;
+
+  // The oEmbed HTML is a <blockquote> with the tweet text + a <script> tag.
+  // Sanitize to keep just the blockquote content (strips the script tag).
+  const sanitizedEmbed = embedHtml
+    ? DOMPurify.sanitize(embedHtml, {
+        ALLOWED_TAGS: ["blockquote", "p", "a", "br", "em", "strong", "span"],
+        ALLOWED_ATTR: ["href", "dir", "lang"],
+        ALLOW_DATA_ATTR: false,
+      })
+    : undefined;
+
+  // If we have neither oEmbed HTML nor OG text, nothing to show
+  if (!sanitizedEmbed && !text) {
+    return (
+      <div className="bg-white/5 rounded-lg border border-white/10 p-4 space-y-2">
+        {author && <span className="text-xs text-white/60 font-medium">@{author}</span>}
+        <p className="text-sm text-white/40 italic">Tweet content unavailable</p>
+        {sourceUrl && isSafeHref(sourceUrl) && (
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+            View on X <ExternalLink size={10} />
+          </a>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white/5 rounded-lg border border-white/10 p-4 space-y-2">
       {author && <span className="text-xs text-white/60 font-medium">@{author}</span>}
-      {text && <p className="text-sm text-white/80 leading-relaxed italic">{text}</p>}
+      {sanitizedEmbed ? (
+        <div
+          className="text-sm text-white/80 leading-relaxed [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-blue-300"
+          dangerouslySetInnerHTML={{ __html: sanitizedEmbed }}
+        />
+      ) : (
+        <p className="text-sm text-white/80 leading-relaxed italic">{text}</p>
+      )}
       {sourceUrl && isSafeHref(sourceUrl) && (
-        <a
-          href={sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-        >
+        <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
           View on X <ExternalLink size={10} />
         </a>
       )}
@@ -340,6 +370,19 @@ export function ContentPreview({
     case "podcast":
       return <PodcastPreview metadata={contentMetadata} sourceUrl={sourceUrl} />;
     case "article":
+      // Fall back to web_page card if no article body was extracted
+      if (!contentBody) {
+        return (
+          <WebPagePreview
+            contentTitle={contentTitle}
+            contentDescription={contentDescription}
+            contentImageUrl={contentImageUrl}
+            contentFavicon={contentFavicon}
+            contentDomain={contentDomain}
+            sourceUrl={sourceUrl}
+          />
+        );
+      }
       return (
         <ArticlePreview
           contentBody={contentBody}

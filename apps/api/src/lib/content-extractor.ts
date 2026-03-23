@@ -177,14 +177,18 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
   switch (contentType) {
     case "tweet": {
       const oembed = await fetchOEmbed("https://publish.twitter.com/oembed", url);
+      const author = oembed?.author_name as string | undefined;
       return {
         ...base,
         contentType: "tweet",
+        // Use oEmbed author for title when OG tags are blocked (common with X)
+        title: base.title ?? (author ? `Tweet by ${author}` : undefined),
+        contentTitle: base.contentTitle ?? (author ? `Tweet by ${author}` : null),
         contentBody: null,
         contentMetadata: {
           type: "tweet",
           embedHtml: oembed?.html as string | undefined,
-          author: oembed?.author_name as string | undefined,
+          author,
           tweetText: ogTags.description ?? undefined,
         },
       };
