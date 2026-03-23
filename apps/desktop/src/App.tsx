@@ -505,7 +505,7 @@ export function App() {
           className="absolute inset-0 z-0 bg-cover bg-center opacity-80"
           style={{
             backgroundImage:
-              'url("https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80")',
+              'url("https://images.unsplash.com/photo-1666008490793-338bc347ca2e?w=1920&q=80")',
           }}
         />
 
