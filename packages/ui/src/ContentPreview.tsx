@@ -125,22 +125,26 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
   }
 
   return (
-    <div className="bg-white/5 rounded-lg border border-white/10 p-4 space-y-2">
-      {author && <span className="text-xs text-white/60 font-medium">@{author}</span>}
-      {sanitizedEmbed ? (
-        <div
-          className="text-sm text-white/80 leading-relaxed [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-blue-300"
-          dangerouslySetInnerHTML={{ __html: sanitizedEmbed }}
-        />
-      ) : (
-        <p className="text-sm text-white/80 leading-relaxed italic">{text}</p>
-      )}
-      {sourceUrl && isSafeHref(sourceUrl) && (
-        <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-          View on X <ExternalLink size={10} />
-        </a>
-      )}
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        {author && <span className="text-xs text-white/60 font-medium">@{author}</span>}
+        {sourceUrl && isSafeHref(sourceUrl) && (
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
+            className="ml-auto inline-flex items-center gap-1 text-xs text-white/40 hover:text-white/60 transition-colors">
+            View on X <ExternalLink size={10} />
+          </a>
+        )}
+      </div>
+      <div className="bg-white/5 rounded-lg border border-white/10 p-4">
+        {sanitizedEmbed ? (
+          <div
+            className="text-sm text-white/80 leading-relaxed [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-blue-300"
+            dangerouslySetInnerHTML={{ __html: sanitizedEmbed }}
+          />
+        ) : (
+          <p className="text-sm text-white/80 leading-relaxed italic">{text}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -155,6 +159,12 @@ function VideoPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
 
   return (
     <div className="space-y-1.5">
+      {sourceUrl && isSafeHref(sourceUrl) && (
+        <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
+          className="text-xs text-white/40 hover:text-white/60 inline-flex items-center gap-1 transition-colors">
+          Source <ExternalLink size={10} />
+        </a>
+      )}
       <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10">
         {/* No sandbox — embedUrl is validated against TRUSTED_VIDEO_ORIGINS before rendering.
             YouTube's own embed code doesn't use sandbox. The URL allowlist is the security boundary. */}
@@ -166,12 +176,6 @@ function VideoPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
           className="w-full h-full"
         />
       </div>
-      {sourceUrl && isSafeHref(sourceUrl) && (
-        <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
-          className="text-xs text-white/40 hover:text-white/60 inline-flex items-center gap-1 transition-colors">
-          Source <ExternalLink size={10} />
-        </a>
-      )}
     </div>
   );
 }
@@ -183,6 +187,12 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
     const isSpotify = embedUrl.includes("spotify.com");
     return (
       <div className="space-y-1.5">
+        {sourceUrl && isSafeHref(sourceUrl) && (
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-white/40 hover:text-white/60 inline-flex items-center gap-1 transition-colors">
+            {isSpotify ? "Open in Spotify" : "Source"} <ExternalLink size={10} />
+          </a>
+        )}
         <div className="rounded-lg overflow-hidden border border-white/10">
           {/* No sandbox — embedUrl is validated against TRUSTED_PODCAST_ORIGINS before rendering. */}
           <iframe
@@ -192,12 +202,6 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
             className="w-full h-[152px]"
           />
         </div>
-        {sourceUrl && isSafeHref(sourceUrl) && (
-          <a href={sourceUrl} target="_blank" rel="noopener noreferrer"
-            className="text-xs text-white/40 hover:text-white/60 inline-flex items-center gap-1 transition-colors">
-            {isSpotify ? "Open in Spotify" : "Source"} <ExternalLink size={10} />
-          </a>
-        )}
       </div>
     );
   }
