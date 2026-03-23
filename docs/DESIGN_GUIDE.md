@@ -372,3 +372,132 @@ className="bg-gradient-to-b from-black/40 to-transparent h-4 pointer-events-none
 8. **`text-lg`** — skip from `text-base` to `text-xl`
 9. **Component libraries (shadcn, Radix, etc.) for styled components** — this app uses custom glass components, not shadcn. `@brett/ui` is the component library.
 10. **Framer Motion** — use CSS keyframes and Tailwind transitions only
+11. **Toast notifications** — never use toasts. All feedback is inline, contextual, and integrated into the surface where the action happened.
+12. **Generic empty states** — every empty state must be crafted, contextual, and carry Brett's personality. Never "No items found."
+
+---
+
+## Design Persona & Judgment Heuristics
+
+This section covers the *taste and judgment layer* — how to make design decisions when the system tokens don't give you a clear answer.
+
+### Product Identity
+
+**Apple Weather meets a witty assistant.** Brett's visual identity is lush, data-rich, and polished (Apple Weather's data-as-art philosophy), but cut with dry personality and editorial sharpness. The tension that makes Brett distinctive is: **premium polish with a voice that has opinions.**
+
+Think of it as: the UI is quiet and beautiful, but Brett (the character) is not quiet at all.
+
+**Reference triangle:** Apple Weather (primary) > Linear (secondary) > Arc (tertiary)
+- From Apple Weather: data-as-art, backgrounds that *are* information, lush environmental shifts
+- From Linear: engineering precision, density with clarity, respect for power users
+- From Arc: willingness to be opinionated, break conventions when it serves the user
+
+### Brett as a Character
+
+Brett is an assistant, but the best kind — the kind that challenges you.
+
+**Voice:** Dry wit. Direct. Occasionally self-deprecating. Never sycophantic, never corporate.
+
+**Personality traits:**
+- Confident but not arrogant — will say "not sure about this one" when uncertain
+- Challenges you when something seems off — "Hey, does this still matter?"
+- Celebrates your wins without being performative — knows the difference between clearing 3 tasks on a light day vs. crushing 8 things through 6 hours of meetings
+- Context-aware — Brett's observations should reflect what actually happened, not generic encouragement
+
+**Voice examples:**
+
+| Moment | Bad (generic) | Good (Brett) |
+|--------|---------------|--------------|
+| Empty inbox, free day | "No tasks" | "Nothing but focus today. Let's get it." |
+| Empty inbox, earned it | "All done!" | "Nice work — you got 8 things done while getting through 6 hours of meetings. Have a glass of wine, you earned it." |
+| Stale task (2+ weeks) | "This task is overdue" | "Hey, does this still matter? Do something or delete it." |
+| Error saving | "Something went wrong" | "Failed to save. Try again — if this persists after refreshing, ask Brett to report an error." |
+
+**Error voice rule:** Errors are clinical and helpful, never cute. Being witty when something broke is annoying. State what happened, what to try, and where to escalate.
+
+### Data as Art / Environmental Design
+
+The app should feel alive and responsive to context — not a static dark shell.
+
+**Background:**
+- The background is not sacred. It can shift, change images, respond to time of day and workload.
+- Source different background images. Factor in: time of day, season, how busy the user's day is.
+- A packed day might feel denser, more focused. A clear day might breathe more.
+- Evening should feel warmer. Morning should feel crisp.
+
+**Time-of-day evolution:**
+- This goes beyond cosmetic. Brett's personality should shift with the time:
+  - **Morning:** Energetic, forward-looking. "Here's what's ahead."
+  - **Afternoon:** Focused, supportive. Progress-aware.
+  - **Evening:** Chill, reflective. "You got through a lot today."
+  - **Late night:** Minimal, calm. Don't be loud.
+- Express time through: background imagery/tint, copy tone, greeting energy, subtle color temperature shifts.
+
+### Motion & Interaction Feel
+
+**Completion (Things 3 swoosh):**
+- Task completion should be efficient (you can rapid-fire through a list) but also *feel good* — like you accomplished something.
+- The gold standard is Things 3: checkmark animates, row compresses with a satisfying vertical slide, item disappears. It's about the *feel* of the row sliding away.
+- Don't block the next action. The animation happens, but the user can already be clicking the next item.
+- On mobile (future): explore tactile/haptic feedback combined with the swoosh.
+
+**Hover states:** Physical, not luminous. Cards lift (`translateY(-1px)`), shadows deepen. It should feel like touching a real surface, not highlighting a pixel region.
+
+**Panel transitions:** Snappy but organic. Fast enough to feel responsive (~200-250ms), but with a gentle ease curve that avoids feeling mechanical. Not bouncy — just alive.
+
+### Density & Information Hierarchy
+
+**Default bias: less.** When in doubt, show less. But this is a power-user tool — density is a feature when it serves comprehension, not when it's just "more stuff."
+
+**Detail panel rules:**
+- Remove duplicative metadata. If the user clicked into this from a list, don't re-show list name or source as prominent badges.
+- Source/origin information lives in the content preview area as an "open original" link pattern (like Lenny's newsletter), not as a standalone badge.
+- All detail panel types (Task, Content, Calendar Event) should follow the same structural pattern. Enforce consistency unless there's a very strong reason to break.
+- Panel width is not sacred at 550px. Size it to what makes sense holistically.
+
+**Inbox list rows:** toggle button, title, relative age. Source pill is noise — remove it.
+
+### Consistency as Default
+
+**Force consistency most of the time.** Every panel type, every list row, every section header should follow the same patterns unless there's a compelling reason to diverge. "Compelling" means the content genuinely demands a different treatment, not "this one felt like it should be different."
+
+**When to break consistency:**
+- The content type has fundamentally different affordances (calendar events have RSVP, tasks don't)
+- Consistency would actively mislead (making a read-only field look editable)
+- A one-off moment of delight that earns its keep
+
+### Typography Direction
+
+**Target feel:** Apple SF Pro neutrality — clean, invisible, gets out of the way. The content is the star, not the typeface.
+
+- Section labels (`font-mono uppercase`) are a signature pattern but not precious. Open to evolution — could explore sans-serif small caps, lighter tracking, or other treatments that feel less "developer tool."
+- Font size/density should be configurable as a user preference (not typeface switching — that's a design decision, not a setting).
+
+**Future direction — Zen Mode:**
+- A distinct visual mode: softer fonts, Japanese-inspired aesthetic, rounder edges, more pastel colors.
+- This is a *mode*, not a setting toggle — it's a holistic visual transformation.
+- Hold off on implementation, but design decisions should not preclude it.
+
+### Destructive Actions & Friction
+
+**Inline transformation, never modals.** When the user hits delete, the row/button itself transforms into the confirmation state. The calendar disconnect pattern in Settings is the gold standard — replicate it everywhere.
+
+**Pattern:** Action button → transforms to "Are you sure? [Confirm] [Cancel]" in the same space → completes or reverts.
+
+**Errors:** Glass-style inline errors. Appear contextually where the action happened. Clinical tone (see voice rules above). Include escalation path ("ask Brett to report an error").
+
+### Actionable Tooltips
+
+Tooltips should not just describe — they should *suggest action*. When hovering over a stale task, the tooltip doesn't say "Created 14 days ago." It says "This has been sitting for 2 weeks. Complete it or delete it."
+
+This extends Brett's personality into the smallest interactions.
+
+### Empty States
+
+Every empty state should be:
+1. **Contextual** — aware of *why* it's empty (fresh start vs. you cleared everything)
+2. **Personality-forward** — Brett's voice, not system language
+3. **Smoothly integrated** — feels like a natural part of the view, not an error page
+4. **Actionable when appropriate** — if there's a next step, surface it naturally
+
+Empty states are where personality lives. They're the moments when the app has nothing to show, so it shows *character* instead.

@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Calendar, MapPin, Users, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type {
   Thing,
   CalendarEventDisplay,
@@ -129,19 +129,6 @@ export function DetailPanel({
           ${isOpen ? "translate-x-0" : "translate-x-full"}
         `}
       >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-white/10">
-        <span className="font-mono text-xs uppercase tracking-wider text-white/40">
-          {isCalendarEvent ? "Event" : isContent ? "Content" : "Detail"}
-        </span>
-        <button
-          onClick={onClose}
-          className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
       {/* Content */}
       {isTask ? (
         isLoadingDetail ? (
@@ -151,6 +138,7 @@ export function DetailPanel({
         ) : detail ? (
           <TaskDetailPanel
             detail={detail}
+            onClose={onClose}
             onUpdate={onUpdate ?? (() => {})}
             onToggle={onToggle ?? (() => {})}
             onDelete={onDelete ?? (() => {})}
@@ -189,6 +177,7 @@ export function DetailPanel({
         ) : detail ? (
           <ContentDetailPanel
             detail={detail}
+            onClose={onClose}
             onUpdate={onUpdate ?? (() => {})}
             onToggle={onToggle ?? (() => {})}
             onDelete={onDelete ?? (() => {})}
@@ -227,6 +216,7 @@ export function DetailPanel({
       ) : calendarEventDetail ? (
         <CalendarEventDetailPanel
           detail={calendarEventDetail}
+          onClose={onClose}
           onUpdateRsvp={onUpdateRsvp ?? (() => {})}
           onUpdateNotes={onUpdateCalendarNotes ?? (() => {})}
           brettMessages={calendarBrettMessages ?? []}

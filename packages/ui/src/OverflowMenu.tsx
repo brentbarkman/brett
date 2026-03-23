@@ -16,19 +16,18 @@ export function OverflowMenu({
   onCopyLink,
 }: OverflowMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  useClickOutside(menuRef, () => setIsOpen(false));
+  useClickOutside(menuRef, () => { setIsOpen(false); setConfirming(false); });
 
   const items: {
     icon: typeof Copy;
     label: string;
     action: () => void;
-    danger?: boolean;
   }[] = [
     { icon: Copy, label: "Duplicate", action: onDuplicate },
     { icon: ArrowRight, label: "Move to List\u2026", action: onMoveToList },
     { icon: Link2, label: "Copy Link", action: onCopyLink },
-    { icon: Trash2, label: "Delete", action: onDelete, danger: true },
   ];
 
   return (
@@ -48,16 +47,47 @@ export function OverflowMenu({
                 item.action();
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                item.danger
-                  ? "text-red-400 hover:bg-red-500/10"
-                  : "text-white/80 hover:bg-white/10"
-              }`}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-white/80 hover:bg-white/10"
             >
               <item.icon size={14} />
               {item.label}
             </button>
           ))}
+
+          {/* Delete with inline confirmation */}
+          <div className="border-t border-white/5 mt-1 pt-1">
+            {confirming ? (
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <span className="text-xs text-red-400">Delete this?</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      onDelete();
+                      setIsOpen(false);
+                      setConfirming(false);
+                    }}
+                    className="px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/20 hover:bg-red-500/30 transition-colors"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setConfirming(false)}
+                    className="px-2 py-0.5 rounded text-xs font-medium text-white/40 hover:text-white/60 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirming(true)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-red-400 hover:bg-red-500/10"
+              >
+                <Trash2 size={14} />
+                Delete
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -41,6 +41,9 @@ export function InboxView({
   const [animatingOutIds, setAnimatingOutIds] = useState<Set<string>>(
     new Set()
   );
+  // Deferred toggle: batch mutations so list stays stable during rapid-fire
+  const pendingToggles = useRef<Set<string>>(new Set());
+  const toggleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [addInputFocused, setAddInputFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<QuickAddInputHandle>(null);
@@ -52,6 +55,11 @@ export function InboxView({
   // Track previous thing IDs for enter animation
   const isInitialLoadRef = useRef(true);
   const prevThingIdsRef = useRef<Set<string>>(new Set());
+
+  // Cleanup toggle timer
+  useEffect(() => {
+    return () => { if (toggleTimer.current) clearTimeout(toggleTimer.current); };
+  }, []);
 
   // Update "now" every minute for relative age
   useEffect(() => {
@@ -142,7 +150,7 @@ export function InboxView({
         return next;
       });
     },
-    [things]
+    [things, filteredThings]
   );
 
   const handleAnimationEnd = useCallback(
@@ -356,11 +364,16 @@ export function InboxView({
 
         {/* Empty state */}
         {isEmpty && (
-          <div className="flex flex-col items-center justify-center py-12 gap-2">
-            <p className="text-sm text-white/40">Nothing here yet</p>
-            <p className="text-xs text-white/20 font-mono">
-              press <kbd className="px-1 py-0.5 rounded bg-white/5 text-white/30">n</kbd> to add
-            </p>
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+              <Inbox size={22} className="text-blue-400" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">Inbox zero</h3>
+              <p className="text-white/40 text-sm leading-relaxed max-w-xs">
+                Nothing to triage. Add something or let Brett find things for you.
+              </p>
+            </div>
           </div>
         )}
 
@@ -378,6 +391,8 @@ export function InboxView({
                   className="inbox-item-wrapper"
                   style={{
                     overflow: "hidden",
+                    // During freeze: keep full height, item stays visible (check mark shows)
+                    // After freeze lifts: collapse height
                     maxHeight: isOut ? 0 : 56,
                     marginBottom: isOut ? 0 : 2,
                     transition: isOut
@@ -409,7 +424,18 @@ export function InboxView({
                     onFocus={() => {
                       if (activeIdx >= 0) setFocusedIndex(activeIdx);
                     }}
-                    onToggle={onToggle}
+                    onToggle={(id) => {
+                      // Defer EVERYTHING — no slideOut, no mutation yet
+                      pendingToggles.current.add(id);
+                      if (toggleTimer.current) clearTimeout(toggleTimer.current);
+                      toggleTimer.current = setTimeout(() => {
+                        const ids = [...pendingToggles.current];
+                        pendingToggles.current = new Set();
+                        // Now slide out + fire mutations together
+                        slideOut(ids);
+                        ids.forEach(toggleId => onToggle(toggleId));
+                      }, 600);
+                    }}
                     onSelect={() => {
                       setSelectedIds((prev) => {
                         const next = new Set(prev);

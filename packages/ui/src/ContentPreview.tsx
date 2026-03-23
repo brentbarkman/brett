@@ -55,30 +55,35 @@ function LoadingSkeleton({ contentType }: { contentType?: ContentType }) {
 
 function ErrorState({ sourceUrl, onRetry }: { sourceUrl?: string; onRetry?: () => void }) {
   return (
-    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 space-y-3">
+    <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <AlertTriangle size={16} className="text-red-400" />
-        <span className="text-sm text-red-400 font-medium">Couldn't load preview</span>
+        <AlertTriangle size={16} className="text-amber-400/70" />
+        <span className="text-sm text-white/50 font-medium">Preview unavailable</span>
       </div>
       {sourceUrl && isSafeHref(sourceUrl) && (
         <a
           href={sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-white/40 hover:text-white/60 transition-colors truncate block"
+          className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors truncate block"
         >
-          {sourceUrl}
+          Open original →
         </a>
       )}
-      {onRetry && (
-        <button
-          onClick={onRetry}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
-        >
-          <RefreshCw size={12} />
-          Retry
-        </button>
-      )}
+      <div className="flex items-center gap-2">
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <RefreshCw size={12} />
+            Try again
+          </button>
+        )}
+        <span className="text-[10px] text-white/25">
+          If this persists, ask Brett to report it.
+        </span>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { CheckCircle, RotateCw } from "lucide-react";
+import { CheckCircle, RotateCw, X } from "lucide-react";
 import type {
   ThingDetail,
   DueDatePrecision,
@@ -18,6 +18,7 @@ import { ContentPreview } from "./ContentPreview";
 
 interface ContentDetailPanelProps {
   detail: ThingDetail;
+  onClose: () => void;
   onUpdate: (updates: Record<string, unknown>) => void;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
@@ -51,6 +52,7 @@ interface ContentDetailPanelProps {
 
 export function ContentDetailPanel({
   detail,
+  onClose,
   onUpdate,
   onToggle,
   onDelete,
@@ -105,13 +107,8 @@ export function ContentDetailPanel({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs uppercase tracking-wider text-amber-400 font-semibold">
-                Content
+                {detail.contentType ? detail.contentType.replace("_", " ") : "Content"}
               </span>
-              {detail.contentType && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/20">
-                  {detail.contentType.replace("_", " ")}
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -133,6 +130,12 @@ export function ContentDetailPanel({
                   navigator.clipboard.writeText(`brett://things/${detail.id}`)
                 }
               />
+              <button
+                onClick={onClose}
+                className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X size={16} />
+              </button>
             </div>
           </div>
 
@@ -160,16 +163,6 @@ export function ContentDetailPanel({
               {detail.title}
             </h2>
           )}
-
-          {/* Metadata badges */}
-          <div className="flex flex-wrap gap-2">
-            <div className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-white/70 cursor-pointer hover:bg-white/10 transition-colors">
-              List: {detail.list}
-            </div>
-            <div className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-white/40">
-              Source: {detail.source}
-            </div>
-          </div>
 
           {/* Schedule Row */}
           {onUpdateDueDate && onUpdateReminder && onUpdateRecurrence && (

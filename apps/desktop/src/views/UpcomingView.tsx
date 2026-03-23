@@ -72,9 +72,16 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange }: Upcom
   return (
     <ItemListShell header={header} hints={hints}>
       {allItems.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 gap-2">
-          <p className="text-sm text-white/40">Nothing upcoming</p>
-          <p className="text-xs text-white/20">Assign due dates to items in your inbox or lists</p>
+        <div className="flex flex-col items-center justify-center py-16 gap-4">
+          <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+            <Clock size={22} className="text-white/40" />
+          </div>
+          <div className="text-center">
+            <h3 className="text-white font-semibold text-base mb-1">Clear skies ahead</h3>
+            <p className="text-white/40 text-sm leading-relaxed max-w-xs">
+              Nothing scheduled. Set due dates on items to plan your week.
+            </p>
+          </div>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import type { Thing, NavList } from "@brett/types";
 import { ThingCard } from "./ThingCard";
 import { SectionHeader } from "./SectionHeader";
@@ -17,9 +17,31 @@ interface ThingsListProps {
   onFocusChange?: (thing: Thing) => void;
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
   header?: React.ReactNode;
+  activeFilter?: string;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter }: ThingsListProps) {
+  // ── Deferred toggle: batch mutations so the list stays stable during rapid-fire ──
+  const pendingToggles = useRef<Set<string>>(new Set());
+  const freezeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleToggleWithFreeze = useCallback((id: string) => {
+    pendingToggles.current.add(id);
+    // Reset timer — fire all mutations 600ms after last click
+    if (freezeTimer.current) clearTimeout(freezeTimer.current);
+    freezeTimer.current = setTimeout(() => {
+      const ids = [...pendingToggles.current];
+      pendingToggles.current = new Set();
+      ids.forEach(toggleId => onToggle?.(toggleId));
+    }, 600);
+  }, [onToggle]);
+
+  useEffect(() => {
+    return () => {
+      if (freezeTimer.current) clearTimeout(freezeTimer.current);
+    };
+  }, []);
+
   const { uncompleted, done, grouped, allItems } = useMemo(() => {
     const uncompleted = things.filter((t) => !t.isCompleted);
     const done = things.filter((t) => t.isCompleted);
@@ -36,7 +58,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
   const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
     items: allItems,
     onItemClick,
-    onToggle,
+    onToggle: handleToggleWithFreeze,
     onFocusChange,
     onFocusAdd: () => quickAddRef.current?.focus(),
     onExtraKey: (e, focusedThing) => {
@@ -97,17 +119,17 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           )}
 
           {grouped.overdue.length > 0 && (
-            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={overdueOffset} />
+            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} />
           )}
           {grouped.today.length > 0 && (
-            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={todayOffset} />
+            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} />
           )}
           {grouped.this_week.length > 0 && (
-            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} />
+            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} />
           )}
 
           {hasUncompleted && (
-            <QuickAddInput ref={quickAddRef} placeholder="Add a task..." onAdd={(title) => onAdd(title, lists[0]?.id ?? null)} onAddContent={onAddContent} />
+            <QuickAddInput ref={quickAddRef} placeholder={activeFilter === "Content" ? "Paste a link..." : "Add a task..."} onAdd={(title) => onAdd(title, lists[0]?.id ?? null)} onAddContent={onAddContent} />
           )}
 
           {done.length > 0 && (
@@ -118,7 +140,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
                 opacity: 0,
               } : undefined}
             >
-              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={onToggle} focusedIndex={focusedIndex} indexOffset={doneOffset} />
+              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} />
             </div>
           )}
         </div>

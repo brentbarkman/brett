@@ -48,6 +48,7 @@ function AttendeeAvatar({ photoUrl, name }: { photoUrl?: string | null; name: st
 
 interface CalendarEventDetailPanelProps {
   detail: CalendarEventDetailResponse;
+  onClose: () => void;
   onUpdateRsvp: (status: CalendarRsvpStatus, comment?: string) => void;
   onUpdateNotes: (content: string) => void;
   brettMessages: BrettMessageRecord[];
@@ -129,6 +130,7 @@ function rsvpButtonClasses(
 
 export function CalendarEventDetailPanel({
   detail,
+  onClose,
   onUpdateRsvp,
   onUpdateNotes,
   brettMessages,
@@ -185,9 +187,17 @@ export function CalendarEventDetailPanel({
         <div className="p-6 space-y-0">
           {/* ── Header ── */}
           <div className="pb-4">
-            <h2 className="text-2xl font-semibold text-white leading-tight mb-2">
-              {detail.title}
-            </h2>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h2 className="text-2xl font-semibold text-white leading-tight">
+                {detail.title}
+              </h2>
+              <button
+                onClick={onClose}
+                className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-colors flex-shrink-0 mt-0.5"
+              >
+                <X size={16} />
+              </button>
+            </div>
             <p className="text-sm text-white/60 mb-2">
               {formatEventTime(detail.startTime, detail.endTime, detail.isAllDay)}
             </p>

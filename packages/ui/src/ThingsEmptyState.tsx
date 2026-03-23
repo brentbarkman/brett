@@ -34,10 +34,10 @@ export function ThingsEmptyState({
         </div>
         <div>
           <h3 className="text-white font-semibold text-base mb-1">
-            Everything's done
+            Cleared.
           </h3>
           <p className="text-white/40 text-sm leading-relaxed max-w-sm">
-            You've completed all your things. Take a break or add what's next.
+            Nothing left. Go build something or enjoy the quiet.
           </p>
         </div>
         <InlineTaskAdd lists={lists} onAdd={onAddTask} placeholder="What's next?" />
@@ -65,12 +65,12 @@ export function ThingsEmptyState({
           </div>
           <div>
             <h3 className="text-white font-semibold text-base mb-1">
-              {isContentFilter ? "No content yet" : "No tasks here"}
+              {isContentFilter ? "No content saved" : "No tasks yet"}
             </h3>
             <p className="text-white/40 text-sm leading-relaxed max-w-sm">
               {isContentFilter
-                ? "Save a link to start building your reading list."
-                : "Nothing matches this view right now."
+                ? "Paste a link to save something worth reading later."
+                : "Add one, or switch to All to see everything."
               }
             </p>
           </div>
@@ -92,11 +92,11 @@ export function ThingsEmptyState({
         </div>
         <div>
           <h3 className="text-white font-semibold text-base mb-2">
-            Everything is a Thing
+            Start here
           </h3>
           <p className="text-white/40 text-sm leading-relaxed max-w-md">
-            Tasks and content all live here as Things.
-            Add your first one below to get started.
+            Tasks, links, articles — everything goes in one place.
+            Add your first one below.
           </p>
         </div>
 

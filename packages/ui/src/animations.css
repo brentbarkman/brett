@@ -64,3 +64,17 @@
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Things 3-style swoosh — fade + slide right, NO height collapse.
+   Items below don't shift during rapid-fire completion.
+   The list reflows in one batch when the freeze lifts. */
+@keyframes swooshOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(24px) scale(0.98);
+  }
+}

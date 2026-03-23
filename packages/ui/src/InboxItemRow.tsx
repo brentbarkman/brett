@@ -65,7 +65,7 @@ export function InboxItemRow({
     setCompleting(true);
     timerRef.current = setTimeout(() => {
       onToggle(thing.id);
-      setCompleting(false);
+      // Don't reset completing — item stays in completed visual until removed
     }, 600);
   };
 
@@ -86,7 +86,7 @@ export function InboxItemRow({
           ? "bg-blue-500/15 border border-blue-500/30"
           : isSelected
             ? "bg-white/[0.07] border border-white/10"
-            : "border border-transparent hover:bg-white/[0.06]"
+            : "border border-transparent hover:bg-white/[0.06] hover:-translate-y-[1px] hover:shadow-lg"
         }
       `}
       style={animationStyle}

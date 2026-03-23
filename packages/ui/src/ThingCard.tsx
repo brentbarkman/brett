@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { StaleTooltip } from "./StaleTooltip";
 import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Thing } from "@brett/types";
@@ -35,10 +36,11 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
 
       if (!thing.isCompleted) {
         setCompleting(true);
+        // Check pop plays for 500ms, then notify parent
+        // Stay in completing state — parent defers mutation during rapid-fire
         timerRef.current = setTimeout(() => {
           onToggle(thing.id);
-          setCompleting(false);
-        }, 600);
+        }, 500);
       } else {
         onToggle(thing.id);
       }
@@ -92,9 +94,9 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
           ? "bg-green-500/[0.03] border-green-500/15"
           : isFocused
             ? "bg-white/10 border-blue-500/30"
-            : "bg-white/5 hover:bg-white/10 border-white/5 hover:border-white/10"
+            : "bg-white/5 hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg border-white/5 hover:border-white/10"
         }
-        ${thing.isCompleted && !completing ? "opacity-50" : "opacity-100"}
+        ${thing.isCompleted && !completing ? "opacity-60" : "opacity-100"}
         ${isDragging ? "opacity-50" : ""}
       `}
     >
@@ -146,7 +148,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
         )}
       </button>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex items-center gap-2">
         <h4
           className={`text-sm font-medium truncate transition-all duration-300 ${
             thing.isCompleted || completing
@@ -156,24 +158,21 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
         >
           {thing.title}
         </h4>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-white/40 truncate">
-            {thing.type === "content"
-              ? (thing.contentDomain ?? thing.source)
-              : `${thing.list} · ${thing.source}`}
-          </span>
-          {thing.stalenessDays && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/40 border border-white/5">
-              No update in {thing.stalenessDays} days
-            </span>
-          )}
-        </div>
+        {thing.stalenessDays && !thing.isCompleted && !completing && (
+          <StaleTooltip days={thing.stalenessDays}>
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60 flex-shrink-0" />
+          </StaleTooltip>
+        )}
       </div>
 
       <div className="flex-shrink-0 flex items-center gap-2">
         {thing.dueDateLabel ? (
           <div
-            className={`px-2.5 py-1 rounded-full text-xs font-medium ${getUrgencyColor()}`}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+              thing.isCompleted
+                ? "bg-white/5 text-white/30 border border-white/5"
+                : getUrgencyColor()
+            }`}
           >
             {thing.dueDateLabel}
           </div>
