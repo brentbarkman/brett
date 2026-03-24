@@ -330,7 +330,7 @@ export function App() {
       onSend: (text: string) => omnibar.send(text, currentView),
       onCreateTask: (title: string) => omnibar.createTask(title, currentView),
       onSearch: omnibar.searchThings,
-      searchResults: omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type })) ?? null,
+      searchResults: omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, listName: t.list || null })) ?? null,
       isSearching: omnibar.isSearching,
       onSearchResultClick: (id: string) => {
         const item = omnibar.searchResults?.find((t) => t.id === id);
