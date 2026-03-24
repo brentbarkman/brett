@@ -244,9 +244,6 @@ export function SpotlightModal({
                 <X size={14} />
               </button>
             ) : null}
-            <kbd className="inline-flex items-center px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
-              ESC
-            </kbd>
           </div>
         </div>
 
@@ -266,11 +263,6 @@ export function SpotlightModal({
               >
                 {suggestion.icon}
                 <span className="truncate">{suggestion.label}</span>
-                {i === 0 && (
-                  <span className="ml-auto text-[10px] text-white/30 font-mono flex-shrink-0">
-                    ENTER
-                  </span>
-                )}
               </button>
             ))}
           </div>

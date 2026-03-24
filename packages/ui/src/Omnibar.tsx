@@ -323,11 +323,6 @@ export function Omnibar({
             >
               {suggestion.icon}
               <span className="truncate">{suggestion.label}</span>
-              {i === 0 && (
-                <span className="ml-auto text-[10px] text-white/30 font-mono flex-shrink-0">
-                  ENTER
-                </span>
-              )}
             </button>
           ))}
         </div>
