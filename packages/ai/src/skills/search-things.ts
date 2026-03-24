@@ -4,7 +4,7 @@ import { scopedItems } from "./scoped-queries.js";
 export const searchThingsSkill: Skill = {
   name: "search_things",
   description:
-    "Search across all items (tasks and content) by title. Use when the user asks to find, look up, or search for something. Returns matching items with their status and list.",
+    "Search across all items (tasks and content) by title keyword. Use when the user explicitly searches ('find...', 'search for...', 'look up...'), asks if something exists ('do I have a task about...?'), or references an item by partial name without knowing its ID ('the quarterly report task', 'that article about AI'). This is the go-to skill when you need to find an item and don't have its ID.",
   parameters: {
     type: "object",
     properties: {

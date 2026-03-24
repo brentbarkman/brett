@@ -389,7 +389,7 @@ async function assembleBriefing(
   const messages: Message[] = [
     {
       role: "user",
-      content: `Generate my morning briefing based on the following data:\n\n${dataBlock}`,
+      content: `Generate my morning briefing based on the following data:\n\n<user_data label="briefing_data">\n${dataBlock}\n</user_data>`,
     },
   ];
 

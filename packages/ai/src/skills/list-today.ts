@@ -5,7 +5,7 @@ import { getTodayUTC, itemToThing } from "@brett/business";
 export const listTodaySkill: Skill = {
   name: "list_today",
   description:
-    "Show items due today or overdue. Use when the user asks 'what do I have today?', 'what's on my plate?', 'what's due?', or similar. Returns active tasks due today or past due.",
+    "List all tasks and items due today or overdue. Use when the user asks about their DAY — 'what do I have today?', 'what's on my plate today?', 'what's due today?', 'show me today'. This is about TASKS, not calendar events. Do NOT use for calendar/meeting queries — use get_calendar_events instead.",
   parameters: {
     type: "object",
     properties: {},

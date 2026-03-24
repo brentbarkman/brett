@@ -5,7 +5,7 @@ import { itemToThing } from "@brett/business";
 export const getListItemsSkill: Skill = {
   name: "get_list_items",
   description:
-    "Show items in a specific list. Use when the user asks 'show me my [list name] list', 'what's in [list]?', or references a specific list by name or ID.",
+    "Show items in a specific CUSTOM LIST by name or ID. Use when the user references a list they created, e.g., 'show my Work list', 'what's in Reading?', 'show me the Groceries list'. Do NOT use for built-in views — use list_today for Today, list_inbox for Inbox, list_upcoming for Upcoming.",
   parameters: {
     type: "object",
     properties: {

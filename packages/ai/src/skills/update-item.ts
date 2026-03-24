@@ -5,7 +5,7 @@ import { validateUpdateItem } from "@brett/business";
 export const updateItemSkill: Skill = {
   name: "update_item",
   description:
-    "Update fields on an existing item (task or content). Use when the user wants to change the title, due date, notes, description, or other properties of an item. Requires the item ID.",
+    "Update fields on an existing item (task or content). Use when the user wants to change the title, due date, notes, description, or other properties of an item. Requires the item ID. Do NOT use this to mark tasks as done — use complete_task instead. Do NOT use this to move items between lists — use move_to_list instead.",
   parameters: {
     type: "object",
     properties: {

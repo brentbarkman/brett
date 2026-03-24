@@ -4,7 +4,7 @@ import { scopedItems } from "./scoped-queries.js";
 export const completeTaskSkill: Skill = {
   name: "complete_task",
   description:
-    "Mark a task as done. Use when the user says they finished, completed, or are done with a task. Requires the item ID.",
+    "Mark a task as done. Use when the user says they finished, completed, or are done with a task. Requires the item ID. ALWAYS prefer this over update_item with status='done' — this is the canonical way to complete tasks.",
   parameters: {
     type: "object",
     properties: {
