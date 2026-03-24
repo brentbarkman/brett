@@ -18,6 +18,10 @@ export { validateSkillArgs } from "./skills/validate-args.js";
 export { scopedItems, scopedLists, scopedEvents } from "./skills/scoped-queries.js";
 export { createRegistry } from "./skills/index.js";
 
+// Orchestrator
+export { orchestrate } from "./orchestrator.js";
+export type { OrchestratorParams } from "./orchestrator.js";
+
 // Context
 export {
   BRETT_SYSTEM_PROMPT,
