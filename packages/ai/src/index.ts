@@ -22,6 +22,10 @@ export { createRegistry } from "./skills/index.js";
 export { orchestrate } from "./orchestrator.js";
 export type { OrchestratorParams } from "./orchestrator.js";
 
+// Memory
+export { extractFacts } from "./memory/facts.js";
+export { embedConversation, searchSimilar } from "./memory/embeddings.js";
+
 // Context
 export {
   BRETT_SYSTEM_PROMPT,

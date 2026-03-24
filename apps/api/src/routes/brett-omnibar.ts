@@ -3,8 +3,9 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { aiMiddleware, type AIEnv } from "../middleware/ai.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
-import { orchestrate } from "@brett/ai";
+import { orchestrate, extractFacts, embedConversation } from "@brett/ai";
 import { registry } from "../lib/ai-registry.js";
+import { decryptToken } from "../lib/encryption.js";
 import type { StreamChunk } from "@brett/types";
 
 const brettOmnibar = new Hono<AIEnv>();
@@ -128,6 +129,22 @@ brettOmnibar.post(
                   role: "assistant",
                   content: assistantContent,
                 },
+              })
+              .then(() => {
+                // Fire-and-forget: extract facts after message is stored
+                extractFacts(session.id, user.id, provider, providerName, prisma)
+                  .catch((err) => console.error("[fact-extraction] Failed:", err.message));
+
+                // Fire-and-forget: embed conversation
+                prisma.userAIConfig.findFirst({
+                  where: { userId: user.id, provider: "openai", isValid: true },
+                }).then((openaiConfig) => {
+                  if (openaiConfig) {
+                    const openaiKey = decryptToken(openaiConfig.encryptedKey);
+                    embedConversation(session.id, user.id, openaiKey, prisma)
+                      .catch((err) => console.error("[embedding] Failed:", err.message));
+                  }
+                }).catch((err) => console.error("[embedding] Failed to load config:", err.message));
               })
               .catch((err: unknown) =>
                 console.error("Failed to store assistant message:", err)

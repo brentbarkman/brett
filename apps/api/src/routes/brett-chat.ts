@@ -3,9 +3,11 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { aiMiddleware, type AIEnv } from "../middleware/ai.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
-import { orchestrate } from "@brett/ai";
+import { orchestrate, extractFacts, embedConversation } from "@brett/ai";
 import { registry } from "../lib/ai-registry.js";
-import type { StreamChunk } from "@brett/types";
+import { decryptToken } from "../lib/encryption.js";
+import type { AIProvider } from "@brett/ai";
+import type { AIProviderName, StreamChunk } from "@brett/types";
 
 const brettChat = new Hono<AIEnv>();
 
@@ -17,6 +19,7 @@ brettChat.use("*", authMiddleware);
 function buildStream(
   params: Parameters<typeof orchestrate>[0],
   sessionId: string,
+  memoryCtx?: { userId: string; provider: AIProvider; providerName: AIProviderName },
 ): { stream: ReadableStream; assistantContentRef: { value: string } } {
   const encoder = new TextEncoder();
   const assistantContentRef = { value: "" };
@@ -42,6 +45,23 @@ function buildStream(
                 role: "assistant",
                 content: assistantContentRef.value,
               },
+            })
+            .then(() => {
+              if (!memoryCtx) return;
+              // Fire-and-forget: extract facts
+              extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma)
+                .catch((err) => console.error("[fact-extraction] Failed:", err.message));
+
+              // Fire-and-forget: embed conversation
+              prisma.userAIConfig.findFirst({
+                where: { userId: memoryCtx.userId, provider: "openai", isValid: true },
+              }).then((openaiConfig) => {
+                if (openaiConfig) {
+                  const openaiKey = decryptToken(openaiConfig.encryptedKey);
+                  embedConversation(sessionId, memoryCtx.userId, openaiKey, prisma)
+                    .catch((err) => console.error("[embedding] Failed:", err.message));
+                }
+              }).catch((err) => console.error("[embedding] Failed to load config:", err.message));
             })
             .catch((err: unknown) =>
               console.error("Failed to store assistant message:", err),
@@ -166,6 +186,7 @@ brettChat.post(
     const { stream } = buildStream(
       { input, provider, providerName, prisma, registry, sessionId: session.id },
       session.id,
+      { userId: user.id, provider, providerName },
     );
 
     return sseResponse(stream);
@@ -255,6 +276,7 @@ brettChat.post(
     const { stream } = buildStream(
       { input, provider, providerName, prisma, registry, sessionId: session.id },
       session.id,
+      { userId: user.id, provider, providerName },
     );
 
     return sseResponse(stream);

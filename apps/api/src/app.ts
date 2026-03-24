@@ -16,6 +16,7 @@ import { aiConfig } from "./routes/ai-config.js";
 import { brettOmnibar } from "./routes/brett-omnibar.js";
 import { brettChat } from "./routes/brett-chat.js";
 import { brettIntelligence } from "./routes/brett-intelligence.js";
+import { brettMemory } from "./routes/brett-memory.js";
 import { startCronJobs } from "./jobs/cron.js";
 
 export const app = new Hono();
@@ -55,6 +56,7 @@ app.route("/ai", aiConfig);
 app.route("/brett/omnibar", brettOmnibar);
 app.route("/brett/chat", brettChat);
 app.route("/brett", brettIntelligence);
+app.route("/brett/memory", brettMemory);
 app.route("/events", sse);
 app.route("/webhooks", webhooks);
 

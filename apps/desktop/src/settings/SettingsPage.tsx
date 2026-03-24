@@ -4,6 +4,7 @@ import { ProfileSection } from "./ProfileSection";
 import { SecuritySection } from "./SecuritySection";
 import { CalendarSection } from "./CalendarSection";
 import { AISection } from "./AISection";
+import { MemorySection } from "./MemorySection";
 import { SignOutSection } from "./SignOutSection";
 import { DangerZoneSection } from "./DangerZoneSection";
 
@@ -30,6 +31,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         <SecuritySection />
         <CalendarSection />
         <AISection />
+        <MemorySection />
         <SignOutSection />
         <DangerZoneSection />
       </div>
