@@ -99,7 +99,7 @@ aiConfig.post("/config", rateLimiter(5), async (c) => {
     await validateApiKey(providerName, apiKey);
   } catch {
     return c.json(
-      { error: "invalid_api_key", message: "API key validation failed. Please check your key." },
+      { error: "invalid_api_key", message: "That API key didn't work. Double-check it and try again." },
       400
     );
   }
