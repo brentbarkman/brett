@@ -16,7 +16,9 @@
     "db:studio": "pnpm --filter @brett/api exec prisma studio",
     "setup": "pnpm db:up && sleep 2 && pnpm db:migrate",
     "test": "pnpm --filter @brett/api run test",
-    "test:unit": "pnpm --filter @brett/api run test -- --testPathPattern=health"
+    "test:unit": "pnpm --filter @brett/api run test -- --testPathPattern=health",
+    "eval": "pnpm --filter @brett/evals eval",
+    "eval:compare": "pnpm --filter @brett/evals eval:compare"
   },
   "devDependencies": {
     "turbo": "^2.8.20",

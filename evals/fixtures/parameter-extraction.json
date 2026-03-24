@@ -1,0 +1,42 @@
+[
+  {
+    "input": "create a task to call Mom tomorrow at 3pm",
+    "expectedSkill": "create_task",
+    "expectedParams": { "title": "Call Mom" }
+  },
+  {
+    "input": "move NVDA research to the investing list",
+    "expectedSkill": "move_to_list",
+    "expectedParams": { "listName": "investing" }
+  },
+  {
+    "input": "add a task: review the quarterly report by Friday",
+    "expectedSkill": "create_task",
+    "expectedParams": { "title": "Review the quarterly report" }
+  },
+  {
+    "input": "snooze the dentist appointment until next Monday",
+    "expectedSkill": "snooze_item",
+    "expectedParams": {}
+  },
+  {
+    "input": "add a new list called Side Projects",
+    "expectedSkill": "create_list",
+    "expectedParams": { "name": "Side Projects" }
+  },
+  {
+    "input": "search for NVDA",
+    "expectedSkill": "search_things",
+    "expectedParams": { "query": "NVDA" }
+  },
+  {
+    "input": "show me what's in the investing list",
+    "expectedSkill": "get_list_items",
+    "expectedParams": { "listName": "investing" }
+  },
+  {
+    "input": "save this article: https://example.com/ai-safety",
+    "expectedSkill": "create_content",
+    "expectedParams": { "sourceUrl": "https://example.com/ai-safety" }
+  }
+]
