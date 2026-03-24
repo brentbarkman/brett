@@ -358,6 +358,17 @@ className="bg-gradient-to-b from-black/40 to-transparent h-4 pointer-events-none
 **Current:** Active nav item uses `text-white` vs inactive `text-white/50`.
 **Upgrade:** Add a subtle left border accent (`border-l-2 border-blue-500`) or a glass highlight (`bg-white/10 rounded-lg`) on the active item for stronger spatial anchoring.
 
+### 11. Prism Logo — Dynamic Glow States
+**Current:** Static blue "B" square SVG in LeftNav header.
+**Upgrade:** Replace with programmable SVG prism mark (faceted crystal, amber/gold). The logo is built as an SVG with CSS-driven light effects, not a raster image. The prism's internal glow responds to app state:
+- **Idle:** Soft, warm amber glow — a quiet light source in the nav
+- **Brett AI active (chat/thinking):** Glow pulses gently, intensifies — the prism is "refracting" information
+- **Time-of-day:** Glow warms (morning/afternoon) or cools (evening/night) via CSS custom properties
+- **Busy day:** Slightly more saturated; light day: calmer
+- **Splash screen:** Full cinematic version with radial ambient light on dark background
+- **Favicon/tray:** Simplified to geometric silhouette, no glow effects
+**Implementation:** SVG facets with opacity fills for 3D depth. CSS custom properties (`--prism-glow-color`, `--prism-glow-intensity`) driven by app state. Glow via `filter: drop-shadow()` or layered pseudo-elements with `mix-blend-mode: screen`.
+
 ---
 
 ## Anti-Patterns (Never Do These)
