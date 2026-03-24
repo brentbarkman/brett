@@ -3,7 +3,7 @@ import "./animations.css";
 export { Button } from "./button";
 export { LeftNav } from "./LeftNav";
 export { Omnibar } from "./Omnibar";
-export type { OmnibarProps, OmnibarMessage } from "./Omnibar";
+export type { OmnibarProps, OmnibarMessage, SearchResultItem } from "./Omnibar";
 export { SkillResultCard } from "./SkillResultCard";
 export { SpotlightModal } from "./SpotlightModal";
 export type { SpotlightModalProps, SpotlightMessage } from "./SpotlightModal";

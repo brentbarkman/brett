@@ -15,6 +15,14 @@ export interface OmnibarMessage {
   }>;
 }
 
+export interface SearchResultItem {
+  id: string;
+  title: string;
+  status: string;
+  type?: string;
+  listName?: string | null;
+}
+
 export interface OmnibarProps {
   isOpen: boolean;
   input: string;
@@ -29,6 +37,9 @@ export interface OmnibarProps {
   onOpen: () => void;
   onCancel?: () => void;
   onReset?: () => void;
+  searchResults?: SearchResultItem[] | null;
+  isSearching?: boolean;
+  onSearchResultClick?: (id: string) => void;
 }
 
 type Suggestion = {
@@ -52,6 +63,9 @@ export function Omnibar({
   onOpen,
   onCancel,
   onReset,
+  searchResults,
+  isSearching,
+  onSearchResultClick,
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -284,6 +298,43 @@ export function Omnibar({
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Search Results Dropdown */}
+      {isOpen && (isSearching || searchResults !== null && searchResults !== undefined) && !hasConversation && !showSuggestions && (
+        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden shadow-xl">
+          {isSearching ? (
+            <div className="px-4 py-3 text-sm text-white/40 flex items-center gap-2">
+              <div className="w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
+              Searching...
+            </div>
+          ) : searchResults && searchResults.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-white/40">
+              No results found.
+            </div>
+          ) : searchResults ? (
+            <>
+              <div className="px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-white/30 border-b border-white/5">
+                {searchResults.length} result{searchResults.length === 1 ? "" : "s"}
+              </div>
+              {searchResults.slice(0, 8).map((item) => (
+                <button
+                  key={item.id}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left text-white/80 hover:bg-white/5 transition-colors"
+                  onClick={() => onSearchResultClick?.(item.id)}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
+                  }`} />
+                  <span className="truncate">{item.title}</span>
+                  {item.listName && (
+                    <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">{item.listName}</span>
+                  )}
+                </button>
+              ))}
+            </>
+          ) : null}
         </div>
       )}
     </div>

@@ -330,12 +330,21 @@ export function App() {
       onSend: (text: string) => omnibar.send(text, currentView),
       onCreateTask: (title: string) => omnibar.createTask(title, currentView),
       onSearch: omnibar.searchThings,
+      searchResults: omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type })) ?? null,
+      isSearching: omnibar.isSearching,
+      onSearchResultClick: (id: string) => {
+        const item = omnibar.searchResults?.find((t) => t.id === id);
+        if (item) {
+          handleItemClick(item);
+          omnibar.close();
+        }
+      },
       onClose: omnibar.close,
       onOpen: () => omnibar.open("bar"),
       onCancel: omnibar.cancel,
       onReset: omnibar.reset,
     }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView]
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView]
   );
 
   // Apply dark mode to root
