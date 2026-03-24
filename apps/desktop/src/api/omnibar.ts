@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { streamingFetch } from "./streaming";
 import { useAIConfigs } from "./ai-config";
 import { apiFetch } from "./client";
@@ -26,6 +27,7 @@ export function useOmnibar() {
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  const queryClient = useQueryClient();
 
   // Check if AI is configured
   const { data: aiConfigData } = useAIConfigs();
@@ -167,7 +169,8 @@ export function useOmnibar() {
     cancel();
     setIsOpen(false);
     setInput("");
-    // Keep messages and sessionId so reopening shows history
+    setSearchResults(null);
+    // Keep messages and sessionId so reopening shows AI conversation history
   }, [cancel]);
 
   const open = useCallback((newMode: OmnibarMode = "bar") => {
@@ -180,52 +183,56 @@ export function useOmnibar() {
     setMessages([]);
     setSessionId(null);
     setInput("");
+    setSearchResults(null);
   }, [cancel]);
 
   // Local action: create a task directly (no AI needed)
+  // No chat UI — just do it, invalidate queries, close the omnibar
   const createTask = useCallback(async (title: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
-    setMessages((prev) => [...prev, { role: "user", content: `Create task: "${trimmed}"` }]);
     setInput("");
 
     try {
-      const result = await apiFetch<{ id: string; title: string }>("/things", {
+      await apiFetch("/things", {
         method: "POST",
         body: JSON.stringify({ title: trimmed, type: "task" }),
         headers: { "Content-Type": "application/json" },
       });
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Created task "${result.title}".`, toolCalls: [{ name: "create_task", args: { title: trimmed }, result, displayHint: { type: "task_created" as const, taskId: result.id } }] },
-      ]);
+      // Refresh task lists so the new task shows up immediately
+      queryClient.invalidateQueries({ queryKey: ["things"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox"] });
     } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Failed to create task. Please try again." }]);
+      // Silently fail — user will notice if the task doesn't appear
     }
-  }, []);
+
+    // Close omnibar — no conversation in non-AI mode
+    setIsOpen(false);
+    setMessages([]);
+    setSessionId(null);
+  }, [queryClient]);
 
   // Local action: search things directly (no AI needed)
+  // Shows results as a one-shot display, not a conversation
+  const [searchResults, setSearchResults] = useState<Thing[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+
   const searchThings = useCallback(async (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
 
-    setMessages((prev) => [...prev, { role: "user", content: `Search: "${trimmed}"` }]);
     setInput("");
+    setIsSearching(true);
+    setSearchResults(null);
 
     try {
       const results = await apiFetch<Thing[]>(`/things?search=${encodeURIComponent(trimmed)}`);
-      if (results.length === 0) {
-        setMessages((prev) => [...prev, { role: "assistant", content: `No results found for "${trimmed}".` }]);
-      } else {
-        const items = results.slice(0, 10).map((t) => ({ id: t.id, title: t.title, status: t.status }));
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `Found ${results.length} item${results.length === 1 ? "" : "s"}:`, toolCalls: [{ name: "search_things", args: { query: trimmed }, result: items, displayHint: { type: "task_list" as const, items } }] },
-        ]);
-      }
+      setSearchResults(results);
     } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Search failed. Please try again." }]);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
     }
   }, []);
 
@@ -241,6 +248,8 @@ export function useOmnibar() {
     send,
     createTask,
     searchThings,
+    searchResults,
+    isSearching,
     cancel,
     close,
     open,
