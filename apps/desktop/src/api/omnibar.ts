@@ -9,6 +9,7 @@ export interface OmnibarMessage {
   role: "user" | "assistant";
   content: string;
   toolCalls?: Array<{
+    id: string;
     name: string;
     args: Record<string, unknown>;
     result: unknown;
@@ -87,6 +88,7 @@ export function useOmnibar() {
                     toolCalls: [
                       ...(last.toolCalls ?? []),
                       {
+                        id: chunk.id,
                         name: chunk.name,
                         args: chunk.args,
                         result: null,
@@ -104,7 +106,7 @@ export function useOmnibar() {
                 const last = updated[updated.length - 1];
                 if (last && last.role === "assistant" && last.toolCalls) {
                   const toolCalls = last.toolCalls.map((tc) =>
-                    tc.name === findToolCallById(last.toolCalls!, chunk.id)?.name && tc.result === null
+                    tc.id === chunk.id
                       ? { ...tc, result: chunk.data, displayHint: chunk.displayHint }
                       : tc
                   );
@@ -264,14 +266,4 @@ export function useOmnibar() {
     open,
     reset,
   };
-}
-
-// Helper to find a tool call matching a result id (tool_result chunks use the same id as tool_call)
-function findToolCallById(
-  toolCalls: Array<{ name: string; args: Record<string, unknown>; result: unknown }>,
-  _id: string
-) {
-  // The tool_result id matches the tool_call id, but we store by name.
-  // Since tool calls are processed in order, find the first one without a result.
-  return toolCalls.find((tc) => tc.result === null) ?? null;
 }

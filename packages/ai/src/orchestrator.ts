@@ -6,12 +6,13 @@ import { SkillRegistry } from "./skills/registry.js";
 import { validateSkillArgs } from "./skills/validate-args.js";
 import type { AssemblerInput } from "./context/assembler.js";
 import { assembleContext } from "./context/assembler.js";
+import { AI_CONFIG } from "./config.js";
 
 // ─── Constants ───
 
-const MAX_ROUNDS = 5;
-const MAX_TOTAL_TOKENS = 50_000;
-const MAX_TOOL_RESULT_SIZE = 4096; // 4KB
+const MAX_ROUNDS = AI_CONFIG.orchestrator.maxRounds;
+const MAX_TOTAL_TOKENS = AI_CONFIG.orchestrator.maxTotalTokens;
+const MAX_TOOL_RESULT_SIZE = AI_CONFIG.orchestrator.maxToolResultSize;
 
 // Matches common API key patterns (Bearer tokens, sk-*, key-*, etc.)
 const API_KEY_PATTERN = /(?:sk-|key-|bearer\s+)[a-zA-Z0-9_-]{20,}/gi;
@@ -58,7 +59,8 @@ export async function* orchestrate(
     let currentTier: ModelTier = ctx.modelTier;
 
     const tools = registry.toToolDefinitions();
-    let totalTokens = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
     let round = 0;
     let truncatedExit = false;
 
@@ -97,8 +99,9 @@ export async function* orchestrate(
             break;
 
           case "done": {
-            // Track token usage
-            totalTokens += chunk.usage.input + chunk.usage.output;
+            // Track token usage separately
+            totalInputTokens += chunk.usage.input;
+            totalOutputTokens += chunk.usage.output;
 
             if (pendingToolCalls.length > 0) {
               // Add assistant message with tool calls to history
@@ -185,7 +188,7 @@ export async function* orchestrate(
               currentTier = escalateTier(currentTier);
 
               // Check token budget before continuing
-              if (totalTokens > MAX_TOTAL_TOKENS) {
+              if (totalInputTokens + totalOutputTokens > MAX_TOTAL_TOKENS) {
                 truncatedExit = true;
                 break;
               }
@@ -196,7 +199,7 @@ export async function* orchestrate(
               yield {
                 type: "done",
                 sessionId: sessionId ?? "",
-                usage: { input: totalTokens, output: 0 },
+                usage: { input: totalInputTokens, output: totalOutputTokens },
               };
               return;
             }
@@ -223,7 +226,7 @@ export async function* orchestrate(
     yield {
       type: "done",
       sessionId: sessionId ?? "",
-      usage: { input: totalTokens, output: 0 },
+      usage: { input: totalInputTokens, output: totalOutputTokens },
     };
   } catch (err) {
     const message =

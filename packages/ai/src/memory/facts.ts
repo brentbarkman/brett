@@ -3,6 +3,7 @@ import type { AIProviderName } from "@brett/types";
 import type { PrismaClient } from "@prisma/client";
 import { resolveModel } from "../router.js";
 import { FACT_EXTRACTION_PROMPT } from "../context/system-prompts.js";
+import { AI_CONFIG } from "../config.js";
 
 const VALID_CATEGORIES = new Set(["preference", "context", "relationship", "habit"]);
 
@@ -66,8 +67,8 @@ export async function extractFacts(
       .replace(/^```json?\s*\n?/i, "")
       .replace(/\n?```\s*$/, "");
     facts = JSON.parse(cleaned);
-  } catch {
-    // 8. Silent fail on parse errors
+  } catch (parseErr) {
+    console.warn("[fact-extraction] Failed to parse LLM response:", fullResponse.slice(0, 200));
     return;
   }
 
@@ -81,8 +82,8 @@ export async function extractFacts(
     // Category must be valid
     if (!VALID_CATEGORIES.has(fact.category)) continue;
 
-    // Max 200 chars for value
-    if (fact.value.length > 200) continue;
+    // Max value length
+    if (fact.value.length > AI_CONFIG.memory.maxFactValueLength) continue;
 
     // No instruction-like content
     if (INJECTION_PATTERN.test(fact.value)) continue;

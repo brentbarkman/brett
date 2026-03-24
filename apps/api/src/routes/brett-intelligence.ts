@@ -3,88 +3,13 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { aiMiddleware, type AIEnv } from "../middleware/ai.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
-import { orchestrate } from "@brett/ai";
 import { registry } from "../lib/ai-registry.js";
-import type { StreamChunk } from "@brett/types";
+import { buildStream, sseResponse } from "../lib/ai-stream.js";
 
 const brettIntelligence = new Hono<AIEnv>();
 
 // Auth on all routes
 brettIntelligence.use("*", authMiddleware);
-
-// ─── Helper: SSE response from orchestrate() ───
-
-function buildStreamAndRespond(
-  params: Parameters<typeof orchestrate>[0],
-  sessionId: string,
-  opts?: { onDone?: (content: string) => void },
-): Response {
-  const encoder = new TextEncoder();
-  let assistantContent = "";
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const chunk of orchestrate(params)) {
-          if (chunk.type === "text") {
-            assistantContent += chunk.content;
-          }
-          const data = `event: chunk\ndata: ${JSON.stringify(chunk)}\n\n`;
-          controller.enqueue(encoder.encode(data));
-        }
-        controller.close();
-
-        // Fire-and-forget: store assistant response + callback
-        if (assistantContent.trim()) {
-          prisma.conversationMessage
-            .create({
-              data: {
-                sessionId,
-                role: "assistant",
-                content: assistantContent,
-              },
-            })
-            .catch((err: unknown) =>
-              console.error("Failed to store assistant message:", err),
-            );
-
-          if (opts?.onDone) {
-            try {
-              opts.onDone(assistantContent);
-            } catch (err) {
-              console.error("onDone callback failed:", err);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("[brett-intelligence] Stream error:", err);
-        const errorChunk: StreamChunk = {
-          type: "error",
-          message: "Something went wrong. Please try again.",
-        };
-        try {
-          controller.enqueue(
-            encoder.encode(
-              `event: error\ndata: ${JSON.stringify(errorChunk)}\n\n`,
-            ),
-          );
-          controller.close();
-        } catch {
-          /* controller already closed */
-        }
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
-}
 
 // ─── GET /briefing — Get today's cached briefing ───
 
@@ -149,10 +74,12 @@ brettIntelligence.post(
       userId: user.id,
     };
 
-    return buildStreamAndRespond(
+    const { stream } = buildStream(
       { input, provider, providerName, prisma, registry, sessionId: session.id },
       session.id,
     );
+
+    return sseResponse(stream);
   },
 );
 
@@ -189,7 +116,7 @@ brettIntelligence.post(
       itemId,
     };
 
-    return buildStreamAndRespond(
+    const { stream } = buildStream(
       { input, provider, providerName, prisma, registry, sessionId: session.id },
       session.id,
       {
@@ -209,6 +136,8 @@ brettIntelligence.post(
         },
       },
     );
+
+    return sseResponse(stream);
   },
 );
 
@@ -245,10 +174,12 @@ brettIntelligence.post(
       calendarEventId: eventId,
     };
 
-    return buildStreamAndRespond(
+    const { stream } = buildStream(
       { input, provider, providerName, prisma, registry, sessionId: session.id },
       session.id,
     );
+
+    return sseResponse(stream);
   },
 );
 

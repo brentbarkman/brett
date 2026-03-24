@@ -12,6 +12,7 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   toolCalls?: Array<{
+    toolCallId: string;
     name: string;
     args: Record<string, unknown>;
     result: unknown;
@@ -159,7 +160,7 @@ export function useBrettChat(opts: {
                     ...last,
                     toolCalls: [
                       ...(last.toolCalls ?? []),
-                      { name: chunk.name, args: chunk.args, result: null },
+                      { toolCallId: chunk.id, name: chunk.name, args: chunk.args, result: null },
                     ],
                   };
                 }
@@ -173,7 +174,7 @@ export function useBrettChat(opts: {
                 const last = updated[updated.length - 1];
                 if (last && last.role === "assistant" && last.toolCalls) {
                   const toolCalls = last.toolCalls.map((tc) =>
-                    tc.result === null
+                    tc.toolCallId === chunk.id
                       ? { ...tc, result: chunk.data, displayHint: chunk.displayHint }
                       : tc,
                   );

@@ -3,102 +3,69 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { aiMiddleware, type AIEnv } from "../middleware/ai.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
-import { orchestrate, extractFacts, embedConversation } from "@brett/ai";
 import { registry } from "../lib/ai-registry.js";
-import { decryptToken } from "../lib/encryption.js";
-import type { AIProvider } from "@brett/ai";
-import type { AIProviderName, StreamChunk } from "@brett/types";
+import { buildStream, sseResponse } from "../lib/ai-stream.js";
 
 const brettChat = new Hono<AIEnv>();
 
 // Auth on all routes
 brettChat.use("*", authMiddleware);
 
-// ─── Helper: build SSE stream from orchestrate() ───
+// ─── Shared helper: paginated chat history ───
 
-function buildStream(
-  params: Parameters<typeof orchestrate>[0],
-  sessionId: string,
-  memoryCtx?: { userId: string; provider: AIProvider; providerName: AIProviderName },
-): { stream: ReadableStream; assistantContentRef: { value: string } } {
-  const encoder = new TextEncoder();
-  const assistantContentRef = { value: "" };
+async function getPaginatedHistory(
+  userId: string,
+  filter: { itemId?: string; calendarEventId?: string },
+  query: { limit?: string; cursor?: string },
+) {
+  const limit = Math.min(parseInt(query.limit || "20", 10), 50);
+  const cursor = query.cursor;
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const chunk of orchestrate(params)) {
-          if (chunk.type === "text") {
-            assistantContentRef.value += chunk.content;
-          }
-          const data = `event: chunk\ndata: ${JSON.stringify(chunk)}\n\n`;
-          controller.enqueue(encoder.encode(data));
-        }
-        controller.close();
+  if (cursor && isNaN(new Date(cursor).getTime())) {
+    return { error: "Invalid cursor" as const };
+  }
 
-        // Fire-and-forget: store assistant response
-        if (assistantContentRef.value.trim()) {
-          prisma.conversationMessage
-            .create({
-              data: {
-                sessionId,
-                role: "assistant",
-                content: assistantContentRef.value,
-              },
-            })
-            .then(() => {
-              if (!memoryCtx) return;
-              // Fire-and-forget: extract facts
-              extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma)
-                .catch((err) => console.error("[fact-extraction] Failed:", err.message));
-
-              // Fire-and-forget: embed conversation
-              prisma.userAIConfig.findFirst({
-                where: { userId: memoryCtx.userId, provider: "openai", isValid: true },
-              }).then((openaiConfig) => {
-                if (openaiConfig) {
-                  const openaiKey = decryptToken(openaiConfig.encryptedKey);
-                  embedConversation(sessionId, memoryCtx.userId, openaiKey, prisma)
-                    .catch((err) => console.error("[embedding] Failed:", err.message));
-                }
-              }).catch((err) => console.error("[embedding] Failed to load config:", err.message));
-            })
-            .catch((err: unknown) =>
-              console.error("Failed to store assistant message:", err),
-            );
-        }
-      } catch (err) {
-        console.error("[brett-chat] Stream error:", err);
-        const errorChunk: StreamChunk = {
-          type: "error",
-          message: "Something went wrong. Please try again.",
-        };
-        try {
-          controller.enqueue(
-            encoder.encode(
-              `event: error\ndata: ${JSON.stringify(errorChunk)}\n\n`,
-            ),
-          );
-          controller.close();
-        } catch {
-          /* controller already closed */
-        }
-      }
-    },
+  const sessions = await prisma.conversationSession.findMany({
+    where: { userId, source: "brett_thread", ...filter },
+    select: { id: true },
   });
 
-  return { stream, assistantContentRef };
-}
+  const sessionIds = sessions.map((s) => s.id);
 
-function sseResponse(stream: ReadableStream): Response {
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+  if (sessionIds.length === 0) {
+    return { data: { messages: [], hasMore: false, cursor: null, totalCount: 0 } };
+  }
+
+  const [messages, totalCount] = await Promise.all([
+    prisma.conversationMessage.findMany({
+      where: {
+        sessionId: { in: sessionIds },
+        ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
+    }),
+    prisma.conversationMessage.count({
+      where: { sessionId: { in: sessionIds } },
+    }),
+  ]);
+
+  const hasMore = messages.length > limit;
+  const page = hasMore ? messages.slice(0, limit) : messages;
+
+  return {
+    data: {
+      messages: page.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt.toISOString(),
+      })),
+      hasMore,
+      cursor: hasMore ? page[page.length - 1].createdAt.toISOString() : null,
+      totalCount,
     },
-  });
+  };
 }
 
 // ─── POST /:itemId — Stream chat on an item ───
@@ -186,7 +153,7 @@ brettChat.post(
     const { stream } = buildStream(
       { input, provider, providerName, prisma, registry, sessionId: session.id },
       session.id,
-      { userId: user.id, provider, providerName },
+      { memoryCtx: { userId: user.id, provider, providerName } },
     );
 
     return sseResponse(stream);
@@ -276,7 +243,7 @@ brettChat.post(
     const { stream } = buildStream(
       { input, provider, providerName, prisma, registry, sessionId: session.id },
       session.id,
-      { userId: user.id, provider, providerName },
+      { memoryCtx: { userId: user.id, provider, providerName } },
     );
 
     return sseResponse(stream);
@@ -294,53 +261,14 @@ brettChat.get("/:itemId", async (c) => {
   });
   if (!item) return c.json({ error: "Not found" }, 404);
 
-  const limit = Math.min(parseInt(c.req.query("limit") || "20", 10), 50);
-  const cursor = c.req.query("cursor");
+  const result = await getPaginatedHistory(
+    user.id,
+    { itemId },
+    { limit: c.req.query("limit"), cursor: c.req.query("cursor") },
+  );
 
-  if (cursor && isNaN(new Date(cursor).getTime())) {
-    return c.json({ error: "Invalid cursor" }, 400);
-  }
-
-  // Find all sessions for this item, then query messages across them
-  const sessions = await prisma.conversationSession.findMany({
-    where: { userId: user.id, source: "brett_thread", itemId },
-    select: { id: true },
-  });
-
-  const sessionIds = sessions.map((s) => s.id);
-
-  if (sessionIds.length === 0) {
-    return c.json({ messages: [], hasMore: false, cursor: null, totalCount: 0 });
-  }
-
-  const [messages, totalCount] = await Promise.all([
-    prisma.conversationMessage.findMany({
-      where: {
-        sessionId: { in: sessionIds },
-        ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit + 1,
-    }),
-    prisma.conversationMessage.count({
-      where: { sessionId: { in: sessionIds } },
-    }),
-  ]);
-
-  const hasMore = messages.length > limit;
-  const page = hasMore ? messages.slice(0, limit) : messages;
-
-  return c.json({
-    messages: page.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      createdAt: m.createdAt.toISOString(),
-    })),
-    hasMore,
-    cursor: hasMore ? page[page.length - 1].createdAt.toISOString() : null,
-    totalCount,
-  });
+  if ("error" in result) return c.json({ error: result.error }, 400);
+  return c.json(result.data);
 });
 
 // ─── GET /event/:eventId — Paginated chat history for a calendar event ───
@@ -354,52 +282,14 @@ brettChat.get("/event/:eventId", async (c) => {
   });
   if (!event) return c.json({ error: "Not found" }, 404);
 
-  const limit = Math.min(parseInt(c.req.query("limit") || "20", 10), 50);
-  const cursor = c.req.query("cursor");
+  const result = await getPaginatedHistory(
+    user.id,
+    { calendarEventId: eventId },
+    { limit: c.req.query("limit"), cursor: c.req.query("cursor") },
+  );
 
-  if (cursor && isNaN(new Date(cursor).getTime())) {
-    return c.json({ error: "Invalid cursor" }, 400);
-  }
-
-  const sessions = await prisma.conversationSession.findMany({
-    where: { userId: user.id, source: "brett_thread", calendarEventId: eventId },
-    select: { id: true },
-  });
-
-  const sessionIds = sessions.map((s) => s.id);
-
-  if (sessionIds.length === 0) {
-    return c.json({ messages: [], hasMore: false, cursor: null, totalCount: 0 });
-  }
-
-  const [messages, totalCount] = await Promise.all([
-    prisma.conversationMessage.findMany({
-      where: {
-        sessionId: { in: sessionIds },
-        ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit + 1,
-    }),
-    prisma.conversationMessage.count({
-      where: { sessionId: { in: sessionIds } },
-    }),
-  ]);
-
-  const hasMore = messages.length > limit;
-  const page = hasMore ? messages.slice(0, limit) : messages;
-
-  return c.json({
-    messages: page.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      createdAt: m.createdAt.toISOString(),
-    })),
-    hasMore,
-    cursor: hasMore ? page[page.length - 1].createdAt.toISOString() : null,
-    totalCount,
-  });
+  if ("error" in result) return c.json({ error: result.error }, 400);
+  return c.json(result.data);
 });
 
 export { brettChat };

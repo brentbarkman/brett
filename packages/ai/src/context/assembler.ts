@@ -6,6 +6,7 @@ import {
   BRIEFING_SYSTEM_PROMPT,
   BRETTS_TAKE_SYSTEM_PROMPT,
 } from "./system-prompts.js";
+import { AI_CONFIG } from "../config.js";
 
 // ─── Input types ───
 
@@ -54,9 +55,9 @@ export interface AssembledContext {
 
 const VALID_VIEWS = ["today", "upcoming", "inbox", "settings", "calendar"];
 const CUID_PATTERN = /^[a-z0-9]{20,30}$/;
-const MAX_FACTS = 50;
-const MAX_PAST_SESSIONS = 5;
-const MAX_MESSAGES_PER_SESSION = 20;
+const MAX_FACTS = AI_CONFIG.context.maxFacts;
+const MAX_PAST_SESSIONS = AI_CONFIG.context.maxPastSessions;
+const MAX_MESSAGES_PER_SESSION = AI_CONFIG.context.maxMessagesPerSession;
 
 // ─── Helpers ───
 
