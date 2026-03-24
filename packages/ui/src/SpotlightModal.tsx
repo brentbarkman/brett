@@ -209,7 +209,7 @@ export function SpotlightModal({
       />
 
       {/* Modal */}
-      <div className="relative w-[520px] max-h-[70vh] bg-black/70 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-[640px] max-h-[70vh] bg-black/70 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Input Row */}
         <div className="flex items-center h-14 px-5 border-b border-white/10">
           <Bot

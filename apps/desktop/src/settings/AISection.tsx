@@ -124,7 +124,7 @@ export function AISection() {
     PROVIDERS.find((p) => p.id === selectedProvider)?.hint ?? "";
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+    <div id="ai-settings" className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
       {/* Header */}
       <div className="mb-4">
         <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">

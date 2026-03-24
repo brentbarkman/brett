@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { ProfileSection } from "./ProfileSection";
 import { SecuritySection } from "./SecuritySection";
@@ -13,6 +14,19 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ onBack }: SettingsPageProps) {
+  const location = useLocation();
+
+  // Scroll to section if hash is present (e.g., /settings#ai-settings)
+  useEffect(() => {
+    if (location.hash) {
+      const id = location.hash.slice(1);
+      // Small delay to let the page render
+      setTimeout(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, [location.hash]);
+
   return (
     <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
       <div className="max-w-xl mx-auto w-full space-y-5 px-4 pb-12">
