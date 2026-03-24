@@ -108,9 +108,12 @@ things.use("*", authMiddleware);
 //   completedAfter=ISO — items with completedAt >= value
 things.get("/", async (c) => {
   const user = c.get("user");
-  const { listId, type, status, source, dueBefore, dueAfter, completedAfter } = c.req.query();
+  const { listId, type, status, source, dueBefore, dueAfter, completedAfter, search } = c.req.query();
 
   const where: Record<string, unknown> = { userId: user.id };
+  if (search) {
+    where.title = { contains: search, mode: "insensitive" };
+  }
   if (listId) where.listId = listId;
   if (type) where.type = type;
   if (status) where.status = status;
