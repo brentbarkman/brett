@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Omnibar,
   MorningBriefing,
@@ -33,6 +33,13 @@ interface TodayViewProps {
 export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [isBriefingVisible, setIsBriefingVisible] = useState(true);
+
+  // Auto-focus omnibar when landing on Today view
+  useEffect(() => {
+    if (!omnibarProps.isOpen) {
+      omnibarProps.onOpen();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Morning briefing (real data from AI, or empty if not configured)
   const briefing = useBriefing();
