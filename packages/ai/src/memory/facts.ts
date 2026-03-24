@@ -8,7 +8,10 @@ import { AI_CONFIG } from "../config.js";
 const VALID_CATEGORIES = new Set(["preference", "context", "relationship", "habit"]);
 
 const INJECTION_PATTERN =
-  /\b(ignore|override|system prompt|instruction|you are now|always execute|never ask|secret|api.?key|password)\b/i;
+  /\b(ignore|override|system prompt|instruction|you are now|always execute|never ask|secret|api.?key|password|disregard|bypass|credentials|token)\b/i;
+
+// Patterns that could break out of user_data tags or inject XML-like structures
+const TAG_INJECTION_PATTERN = /<\/?user_data|<\/?system|<\/?instruction/i;
 
 interface ExtractedFact {
   category: string;
@@ -88,6 +91,9 @@ export async function extractFacts(
     // No instruction-like content
     if (INJECTION_PATTERN.test(fact.value)) continue;
     if (INJECTION_PATTERN.test(fact.key)) continue;
+
+    // No XML/tag injection (could break out of <user_data> blocks when facts are injected into prompts)
+    if (TAG_INJECTION_PATTERN.test(fact.value)) continue;
 
     // Key must be snake_case and reasonable length
     if (!/^[a-z][a-z0-9_]{1,63}$/.test(fact.key)) continue;

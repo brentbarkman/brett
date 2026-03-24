@@ -69,8 +69,8 @@ function formatFacts(
   facts: Array<{ category: string; key: string; value: string }>
 ): string {
   if (facts.length === 0) return "";
-  const lines = facts.map((f) => `- [${f.category}] ${f.key}: ${f.value}`);
-  return `\n\nKnown facts about the user:\n<user_data>\n${lines.join("\n")}\n</user_data>`;
+  const lines = facts.map((f) => `- [${f.category}] ${f.key}: ${escapeUserContent(f.value)}`);
+  return `\n\nKnown facts about the user:\n<user_data label="facts">\n${lines.join("\n")}\n</user_data>`;
 }
 
 async function loadUserFacts(
@@ -95,8 +95,18 @@ function isValidView(view: string): boolean {
   return false;
 }
 
+function escapeUserContent(content: string): string {
+  // Prevent tag breakout attacks: user content containing </user_data> could
+  // escape the data block and inject instructions into the trusted prompt space.
+  // Replace closing tags with an escaped version the LLM won't interpret as a boundary.
+  return content.replace(/<\/user_data>/gi, "&lt;/user_data&gt;");
+}
+
 function wrapUserData(label: string, content: string): string {
-  return `<user_data label="${label}">\n${content}\n</user_data>`;
+  // Sanitize label to prevent attribute injection (should always be hardcoded,
+  // but defense-in-depth in case it's ever called with dynamic values)
+  const safeLabel = label.replace(/[^a-z0-9_-]/gi, "");
+  return `<user_data label="${safeLabel}">\n${escapeUserContent(content)}\n</user_data>`;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

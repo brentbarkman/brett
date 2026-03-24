@@ -16,6 +16,8 @@ const MAX_TOOL_RESULT_SIZE = AI_CONFIG.orchestrator.maxToolResultSize;
 
 // Matches common API key patterns (Bearer tokens, sk-*, key-*, etc.)
 const API_KEY_PATTERN = /(?:sk-|key-|bearer\s+)[a-zA-Z0-9_-]{20,}/gi;
+// Catches long alphanumeric strings that look like tokens/secrets (32+ chars, mixed case/digits)
+const HIGH_ENTROPY_PATTERN = /\b[a-zA-Z0-9_-]{40,}\b/g;
 
 // ─── Types ───
 
@@ -31,7 +33,11 @@ export interface OrchestratorParams {
 // ─── Helpers ───
 
 function sanitizeError(message: string): string {
-  return message.replace(API_KEY_PATTERN, "[REDACTED]");
+  // Layer 1: Known key prefixes (sk-, key-, bearer)
+  let sanitized = message.replace(API_KEY_PATTERN, "[REDACTED]");
+  // Layer 2: Long high-entropy strings that look like tokens/secrets
+  sanitized = sanitized.replace(HIGH_ENTROPY_PATTERN, "[REDACTED]");
+  return sanitized;
 }
 
 function truncateResult(result: string): string {
