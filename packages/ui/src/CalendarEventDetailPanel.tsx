@@ -14,13 +14,13 @@ import {
 import type {
   CalendarEventDetailResponse,
   CalendarRsvpStatus,
-  BrettMessageRecord,
   CalendarAttendee,
 } from "@brett/types";
 import DOMPurify from "dompurify";
 import { isSafeUrl } from "@brett/utils";
 import { RichTextEditor } from "./RichTextEditor";
 import { BrettThread } from "./BrettThread";
+import type { BrettThreadMessage } from "./BrettThread";
 
 /** Attendee avatar — uses stored photo URL from People API, falls back to initials */
 function AttendeeAvatar({ photoUrl, name }: { photoUrl?: string | null; name: string }) {
@@ -51,12 +51,13 @@ interface CalendarEventDetailPanelProps {
   onClose: () => void;
   onUpdateRsvp: (status: CalendarRsvpStatus, comment?: string) => void;
   onUpdateNotes: (content: string) => void;
-  brettMessages: BrettMessageRecord[];
+  brettMessages: BrettThreadMessage[];
   brettTotalCount: number;
   brettHasMore: boolean;
   onSendBrettMessage: (content: string) => void;
   onLoadMoreBrettMessages: () => void;
   isSendingBrettMessage: boolean;
+  isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages: boolean;
 }
 
@@ -139,6 +140,7 @@ export function CalendarEventDetailPanel({
   onSendBrettMessage,
   onLoadMoreBrettMessages,
   isSendingBrettMessage,
+  isBrettStreaming,
   isLoadingMoreBrettMessages,
 }: CalendarEventDetailPanelProps) {
   const [showAllAttendees, setShowAllAttendees] = useState(false);
@@ -427,6 +429,7 @@ export function CalendarEventDetailPanel({
         onSend={onSendBrettMessage}
         onLoadMore={onLoadMoreBrettMessages}
         isSending={isSendingBrettMessage}
+        isStreaming={isBrettStreaming}
         isLoadingMore={isLoadingMoreBrettMessages}
         totalCount={brettTotalCount}
       />

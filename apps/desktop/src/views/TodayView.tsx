@@ -19,7 +19,8 @@ import {
   useCreateThing,
   useToggleThing,
 } from "../api/things";
-import { mockEvents, mockBriefingItems } from "../data/mockData";
+import { useBriefing } from "../api/briefing";
+import { mockEvents } from "../data/mockData";
 
 interface TodayViewProps {
   lists: NavList[];
@@ -32,6 +33,9 @@ interface TodayViewProps {
 export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [isBriefingVisible, setIsBriefingVisible] = useState(true);
+
+  // Morning briefing (real data from AI, or empty if not configured)
+  const briefing = useBriefing();
 
   // Stable date boundaries for the day — memoized to avoid re-fetches on re-render
   const { dueBefore, completedAfter } = useMemo(() => ({
@@ -117,10 +121,12 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     <>
       <Omnibar {...omnibarProps} />
 
-      {isBriefingVisible && (
+      {isBriefingVisible && briefing.hasAI && (briefing.hasBriefing || !briefing.content) && (
         <MorningBriefing
-          items={mockBriefingItems}
+          content={briefing.content}
+          isGenerating={briefing.isGenerating}
           onDismiss={() => setIsBriefingVisible(false)}
+          onRegenerate={briefing.regenerate}
         />
       )}
 

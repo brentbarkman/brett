@@ -252,7 +252,7 @@ export * from "./calendar";
 
 export type AIProviderName = "anthropic" | "openai" | "google";
 export type ModelTier = "small" | "medium" | "large";
-export type ConversationSource = "omnibar" | "brett_thread" | "briefing" | "scout";
+export type ConversationSource = "omnibar" | "brett_thread" | "briefing" | "bretts_take" | "scout";
 export type MessageRole = "user" | "assistant" | "tool_call" | "tool_result";
 export type FactCategory = "preference" | "context" | "relationship" | "habit";
 

@@ -7,7 +7,6 @@ import type {
   RecurrenceType,
   Attachment,
   ItemLink,
-  BrettMessage,
   Thing,
 } from "@brett/types";
 import { OverflowMenu } from "./OverflowMenu";
@@ -16,6 +15,7 @@ import { RichTextEditor } from "./RichTextEditor";
 import { AttachmentList } from "./AttachmentList";
 import { LinkedItemsList } from "./LinkedItemsList";
 import { BrettThread } from "./BrettThread";
+import type { BrettThreadMessage } from "./BrettThread";
 
 interface TaskDetailPanelProps {
   detail: ThingDetail;
@@ -40,11 +40,12 @@ interface TaskDetailPanelProps {
   onRemoveLink?: (linkId: string) => void;
   searchItems?: (query: string) => Promise<Thing[]>;
   // Brett thread
-  brettMessages?: BrettMessage[];
+  brettMessages?: BrettThreadMessage[];
   brettHasMore?: boolean;
   onSendBrettMessage?: (content: string) => void;
   onLoadMoreBrettMessages?: () => void;
   isSendingBrettMessage?: boolean;
+  isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
 }
@@ -72,6 +73,7 @@ export function TaskDetailPanel({
   onSendBrettMessage,
   onLoadMoreBrettMessages,
   isSendingBrettMessage,
+  isBrettStreaming,
   isLoadingMoreBrettMessages,
   brettTotalCount,
 }: TaskDetailPanelProps) {
@@ -250,6 +252,7 @@ export function TaskDetailPanel({
           onSend={onSendBrettMessage}
           onLoadMore={onLoadMoreBrettMessages}
           isSending={isSendingBrettMessage}
+          isStreaming={isBrettStreaming}
           isLoadingMore={isLoadingMoreBrettMessages}
           totalCount={brettTotalCount}
         />

@@ -6,15 +6,14 @@ import type {
   ThingDetail,
   CalendarEventDetailResponse,
   CalendarRsvpStatus,
-  BrettMessageRecord,
   DueDatePrecision,
   ReminderType,
   RecurrenceType,
-  BrettMessage,
 } from "@brett/types";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { ContentDetailPanel } from "./ContentDetailPanel";
 import { CalendarEventDetailPanel } from "./CalendarEventDetailPanel";
+import type { BrettThreadMessage } from "./BrettThread";
 
 interface DetailPanelProps {
   isOpen: boolean;
@@ -42,11 +41,12 @@ interface DetailPanelProps {
   onRemoveLink?: (linkId: string) => void;
   searchItems?: (query: string) => Promise<Thing[]>;
   // Brett thread
-  brettMessages?: BrettMessage[];
+  brettMessages?: BrettThreadMessage[];
   brettHasMore?: boolean;
   onSendBrettMessage?: (content: string) => void;
   onLoadMoreBrettMessages?: () => void;
   isSendingBrettMessage?: boolean;
+  isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
   // Content extraction
@@ -56,12 +56,13 @@ interface DetailPanelProps {
   isLoadingCalendarDetail?: boolean;
   onUpdateRsvp?: (status: CalendarRsvpStatus, comment?: string) => void;
   onUpdateCalendarNotes?: (content: string) => void;
-  calendarBrettMessages?: BrettMessageRecord[];
+  calendarBrettMessages?: BrettThreadMessage[];
   calendarBrettTotalCount?: number;
   calendarBrettHasMore?: boolean;
   onSendCalendarBrettMessage?: (content: string) => void;
   onLoadMoreCalendarBrettMessages?: () => void;
   isSendingCalendarBrettMessage?: boolean;
+  isCalendarBrettStreaming?: boolean;
   isLoadingMoreCalendarBrettMessages?: boolean;
 }
 
@@ -91,6 +92,7 @@ export function DetailPanel({
   onSendBrettMessage,
   onLoadMoreBrettMessages,
   isSendingBrettMessage,
+  isBrettStreaming,
   isLoadingMoreBrettMessages,
   brettTotalCount,
   onRetryExtraction,
@@ -104,6 +106,7 @@ export function DetailPanel({
   onSendCalendarBrettMessage,
   onLoadMoreCalendarBrettMessages,
   isSendingCalendarBrettMessage,
+  isCalendarBrettStreaming,
   isLoadingMoreCalendarBrettMessages,
 }: DetailPanelProps) {
   if (!item) return null;
@@ -159,6 +162,7 @@ export function DetailPanel({
             onSendBrettMessage={onSendBrettMessage}
             onLoadMoreBrettMessages={onLoadMoreBrettMessages}
             isSendingBrettMessage={isSendingBrettMessage}
+            isBrettStreaming={isBrettStreaming}
             isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
             brettTotalCount={brettTotalCount}
           />
@@ -198,6 +202,7 @@ export function DetailPanel({
             onSendBrettMessage={onSendBrettMessage}
             onLoadMoreBrettMessages={onLoadMoreBrettMessages}
             isSendingBrettMessage={isSendingBrettMessage}
+            isBrettStreaming={isBrettStreaming}
             isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
             brettTotalCount={brettTotalCount}
             onRetryExtraction={onRetryExtraction}
@@ -225,6 +230,7 @@ export function DetailPanel({
           onSendBrettMessage={onSendCalendarBrettMessage ?? (() => {})}
           onLoadMoreBrettMessages={onLoadMoreCalendarBrettMessages ?? (() => {})}
           isSendingBrettMessage={isSendingCalendarBrettMessage ?? false}
+          isBrettStreaming={isCalendarBrettStreaming}
           isLoadingMoreBrettMessages={isLoadingMoreCalendarBrettMessages ?? false}
         />
       ) : (

@@ -1,18 +1,39 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { ChevronDown, ChevronUp, User, Bot, Send, Loader2 } from "lucide-react";
-import type { BrettMessage } from "@brett/types";
+import type { DisplayHint } from "@brett/types";
+import { SkillResultCard } from "./SkillResultCard";
+
+export interface BrettThreadMessage {
+  id: string;
+  role: "user" | "assistant" | "brett";
+  content: string;
+  createdAt: string;
+  toolCalls?: Array<{
+    name: string;
+    args: Record<string, unknown>;
+    result: unknown;
+    displayHint?: DisplayHint;
+  }>;
+}
 
 interface BrettThreadProps {
-  messages: BrettMessage[];
+  messages: BrettThreadMessage[];
   totalCount?: number;
   hasMore: boolean;
   onSend: (content: string) => void;
   onLoadMore: () => void;
   isSending?: boolean;
+  isStreaming?: boolean;
   isLoadingMore?: boolean;
 }
 
-function MessageBubble({ message }: { message: BrettMessage }) {
+function MessageBubble({
+  message,
+  isStreamingMsg,
+}: {
+  message: BrettThreadMessage;
+  isStreamingMsg?: boolean;
+}) {
   const isUser = message.role === "user";
   return (
     <div className="flex items-start gap-2 py-2">
@@ -27,10 +48,45 @@ function MessageBubble({ message }: { message: BrettMessage }) {
           <Bot size={12} className="text-blue-400" />
         )}
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap break-words">
-          {message.content}
-        </p>
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Tool result cards */}
+        {message.toolCalls?.map((tc, i) =>
+          tc.result != null && tc.displayHint ? (
+            <SkillResultCard
+              key={`tc-${i}`}
+              displayHint={tc.displayHint}
+              data={tc.result}
+              message={tc.name}
+            />
+          ) : tc.result == null && !isStreamingMsg ? null : tc.result == null ? (
+            <div
+              key={`tc-pending-${i}`}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10"
+            >
+              <Loader2 size={12} className="animate-spin text-white/30" />
+              <span className="text-xs text-white/40">{tc.name}...</span>
+            </div>
+          ) : null,
+        )}
+
+        {/* Text content */}
+        {message.content && (
+          <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap break-words">
+            {message.content}
+            {isStreamingMsg && (
+              <span className="inline-block w-1.5 h-3.5 bg-blue-400/60 ml-0.5 animate-pulse rounded-sm" />
+            )}
+          </p>
+        )}
+
+        {/* Streaming cursor when no content yet */}
+        {!message.content && isStreamingMsg && !message.toolCalls?.length && (
+          <div className="flex items-center gap-1 py-1">
+            <Loader2 size={12} className="animate-spin text-blue-400/60" />
+            <span className="text-xs text-white/30">Thinking...</span>
+          </div>
+        )}
+
         <span className="text-[10px] text-white/30 mt-0.5 block">
           {new Date(message.createdAt).toLocaleTimeString([], {
             hour: "numeric",
@@ -49,6 +105,7 @@ export function BrettThread({
   onSend,
   onLoadMore,
   isSending,
+  isStreaming,
   isLoadingMore,
 }: BrettThreadProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -66,6 +123,13 @@ export function BrettThread({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [isExpanded, messages.length]);
+
+  // Also scroll to bottom during streaming as content grows
+  useEffect(() => {
+    if (isStreaming && isExpanded && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  });
 
   // Infinite scroll: load more when sentinel at top becomes visible
   useEffect(() => {
@@ -98,11 +162,11 @@ export function BrettThread({
 
   const handleSend = useCallback(() => {
     const trimmed = inputValue.trim();
-    if (!trimmed || isSending) return;
+    if (!trimmed || isSending || isStreaming) return;
     onSend(trimmed);
     setInputValue("");
     setIsExpanded(true);
-  }, [inputValue, isSending, onSend]);
+  }, [inputValue, isSending, isStreaming, onSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -114,6 +178,11 @@ export function BrettThread({
     [handleSend],
   );
 
+  // Determine if the last assistant message is actively streaming
+  const lastMsg = displayMessages[displayMessages.length - 1];
+  const lastIsStreaming =
+    isStreaming && lastMsg && lastMsg.role !== "user";
+
   return (
     <div className="border-t border-white/10 flex flex-col">
       {/* Toggle header */}
@@ -124,8 +193,14 @@ export function BrettThread({
         <div className="flex items-center gap-2">
           <Bot size={14} className="text-blue-400" />
           <span className="text-xs font-medium text-white/60">
-            Brett Thread{(totalCount ?? messages.length) > 0 ? ` (${totalCount ?? messages.length})` : ""}
+            Brett Thread
+            {(totalCount ?? messages.length) > 0
+              ? ` (${totalCount ?? messages.length})`
+              : ""}
           </span>
+          {isStreaming && (
+            <Loader2 size={10} className="animate-spin text-blue-400/60" />
+          )}
         </div>
         {isExpanded ? (
           <ChevronDown size={14} className="text-white/40" />
@@ -136,7 +211,10 @@ export function BrettThread({
 
       {/* Expanded message history */}
       {isExpanded && displayMessages.length > 0 && (
-        <div ref={scrollRef} className="max-h-64 overflow-y-auto px-4 scrollbar-hide overscroll-contain">
+        <div
+          ref={scrollRef}
+          className="max-h-64 overflow-y-auto px-4 scrollbar-hide overscroll-contain"
+        >
           {/* Sentinel + loading indicator at top */}
           <div ref={sentinelRef} className="h-1" />
           {isLoadingMore && (
@@ -144,8 +222,14 @@ export function BrettThread({
               <Loader2 size={14} className="animate-spin text-white/30" />
             </div>
           )}
-          {displayMessages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+          {displayMessages.map((msg, idx) => (
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              isStreamingMsg={
+                lastIsStreaming && idx === displayMessages.length - 1
+              }
+            />
           ))}
         </div>
       )}
@@ -165,7 +249,7 @@ export function BrettThread({
           />
           <button
             onClick={handleSend}
-            disabled={!inputValue.trim() || isSending}
+            disabled={!inputValue.trim() || isSending || isStreaming}
             className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Send size={14} />

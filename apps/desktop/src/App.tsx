@@ -41,15 +41,13 @@ import {
 } from "./api/things";
 import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists, useArchiveList, useUnarchiveList, useArchivedLists } from "./api/lists";
 import { useUploadAttachment, useDeleteAttachment } from "./api/attachments";
-import { useBrettMessages, useSendBrettMessage } from "./api/brett";
+import { useBrettChat } from "./api/brett-chat";
 import { useCreateLink, useDeleteLink } from "./api/links";
 import {
   useCalendarEvents,
   useCalendarEventDetail,
   useUpdateRsvp,
   useUpdateCalendarEventNotes,
-  useCalendarEventBrettMessages,
-  useSendCalendarBrettMessage,
 } from "./api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
 import { useEventStream, useSSEHandler } from "./api/sse";
@@ -194,8 +192,7 @@ export function App() {
   const createLink = useCreateLink();
   const deleteLink = useDeleteLink();
 
-  // Brett thread hooks
-  const sendBrettMessage = useSendBrettMessage();
+  // Brett thread hooks — now using streaming chat
 
   // Calendar account state — for sidebar visibility
   const { data: calendarAccounts = [] } = useCalendarAccounts();
@@ -251,10 +248,10 @@ export function App() {
     isDetailOpen && isTaskSelected ? selectedId : null,
   );
 
-  // Brett messages for selected item
-  const brett = useBrettMessages(
-    isDetailOpen && isTaskSelected ? selectedId : null,
-  );
+  // Brett chat for selected item (streaming)
+  const brett = useBrettChat({
+    itemId: isDetailOpen && isTaskSelected ? selectedId : null,
+  });
 
   // Calendar event detail panel hooks
   const { data: calendarEventDetail, isLoading: isLoadingCalendarDetail } = useCalendarEventDetail(
@@ -262,10 +259,9 @@ export function App() {
   );
   const updateRsvp = useUpdateRsvp();
   const updateCalendarNotes = useUpdateCalendarEventNotes();
-  const calendarBrett = useCalendarEventBrettMessages(
-    isDetailOpen && isCalendarSelected ? selectedId : null,
-  );
-  const sendCalendarBrettMessage = useSendCalendarBrettMessage();
+  const calendarBrett = useBrettChat({
+    calendarEventId: isDetailOpen && isCalendarSelected ? selectedId : null,
+  });
 
   // Active things for link search
   const { data: allActiveThings = [] } = useThings({ status: "active" });
@@ -687,11 +683,10 @@ export function App() {
           searchItems={handleSearchItems}
           brettMessages={brett.messages}
           brettHasMore={brett.hasMore}
-          onSendBrettMessage={(content) => {
-            if (selectedId) sendBrettMessage.mutate({ itemId: selectedId, content });
-          }}
+          onSendBrettMessage={brett.sendMessage}
           onLoadMoreBrettMessages={brett.loadMore}
-          isSendingBrettMessage={sendBrettMessage.isPending}
+          isSendingBrettMessage={false}
+          isBrettStreaming={brett.isStreaming}
           isLoadingMoreBrettMessages={brett.isLoadingMore}
           brettTotalCount={brett.totalCount}
           onRetryExtraction={() => {
@@ -708,11 +703,10 @@ export function App() {
           calendarBrettMessages={calendarBrett.messages}
           calendarBrettTotalCount={calendarBrett.totalCount}
           calendarBrettHasMore={calendarBrett.hasMore}
-          onSendCalendarBrettMessage={(content) => {
-            if (selectedId) sendCalendarBrettMessage.mutate({ eventId: selectedId, content });
-          }}
+          onSendCalendarBrettMessage={calendarBrett.sendMessage}
           onLoadMoreCalendarBrettMessages={calendarBrett.loadMore}
-          isSendingCalendarBrettMessage={sendCalendarBrettMessage.isPending}
+          isSendingCalendarBrettMessage={false}
+          isCalendarBrettStreaming={calendarBrett.isStreaming}
           isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
         />
 

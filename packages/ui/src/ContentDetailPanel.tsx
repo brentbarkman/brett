@@ -6,7 +6,6 @@ import type {
   ReminderType,
   RecurrenceType,
   Thing,
-  BrettMessage,
 } from "@brett/types";
 import { OverflowMenu } from "./OverflowMenu";
 import { ScheduleRow } from "./ScheduleRow";
@@ -14,6 +13,7 @@ import { RichTextEditor } from "./RichTextEditor";
 import { AttachmentList } from "./AttachmentList";
 import { LinkedItemsList } from "./LinkedItemsList";
 import { BrettThread } from "./BrettThread";
+import type { BrettThreadMessage } from "./BrettThread";
 import { ContentPreview } from "./ContentPreview";
 
 interface ContentDetailPanelProps {
@@ -39,11 +39,12 @@ interface ContentDetailPanelProps {
   onRemoveLink?: (linkId: string) => void;
   searchItems?: (query: string) => Promise<Thing[]>;
   // Brett thread
-  brettMessages?: BrettMessage[];
+  brettMessages?: BrettThreadMessage[];
   brettHasMore?: boolean;
   onSendBrettMessage?: (content: string) => void;
   onLoadMoreBrettMessages?: () => void;
   isSendingBrettMessage?: boolean;
+  isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
   // Content extraction retry
@@ -73,6 +74,7 @@ export function ContentDetailPanel({
   onSendBrettMessage,
   onLoadMoreBrettMessages,
   isSendingBrettMessage,
+  isBrettStreaming,
   isLoadingMoreBrettMessages,
   brettTotalCount,
   onRetryExtraction,
@@ -266,6 +268,7 @@ export function ContentDetailPanel({
           onSend={onSendBrettMessage}
           onLoadMore={onLoadMoreBrettMessages}
           isSending={isSendingBrettMessage}
+          isStreaming={isBrettStreaming}
           isLoadingMore={isLoadingMoreBrettMessages}
           totalCount={brettTotalCount}
         />
