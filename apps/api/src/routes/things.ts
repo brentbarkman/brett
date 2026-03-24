@@ -112,7 +112,10 @@ things.get("/", async (c) => {
 
   const where: Record<string, unknown> = { userId: user.id };
   if (search) {
-    where.title = { contains: search, mode: "insensitive" };
+    where.OR = [
+      { title: { contains: search, mode: "insensitive" } },
+      { notes: { contains: search, mode: "insensitive" } },
+    ];
   }
   if (listId) where.listId = listId;
   if (type) where.type = type;

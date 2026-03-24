@@ -363,6 +363,9 @@ export function Omnibar({
                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                     item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
                   }`} />
+                  <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
+                    {item.type === "content" ? "content" : "task"}
+                  </span>
                   <span className="truncate">{item.title}</span>
                   <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
                     {item.listName || "Inbox"}
