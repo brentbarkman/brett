@@ -38,6 +38,7 @@ export interface OmnibarProps {
   onOpen: () => void;
   onCancel?: () => void;
   onReset?: () => void;
+  onNavigateToSettings?: () => void;
   searchResults?: SearchResultItem[] | null;
   isSearching?: boolean;
   onSearchResultClick?: (id: string) => void;
@@ -64,6 +65,7 @@ export function Omnibar({
   onOpen,
   onCancel,
   onReset,
+  onNavigateToSettings,
   searchResults,
   isSearching,
   onSearchResultClick,
@@ -235,7 +237,7 @@ export function Omnibar({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Ask Brett anything..."
+            placeholder={hasAI ? "Ask Brett anything..." : "Create a task or search..."}
             className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
@@ -267,6 +269,28 @@ export function Omnibar({
             ) : null}
           </div>
         </div>
+
+        {/* AI Upsell — shown when open, no input, no AI configured */}
+        {isOpen && !hasAI && !input.trim() && !hasConversation && !showSearchResults && (
+          <div className="border-t border-white/10 px-4 py-3">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+              <Sparkles size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm text-white/70">
+                  Add an AI provider to unlock Brett's full capabilities — ask questions, get briefings, and manage everything with natural language.
+                </p>
+                {onNavigateToSettings && (
+                  <button
+                    onClick={() => { onNavigateToSettings(); onClose(); }}
+                    className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    Configure AI in Settings →
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Conversation Area */}
         {isOpen && hasConversation && (

@@ -36,6 +36,7 @@ export interface SpotlightModalProps {
   onClose: () => void;
   onCancel?: () => void;
   onReset?: () => void;
+  onNavigateToSettings?: () => void;
   searchResults?: SpotlightSearchResult[] | null;
   isSearching?: boolean;
   onSearchResultClick?: (id: string) => void;
@@ -54,6 +55,7 @@ export function SpotlightModal({
   onClose,
   onCancel,
   onReset,
+  onNavigateToSettings,
   searchResults,
   isSearching,
   onSearchResultClick,
@@ -219,7 +221,7 @@ export function SpotlightModal({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Ask Brett anything..."
+            placeholder={hasAI ? "Ask Brett anything..." : "Create a task or search..."}
             className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
@@ -348,14 +350,31 @@ export function SpotlightModal({
           </div>
         )}
 
-        {/* Empty state hint */}
+        {/* Empty state */}
         {!hasConversation && !showSuggestions && !showSearchResults && (
-          <div className="px-5 py-8 text-center">
-            <p className="text-sm text-white/30">
-              {hasAI
-                ? "Ask a question, create a task, or search..."
-                : "Create a task or search your items..."}
-            </p>
+          <div className="px-5 py-6">
+            {!hasAI ? (
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                <Sparkles size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm text-white/70">
+                    Add an AI provider to unlock Brett's full capabilities — ask questions, get briefings, and manage everything with natural language.
+                  </p>
+                  {onNavigateToSettings && (
+                    <button
+                      onClick={() => { onNavigateToSettings(); onClose(); }}
+                      className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                      Configure AI in Settings →
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-white/30 text-center">
+                Ask a question, create a task, or search...
+              </p>
+            )}
           </div>
         )}
       </div>
