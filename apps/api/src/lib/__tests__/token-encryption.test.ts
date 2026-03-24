@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { encryptToken, decryptToken } from "../token-encryption";
+import { encryptToken, decryptToken } from "../encryption";
 
 describe("token-encryption", () => {
   beforeAll(() => {

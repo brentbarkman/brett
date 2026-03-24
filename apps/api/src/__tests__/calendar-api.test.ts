@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { createTestUser, authRequest } from "./helpers.js";
 import { prisma } from "../lib/prisma.js";
-import { encryptToken } from "../lib/token-encryption.js";
+import { encryptToken } from "../lib/encryption.js";
 import { generateId } from "@brett/utils";
 
 // Set encryption key before any tests run (setup.ts runs first, but this must be set for encryptToken)

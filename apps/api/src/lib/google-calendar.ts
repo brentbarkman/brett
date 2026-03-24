@@ -1,6 +1,6 @@
 import { google, type calendar_v3, type people_v1 } from "googleapis";
 import { prisma } from "./prisma.js";
-import { decryptToken, encryptToken } from "./token-encryption.js";
+import { decryptToken, encryptToken } from "./encryption.js";
 
 /** Per-account mutex to prevent concurrent token refreshes */
 const clientCache = new Map<string, Promise<calendar_v3.Calendar>>();

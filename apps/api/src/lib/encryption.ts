@@ -1,11 +1,10 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 function getKey(): Buffer {
-  const hex = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
-  if (!hex) {
-    throw new Error("CALENDAR_TOKEN_ENCRYPTION_KEY environment variable is required");
+  const hex = process.env.TOKEN_ENCRYPTION_KEY || process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+  if (!hex || hex.length !== 64) {
+    throw new Error("TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
   }
-  if (hex.length !== 64) throw new Error("CALENDAR_TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes)");
   return Buffer.from(hex, "hex");
 }
 

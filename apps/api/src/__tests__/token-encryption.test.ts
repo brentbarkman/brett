@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { encryptToken, decryptToken } from "../lib/token-encryption.js";
+import { encryptToken, decryptToken } from "../lib/encryption.js";
 
 // 32-byte hex key for AES-256
 const TEST_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

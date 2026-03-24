@@ -7,7 +7,7 @@ import {
   getCalendarClient,
   stopWatch,
 } from "../lib/google-calendar.js";
-import { encryptToken } from "../lib/token-encryption.js";
+import { encryptToken } from "../lib/encryption.js";
 import { initialSync } from "../services/calendar-sync.js";
 import { generateId } from "@brett/utils";
 import { google } from "googleapis";
