@@ -348,7 +348,7 @@ export function Omnibar({
           ) : (
             <>
               <div className="px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-white/30 border-b border-white/5">
-                {searchResults!.length} result{searchResults!.length === 1 ? "" : "s"} · ↑↓ to navigate · enter to open
+                {searchResults!.length} result{searchResults!.length === 1 ? "" : "s"}
               </div>
               {visibleResults.map((item, i) => (
                 <button
