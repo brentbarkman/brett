@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { ProfileSection } from "./ProfileSection";
 import { SecuritySection } from "./SecuritySection";
 import { CalendarSection } from "./CalendarSection";
+import { AISection } from "./AISection";
 import { SignOutSection } from "./SignOutSection";
 import { DangerZoneSection } from "./DangerZoneSection";
 
@@ -28,6 +29,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         <ProfileSection />
         <SecuritySection />
         <CalendarSection />
+        <AISection />
         <SignOutSection />
         <DangerZoneSection />
       </div>
