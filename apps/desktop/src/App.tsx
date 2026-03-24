@@ -335,7 +335,16 @@ export function App() {
       onSearchResultClick: (id: string) => {
         const item = omnibar.searchResults?.find((t) => t.id === id);
         if (item) {
-          handleItemClick(item);
+          // Navigate to the view where this item lives
+          if (item.listId && item.list) {
+            navigate(`/lists/${slugify(item.list)}`);
+          } else if (item.urgency === "overdue" || item.urgency === "today") {
+            navigate("/today");
+          } else {
+            navigate("/inbox");
+          }
+          // Open detail panel after a tick so the view renders first
+          setTimeout(() => handleItemClick(item), 50);
           omnibar.close();
         }
       },
