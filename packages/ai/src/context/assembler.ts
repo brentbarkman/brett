@@ -53,6 +53,7 @@ export interface AssembledContext {
 // ─── Constants ───
 
 const VALID_VIEWS = ["today", "upcoming", "inbox", "settings", "calendar"];
+const CUID_PATTERN = /^[a-z0-9]{20,30}$/;
 const MAX_FACTS = 50;
 const MAX_PAST_SESSIONS = 5;
 const MAX_MESSAGES_PER_SESSION = 20;
@@ -85,7 +86,12 @@ async function loadUserFacts(
 }
 
 function isValidView(view: string): boolean {
-  return VALID_VIEWS.includes(view) || view.startsWith("list:");
+  if (VALID_VIEWS.includes(view)) return true;
+  if (view.startsWith("list:")) {
+    const listId = view.slice(5);
+    return CUID_PATTERN.test(listId);
+  }
+  return false;
 }
 
 function wrapUserData(label: string, content: string): string {

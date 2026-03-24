@@ -44,13 +44,18 @@ export const createContentSkill: Skill = {
       listId = list.id;
     }
 
+    let source = "Brett";
+    if (p.sourceUrl) {
+      try { source = new URL(p.sourceUrl).hostname; } catch { /* keep default */ }
+    }
+
     const validation = validateCreateItem({
       type: "content",
       title: p.title,
       sourceUrl: p.sourceUrl,
       contentType: p.contentType,
       listId,
-      source: p.sourceUrl ? new URL(p.sourceUrl).hostname : "Brett",
+      source,
     });
 
     if (!validation.ok) {

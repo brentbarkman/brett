@@ -68,10 +68,10 @@ function buildStream(
             );
         }
       } catch (err) {
+        console.error("[brett-chat] Stream error:", err);
         const errorChunk: StreamChunk = {
           type: "error",
-          message:
-            err instanceof Error ? err.message : "Internal server error",
+          message: "Something went wrong. Please try again.",
         };
         try {
           controller.enqueue(

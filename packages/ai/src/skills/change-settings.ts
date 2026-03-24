@@ -26,12 +26,7 @@ export const changeSettingsSkill: Skill = {
       return { success: false, message: `Invalid provider. Choose from: anthropic, openai, google.` };
     }
 
-    // Deactivate all, then activate the target provider
-    await ctx.prisma.userAIConfig.updateMany({
-      where: { userId: ctx.userId },
-      data: { isActive: false },
-    });
-
+    // Check target config exists before modifying anything
     const config = await ctx.prisma.userAIConfig.findFirst({
       where: { userId: ctx.userId, provider: p.aiProvider },
     });
@@ -42,6 +37,12 @@ export const changeSettingsSkill: Skill = {
         message: `No API key configured for ${p.aiProvider}. Add one in Settings first.`,
       };
     }
+
+    // Target exists — deactivate all, then activate target
+    await ctx.prisma.userAIConfig.updateMany({
+      where: { userId: ctx.userId },
+      data: { isActive: false },
+    });
 
     await ctx.prisma.userAIConfig.update({
       where: { id: config.id },
