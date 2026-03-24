@@ -7,3 +7,6 @@ export type {
   Message,
   ToolDefinition,
 } from "./providers/types.js";
+export { getProvider } from "./providers/factory.js";
+export { OpenAIEmbeddingProvider } from "./providers/embedding.js";
+export { resolveModel, MODEL_MAP } from "./router.js";
