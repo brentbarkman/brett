@@ -781,6 +781,22 @@ export function App() {
           onSend={(text) => omnibar.send(text, currentView)}
           onCreateTask={(title: string) => omnibar.createTask(title, currentView)}
           onSearch={omnibar.searchThings}
+          searchResults={omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null}
+          isSearching={omnibar.isSearching}
+          onSearchResultClick={(id: string) => {
+            const item = omnibar.searchResults?.find((t) => t.id === id);
+            if (item) {
+              if (item.listId && item.list) {
+                navigate(`/lists/${slugify(item.list)}`);
+              } else if (item.urgency === "overdue" || item.urgency === "today") {
+                navigate("/today");
+              } else {
+                navigate("/inbox");
+              }
+              setTimeout(() => handleItemClick(item), 50);
+              omnibar.close();
+            }
+          }}
           onClose={omnibar.close}
           onCancel={omnibar.cancel}
           onReset={omnibar.reset}

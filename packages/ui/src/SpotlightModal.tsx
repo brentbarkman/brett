@@ -14,6 +14,15 @@ export interface SpotlightMessage {
   }>;
 }
 
+export interface SpotlightSearchResult {
+  id: string;
+  title: string;
+  status: string;
+  type?: string;
+  contentType?: string | null;
+  listName?: string | null;
+}
+
 export interface SpotlightModalProps {
   isOpen: boolean;
   input: string;
@@ -27,6 +36,9 @@ export interface SpotlightModalProps {
   onClose: () => void;
   onCancel?: () => void;
   onReset?: () => void;
+  searchResults?: SpotlightSearchResult[] | null;
+  isSearching?: boolean;
+  onSearchResultClick?: (id: string) => void;
 }
 
 export function SpotlightModal({
@@ -42,10 +54,14 @@ export function SpotlightModal({
   onClose,
   onCancel,
   onReset,
+  searchResults,
+  isSearching,
+  onSearchResultClick,
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [selectedSuggestion, setSelectedSuggestion] = React.useState(0);
+  const [selectedSearchIdx, setSelectedSearchIdx] = React.useState(-1);
 
   // Focus input when opening
   useEffect(() => {
@@ -64,8 +80,14 @@ export function SpotlightModal({
     setSelectedSuggestion(0);
   }, [input]);
 
+  useEffect(() => {
+    setSelectedSearchIdx(-1);
+  }, [searchResults]);
+
   const hasConversation = messages.length > 0;
   const showSuggestions = input.trim().length > 0 && !hasConversation;
+  const showSearchResults = !hasConversation && !showSuggestions && (isSearching || (searchResults !== null && searchResults !== undefined));
+  const visibleResults = searchResults?.slice(0, 8) ?? [];
 
   type Suggestion = {
     id: string;
@@ -141,6 +163,25 @@ export function SpotlightModal({
         }
       }
 
+      // Keyboard nav for search results
+      if (showSearchResults && visibleResults.length > 0) {
+        if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
+          e.preventDefault();
+          setSelectedSearchIdx((prev) => prev < visibleResults.length - 1 ? prev + 1 : 0);
+          return;
+        }
+        if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
+          e.preventDefault();
+          setSelectedSearchIdx((prev) => prev > 0 ? prev - 1 : visibleResults.length - 1);
+          return;
+        }
+        if (e.key === "Enter" && selectedSearchIdx >= 0 && visibleResults[selectedSearchIdx]) {
+          e.preventDefault();
+          onSearchResultClick?.(visibleResults[selectedSearchIdx].id);
+          return;
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (input.trim()) {
@@ -152,7 +193,7 @@ export function SpotlightModal({
         }
       }
     },
-    [showSuggestions, suggestions, selectedSuggestion, handleSuggestionSelect, input, hasAI, onSend, onCreateTask, onClose]
+    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, hasAI, onSend, onCreateTask, onClose]
   );
 
   if (!isOpen) return null;
@@ -274,8 +315,49 @@ export function SpotlightModal({
           </div>
         )}
 
+        {/* Search Results */}
+        {showSearchResults && (
+          <div className="border-b border-white/10">
+            {isSearching ? (
+              <div className="px-5 py-3 text-sm text-white/40 flex items-center gap-2">
+                <div className="w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
+                Searching...
+              </div>
+            ) : visibleResults.length === 0 ? (
+              <div className="px-5 py-3 text-sm text-white/40">No results found.</div>
+            ) : (
+              <>
+                <div className="px-5 py-2 text-[10px] font-mono uppercase tracking-wider text-white/30 border-b border-white/5">
+                  {searchResults!.length} result{searchResults!.length === 1 ? "" : "s"}
+                </div>
+                {visibleResults.map((item, i) => (
+                  <button
+                    key={item.id}
+                    className={`w-full flex items-center gap-3 px-5 py-2.5 text-sm text-left transition-colors ${
+                      i === selectedSearchIdx ? "bg-white/10 text-white" : "text-white/80 hover:bg-white/5"
+                    }`}
+                    onClick={() => onSearchResultClick?.(item.id)}
+                    onMouseEnter={() => setSelectedSearchIdx(i)}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
+                    }`} />
+                    <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
+                      {item.type === "content" ? (item.contentType || "content") : "task"}
+                    </span>
+                    <span className="truncate">{item.title}</span>
+                    <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
+                      {item.listName || "Inbox"}
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Empty state hint */}
-        {!hasConversation && !showSuggestions && (
+        {!hasConversation && !showSuggestions && !showSearchResults && (
           <div className="px-5 py-8 text-center">
             <p className="text-sm text-white/30">
               {hasAI
