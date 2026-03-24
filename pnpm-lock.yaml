@@ -233,6 +233,9 @@ importers:
       '@prisma/client':
         specifier: '*'
         version: 6.19.2(prisma@6.19.2)(typescript@5.9.3)
+      ajv:
+        specifier: ^8.18.0
+        version: 8.18.0
       openai:
         specifier: ^6.32.0
         version: 6.32.0

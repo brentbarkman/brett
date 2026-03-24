@@ -1,0 +1,25 @@
+import type { ModelTier, DisplayHint } from "@brett/types";
+import type { PrismaClient } from "@prisma/client";
+import type { AIProvider } from "../providers/types.js";
+
+export interface SkillContext {
+  userId: string;
+  prisma: PrismaClient;
+  provider?: AIProvider;
+}
+
+export interface SkillResult {
+  success: boolean;
+  data?: unknown;
+  displayHint?: DisplayHint;
+  message?: string;
+}
+
+export interface Skill {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>; // JSON Schema
+  modelTier: ModelTier;
+  requiresAI: boolean;
+  execute(params: unknown, ctx: SkillContext): Promise<SkillResult>;
+}
