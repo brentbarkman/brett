@@ -7,14 +7,9 @@ import {
   type FunctionDeclarationsTool,
   type Part,
 } from "@google/generative-ai";
+import { randomUUID } from "crypto";
 import type { StreamChunk } from "@brett/types";
 import type { AIProvider, ChatParams, Message, ToolDefinition } from "./types.js";
-
-let toolCallCounter = 0;
-
-function generateToolCallId(): string {
-  return `google_tc_${Date.now()}_${++toolCallCounter}`;
-}
 
 function mapTools(tools: ToolDefinition[]): FunctionDeclarationsTool[] {
   return [
@@ -177,7 +172,7 @@ export class GoogleProvider implements AIProvider {
         if ("functionCall" in part && part.functionCall) {
           yield {
             type: "tool_call",
-            id: generateToolCallId(),
+            id: randomUUID(),
             name: part.functionCall.name,
             args: (part.functionCall.args ?? {}) as Record<string, unknown>,
           };

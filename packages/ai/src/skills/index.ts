@@ -63,10 +63,11 @@ export function createRegistry(): SkillRegistry {
   registry.register(getNextEventSkill);
 
   // Brett Intelligence (4)
-  registry.register(morningBriefingSkill);
-  registry.register(brettsTakeSkill);
+  // Registered when functional — placeholder skills pollute the tool list and confuse routing
+  // registry.register(morningBriefingSkill);
+  // registry.register(brettsTakeSkill);
   registry.register(upNextSkill);
-  registry.register(recallMemorySkill);
+  // registry.register(recallMemorySkill);
 
   // Meta / System (4)
   registry.register(changeSettingsSkill);
@@ -75,7 +76,8 @@ export function createRegistry(): SkillRegistry {
   registry.register(getStatsSkill);
 
   // MCP (1)
-  registry.register(getMeetingNotesSkill);
+  // Registered when functional — placeholder skills pollute the tool list and confuse routing
+  // registry.register(getMeetingNotesSkill);
 
   return registry;
 }

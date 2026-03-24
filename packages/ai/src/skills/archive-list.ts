@@ -39,7 +39,7 @@ export const archiveListSkill: Skill = {
         data: { archivedAt: now },
       }),
       ctx.prisma.item.updateMany({
-        where: { listId: list.id, status: { not: "done" } },
+        where: { listId: list.id, status: { not: "done" }, userId: ctx.userId },
         data: { status: "done", completedAt: now },
       }),
     ]);

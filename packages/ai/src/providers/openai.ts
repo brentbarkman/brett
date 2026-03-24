@@ -104,6 +104,8 @@ export class OpenAIProvider implements AIProvider {
       { id: string; name: string; argsJson: string }
     >();
 
+    let doneEmitted = false;
+
     for await (const chunk of stream) {
       const choice = chunk.choices?.[0];
 
@@ -158,6 +160,7 @@ export class OpenAIProvider implements AIProvider {
 
       // Usage info on final chunk
       if (chunk.usage) {
+        doneEmitted = true;
         yield {
           type: "done",
           sessionId: "",
@@ -186,6 +189,11 @@ export class OpenAIProvider implements AIProvider {
         };
       }
       toolCallAccumulator.clear();
+    }
+
+    // Sentinel: if no done chunk was emitted during the stream, emit a fallback
+    if (!doneEmitted) {
+      yield { type: "done", sessionId: "", usage: { input: 0, output: 0 } };
     }
   }
 }

@@ -58,8 +58,8 @@ aiConfig.get("/config", async (c) => {
     orderBy: { createdAt: "asc" },
   });
 
-  return c.json(
-    configs.map((cfg) => ({
+  return c.json({
+    configs: configs.map((cfg) => ({
       id: cfg.id,
       provider: cfg.provider,
       isValid: cfg.isValid,
@@ -67,8 +67,8 @@ aiConfig.get("/config", async (c) => {
       maskedKey: maskKey(cfg.encryptedKey),
       createdAt: cfg.createdAt.toISOString(),
       updatedAt: cfg.updatedAt.toISOString(),
-    }))
-  );
+    })),
+  });
 });
 
 // POST /ai/config — Add/update a provider key (validates before saving)
