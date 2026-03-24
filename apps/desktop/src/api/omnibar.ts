@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from "react";
 import { streamingFetch } from "./streaming";
 import { useAIConfigs } from "./ai-config";
-import type { StreamChunk, DisplayHint } from "@brett/types";
+import { apiFetch } from "./client";
+import type { StreamChunk, DisplayHint, Thing } from "@brett/types";
 
 export interface OmnibarMessage {
   role: "user" | "assistant";
@@ -181,6 +182,53 @@ export function useOmnibar() {
     setInput("");
   }, [cancel]);
 
+  // Local action: create a task directly (no AI needed)
+  const createTask = useCallback(async (title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+
+    setMessages((prev) => [...prev, { role: "user", content: `Create task: "${trimmed}"` }]);
+    setInput("");
+
+    try {
+      const result = await apiFetch<{ id: string; title: string }>("/things", {
+        method: "POST",
+        body: JSON.stringify({ title: trimmed, type: "task" }),
+        headers: { "Content-Type": "application/json" },
+      });
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Created task "${result.title}".`, toolCalls: [{ name: "create_task", args: { title: trimmed }, result, displayHint: { type: "task_created" as const, taskId: result.id } }] },
+      ]);
+    } catch {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Failed to create task. Please try again." }]);
+    }
+  }, []);
+
+  // Local action: search things directly (no AI needed)
+  const searchThings = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+
+    setMessages((prev) => [...prev, { role: "user", content: `Search: "${trimmed}"` }]);
+    setInput("");
+
+    try {
+      const results = await apiFetch<Thing[]>(`/things?search=${encodeURIComponent(trimmed)}`);
+      if (results.length === 0) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `No results found for "${trimmed}".` }]);
+      } else {
+        const items = results.slice(0, 10).map((t) => ({ id: t.id, title: t.title, status: t.status }));
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `Found ${results.length} item${results.length === 1 ? "" : "s"}:`, toolCalls: [{ name: "search_things", args: { query: trimmed }, result: items, displayHint: { type: "task_list" as const, items } }] },
+        ]);
+      }
+    } catch {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Search failed. Please try again." }]);
+    }
+  }, []);
+
   return {
     isOpen,
     mode,
@@ -191,6 +239,8 @@ export function useOmnibar() {
     sessionId,
     hasAI,
     send,
+    createTask,
+    searchThings,
     cancel,
     close,
     open,

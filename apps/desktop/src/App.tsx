@@ -328,12 +328,14 @@ export function App() {
       isStreaming: omnibar.isStreaming,
       hasAI: omnibar.hasAI,
       onSend: (text: string) => omnibar.send(text, currentView),
+      onCreateTask: omnibar.createTask,
+      onSearch: omnibar.searchThings,
       onClose: omnibar.close,
       onOpen: () => omnibar.open("bar"),
       onCancel: omnibar.cancel,
       onReset: omnibar.reset,
     }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView]
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView]
   );
 
   // Apply dark mode to root
@@ -759,6 +761,8 @@ export function App() {
           isStreaming={omnibar.isStreaming}
           hasAI={omnibar.hasAI}
           onSend={(text) => omnibar.send(text, currentView)}
+          onCreateTask={omnibar.createTask}
+          onSearch={omnibar.searchThings}
           onClose={omnibar.close}
           onCancel={omnibar.cancel}
           onReset={omnibar.reset}

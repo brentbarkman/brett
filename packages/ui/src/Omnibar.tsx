@@ -23,6 +23,8 @@ export interface OmnibarProps {
   isStreaming: boolean;
   hasAI: boolean;
   onSend: (text: string) => void;
+  onCreateTask: (title: string) => void;
+  onSearch: (query: string) => void;
   onClose: () => void;
   onOpen: () => void;
   onCancel?: () => void;
@@ -44,6 +46,8 @@ export function Omnibar({
   isStreaming,
   hasAI,
   onSend,
+  onCreateTask,
+  onSearch,
   onClose,
   onOpen,
   onCancel,
@@ -108,13 +112,12 @@ export function Omnibar({
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "create") {
-        // For now, treat create as an AI command
-        onSend(`Create a task: ${input}`);
+        onCreateTask(input);
       } else if (suggestion.action === "search") {
-        onSend(`Search for: ${input}`);
+        onSearch(input);
       }
     },
-    [input, onSend]
+    [input, onSend, onCreateTask, onSearch]
   );
 
   const handleKeyDown = useCallback(
@@ -150,7 +153,12 @@ export function Omnibar({
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (input.trim()) {
-          onSend(input);
+          if (hasAI) {
+            onSend(input);
+          } else {
+            // No AI: default Enter creates a task
+            onCreateTask(input);
+          }
         }
       }
     },

@@ -22,6 +22,8 @@ export interface SpotlightModalProps {
   isStreaming: boolean;
   hasAI: boolean;
   onSend: (text: string) => void;
+  onCreateTask: (title: string) => void;
+  onSearch: (query: string) => void;
   onClose: () => void;
   onCancel?: () => void;
   onReset?: () => void;
@@ -35,6 +37,8 @@ export function SpotlightModal({
   isStreaming,
   hasAI,
   onSend,
+  onCreateTask,
+  onSearch,
   onClose,
   onCancel,
   onReset,
@@ -99,12 +103,12 @@ export function SpotlightModal({
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "create") {
-        onSend(`Create a task: ${input}`);
+        onCreateTask(input);
       } else if (suggestion.action === "search") {
-        onSend(`Search for: ${input}`);
+        onSearch(input);
       }
     },
-    [input, onSend]
+    [input, onSend, onCreateTask, onSearch]
   );
 
   const handleKeyDown = useCallback(
@@ -140,11 +144,15 @@ export function SpotlightModal({
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (input.trim()) {
-          onSend(input);
+          if (hasAI) {
+            onSend(input);
+          } else {
+            onCreateTask(input);
+          }
         }
       }
     },
-    [showSuggestions, suggestions, selectedSuggestion, handleSuggestionSelect, input, onSend, onClose]
+    [showSuggestions, suggestions, selectedSuggestion, handleSuggestionSelect, input, hasAI, onSend, onCreateTask, onClose]
   );
 
   if (!isOpen) return null;
