@@ -1,3 +1,4 @@
+import { createGranolaClient } from "../mcp/granola.js";
 import type { Skill } from "./types.js";
 
 export const getMeetingNotesSkill: Skill = {
@@ -15,18 +16,45 @@ export const getMeetingNotesSkill: Skill = {
         type: "string",
         description: "Search query for meeting notes",
       },
+      date: {
+        type: "string",
+        description: "Date to retrieve meeting notes for (ISO format)",
+      },
     },
   },
   modelTier: "small",
   requiresAI: false,
 
-  async execute(_params, _ctx) {
+  async execute(params, _ctx) {
+    const granolaClient = createGranolaClient();
+
+    if (!granolaClient) {
+      return {
+        success: true,
+        data: { placeholder: true },
+        displayHint: { type: "text" },
+        message:
+          "MCP integration coming soon. This will connect to meeting note services to retrieve transcripts and summaries.",
+      };
+    }
+
+    const date = (params as Record<string, unknown>).date as string | undefined;
+    const notes = await granolaClient.getMeetingNotes(date ?? new Date().toISOString());
+
+    if (!notes) {
+      return {
+        success: true,
+        data: { notes: null },
+        displayHint: { type: "text" },
+        message: "No meeting notes found.",
+      };
+    }
+
     return {
       success: true,
-      data: { placeholder: true },
+      data: { notes },
       displayHint: { type: "text" },
-      message:
-        "MCP integration coming soon. This will connect to meeting note services to retrieve transcripts and summaries.",
+      message: notes,
     };
   },
 };

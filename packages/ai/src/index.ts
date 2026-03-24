@@ -26,6 +26,10 @@ export type { OrchestratorParams } from "./orchestrator.js";
 export { extractFacts } from "./memory/facts.js";
 export { embedConversation, searchSimilar } from "./memory/embeddings.js";
 
+// MCP
+export type { MCPClient } from "./mcp/client.js";
+export { GranolaMCPClient, createGranolaClient } from "./mcp/granola.js";
+
 // Context
 export {
   BRETT_SYSTEM_PROMPT,
