@@ -13,6 +13,7 @@ import sse from "./routes/sse.js";
 import webhooks from "./routes/webhooks.js";
 import extract from "./routes/extract.js";
 import { aiConfig } from "./routes/ai-config.js";
+import { brettOmnibar } from "./routes/brett-omnibar.js";
 import { startCronJobs } from "./jobs/cron.js";
 
 export const app = new Hono();
@@ -49,6 +50,7 @@ app.route("/things", extract);
 app.route("/calendar", calendar);
 app.route("/calendar/accounts", calendarAccounts);
 app.route("/ai", aiConfig);
+app.route("/brett/omnibar", brettOmnibar);
 app.route("/events", sse);
 app.route("/webhooks", webhooks);
 

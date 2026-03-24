@@ -10,6 +10,7 @@ import {
   TriagePopup,
   SkeletonListView,
 } from "@brett/ui";
+import type { OmnibarProps } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, NavList, FilterType } from "@brett/types";
 import { getTodayUTC, getEndOfWeekUTC } from "@brett/business";
 import {
@@ -25,9 +26,10 @@ interface TodayViewProps {
   onItemClick: (item: Thing | CalendarEventDisplay) => void;
   onTriageOpen: (mode: "list-first" | "date-first", ids: string[]) => void;
   onFocusChange?: (thing: Thing) => void;
+  omnibarProps: OmnibarProps;
 }
 
-export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange }: TodayViewProps) {
+export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [isBriefingVisible, setIsBriefingVisible] = useState(true);
 
@@ -113,7 +115,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange }: T
 
   return (
     <>
-      <Omnibar />
+      <Omnibar {...omnibarProps} />
 
       {isBriefingVisible && (
         <MorningBriefing

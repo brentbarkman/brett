@@ -22,6 +22,7 @@ import {
   ConfirmDialog,
   AppDropZone,
   cleanFilename,
+  SpotlightModal,
 } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
@@ -52,6 +53,7 @@ import {
 } from "./api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
 import { useEventStream, useSSEHandler } from "./api/sse";
+import { useOmnibar } from "./api/omnibar";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
@@ -289,6 +291,54 @@ export function App() {
 
   // Inbox data
   const { data: inboxData } = useInboxThings();
+
+  // Omnibar state (shared between bar and spotlight)
+  const omnibar = useOmnibar();
+
+  // Global Cmd+K / Ctrl+K listener for spotlight
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        if (omnibar.isOpen && omnibar.mode === "spotlight") {
+          omnibar.close();
+        } else {
+          omnibar.open("spotlight");
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [omnibar.isOpen, omnibar.mode, omnibar.close, omnibar.open]);
+
+  // Build omnibar props for the bar component
+  const currentView = useMemo(() => {
+    const path = location.pathname;
+    if (path === "/today") return "today";
+    if (path === "/upcoming") return "upcoming";
+    if (path === "/inbox") return "inbox";
+    if (path === "/calendar") return "calendar";
+    if (path === "/settings") return "settings";
+    if (path.startsWith("/lists/")) return `list:${path.split("/lists/")[1]}`;
+    return undefined;
+  }, [location.pathname]);
+
+  const omnibarProps = useMemo(
+    () => ({
+      isOpen: omnibar.isOpen && omnibar.mode === "bar",
+      input: omnibar.input,
+      onInputChange: omnibar.setInput,
+      messages: omnibar.messages,
+      isStreaming: omnibar.isStreaming,
+      hasAI: omnibar.hasAI,
+      onSend: (text: string) => omnibar.send(text, currentView),
+      onClose: omnibar.close,
+      onOpen: () => omnibar.open("bar"),
+      onCancel: omnibar.cancel,
+      onReset: omnibar.reset,
+    }),
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView]
+  );
 
   // Apply dark mode to root
   useEffect(() => {
@@ -558,6 +608,7 @@ export function App() {
                   onItemClick={handleItemClick}
                   onTriageOpen={handleTriageOpen}
                   onFocusChange={handleFocusChange}
+                  omnibarProps={omnibarProps}
                 />
               </MainLayout>
             } />
@@ -704,6 +755,20 @@ export function App() {
             onCancel={() => setDeleteListConfirm(null)}
           />
         )}
+
+        {/* Spotlight Modal (Cmd+K) */}
+        <SpotlightModal
+          isOpen={omnibar.isOpen && omnibar.mode === "spotlight"}
+          input={omnibar.input}
+          onInputChange={omnibar.setInput}
+          messages={omnibar.messages}
+          isStreaming={omnibar.isStreaming}
+          hasAI={omnibar.hasAI}
+          onSend={(text) => omnibar.send(text, currentView)}
+          onClose={omnibar.close}
+          onCancel={omnibar.cancel}
+          onReset={omnibar.reset}
+        />
 
         {/* Archive list confirmation */}
         {archiveListConfirm && (

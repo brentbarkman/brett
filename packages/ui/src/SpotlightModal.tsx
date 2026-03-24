@@ -1,10 +1,9 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Bot, Send, Search, Plus, Sparkles, X, Square } from "lucide-react";
-import { useClickOutside } from "./useClickOutside";
+import React, { useEffect, useRef, useCallback } from "react";
+import { Bot, Send, Square, X, Sparkles, Search, Plus } from "lucide-react";
 import { SkillResultCard } from "./SkillResultCard";
 import type { DisplayHint } from "@brett/types";
 
-export interface OmnibarMessage {
+export interface SpotlightMessage {
   role: "user" | "assistant";
   content: string;
   toolCalls?: Array<{
@@ -15,28 +14,20 @@ export interface OmnibarMessage {
   }>;
 }
 
-export interface OmnibarProps {
+export interface SpotlightModalProps {
   isOpen: boolean;
   input: string;
   onInputChange: (value: string) => void;
-  messages: OmnibarMessage[];
+  messages: SpotlightMessage[];
   isStreaming: boolean;
   hasAI: boolean;
   onSend: (text: string) => void;
   onClose: () => void;
-  onOpen: () => void;
   onCancel?: () => void;
   onReset?: () => void;
 }
 
-type Suggestion = {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  action: "ask" | "create" | "search";
-};
-
-export function Omnibar({
+export function SpotlightModal({
   isOpen,
   input,
   onInputChange,
@@ -45,18 +36,12 @@ export function Omnibar({
   hasAI,
   onSend,
   onClose,
-  onOpen,
   onCancel,
   onReset,
-}: OmnibarProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+}: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [selectedSuggestion, setSelectedSuggestion] = useState(0);
-
-  useClickOutside(containerRef, () => {
-    if (isOpen && !isStreaming) onClose();
-  }, isOpen);
+  const [selectedSuggestion, setSelectedSuggestion] = React.useState(0);
 
   // Focus input when opening
   useEffect(() => {
@@ -65,7 +50,7 @@ export function Omnibar({
     }
   }, [isOpen]);
 
-  // Auto-scroll chat to bottom
+  // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -76,9 +61,15 @@ export function Omnibar({
   }, [input]);
 
   const hasConversation = messages.length > 0;
-  const showSuggestions = isOpen && input.trim().length > 0 && !hasConversation;
+  const showSuggestions = input.trim().length > 0 && !hasConversation;
 
-  // Build suggestions
+  type Suggestion = {
+    id: string;
+    label: string;
+    icon: React.ReactNode;
+    action: "ask" | "create" | "search";
+  };
+
   const suggestions: Suggestion[] = [];
   if (showSuggestions) {
     if (hasAI) {
@@ -108,7 +99,6 @@ export function Omnibar({
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "create") {
-        // For now, treat create as an AI command
         onSend(`Create a task: ${input}`);
       } else if (suggestion.action === "search") {
         onSend(`Search for: ${input}`);
@@ -157,25 +147,24 @@ export function Omnibar({
     [showSuggestions, suggestions, selectedSuggestion, handleSuggestionSelect, input, onSend, onClose]
   );
 
+  if (!isOpen) return null;
+
   return (
-    <div ref={containerRef} className="relative w-full">
-      {/* Top Pill / Input Area */}
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
+      {/* Backdrop */}
       <div
-        className={`
-          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-300 ease-in-out
-          ${isOpen ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-white/10 hover:border-white/20"}
-          ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
-        `}
-      >
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={() => !isStreaming && onClose()}
+      />
+
+      {/* Modal */}
+      <div className="relative w-[520px] max-h-[70vh] bg-black/70 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Input Row */}
-        <div
-          className="flex items-center h-12 px-4 cursor-text"
-          onClick={() => !isOpen && onOpen()}
-        >
+        <div className="flex items-center h-14 px-5 border-b border-white/10">
           <Bot
-            size={18}
-            className={`flex-shrink-0 transition-colors ${
-              isOpen || isStreaming ? "text-blue-400" : "text-white/40"
+            size={20}
+            className={`flex-shrink-0 ${
+              isStreaming ? "text-blue-400 animate-pulse" : "text-blue-400"
             }`}
           />
           <input
@@ -185,11 +174,10 @@ export function Omnibar({
             className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
-            onFocus={() => !isOpen && onOpen()}
             onKeyDown={handleKeyDown}
             disabled={isStreaming}
           />
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {isStreaming && onCancel ? (
               <button
                 onClick={onCancel}
@@ -198,7 +186,7 @@ export function Omnibar({
               >
                 <Square size={14} className="text-white/50" />
               </button>
-            ) : isOpen && hasConversation ? (
+            ) : hasConversation && onReset ? (
               <button
                 onClick={onReset}
                 className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/40 hover:text-white/60"
@@ -206,91 +194,100 @@ export function Omnibar({
               >
                 <X size={14} />
               </button>
-            ) : !isOpen ? (
-              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
-                <span>&#8984;</span>K
-              </kbd>
             ) : null}
+            <kbd className="inline-flex items-center px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+              ESC
+            </kbd>
           </div>
         </div>
 
-        {/* Conversation Area */}
-        {isOpen && hasConversation && (
-          <div className="border-t border-white/10">
-            <div className="max-h-[350px] overflow-y-auto scrollbar-hide p-4 space-y-4">
-              {messages.map((msg, i) => (
-                <MessageBubble
-                  key={i}
-                  message={msg}
-                  isLast={i === messages.length - 1}
-                  isStreaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
-                />
-              ))}
-              <div ref={chatEndRef} />
-            </div>
+        {/* Suggestions */}
+        {showSuggestions && (
+          <div className="border-b border-white/10">
+            {suggestions.map((suggestion, i) => (
+              <button
+                key={suggestion.id}
+                className={`w-full flex items-center gap-3 px-5 py-2.5 text-sm text-left transition-colors ${
+                  i === selectedSuggestion
+                    ? "bg-white/10 text-white"
+                    : "text-white/70 hover:bg-white/5"
+                }`}
+                onClick={() => handleSuggestionSelect(suggestion)}
+                onMouseEnter={() => setSelectedSuggestion(i)}
+              >
+                {suggestion.icon}
+                <span className="truncate">{suggestion.label}</span>
+                {i === 0 && (
+                  <span className="ml-auto text-[10px] text-white/30 font-mono flex-shrink-0">
+                    ENTER
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
-            {/* Follow-up Input */}
-            {!isStreaming && (
-              <div className="border-t border-white/10 px-4 py-3 flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Follow up..."
-                  className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
-                  value={input}
-                  onChange={(e) => onInputChange(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                />
-                <button
-                  onClick={() => input.trim() && onSend(input)}
-                  disabled={!input.trim()}
-                  className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-30 disabled:hover:bg-blue-500"
-                >
-                  <Send size={14} />
-                </button>
-              </div>
-            )}
+        {/* Conversation */}
+        {hasConversation && (
+          <div className="max-h-[45vh] overflow-y-auto scrollbar-hide p-5 space-y-4">
+            {messages.map((msg, i) => (
+              <SpotlightMessageBubble
+                key={i}
+                message={msg}
+                isStreaming={
+                  isStreaming &&
+                  i === messages.length - 1 &&
+                  msg.role === "assistant"
+                }
+              />
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+        )}
+
+        {/* Follow-up input when conversation exists */}
+        {hasConversation && !isStreaming && (
+          <div className="border-t border-white/10 px-5 py-3 flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Follow up..."
+              className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
+              value={input}
+              onChange={(e) => onInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+            <button
+              onClick={() => input.trim() && onSend(input)}
+              disabled={!input.trim()}
+              className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-30 disabled:hover:bg-blue-500"
+            >
+              <Send size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Empty state hint */}
+        {!hasConversation && !showSuggestions && (
+          <div className="px-5 py-8 text-center">
+            <p className="text-sm text-white/30">
+              {hasAI
+                ? "Ask a question, create a task, or search..."
+                : "Create a task or search your items..."}
+            </p>
           </div>
         )}
       </div>
-
-      {/* Suggestions Dropdown */}
-      {showSuggestions && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden shadow-xl">
-          {suggestions.map((suggestion, i) => (
-            <button
-              key={suggestion.id}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                i === selectedSuggestion
-                  ? "bg-white/10 text-white"
-                  : "text-white/70 hover:bg-white/5"
-              }`}
-              onClick={() => handleSuggestionSelect(suggestion)}
-              onMouseEnter={() => setSelectedSuggestion(i)}
-            >
-              {suggestion.icon}
-              <span className="truncate">{suggestion.label}</span>
-              {i === 0 && (
-                <span className="ml-auto text-[10px] text-white/30 font-mono flex-shrink-0">
-                  ENTER
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── MessageBubble sub-component ───
+// ─── Message bubble for Spotlight ───
 
-function MessageBubble({
+function SpotlightMessageBubble({
   message,
-  isLast,
   isStreaming,
 }: {
-  message: OmnibarMessage;
-  isLast: boolean;
+  message: SpotlightMessage;
   isStreaming: boolean;
 }) {
   if (message.role === "user") {
@@ -314,7 +311,6 @@ function MessageBubble({
         <Bot size={12} className="text-blue-400" />
       </div>
       <div className="flex-1 min-w-0 space-y-2">
-        {/* Text content */}
         {(message.content || isStreaming) && (
           <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">
             {message.content}
@@ -324,7 +320,6 @@ function MessageBubble({
           </p>
         )}
 
-        {/* Skill result cards */}
         {message.toolCalls
           ?.filter((tc) => tc.displayHint)
           .map((tc, i) => (
@@ -332,7 +327,15 @@ function MessageBubble({
               key={i}
               displayHint={tc.displayHint!}
               data={tc.result}
-              message={typeof tc.result === "object" && tc.result && "message" in (tc.result as Record<string, unknown>) ? String((tc.result as Record<string, unknown>).message) : undefined}
+              message={
+                typeof tc.result === "object" &&
+                tc.result &&
+                "message" in (tc.result as Record<string, unknown>)
+                  ? String(
+                      (tc.result as Record<string, unknown>).message
+                    )
+                  : undefined
+              }
             />
           ))}
       </div>
