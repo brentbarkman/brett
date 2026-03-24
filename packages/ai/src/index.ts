@@ -16,3 +16,4 @@ export { SkillRegistry } from "./skills/registry.js";
 export type { Skill, SkillContext, SkillResult } from "./skills/types.js";
 export { validateSkillArgs } from "./skills/validate-args.js";
 export { scopedItems, scopedLists, scopedEvents } from "./skills/scoped-queries.js";
+export { createRegistry } from "./skills/index.js";

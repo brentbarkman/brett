@@ -306,6 +306,8 @@ export type DisplayHint =
   | { type: "task_created"; taskId: string }
   | { type: "task_list"; items: { id: string; title: string; status: string }[] }
   | { type: "calendar_events"; events: { id: string; title: string; startTime: string; endTime: string }[] }
-  | { type: "confirmation"; message: string; action: string }
+  | { type: "confirmation"; message?: string; action?: string }
   | { type: "settings_changed"; setting: string }
-  | { type: "text" };
+  | { type: "text" }
+  | { type: "list" }
+  | { type: "detail" };
