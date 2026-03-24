@@ -247,3 +247,65 @@ export interface CreateBrettMessageInput {
 }
 
 export * from "./calendar";
+
+// ─── AI Types ───
+
+export type AIProviderName = "anthropic" | "openai" | "google";
+export type ModelTier = "small" | "medium" | "large";
+export type ConversationSource = "omnibar" | "brett_thread" | "briefing" | "scout";
+export type MessageRole = "user" | "assistant" | "tool_call" | "tool_result";
+export type FactCategory = "preference" | "context" | "relationship" | "habit";
+
+export interface UserAIConfigRecord {
+  id: string;
+  provider: AIProviderName;
+  isValid: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationSessionRecord {
+  id: string;
+  source: ConversationSource;
+  itemId: string | null;
+  calendarEventId: string | null;
+  modelTier: string;
+  modelUsed: string;
+  createdAt: string;
+}
+
+export interface ConversationMessageRecord {
+  id: string;
+  role: MessageRole;
+  content: string;
+  toolName: string | null;
+  toolArgs: Record<string, unknown> | null;
+  tokenCount: number | null;
+  createdAt: string;
+}
+
+export interface UserFactRecord {
+  id: string;
+  category: FactCategory;
+  key: string;
+  value: string;
+  confidence: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type StreamChunk =
+  | { type: "text"; content: string }
+  | { type: "tool_call"; id: string; name: string; args: Record<string, unknown> }
+  | { type: "tool_result"; id: string; data: unknown; displayHint?: DisplayHint; message?: string }
+  | { type: "done"; sessionId: string; usage: { input: number; output: number } }
+  | { type: "error"; message: string };
+
+export type DisplayHint =
+  | { type: "task_created"; taskId: string }
+  | { type: "task_list"; items: { id: string; title: string; status: string }[] }
+  | { type: "calendar_events"; events: { id: string; title: string; startTime: string; endTime: string }[] }
+  | { type: "confirmation"; message: string; action: string }
+  | { type: "settings_changed"; setting: string }
+  | { type: "text" };
