@@ -328,7 +328,7 @@ export function App() {
       isStreaming: omnibar.isStreaming,
       hasAI: omnibar.hasAI,
       onSend: (text: string) => omnibar.send(text, currentView),
-      onCreateTask: omnibar.createTask,
+      onCreateTask: (title: string) => omnibar.createTask(title, currentView),
       onSearch: omnibar.searchThings,
       onClose: omnibar.close,
       onOpen: () => omnibar.open("bar"),
@@ -761,7 +761,7 @@ export function App() {
           isStreaming={omnibar.isStreaming}
           hasAI={omnibar.hasAI}
           onSend={(text) => omnibar.send(text, currentView)}
-          onCreateTask={omnibar.createTask}
+          onCreateTask={(title: string) => omnibar.createTask(title, currentView)}
           onSearch={omnibar.searchThings}
           onClose={omnibar.close}
           onCancel={omnibar.cancel}

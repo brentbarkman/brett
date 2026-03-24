@@ -188,19 +188,28 @@ export function useOmnibar() {
 
   // Local action: create a task directly (no AI needed)
   // No chat UI — just do it, invalidate queries, close the omnibar
-  const createTask = useCallback(async (title: string) => {
+  // When on Today view, set dueDate to today so it appears in the current list
+  const createTask = useCallback(async (title: string, currentView?: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
     setInput("");
 
+    const body: Record<string, unknown> = { title: trimmed, type: "task" };
+
+    // Context-aware defaults based on current view
+    if (currentView === "today") {
+      body.dueDate = new Date().toISOString().split("T")[0];
+    } else if (currentView?.startsWith("list:")) {
+      body.listId = currentView.slice(5);
+    }
+
     try {
       await apiFetch("/things", {
         method: "POST",
-        body: JSON.stringify({ title: trimmed, type: "task" }),
+        body: JSON.stringify(body),
         headers: { "Content-Type": "application/json" },
       });
-      // Refresh task lists so the new task shows up immediately
       queryClient.invalidateQueries({ queryKey: ["things"] });
       queryClient.invalidateQueries({ queryKey: ["inbox"] });
     } catch {
