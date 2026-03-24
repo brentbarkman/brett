@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Brain, Trash2 } from "lucide-react";
 import { useUserFacts, useDeleteUserFact } from "../api/user-facts";
+import { useAIConfigs } from "../api/ai-config";
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   preference: { label: "Preference", color: "text-blue-400" },
@@ -69,6 +70,8 @@ function FactRow({
 export function MemorySection() {
   const { data, isLoading, error } = useUserFacts();
   const deleteFact = useDeleteUserFact();
+  const { data: aiConfigData } = useAIConfigs();
+  const hasAI = (aiConfigData?.configs ?? []).some((c) => c.isActive && c.isValid);
 
   const facts = data?.facts ?? [];
 
@@ -117,7 +120,9 @@ export function MemorySection() {
         <div className="flex flex-col items-center gap-2 py-4 text-center">
           <Brain size={24} className="text-white/20" />
           <p className="text-xs text-white/30">
-            Brett hasn't learned anything about you yet
+            {hasAI
+              ? "Brett hasn't learned anything about you yet. It will pick up on your preferences as you chat."
+              : "Configure an AI provider above to enable Brett's memory."}
           </p>
         </div>
       )}
