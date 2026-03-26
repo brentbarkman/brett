@@ -3,13 +3,12 @@ import { scopedLists } from "./scoped-queries.js";
 
 export const archiveListSkill: Skill = {
   name: "archive_list",
-  description:
-    "Archive a list and mark its incomplete items as done. Use when the user wants to archive, close, or finish a list/project.",
+  description: "Archive a list and complete its items.",
   parameters: {
     type: "object",
     properties: {
-      listName: { type: "string", description: "Name of the list to archive" },
-      listId: { type: "string", description: "List ID (alternative to listName)" },
+      listName: { type: "string" },
+      listId: { type: "string", description: "Alt to listName" },
     },
   },
   modelTier: "small",

@@ -1,23 +1,36 @@
 import type { Skill } from "./types.js";
 import type { ToolDefinition } from "../providers/types.js";
 
-// Core skills sent on every request (~9 tools, ~700 tokens instead of ~1,600)
-const CORE_SKILLS = new Set([
-  "create_task", "create_content", "search_things", "list_today", "complete_task",
-  "get_item_detail", "get_calendar_events", "get_next_event", "up_next",
-]);
-
-// Keyword patterns that hint at needing specific tool groups
-const TOOL_HINTS: Record<string, string[]> = {
-  list: ["create_list", "archive_list", "get_list_items", "list_inbox", "list_upcoming", "move_to_list"],
-  content: ["create_content"],
-  snooze: ["snooze_item"],
-  update: ["update_item"],
-  settings: ["change_settings"],
-  feedback: ["submit_feedback"],
-  help: ["explain_feature"],
-  stats: ["get_stats"],
+// Intent-based tool groups — each request gets only the tools it needs.
+// Routing guidance lives in the system prompt; tools are just capabilities.
+const INTENT_GROUPS: Record<string, string[]> = {
+  query: [
+    "search_things", "get_item_detail", "list_today", "list_upcoming",
+    "list_inbox", "get_list_items", "get_calendar_events", "get_next_event",
+    "up_next", "get_stats",
+  ],
+  create: [
+    "create_task", "create_content", "create_list",
+  ],
+  mutate: [
+    "update_item", "complete_task", "move_to_list", "snooze_item", "archive_list",
+  ],
+  meta: [
+    "change_settings", "submit_feedback", "explain_feature",
+  ],
 };
+
+// Lookup tools needed by create/mutate to resolve IDs and list names.
+// Much cheaper than pulling the full query group (~2 tools vs ~10).
+const LOOKUP_TOOLS = ["search_things", "get_item_detail"];
+
+// Regex patterns for intent classification — uses word boundaries to avoid false matches
+const INTENT_PATTERNS: Array<{ intent: string; pattern: RegExp }> = [
+  { intent: "create", pattern: /\b(create|make|add|new|save|remind)\b/ },
+  { intent: "mutate", pattern: /\b(done|complete|finish|mark|move|put|update|edit|change|rename|set|snooze|defer|later|archive|delete|remove)\b/ },
+  { intent: "query", pattern: /\b(what|when|where|show|list|how many|search|find|look|get|next|upcoming|today|inbox|schedule|meeting|calendar|stat)\b/ },
+  { intent: "meta", pattern: /\b(settings?|provider|model|switch|feedback|bug|feature request|help|explain|how does)\b/ },
+];
 
 export class SkillRegistry {
   private skills = new Map<string, Skill>();
@@ -44,39 +57,47 @@ export class SkillRegistry {
   }
 
   /**
-   * Context-aware tool selection — sends core tools + any tools
-   * hinted at by the user's message. Saves ~1,000 tokens per request
-   * vs sending all 21 tools every time.
+   * Intent-based tool selection — classifies the message into intents
+   * and sends only the tools for matched intent groups.
+   * Falls back to query + create + mutate for ambiguous messages.
    */
   toToolDefinitionsForMessage(message: string): ToolDefinition[] {
     const lower = message.toLowerCase();
 
-    // Complex requests (long messages or multiple action words) get ALL tools.
-    // The token savings from keyword filtering aren't worth it when missing a
-    // tool causes the LLM to fail on multi-step requests.
-    const actionWords = lower.match(/\b(create|make|move|add|put|delete|remove|archive|update|change|set|snooze|complete|done|mark)\b/g);
-    const isComplex = lower.length > 80 || (actionWords && actionWords.length >= 2);
-
-    if (isComplex) {
-      return this.toToolDefinitions();
-    }
-
-    // Simple requests get core tools + keyword-matched extras
-    const needed = new Set<string>(CORE_SKILLS);
-
-    for (const [keyword, skills] of Object.entries(TOOL_HINTS)) {
-      if (lower.includes(keyword)) {
-        for (const s of skills) needed.add(s);
+    // Classify intents from the message
+    const matchedIntents = new Set<string>();
+    for (const { intent, pattern } of INTENT_PATTERNS) {
+      if (pattern.test(lower)) {
+        matchedIntents.add(intent);
       }
     }
 
-    if (lower.match(/\b(move|put|add to)\b/)) needed.add("move_to_list");
-    if (lower.match(/\b(create|make|new)\b.*\b(list|project|folder)\b/)) needed.add("create_list");
-    if (lower.match(/\b(edit|change|update|rename|set)\b/)) needed.add("update_item");
-    if (lower.match(/\b(inbox|unassigned)\b/)) needed.add("list_inbox");
-    if (lower.match(/\b(upcoming|next week|later)\b/)) needed.add("list_upcoming");
-    if (lower.match(/\b(save|article|podcast|video|web)\b/) || lower.match(/https?:\/\//)) needed.add("create_content");
-    if (lower.match(/\b(snooze|later|remind)\b/)) needed.add("snooze_item");
+    // URL in message → likely saving content
+    if (/https?:\/\//.test(lower)) {
+      matchedIntents.add("create");
+    }
+
+    // No intents matched → ambiguous, send query + create + mutate (skip meta)
+    if (matchedIntents.size === 0) {
+      matchedIntents.add("query");
+      matchedIntents.add("create");
+      matchedIntents.add("mutate");
+    }
+
+    // Collect unique tool names from matched groups
+    const needed = new Set<string>();
+    for (const intent of matchedIntents) {
+      const group = INTENT_GROUPS[intent];
+      if (group) {
+        for (const name of group) needed.add(name);
+      }
+    }
+
+    // Create/mutate need lookup tools to resolve IDs — but NOT the full query group.
+    // "mark it complete" needs search_things + complete_task, not list_today + get_stats.
+    if ((matchedIntents.has("create") || matchedIntents.has("mutate")) && !matchedIntents.has("query")) {
+      for (const name of LOOKUP_TOOLS) needed.add(name);
+    }
 
     return Array.from(needed)
       .map((name) => this.skills.get(name))

@@ -4,15 +4,11 @@ import { itemToThing } from "@brett/business";
 
 export const listInboxSkill: Skill = {
   name: "list_inbox",
-  description:
-    "Show items in the inbox (no list assigned and no due date). Use when the user asks about their inbox, unsorted items, or things that need triaging.",
+  description: "List inbox items (no list, no due date).",
   parameters: {
     type: "object",
     properties: {
-      limit: {
-        type: "number",
-        description: "Max items to return (default 20)",
-      },
+      limit: { type: "number" },
     },
   },
   modelTier: "small",

@@ -9,6 +9,8 @@ export interface UsageEntry {
   source: string;
   inputTokens: number;
   outputTokens: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
 }
 
 export async function logUsage(prisma: PrismaClient, entry: UsageEntry): Promise<void> {
@@ -22,6 +24,8 @@ export async function logUsage(prisma: PrismaClient, entry: UsageEntry): Promise
       source: entry.source,
       inputTokens: entry.inputTokens,
       outputTokens: entry.outputTokens,
+      cacheCreationTokens: entry.cacheCreationTokens ?? 0,
+      cacheReadTokens: entry.cacheReadTokens ?? 0,
     },
   }).catch((err) => console.error("[usage-log] Failed:", err.message));
 }

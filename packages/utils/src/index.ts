@@ -1,4 +1,27 @@
-import type { CalendarGlassColor } from "@brett/types";
+import type { CalendarGlassColor, ContentType } from "@brett/types";
+
+// ── URL content type detection ──
+
+const CONTENT_TYPE_PATTERNS: [RegExp, ContentType][] = [
+  [/^https?:\/\/(www\.)?(x|twitter)\.com\/[^/]+\/article\//i, "article"],
+  [/^https?:\/\/(www\.)?(x|twitter)\.com\/[^/]+\/status\//i, "tweet"],
+  [/^https?:\/\/(www\.)?youtube\.com\/watch/i, "video"],
+  [/^https?:\/\/(www\.)?youtube\.com\/shorts\//i, "video"],
+  [/^https?:\/\/(www\.)?youtu\.be\//i, "video"],
+  [/^https?:\/\/open\.spotify\.com\/episode\//i, "podcast"],
+  [/^https?:\/\/podcasts\.apple\.com\/.+\/podcast\//i, "podcast"],
+  [/\.pdf(\?.*)?$/i, "pdf"],
+  [/^https?:\/\/(www\.)?medium\.com\//i, "article"],
+  [/^https?:\/\/[^/]+\.substack\.com\//i, "article"],
+];
+
+/** Detect content type from URL patterns (video, article, tweet, etc.) */
+export function detectContentType(url: string): ContentType {
+  for (const [pattern, type] of CONTENT_TYPE_PATTERNS) {
+    if (pattern.test(url)) return type;
+  }
+  return "web_page";
+}
 
 export function formatDate(date: Date): string {
   return date.toLocaleDateString("en-US", {

@@ -268,6 +268,8 @@ export function Omnibar({
               onChange={(e) => onInputChange(e.target.value)}
               onFocus={() => !isOpen && onOpen()}
               onKeyDown={handleKeyDown}
+              data-1p-ignore
+              autoComplete="off"
             />
             {!isOpen && (
               <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
@@ -350,6 +352,8 @@ export function Omnibar({
                     onChange={(e) => onInputChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     autoFocus
+                    data-1p-ignore
+                    autoComplete="off"
                   />
                   <button
                     onClick={() => input.trim() && onSend(input)}
@@ -477,15 +481,29 @@ function MessageBubble({
         <Bot size={12} className="text-blue-400" />
       </div>
       <div className="flex-1 min-w-0 space-y-2">
-        {/* Text content with markdown rendering */}
-        {(message.content || isStreaming) && (
-          <div className="text-sm text-white/90 leading-relaxed">
-            <SimpleMarkdown content={message.content} onItemClick={onItemClick} onNavigate={onNavigate} />
-            {isStreaming && (
-              <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
-            )}
-          </div>
-        )}
+        {/* Text content — suppressed when a confirmation card exists (the card IS the response) */}
+        {(() => {
+          const hasConfirmation = message.toolCalls?.some((tc) => tc.displayHint?.type === "confirmation" || tc.displayHint?.type === "task_created");
+          if (!hasConfirmation && (message.content || isStreaming)) {
+            return (
+              <div className="text-sm text-white/90 leading-relaxed">
+                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onNavigate={onNavigate} />
+                {isStreaming && (
+                  <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+                )}
+              </div>
+            );
+          }
+          if (isStreaming && !message.toolCalls?.length) {
+            return (
+              <div className="text-sm text-white/90 leading-relaxed">
+                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onNavigate={onNavigate} />
+                <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Skill result cards */}
         {message.toolCalls

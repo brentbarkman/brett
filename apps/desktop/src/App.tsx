@@ -858,6 +858,15 @@ export function App() {
           onCancel={omnibar.cancel}
           onReset={omnibar.reset}
           onNavigateToSettings={() => navigate("/settings#ai-settings")}
+          onItemClick={(id: string) => {
+            setSelectedItem({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
+            setIsDetailOpen(true);
+            omnibar.close();
+          }}
+          onNavigate={(path: string) => {
+            navigate(path);
+            omnibar.close();
+          }}
           sessionId={omnibar.sessionId}
           showTokenUsage={showTokenUsage}
           sessionUsage={sessionUsageData ?? null}

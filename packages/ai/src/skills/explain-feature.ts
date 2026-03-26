@@ -25,16 +25,11 @@ const FEATURE_EXPLANATIONS: Record<string, string> = {
 
 export const explainFeatureSkill: Skill = {
   name: "explain_feature",
-  description:
-    "Explain how a Brett feature works. Use when the user asks 'what is...?', 'how does ... work?', 'help with...', or wants to understand a feature of the app.",
+  description: "Explain a Brett feature.",
   parameters: {
     type: "object",
     properties: {
-      feature: {
-        type: "string",
-        description:
-          "Feature name to explain. Options: inbox, today, upcoming, lists, calendar, brett, content, snooze, brett's take, shortcuts",
-      },
+      feature: { type: "string", enum: ["inbox", "today", "upcoming", "lists", "calendar", "brett", "content", "snooze", "brett's take", "shortcuts"] },
     },
     required: ["feature"],
   },

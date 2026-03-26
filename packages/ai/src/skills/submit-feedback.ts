@@ -2,15 +2,11 @@ import type { Skill } from "./types.js";
 
 export const submitFeedbackSkill: Skill = {
   name: "submit_feedback",
-  description:
-    "Submit feedback about Brett. Use when the user wants to report a bug, suggest a feature, or share feedback about the app.",
+  description: "Submit user feedback about Brett.",
   parameters: {
     type: "object",
     properties: {
-      feedback: {
-        type: "string",
-        description: "The feedback text from the user",
-      },
+      feedback: { type: "string" },
     },
     required: ["feedback"],
   },

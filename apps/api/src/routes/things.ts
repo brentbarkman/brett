@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { getPresignedUrl } from "../lib/storage.js";
 import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem, computeNextDueDate } from "@brett/business";
 import { runExtraction } from "../lib/content-extractor.js";
+import { detectContentType } from "@brett/utils";
 import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
 
 const things = new Hono<AuthEnv>();
@@ -246,7 +247,7 @@ things.post("/", async (c) => {
       description: data.description,
       source: data.source ?? (data.type === "content" && data.sourceUrl ? new URL(data.sourceUrl).hostname : "Brett"),
       sourceUrl: data.sourceUrl,
-      contentType: data.contentType ?? null,
+      contentType: data.contentType ?? (data.sourceUrl ? detectContentType(data.sourceUrl) : null),
       contentStatus: data.type === "content" ? "pending" : null,
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
       dueDatePrecision: data.dueDatePrecision ?? null,

@@ -366,8 +366,10 @@ model AIUsageLog {
   model        String   // actual model name used
   modelTier    String   // "small" | "medium" | "large"
   source       String   // "omnibar" | "brett_thread" | "briefing" | "bretts_take" | "fact_extraction"
-  inputTokens  Int
-  outputTokens Int
+  inputTokens         Int
+  outputTokens        Int
+  cacheCreationTokens Int      @default(0)
+  cacheReadTokens     Int      @default(0)
   createdAt    DateTime @default(now())
 
   @@index([userId, createdAt])

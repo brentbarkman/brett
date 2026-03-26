@@ -3,16 +3,12 @@ import { validateCreateList } from "@brett/business";
 
 export const createListSkill: Skill = {
   name: "create_list",
-  description:
-    "Create a new custom list. Use when the user wants to create a new list, project, or category to organize their items.",
+  description: "Create a custom list.",
   parameters: {
     type: "object",
     properties: {
-      name: { type: "string", description: "Name for the new list" },
-      colorClass: {
-        type: "string",
-        description: "Tailwind color class (e.g. 'bg-blue-400', 'bg-emerald-400')",
-      },
+      name: { type: "string" },
+      colorClass: { type: "string", description: "Tailwind color (e.g. bg-blue-400)" },
     },
     required: ["name"],
   },

@@ -3,8 +3,7 @@ import { scopedEvents } from "./scoped-queries.js";
 
 export const upNextSkill: Skill = {
   name: "up_next",
-  description:
-    "Get a combined overview of what the user should focus on next — their next calendar event plus any relevant task context. Use for general questions like 'what's up next?', 'what should I focus on?', 'what's next?'. This is the DEFAULT for vague \"what's next\" questions. Prefer this over get_next_event unless the user specifically mentions meetings or calendar.",
+  description: "Overview of what to focus on next (calendar + tasks).",
   parameters: {
     type: "object",
     properties: {},

@@ -3,16 +3,12 @@ import { scopedItems } from "./scoped-queries.js";
 
 export const snoozeItemSkill: Skill = {
   name: "snooze_item",
-  description:
-    "Snooze an item until a specific date. Use when the user wants to hide or defer an item until later. Sets status to 'snoozed' and snoozedUntil date.",
+  description: "Snooze an item until a date.",
   parameters: {
     type: "object",
     properties: {
-      id: { type: "string", description: "The item ID to snooze" },
-      snoozedUntil: {
-        type: "string",
-        description: "ISO 8601 date string for when the item should reappear",
-      },
+      id: { type: "string" },
+      snoozedUntil: { type: "string", description: "ISO 8601 date to reappear" },
     },
     required: ["id", "snoozedUntil"],
   },

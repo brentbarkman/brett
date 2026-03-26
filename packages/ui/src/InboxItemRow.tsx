@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Zap, BookOpen, Check } from "lucide-react";
+import { Zap, BookOpen, Check, MessageSquare, FileText, Play, File, Headphones, Globe } from "lucide-react";
 import type { Thing } from "@brett/types";
 import { useDraggable } from "@dnd-kit/core";
 
@@ -42,7 +42,16 @@ export function InboxItemRow({
 
   const isTask = thing.type === "task";
   const iconColor = isTask ? "text-blue-400" : "text-amber-400";
-  const Icon = isTask ? Zap : BookOpen;
+  const Icon = isTask ? Zap : (() => {
+    switch (thing.contentType) {
+      case "tweet": return MessageSquare;
+      case "article": return FileText;
+      case "video": return Play;
+      case "pdf": return File;
+      case "podcast": return Headphones;
+      default: return Globe;
+    }
+  })();
 
   const animationStyle: React.CSSProperties | undefined = isAnimatingOut
     ? {

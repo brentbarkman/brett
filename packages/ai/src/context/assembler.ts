@@ -56,8 +56,6 @@ export interface AssembledContext {
 const VALID_VIEWS = ["today", "upcoming", "inbox", "settings", "calendar"];
 const CUID_PATTERN = /^[a-z0-9]{20,30}$/;
 const MAX_FACTS = AI_CONFIG.context.maxFacts;
-const MAX_PAST_SESSIONS = AI_CONFIG.context.maxPastSessions;
-const MAX_MESSAGES_PER_SESSION = AI_CONFIG.context.maxMessagesPerSession;
 
 // ─── Helpers ───
 
@@ -272,41 +270,11 @@ async function assembleBrettThread(
     itemContext +
     currentDateLine();
 
-  // Load past conversation messages for this item/event
-  const messages: Message[] = [];
-
-  const whereClause: Record<string, unknown> = {
-    userId: input.userId,
-    source: "brett_thread",
-  };
-  if (input.itemId) whereClause.itemId = input.itemId;
-  if (input.calendarEventId)
-    whereClause.calendarEventId = input.calendarEventId;
-
-  const pastSessions = await prisma.conversationSession.findMany({
-    where: whereClause,
-    orderBy: { createdAt: "desc" },
-    take: MAX_PAST_SESSIONS,
-    select: {
-      messages: {
-        orderBy: { createdAt: "asc" },
-        take: MAX_MESSAGES_PER_SESSION,
-        select: { role: true, content: true },
-      },
-    },
-  });
-
-  // Add past messages in chronological order (oldest session first)
-  for (const session of pastSessions.reverse()) {
-    for (const msg of session.messages) {
-      if (msg.role === "user" || msg.role === "assistant") {
-        messages.push({ role: msg.role as "user" | "assistant", content: msg.content });
-      }
-    }
-  }
-
-  // Add current user message
-  messages.push({ role: "user", content: input.message });
+  // Item context + user facts provide sufficient memory for Brett threads.
+  // Past session history was ~2,000-3,000 tokens of low-value back-and-forth.
+  const messages: Message[] = [
+    { role: "user", content: input.message },
+  ];
 
   return { system, messages, modelTier: "medium" };
 }

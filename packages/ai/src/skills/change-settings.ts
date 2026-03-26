@@ -2,16 +2,11 @@ import type { Skill } from "./types.js";
 
 export const changeSettingsSkill: Skill = {
   name: "change_settings",
-  description:
-    "Change user settings. Currently limited to toggling the active AI provider. Use when the user asks to switch AI models, change providers, or adjust their AI settings.",
+  description: "Change user settings (e.g. AI provider).",
   parameters: {
     type: "object",
     properties: {
-      aiProvider: {
-        type: "string",
-        enum: ["anthropic", "openai", "google"],
-        description: "The AI provider to switch to",
-      },
+      aiProvider: { type: "string", enum: ["anthropic", "openai", "google"] },
     },
     required: ["aiProvider"],
   },

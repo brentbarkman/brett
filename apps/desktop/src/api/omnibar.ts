@@ -114,10 +114,16 @@ export function useOmnibar() {
                 }
                 return updated;
               });
-              // Invalidate data queries when a skill modifies data so lists refresh
+              // Invalidate + refetch data queries when a skill modifies data.
+              // Both calls are needed: invalidate marks stale, refetch forces immediate update
+              // (staleTime is 30s, so invalidate alone may not trigger an immediate refetch).
               if (chunk.displayHint?.type === "task_created" || chunk.displayHint?.type === "confirmation") {
                 queryClient.invalidateQueries({ queryKey: ["things"] });
+                queryClient.refetchQueries({ queryKey: ["things"] });
+                queryClient.invalidateQueries({ queryKey: ["thing-detail"] });
+                queryClient.refetchQueries({ queryKey: ["thing-detail"] });
                 queryClient.invalidateQueries({ queryKey: ["inbox"] });
+                queryClient.refetchQueries({ queryKey: ["inbox"] });
                 queryClient.invalidateQueries({ queryKey: ["lists"] });
               }
               break;

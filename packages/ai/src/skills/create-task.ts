@@ -4,26 +4,15 @@ import { validateCreateItem } from "@brett/business";
 
 export const createTaskSkill: Skill = {
   name: "create_task",
-  description:
-    "Create a new task for the user. Use when they want to add something to their todo list, set a reminder, or track something they need to do. Extract the title, due date, and list if mentioned. IMPORTANT: If the user is on the Today view (context says 'today') and doesn't specify a due date, set dueDate to today's date so the task shows up in their current view.",
+  description: "Create a task.",
   parameters: {
     type: "object",
     properties: {
       title: { type: "string", description: "The task title" },
-      dueDate: {
-        type: "string",
-        description: "ISO 8601 date (YYYY-MM-DD). Convert natural language: 'tomorrow' → tomorrow's date, 'next Friday' → that date, 'end of week' → Sunday's date. If user is on Today view and doesn't specify, use today's date.",
-      },
-      dueDatePrecision: {
-        type: "string",
-        enum: ["day", "week"],
-        description: "Whether the due date is day-precise or week-precise",
-      },
-      listName: {
-        type: "string",
-        description: "Name of the list to add the task to (resolved to ID)",
-      },
-      description: { type: "string", description: "Optional task description" },
+      dueDate: { type: "string", description: "ISO 8601 date (YYYY-MM-DD)" },
+      dueDatePrecision: { type: "string", enum: ["day", "week"], description: "Use 'week' for 'this week'/'next week'" },
+      listName: { type: "string", description: "List name to add to" },
+      description: { type: "string" },
     },
     required: ["title"],
   },
@@ -40,8 +29,9 @@ export const createTaskSkill: Skill = {
     };
 
     let listId: string | undefined;
-    if (p.listName) {
+    if (p.listName && p.listName.toLowerCase() !== "inbox") {
       // Case-insensitive list lookup — user might say "podcasts" or "Podcasts"
+      // "Inbox" is not a real list — it means no list assigned (listId = undefined)
       const lists = scopedLists(ctx.prisma, ctx.userId);
       const allLists = await lists.findMany({ where: { archivedAt: null } });
       const list = allLists.find(

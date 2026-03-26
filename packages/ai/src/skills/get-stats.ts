@@ -2,8 +2,7 @@ import type { Skill } from "./types.js";
 
 export const getStatsSkill: Skill = {
   name: "get_stats",
-  description:
-    "Get task and list statistics. Use when the user asks 'how many tasks do I have?', 'show me my stats', 'how productive have I been?', or wants an overview of their items.",
+  description: "Get task and list statistics.",
   parameters: {
     type: "object",
     properties: {},

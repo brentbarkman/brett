@@ -99,6 +99,7 @@ export function buildApplePodcastEmbedUrl(url: string): string | null {
 export function extractYouTubeVideoId(url: string): string | null {
   const patterns = [
     /youtube\.com\/watch\?v=([^&#]+)/,
+    /youtube\.com\/shorts\/([^?&#]+)/,
     /youtu\.be\/([^?&#]+)/,
   ];
   for (const re of patterns) {
@@ -141,6 +142,32 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
       contentMetadata: { type: "pdf" },
       needsPdfDownload: true,
     };
+  }
+
+  // YouTube: skip page fetch entirely — oEmbed API is faster and more reliable.
+  // YouTube pages are heavy JS-rendered and often hang or return useless HTML.
+  if (contentType === "video") {
+    const videoId = extractYouTubeVideoId(url);
+    if (videoId) {
+      const oembed = await fetchOEmbed("https://www.youtube.com/oembed", url);
+      const parsed = new URL(url);
+      return {
+        contentType: "video",
+        contentStatus: "extracted",
+        contentTitle: (oembed?.title as string) ?? null,
+        contentDescription: null,
+        contentImageUrl: (oembed?.thumbnail_url as string) ?? null,
+        contentBody: null,
+        contentFavicon: `${parsed.origin}/favicon.ico`,
+        contentDomain: parsed.hostname.replace(/^www\./, ""),
+        contentMetadata: {
+          type: "video",
+          embedUrl: `https://www.youtube.com/embed/${videoId}`,
+          channel: oembed?.author_name as string | undefined,
+        },
+        title: (oembed?.title as string) ?? undefined,
+      };
+    }
   }
 
   // Fetch the page
@@ -318,11 +345,16 @@ export async function runExtraction(itemId: string, url: string, userId: string)
       source: result.contentDomain,
     };
 
-    // Update title from OG tags only if the current title is the URL (user hasn't renamed it)
+    // Update title from extraction if the current title is a placeholder
+    // (raw URL, or auto-generated "Saved X from Y" from the create skill)
     if (result.title) {
       const current = await prisma.item.findUnique({ where: { id: itemId }, select: { title: true, sourceUrl: true } });
-      if (current && current.title === current.sourceUrl) {
-        updateData.title = result.title;
+      if (current) {
+        const isUrl = current.title === current.sourceUrl;
+        const isPlaceholder = /^Saved \w+ from /.test(current.title);
+        if (isUrl || isPlaceholder) {
+          updateData.title = result.title;
+        }
       }
     }
 

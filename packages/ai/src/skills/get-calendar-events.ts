@@ -3,23 +3,13 @@ import { scopedEvents } from "./scoped-queries.js";
 
 export const getCalendarEventsSkill: Skill = {
   name: "get_calendar_events",
-  description:
-    "Query calendar events by date range. Use when the user asks about their schedule, meetings, or calendar for a specific day or date range. E.g. 'what meetings do I have tomorrow?', 'show my schedule for next week'.",
+  description: "Query calendar events by date range.",
   parameters: {
     type: "object",
     properties: {
-      startDate: {
-        type: "string",
-        description: "Start of date range (ISO 8601). Defaults to start of today.",
-      },
-      endDate: {
-        type: "string",
-        description: "End of date range (ISO 8601). Defaults to end of today.",
-      },
-      date: {
-        type: "string",
-        description: "Single date to query (ISO 8601 date). Use instead of startDate/endDate for a single day.",
-      },
+      startDate: { type: "string", description: "ISO 8601. Default: start of today." },
+      endDate: { type: "string", description: "ISO 8601. Default: end of today." },
+      date: { type: "string", description: "Single date (ISO 8601). Alt to startDate/endDate." },
     },
   },
   modelTier: "small",

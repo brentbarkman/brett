@@ -6,6 +6,8 @@ export interface SkillContext {
   userId: string;
   prisma: PrismaClient;
   provider?: AIProvider;
+  /** Fire-and-forget callback for content items that need extraction */
+  onContentCreated?: (itemId: string, sourceUrl: string) => void;
 }
 
 export interface SkillResult {

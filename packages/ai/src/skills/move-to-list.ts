@@ -3,20 +3,13 @@ import { scopedItems, scopedLists } from "./scoped-queries.js";
 
 export const moveToListSkill: Skill = {
   name: "move_to_list",
-  description:
-    "Move an item to a different list. Use when the user wants to organize an item into a specific list, or move it out of a list (to inbox). Resolves list by name or ID.",
+  description: "Move an item to a list. Omit listName to move to Inbox.",
   parameters: {
     type: "object",
     properties: {
-      id: { type: "string", description: "The item ID to move" },
-      listName: {
-        type: "string",
-        description: "Name of the target list. Use 'Inbox' or omit to remove from any list.",
-      },
-      listId: {
-        type: "string",
-        description: "Target list ID (alternative to listName)",
-      },
+      id: { type: "string" },
+      listName: { type: "string", description: "Target list name" },
+      listId: { type: "string", description: "Target list ID (alt to listName)" },
     },
     required: ["id"],
   },

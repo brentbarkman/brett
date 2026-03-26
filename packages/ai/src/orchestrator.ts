@@ -30,6 +30,8 @@ export interface OrchestratorParams {
   registry: SkillRegistry;
   sessionId?: string;
   logUsage?: boolean;
+  /** Called when a content item is created and needs extraction */
+  onContentCreated?: (itemId: string, sourceUrl: string) => void;
 }
 
 // ─── Helpers ───
@@ -99,6 +101,8 @@ export async function* orchestrate(
       : registry.toToolDefinitions();
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let totalCacheCreationTokens = 0;
+    let totalCacheReadTokens = 0;
     let round = 0;
     let truncatedExit = false;
     let hasYieldedText = false;
@@ -150,6 +154,8 @@ export async function* orchestrate(
             // Track token usage separately
             totalInputTokens += chunk.usage.input;
             totalOutputTokens += chunk.usage.output;
+            totalCacheCreationTokens += chunk.usage.cacheCreation ?? 0;
+            totalCacheReadTokens += chunk.usage.cacheRead ?? 0;
 
             // Log per-round usage (reuse `model` from top of loop)
             if (params.logUsage !== false) {
@@ -162,6 +168,8 @@ export async function* orchestrate(
                 source: input.type,
                 inputTokens: chunk.usage.input,
                 outputTokens: chunk.usage.output,
+                cacheCreationTokens: chunk.usage.cacheCreation ?? 0,
+                cacheReadTokens: chunk.usage.cacheRead ?? 0,
               }).catch(() => {});
             }
 
@@ -222,6 +230,7 @@ export async function* orchestrate(
                   userId,
                   prisma,
                   provider,
+                  onContentCreated: params.onContentCreated,
                 });
 
                 // Buffer fire-and-forget results; yield others immediately.
@@ -257,21 +266,16 @@ export async function* orchestrate(
                 });
               }
 
-              // Check if ALL tool calls are fire-and-forget actions.
-              // If so, skip the follow-up LLM round — the skill results are the response.
-              // Saves ~2,500 tokens per simple action (create task, complete task, etc.)
-              // For fire-and-forget tools, skip the follow-up LLM round ONLY if
-              // this is a single action. For multi-step sequences where the LLM
-              // might chain more actions (create list → move items), we need to
-              // continue the loop so the LLM can issue follow-up tool calls.
-              // But we stay on the small model — no escalation needed.
+              // If ALL tool calls are fire-and-forget, the skill results ARE the response.
+              // Flush the buffer and exit — no follow-up LLM round needed.
+              // This handles single actions, batch actions (create 6 tasks), and
+              // multi-step chains where the final round is all fire-and-forget.
+              // Saves ~2,500+ tokens by skipping round 2 entirely.
               const allFireAndForget = pendingToolCalls.every(
                 (tc) => FIRE_AND_FORGET_TOOLS.has(tc.name)
               );
 
-              if (allFireAndForget && pendingToolCalls.length === 1 && round === 1) {
-                // Single action, first round — flush buffer and done
-                // Flush buffered confirmations as a single combined result
+              if (allFireAndForget) {
                 if (bufferedConfirmations.length > 0) {
                   const combinedMessage = bufferedConfirmations
                     .map((c) => c.message)
@@ -289,32 +293,7 @@ export async function* orchestrate(
                 yield {
                   type: "done",
                   sessionId: sessionId ?? "",
-                  usage: { input: totalInputTokens, output: totalOutputTokens },
-                };
-                return;
-              }
-
-              if (allFireAndForget && round > 1) {
-                // Multi-step sequence complete — flush all buffered confirmations
-                // Flush buffered confirmations as a single combined result
-                if (bufferedConfirmations.length > 0) {
-                  const combinedMessage = bufferedConfirmations
-                    .map((c) => c.message)
-                    .filter(Boolean)
-                    .join("\n");
-                  yield {
-                    type: "tool_result" as const,
-                    id: bufferedConfirmations[bufferedConfirmations.length - 1].id,
-                    data: bufferedConfirmations.map((c) => c.data),
-                    displayHint: { type: "confirmation" as const, message: combinedMessage },
-                    message: combinedMessage,
-                  };
-                  bufferedConfirmations.length = 0;
-                }
-                yield {
-                  type: "done",
-                  sessionId: sessionId ?? "",
-                  usage: { input: totalInputTokens, output: totalOutputTokens },
+                  usage: { input: totalInputTokens, output: totalOutputTokens, cacheCreation: totalCacheCreationTokens, cacheRead: totalCacheReadTokens },
                 };
                 return;
               }
@@ -340,7 +319,7 @@ export async function* orchestrate(
               yield {
                 type: "done",
                 sessionId: sessionId ?? "",
-                usage: { input: totalInputTokens, output: totalOutputTokens },
+                usage: { input: totalInputTokens, output: totalOutputTokens, cacheCreation: totalCacheCreationTokens, cacheRead: totalCacheReadTokens },
               };
               return;
             }
@@ -367,7 +346,7 @@ export async function* orchestrate(
     yield {
       type: "done",
       sessionId: sessionId ?? "",
-      usage: { input: totalInputTokens, output: totalOutputTokens },
+      usage: { input: totalInputTokens, output: totalOutputTokens, cacheCreation: totalCacheCreationTokens, cacheRead: totalCacheReadTokens },
     };
   } catch (err) {
     const message =

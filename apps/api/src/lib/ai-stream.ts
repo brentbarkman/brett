@@ -30,6 +30,12 @@ export function buildStream(
           if (chunk.type === "text") {
             assistantContentRef.value += chunk.content;
           }
+          // Persist fire-and-forget confirmations so subsequent messages
+          // in the session know what Brett already did. Without this,
+          // the LLM sees only user messages and re-creates/re-lists old tasks.
+          if (chunk.type === "tool_result" && chunk.displayHint?.type === "confirmation" && chunk.message) {
+            assistantContentRef.value += chunk.message;
+          }
           const data = `event: chunk\ndata: ${JSON.stringify(chunk)}\n\n`;
           controller.enqueue(encoder.encode(data));
         }

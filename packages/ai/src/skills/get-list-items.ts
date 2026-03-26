@@ -4,17 +4,13 @@ import { itemToThing } from "@brett/business";
 
 export const getListItemsSkill: Skill = {
   name: "get_list_items",
-  description:
-    "Show items in a specific CUSTOM LIST by name or ID. Use when the user references a list they created, e.g., 'show my Work list', 'what's in Reading?', 'show me the Groceries list'. Do NOT use for built-in views — use list_today for Today, list_inbox for Inbox, list_upcoming for Upcoming.",
+  description: "Get items in a custom list by name or ID.",
   parameters: {
     type: "object",
     properties: {
-      listName: { type: "string", description: "Name of the list to show" },
-      listId: { type: "string", description: "List ID (alternative to listName)" },
-      includeCompleted: {
-        type: "boolean",
-        description: "Whether to include completed items (default false)",
-      },
+      listName: { type: "string" },
+      listId: { type: "string", description: "Alt to listName" },
+      includeCompleted: { type: "boolean" },
     },
   },
   modelTier: "small",

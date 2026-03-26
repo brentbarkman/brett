@@ -4,29 +4,17 @@ import { validateUpdateItem } from "@brett/business";
 
 export const updateItemSkill: Skill = {
   name: "update_item",
-  description:
-    "Update fields on an existing item (task or content). Use when the user wants to change the title, due date, notes, description, or other properties of an item. Requires the item ID. Do NOT use this to mark tasks as done — use complete_task instead. Do NOT use this to move items between lists — use move_to_list instead.",
+  description: "Update fields on an existing item.",
   parameters: {
     type: "object",
     properties: {
-      id: { type: "string", description: "The item ID to update" },
-      title: { type: "string", description: "New title" },
-      dueDate: {
-        type: ["string", "null"],
-        description: "New due date (ISO 8601) or null to clear",
-      },
-      dueDatePrecision: {
-        type: ["string", "null"],
-        enum: ["day", "week", null],
-        description: "Due date precision",
-      },
-      notes: { type: ["string", "null"], description: "Notes content or null to clear" },
-      description: { type: ["string", "null"], description: "Description or null to clear" },
-      status: {
-        type: "string",
-        enum: ["active", "snoozed", "done", "archived"],
-        description: "New status",
-      },
+      id: { type: "string" },
+      title: { type: "string" },
+      dueDate: { type: ["string", "null"], description: "ISO 8601 or null to clear" },
+      dueDatePrecision: { type: ["string", "null"], enum: ["day", "week", null] },
+      notes: { type: ["string", "null"] },
+      description: { type: ["string", "null"] },
+      status: { type: "string", enum: ["active", "snoozed", "done", "archived"] },
     },
     required: ["id"],
   },

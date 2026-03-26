@@ -16,16 +16,29 @@ aiUsage.get("/session/:sessionId", async (c) => {
   // the user wants to see what their conversation cost, not background overhead
   const result = await prisma.aIUsageLog.aggregate({
     where: { userId: user.id, sessionId, source: { not: "fact_extraction" } },
-    _sum: { inputTokens: true, outputTokens: true },
+    _sum: { inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true },
   });
 
   const inputTokens = result._sum.inputTokens ?? 0;
   const outputTokens = result._sum.outputTokens ?? 0;
+  const cacheCreationTokens = result._sum.cacheCreationTokens ?? 0;
+  const cacheReadTokens = result._sum.cacheReadTokens ?? 0;
+
+  // Effective tokens: what you'd pay for without caching vs what you actually pay.
+  // Cache reads cost 0.1x, cache writes cost 1.25x, everything else is 1x.
+  const totalTokens = inputTokens + cacheCreationTokens + cacheReadTokens + outputTokens;
+  const effectiveTokens = Math.round(
+    inputTokens + (cacheCreationTokens * 1.25) + (cacheReadTokens * 0.1) + outputTokens
+  );
 
   return c.json({
     inputTokens,
     outputTokens,
-    totalTokens: inputTokens + outputTokens,
+    cacheCreationTokens,
+    cacheReadTokens,
+    totalTokens,
+    effectiveTokens,
+    cacheSavings: totalTokens > 0 ? Math.round((1 - effectiveTokens / totalTokens) * 100) : 0,
   });
 });
 
@@ -42,19 +55,19 @@ aiUsage.get("/summary", async (c) => {
     prisma.aIUsageLog.groupBy({
       by: ["provider", "model", "source"],
       where: { userId: user.id, createdAt: { gte: last24h } },
-      _sum: { inputTokens: true, outputTokens: true },
+      _sum: { inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true },
       _count: true,
     }),
     prisma.aIUsageLog.groupBy({
       by: ["provider", "model", "source"],
       where: { userId: user.id, createdAt: { gte: last7d } },
-      _sum: { inputTokens: true, outputTokens: true },
+      _sum: { inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true },
       _count: true,
     }),
     prisma.aIUsageLog.groupBy({
       by: ["provider", "model", "source"],
       where: { userId: user.id, createdAt: { gte: last30d } },
-      _sum: { inputTokens: true, outputTokens: true },
+      _sum: { inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true },
       _count: true,
     }),
   ]);
@@ -67,6 +80,8 @@ aiUsage.get("/summary", async (c) => {
       calls: r._count,
       inputTokens: r._sum.inputTokens ?? 0,
       outputTokens: r._sum.outputTokens ?? 0,
+      cacheCreationTokens: r._sum.cacheCreationTokens ?? 0,
+      cacheReadTokens: r._sum.cacheReadTokens ?? 0,
     }));
 
   return c.json({

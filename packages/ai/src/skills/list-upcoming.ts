@@ -4,15 +4,11 @@ import { getTodayUTC, itemToThing } from "@brett/business";
 
 export const listUpcomingSkill: Skill = {
   name: "list_upcoming",
-  description:
-    "Show items with future due dates. Use when the user asks 'what's coming up?', 'what's next?', 'upcoming tasks', or wants to see future deadlines.",
+  description: "List items with future due dates.",
   parameters: {
     type: "object",
     properties: {
-      limit: {
-        type: "number",
-        description: "Max items to return (default 15)",
-      },
+      limit: { type: "number" },
     },
   },
   modelTier: "small",

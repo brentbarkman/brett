@@ -182,10 +182,15 @@ export function useBrettChat(opts: {
                 }
                 return updated;
               });
-              // Invalidate data queries when a skill modifies data
+              // Invalidate + refetch data queries when a skill modifies data.
+              // Both calls are needed: invalidate marks stale, refetch forces immediate update.
               if (chunk.displayHint?.type === "task_created" || chunk.displayHint?.type === "confirmation") {
                 qc.invalidateQueries({ queryKey: ["things"] });
+                qc.refetchQueries({ queryKey: ["things"] });
+                qc.invalidateQueries({ queryKey: ["thing-detail"] });
+                qc.refetchQueries({ queryKey: ["thing-detail"] });
                 qc.invalidateQueries({ queryKey: ["inbox"] });
+                qc.refetchQueries({ queryKey: ["inbox"] });
                 qc.invalidateQueries({ queryKey: ["lists"] });
               }
               break;

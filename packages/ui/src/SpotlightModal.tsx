@@ -41,6 +41,8 @@ export interface SpotlightModalProps {
   searchResults?: SpotlightSearchResult[] | null;
   isSearching?: boolean;
   onSearchResultClick?: (id: string) => void;
+  onItemClick?: (id: string) => void;
+  onNavigate?: (path: string) => void;
   sessionId?: string | null;
   showTokenUsage?: boolean;
   sessionUsage?: { totalTokens: number } | null;
@@ -63,6 +65,8 @@ export function SpotlightModal({
   searchResults,
   isSearching,
   onSearchResultClick,
+  onItemClick,
+  onNavigate,
   sessionId,
   showTokenUsage,
   sessionUsage,
@@ -236,6 +240,8 @@ export function SpotlightModal({
               onChange={(e) => onInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isStreaming}
+              data-1p-ignore
+              autoComplete="off"
             />
           ) : (
             <span className="flex-1 text-sm text-white/40 px-3">Chat with Brett</span>
@@ -294,6 +300,8 @@ export function SpotlightModal({
                   i === messages.length - 1 &&
                   msg.role === "assistant"
                 }
+                onItemClick={onItemClick}
+                onNavigate={onNavigate}
               />
             ))}
             {/* scroll handled by chatContainerRef.scrollTop */}
@@ -319,6 +327,8 @@ export function SpotlightModal({
               onChange={(e) => onInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               autoFocus
+              data-1p-ignore
+              autoComplete="off"
             />
             <button
               onClick={() => input.trim() && onSend(input)}
@@ -408,9 +418,13 @@ export function SpotlightModal({
 function SpotlightMessageBubble({
   message,
   isStreaming,
+  onItemClick,
+  onNavigate,
 }: {
   message: SpotlightMessage;
   isStreaming: boolean;
+  onItemClick?: (id: string) => void;
+  onNavigate?: (path: string) => void;
 }) {
   if (message.role === "user") {
     return (
@@ -433,14 +447,29 @@ function SpotlightMessageBubble({
         <Bot size={12} className="text-blue-400" />
       </div>
       <div className="flex-1 min-w-0 space-y-2">
-        {(message.content || isStreaming) && (
-          <div className="text-sm text-white/90 leading-relaxed">
-            <SimpleMarkdown content={message.content} />
-            {isStreaming && (
-              <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
-            )}
-          </div>
-        )}
+        {/* Text content — suppressed when a confirmation card exists (the card IS the response) */}
+        {(() => {
+          const hasConfirmation = message.toolCalls?.some((tc) => tc.displayHint?.type === "confirmation" || tc.displayHint?.type === "task_created");
+          if (!hasConfirmation && (message.content || isStreaming)) {
+            return (
+              <div className="text-sm text-white/90 leading-relaxed">
+                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onNavigate={onNavigate} />
+                {isStreaming && (
+                  <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+                )}
+              </div>
+            );
+          }
+          if (isStreaming && !message.toolCalls?.length) {
+            return (
+              <div className="text-sm text-white/90 leading-relaxed">
+                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onNavigate={onNavigate} />
+                <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {message.toolCalls
           ?.filter((tc) => tc.displayHint)
@@ -458,6 +487,8 @@ function SpotlightMessageBubble({
                     )
                   : undefined
               }
+              onItemClick={onItemClick}
+              onNavigate={onNavigate}
             />
           ))}
       </div>

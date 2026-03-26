@@ -3,12 +3,11 @@ import { scopedItems } from "./scoped-queries.js";
 
 export const getItemDetailSkill: Skill = {
   name: "get_item_detail",
-  description:
-    "Get full details for a specific item including notes, attachments, and links. Use when the user asks about details of a specific task or content item.",
+  description: "Get full details for an item by ID.",
   parameters: {
     type: "object",
     properties: {
-      id: { type: "string", description: "The item ID to get details for" },
+      id: { type: "string" },
     },
     required: ["id"],
   },

@@ -1,25 +1,18 @@
 import type { Skill } from "./types.js";
 import { scopedLists } from "./scoped-queries.js";
 import { validateCreateItem } from "@brett/business";
+import { detectContentType } from "@brett/utils";
 
 export const createContentSkill: Skill = {
   name: "create_content",
-  description:
-    "Save a content item (article, video, tweet, etc.) for the user. Use when they share a URL or want to save something to read/watch later. Extract the URL, title, and content type if identifiable.",
+  description: "Save content (article, video, tweet, etc.).",
   parameters: {
     type: "object",
     properties: {
-      title: { type: "string", description: "Content title or description" },
-      sourceUrl: { type: "string", description: "URL of the content" },
-      contentType: {
-        type: "string",
-        enum: ["tweet", "article", "video", "pdf", "podcast", "web_page"],
-        description: "Type of content being saved",
-      },
-      listName: {
-        type: "string",
-        description: "Name of the list to add the content to",
-      },
+      title: { type: "string" },
+      sourceUrl: { type: "string", description: "URL" },
+      contentType: { type: "string", enum: ["tweet", "article", "video", "pdf", "podcast", "web_page"] },
+      listName: { type: "string" },
     },
     required: ["title"],
   },
@@ -35,7 +28,7 @@ export const createContentSkill: Skill = {
     };
 
     let listId: string | undefined;
-    if (p.listName) {
+    if (p.listName && p.listName.toLowerCase() !== "inbox") {
       const lists = scopedLists(ctx.prisma, ctx.userId);
       const allLists = await lists.findMany({ where: { archivedAt: null } });
       const list = allLists.find(
@@ -52,11 +45,30 @@ export const createContentSkill: Skill = {
       try { source = new URL(p.sourceUrl).hostname; } catch { /* keep default */ }
     }
 
+    // If the title is just a URL, path slug, or ID-like string, replace with a
+    // friendly placeholder. The real title gets filled in by content extraction.
+    let title = p.title;
+    const looksLikeUrl = /^https?:\/\//.test(title);
+    const looksLikeSlug = /^[a-zA-Z0-9_-]{6,}$/.test(title) && !/\s/.test(title);
+    if (looksLikeUrl || looksLikeSlug) {
+      const typeLabel = p.contentType
+        ? p.contentType.replace("_", " ")
+        : "link";
+      const domain = source !== "Brett" ? source.replace(/^www\./, "") : "";
+      title = domain ? `Saved ${typeLabel} from ${domain}` : `Saved ${typeLabel}`;
+    }
+
+    // Detect content type from URL patterns — don't rely on the LLM to classify.
+    // This ensures the correct icon shows immediately, before extraction runs.
+    const contentType = p.sourceUrl
+      ? detectContentType(p.sourceUrl)
+      : p.contentType ?? undefined;
+
     const validation = validateCreateItem({
       type: "content",
-      title: p.title,
+      title,
       sourceUrl: p.sourceUrl,
-      contentType: p.contentType,
+      contentType,
       listId,
       source,
     });
@@ -79,6 +91,11 @@ export const createContentSkill: Skill = {
       },
       include: { list: { select: { name: true } } },
     });
+
+    // Trigger background content extraction (same as direct POST /things path)
+    if (p.sourceUrl && ctx.onContentCreated) {
+      ctx.onContentCreated(item.id, p.sourceUrl);
+    }
 
     return {
       success: true,

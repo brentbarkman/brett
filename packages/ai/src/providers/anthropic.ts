@@ -5,11 +5,19 @@ import type { AIProvider, ChatParams, Message, ToolDefinition } from "./types.js
 function mapTools(
   tools: ToolDefinition[]
 ): Anthropic.Messages.Tool[] {
-  return tools.map((t) => ({
-    name: t.name,
-    description: t.description,
-    input_schema: t.parameters as Anthropic.Messages.Tool.InputSchema,
-  }));
+  return tools.map((t, i) => {
+    const tool: Anthropic.Messages.Tool = {
+      name: t.name,
+      description: t.description,
+      input_schema: t.parameters as Anthropic.Messages.Tool.InputSchema,
+    };
+    // Cache breakpoint on the last tool — caches system prompt + all tools together.
+    // Subsequent rounds in the same orchestration loop hit the cache (~90% cheaper).
+    if (i === tools.length - 1) {
+      tool.cache_control = { type: "ephemeral" };
+    }
+    return tool;
+  });
 }
 
 function mapMessages(
@@ -80,7 +88,16 @@ export class AnthropicProvider implements AIProvider {
     };
 
     if (params.system) {
-      requestParams.system = params.system;
+      // Pass system prompt as a cacheable text block.
+      // If tools are present, the tool-level cache_control covers both system + tools.
+      // If no tools, cache the system prompt directly.
+      if (!params.tools?.length) {
+        requestParams.system = [
+          { type: "text", text: params.system, cache_control: { type: "ephemeral" } },
+        ];
+      } else {
+        requestParams.system = params.system;
+      }
     }
 
     if (params.temperature !== undefined) {
@@ -132,14 +149,19 @@ export class AnthropicProvider implements AIProvider {
       }
     }
 
-    // Get final message for usage stats
+    // Get final message for usage stats (includes cache metrics)
     const finalMessage = await stream.finalMessage();
+    const usage = finalMessage.usage;
+    // Cache token fields exist on the usage object when prompt caching is active
+    const usageAny = usage as unknown as Record<string, number>;
     yield {
       type: "done",
       sessionId: "",
       usage: {
-        input: finalMessage.usage.input_tokens,
-        output: finalMessage.usage.output_tokens,
+        input: usage.input_tokens,
+        output: usage.output_tokens,
+        cacheCreation: usageAny.cache_creation_input_tokens ?? 0,
+        cacheRead: usageAny.cache_read_input_tokens ?? 0,
       },
     };
   }

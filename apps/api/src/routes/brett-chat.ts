@@ -5,6 +5,7 @@ import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { registry } from "../lib/ai-registry.js";
 import { buildStream, sseResponse } from "../lib/ai-stream.js";
+import { runExtraction } from "../lib/content-extractor.js";
 
 const brettChat = new Hono<AIEnv>();
 
@@ -151,7 +152,13 @@ brettChat.post(
     };
 
     const { stream } = buildStream(
-      { input, provider, providerName, prisma, registry, sessionId: session.id },
+      {
+        input, provider, providerName, prisma, registry, sessionId: session.id,
+        onContentCreated: (itemId, sourceUrl) => {
+          runExtraction(itemId, sourceUrl, user.id).catch((err) =>
+            console.error(`[brett-chat] Content extraction failed for ${itemId}:`, err));
+        },
+      },
       session.id,
       { memoryCtx: { userId: user.id, provider, providerName } },
     );
@@ -241,7 +248,13 @@ brettChat.post(
     };
 
     const { stream } = buildStream(
-      { input, provider, providerName, prisma, registry, sessionId: session.id },
+      {
+        input, provider, providerName, prisma, registry, sessionId: session.id,
+        onContentCreated: (itemId, sourceUrl) => {
+          runExtraction(itemId, sourceUrl, user.id).catch((err) =>
+            console.error(`[brett-chat] Content extraction failed for ${itemId}:`, err));
+        },
+      },
       session.id,
       { memoryCtx: { userId: user.id, provider, providerName } },
     );
