@@ -61,7 +61,7 @@ export function SpotlightModal({
   onSearchResultClick,
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const [selectedSuggestion, setSelectedSuggestion] = React.useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = React.useState(-1);
 
@@ -74,7 +74,8 @@ export function SpotlightModal({
 
   // Auto-scroll chat
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = chatContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages]);
 
   // Reset suggestion selection when input changes
@@ -276,7 +277,7 @@ export function SpotlightModal({
 
         {/* Conversation */}
         {hasConversation && (
-          <div className="max-h-[45vh] overflow-y-auto scrollbar-hide p-5 space-y-4">
+          <div ref={chatContainerRef} className="max-h-[45vh] overflow-y-auto scrollbar-hide p-5 space-y-4">
             {messages.map((msg, i) => (
               <SpotlightMessageBubble
                 key={i}
@@ -288,7 +289,7 @@ export function SpotlightModal({
                 }
               />
             ))}
-            <div ref={chatEndRef} />
+            {/* scroll handled by chatContainerRef.scrollTop */}
           </div>
         )}
 

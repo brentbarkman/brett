@@ -71,7 +71,7 @@ export const searchThingsSkill: Skill = {
       },
       displayHint: { type: "list" },
       message: results.length > 0
-        ? `Found ${results.length} item${results.length === 1 ? "" : "s"} matching "${p.query}".`
+        ? `Found ${results.length} item${results.length === 1 ? "" : "s"} matching "${p.query}". Use get_item_detail with an item's ID to get full content and description.`
         : `No items found matching "${p.query}".`,
     };
   },

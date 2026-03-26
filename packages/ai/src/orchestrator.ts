@@ -199,6 +199,9 @@ export async function* orchestrate(
                 break;
               }
 
+              // Yield a separator before the next LLM round so text doesn't run together
+              yield { type: "text" as const, content: "\n\n" };
+
               continueLoop = true;
             } else {
               // No tool calls — we're done

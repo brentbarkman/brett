@@ -72,7 +72,7 @@ export function Omnibar({
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  // chatEndRef removed — use chatContainerRef.scrollTop instead to avoid page jumping
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
 
@@ -87,9 +87,13 @@ export function Omnibar({
     }
   }, [isOpen]);
 
-  // Auto-scroll chat to bottom
+  // Auto-scroll chat container to bottom (not the page)
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = chatContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [messages]);
 
   // Reset suggestion selection when input changes
@@ -300,7 +304,7 @@ export function Omnibar({
         {/* Conversation Area */}
         {isOpen && hasConversation && (
           <div className="border-t border-white/10">
-            <div className="max-h-[350px] overflow-y-auto scrollbar-hide p-4 space-y-4">
+            <div ref={chatContainerRef} className="max-h-[350px] overflow-y-auto scrollbar-hide p-4 space-y-4">
               {messages.map((msg, i) => (
                 <MessageBubble
                   key={i}
@@ -309,7 +313,7 @@ export function Omnibar({
                   isStreaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
                 />
               ))}
-              <div ref={chatEndRef} />
+              {/* scroll anchor handled by chatContainerRef.scrollTop */}
             </div>
 
             {/* Follow-up Input — this is the only input when conversation is active */}

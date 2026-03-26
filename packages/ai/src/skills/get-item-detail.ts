@@ -24,22 +24,34 @@ export const getItemDetailSkill: Skill = {
       return { success: false, message: "Item not found." };
     }
 
+    const detail: Record<string, unknown> = {
+      id: item.id,
+      title: item.title,
+      type: item.type,
+      status: item.status,
+      notes: item.notes,
+      description: item.description,
+      dueDate: item.dueDate?.toISOString() ?? null,
+      source: item.source,
+      sourceUrl: item.sourceUrl,
+      brettObservation: item.brettObservation,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    };
+
+    // Include content-specific fields for content items (podcast, article, etc.)
+    const anyItem = item as any;
+    if (anyItem.contentType) detail.contentType = anyItem.contentType;
+    if (anyItem.contentTitle) detail.contentTitle = anyItem.contentTitle;
+    if (anyItem.contentDescription) detail.contentDescription = anyItem.contentDescription;
+    if (anyItem.contentBody) detail.contentBody = typeof anyItem.contentBody === "string" && anyItem.contentBody.length > 2000
+      ? anyItem.contentBody.slice(0, 2000) + "...[truncated]"
+      : anyItem.contentBody;
+    if (anyItem.contentFavicon) detail.contentFavicon = anyItem.contentFavicon;
+
     return {
       success: true,
-      data: {
-        id: item.id,
-        title: item.title,
-        type: item.type,
-        status: item.status,
-        notes: item.notes,
-        description: item.description,
-        dueDate: item.dueDate?.toISOString() ?? null,
-        source: item.source,
-        sourceUrl: item.sourceUrl,
-        brettObservation: item.brettObservation,
-        createdAt: item.createdAt.toISOString(),
-        updatedAt: item.updatedAt.toISOString(),
-      },
+      data: detail,
       displayHint: { type: "detail" },
       message: `Details for "${item.title}".`,
     };
