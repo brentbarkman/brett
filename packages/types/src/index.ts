@@ -74,6 +74,11 @@ export interface NavList {
 
 // Scout types
 
+export interface ScoutSource {
+  name: string;
+  url?: string; // clickable when present
+}
+
 export type ScoutStatus = "active" | "paused" | "completed" | "expired";
 
 export interface Scout {
@@ -83,7 +88,7 @@ export interface Scout {
   avatarGradient: [string, string]; // [fromColor, toColor]
   goal: string;
   context?: string;
-  sources: string;
+  sources: ScoutSource[];
   sensitivity: string;
   cadenceBase: string;
   cadenceCurrent?: string;

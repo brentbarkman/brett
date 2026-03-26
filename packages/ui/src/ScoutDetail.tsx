@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Pencil, Pause, Zap, FileText, CircleCheck, ArrowLeft } from "lucide-react";
-import type { Scout, ScoutFinding } from "@brett/types";
+import { Pencil, Pause, Zap, FileText, CircleCheck, ArrowLeft, ExternalLink } from "lucide-react";
+import type { Scout, ScoutFinding, ScoutSource } from "@brett/types";
 import { ScoutCard } from "./ScoutCard";
 
 interface ScoutDetailProps {
@@ -24,9 +24,9 @@ export function ScoutDetail({
   const budgetPercent = Math.round((selectedScout.budgetUsed / selectedScout.budgetTotal) * 100);
 
   return (
-    <div className="flex flex-1 min-w-0 h-full">
+    <div className="flex flex-1 min-w-0 h-full gap-4 py-2 pr-4">
       {/* Scout List Panel */}
-      <div className="w-[340px] flex-shrink-0 bg-black/30 backdrop-blur-xl border-r border-white/[0.06] overflow-y-auto scrollbar-hide p-5 space-y-4">
+      <div className="w-[340px] flex-shrink-0 bg-black/30 backdrop-blur-xl rounded-2xl border border-white/[0.06] overflow-y-auto scrollbar-hide p-5 space-y-4">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-sm font-semibold text-white/60 hover:text-white transition-colors"
@@ -48,7 +48,7 @@ export function ScoutDetail({
       </div>
 
       {/* Detail Panel */}
-      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/20 backdrop-blur-lg">
+      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/20 backdrop-blur-lg rounded-2xl border border-white/[0.06]">
         {/* Header with gradient accent */}
         <div className="relative overflow-hidden">
           {/* Ambient color from scout avatar */}
@@ -119,7 +119,7 @@ export function ScoutDetail({
         <div className="px-8 py-6 space-y-6">
           {/* Config Grid */}
           <div className="grid grid-cols-2 gap-5">
-            <ConfigCard label="SOURCES" value={selectedScout.sources} />
+            <SourcesCard sources={selectedScout.sources} />
             <ConfigCard label="SENSITIVITY" value={selectedScout.sensitivity} />
             <ConfigCard
               label="CADENCE"
@@ -220,6 +220,37 @@ function ActionButton({ icon, label }: { icon: React.ReactNode; label: string })
       {icon}
       {label}
     </button>
+  );
+}
+
+function SourcesCard({ sources }: { sources: ScoutSource[] }) {
+  return (
+    <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 space-y-3">
+      <div className="text-[10px] font-semibold tracking-widest text-white/30 uppercase">Sources</div>
+      <div className="flex flex-wrap gap-2">
+        {sources.map((source) =>
+          source.url ? (
+            <a
+              key={source.name}
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[12px] text-blue-400 hover:text-blue-300 hover:bg-white/[0.08] hover:border-blue-500/20 transition-all cursor-pointer"
+            >
+              {source.name}
+              <ExternalLink size={10} className="opacity-50" />
+            </a>
+          ) : (
+            <span
+              key={source.name}
+              className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[12px] text-white/40"
+            >
+              {source.name}
+            </span>
+          )
+        )}
+      </div>
+    </div>
   );
 }
 

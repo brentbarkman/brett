@@ -13,7 +13,7 @@ export function ScoutsRoster({ scouts, onSelectScout }: ScoutsRosterProps) {
   const inactiveScouts = scouts.filter((s) => s.status !== "active");
 
   return (
-    <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide">
+    <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/20 backdrop-blur-lg rounded-2xl border border-white/[0.06] my-2 mr-4">
       <div className="max-w-3xl mx-auto w-full px-10 py-8 space-y-8">
         {/* Hero Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600/20 via-black/40 to-black/60 backdrop-blur-xl border border-purple-500/10 p-8">
