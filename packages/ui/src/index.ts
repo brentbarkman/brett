@@ -8,3 +8,6 @@ export { ThingCard } from "./ThingCard";
 export { ThingsList } from "./ThingsList";
 export { CalendarTimeline } from "./CalendarTimeline";
 export { DetailPanel } from "./DetailPanel";
+export { ScoutCard } from "./ScoutCard";
+export { ScoutsRoster } from "./ScoutsRoster";
+export { ScoutDetail } from "./ScoutDetail";
