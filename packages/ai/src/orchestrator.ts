@@ -241,11 +241,13 @@ export async function* orchestrate(
               // Check if ALL tool calls are fire-and-forget actions.
               // If so, skip the follow-up LLM round — the skill results are the response.
               // Saves ~2,500 tokens per simple action (create task, complete task, etc.)
-              const allFireAndForget = pendingToolCalls.length > 0 &&
-                pendingToolCalls.every((tc) => FIRE_AND_FORGET_TOOLS.has(tc.name));
+              // Skip follow-up LLM round for single fire-and-forget actions.
+              // Multi-action flows (create list + move items) need the LLM to summarize.
+              const isSingleFireAndForget = pendingToolCalls.length === 1 &&
+                FIRE_AND_FORGET_TOOLS.has(pendingToolCalls[0].name);
 
-              if (allFireAndForget) {
-                // Done — no follow-up LLM call needed
+              if (isSingleFireAndForget) {
+                // Done — the skill's result card is the full response
                 yield {
                   type: "done",
                   sessionId: sessionId ?? "",
