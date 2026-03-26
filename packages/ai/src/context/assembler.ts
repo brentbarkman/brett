@@ -208,7 +208,14 @@ async function assembleOmnibar(
 
   messages.push({ role: "user", content: userContent });
 
-  return { system, messages, modelTier: "small" };
+  // Complex requests (multi-action, long messages) start on medium model
+  // for better reasoning. Simple requests stay on small for speed/cost.
+  const lower = input.message.toLowerCase();
+  const actionWords = lower.match(/\b(create|make|move|add|put|delete|remove|archive|update|change|snooze|complete|done|mark)\b/g);
+  const isComplex = lower.length > 80 || (actionWords && actionWords.length >= 2);
+  const tier = isComplex ? "medium" : "small";
+
+  return { system, messages, modelTier: tier };
 }
 
 async function assembleBrettThread(

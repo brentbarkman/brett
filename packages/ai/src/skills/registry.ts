@@ -49,8 +49,20 @@ export class SkillRegistry {
    * vs sending all 21 tools every time.
    */
   toToolDefinitionsForMessage(message: string): ToolDefinition[] {
-    const needed = new Set<string>(CORE_SKILLS);
     const lower = message.toLowerCase();
+
+    // Complex requests (long messages or multiple action words) get ALL tools.
+    // The token savings from keyword filtering aren't worth it when missing a
+    // tool causes the LLM to fail on multi-step requests.
+    const actionWords = lower.match(/\b(create|make|move|add|put|delete|remove|archive|update|change|set|snooze|complete|done|mark)\b/g);
+    const isComplex = lower.length > 80 || (actionWords && actionWords.length >= 2);
+
+    if (isComplex) {
+      return this.toToolDefinitions();
+    }
+
+    // Simple requests get core tools + keyword-matched extras
+    const needed = new Set<string>(CORE_SKILLS);
 
     for (const [keyword, skills] of Object.entries(TOOL_HINTS)) {
       if (lower.includes(keyword)) {
@@ -58,7 +70,6 @@ export class SkillRegistry {
       }
     }
 
-    // Also include tools for common intent patterns
     if (lower.match(/\b(move|put|add to)\b/)) needed.add("move_to_list");
     if (lower.match(/\b(create|make|new)\b.*\b(list|project|folder)\b/)) needed.add("create_list");
     if (lower.match(/\b(edit|change|update|rename|set)\b/)) needed.add("update_item");
