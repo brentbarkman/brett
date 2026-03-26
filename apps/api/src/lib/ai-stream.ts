@@ -1,5 +1,4 @@
-import { orchestrate, extractFacts, embedConversation } from "@brett/ai";
-import { decryptToken } from "./encryption.js";
+import { orchestrate, extractFacts } from "@brett/ai";
 import { prisma } from "./prisma.js";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, StreamChunk } from "@brett/types";
@@ -53,16 +52,9 @@ export function buildStream(
                 extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma)
                   .catch((err) => console.error("[fact-extraction] Failed:", err.message));
 
-                // Fire-and-forget: embed conversation
-                prisma.userAIConfig.findFirst({
-                  where: { userId: memoryCtx.userId, provider: "openai", isValid: true },
-                }).then((openaiConfig) => {
-                  if (openaiConfig) {
-                    const openaiKey = decryptToken(openaiConfig.encryptedKey);
-                    embedConversation(sessionId, memoryCtx.userId, openaiKey, prisma)
-                      .catch((err) => console.error("[embedding] Failed:", err.message));
-                  }
-                }).catch((err) => console.error("[embedding] Failed to load config:", err.message));
+                // Embeddings disabled — OpenAI-only strategy doesn't work for non-OpenAI users.
+                // Layer C (vector memory) deferred until multi-provider embedding strategy is designed.
+                // Raw logs (Layer A) + structured facts (Layer B) provide memory without embeddings.
               }
 
               if (opts?.onDone) {
