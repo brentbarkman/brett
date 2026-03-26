@@ -170,9 +170,8 @@ export function useOmnibar() {
   const close = useCallback(() => {
     cancel();
     setIsOpen(false);
-    setInput("");
     setSearchResults(null);
-    // Keep messages and sessionId so reopening shows AI conversation history
+    // Keep input, messages, and sessionId so reopening restores state
   }, [cancel]);
 
   const open = useCallback((newMode: OmnibarMode = "bar") => {
