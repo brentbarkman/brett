@@ -32,6 +32,8 @@ interface LeftNavProps {
   upcomingCount?: number;
   /** Real inbox badge count */
   inboxCount?: number;
+  /** Number of active scouts */
+  scoutsCount?: number;
   onCreateList?: (name: string) => void;
   onRenameList?: (id: string, newName: string) => void;
   onDeleteList?: (id: string) => void;
@@ -50,6 +52,7 @@ export function LeftNav({
   navigate,
   upcomingCount,
   inboxCount,
+  scoutsCount,
   onCreateList,
   onRenameList,
   onDeleteList,
@@ -90,7 +93,6 @@ export function LeftNav({
   };
 
   const sortableIds = lists.map((l) => `sortable-list-${l.id}`);
-
   return (
     <nav
       className={`
@@ -146,8 +148,10 @@ export function LeftNav({
         <NavItem
           icon={<Search size={18} />}
           label="Scouts"
-          badge={2}
+          badge={scoutsCount}
+          isActive={currentPath === "/scouts"}
           isCollapsed={isCollapsed}
+          onClick={() => navigate?.("/scouts")}
         />
       </div>
 

@@ -23,8 +23,10 @@ import {
   AppDropZone,
   cleanFilename,
   SpotlightModal,
+  ScoutsRoster,
+  ScoutDetail,
 } from "@brett/ui";
-import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
+import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
 import {
   useActiveThings,
@@ -60,6 +62,10 @@ import { ListView } from "./views/ListView";
 import { UpcomingView } from "./views/UpcomingView";
 import { NotFoundView } from "./views/NotFoundView";
 import CalendarPage from "./pages/CalendarPage";
+import {
+  mockScouts,
+  mockScoutFindings,
+} from "./data/mockData";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
@@ -131,6 +137,8 @@ export function App() {
     Thing | CalendarEventDisplay | null
   >(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [activePage, setActivePage] = useState<"today" | "inbox" | "scouts">("today");
+  const [selectedScout, setSelectedScout] = useState<Scout | null>(null);
 
   // Triage popup state
   const [triageState, setTriageState] = useState<{
@@ -325,6 +333,7 @@ export function App() {
     if (path === "/inbox") return "inbox";
     if (path === "/calendar") return "calendar";
     if (path === "/settings") return "settings";
+    if (path === "/scouts") return "scouts";
     if (path.startsWith("/lists/")) return `list:${path.split("/lists/")[1]}`;
     return undefined;
   }, [location.pathname]);
@@ -438,6 +447,15 @@ export function App() {
       { type: "task", title },
       { onError: (err) => console.error("Failed to create thing:", err) }
     );
+  };
+
+  // Scout handlers
+  const handleSelectScout = (scout: Scout) => {
+    setSelectedScout(scout);
+  };
+
+  const handleBackToRoster = () => {
+    setSelectedScout(null);
   };
 
   const handleInboxAddContent = (url: string) => {
@@ -608,7 +626,7 @@ export function App() {
         <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
           {/* Left Column: Navigation */}
           <LeftNav
-            isCollapsed={isDetailOpen}
+            isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScout !== null)}
             lists={lists}
             user={user}
             incompleteCount={activeThingsForCount.length}
@@ -640,6 +658,22 @@ export function App() {
           <Routes>
             <Route path="/settings" element={<SettingsPage onBack={() => navigate("/today")} />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
+            <Route path="/scouts" element={
+              selectedScout ? (
+                <ScoutDetail
+                  scouts={mockScouts}
+                  selectedScout={selectedScout}
+                  findings={mockScoutFindings}
+                  onSelectScout={handleSelectScout}
+                  onBack={handleBackToRoster}
+                />
+              ) : (
+                <ScoutsRoster
+                  scouts={mockScouts}
+                  onSelectScout={handleSelectScout}
+                />
+              )
+            } />
             <Route path="/today" element={
               <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay}>
                 <TodayView

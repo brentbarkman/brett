@@ -45,3 +45,6 @@ export { ContentDetailPanel } from "./ContentDetailPanel";
 export { TypeFilter } from "./TypeFilter";
 export { AppDropZone, cleanFilename } from "./AppDropZone";
 export { getAvatarColor } from "./avatarColor";
+export { ScoutCard } from "./ScoutCard";
+export { ScoutsRoster } from "./ScoutsRoster";
+export { ScoutDetail } from "./ScoutDetail";
