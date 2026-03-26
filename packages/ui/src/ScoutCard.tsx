@@ -18,7 +18,7 @@ export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: Scou
         className={`
           flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-200 text-left
           ${isSelected
-            ? "bg-white/[0.08] border border-purple-500/30 shadow-[0_0_12px_rgba(139,92,246,0.08)]"
+            ? "bg-white/[0.08] border border-blue-500/25 shadow-[0_0_12px_rgba(59,130,246,0.06)]"
             : "bg-white/[0.03] border border-transparent hover:bg-white/[0.06]"}
         `}
       >
@@ -28,7 +28,7 @@ export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: Scou
             background: isCompleted
               ? "rgba(255,255,255,0.08)"
               : `linear-gradient(180deg, ${scout.avatarGradient[0]}, ${scout.avatarGradient[1]})`,
-            boxShadow: isCompleted ? "none" : `0 0 10px ${scout.avatarGradient[0]}40`,
+            boxShadow: isCompleted ? "none" : `0 0 8px ${scout.avatarGradient[0]}30`,
           }}
         >
           <span className={`text-sm font-bold ${isCompleted ? "text-white/30" : "text-white"}`}>
@@ -36,7 +36,7 @@ export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: Scou
           </span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className={`text-[13px] font-medium truncate ${isSelected ? "text-white" : "text-white/70"}`}>
+          <div className={`text-[13px] font-medium truncate ${isSelected ? "text-white" : "text-white/50"}`}>
             {scout.name}
           </div>
           <div className="text-[11px] text-white/30">
@@ -73,7 +73,7 @@ export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: Scou
         </div>
         {!isCompleted && (
           <div
-            className="absolute inset-0 rounded-full blur-lg opacity-40 group-hover:opacity-60 transition-opacity"
+            className="absolute inset-0 rounded-full blur-lg opacity-30 group-hover:opacity-50 transition-opacity"
             style={{ background: scout.avatarGradient[0] }}
           />
         )}
@@ -84,13 +84,13 @@ export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: Scou
           <span className="text-[15px] font-semibold text-white truncate">{scout.name}</span>
           <StatusBadge status={scout.status} />
         </div>
-        <p className="text-[13px] text-white/40 line-clamp-1">{scout.goal}</p>
+        <p className="text-[13px] text-white/30 line-clamp-1">{scout.goal}</p>
         <div className="flex items-center gap-3 text-[11px] text-white/30 font-medium">
           <span>Last run: {scout.lastRun ?? "Never"}</span>
           <span className="text-white/10">·</span>
           <span>{scout.findingsCount} findings</span>
           <span className="text-white/10">·</span>
-          <span className={scout.cadenceCurrent ? "text-purple-400" : ""}>
+          <span className={scout.cadenceCurrent ? "text-blue-400/70" : ""}>
             {scout.cadenceCurrent
               ? `${scout.cadenceCurrent} (elevated)`
               : scout.cadenceBase}
@@ -104,14 +104,14 @@ export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: Scou
 function StatusBadge({ status }: { status: Scout["status"] }) {
   if (status === "active") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-[10px] font-semibold text-emerald-400 border border-emerald-500/15">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
         Active
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] text-[10px] font-semibold text-white/40 border border-white/[0.06]">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] text-[10px] font-semibold text-white/30 border border-white/[0.04]">
       {status === "completed" ? "Completed" : status === "paused" ? "Paused" : "Expired"}
     </span>
   );
