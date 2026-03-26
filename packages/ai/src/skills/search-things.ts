@@ -8,7 +8,7 @@ export const searchThingsSkill: Skill = {
   parameters: {
     type: "object",
     properties: {
-      query: { type: "string", description: "Search query to match against item titles" },
+      query: { type: "string", description: "Search query to match against item titles, notes, content type (podcast, article, etc.), and content titles" },
       type: {
         type: "string",
         enum: ["task", "content"],
@@ -37,8 +37,15 @@ export const searchThingsSkill: Skill = {
       limit?: number;
     };
 
+    // Search across title, notes, and contentType (so "podcast" finds podcast content)
+    const textFilter = { contains: p.query, mode: "insensitive" as const };
     const where: Record<string, unknown> = {
-      title: { contains: p.query, mode: "insensitive" },
+      OR: [
+        { title: textFilter },
+        { notes: textFilter },
+        { contentType: textFilter },
+        { contentTitle: textFilter },
+      ],
     };
     if (p.type) where.type = p.type;
     if (p.status) where.status = p.status;
@@ -52,7 +59,16 @@ export const searchThingsSkill: Skill = {
 
     return {
       success: true,
-      data: { items: results.map((i) => ({ id: i.id, title: i.title, type: i.type, status: i.status })) },
+      data: {
+        items: results.map((i: any) => ({
+          id: i.id,
+          title: i.title,
+          type: i.type,
+          status: i.status,
+          contentType: i.contentType ?? null,
+          dueDate: i.dueDate?.toISOString() ?? null,
+        })),
+      },
       displayHint: { type: "list" },
       message: results.length > 0
         ? `Found ${results.length} item${results.length === 1 ? "" : "s"} matching "${p.query}".`

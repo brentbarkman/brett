@@ -37,7 +37,10 @@ export const listTodaySkill: Skill = {
       orderBy: { dueDate: "asc" },
     });
 
-    const things = withLists.map((i) => itemToThing(i as any, now));
+    const things = withLists.map((i) => {
+      const thing = itemToThing(i as any, now);
+      return { ...thing, contentType: (i as any).contentType ?? null };
+    });
 
     return {
       success: true,
