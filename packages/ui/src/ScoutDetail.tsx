@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Pause, Zap, FileText, CircleCheck, ArrowLeft, ExternalLink } from "lucide-react";
+import { Pencil, Pause, Zap, FileText, CircleCheck, ArrowLeft, ExternalLink, Check, X, MessageSquare, Minus, Plus } from "lucide-react";
 import type { Scout, ScoutFinding, ScoutSource } from "@brett/types";
 import { ScoutCard } from "./ScoutCard";
 
@@ -19,6 +19,7 @@ export function ScoutDetail({
   onBack,
 }: ScoutDetailProps) {
   const [activeTab, setActiveTab] = useState<"findings" | "log">("findings");
+  const [editingField, setEditingField] = useState<string | null>(null);
   const scoutFindings = findings.filter((f) => f.scoutId === selectedScout.id);
   const isCompleted = selectedScout.status === "completed" || selectedScout.status === "expired";
   const budgetPercent = Math.round((selectedScout.budgetUsed / selectedScout.budgetTotal) * 100);
@@ -51,7 +52,6 @@ export function ScoutDetail({
       <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/20 backdrop-blur-lg rounded-2xl border border-white/[0.06]">
         {/* Header with gradient accent */}
         <div className="relative overflow-hidden">
-          {/* Ambient color from scout avatar */}
           {!isCompleted && (
             <div
               className="absolute top-0 left-0 w-full h-48 opacity-[0.06] pointer-events-none"
@@ -64,7 +64,6 @@ export function ScoutDetail({
           <div className="relative z-10 p-8 pb-0 space-y-6">
             {/* Scout Identity */}
             <div className="flex items-start gap-5">
-              {/* Large avatar with glow */}
               <div className="relative flex-shrink-0">
                 <div
                   className="w-16 h-16 rounded-2xl flex items-center justify-center relative z-10"
@@ -103,58 +102,139 @@ export function ScoutDetail({
                 )}
               </div>
 
-              <div className="flex gap-2 flex-shrink-0">
-                <ActionButton icon={<Pencil size={14} />} label="Edit" />
-                <ActionButton icon={<Pause size={14} />} label="Pause" />
+              <div className="flex-shrink-0">
+                <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] hover:border-white/[0.15] transition-all duration-200 text-white/60 hover:text-white text-xs font-medium">
+                  <Pause size={14} />
+                  Pause
+                </button>
               </div>
             </div>
 
-            {/* Goal callout */}
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-4">
+            {/* Goal — editable via Brett */}
+            <EditableCard
+              label="GOAL"
+              isEditing={editingField === "goal"}
+              onEdit={() => setEditingField("goal")}
+              onCancel={() => setEditingField(null)}
+              editType="brett"
+            >
               <p className="text-[13px] text-white/70 leading-relaxed">{selectedScout.goal}</p>
-            </div>
+            </EditableCard>
           </div>
         </div>
 
-        <div className="px-8 py-6 space-y-6">
+        <div className="px-8 py-6 space-y-5">
           {/* Config Grid */}
           <div className="grid grid-cols-2 gap-5">
-            <SourcesCard sources={selectedScout.sources} />
-            <ConfigCard label="SENSITIVITY" value={selectedScout.sensitivity} />
-            <ConfigCard
+            {/* Sources — editable via Brett */}
+            <EditableCard
+              label="SOURCES"
+              isEditing={editingField === "sources"}
+              onEdit={() => setEditingField("sources")}
+              onCancel={() => setEditingField(null)}
+              editType="brett"
+            >
+              <div className="flex flex-wrap gap-2">
+                {selectedScout.sources.map((source) =>
+                  source.url ? (
+                    <a
+                      key={source.name}
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[12px] text-blue-400 hover:text-blue-300 hover:bg-white/[0.08] hover:border-blue-500/20 transition-all cursor-pointer"
+                    >
+                      {source.name}
+                      <ExternalLink size={10} className="opacity-50" />
+                    </a>
+                  ) : (
+                    <span
+                      key={source.name}
+                      className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[12px] text-white/40"
+                    >
+                      {source.name}
+                    </span>
+                  )
+                )}
+              </div>
+            </EditableCard>
+
+            {/* Sensitivity — segmented control */}
+            <EditableCard
+              label="SENSITIVITY"
+              isEditing={editingField === "sensitivity"}
+              onEdit={() => setEditingField("sensitivity")}
+              onCancel={() => setEditingField(null)}
+              onSave={() => setEditingField(null)}
+              editType="inline"
+            >
+              {editingField === "sensitivity" ? (
+                <SensitivityPicker current={selectedScout.sensitivity} />
+              ) : (
+                <p className="text-[13px] text-white/50 leading-relaxed">{selectedScout.sensitivity}</p>
+              )}
+            </EditableCard>
+
+            {/* Cadence — preset picker */}
+            <EditableCard
               label="CADENCE"
-              value={
-                selectedScout.cadenceCurrent
-                  ? `Base: ${selectedScout.cadenceBase}\nCurrent: ${selectedScout.cadenceCurrent} (${selectedScout.cadenceReason})`
-                  : selectedScout.cadenceBase
-              }
+              isEditing={editingField === "cadence"}
+              onEdit={() => setEditingField("cadence")}
+              onCancel={() => setEditingField(null)}
+              onSave={() => setEditingField(null)}
+              editType="inline"
               accent={!!selectedScout.cadenceCurrent}
-            />
-            <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 space-y-3">
-              <div className="text-[10px] font-semibold tracking-widest text-white/30 uppercase">Budget</div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-lg font-bold text-white">{selectedScout.budgetUsed}</span>
-                <span className="text-sm text-white/30">/ {selectedScout.budgetTotal} runs</span>
-              </div>
-              {/* Progress bar */}
-              <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${budgetPercent}%`,
-                    background: budgetPercent > 80
-                      ? "linear-gradient(90deg, #F59E0B, #EF4444)"
-                      : budgetPercent > 50
-                        ? "linear-gradient(90deg, #8B5CF6, #A78BFA)"
-                        : "linear-gradient(90deg, #22C55E, #4ADE80)",
-                  }}
+            >
+              {editingField === "cadence" ? (
+                <CadencePicker
+                  baseInterval={selectedScout.cadenceBase}
+                  burstMin={selectedScout.cadenceCurrent}
                 />
-              </div>
-              <div className="text-[11px] text-white/30">{budgetPercent}% used this month</div>
-            </div>
+              ) : (
+                <p className={`text-[13px] leading-relaxed whitespace-pre-line ${selectedScout.cadenceCurrent ? "text-white/70" : "text-white/50"}`}>
+                  {selectedScout.cadenceCurrent
+                    ? `Base: ${selectedScout.cadenceBase}\nCurrent: ${selectedScout.cadenceCurrent} (${selectedScout.cadenceReason})`
+                    : selectedScout.cadenceBase}
+                </p>
+              )}
+            </EditableCard>
+
+            {/* Budget — inline stepper */}
+            <EditableCard
+              label="BUDGET"
+              isEditing={editingField === "budget"}
+              onEdit={() => setEditingField("budget")}
+              onCancel={() => setEditingField(null)}
+              onSave={() => setEditingField(null)}
+              editType="inline"
+            >
+              {editingField === "budget" ? (
+                <BudgetEditor used={selectedScout.budgetUsed} total={selectedScout.budgetTotal} />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-lg font-bold text-white">{selectedScout.budgetUsed}</span>
+                    <span className="text-sm text-white/30">/ {selectedScout.budgetTotal} runs</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${budgetPercent}%`,
+                        background: budgetPercent > 80
+                          ? "linear-gradient(90deg, #F59E0B, #EF4444)"
+                          : budgetPercent > 50
+                            ? "linear-gradient(90deg, #8B5CF6, #A78BFA)"
+                            : "linear-gradient(90deg, #22C55E, #4ADE80)",
+                      }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-white/30">{budgetPercent}% used this month</div>
+                </div>
+              )}
+            </EditableCard>
           </div>
 
-          {/* Divider */}
           <div className="h-px bg-white/[0.06]" />
 
           {/* Tabs */}
@@ -172,7 +252,6 @@ export function ScoutDetail({
             />
           </div>
 
-          {/* Tab Content */}
           {activeTab === "findings" ? (
             <div className="space-y-2.5">
               {scoutFindings.length > 0 ? (
@@ -198,6 +277,267 @@ export function ScoutDetail({
   );
 }
 
+// ── Editable Card Wrapper ────────────────────────────────────────
+
+function EditableCard({
+  label,
+  children,
+  isEditing,
+  onEdit,
+  onCancel,
+  onSave,
+  editType,
+  accent,
+}: {
+  label: string;
+  children: React.ReactNode;
+  isEditing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave?: () => void;
+  editType: "inline" | "brett";
+  accent?: boolean;
+}) {
+  return (
+    <div className={`group rounded-xl border p-4 space-y-3 transition-all duration-200 ${
+      isEditing
+        ? "bg-white/[0.06] border-purple-500/20 shadow-[0_0_20px_rgba(139,92,246,0.06)]"
+        : accent
+          ? "bg-white/[0.03] border-purple-500/15"
+          : "bg-white/[0.03] border-white/[0.06]"
+    }`}>
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold tracking-widest text-white/30 uppercase">{label}</div>
+        {isEditing ? (
+          <div className="flex items-center gap-1">
+            {onSave && (
+              <button
+                onClick={onSave}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-purple-600/80 hover:bg-purple-500 text-white text-[10px] font-semibold transition-colors"
+              >
+                <Check size={10} />
+                Save
+              </button>
+            )}
+            <button
+              onClick={onCancel}
+              className="flex items-center px-1.5 py-1 rounded-md hover:bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1 px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/[0.06] text-white/30 hover:text-white/60 text-[10px] font-medium transition-all"
+          >
+            {editType === "brett" ? (
+              <>
+                <MessageSquare size={10} />
+                Edit with Brett
+              </>
+            ) : (
+              <Pencil size={10} />
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Brett conversation placeholder */}
+      {isEditing && editType === "brett" ? (
+        <div className="space-y-3">
+          {children}
+          <div className="rounded-lg bg-white/[0.04] border border-white/[0.08] p-3 space-y-2">
+            <p className="text-[11px] text-white/40">What would you like to change?</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g., Also watch for supply chain issues..."
+                className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-[12px] text-white placeholder-white/20 focus:outline-none focus:border-purple-500/30 focus:ring-1 focus:ring-purple-500/20"
+              />
+              <button className="px-3 py-2 rounded-lg bg-purple-600/80 hover:bg-purple-500 text-white text-[11px] font-semibold transition-colors flex-shrink-0">
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        children
+      )}
+    </div>
+  );
+}
+
+// ── Sensitivity Picker ───────────────────────────────────────────
+
+const SENSITIVITY_OPTIONS = [
+  { value: "low", label: "Low", desc: "Surface anything from credible sources" },
+  { value: "medium", label: "Medium", desc: "Notable developments and signals only" },
+  { value: "high", label: "High", desc: "Only major, material developments" },
+] as const;
+
+function SensitivityPicker({ current }: { current: string }) {
+  const currentValue = current.toLowerCase().startsWith("low") ? "low"
+    : current.toLowerCase().startsWith("high") ? "high" : "medium";
+  const [selected, setSelected] = useState(currentValue);
+
+  return (
+    <div className="space-y-2">
+      {SENSITIVITY_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => setSelected(opt.value)}
+          className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-all duration-150 ${
+            selected === opt.value
+              ? "bg-purple-500/15 border border-purple-500/25"
+              : "bg-white/[0.02] border border-transparent hover:bg-white/[0.04]"
+          }`}
+        >
+          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+            selected === opt.value ? "border-purple-400" : "border-white/20"
+          }`}>
+            {selected === opt.value && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+          </div>
+          <div>
+            <div className={`text-[12px] font-semibold ${selected === opt.value ? "text-white" : "text-white/60"}`}>
+              {opt.label}
+            </div>
+            <div className="text-[11px] text-white/30">{opt.desc}</div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Cadence Picker ───────────────────────────────────────────────
+
+const CADENCE_PRESETS = [
+  { label: "Every hour", hours: 1 },
+  { label: "Every 4 hours", hours: 4 },
+  { label: "Every 8 hours", hours: 8 },
+  { label: "Every 12 hours", hours: 12 },
+  { label: "Daily", hours: 24 },
+  { label: "Every 2 days", hours: 48 },
+  { label: "Every 3 days", hours: 72 },
+  { label: "Weekly", hours: 168 },
+] as const;
+
+function CadencePicker({ baseInterval, burstMin }: { baseInterval: string; burstMin?: string }) {
+  const matchPreset = (label: string) =>
+    CADENCE_PRESETS.find((p) => p.label.toLowerCase() === label.toLowerCase());
+  const [selectedBase, setSelectedBase] = useState<number>(matchPreset(baseInterval)?.hours ?? 72);
+  const [burstHours, setBurstHours] = useState<number>(matchPreset(burstMin ?? "")?.hours ?? 8);
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <div className="text-[11px] text-white/40 font-medium">Base check frequency</div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {CADENCE_PRESETS.map((preset) => (
+            <button
+              key={preset.hours}
+              onClick={() => setSelectedBase(preset.hours)}
+              className={`px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                selectedBase === preset.hours
+                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                  : "bg-white/[0.03] text-white/40 border border-transparent hover:bg-white/[0.06]"
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-[11px] text-white/40 font-medium">
+          Burst minimum <span className="text-white/20">— scout can speed up to this</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setBurstHours(Math.max(1, burstHours - (burstHours > 12 ? 12 : burstHours > 4 ? 4 : 1)))}
+            className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
+          >
+            <Minus size={12} />
+          </button>
+          <span className="text-[13px] font-semibold text-white min-w-[100px] text-center">
+            {CADENCE_PRESETS.find((p) => p.hours === burstHours)?.label ?? `Every ${burstHours}h`}
+          </span>
+          <button
+            onClick={() => setBurstHours(Math.min(selectedBase, burstHours + (burstHours >= 12 ? 12 : burstHours >= 4 ? 4 : 1)))}
+            className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Budget Editor ────────────────────────────────────────────────
+
+function BudgetEditor({ used, total }: { used: number; total: number }) {
+  const [budget, setBudget] = useState(total);
+  const presets = [30, 45, 60, 90, 120];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-2">
+        <span className="text-lg font-bold text-white">{used}</span>
+        <span className="text-sm text-white/30">used of</span>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-[11px] text-white/40 font-medium">Monthly run limit</div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setBudget(Math.max(used, budget - 10))}
+            className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
+          >
+            <Minus size={12} />
+          </button>
+          <span className="text-xl font-bold text-white min-w-[60px] text-center">{budget}</span>
+          <button
+            onClick={() => setBudget(budget + 10)}
+            className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
+          >
+            <Plus size={12} />
+          </button>
+          <span className="text-[12px] text-white/30">runs / month</span>
+        </div>
+      </div>
+
+      <div className="flex gap-1.5">
+        {presets.map((p) => (
+          <button
+            key={p}
+            onClick={() => setBudget(p)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
+              budget === p
+                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                : "bg-white/[0.03] text-white/30 border border-transparent hover:bg-white/[0.06] hover:text-white/50"
+            }`}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      {/* Progress bar showing used vs new limit */}
+      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-400 transition-all duration-300"
+          style={{ width: `${Math.round((used / budget) * 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Shared Sub-components ────────────────────────────────────────
+
 function StatusBadge({ status }: { status: Scout["status"] }) {
   if (status === "active") {
     return (
@@ -211,55 +551,6 @@ function StatusBadge({ status }: { status: Scout["status"] }) {
     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/[0.06] text-[11px] font-semibold text-white/40 border border-white/[0.06]">
       {status === "completed" ? "Completed" : status === "paused" ? "Paused" : "Expired"}
     </span>
-  );
-}
-
-function ActionButton({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] hover:border-white/[0.15] transition-all duration-200 text-white/60 hover:text-white text-xs font-medium">
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function SourcesCard({ sources }: { sources: ScoutSource[] }) {
-  return (
-    <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 space-y-3">
-      <div className="text-[10px] font-semibold tracking-widest text-white/30 uppercase">Sources</div>
-      <div className="flex flex-wrap gap-2">
-        {sources.map((source) =>
-          source.url ? (
-            <a
-              key={source.name}
-              href={source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[12px] text-blue-400 hover:text-blue-300 hover:bg-white/[0.08] hover:border-blue-500/20 transition-all cursor-pointer"
-            >
-              {source.name}
-              <ExternalLink size={10} className="opacity-50" />
-            </a>
-          ) : (
-            <span
-              key={source.name}
-              className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[12px] text-white/40"
-            >
-              {source.name}
-            </span>
-          )
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ConfigCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className={`rounded-xl bg-white/[0.03] border p-4 space-y-2 ${accent ? "border-purple-500/15" : "border-white/[0.06]"}`}>
-      <div className="text-[10px] font-semibold tracking-widest text-white/30 uppercase">{label}</div>
-      <p className={`text-[13px] leading-relaxed whitespace-pre-line ${accent ? "text-white/70" : "text-white/50"}`}>{value}</p>
-    </div>
   );
 }
 
