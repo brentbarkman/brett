@@ -3,8 +3,11 @@ import { prisma } from "../lib/prisma.js";
 import { createHmac, timingSafeEqual } from "crypto";
 
 const router = new Hono();
+
+/** Debounce per Google account (not per calendar) — collapses all calendar
+ *  notifications for the same account into a single incrementalSync call. */
 const syncDebounce = new Map<string, NodeJS.Timeout>();
-const DEBOUNCE_MS = 2000;
+const DEBOUNCE_MS = 10_000; // 10 seconds
 
 router.post("/google-calendar", async (c) => {
   const channelId = c.req.header("X-Goog-Channel-ID");
@@ -38,22 +41,22 @@ router.post("/google-calendar", async (c) => {
     return c.json({ error: "Invalid token" }, 403);
   }
 
-  // Debounced sync — Google often sends multiple notifications for the same change
-  const key = calendarList.id;
-  if (syncDebounce.has(key)) clearTimeout(syncDebounce.get(key)!);
+  // Debounce per account — all calendars for this Google account collapse
+  const accountId = calendarList.googleAccountId;
+  if (syncDebounce.has(accountId)) clearTimeout(syncDebounce.get(accountId)!);
 
   syncDebounce.set(
-    key,
+    accountId,
     setTimeout(async () => {
-      syncDebounce.delete(key);
+      syncDebounce.delete(accountId);
       try {
         const { incrementalSync } = await import(
           "../services/calendar-sync.js"
         );
-        await incrementalSync(calendarList.googleAccountId);
+        await incrementalSync(accountId);
       } catch (err) {
         console.error(
-          `Webhook sync failed for account ${calendarList.googleAccountId}:`,
+          `Webhook sync failed for account ${accountId}:`,
           err,
         );
       }

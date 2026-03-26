@@ -1,6 +1,7 @@
 import { google, type calendar_v3, type people_v1 } from "googleapis";
 import { prisma } from "./prisma.js";
 import { decryptToken, encryptToken } from "./encryption.js";
+import { googleThrottle } from "./google-throttle.js";
 
 /** Per-account mutex to prevent concurrent token refreshes */
 const clientCache = new Map<string, Promise<calendar_v3.Calendar>>();
@@ -100,6 +101,7 @@ async function createCalendarClient(
 export async function fetchCalendarList(
   calendarClient: calendar_v3.Calendar,
 ): Promise<calendar_v3.Schema$CalendarListEntry[]> {
+  await googleThrottle();
   const res = await calendarClient.calendarList.list();
   return res.data.items ?? [];
 }
@@ -142,6 +144,7 @@ export async function fetchEvents(
       if (options.timeMax) params.timeMax = options.timeMax;
     }
 
+    await googleThrottle();
     const res = await calendarClient.events.list(params);
     const items = res.data.items ?? [];
     allEvents.push(...items);
@@ -162,6 +165,7 @@ export async function updateRsvp(
   status: "accepted" | "declined" | "tentative",
   comment?: string,
 ): Promise<calendar_v3.Schema$Event> {
+  await googleThrottle();
   const eventRes = await calendarClient.events.get({ calendarId, eventId });
   const event = eventRes.data;
 
@@ -180,6 +184,7 @@ export async function updateRsvp(
   // Always sync the comment — empty string or undefined clears it
   selfAttendee.comment = comment || undefined;
 
+  await googleThrottle();
   const res = await calendarClient.events.patch({
     calendarId,
     eventId,
@@ -197,6 +202,7 @@ export async function watchCalendar(
   channelId: string,
   token: string,
 ): Promise<calendar_v3.Schema$Channel> {
+  await googleThrottle();
   const res = await calendarClient.events.watch({
     calendarId,
     requestBody: {
@@ -215,6 +221,7 @@ export async function stopWatch(
   channelId: string,
   resourceId: string,
 ): Promise<void> {
+  await googleThrottle();
   await calendarClient.channels.stop({
     requestBody: {
       id: channelId,
@@ -227,6 +234,7 @@ export async function stopWatch(
 export async function fetchColors(
   calendarClient: calendar_v3.Calendar,
 ): Promise<calendar_v3.Schema$Colors> {
+  await googleThrottle();
   const res = await calendarClient.colors.get();
   return res.data;
 }
@@ -268,6 +276,7 @@ export async function fetchAttendeePhotos(
 
   try {
     // 1. The authenticated user's own profile photo
+    await googleThrottle();
     const meRes = await people.people.get({
       resourceName: "people/me",
       personFields: "emailAddresses,photos",
@@ -281,6 +290,7 @@ export async function fetchAttendeePhotos(
     // 2. My Contacts (requires contacts.readonly)
     let nextPageToken: string | undefined;
     do {
+      await googleThrottle();
       const res = await people.people.connections.list({
         resourceName: "people/me",
         personFields: "emailAddresses,photos",
@@ -296,6 +306,7 @@ export async function fetchAttendeePhotos(
 
   try {
     // 3. Other Contacts (requires contacts.other.readonly)
+    await googleThrottle();
     const res = await people.otherContacts.list({
       readMask: "emailAddresses,photos",
       pageSize: 1000,

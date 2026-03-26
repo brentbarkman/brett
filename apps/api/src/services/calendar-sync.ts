@@ -19,6 +19,44 @@ const SYNC_WINDOW_FUTURE_DAYS = 90;
 /** Guards against concurrent syncs for the same account */
 const inFlightSyncs = new Set<string>();
 
+/** Post-sync cooldown: tracks when each account last finished syncing */
+const lastSyncCompleted = new Map<string, number>();
+const SYNC_COOLDOWN_MS = 30_000; // 30 seconds
+
+/** 410 backoff: tracks consecutive full-fetch fallbacks per calendar */
+const fullFetchBackoff = new Map<string, { attempts: number; nextAllowedAt: number }>();
+const BACKOFF_BASE_MS = 15_000; // 15s, 30s, 60s, 120s...
+const BACKOFF_MAX_MS = 5 * 60_000; // 5 minutes
+
+function isSyncOnCooldown(googleAccountId: string): boolean {
+  const lastCompleted = lastSyncCompleted.get(googleAccountId);
+  if (!lastCompleted) return false;
+  return Date.now() - lastCompleted < SYNC_COOLDOWN_MS;
+}
+
+function recordSyncCompleted(googleAccountId: string): void {
+  lastSyncCompleted.set(googleAccountId, Date.now());
+}
+
+function getBackoffDelay(calendarId: string): number {
+  const entry = fullFetchBackoff.get(calendarId);
+  if (!entry) return 0;
+  const remaining = entry.nextAllowedAt - Date.now();
+  return Math.max(0, remaining);
+}
+
+function recordFullFetchFallback(calendarId: string): void {
+  const entry = fullFetchBackoff.get(calendarId) ?? { attempts: 0, nextAllowedAt: 0 };
+  entry.attempts++;
+  const delay = Math.min(BACKOFF_BASE_MS * Math.pow(2, entry.attempts - 1), BACKOFF_MAX_MS);
+  entry.nextAllowedAt = Date.now() + delay;
+  fullFetchBackoff.set(calendarId, entry);
+}
+
+function clearBackoff(calendarId: string): void {
+  fullFetchBackoff.delete(calendarId);
+}
+
 type SyncChangeset = { created: string[]; updated: string[]; deleted: string[] };
 
 function getSyncTimeRange(): { timeMin: string; timeMax: string } {
@@ -110,6 +148,10 @@ export async function initialSync(googleAccountId: string): Promise<void> {
  */
 export async function incrementalSync(googleAccountId: string): Promise<void> {
   if (inFlightSyncs.has(googleAccountId)) return;
+  if (isSyncOnCooldown(googleAccountId)) {
+    console.log(`[calendar-sync] Skipping sync for ${googleAccountId} — cooldown active`);
+    return;
+  }
   inFlightSyncs.add(googleAccountId);
 
   try {
@@ -146,7 +188,15 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
     for (const cal of calendarLists) {
       try {
         if (!cal.syncToken) {
-          // No syncToken — do a full fetch for this calendar
+          // No syncToken — do a full fetch, but respect backoff from prior 410s
+          const backoffDelay = getBackoffDelay(cal.googleCalendarId);
+          if (backoffDelay > 0) {
+            console.log(
+              `[calendar-sync] Skipping full fetch for ${cal.googleCalendarId} — backoff ${Math.round(backoffDelay / 1000)}s remaining`,
+            );
+            continue;
+          }
+
           const { timeMin, timeMax } = getSyncTimeRange();
           const { events, nextSyncToken } = await fetchEvents(
             client,
@@ -164,6 +214,8 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
               where: { id: cal.id },
               data: { syncToken: nextSyncToken },
             });
+            // Successful full fetch — clear any backoff
+            clearBackoff(cal.googleCalendarId);
           }
         } else {
           // Incremental fetch using syncToken
@@ -187,13 +239,16 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
         }
       } catch (err: unknown) {
         if (isGoogleApiError(err) && err.code === 410) {
-          // 410 Gone — syncToken is invalid, clear it for next sync
+          // 410 Gone — syncToken is invalid, clear it and apply exponential backoff
           await prisma.calendarList.update({
             where: { id: cal.id },
             data: { syncToken: null },
           });
+          recordFullFetchFallback(cal.googleCalendarId);
+          const entry = fullFetchBackoff.get(cal.googleCalendarId);
           console.warn(
-            `[calendar-sync] syncToken expired for calendar ${cal.googleCalendarId}, cleared for re-sync`,
+            `[calendar-sync] syncToken expired for calendar ${cal.googleCalendarId}, ` +
+            `cleared — backoff attempt #${entry?.attempts}, next retry in ${Math.round((entry?.nextAllowedAt ?? 0 - Date.now()) / 1000)}s`,
           );
         } else if (isGoogleApiError(err) && (err.code === 401 || err.code === 403)) {
           // Token revoked or permission denied — stop syncing this account
@@ -213,18 +268,31 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
     });
   } finally {
     inFlightSyncs.delete(googleAccountId);
+    recordSyncCompleted(googleAccountId);
   }
 }
+
+/** Per-account cooldown for on-demand fetches */
+const lastOnDemandFetch = new Map<string, number>();
+const ON_DEMAND_COOLDOWN_MS = 60_000; // 60 seconds
 
 /**
  * On-demand fetch for browsing outside the default sync window.
  * Fetches events in the specified time range without using syncTokens.
+ * Enforces a 60s per-account cooldown to avoid request storms.
  */
 export async function onDemandFetch(
   googleAccountId: string,
   timeMin: string,
   timeMax: string,
 ): Promise<void> {
+  const lastFetch = lastOnDemandFetch.get(googleAccountId);
+  if (lastFetch && Date.now() - lastFetch < ON_DEMAND_COOLDOWN_MS) {
+    console.log(`[calendar-sync] Skipping on-demand fetch for ${googleAccountId} — cooldown active`);
+    return;
+  }
+  lastOnDemandFetch.set(googleAccountId, Date.now());
+
   const account = await prisma.googleAccount.findUniqueOrThrow({
     where: { id: googleAccountId },
   });
@@ -259,7 +327,22 @@ export async function onDemandFetch(
 // Private helpers
 // ---------------------------------------------------------------------------
 
-/** Batch-resolve attendee photos via People API and update stored attendees JSON */
+/** In-memory photo cache: email → { url, fetchedAt } */
+const photoCache = new Map<string, { url: string; fetchedAt: number }>();
+const PHOTO_CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function getCachedPhoto(email: string): string | undefined {
+  const entry = photoCache.get(email);
+  if (!entry) return undefined;
+  if (Date.now() - entry.fetchedAt > PHOTO_CACHE_TTL_MS) {
+    photoCache.delete(email);
+    return undefined;
+  }
+  return entry.url;
+}
+
+/** Batch-resolve attendee photos via People API and update stored attendees JSON.
+ *  Uses a 48h in-memory cache to avoid redundant People API calls. */
 async function resolveAttendeePhotos(
   googleAccountId: string,
   userId: string,
@@ -282,8 +365,36 @@ async function resolveAttendeePhotos(
 
     if (allEmails.size === 0) return;
 
-    const photoMap = await fetchAttendeePhotos(googleAccountId, [...allEmails]);
-    if (photoMap.size === 0) return;
+    // Split into cached and uncached emails
+    const uncachedEmails: string[] = [];
+    const mergedPhotoMap = new Map<string, string>();
+
+    for (const email of allEmails) {
+      const cached = getCachedPhoto(email);
+      if (cached) {
+        mergedPhotoMap.set(email, cached);
+      } else {
+        uncachedEmails.push(email);
+      }
+    }
+
+    // Only hit People API for uncached emails
+    if (uncachedEmails.length > 0) {
+      const freshPhotos = await fetchAttendeePhotos(googleAccountId, uncachedEmails);
+      const now = Date.now();
+      for (const [email, url] of freshPhotos) {
+        photoCache.set(email, { url, fetchedAt: now });
+        mergedPhotoMap.set(email, url);
+      }
+      // Cache misses too — avoid re-fetching emails with no photo
+      for (const email of uncachedEmails) {
+        if (!freshPhotos.has(email)) {
+          photoCache.set(email, { url: "", fetchedAt: now });
+        }
+      }
+    }
+
+    if (mergedPhotoMap.size === 0) return;
 
     // Update attendees JSON with photo URLs
     for (const event of events) {
@@ -293,7 +404,7 @@ async function resolveAttendeePhotos(
       let updated = false;
       const newAttendees = attendees.map((a) => {
         if (a.email) {
-          const photo = photoMap.get(a.email.toLowerCase());
+          const photo = mergedPhotoMap.get(a.email.toLowerCase());
           if (photo && photo !== a.photoUrl) {
             updated = true;
             return { ...a, photoUrl: photo };
