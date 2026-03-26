@@ -137,20 +137,31 @@ function UsageStats({ provider }: { provider: string }) {
           </div>
           {period.rows.length === 0 ? (
             <div className="text-[10px] text-white/20 pl-2">--</div>
-          ) : (
-            period.rows.map((row) => {
-              const total = row.inputTokens + row.outputTokens;
-              const sourceLabel = row.source === "fact_extraction" ? "memory" : row.source.replace("_", " ");
-              return (
-                <div key={`${row.model}-${row.source}`} className="flex items-center gap-2 text-[10px] font-mono text-white/50 pl-2">
-                  <span className="text-white/30 w-14 flex-shrink-0">{sourceLabel}</span>
-                  <span className="text-white/40 truncate max-w-[120px]">{row.model}</span>
-                  <span className="ml-auto tabular-nums">{row.calls}×</span>
-                  <span className="tabular-nums text-white/60">{total.toLocaleString()}</span>
+          ) : (() => {
+            const models = new Set(period.rows.map((r) => r.model));
+            const showModel = models.size > 1;
+            const periodTotal = period.rows.reduce((sum, r) => sum + r.inputTokens + r.outputTokens, 0);
+            return (
+              <div className="space-y-0.5">
+                {period.rows.map((row) => {
+                  const total = row.inputTokens + row.outputTokens;
+                  const sourceLabel = row.source === "fact_extraction" ? "memory" : row.source.replace(/_/g, " ");
+                  return (
+                    <div key={`${row.model}-${row.source}`} className="flex items-center gap-2 text-[10px] font-mono text-white/50 pl-2">
+                      <span className="text-white/30 flex-shrink-0 w-16">{sourceLabel}</span>
+                      {showModel && <span className="text-white/20 truncate max-w-[100px]">{row.model.split("-").slice(-2).join("-")}</span>}
+                      <span className="ml-auto tabular-nums">{row.calls} call{row.calls === 1 ? "" : "s"}</span>
+                      <span className="tabular-nums text-white/60 w-16 text-right">{total.toLocaleString()}</span>
+                    </div>
+                  );
+                })}
+                <div className="flex items-center gap-2 text-[10px] font-mono pl-2 pt-0.5 border-t border-white/5">
+                  <span className="text-white/40">total</span>
+                  <span className="ml-auto tabular-nums text-white/60 w-16 text-right">{periodTotal.toLocaleString()}</span>
                 </div>
-              );
-            })
-          )}
+              </div>
+            );
+          })()}
         </div>
       ))}
     </div>
