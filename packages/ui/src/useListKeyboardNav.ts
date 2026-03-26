@@ -30,19 +30,22 @@ export function useListKeyboardNav({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // Don't intercept when input, textarea, contenteditable, or omnibar/modal is focused
+      // Don't intercept when input, textarea, or contenteditable is focused
       const el = document.activeElement;
       if (
         el instanceof HTMLInputElement ||
         el instanceof HTMLTextAreaElement ||
-        (el instanceof HTMLElement && el.isContentEditable) ||
-        (el instanceof HTMLElement && el.closest("[data-omnibar]"))
+        (el instanceof HTMLElement && el.isContentEditable)
       ) {
         return;
       }
 
-      // Don't intercept when any modal/overlay is open (spotlight, dialogs)
-      if (document.querySelector("[data-spotlight-modal]")) {
+      // Don't intercept when omnibar or spotlight is open
+      // These use document-level event listeners that conflict with ours
+      if (
+        document.querySelector("[data-omnibar-open]") ||
+        document.querySelector("[data-spotlight-modal]")
+      ) {
         return;
       }
 

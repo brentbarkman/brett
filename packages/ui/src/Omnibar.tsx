@@ -214,7 +214,7 @@ export function Omnibar({
   );
 
   return (
-    <div ref={containerRef} className="relative w-full" data-omnibar>
+    <div ref={containerRef} className="relative w-full" {...(isOpen ? { "data-omnibar-open": true } : {})}>
       {/* Top Pill / Input Area */}
       <div
         className={`
