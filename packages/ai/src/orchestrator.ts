@@ -7,6 +7,7 @@ import { validateSkillArgs } from "./skills/validate-args.js";
 import type { AssemblerInput } from "./context/assembler.js";
 import { assembleContext } from "./context/assembler.js";
 import { AI_CONFIG } from "./config.js";
+import { logUsage } from "./memory/usage.js";
 
 // ─── Constants ───
 
@@ -28,6 +29,7 @@ export interface OrchestratorParams {
   prisma: PrismaClient;
   registry: SkillRegistry;
   sessionId?: string;
+  logUsage?: boolean;
 }
 
 // ─── Helpers ───
@@ -129,6 +131,20 @@ export async function* orchestrate(
             // Track token usage separately
             totalInputTokens += chunk.usage.input;
             totalOutputTokens += chunk.usage.output;
+
+            // Log per-round usage (reuse `model` from top of loop)
+            if (params.logUsage !== false) {
+              logUsage(prisma, {
+                userId: "userId" in input ? (input.userId as string) : "",
+                sessionId: params.sessionId,
+                provider: providerName,
+                model,
+                modelTier: currentTier,
+                source: input.type,
+                inputTokens: chunk.usage.input,
+                outputTokens: chunk.usage.output,
+              }).catch(() => {});
+            }
 
             if (pendingToolCalls.length > 0) {
               // Add assistant message with tool calls to history

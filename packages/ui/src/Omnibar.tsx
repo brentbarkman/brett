@@ -45,6 +45,9 @@ export interface OmnibarProps {
   searchResults?: SearchResultItem[] | null;
   isSearching?: boolean;
   onSearchResultClick?: (id: string) => void;
+  sessionId?: string | null;
+  showTokenUsage?: boolean;
+  sessionUsage?: { totalTokens: number } | null;
 }
 
 type Suggestion = {
@@ -74,6 +77,9 @@ export function Omnibar({
   searchResults,
   isSearching,
   onSearchResultClick,
+  sessionId,
+  showTokenUsage,
+  sessionUsage,
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -300,6 +306,13 @@ export function Omnibar({
                 />
               ))}
             </div>
+
+            {/* Token counter */}
+            {showTokenUsage && sessionId && sessionUsage && (
+              <div className="px-4 py-1 text-[10px] font-mono text-white/20 text-right">
+                {sessionUsage.totalTokens.toLocaleString()} tokens
+              </div>
+            )}
 
             {/* Bottom Input — the ONLY input when conversation is active */}
             <div className="border-t border-white/10 px-4 py-2.5 flex items-center gap-3">

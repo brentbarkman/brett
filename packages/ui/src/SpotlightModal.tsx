@@ -41,6 +41,9 @@ export interface SpotlightModalProps {
   searchResults?: SpotlightSearchResult[] | null;
   isSearching?: boolean;
   onSearchResultClick?: (id: string) => void;
+  sessionId?: string | null;
+  showTokenUsage?: boolean;
+  sessionUsage?: { totalTokens: number } | null;
 }
 
 export function SpotlightModal({
@@ -60,6 +63,9 @@ export function SpotlightModal({
   searchResults,
   isSearching,
   onSearchResultClick,
+  sessionId,
+  showTokenUsage,
+  sessionUsage,
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -291,6 +297,13 @@ export function SpotlightModal({
               />
             ))}
             {/* scroll handled by chatContainerRef.scrollTop */}
+          </div>
+        )}
+
+        {/* Token counter */}
+        {showTokenUsage && sessionId && sessionUsage && hasConversation && (
+          <div className="px-5 py-1 text-[10px] font-mono text-white/20 text-right">
+            {sessionUsage.totalTokens.toLocaleString()} tokens
           </div>
         )}
 

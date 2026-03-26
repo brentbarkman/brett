@@ -28,6 +28,8 @@ export type { OrchestratorParams } from "./orchestrator.js";
 // Memory
 export { extractFacts } from "./memory/facts.js";
 export { embedConversation, searchSimilar } from "./memory/embeddings.js";
+export { logUsage } from "./memory/usage.js";
+export type { UsageEntry } from "./memory/usage.js";
 
 // MCP
 export type { MCPClient } from "./mcp/client.js";

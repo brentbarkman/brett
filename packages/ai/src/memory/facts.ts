@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { resolveModel } from "../router.js";
 import { FACT_EXTRACTION_PROMPT } from "../context/system-prompts.js";
 import { AI_CONFIG } from "../config.js";
+import { logUsage } from "./usage.js";
 
 const VALID_CATEGORIES = new Set(["preference", "context", "relationship", "habit"]);
 
@@ -68,6 +69,18 @@ export async function extractFacts(
   })) {
     if (chunk.type === "text") {
       fullResponse += chunk.content;
+    }
+    if (chunk.type === "done") {
+      logUsage(prisma, {
+        userId,
+        sessionId,
+        provider: providerName,
+        model,
+        modelTier: "small",
+        source: "fact_extraction",
+        inputTokens: chunk.usage.input,
+        outputTokens: chunk.usage.output,
+      }).catch(() => {});
     }
   }
 

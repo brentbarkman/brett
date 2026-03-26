@@ -52,6 +52,8 @@ import {
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useOmnibar } from "./api/omnibar";
+import { useSessionUsage } from "./api/ai-usage";
+import { getPreferences } from "./api/preferences";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
@@ -291,6 +293,12 @@ export function App() {
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
 
+  // Token usage tracking
+  const [showTokenUsage] = useState(() => getPreferences().showTokenUsage);
+  const { data: sessionUsageData } = useSessionUsage(
+    showTokenUsage ? omnibar.sessionId : null,
+  );
+
   // Global Cmd+K / Ctrl+K listener for spotlight
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -364,8 +372,11 @@ export function App() {
       onCancel: omnibar.cancel,
       onReset: omnibar.reset,
       onNavigateToSettings: () => navigate("/settings#ai-settings"),
+      sessionId: omnibar.sessionId,
+      showTokenUsage,
+      sessionUsage: sessionUsageData ?? null,
     }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate]
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData]
   );
 
   // Apply dark mode to root
@@ -813,6 +824,9 @@ export function App() {
           onCancel={omnibar.cancel}
           onReset={omnibar.reset}
           onNavigateToSettings={() => navigate("/settings#ai-settings")}
+          sessionId={omnibar.sessionId}
+          showTokenUsage={showTokenUsage}
+          sessionUsage={sessionUsageData ?? null}
         />
 
         {/* Archive list confirmation */}

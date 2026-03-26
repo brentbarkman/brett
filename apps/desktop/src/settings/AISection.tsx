@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { Bot, Check, Loader2, Trash2, X } from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, Loader2, Trash2, X } from "lucide-react";
 import {
   useAIConfigs,
   useSaveAIConfig,
   useActivateAIConfig,
   useDeleteAIConfig,
 } from "../api/ai-config";
+import { useUsageSummary } from "../api/ai-usage";
+import { getPreferences, setPreference } from "../api/preferences";
 import type { AIProviderName, UserAIConfigRecord } from "@brett/types";
 
 const PROVIDERS: { id: AIProviderName; label: string; hint: string }[] = [
@@ -92,6 +94,68 @@ function ConnectedRow({
   );
 }
 
+function UsageStats({ provider }: { provider: string }) {
+  const { data, isLoading } = useUsageSummary();
+
+  if (isLoading) {
+    return (
+      <div className="px-3 py-2">
+        <div className="bg-white/5 animate-pulse rounded h-6 w-full" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const periods = [
+    { label: "Last 24h", rows: data.last24h },
+    { label: "Last 7 days", rows: data.last7d },
+    { label: "Last 30 days", rows: data.last30d },
+  ];
+
+  const filtered = periods.map((p) => ({
+    ...p,
+    rows: p.rows.filter((r) => r.provider === provider),
+  }));
+
+  const hasAny = filtered.some((p) => p.rows.length > 0);
+
+  if (!hasAny) {
+    return (
+      <div className="px-3 py-2 text-xs text-white/30">
+        No usage data yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 py-2 space-y-2">
+      {filtered.map((period) => (
+        <div key={period.label}>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-white/30 mb-1">
+            {period.label}
+          </div>
+          {period.rows.length === 0 ? (
+            <div className="text-[10px] text-white/20 pl-2">--</div>
+          ) : (
+            period.rows.map((row) => {
+              const total = row.inputTokens + row.outputTokens;
+              return (
+                <div key={row.model} className="flex items-center gap-2 text-[10px] font-mono text-white/50 pl-2">
+                  <span className="text-white/40 truncate max-w-[140px]">{row.model}</span>
+                  <span className="ml-auto tabular-nums">{row.inputTokens.toLocaleString()} in</span>
+                  <span className="tabular-nums">{row.outputTokens.toLocaleString()} out</span>
+                  <span className="tabular-nums text-white/60">{total.toLocaleString()} total</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AISection() {
   const { data, isLoading, error } = useAIConfigs();
   const saveConfig = useSaveAIConfig();
@@ -104,6 +168,8 @@ export function AISection() {
     useState<AIProviderName>("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showTokenUsage, setShowTokenUsage] = useState(() => getPreferences().showTokenUsage);
+  const [expandedUsage, setExpandedUsage] = useState<string | null>(null);
 
   function handleSave() {
     if (!apiKey.trim()) return;
@@ -132,6 +198,27 @@ export function AISection() {
         </h3>
       </div>
 
+      {/* Show token usage toggle */}
+      <div className="flex items-center justify-between px-3 py-2.5 bg-white/5 rounded-lg mb-4">
+        <span className="text-sm text-white/70">Show token usage in conversations</span>
+        <button
+          onClick={() => {
+            const next = !showTokenUsage;
+            setShowTokenUsage(next);
+            setPreference("showTokenUsage", next);
+          }}
+          className={`relative w-9 h-5 rounded-full transition-colors ${
+            showTokenUsage ? "bg-blue-500" : "bg-white/20"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+              showTokenUsage ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+
       {/* Loading */}
       {isLoading && (
         <div className="space-y-2">
@@ -151,19 +238,32 @@ export function AISection() {
       {!isLoading && configs.length > 0 && (
         <div className="space-y-2 mb-5">
           {configs.map((config) => (
-            <ConnectedRow
-              key={config.id}
-              config={config}
-              onActivate={() => activateConfig.mutate(config.id)}
-              onDelete={() => deleteConfig.mutate(config.id)}
-              isActivating={
-                activateConfig.isPending &&
-                activateConfig.variables === config.id
-              }
-              isDeleting={
-                deleteConfig.isPending && deleteConfig.variables === config.id
-              }
-            />
+            <div key={config.id} className="space-y-0">
+              <ConnectedRow
+                config={config}
+                onActivate={() => activateConfig.mutate(config.id)}
+                onDelete={() => deleteConfig.mutate(config.id)}
+                isActivating={
+                  activateConfig.isPending &&
+                  activateConfig.variables === config.id
+                }
+                isDeleting={
+                  deleteConfig.isPending && deleteConfig.variables === config.id
+                }
+              />
+              <button
+                onClick={() => setExpandedUsage(expandedUsage === config.id ? null : config.id)}
+                className="flex items-center gap-1 px-3 py-1 text-[10px] text-white/30 hover:text-white/50 transition-colors"
+              >
+                {expandedUsage === config.id ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                Usage
+              </button>
+              {expandedUsage === config.id && (
+                <div className="bg-white/[0.03] rounded-lg border border-white/5 mb-1">
+                  <UsageStats provider={config.provider} />
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}

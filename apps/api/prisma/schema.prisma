@@ -31,6 +31,7 @@ model User {
   conversationSessions ConversationSession[]
   facts                UserFact[]
   conversationEmbeddings ConversationEmbedding[]
+  usageLogs            AIUsageLog[]
 }
 
 model Session {
@@ -305,6 +306,7 @@ model ConversationSession {
   createdAt       DateTime  @default(now())
   messages        ConversationMessage[]
   embeddings      ConversationEmbedding[]
+  usageLogs       AIUsageLog[]
 
   @@index([userId, createdAt])
   @@index([itemId])
@@ -352,4 +354,22 @@ model ConversationEmbedding {
   createdAt DateTime            @default(now())
 
   @@index([userId])
+}
+
+model AIUsageLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId    String?
+  session      ConversationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  provider     String   // "anthropic" | "openai" | "google"
+  model        String   // actual model name used
+  modelTier    String   // "small" | "medium" | "large"
+  source       String   // "omnibar" | "brett_thread" | "briefing" | "bretts_take" | "fact_extraction"
+  inputTokens  Int
+  outputTokens Int
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, provider, createdAt])
 }
