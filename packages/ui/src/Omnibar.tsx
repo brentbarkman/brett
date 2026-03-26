@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Bot, Send, Search, Plus, Sparkles, X, Square } from "lucide-react";
 import { useClickOutside } from "./useClickOutside";
 import { SkillResultCard } from "./SkillResultCard";
+import { SimpleMarkdown } from "./SimpleMarkdown";
 import type { DisplayHint } from "@brett/types";
 
 export interface OmnibarMessage {
@@ -39,6 +40,7 @@ export interface OmnibarProps {
   onCancel?: () => void;
   onReset?: () => void;
   onNavigateToSettings?: () => void;
+  onItemClick?: (id: string) => void;
   searchResults?: SearchResultItem[] | null;
   isSearching?: boolean;
   onSearchResultClick?: (id: string) => void;
@@ -66,6 +68,7 @@ export function Omnibar({
   onCancel,
   onReset,
   onNavigateToSettings,
+  onItemClick,
   searchResults,
   isSearching,
   onSearchResultClick,
@@ -227,21 +230,20 @@ export function Omnibar({
           ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
         `}
       >
-        {/* Top Bar — shows input when no conversation, just header when conversation active */}
-        <div
-          className="flex items-center h-12 px-4 cursor-text"
-          onClick={() => !isOpen && onOpen()}
-        >
-          <Bot
-            size={18}
-            className={`flex-shrink-0 transition-colors ${
-              isOpen || isStreaming ? "text-blue-400" : "text-white/40"
-            }`}
-          />
-          {/* Show input in top bar only when there's no conversation yet */}
-          {!hasConversation ? (
+        {/* Top Bar — visible when collapsed or when open without conversation */}
+        {!hasConversation && (
+          <div
+            className="flex items-center h-12 px-4 cursor-text"
+            onClick={() => !isOpen && onOpen()}
+          >
+            <Bot
+              size={18}
+              className={`flex-shrink-0 transition-colors ${
+                isOpen ? "text-blue-400" : "text-white/40"
+              }`}
+            />
             <input
-              ref={inputRef}
+              ref={!hasConversation ? inputRef : undefined}
               type="text"
               placeholder={hasAI ? "Ask Brett anything..." : "Create a task or search..."}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
@@ -249,35 +251,14 @@ export function Omnibar({
               onChange={(e) => onInputChange(e.target.value)}
               onFocus={() => !isOpen && onOpen()}
               onKeyDown={handleKeyDown}
-              disabled={isStreaming}
             />
-          ) : (
-            <span className="flex-1 text-sm text-white/40 px-3">Chat with Brett</span>
-          )}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {isStreaming && onCancel ? (
-              <button
-                onClick={onCancel}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                title="Stop generating"
-              >
-                <Square size={14} className="text-white/50" />
-              </button>
-            ) : isOpen && hasConversation ? (
-              <button
-                onClick={onReset}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/40 hover:text-white/60"
-                title="New conversation"
-              >
-                <X size={14} />
-              </button>
-            ) : !isOpen ? (
+            {!isOpen && (
               <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
                 <span>&#8984;</span>K
               </kbd>
-            ) : null}
+            )}
           </div>
-        </div>
+        )}
 
         {/* AI Upsell — shown when open, no input, no AI configured */}
         {isOpen && !hasAI && !input.trim() && !hasConversation && !showSearchResults && (
@@ -301,9 +282,10 @@ export function Omnibar({
           </div>
         )}
 
-        {/* Conversation Area */}
+        {/* Conversation Area — replaces the top bar entirely */}
         {isOpen && hasConversation && (
-          <div className="border-t border-white/10">
+          <div>
+            {/* Messages */}
             <div ref={chatContainerRef} className="max-h-[350px] overflow-y-auto scrollbar-hide p-4 space-y-4">
               {messages.map((msg, i) => (
                 <MessageBubble
@@ -311,33 +293,56 @@ export function Omnibar({
                   message={msg}
                   isLast={i === messages.length - 1}
                   isStreaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
+                  onItemClick={onItemClick}
                 />
               ))}
-              {/* scroll anchor handled by chatContainerRef.scrollTop */}
             </div>
 
-            {/* Follow-up Input — this is the only input when conversation is active */}
-            {!isStreaming && (
-              <div className="border-t border-white/10 px-4 py-3 flex items-center gap-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder="Follow up..."
-                  className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
-                  value={input}
-                  onChange={(e) => onInputChange(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  autoFocus
-                />
-                <button
-                  onClick={() => input.trim() && onSend(input)}
-                  disabled={!input.trim()}
-                  className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-30 disabled:hover:bg-blue-500"
-                >
-                  <Send size={14} />
-                </button>
-              </div>
-            )}
+            {/* Bottom Input — the ONLY input when conversation is active */}
+            <div className="border-t border-white/10 px-4 py-2.5 flex items-center gap-3">
+              <Bot size={16} className="text-blue-400 flex-shrink-0" />
+              {isStreaming ? (
+                <>
+                  <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>
+                  {onCancel && (
+                    <button
+                      onClick={onCancel}
+                      className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                      title="Stop"
+                    >
+                      <Square size={14} className="text-white/50" />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    placeholder="Follow up..."
+                    className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
+                    value={input}
+                    onChange={(e) => onInputChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => input.trim() && onSend(input)}
+                    disabled={!input.trim()}
+                    className="p-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-30"
+                  >
+                    <Send size={14} />
+                  </button>
+                  <button
+                    onClick={onReset}
+                    className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/30 hover:text-white/50"
+                    title="New conversation"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -417,10 +422,12 @@ function MessageBubble({
   message,
   isLast,
   isStreaming,
+  onItemClick,
 }: {
   message: OmnibarMessage;
   isLast: boolean;
   isStreaming: boolean;
+  onItemClick?: (id: string) => void;
 }) {
   if (message.role === "user") {
     return (
@@ -443,14 +450,14 @@ function MessageBubble({
         <Bot size={12} className="text-blue-400" />
       </div>
       <div className="flex-1 min-w-0 space-y-2">
-        {/* Text content */}
+        {/* Text content with markdown rendering */}
         {(message.content || isStreaming) && (
-          <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">
-            {message.content}
+          <div className="text-sm text-white/90 leading-relaxed">
+            <SimpleMarkdown content={message.content} onItemClick={onItemClick} />
             {isStreaming && (
               <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
             )}
-          </p>
+          </div>
         )}
 
         {/* Skill result cards */}
@@ -462,6 +469,7 @@ function MessageBubble({
               displayHint={tc.displayHint!}
               data={tc.result}
               message={typeof tc.result === "object" && tc.result && "message" in (tc.result as Record<string, unknown>) ? String((tc.result as Record<string, unknown>).message) : undefined}
+              onItemClick={onItemClick}
             />
           ))}
       </div>

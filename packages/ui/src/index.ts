@@ -5,6 +5,7 @@ export { LeftNav } from "./LeftNav";
 export { Omnibar } from "./Omnibar";
 export type { OmnibarProps, OmnibarMessage, SearchResultItem } from "./Omnibar";
 export { SkillResultCard } from "./SkillResultCard";
+export { SimpleMarkdown } from "./SimpleMarkdown";
 export { SpotlightModal } from "./SpotlightModal";
 export type { SpotlightModalProps, SpotlightMessage } from "./SpotlightModal";
 export { MorningBriefing } from "./MorningBriefing";

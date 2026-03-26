@@ -332,6 +332,11 @@ export function App() {
       onSend: (text: string) => omnibar.send(text, currentView),
       onCreateTask: (title: string) => omnibar.createTask(title, currentView),
       onSearch: omnibar.searchThings,
+      onItemClick: (id: string) => {
+        // Create a minimal Thing to open the detail panel — it will fetch full data
+        setSelectedItem({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
+        setIsDetailOpen(true);
+      },
       searchResults: omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null,
       isSearching: omnibar.isSearching,
       onSearchResultClick: (id: string) => {

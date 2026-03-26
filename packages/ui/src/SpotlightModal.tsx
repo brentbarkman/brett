@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import { Bot, Send, Square, X, Sparkles, Search, Plus } from "lucide-react";
 import { SkillResultCard } from "./SkillResultCard";
+import { SimpleMarkdown } from "./SimpleMarkdown";
 import type { DisplayHint } from "@brett/types";
 
 export interface SpotlightMessage {
@@ -420,12 +421,12 @@ function SpotlightMessageBubble({
       </div>
       <div className="flex-1 min-w-0 space-y-2">
         {(message.content || isStreaming) && (
-          <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">
-            {message.content}
+          <div className="text-sm text-white/90 leading-relaxed">
+            <SimpleMarkdown content={message.content} />
             {isStreaming && (
               <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
             )}
-          </p>
+          </div>
         )}
 
         {message.toolCalls

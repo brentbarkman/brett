@@ -6,9 +6,10 @@ interface SkillResultCardProps {
   displayHint: DisplayHint;
   data?: unknown;
   message?: string;
+  onItemClick?: (id: string) => void;
 }
 
-export function SkillResultCard({ displayHint, data, message }: SkillResultCardProps) {
+export function SkillResultCard({ displayHint, data, message, onItemClick }: SkillResultCardProps) {
   switch (displayHint.type) {
     case "task_created":
       return (
@@ -34,7 +35,11 @@ export function SkillResultCard({ displayHint, data, message }: SkillResultCardP
           </div>
           <div className="divide-y divide-white/5">
             {items.slice(0, 8).map((item) => (
-              <div key={item.id} className="px-3 py-1.5 flex items-center gap-2">
+              <button
+                key={item.id}
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-white/5 transition-colors text-left"
+                onClick={() => onItemClick?.(item.id)}
+              >
                 <div
                   className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     item.status === "completed"
@@ -42,10 +47,10 @@ export function SkillResultCard({ displayHint, data, message }: SkillResultCardP
                       : "bg-white/20"
                   }`}
                 />
-                <span className="text-sm text-white/80 truncate">
+                <span className={`text-sm truncate ${onItemClick ? "text-blue-400 hover:text-blue-300" : "text-white/80"}`}>
                   {item.title}
                 </span>
-              </div>
+              </button>
             ))}
             {items.length > 8 && (
               <div className="px-3 py-1.5 text-xs text-white/40">
