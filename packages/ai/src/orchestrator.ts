@@ -45,8 +45,24 @@ function truncateResult(result: string): string {
   return result.slice(0, MAX_TOOL_RESULT_SIZE) + "\n...[truncated]";
 }
 
-function escalateTier(tier: ModelTier): ModelTier {
-  return tier === "small" ? "medium" : tier;
+// Simple tool calls (single lookup/create) don't need model escalation.
+// Only escalate when the LLM needs to reason about tool results.
+const SIMPLE_TOOLS = new Set([
+  "list_today", "list_upcoming", "list_inbox", "get_list_items",
+  "get_calendar_events", "get_next_event", "up_next", "get_stats",
+  "get_item_detail", "create_task", "complete_task", "search_things",
+]);
+
+function shouldEscalate(pendingToolCalls: Array<{ name: string }>): boolean {
+  // Don't escalate if all tool calls are simple lookups/creates
+  if (pendingToolCalls.every((tc) => SIMPLE_TOOLS.has(tc.name))) return false;
+  // Escalate for complex tools that need reasoning about results
+  return true;
+}
+
+function escalateTier(tier: ModelTier, pendingToolCalls: Array<{ name: string }>): ModelTier {
+  if (tier !== "small") return tier;
+  return shouldEscalate(pendingToolCalls) ? "medium" : tier;
 }
 
 // ─── Orchestrator ───
@@ -64,7 +80,12 @@ export async function* orchestrate(
     const system = ctx.system;
     let currentTier: ModelTier = ctx.modelTier;
 
-    const tools = registry.toToolDefinitions();
+    // Context-aware tool selection: only send tools relevant to the user's message.
+    // Saves ~1,000 tokens per request vs sending all 21 tools every time.
+    const userMessage = "message" in input ? (input as { message: string }).message : "";
+    const tools = userMessage
+      ? registry.toToolDefinitionsForMessage(userMessage)
+      : registry.toToolDefinitions();
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let round = 0;
@@ -190,8 +211,8 @@ export async function* orchestrate(
                 });
               }
 
-              // Escalate tier after first tool call round
-              currentTier = escalateTier(currentTier);
+              // Escalate tier only if tool calls require reasoning
+              currentTier = escalateTier(currentTier, pendingToolCalls);
 
               // Check token budget before continuing
               if (totalInputTokens + totalOutputTokens > MAX_TOTAL_TOKENS) {

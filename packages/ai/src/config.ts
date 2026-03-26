@@ -6,9 +6,9 @@ export const AI_CONFIG = {
     maxToolResultSize: 4096,
   },
   context: {
-    maxFacts: 50,
-    maxPastSessions: 5,
-    maxMessagesPerSession: 20,
+    maxFacts: 20,           // was 50 — most users have <20 facts, saves ~1,500 tokens
+    maxPastSessions: 3,     // was 5 — older sessions rarely relevant, saves ~3,000 tokens
+    maxMessagesPerSession: 15, // was 20
   },
   memory: {
     maxFactValueLength: 200,

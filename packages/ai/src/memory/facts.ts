@@ -38,8 +38,18 @@ export async function extractFacts(
     (m) => m.role === "user" || m.role === "assistant",
   );
 
-  // 3. If < 2 messages, skip
+  // 3. Skip trivial conversations — not worth the LLM call
   if (relevant.length < 2) return;
+
+  // Only extract facts if the user's messages have enough substance.
+  // Simple commands ("what's on my plate today", "create task buy groceries")
+  // rarely contain personal facts worth remembering.
+  const userText = relevant
+    .filter((m) => m.role === "user")
+    .map((m) => m.content)
+    .join(" ");
+  const MIN_USER_TEXT_LENGTH = 100; // ~25 words minimum
+  if (userText.length < MIN_USER_TEXT_LENGTH) return;
 
   const conversationText = relevant
     .map((m) => `${m.role}: ${m.content}`)
