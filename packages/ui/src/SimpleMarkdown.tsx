@@ -25,7 +25,7 @@ export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: 
   const lines = content.split("\n");
 
   return (
-    <div className={className}>
+    <div className={`space-y-1 ${className ?? ""}`}>
       {lines.map((line, lineIdx) => {
         const trimmed = line.trim();
 

@@ -53,7 +53,7 @@ import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
-import { getPreferences } from "./api/preferences";
+import { usePreference } from "./api/preferences";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
@@ -293,8 +293,8 @@ export function App() {
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
 
-  // Token usage tracking
-  const [showTokenUsage] = useState(() => getPreferences().showTokenUsage);
+  // Token usage tracking — reactive to Settings toggle
+  const [showTokenUsage] = usePreference("showTokenUsage");
   const { data: sessionUsageData } = useSessionUsage(
     showTokenUsage ? omnibar.sessionId : null,
   );

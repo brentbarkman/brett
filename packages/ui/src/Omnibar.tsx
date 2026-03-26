@@ -88,7 +88,10 @@ export function Omnibar({
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
 
   useClickOutside(containerRef, () => {
-    if (isOpen && !isStreaming) onClose();
+    // Don't close on click-outside when there's an active conversation —
+    // user might be clicking on a task or elsewhere and wants to come back.
+    // Only suggestions/search dropdowns should close on click-outside.
+    if (isOpen && !isStreaming && messages.length === 0) onClose();
   }, isOpen);
 
   // Focus input when opening

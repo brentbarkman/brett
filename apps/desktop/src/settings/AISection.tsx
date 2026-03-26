@@ -7,7 +7,7 @@ import {
   useDeleteAIConfig,
 } from "../api/ai-config";
 import { useUsageSummary } from "../api/ai-usage";
-import { getPreferences, setPreference } from "../api/preferences";
+import { usePreference } from "../api/preferences";
 import type { AIProviderName, UserAIConfigRecord } from "@brett/types";
 
 const PROVIDERS: { id: AIProviderName; label: string; hint: string }[] = [
@@ -168,7 +168,7 @@ export function AISection() {
     useState<AIProviderName>("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showTokenUsage, setShowTokenUsage] = useState(() => getPreferences().showTokenUsage);
+  const [showTokenUsage, setShowTokenUsage] = usePreference("showTokenUsage");
   const [expandedUsage, setExpandedUsage] = useState<string | null>(null);
 
   function handleSave() {
@@ -202,11 +202,7 @@ export function AISection() {
       <div className="flex items-center justify-between px-3 py-2.5 bg-white/5 rounded-lg mb-4">
         <span className="text-sm text-white/70">Show token usage in conversations</span>
         <button
-          onClick={() => {
-            const next = !showTokenUsage;
-            setShowTokenUsage(next);
-            setPreference("showTokenUsage", next);
-          }}
+          onClick={() => setShowTokenUsage(!showTokenUsage)}
           className={`relative w-9 h-5 rounded-full transition-colors ${
             showTokenUsage ? "bg-blue-500" : "bg-white/20"
           }`}
