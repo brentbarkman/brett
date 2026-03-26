@@ -11,12 +11,14 @@ interface SimpleMarkdownProps {
   className?: string;
   /** Callback when an item ID is clicked (for inline item references) */
   onItemClick?: (id: string) => void;
+  /** Callback when a navigation link is clicked (for list/view references) */
+  onNavigate?: (path: string) => void;
 }
 
 // Pattern for inline item references: [title](brett-item:id)
 const ITEM_REF_PATTERN = /\[([^\]]+)\]\(brett-item:([a-z0-9]+)\)/g;
 
-export function SimpleMarkdown({ content, className, onItemClick }: SimpleMarkdownProps) {
+export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: SimpleMarkdownProps) {
   if (!content) return null;
 
   // Split into lines, render each line with inline formatting
@@ -37,7 +39,7 @@ export function SimpleMarkdown({ content, className, onItemClick }: SimpleMarkdo
           return (
             <div key={lineIdx} className="flex gap-2 pl-1">
               <span className="text-white/40 select-none">•</span>
-              <span>{renderInline(trimmed.slice(2), onItemClick)}</span>
+              <span>{renderInline(trimmed.slice(2), onItemClick, onNavigate)}</span>
             </div>
           );
         }
@@ -48,13 +50,13 @@ export function SimpleMarkdown({ content, className, onItemClick }: SimpleMarkdo
           return (
             <div key={lineIdx} className="flex gap-2 pl-1">
               <span className="text-white/40 select-none min-w-[1rem] text-right">{numMatch[1]}.</span>
-              <span>{renderInline(trimmed.slice(numMatch[0].length), onItemClick)}</span>
+              <span>{renderInline(trimmed.slice(numMatch[0].length), onItemClick, onNavigate)}</span>
             </div>
           );
         }
 
         // Regular line
-        return <div key={lineIdx}>{renderInline(trimmed, onItemClick)}</div>;
+        return <div key={lineIdx}>{renderInline(trimmed, onItemClick, onNavigate)}</div>;
       })}
     </div>
   );
@@ -63,8 +65,9 @@ export function SimpleMarkdown({ content, className, onItemClick }: SimpleMarkdo
 function renderInline(
   text: string,
   onItemClick?: (id: string) => void,
+  onNavigate?: (path: string) => void,
 ): React.ReactNode {
-  // Process inline patterns: **bold**, *italic*, `code`, [text](brett-item:id), [text](url)
+  // Process inline patterns: **bold**, *italic*, `code`, [text](brett-item:id), [text](brett-nav:path), [text](url)
   const parts: React.ReactNode[] = [];
   let remaining = text;
   let key = 0;
@@ -102,6 +105,13 @@ function renderInline(
       match = { type: "item-ref", fullMatch: itemMatch[0], content: itemMatch[1], extra: itemMatch[2], index: itemMatch.index };
     }
 
+    // [text](brett-nav:/path) — clickable navigation link (lists, views)
+    const navMatch = remaining.match(/\[([^\]]+)\]\(brett-nav:(\/[a-z0-9/_-]+)\)/i);
+    if (navMatch && navMatch.index !== undefined && navMatch.index < earliestIdx) {
+      earliestIdx = navMatch.index;
+      match = { type: "nav-ref", fullMatch: navMatch[0], content: navMatch[1], extra: navMatch[2], index: navMatch.index };
+    }
+
     if (!match) {
       // No more patterns — push the rest as plain text
       parts.push(remaining);
@@ -135,6 +145,21 @@ function renderInline(
               key={key++}
               className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
               onClick={() => onItemClick(match!.extra!)}
+            >
+              {match.content}
+            </button>
+          ) : (
+            <span key={key++} className="text-blue-400">{match.content}</span>
+          )
+        );
+        break;
+      case "nav-ref":
+        parts.push(
+          onNavigate ? (
+            <button
+              key={key++}
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              onClick={() => onNavigate(match!.extra!)}
             >
               {match.content}
             </button>

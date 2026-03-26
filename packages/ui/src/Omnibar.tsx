@@ -41,6 +41,7 @@ export interface OmnibarProps {
   onReset?: () => void;
   onNavigateToSettings?: () => void;
   onItemClick?: (id: string) => void;
+  onNavigate?: (path: string) => void;
   searchResults?: SearchResultItem[] | null;
   isSearching?: boolean;
   onSearchResultClick?: (id: string) => void;
@@ -69,6 +70,7 @@ export function Omnibar({
   onReset,
   onNavigateToSettings,
   onItemClick,
+  onNavigate,
   searchResults,
   isSearching,
   onSearchResultClick,
@@ -294,6 +296,7 @@ export function Omnibar({
                   isLast={i === messages.length - 1}
                   isStreaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
                   onItemClick={onItemClick}
+                  onNavigate={onNavigate}
                 />
               ))}
             </div>
@@ -423,11 +426,13 @@ function MessageBubble({
   isLast,
   isStreaming,
   onItemClick,
+  onNavigate,
 }: {
   message: OmnibarMessage;
   isLast: boolean;
   isStreaming: boolean;
   onItemClick?: (id: string) => void;
+  onNavigate?: (path: string) => void;
 }) {
   if (message.role === "user") {
     return (
@@ -453,7 +458,7 @@ function MessageBubble({
         {/* Text content with markdown rendering */}
         {(message.content || isStreaming) && (
           <div className="text-sm text-white/90 leading-relaxed">
-            <SimpleMarkdown content={message.content} onItemClick={onItemClick} />
+            <SimpleMarkdown content={message.content} onItemClick={onItemClick} onNavigate={onNavigate} />
             {isStreaming && (
               <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
             )}

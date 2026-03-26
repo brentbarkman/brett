@@ -38,8 +38,11 @@ export const moveToListSkill: Skill = {
       targetListName = list.name;
     } else if (p.listName && p.listName.toLowerCase() !== "inbox") {
       const lists = scopedLists(ctx.prisma, ctx.userId);
-      const list = await lists.findFirst({ name: p.listName, archivedAt: null });
-      if (!list) return { success: false, message: `List "${p.listName}" not found.` };
+      const allLists = await lists.findMany({ where: { archivedAt: null } });
+      const list = allLists.find(
+        (l) => l.name.toLowerCase() === p.listName!.toLowerCase()
+      );
+      if (!list) return { success: false, message: `List "${p.listName}" not found. Available lists: ${allLists.map(l => l.name).join(", ")}.` };
       targetListId = list.id;
       targetListName = list.name;
     }

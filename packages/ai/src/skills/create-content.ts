@@ -37,9 +37,12 @@ export const createContentSkill: Skill = {
     let listId: string | undefined;
     if (p.listName) {
       const lists = scopedLists(ctx.prisma, ctx.userId);
-      const list = await lists.findFirst({ name: p.listName, archivedAt: null });
+      const allLists = await lists.findMany({ where: { archivedAt: null } });
+      const list = allLists.find(
+        (l) => l.name.toLowerCase() === p.listName!.toLowerCase()
+      );
       if (!list) {
-        return { success: false, message: `List "${p.listName}" not found.` };
+        return { success: false, message: `List "${p.listName}" not found. Available lists: ${allLists.map(l => l.name).join(", ")}.` };
       }
       listId = list.id;
     }
@@ -81,7 +84,7 @@ export const createContentSkill: Skill = {
       success: true,
       data: { id: item.id, title: item.title },
       displayHint: { type: "confirmation" },
-      message: `Saved content "${item.title}".`,
+      message: `Saved "${item.title}"${item.list ? ` to [${item.list.name}](brett-nav:/lists/${item.list.name.toLowerCase().replace(/\s+/g, "-")})` : ""}.`,
     };
   },
 };

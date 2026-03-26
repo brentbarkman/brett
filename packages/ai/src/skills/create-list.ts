@@ -58,7 +58,7 @@ export const createListSkill: Skill = {
       success: true,
       data: { id: list.id, name: list.name, colorClass: list.colorClass },
       displayHint: { type: "confirmation" },
-      message: `Created list "${list.name}".`,
+      message: `Created list [${list.name}](brett-nav:/lists/${list.name.toLowerCase().replace(/\s+/g, "-")}).`,
     };
   },
 };

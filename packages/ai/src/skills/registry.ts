@@ -1,9 +1,9 @@
 import type { Skill } from "./types.js";
 import type { ToolDefinition } from "../providers/types.js";
 
-// Core skills sent on every request (~8 tools, ~600 tokens instead of ~1,600)
+// Core skills sent on every request (~9 tools, ~700 tokens instead of ~1,600)
 const CORE_SKILLS = new Set([
-  "create_task", "search_things", "list_today", "complete_task",
+  "create_task", "create_content", "search_things", "list_today", "complete_task",
   "get_item_detail", "get_calendar_events", "get_next_event", "up_next",
 ]);
 
@@ -60,10 +60,11 @@ export class SkillRegistry {
 
     // Also include tools for common intent patterns
     if (lower.match(/\b(move|put|add to)\b/)) needed.add("move_to_list");
+    if (lower.match(/\b(create|make|new)\b.*\b(list|project|folder)\b/)) needed.add("create_list");
     if (lower.match(/\b(edit|change|update|rename|set)\b/)) needed.add("update_item");
     if (lower.match(/\b(inbox|unassigned)\b/)) needed.add("list_inbox");
     if (lower.match(/\b(upcoming|next week|later)\b/)) needed.add("list_upcoming");
-    if (lower.match(/\b(save|article|podcast|video|web)\b/)) needed.add("create_content");
+    if (lower.match(/\b(save|article|podcast|video|web)\b/) || lower.match(/https?:\/\//)) needed.add("create_content");
     if (lower.match(/\b(snooze|later|remind)\b/)) needed.add("snooze_item");
 
     return Array.from(needed)

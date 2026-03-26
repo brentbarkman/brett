@@ -5,14 +5,14 @@ import { validateCreateItem } from "@brett/business";
 export const createTaskSkill: Skill = {
   name: "create_task",
   description:
-    "Create a new task for the user. Use when they want to add something to their todo list, set a reminder, or track something they need to do. Extract the title, due date, and list if mentioned.",
+    "Create a new task for the user. Use when they want to add something to their todo list, set a reminder, or track something they need to do. Extract the title, due date, and list if mentioned. IMPORTANT: If the user is on the Today view (context says 'today') and doesn't specify a due date, set dueDate to today's date so the task shows up in their current view.",
   parameters: {
     type: "object",
     properties: {
       title: { type: "string", description: "The task title" },
       dueDate: {
         type: "string",
-        description: "ISO 8601 date string for when the task is due",
+        description: "ISO 8601 date (YYYY-MM-DD). Convert natural language: 'tomorrow' → tomorrow's date, 'next Friday' → that date, 'end of week' → Sunday's date. If user is on Today view and doesn't specify, use today's date.",
       },
       dueDatePrecision: {
         type: "string",
@@ -41,10 +41,14 @@ export const createTaskSkill: Skill = {
 
     let listId: string | undefined;
     if (p.listName) {
+      // Case-insensitive list lookup — user might say "podcasts" or "Podcasts"
       const lists = scopedLists(ctx.prisma, ctx.userId);
-      const list = await lists.findFirst({ name: p.listName, archivedAt: null });
+      const allLists = await lists.findMany({ where: { archivedAt: null } });
+      const list = allLists.find(
+        (l) => l.name.toLowerCase() === p.listName!.toLowerCase()
+      );
       if (!list) {
-        return { success: false, message: `List "${p.listName}" not found.` };
+        return { success: false, message: `List "${p.listName}" not found. Available lists: ${allLists.map(l => l.name).join(", ")}.` };
       }
       listId = list.id;
     }
@@ -82,7 +86,7 @@ export const createTaskSkill: Skill = {
       success: true,
       data: { id: item.id, title: item.title, listName: item.list?.name },
       displayHint: { type: "confirmation" },
-      message: `Created task "${item.title}"${item.list ? ` in ${item.list.name}` : ""}.`,
+      message: `Created task "${item.title}"${item.list ? ` in [${item.list.name}](brett-nav:/lists/${item.list.name.toLowerCase().replace(/\s+/g, "-")})` : ""}.`,
     };
   },
 };
