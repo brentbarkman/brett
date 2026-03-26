@@ -28,7 +28,7 @@ export const completeTaskSkill: Skill = {
         success: true,
         data: { id: updated.id, title: updated.title },
         displayHint: { type: "confirmation" },
-        message: `Completed "${updated.title}".`,
+        message: `Completed [${updated.title}](brett-item:${updated.id}).`,
       };
     } catch {
       return { success: false, message: "Task not found." };

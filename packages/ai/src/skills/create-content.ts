@@ -84,7 +84,7 @@ export const createContentSkill: Skill = {
       success: true,
       data: { id: item.id, title: item.title },
       displayHint: { type: "confirmation" },
-      message: `Saved "${item.title}"${item.list ? ` to [${item.list.name}](brett-nav:/lists/${item.list.name.toLowerCase().replace(/\s+/g, "-")})` : ""}.`,
+      message: `Saved [${item.title}](brett-item:${item.id})${item.list ? ` to [${item.list.name}](brett-nav:/lists/${item.list.name.toLowerCase().replace(/\s+/g, "-")})` : ""}.`,
     };
   },
 };

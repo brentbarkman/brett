@@ -53,7 +53,7 @@ export const moveToListSkill: Skill = {
         success: true,
         data: { id: updated.id, title: updated.title, listName: targetListName },
         displayHint: { type: "confirmation" },
-        message: `Moved "${updated.title}" to ${targetListName}.`,
+        message: `Moved [${updated.title}](brett-item:${updated.id}) to ${targetListName ? `[${targetListName}](brett-nav:/lists/${targetListName.toLowerCase().replace(/\s+/g, "-")})` : "Inbox"}.`,
       };
     } catch {
       return { success: false, message: "Item not found." };

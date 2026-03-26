@@ -86,7 +86,7 @@ export const createTaskSkill: Skill = {
       success: true,
       data: { id: item.id, title: item.title, listName: item.list?.name },
       displayHint: { type: "confirmation" },
-      message: `Created task "${item.title}"${item.list ? ` in [${item.list.name}](brett-nav:/lists/${item.list.name.toLowerCase().replace(/\s+/g, "-")})` : ""}.`,
+      message: `Created [${item.title}](brett-item:${item.id})${item.list ? ` in [${item.list.name}](brett-nav:/lists/${item.list.name.toLowerCase().replace(/\s+/g, "-")})` : ""}.`,
     };
   },
 };
