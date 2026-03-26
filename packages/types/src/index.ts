@@ -71,3 +71,39 @@ export interface NavList {
   count: number;
   colorClass: string;
 }
+
+// Scout types
+
+export type ScoutStatus = "active" | "paused" | "completed" | "expired";
+
+export interface Scout {
+  id: string;
+  name: string;
+  avatarLetter: string;
+  avatarGradient: [string, string]; // [fromColor, toColor]
+  goal: string;
+  context?: string;
+  sources: string;
+  sensitivity: string;
+  cadenceBase: string;
+  cadenceCurrent?: string;
+  cadenceReason?: string;
+  budgetUsed: number;
+  budgetTotal: number;
+  status: ScoutStatus;
+  statusLine?: string; // e.g., "Monitoring closely — earnings Apr 2"
+  lastRun?: string;
+  endDate?: string;
+  findingsCount: number;
+}
+
+export type FindingType = "insight" | "article" | "task";
+
+export interface ScoutFinding {
+  id: string;
+  scoutId: string;
+  type: FindingType;
+  title: string;
+  description: string;
+  timestamp: string;
+}
