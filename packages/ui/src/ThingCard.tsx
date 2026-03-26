@@ -166,6 +166,9 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
       </div>
 
       <div className="flex-shrink-0 flex items-center gap-2">
+        {thing.list && thing.list !== "Inbox" && (
+          <span className="text-xs text-white/30 truncate max-w-[100px]">{thing.list}</span>
+        )}
         {thing.dueDateLabel ? (
           <div
             className={`px-2.5 py-1 rounded-full text-xs font-medium ${
