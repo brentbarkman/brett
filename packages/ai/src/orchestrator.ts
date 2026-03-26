@@ -92,6 +92,7 @@ export async function* orchestrate(
     let totalOutputTokens = 0;
     let round = 0;
     let truncatedExit = false;
+    let hasYieldedText = false;
 
     // 2. Tool call loop
     while (round < MAX_ROUNDS) {
@@ -116,6 +117,7 @@ export async function* orchestrate(
         switch (chunk.type) {
           case "text":
             yield chunk;
+            hasYieldedText = true;
             break;
 
           case "tool_call":
@@ -237,7 +239,10 @@ export async function* orchestrate(
               }
 
               // Yield a separator before the next LLM round so text doesn't run together
-              yield { type: "text" as const, content: "\n\n" };
+              // Only if we already yielded text — otherwise it creates a blank first line
+              if (hasYieldedText) {
+                yield { type: "text" as const, content: "\n\n" };
+              }
 
               continueLoop = true;
             } else {

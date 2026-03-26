@@ -106,7 +106,7 @@ function renderInline(
     }
 
     // [text](brett-nav:/path) — clickable navigation link (lists, views)
-    const navMatch = remaining.match(/\[([^\]]+)\]\(brett-nav:(\/[a-z0-9/_-]+)\)/i);
+    const navMatch = remaining.match(/\[([^\]]+)\]\(brett-nav:(\/[^\)]+)\)/);
     if (navMatch && navMatch.index !== undefined && navMatch.index < earliestIdx) {
       earliestIdx = navMatch.index;
       match = { type: "nav-ref", fullMatch: navMatch[0], content: navMatch[1], extra: navMatch[2], index: navMatch.index };
