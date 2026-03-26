@@ -75,6 +75,26 @@ export function SpotlightModal({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [selectedSuggestion, setSelectedSuggestion] = React.useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = React.useState(-1);
+  const [forcedAction, setForcedAction] = React.useState<"search" | "create" | null>(null);
+
+  // Intercept input changes to detect shortcut prefixes
+  const handleInputChange = useCallback((value: string) => {
+    if (!forcedAction && value === "s ") {
+      setForcedAction("search");
+      onInputChange("");
+      return;
+    }
+    if (!forcedAction && value === "t ") {
+      setForcedAction("create");
+      onInputChange("");
+      return;
+    }
+    // Backspace to empty clears the forced mode
+    if (forcedAction && value === "") {
+      setForcedAction(null);
+    }
+    onInputChange(value);
+  }, [forcedAction, onInputChange]);
 
   // Focus input when opening
   useEffect(() => {
@@ -99,7 +119,8 @@ export function SpotlightModal({
   }, [searchResults]);
 
   const hasConversation = messages.length > 0;
-  const showSuggestions = input.trim().length > 0 && !hasConversation;
+
+  const showSuggestions = (input.trim().length > 0 || forcedAction !== null) && !hasConversation;
   const showSearchResults = !hasConversation && !showSuggestions && (isSearching || (searchResults !== null && searchResults !== undefined));
   const visibleResults = searchResults?.slice(0, 8) ?? [];
 
@@ -108,34 +129,54 @@ export function SpotlightModal({
     label: string;
     icon: React.ReactNode;
     action: "ask" | "create" | "search";
+    shortcut?: string;
   };
 
   const suggestions: Suggestion[] = [];
   if (showSuggestions) {
-    if (hasAI) {
+    if (forcedAction === "search") {
       suggestions.push({
-        id: "ask",
-        label: `Ask Brett: "${input}"`,
-        icon: <Sparkles size={14} className="text-blue-400" />,
-        action: "ask",
+        id: "search",
+        label: input.trim() ? `Search: "${input}"` : "Search...",
+        icon: <Search size={14} className="text-white/60" />,
+        action: "search",
+      });
+    } else if (forcedAction === "create") {
+      suggestions.push({
+        id: "create",
+        label: input.trim() ? `Create task: "${input}"` : "Create task...",
+        icon: <Plus size={14} className="text-white/60" />,
+        action: "create",
+      });
+    } else {
+      if (hasAI) {
+        suggestions.push({
+          id: "ask",
+          label: `Ask Brett: "${input}"`,
+          icon: <Sparkles size={14} className="text-blue-400" />,
+          action: "ask",
+        });
+      }
+      suggestions.push({
+        id: "create",
+        label: `Create task: "${input}"`,
+        icon: <Plus size={14} className="text-white/60" />,
+        action: "create",
+        shortcut: "t",
+      });
+      suggestions.push({
+        id: "search",
+        label: `Search: "${input}"`,
+        icon: <Search size={14} className="text-white/60" />,
+        action: "search",
+        shortcut: "s",
       });
     }
-    suggestions.push({
-      id: "create",
-      label: `Create task: "${input}"`,
-      icon: <Plus size={14} className="text-white/60" />,
-      action: "create",
-    });
-    suggestions.push({
-      id: "search",
-      label: `Search: "${input}"`,
-      icon: <Search size={14} className="text-white/60" />,
-      action: "search",
-    });
   }
 
   const handleSuggestionSelect = useCallback(
     (suggestion: Suggestion) => {
+      setForcedAction(null);
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "create") {
@@ -151,6 +192,7 @@ export function SpotlightModal({
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        setForcedAction(null);
         onClose();
         return;
       }
@@ -199,7 +241,12 @@ export function SpotlightModal({
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (input.trim()) {
-          if (hasAI) {
+          setForcedAction(null);
+          if (forcedAction === "search") {
+            onSearch(input);
+          } else if (forcedAction === "create") {
+            onCreateTask(input);
+          } else if (hasAI) {
             onSend(input);
           } else {
             onCreateTask(input);
@@ -207,7 +254,7 @@ export function SpotlightModal({
         }
       }
     },
-    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, hasAI, onSend, onCreateTask, onClose]
+    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, onCreateTask, onSearch, onClose]
   );
 
   if (!isOpen) return null;
@@ -234,10 +281,10 @@ export function SpotlightModal({
             <input
               ref={inputRef}
               type="text"
-              placeholder={hasAI ? "Ask Brett anything..." : "Create a task or search..."}
+              placeholder={forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? "Ask Brett anything..." : "Create a task or search..."}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
               value={input}
-              onChange={(e) => onInputChange(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isStreaming}
               data-1p-ignore
@@ -283,6 +330,11 @@ export function SpotlightModal({
               >
                 {suggestion.icon}
                 <span className="truncate">{suggestion.label}</span>
+                {suggestion.shortcut && (
+                  <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+                    {suggestion.shortcut}
+                  </kbd>
+                )}
               </button>
             ))}
           </div>
@@ -324,7 +376,7 @@ export function SpotlightModal({
               placeholder="Follow up..."
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
               value={input}
-              onChange={(e) => onInputChange(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               autoFocus
               data-1p-ignore
