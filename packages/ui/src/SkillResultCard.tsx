@@ -1,5 +1,6 @@
 import React from "react";
 import { Check, Calendar, Settings, MessageSquare, List } from "lucide-react";
+import { SimpleMarkdown } from "./SimpleMarkdown";
 import type { DisplayHint } from "@brett/types";
 
 interface SkillResultCardProps {
@@ -7,19 +8,20 @@ interface SkillResultCardProps {
   data?: unknown;
   message?: string;
   onItemClick?: (id: string) => void;
+  onNavigate?: (path: string) => void;
 }
 
-export function SkillResultCard({ displayHint, data, message, onItemClick }: SkillResultCardProps) {
+export function SkillResultCard({ displayHint, data, message, onItemClick, onNavigate }: SkillResultCardProps) {
   switch (displayHint.type) {
     case "task_created":
       return (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
-          <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+        <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/20">
+          <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
             <Check size={12} className="text-green-400" />
           </div>
-          <span className="text-sm text-white/80">
-            Created: {message ?? "New task"}
-          </span>
+          <div className="text-sm text-white/80 min-w-0">
+            <SimpleMarkdown content={message ?? "Task created."} onItemClick={onItemClick} onNavigate={onNavigate} />
+          </div>
         </div>
       );
 
@@ -97,11 +99,13 @@ export function SkillResultCard({ displayHint, data, message, onItemClick }: Ski
 
     case "confirmation":
       return (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
-          <Check size={14} className="text-green-400 flex-shrink-0" />
-          <span className="text-sm text-white/80">
-            {displayHint.message ?? message ?? "Done"}
-          </span>
+        <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/20">
+          <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Check size={12} className="text-green-400" />
+          </div>
+          <div className="text-sm text-white/80 min-w-0">
+            <SimpleMarkdown content={displayHint.message ?? message ?? "Done."} onItemClick={onItemClick} onNavigate={onNavigate} />
+          </div>
         </div>
       );
 

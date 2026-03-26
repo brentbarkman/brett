@@ -497,6 +497,7 @@ function MessageBubble({
               data={tc.result}
               message={typeof tc.result === "object" && tc.result && "message" in (tc.result as Record<string, unknown>) ? String((tc.result as Record<string, unknown>).message) : undefined}
               onItemClick={onItemClick}
+              onNavigate={onNavigate}
             />
           ))}
       </div>

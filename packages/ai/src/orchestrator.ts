@@ -55,6 +55,15 @@ const SIMPLE_TOOLS = new Set([
   "get_item_detail", "create_task", "complete_task", "search_things",
 ]);
 
+// Fire-and-forget actions — the tool result + displayHint is the full response.
+// No need for a follow-up LLM call to generate a confirmation message.
+// The skill's `message` field IS the confirmation. Saves ~2,500 tokens per action.
+const FIRE_AND_FORGET_TOOLS = new Set([
+  "create_task", "create_content", "create_list",
+  "complete_task", "move_to_list", "snooze_item", "archive_list",
+  "update_item", "change_settings", "submit_feedback",
+]);
+
 function shouldEscalate(pendingToolCalls: Array<{ name: string }>): boolean {
   // Don't escalate if all tool calls are simple lookups/creates
   if (pendingToolCalls.every((tc) => SIMPLE_TOOLS.has(tc.name))) return false;
@@ -227,6 +236,22 @@ export async function* orchestrate(
                   content: truncateResult(resultStr),
                   toolCallId: tc.id,
                 });
+              }
+
+              // Check if ALL tool calls are fire-and-forget actions.
+              // If so, skip the follow-up LLM round — the skill results are the response.
+              // Saves ~2,500 tokens per simple action (create task, complete task, etc.)
+              const allFireAndForget = pendingToolCalls.length > 0 &&
+                pendingToolCalls.every((tc) => FIRE_AND_FORGET_TOOLS.has(tc.name));
+
+              if (allFireAndForget) {
+                // Done — no follow-up LLM call needed
+                yield {
+                  type: "done",
+                  sessionId: sessionId ?? "",
+                  usage: { input: totalInputTokens, output: totalOutputTokens },
+                };
+                return;
               }
 
               // Escalate tier only if tool calls require reasoning
