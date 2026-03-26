@@ -300,6 +300,8 @@ export function App() {
           omnibar.close();
         } else {
           omnibar.open("spotlight");
+          setSelectedItem(null);
+          setIsDetailOpen(false);
         }
       }
     };
@@ -349,7 +351,7 @@ export function App() {
         }
       },
       onClose: omnibar.close,
-      onOpen: () => omnibar.open("bar"),
+      onOpen: () => { omnibar.open("bar"); setSelectedItem(null); setIsDetailOpen(false); },
       onCancel: omnibar.cancel,
       onReset: omnibar.reset,
       onNavigateToSettings: () => navigate("/settings#ai-settings"),

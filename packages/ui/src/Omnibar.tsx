@@ -223,7 +223,7 @@ export function Omnibar({
           ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
         `}
       >
-        {/* Input Row */}
+        {/* Top Bar — shows input when no conversation, just header when conversation active */}
         <div
           className="flex items-center h-12 px-4 cursor-text"
           onClick={() => !isOpen && onOpen()}
@@ -234,17 +234,22 @@ export function Omnibar({
               isOpen || isStreaming ? "text-blue-400" : "text-white/40"
             }`}
           />
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder={hasAI ? "Ask Brett anything..." : "Create a task or search..."}
-            className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
-            value={input}
-            onChange={(e) => onInputChange(e.target.value)}
-            onFocus={() => !isOpen && onOpen()}
-            onKeyDown={handleKeyDown}
-            disabled={isStreaming}
-          />
+          {/* Show input in top bar only when there's no conversation yet */}
+          {!hasConversation ? (
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder={hasAI ? "Ask Brett anything..." : "Create a task or search..."}
+              className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
+              value={input}
+              onChange={(e) => onInputChange(e.target.value)}
+              onFocus={() => !isOpen && onOpen()}
+              onKeyDown={handleKeyDown}
+              disabled={isStreaming}
+            />
+          ) : (
+            <span className="flex-1 text-sm text-white/40 px-3">Chat with Brett</span>
+          )}
           <div className="flex items-center gap-2 flex-shrink-0">
             {isStreaming && onCancel ? (
               <button
@@ -307,16 +312,18 @@ export function Omnibar({
               <div ref={chatEndRef} />
             </div>
 
-            {/* Follow-up Input */}
+            {/* Follow-up Input — this is the only input when conversation is active */}
             {!isStreaming && (
               <div className="border-t border-white/10 px-4 py-3 flex items-center gap-2">
                 <input
+                  ref={inputRef}
                   type="text"
                   placeholder="Follow up..."
                   className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
                   value={input}
                   onChange={(e) => onInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  autoFocus
                 />
                 <button
                   onClick={() => input.trim() && onSend(input)}

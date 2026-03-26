@@ -218,16 +218,20 @@ export function SpotlightModal({
               isStreaming ? "text-blue-400 animate-pulse" : "text-blue-400"
             }`}
           />
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder={hasAI ? "Ask Brett anything..." : "Create a task or search..."}
-            className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
-            value={input}
-            onChange={(e) => onInputChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isStreaming}
-          />
+          {!hasConversation ? (
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder={hasAI ? "Ask Brett anything..." : "Create a task or search..."}
+              className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
+              value={input}
+              onChange={(e) => onInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isStreaming}
+            />
+          ) : (
+            <span className="flex-1 text-sm text-white/40 px-3">Chat with Brett</span>
+          )}
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {isStreaming && onCancel ? (
               <button
@@ -293,11 +297,13 @@ export function SpotlightModal({
           <div className="border-t border-white/10 px-5 py-3 flex items-center gap-2">
             <input
               type="text"
+              ref={inputRef}
               placeholder="Follow up..."
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
               value={input}
               onChange={(e) => onInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
+              autoFocus
             />
             <button
               onClick={() => input.trim() && onSend(input)}
