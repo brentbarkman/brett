@@ -182,6 +182,12 @@ export function useBrettChat(opts: {
                 }
                 return updated;
               });
+              // Invalidate data queries when a skill modifies data
+              if (chunk.displayHint?.type === "task_created" || chunk.displayHint?.type === "confirmation") {
+                qc.invalidateQueries({ queryKey: ["things"] });
+                qc.invalidateQueries({ queryKey: ["inbox"] });
+                qc.invalidateQueries({ queryKey: ["lists"] });
+              }
               break;
 
             case "done":

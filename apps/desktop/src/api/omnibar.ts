@@ -114,6 +114,12 @@ export function useOmnibar() {
                 }
                 return updated;
               });
+              // Invalidate data queries when a skill modifies data so lists refresh
+              if (chunk.displayHint?.type === "task_created" || chunk.displayHint?.type === "confirmation") {
+                queryClient.invalidateQueries({ queryKey: ["things"] });
+                queryClient.invalidateQueries({ queryKey: ["inbox"] });
+                queryClient.invalidateQueries({ queryKey: ["lists"] });
+              }
               break;
 
             case "done":
