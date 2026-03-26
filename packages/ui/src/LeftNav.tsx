@@ -12,9 +12,11 @@ interface LeftNavProps {
   isCollapsed: boolean;
   lists: NavList[];
   user?: LeftNavUser | null;
+  activePage?: "today" | "inbox" | "scouts";
+  onNavigate?: (page: "today" | "inbox" | "scouts") => void;
 }
 
-export function LeftNav({ isCollapsed, lists, user }: LeftNavProps) {
+export function LeftNav({ isCollapsed, lists, user, activePage = "today", onNavigate }: LeftNavProps) {
   return (
     <nav
       className={`
@@ -40,20 +42,25 @@ export function LeftNav({ isCollapsed, lists, user }: LeftNavProps) {
           icon={<Calendar size={18} />}
           label="Today"
           badge={3}
-          isActive
+          isActive={activePage === "today"}
           isCollapsed={isCollapsed}
+          onClick={() => onNavigate?.("today")}
         />
         <NavItem
           icon={<Inbox size={18} />}
           label="Inbox"
           badge={5}
+          isActive={activePage === "inbox"}
           isCollapsed={isCollapsed}
+          onClick={() => onNavigate?.("inbox")}
         />
         <NavItem
           icon={<Search size={18} />}
           label="Scouts"
           badge={2}
+          isActive={activePage === "scouts"}
           isCollapsed={isCollapsed}
+          onClick={() => onNavigate?.("scouts")}
         />
       </div>
 
@@ -141,6 +148,7 @@ interface NavItemProps {
   count?: number;
   isActive?: boolean;
   isCollapsed: boolean;
+  onClick?: () => void;
 }
 
 function NavItem({
@@ -150,9 +158,11 @@ function NavItem({
   count,
   isActive,
   isCollapsed,
+  onClick,
 }: NavItemProps) {
   return (
     <button
+      onClick={onClick}
       className={`
       flex items-center w-full rounded-lg transition-colors duration-200 group
       ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-3"}
