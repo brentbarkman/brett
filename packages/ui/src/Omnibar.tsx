@@ -171,6 +171,12 @@ export function Omnibar({
         return;
       }
 
+      // Tab out of omnibar — close it so keyboard nav can take over the list
+      if (e.key === "Tab" && !showSuggestions && !showSearchResults) {
+        onClose();
+        return; // let default Tab behavior move focus
+      }
+
       if (showSuggestions) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
