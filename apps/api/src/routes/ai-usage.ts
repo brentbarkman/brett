@@ -12,8 +12,10 @@ aiUsage.get("/session/:sessionId", async (c) => {
   const user = c.get("user");
   const sessionId = c.req.param("sessionId");
 
+  // Exclude background processes (fact_extraction) from session token count —
+  // the user wants to see what their conversation cost, not background overhead
   const result = await prisma.aIUsageLog.aggregate({
-    where: { userId: user.id, sessionId },
+    where: { userId: user.id, sessionId, source: { not: "fact_extraction" } },
     _sum: { inputTokens: true, outputTokens: true },
   });
 

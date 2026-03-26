@@ -49,7 +49,7 @@ export async function extractFacts(
     .filter((m) => m.role === "user")
     .map((m) => m.content)
     .join(" ");
-  const MIN_USER_TEXT_LENGTH = 100; // ~25 words minimum
+  const MIN_USER_TEXT_LENGTH = 300; // ~75 words — skip simple Q&A, only extract from substantial conversations
   if (userText.length < MIN_USER_TEXT_LENGTH) return;
 
   const conversationText = relevant
