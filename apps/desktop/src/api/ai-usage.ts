@@ -7,9 +7,11 @@ interface SessionUsage {
   totalTokens: number;
 }
 
-interface UsageSummaryPeriod {
+export interface UsageSummaryPeriod {
   provider: string;
   model: string;
+  source: string;
+  calls: number;
   inputTokens: number;
   outputTokens: number;
 }

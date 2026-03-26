@@ -140,12 +140,13 @@ function UsageStats({ provider }: { provider: string }) {
           ) : (
             period.rows.map((row) => {
               const total = row.inputTokens + row.outputTokens;
+              const sourceLabel = row.source === "fact_extraction" ? "memory" : row.source.replace("_", " ");
               return (
-                <div key={row.model} className="flex items-center gap-2 text-[10px] font-mono text-white/50 pl-2">
-                  <span className="text-white/40 truncate max-w-[140px]">{row.model}</span>
-                  <span className="ml-auto tabular-nums">{row.inputTokens.toLocaleString()} in</span>
-                  <span className="tabular-nums">{row.outputTokens.toLocaleString()} out</span>
-                  <span className="tabular-nums text-white/60">{total.toLocaleString()} total</span>
+                <div key={`${row.model}-${row.source}`} className="flex items-center gap-2 text-[10px] font-mono text-white/50 pl-2">
+                  <span className="text-white/30 w-14 flex-shrink-0">{sourceLabel}</span>
+                  <span className="text-white/40 truncate max-w-[120px]">{row.model}</span>
+                  <span className="ml-auto tabular-nums">{row.calls}×</span>
+                  <span className="tabular-nums text-white/60">{total.toLocaleString()}</span>
                 </div>
               );
             })

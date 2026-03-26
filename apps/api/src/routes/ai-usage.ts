@@ -40,19 +40,22 @@ aiUsage.get("/summary", async (c) => {
 
   const [results24h, results7d, results30d] = await Promise.all([
     prisma.aIUsageLog.groupBy({
-      by: ["provider", "model"],
+      by: ["provider", "model", "source"],
       where: { userId: user.id, createdAt: { gte: last24h } },
       _sum: { inputTokens: true, outputTokens: true },
+      _count: true,
     }),
     prisma.aIUsageLog.groupBy({
-      by: ["provider", "model"],
+      by: ["provider", "model", "source"],
       where: { userId: user.id, createdAt: { gte: last7d } },
       _sum: { inputTokens: true, outputTokens: true },
+      _count: true,
     }),
     prisma.aIUsageLog.groupBy({
-      by: ["provider", "model"],
+      by: ["provider", "model", "source"],
       where: { userId: user.id, createdAt: { gte: last30d } },
       _sum: { inputTokens: true, outputTokens: true },
+      _count: true,
     }),
   ]);
 
@@ -60,6 +63,8 @@ aiUsage.get("/summary", async (c) => {
     rows.map((r) => ({
       provider: r.provider,
       model: r.model,
+      source: r.source,
+      calls: r._count,
       inputTokens: r._sum.inputTokens ?? 0,
       outputTokens: r._sum.outputTokens ?? 0,
     }));
