@@ -47,7 +47,7 @@ export const listTodaySkill: Skill = {
       data: { items: things },
       displayHint: { type: "list" },
       message: things.length > 0
-        ? `You have ${things.length} item${things.length === 1 ? "" : "s"} due today or overdue.`
+        ? `You have ${things.length} item${things.length === 1 ? "" : "s"} due today or overdue: ${things.slice(0, 5).map((t: any) => `[${t.title}](brett-item:${t.id})`).join(", ")}.`
         : "Nothing due today. You're all caught up!",
     };
   },

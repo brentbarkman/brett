@@ -53,7 +53,7 @@ export const getItemDetailSkill: Skill = {
       success: true,
       data: detail,
       displayHint: { type: "detail" },
-      message: `Details for "${item.title}".`,
+      message: `Details for [${item.title}](brett-item:${item.id}).`,
     };
   },
 };
