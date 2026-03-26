@@ -83,6 +83,11 @@ Paused/completed scouts stay in roster (grayed out). Expired scouts prompt to ap
 
 Build two screens as functional UI in the desktop app (mock data, no backend):
 
+### Implementation Prerequisites
+
+- **Routing:** The app currently has no router — `App.tsx` renders a single view. A simple state-based page switcher (e.g., `activePage` state) is needed to navigate between Today and Scouts views via the left nav.
+- **Minimum width:** 1024px. No responsive breakpoints needed for prototype.
+
 ### Screen 1: Scouts Roster Page
 
 Accessible from the "Scouts" nav item in the left sidebar. This is the management dashboard.
@@ -92,7 +97,7 @@ Accessible from the "Scouts" nav item in the left sidebar. This is the managemen
 **Header:**
 - Page title "Scouts"
 - Subtitle: "Your scouts monitor the world and surface what matters."
-- "New Scout" button (purple) — top right
+- "New Scout" button (purple) — top right. Rendered but non-functional in prototype (no click handler).
 
 **Scout Cards (vertical list):**
 Each card shows:
@@ -115,7 +120,9 @@ Each card shows:
 
 ### Screen 2: Scout Detail View
 
-Opened by clicking a scout card. Three-column layout: collapsed nav | scout list | detail panel.
+Opened by clicking a scout card. This is a **new master-detail layout pattern** (not the existing sliding DetailPanel overlay used for tasks). Three-column layout: collapsed nav | scout list | detail panel.
+
+**Transition:** Clicking a scout card transitions from the roster view (full nav) to the detail view (collapsed nav + scout list + detail panel). Back navigation (clicking "Scouts" in nav or a back button) returns to the roster view.
 
 **Left nav:** Collapses to icon-only (68px) when detail is open — matches existing app behavior.
 
@@ -137,7 +144,7 @@ Opened by clicking a scout card. Three-column layout: collapsed nav | scout list
 
 **Tabs:**
 - **Findings** (default active, shows count) — list of Items this scout has created
-- **Activity Log** — chronological record of runs and decisions
+- **Activity Log** — placeholder empty state (e.g., "Activity log coming soon" or a minimal list of mock run entries)
 
 **Findings list:**
 Each finding shows icon (color-coded by type), title, description snippet, type + timestamp.
@@ -154,7 +161,7 @@ Matches existing app aesthetic:
 - Text: white with opacity levels (100%, 90%, 60%, 50%, 40%, 30%)
 - Cards: `#FFFFFF08` fill, `#FFFFFF0D` border, 12px corner radius
 - Accents: purple `#8B5CF6` for scouts, green `#22C55E` for active, amber `#F59E0B` for tasks, blue `#3B82F6` for articles
-- Scout avatars: gradient circles with initial letter
+- Scout avatars: gradient circles with initial letter. Gradient pairs: purple `#8B5CF6→#6D28D9`, green `#22C55E→#16A34A`, amber `#F59E0B→#D97706`, gray (completed): flat `#FFFFFF15`
 - Status badges: colored dot + text in tinted background
 - Typography: Inter, 14px body, 11px metadata, 10px labels (uppercase, tracked)
 - Spacing: 16px card padding, 12px gaps between cards, 32px section padding
