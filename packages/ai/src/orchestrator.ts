@@ -103,6 +103,14 @@ export async function* orchestrate(
     let truncatedExit = false;
     let hasYieldedText = false;
 
+    // Buffer for fire-and-forget confirmations — yielded as one summary at the end
+    const bufferedConfirmations: Array<{
+      id: string;
+      data: unknown;
+      displayHint?: import("@brett/types").DisplayHint;
+      message?: string;
+    }> = [];
+
     // 2. Tool call loop
     while (round < MAX_ROUNDS) {
       round++;
@@ -216,14 +224,25 @@ export async function* orchestrate(
                   provider,
                 });
 
-                // Yield tool result with display hint
-                yield {
-                  type: "tool_result",
-                  id: tc.id,
-                  data: result.data ?? null,
-                  displayHint: result.displayHint,
-                  message: result.message,
-                };
+                // Buffer fire-and-forget results; yield others immediately.
+                // Fire-and-forget confirmations are batched and yielded as a
+                // single summary at the end of the sequence.
+                if (FIRE_AND_FORGET_TOOLS.has(tc.name)) {
+                  bufferedConfirmations.push({
+                    id: tc.id,
+                    data: result.data ?? null,
+                    displayHint: result.displayHint,
+                    message: result.message,
+                  });
+                } else {
+                  yield {
+                    type: "tool_result",
+                    id: tc.id,
+                    data: result.data ?? null,
+                    displayHint: result.displayHint,
+                    message: result.message,
+                  };
+                }
 
                 // Truncate large results before adding to message history
                 const resultStr = JSON.stringify({
@@ -251,7 +270,22 @@ export async function* orchestrate(
               );
 
               if (allFireAndForget && pendingToolCalls.length === 1 && round === 1) {
-                // Single action, first round — done immediately
+                // Single action, first round — flush buffer and done
+                // Flush buffered confirmations as a single combined result
+                if (bufferedConfirmations.length > 0) {
+                  const combinedMessage = bufferedConfirmations
+                    .map((c) => c.message)
+                    .filter(Boolean)
+                    .join("\n");
+                  yield {
+                    type: "tool_result" as const,
+                    id: bufferedConfirmations[bufferedConfirmations.length - 1].id,
+                    data: bufferedConfirmations.map((c) => c.data),
+                    displayHint: { type: "confirmation" as const, message: combinedMessage },
+                    message: combinedMessage,
+                  };
+                  bufferedConfirmations.length = 0;
+                }
                 yield {
                   type: "done",
                   sessionId: sessionId ?? "",
@@ -261,8 +295,22 @@ export async function* orchestrate(
               }
 
               if (allFireAndForget && round > 1) {
-                // Multi-step sequence, subsequent rounds — all fire-and-forget
-                // tools executed. The LLM already chained what it needed. Done.
+                // Multi-step sequence complete — flush all buffered confirmations
+                // Flush buffered confirmations as a single combined result
+                if (bufferedConfirmations.length > 0) {
+                  const combinedMessage = bufferedConfirmations
+                    .map((c) => c.message)
+                    .filter(Boolean)
+                    .join("\n");
+                  yield {
+                    type: "tool_result" as const,
+                    id: bufferedConfirmations[bufferedConfirmations.length - 1].id,
+                    data: bufferedConfirmations.map((c) => c.data),
+                    displayHint: { type: "confirmation" as const, message: combinedMessage },
+                    message: combinedMessage,
+                  };
+                  bufferedConfirmations.length = 0;
+                }
                 yield {
                   type: "done",
                   sessionId: sessionId ?? "",
