@@ -221,6 +221,15 @@ export function Omnibar({
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        // Layered dismiss: weather → conversation → omnibar
+        if (showWeatherExpanded && onWeatherClick) {
+          onWeatherClick();
+          return;
+        }
+        if (hasConversation && onReset) {
+          onReset();
+          return;
+        }
         setForcedAction(null);
         onClose();
         return;
