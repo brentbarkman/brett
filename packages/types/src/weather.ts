@@ -47,6 +47,7 @@ export interface GeocodingResult {
 
 export interface LocationSettings {
   city: string | null;
+  countryCode: string | null;
   latitude: number | null;
   longitude: number | null;
   tempUnit: "auto" | "fahrenheit" | "celsius";
