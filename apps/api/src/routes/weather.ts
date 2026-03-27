@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
@@ -76,8 +77,18 @@ weather.get("/", rateLimiter(60), async (c) => {
 
   // If no location, try IP geolocation
   if (latitude == null || longitude == null) {
+    // In production (Railway), client IP is in X-Forwarded-For.
+    // In local dev (no proxy), fall back to the raw connection address.
     const forwarded = c.req.header("x-forwarded-for");
-    const ip = forwarded?.split(",")[0]?.trim();
+    let ip = forwarded?.split(",")[0]?.trim();
+    if (!ip) {
+      try {
+        const info = getConnInfo(c);
+        ip = info.remote.address ?? undefined;
+      } catch {
+        // getConnInfo only works with @hono/node-server, not in tests
+      }
+    }
 
     if (ip) {
       const geo = await geolocateIp(ip);
