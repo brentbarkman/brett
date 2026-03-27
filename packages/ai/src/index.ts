@@ -33,7 +33,7 @@ export type { UsageEntry } from "./memory/usage.js";
 
 // MCP
 export type { MCPClient } from "./mcp/client.js";
-export { GranolaMCPClient, createGranolaClient } from "./mcp/granola.js";
+export { createGranolaClient } from "./mcp/granola.js";
 
 // Context
 export {
