@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Bot, Send, Search, Plus, Sparkles, X, Square } from "lucide-react";
+import { Bot, Send, Search, Plus, Sparkles, X, Square, Check } from "lucide-react";
 import { useClickOutside } from "./useClickOutside";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
@@ -98,6 +98,7 @@ export function Omnibar({
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
   const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
+  const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
 
   // Intercept input changes to detect shortcut prefixes
   const handleInputChange = useCallback((value: string) => {
@@ -154,10 +155,20 @@ export function Omnibar({
     setSelectedSearchIdx(-1);
   }, [searchResults]);
 
+  // Auto-dismiss task confirmation
+  useEffect(() => {
+    if (!confirmedTask) return;
+    const timer = setTimeout(() => {
+      setConfirmedTask(null);
+      onClose();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [confirmedTask, onClose]);
+
   const hasConversation = messages.length > 0;
 
-  const showSuggestions = isOpen && (input.trim().length > 0 || forcedAction !== null) && !hasConversation;
-  const showSearchResults = isOpen && !hasConversation && !showSuggestions && (isSearching || (searchResults !== null && searchResults !== undefined));
+  const showSuggestions = isOpen && (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
+  const showSearchResults = isOpen && !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));
   const visibleResults = searchResults?.slice(0, 8) ?? [];
 
   // Build suggestions
@@ -203,25 +214,31 @@ export function Omnibar({
     }
   }
 
+  const handleCreateTask = useCallback((title: string) => {
+    onCreateTask(title);
+    onInputChange("");
+    setConfirmedTask(title);
+  }, [onCreateTask, onInputChange]);
+
   const handleSuggestionSelect = useCallback(
     (suggestion: Suggestion) => {
       setForcedAction(null);
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "create") {
-        onCreateTask(input);
+        handleCreateTask(input);
       } else if (suggestion.action === "search") {
         onSearch(input);
       }
     },
-    [input, onSend, onCreateTask, onSearch]
+    [input, onSend, handleCreateTask, onSearch]
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        // Layered dismiss: weather → conversation → omnibar
+        // Layered dismiss: weather → conversation → forced action → omnibar
         if (showWeatherExpanded && onWeatherClick) {
           onWeatherClick();
           return;
@@ -230,7 +247,11 @@ export function Omnibar({
           onReset();
           return;
         }
-        setForcedAction(null);
+        if (forcedAction) {
+          setForcedAction(null);
+          onInputChange("");
+          return;
+        }
         onClose();
         return;
       }
@@ -293,17 +314,17 @@ export function Omnibar({
           if (forcedAction === "search") {
             onSearch(input);
           } else if (forcedAction === "create") {
-            onCreateTask(input);
+            handleCreateTask(input);
           } else if (hasAI) {
             onSend(input);
           } else {
             // No AI: default Enter creates a task
-            onCreateTask(input);
+            handleCreateTask(input);
           }
         }
       }
     },
-    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, onCreateTask, onSearch, onClose]
+    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, handleCreateTask, onSearch, onClose, onInputChange, showWeatherExpanded, onWeatherClick, hasConversation, onReset]
   );
 
   return (
@@ -428,6 +449,21 @@ export function Omnibar({
           </div>
         )}
 
+        {/* Task Created — inline confirmation */}
+        {confirmedTask && (
+          <div className="border-t border-white/10">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="w-6 h-6 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center flex-shrink-0">
+                <Check size={12} className="text-green-400" />
+              </div>
+              <div>
+                <div className="text-sm text-white/85 font-medium">{confirmedTask}</div>
+                <div className="text-[11px] text-white/35">Added to Inbox</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Weather Expanded View — hide when user is interacting with omnibar */}
         {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && (
           <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
@@ -436,7 +472,7 @@ export function Omnibar({
         )}
 
         {/* AI Upsell — shown when open, no input, no AI configured */}
-        {isOpen && !hasAI && !input.trim() && !hasConversation && !showSearchResults && (
+        {isOpen && !hasAI && !input.trim() && !hasConversation && !showSearchResults && !confirmedTask && (
           <div className="border-t border-white/10 px-4 py-3">
             <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
               <Sparkles size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
