@@ -415,11 +415,6 @@ export function CalendarTimeline({
               Today
             </button>
           )}
-          {isDisplayToday && countdownText && countdownEvent && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/70 font-medium">
-              {countdownText}
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-1">
           <button onClick={onPrevDay} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors">
