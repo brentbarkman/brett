@@ -7,6 +7,7 @@ import { createHmac } from "crypto";
 
 let webhookRenewalRunning = false;
 let reconciliationRunning = false;
+let granolaSyncRunning = false;
 
 export function startCronJobs(): void {
   // SSE heartbeat — every 30 seconds
@@ -126,7 +127,72 @@ export function startCronJobs(): void {
     }
   });
 
+  // Granola: calendar-event-driven sync — every 5 minutes
+  // Checks for recently ended calendar events and syncs Granola notes
+  cron.schedule("*/5 * * * *", async () => {
+    if (granolaSyncRunning) return;
+    granolaSyncRunning = true;
+    try {
+      const { syncAfterMeeting } = await import("../services/granola-sync.js");
+
+      // Find users with connected Granola accounts
+      const granolaAccounts = await prisma.granolaAccount.findMany({
+        select: { userId: true },
+      });
+
+      for (const account of granolaAccounts) {
+        try {
+          // Find calendar events that ended 5-10 minutes ago
+          const now = new Date();
+          const fiveMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
+          const tenMinAgo = new Date(now.getTime() - 15 * 60 * 1000);
+
+          const recentlyEnded = await prisma.calendarEvent.findMany({
+            where: {
+              userId: account.userId,
+              endTime: { gte: tenMinAgo, lte: fiveMinAgo },
+              isAllDay: false,
+            },
+            select: { startTime: true, endTime: true },
+          });
+
+          for (const event of recentlyEnded) {
+            await syncAfterMeeting(account.userId, event.startTime, event.endTime);
+          }
+        } catch (err) {
+          console.error(`[cron] Granola post-meeting sync failed for ${account.userId}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error("[cron] Granola post-meeting sync failed:", err);
+    } finally {
+      granolaSyncRunning = false;
+    }
+  });
+
+  // Granola: periodic sweep — every 30 minutes
+  // Safety net that catches any meetings missed by the event-driven trigger
+  cron.schedule("*/30 * * * *", async () => {
+    try {
+      const { incrementalGranolaSync } = await import("../services/granola-sync.js");
+
+      const granolaAccounts = await prisma.granolaAccount.findMany({
+        select: { userId: true },
+      });
+
+      for (const account of granolaAccounts) {
+        try {
+          await incrementalGranolaSync(account.userId);
+        } catch (err) {
+          console.error(`[cron] Granola sweep sync failed for ${account.userId}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error("[cron] Granola sweep sync failed:", err);
+    }
+  });
+
   console.log(
-    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h)",
+    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), granola post-meeting (5m), granola sweep (30m)",
   );
 }
