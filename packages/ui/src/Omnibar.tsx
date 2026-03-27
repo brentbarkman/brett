@@ -3,7 +3,7 @@ import { Bot, Send, Search, Plus, Sparkles, X, Square } from "lucide-react";
 import { useClickOutside } from "./useClickOutside";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
-import { WeatherPill, WeatherPillSkeleton } from "./WeatherPill";
+import { WeatherPill, WeatherPillSkeleton, WeatherPillEmpty } from "./WeatherPill";
 import { WeatherExpanded } from "./WeatherExpanded";
 import type { DisplayHint, WeatherData } from "@brett/types";
 
@@ -339,6 +339,9 @@ export function Omnibar({
                 isActive={showWeatherExpanded ?? false}
                 onClick={onWeatherClick}
               />
+            )}
+            {!weatherLoading && !weather && onNavigateToSettings && (
+              <WeatherPillEmpty onClick={() => { onNavigateToSettings(); onClose(); }} />
             )}
             {!isOpen && (
               <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
