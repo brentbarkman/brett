@@ -252,6 +252,7 @@ export function Omnibar({
           onInputChange("");
           return;
         }
+        setConfirmedTask(null);
         onClose();
         return;
       }
@@ -465,7 +466,7 @@ export function Omnibar({
         )}
 
         {/* Weather Expanded View — hide when user is interacting with omnibar */}
-        {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && (
+        {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && !confirmedTask && (
           <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
             <WeatherExpanded weather={weather} />
           </div>
