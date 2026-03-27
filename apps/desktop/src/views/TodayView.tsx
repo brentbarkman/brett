@@ -33,11 +33,12 @@ interface TodayViewProps {
 
 export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
+  const [briefingEnabled] = usePreference("briefingEnabled");
   const [briefingDismissedDate, setBriefingDismissedDate] = usePreference("briefingDismissedDate");
 
-  // Briefing is visible unless dismissed today
+  // Briefing is visible unless disabled in settings or dismissed today
   const today = new Date().toLocaleDateString("en-CA");
-  const isBriefingVisible = briefingDismissedDate !== today;
+  const isBriefingVisible = briefingEnabled && briefingDismissedDate !== today;
 
   // Auto-focus omnibar when landing on Today view
   useEffect(() => {

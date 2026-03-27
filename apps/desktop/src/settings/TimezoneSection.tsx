@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Globe, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 
@@ -88,16 +88,15 @@ export function TimezoneSection() {
   }
 
   return (
-    <section className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-4">
+    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
       <div className="flex items-center gap-2 mb-4">
-        <Globe size={16} className="text-white/50" />
-        <h2 className="text-sm font-semibold text-white/90">Timezone</h2>
+        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">Timezone</h3>
         {saved && (
           <Check size={14} className="text-emerald-400 ml-auto" />
         )}
       </div>
       {error && (
-        <p className="text-xs text-red-400/80 mt-2">{error}</p>
+        <p className="text-xs text-red-400/80 mb-3">{error}</p>
       )}
 
       <div className="space-y-3">
@@ -149,6 +148,6 @@ export function TimezoneSection() {
           </select>
         )}
       </div>
-    </section>
+    </div>
   );
 }

@@ -5,12 +5,15 @@ const PREFS_EVENT = "brett_preferences_changed";
 
 interface Preferences {
   showTokenUsage: boolean;
+  /** Whether the daily briefing is enabled (shown on Today view) */
+  briefingEnabled: boolean;
   /** ISO date string (YYYY-MM-DD) of when the briefing was last dismissed */
   briefingDismissedDate: string | null;
 }
 
 const DEFAULTS: Preferences = {
   showTokenUsage: false,
+  briefingEnabled: true,
   briefingDismissedDate: null,
 };
 
