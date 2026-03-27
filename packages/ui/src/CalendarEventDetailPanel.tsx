@@ -59,6 +59,14 @@ interface CalendarEventDetailPanelProps {
   isSendingBrettMessage: boolean;
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages: boolean;
+  granolaMeeting?: {
+    title: string;
+    summary: string | null;
+    transcript: { source: string; speaker: string; text: string }[] | null;
+    actionItems: { title: string; dueDate?: string }[] | null;
+    meetingStartedAt: string;
+  } | null;
+  onCreateActionItem?: (title: string, dueDate?: string) => void;
 }
 
 function formatEventTime(start: string, end: string, isAllDay: boolean): string {
@@ -142,6 +150,8 @@ export function CalendarEventDetailPanel({
   isSendingBrettMessage,
   isBrettStreaming,
   isLoadingMoreBrettMessages,
+  granolaMeeting,
+  onCreateActionItem,
 }: CalendarEventDetailPanelProps) {
   const [showAllAttendees, setShowAllAttendees] = useState(false);
   const [rsvpNote, setRsvpNote] = useState("");
@@ -340,6 +350,83 @@ export function CalendarEventDetailPanel({
                     </a>
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Meeting Notes (Granola) ── */}
+          {granolaMeeting && (
+            <div
+              className="pt-4"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3 block">
+                Meeting Notes
+              </span>
+
+              {/* Summary */}
+              {granolaMeeting.summary && (
+                <p className="text-sm text-white/60 leading-relaxed mb-3 whitespace-pre-wrap">
+                  {granolaMeeting.summary}
+                </p>
+              )}
+
+              {/* Action Items */}
+              {granolaMeeting.actionItems && granolaMeeting.actionItems.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-1.5 block">
+                    Action Items
+                  </span>
+                  <div className="flex flex-col gap-1.5">
+                    {granolaMeeting.actionItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg border border-white/5"
+                      >
+                        <span className="flex-1 text-sm text-white/70 truncate">
+                          {item.title}
+                        </span>
+                        {item.dueDate && (
+                          <span className="text-[10px] text-white/30 flex-shrink-0">
+                            {new Date(item.dueDate).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                        )}
+                        {onCreateActionItem && (
+                          <button
+                            onClick={() => onCreateActionItem(item.title, item.dueDate)}
+                            className="text-[10px] text-amber-400/60 hover:text-amber-400 font-medium transition-colors flex-shrink-0"
+                          >
+                            + Task
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Transcript */}
+              {granolaMeeting.transcript && granolaMeeting.transcript.length > 0 && (
+                <details className="group">
+                  <summary className="text-[10px] uppercase tracking-wider text-white/30 font-semibold cursor-pointer hover:text-white/50 transition-colors select-none">
+                    Transcript
+                  </summary>
+                  <div className="mt-2 max-h-64 overflow-y-auto scrollbar-hide bg-white/[0.02] rounded-lg p-3 border border-white/5">
+                    {granolaMeeting.transcript.map((turn, idx) => (
+                      <div key={idx} className="mb-2 last:mb-0">
+                        <span className="text-[10px] font-semibold text-white/40">
+                          {turn.speaker}
+                        </span>
+                        <p className="text-xs text-white/50 leading-relaxed">
+                          {turn.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           )}
