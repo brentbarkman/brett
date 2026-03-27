@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Omnibar,
-  MorningBriefing,
+  DailyBriefing,
   UpNextCard,
   FilterPills,
   ThingsList,
@@ -128,10 +128,12 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     <>
       <Omnibar {...omnibarProps} />
 
-      {isBriefingVisible && briefing.hasAI && (briefing.hasBriefing || !briefing.content) && (
-        <MorningBriefing
+      {isBriefingVisible && briefing.hasAI && (
+        <DailyBriefing
           content={briefing.content}
           isGenerating={briefing.isGenerating}
+          hasAI={briefing.hasAI}
+          generatedAt={briefing.generatedAt}
           onDismiss={() => setIsBriefingVisible(false)}
           onRegenerate={briefing.regenerate}
         />

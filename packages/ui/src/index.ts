@@ -8,7 +8,7 @@ export { SkillResultCard } from "./SkillResultCard";
 export { SimpleMarkdown } from "./SimpleMarkdown";
 export { SpotlightModal } from "./SpotlightModal";
 export type { SpotlightModalProps, SpotlightMessage } from "./SpotlightModal";
-export { MorningBriefing } from "./MorningBriefing";
+export { DailyBriefing } from "./DailyBriefing";
 export { UpNextCard } from "./UpNextCard";
 export { FilterPills } from "./FilterPills";
 export { ThingCard } from "./ThingCard";
