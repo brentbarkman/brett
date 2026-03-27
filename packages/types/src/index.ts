@@ -115,6 +115,7 @@ export interface Thing {
   contentStatus?: ContentStatus;
   contentDomain?: string;
   contentImageUrl?: string;
+  granolaMeetingTitle?: string;
 }
 
 export interface Attachment {

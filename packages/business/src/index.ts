@@ -209,8 +209,13 @@ export const DEFAULT_LIST_NAME = "Inbox";
 
 // ── Transform ──
 
+type ItemWithRelations = ItemRecord & {
+  list: { name: string } | null;
+  granolaMeeting?: { title: string } | null;
+};
+
 export function itemToThing(
-  item: ItemRecord & { list: { name: string } | null },
+  item: ItemWithRelations,
   now: Date = new Date()
 ): Thing {
   const precision = (item.dueDatePrecision as DueDatePrecision) ?? null;
@@ -233,6 +238,7 @@ export function itemToThing(
     description: item.description ?? undefined,
     stalenessDays: computeStalenessDays(item.updatedAt, now),
     createdAt: item.createdAt.toISOString(),
+    granolaMeetingTitle: item.granolaMeeting?.title ?? undefined,
     ...(item.type === "content" && {
       contentType: (item.contentType as ContentType) ?? undefined,
       contentStatus: (item.contentStatus as ContentStatus) ?? undefined,
