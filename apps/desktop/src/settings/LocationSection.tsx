@@ -171,9 +171,10 @@ export function LocationSection() {
                       setShowDropdown(true);
                     }
                   }}
-                  placeholder="Search city…"
-                  className="w-full bg-white/5 border border-white/[0.08] rounded-lg pl-8 pr-3 py-2 text-sm text-white/80
-                    placeholder:text-white/25 focus:outline-none focus:border-blue-500/50"
+                  placeholder={user?.city ?? "Search city…"}
+                  className={`w-full bg-white/5 border border-white/[0.08] rounded-lg pl-8 pr-3 py-2 text-sm
+                    focus:outline-none focus:border-blue-500/50
+                    ${query ? "text-white/80 placeholder:text-white/25" : user?.city ? "text-white/80 placeholder:text-white/70" : "text-white/80 placeholder:text-white/25"}`}
                 />
                 {isSearching && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-white/20 border-t-white/60 animate-spin" />
@@ -204,10 +205,6 @@ export function LocationSection() {
                 document.body
               )}
 
-              {/* Current city label */}
-              <p className="text-xs text-white/30">
-                {user?.city ? user.city : "(detected from IP)"}
-              </p>
             </div>
 
             {/* Temperature unit */}
