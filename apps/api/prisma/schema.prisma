@@ -17,6 +17,8 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  timezone      String   @default("America/Los_Angeles")
+  timezoneAuto  Boolean  @default(true)
   sessions      Session[]
   accounts      Account[]
   lists         List[]
