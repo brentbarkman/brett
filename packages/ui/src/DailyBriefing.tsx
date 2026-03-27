@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { X, RefreshCw, Loader2, Settings } from "lucide-react";
 
 interface OverdueItem {
@@ -13,6 +13,11 @@ interface BriefingSummary {
   overdueItems: OverdueItem[];
 }
 
+interface BriefingItem {
+  id: string;
+  title: string;
+}
+
 interface DailyBriefingProps {
   content: string | null;
   isGenerating?: boolean;
@@ -20,8 +25,70 @@ interface DailyBriefingProps {
   summary?: BriefingSummary | null;
   hasAI: boolean;
   generatedAt?: string | null;
+  items?: BriefingItem[];
   onDismiss: () => void;
   onRegenerate?: () => void;
+  onItemClick?: (id: string) => void;
+}
+
+/**
+ * Parse inline markdown and linkify item references.
+ * Handles: **bold**, "quoted text" matched against known items.
+ */
+function renderBriefingLine(
+  text: string,
+  items: BriefingItem[],
+  onItemClick?: (id: string) => void,
+): React.ReactNode {
+  // Build a lookup of lowercase title → item for matching
+  const titleMap = new Map<string, BriefingItem>();
+  for (const item of items) {
+    titleMap.set(item.title.toLowerCase(), item);
+  }
+
+  // Split on **bold** and "quoted" patterns, preserving delimiters
+  const parts = text.split(/(\*\*[^*]+\*\*|"[^"]+")/g);
+
+  return parts.map((part, i) => {
+    // Bold: **text**
+    if (part.startsWith("**") && part.endsWith("**")) {
+      const inner = part.slice(2, -2);
+      const matched = titleMap.get(inner.toLowerCase());
+      if (matched && onItemClick) {
+        return (
+          <button
+            key={i}
+            onClick={() => onItemClick(matched.id)}
+            className="font-semibold text-blue-400/90 hover:text-blue-300 transition-colors cursor-pointer"
+          >
+            {inner}
+          </button>
+        );
+      }
+      return <strong key={i} className="font-semibold text-white/90">{inner}</strong>;
+    }
+
+    // Quoted: "text"
+    if (part.startsWith('"') && part.endsWith('"')) {
+      const inner = part.slice(1, -1);
+      const matched = titleMap.get(inner.toLowerCase());
+      if (matched && onItemClick) {
+        return (
+          <button
+            key={i}
+            onClick={() => onItemClick(matched.id)}
+            className="text-blue-400/90 hover:text-blue-300 transition-colors cursor-pointer"
+          >
+            &ldquo;{inner}&rdquo;
+          </button>
+        );
+      }
+      return <span key={i}>&ldquo;{inner}&rdquo;</span>;
+    }
+
+    // Plain text
+    return <span key={i}>{part}</span>;
+  });
 }
 
 export function DailyBriefing({
@@ -31,8 +98,10 @@ export function DailyBriefing({
   summary,
   hasAI,
   generatedAt,
+  items: knownItems = [],
   onDismiss,
   onRegenerate,
+  onItemClick,
 }: DailyBriefingProps) {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -41,8 +110,13 @@ export function DailyBriefing({
     return () => clearTimeout(timer);
   }, []);
 
+  const renderLine = useCallback(
+    (text: string) => renderBriefingLine(text, knownItems, onItemClick),
+    [knownItems, onItemClick],
+  );
+
   // Parse AI content into bullet points
-  const items = content
+  const bulletItems = content
     ? content
         .split("\n")
         .map((line) => line.replace(/^[-*•]\s*/, "").trim())
@@ -111,15 +185,15 @@ export function DailyBriefing({
                 Try again — if this keeps happening, check your AI provider in Settings.
               </p>
             </div>
-          ) : items.length > 0 ? (
+          ) : bulletItems.length > 0 ? (
             <ul className="space-y-2">
-              {items.map((item, idx) => (
+              {bulletItems.map((line, idx) => (
                 <li
                   key={idx}
                   className="flex items-start gap-2 text-sm text-white/80 leading-relaxed"
                 >
                   <span className="text-blue-500/50 mt-1">•</span>
-                  <span>{item}</span>
+                  <span>{renderLine(line)}</span>
                 </li>
               ))}
             </ul>

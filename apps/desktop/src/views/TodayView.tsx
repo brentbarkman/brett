@@ -137,8 +137,13 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
           summary={summary.data ?? null}
           hasAI={briefing.hasAI}
           generatedAt={briefing.generatedAt}
+          items={things.map((t) => ({ id: t.id, title: t.title }))}
           onDismiss={() => setIsBriefingVisible(false)}
           onRegenerate={briefing.regenerate}
+          onItemClick={(id) => {
+            const item = things.find((t) => t.id === id);
+            if (item) onItemClick(item);
+          }}
         />
       )}
 
