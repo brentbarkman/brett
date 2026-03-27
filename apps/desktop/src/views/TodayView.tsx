@@ -19,7 +19,7 @@ import {
   useCreateThing,
   useToggleThing,
 } from "../api/things";
-import { useBriefing } from "../api/briefing";
+import { useBriefing, useBriefingSummary } from "../api/briefing";
 import { mockEvents } from "../data/mockData";
 
 interface TodayViewProps {
@@ -43,6 +43,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
 
   // Morning briefing (real data from AI, or empty if not configured)
   const briefing = useBriefing();
+  const summary = useBriefingSummary();
 
   // Stable date boundaries for the day — memoized to avoid re-fetches on re-render
   const { dueBefore, completedAfter } = useMemo(() => ({
@@ -128,10 +129,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     <>
       <Omnibar {...omnibarProps} />
 
-      {isBriefingVisible && briefing.hasAI && (
+      {isBriefingVisible && (
         <DailyBriefing
           content={briefing.content}
           isGenerating={briefing.isGenerating}
+          summary={summary.data ?? null}
           hasAI={briefing.hasAI}
           generatedAt={briefing.generatedAt}
           onDismiss={() => setIsBriefingVisible(false)}
