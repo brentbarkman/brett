@@ -46,7 +46,7 @@ function resolveWmo(code: number): { condition: string; icon: string } {
 
 const FORECAST_BASE = "https://api.open-meteo.com/v1/forecast";
 const GEOCODING_BASE = "https://geocoding-api.open-meteo.com/v1/search";
-const IP_API_BASE = "http://ip-api.com/json";
+// (IP geolocation uses ipapi.co inline — no base URL constant needed)
 
 interface ForecastResponse {
   current: {
@@ -71,6 +71,7 @@ interface ForecastResponse {
   };
 }
 
+/** Fetch 7-day forecast from Open-Meteo. All temperatures returned in Celsius — conversion happens at response time. */
 export async function fetchForecast(
   latitude: number,
   longitude: number,
@@ -80,6 +81,7 @@ export async function fetchForecast(
     latitude: String(latitude),
     longitude: String(longitude),
     timezone,
+    temperature_unit: "celsius",
     current:
       "temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,wind_speed_10m",
     hourly: "temperature_2m,weather_code,precipitation_probability",
@@ -182,38 +184,37 @@ export async function searchCities(query: string): Promise<GeocodingResult[]> {
   }));
 }
 
-// ── IP Geolocation (ip-api.com) ──
+// ── IP Geolocation (ipapi.co — HTTPS) ──
 
-interface IpApiResponse {
-  status: string;
-  city: string;
-  regionName: string;
-  country: string;
-  countryCode: string;
-  lat: number;
-  lon: number;
-  timezone: string;
+function isPublicIp(ip: string): boolean {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) return false;
+  const [a, b] = parts;
+  if (a === 10) return false;
+  if (a === 172 && b >= 16 && b <= 31) return false;
+  if (a === 192 && b === 168) return false;
+  if (a === 127) return false;
+  if (a === 169 && b === 254) return false;
+  if (a === 0 || a >= 224) return false;
+  return true;
 }
 
 export async function geolocateIp(ip: string): Promise<GeocodingResult | null> {
+  if (!isPublicIp(ip)) return null;
   try {
-    const res = await fetch(
-      `${IP_API_BASE}/${ip}?fields=status,city,regionName,country,countryCode,lat,lon,timezone`,
-    );
+    const res = await fetch(`https://ipapi.co/${ip}/json/`);
     if (!res.ok) return null;
-
-    const data: IpApiResponse = await res.json();
-    if (data.status !== "success") return null;
-
+    const data = await res.json();
+    if (data.error) return null;
     return {
-      name: data.city,
-      state: data.regionName,
-      country: data.country,
-      countryCode: data.countryCode,
-      latitude: data.lat,
-      longitude: data.lon,
-      timezone: data.timezone,
-      displayName: formatDisplayName(data.city, data.regionName, data.country),
+      name: data.city ?? "",
+      state: data.region ?? "",
+      country: data.country_name ?? "",
+      countryCode: data.country_code ?? "",
+      latitude: data.latitude,
+      longitude: data.longitude,
+      timezone: data.timezone ?? "",
+      displayName: [data.city, data.region, data.country_name].filter(Boolean).join(", "),
     };
   } catch {
     return null;

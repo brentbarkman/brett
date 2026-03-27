@@ -191,8 +191,8 @@ weather.get("/", rateLimiter(60), async (c) => {
 weather.get("/geocode", rateLimiter(30), async (c) => {
   const query = c.req.query("q");
 
-  if (!query || query.length < 2) {
-    return c.json({ error: "Query must be at least 2 characters" }, 400);
+  if (!query || query.length < 2 || query.length > 100) {
+    return c.json({ error: "Query must be 2-100 characters" }, 400);
   }
 
   const results = await searchCities(query);
