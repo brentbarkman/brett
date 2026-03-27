@@ -35,15 +35,46 @@ interface DailyBriefingProps {
  * Parse inline markdown and linkify item references.
  * Handles: **bold**, "quoted text" matched against known items.
  */
+const STOP_WORDS = new Set([
+  "the", "a", "an", "to", "for", "of", "in", "on", "at", "and", "or", "my", "your", "this", "that",
+]);
+
+/** Fuzzy match: find an item whose title shares enough significant words with the text */
+function fuzzyMatchItem(text: string, items: BriefingItem[]): BriefingItem | undefined {
+  const textWords = text.toLowerCase().split(/\s+/).filter((w) => !STOP_WORDS.has(w) && w.length > 2);
+  if (textWords.length === 0) return undefined;
+
+  let bestMatch: BriefingItem | undefined;
+  let bestScore = 0;
+
+  for (const item of items) {
+    const titleWords = item.title.toLowerCase().split(/\s+/).filter((w) => !STOP_WORDS.has(w) && w.length > 2);
+    const overlap = textWords.filter((w) => titleWords.some((tw) => tw.includes(w) || w.includes(tw)));
+    // Require at least 2 overlapping words, or 1 if text is short (1-2 words)
+    const threshold = textWords.length <= 2 ? 1 : 2;
+    if (overlap.length >= threshold && overlap.length > bestScore) {
+      bestScore = overlap.length;
+      bestMatch = item;
+    }
+  }
+
+  return bestMatch;
+}
+
 function renderBriefingLine(
   text: string,
   items: BriefingItem[],
   onItemClick?: (id: string) => void,
 ): React.ReactNode {
-  // Build a lookup of lowercase title → item for matching
+  // Build a lookup of lowercase title → item for exact matching
   const titleMap = new Map<string, BriefingItem>();
   for (const item of items) {
     titleMap.set(item.title.toLowerCase(), item);
+  }
+
+  // Match: exact first, then fuzzy
+  function matchItem(text: string): BriefingItem | undefined {
+    return titleMap.get(text.toLowerCase()) ?? fuzzyMatchItem(text, items);
   }
 
   // Split on **bold** and "quoted" patterns, preserving delimiters
@@ -53,7 +84,7 @@ function renderBriefingLine(
     // Bold: **text**
     if (part.startsWith("**") && part.endsWith("**")) {
       const inner = part.slice(2, -2);
-      const matched = titleMap.get(inner.toLowerCase());
+      const matched = matchItem(inner);
       if (matched && onItemClick) {
         return (
           <button
@@ -71,7 +102,7 @@ function renderBriefingLine(
     // Quoted: "text" — render as link if matched, otherwise keep quotes
     if (part.startsWith('"') && part.endsWith('"')) {
       const inner = part.slice(1, -1);
-      const matched = titleMap.get(inner.toLowerCase());
+      const matched = matchItem(inner);
       if (matched && onItemClick) {
         return (
           <button

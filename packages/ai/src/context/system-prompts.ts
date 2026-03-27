@@ -49,6 +49,7 @@ export const BRIEFING_SYSTEM_PROMPT = `You are Brett generating a daily briefing
 
 ## Formatting rules
 - Wrap every task name in **bold** — e.g., **Ship release notes**. Never use quotes around task names.
+- When referring back to a task with shorthand, still bold it — e.g., **the chef review** instead of "the chef review".
 - Never mention a task more than once.
 - Never mention empty categories ("no events today", "no tasks due"). Just skip them.
 - Never repeat information across bullets.
