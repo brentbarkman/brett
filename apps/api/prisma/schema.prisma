@@ -41,6 +41,8 @@ model User {
   conversationEmbeddings ConversationEmbedding[]
   usageLogs            AIUsageLog[]
   weatherCache         WeatherCache?
+  granolaAccount         GranolaAccount?
+  granolaMeetings        GranolaMeeting[]
 }
 
 model Session {
@@ -133,6 +135,8 @@ model Item {
   linksFrom      ItemLink[]     @relation("linksFrom")
   brettMessages  BrettMessage[]
   conversationSessions ConversationSession[]
+  granolaMeetingId String?
+  granolaMeeting   GranolaMeeting? @relation(fields: [granolaMeetingId], references: [id], onDelete: SetNull)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -264,6 +268,7 @@ model CalendarEvent {
   notes             CalendarEventNote[]
   brettMessages     BrettMessage[]
   conversationSessions ConversationSession[]
+  granolaMeetings        GranolaMeeting[]
 
   @@unique([googleAccountId, googleEventId])
   @@index([userId, startTime])
@@ -282,6 +287,53 @@ model CalendarEventNote {
 
   @@unique([calendarEventId, userId])
   @@index([userId])
+}
+
+// ── Granola tables ──
+
+model GranolaAccount {
+  id              String    @id @default(uuid())
+  userId          String    @unique  // one Granola account per user
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email           String
+  accessToken     String    @db.Text  // Encrypted (AES-256-GCM)
+  refreshToken    String    @db.Text  // Encrypted (AES-256-GCM)
+  tokenExpiresAt  DateTime
+  lastSyncAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  meetings        GranolaMeeting[]
+
+  @@index([userId])
+}
+
+model GranolaMeeting {
+  id                  String    @id @default(uuid())
+  granolaDocumentId   String    @unique  // Granola's not_-prefixed ID
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  granolaAccountId    String
+  granolaAccount      GranolaAccount @relation(fields: [granolaAccountId], references: [id], onDelete: Cascade)
+  calendarEventId     String?
+  calendarEvent       CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
+  title               String
+  summary             String?   @db.Text
+  transcript          Json?     // [{source, speaker, text}]
+  actionItems         Json?     // [{title, dueDate?, assignee?}]
+  attendees           Json?     // [{name, email}]
+  meetingStartedAt    DateTime
+  meetingEndedAt      DateTime
+  rawData             Json?     // Full MCP response
+  syncedAt            DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  items               Item[]    // Action items created from this meeting
+
+  @@index([userId, meetingStartedAt])
+  @@index([granolaAccountId])
+  @@index([calendarEventId])
 }
 
 // ── AI tables ──

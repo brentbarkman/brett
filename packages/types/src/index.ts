@@ -247,6 +247,7 @@ export interface CreateBrettMessageInput {
 }
 
 export * from "./calendar";
+export * from "./granola.js";
 
 // ─── AI Types ───
 
