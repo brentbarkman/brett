@@ -41,7 +41,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Morning briefing (real data from AI, or empty if not configured)
+  // Daily briefing (real data from AI, or empty if not configured)
   const briefing = useBriefing();
   const summary = useBriefingSummary();
 

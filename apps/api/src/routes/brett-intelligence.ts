@@ -24,17 +24,17 @@ brettIntelligence.use("*", authMiddleware);
 
 // ─── GET /briefing — Get today's cached briefing ───
 
-brettIntelligence.get("/briefing", async (c) => {
+brettIntelligence.get("/briefing", rateLimiter(60), async (c) => {
   const user = c.get("user");
 
   const timezone = await getUserTimezone(user.id);
-  const { startOfDay } = getUserDayBounds(timezone);
+  const { startOfDay, endOfDay } = getUserDayBounds(timezone);
 
   const session = await prisma.conversationSession.findFirst({
     where: {
       userId: user.id,
       source: "briefing",
-      createdAt: { gte: startOfDay },
+      createdAt: { gte: startOfDay, lt: endOfDay },
     },
     orderBy: { createdAt: "desc" },
     include: {
@@ -51,10 +51,15 @@ brettIntelligence.get("/briefing", async (c) => {
     return c.json({ briefing: null });
   }
 
+  const content = session.messages[0].content;
+  if (!content || !content.trim()) {
+    return c.json({ briefing: null });
+  }
+
   return c.json({
     briefing: {
       sessionId: session.id,
-      content: session.messages[0].content,
+      content,
       generatedAt: session.messages[0].createdAt.toISOString(),
     },
   });
@@ -256,7 +261,7 @@ brettIntelligence.post(
 
 // ─── GET /up-next — Next event + cached take ───
 
-brettIntelligence.get("/up-next", async (c) => {
+brettIntelligence.get("/up-next", rateLimiter(60), async (c) => {
   const user = c.get("user");
   const now = new Date();
 

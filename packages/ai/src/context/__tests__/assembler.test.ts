@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { assembleContext, type AssemblerInput } from "../assembler.js";
+import { getUserDayBounds } from "@brett/business";
 
 // ─── Mock system prompts ───
 
@@ -207,6 +208,7 @@ describe("assembleContext", () => {
       };
       const ctx = await assembleContext(input, mockPrisma);
       expect(ctx.system).toContain("Asia/Tokyo");
+      expect(getUserDayBounds).toHaveBeenCalledWith("Asia/Tokyo", expect.any(Date));
     });
 
     it("includes timezone-formatted current date in system prompt", async () => {

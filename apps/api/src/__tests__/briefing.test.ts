@@ -50,6 +50,48 @@ describe("Briefing routes", () => {
       const res = await authRequest("/brett/briefing", "invalid-token");
       expect(res.status).toBe(401);
     });
+
+    it("excludes briefings outside the user's timezone day boundary", async () => {
+      // Set user timezone to Asia/Tokyo (UTC+9)
+      await authRequest("/users/timezone", token, {
+        method: "PATCH",
+        body: JSON.stringify({ timezone: "Asia/Tokyo", auto: true }),
+      });
+
+      // Create a briefing session with createdAt that is "tomorrow" in Tokyo
+      // Tokyo's "today" (March 27) ends at 2026-03-27T15:00:00Z
+      // So 2026-03-27T16:00:00Z = March 28 01:00 in Tokyo (outside today)
+      const futureSession = await prisma.conversationSession.create({
+        data: {
+          userId,
+          source: "briefing",
+          modelTier: "medium",
+          modelUsed: "test",
+          createdAt: new Date("2026-03-27T16:00:00Z"),
+        },
+      });
+      await prisma.conversationMessage.create({
+        data: {
+          sessionId: futureSession.id,
+          role: "assistant",
+          content: "Tomorrow briefing in Tokyo",
+        },
+      });
+
+      const res = await authRequest("/brett/briefing", token);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      // The briefing from "tomorrow" in Tokyo should not be returned
+      if (body.briefing) {
+        expect(body.briefing.content).not.toBe("Tomorrow briefing in Tokyo");
+      }
+
+      // Reset timezone for other tests
+      await authRequest("/users/timezone", token, {
+        method: "PATCH",
+        body: JSON.stringify({ timezone: "America/Los_Angeles", auto: true }),
+      });
+    });
   });
 
   describe("GET /brett/briefing/summary", () => {
@@ -132,6 +174,16 @@ describe("Briefing routes", () => {
         body: JSON.stringify({ timezone: "UTC", auto: "yes" }),
       });
       expect(res.status).toBe(400);
+    });
+
+    it("rejects missing auto field", async () => {
+      const res = await authRequest("/users/timezone", token, {
+        method: "PATCH",
+        body: JSON.stringify({ timezone: "America/New_York" }),
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as any;
+      expect(body.error).toContain("auto is required");
     });
 
     it("handles malformed JSON body", async () => {

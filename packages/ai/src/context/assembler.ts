@@ -289,20 +289,25 @@ async function assembleBriefing(
 
   // Validate timezone at point-of-use (defense-in-depth)
   const timezone = input.timezone;
+  const now = new Date();
   let currentDate: string;
   try {
-    currentDate = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
+    currentDate = now.toLocaleDateString("en-CA", { timeZone: timezone });
   } catch {
-    currentDate = new Date().toLocaleDateString("en-CA", { timeZone: "UTC" });
+    currentDate = now.toLocaleDateString("en-CA", { timeZone: "UTC" });
   }
+
+  // Validate timezone for system prompt (defense-in-depth)
+  const VALID_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
+  const safeTimezone = VALID_TIMEZONES.has(timezone) ? timezone : "UTC";
 
   const system =
     BRIEFING_SYSTEM_PROMPT +
     formatFacts(facts) +
     `\nCurrent date: ${currentDate}` +
-    `\nCurrent timezone: ${timezone}`;
+    `\nCurrent timezone: ${safeTimezone}`;
 
-  const { startOfDay, endOfDay } = getUserDayBounds(timezone);
+  const { startOfDay, endOfDay } = getUserDayBounds(timezone, now);
 
   const [overdueTasks, dueTodayTasks, todayEvents] = await Promise.all([
     prisma.item.findMany({

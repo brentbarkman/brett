@@ -48,7 +48,7 @@ export function DailyBriefing({
     : [];
 
   const showAIBriefing = hasAI;
-  const showStaticFallback = !hasAI && summary;
+  const showStaticFallback = !hasAI;
 
   // Check if the day is completely empty
   const isDayEmpty =
@@ -132,7 +132,9 @@ export function DailyBriefing({
       {/* Static fallback (no AI) */}
       {showStaticFallback && (
         <div className="space-y-3">
-          {isDayEmpty ? (
+          {!summary ? (
+            <p className="text-sm text-white/40">Loading your day...</p>
+          ) : isDayEmpty ? (
             <p className="text-sm text-white/60">
               Your day is clear — no tasks or meetings.
             </p>
