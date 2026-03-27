@@ -343,10 +343,9 @@ export function Omnibar({
       {/* Top Pill / Input Area */}
       <div
         className={`
-          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-150 ease-out
-          ${isOpen && !isClosing ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-white/10 hover:border-white/20"}
+          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-300 ease-in-out overflow-hidden
+          ${isOpen ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-white/10 hover:border-white/20"}
           ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
-          ${isClosing ? "opacity-0 scale-[0.98] -translate-y-1" : "opacity-100 scale-100 translate-y-0"}
         `}
       >
         {/* Top Bar — visible when collapsed or when open without conversation */}
@@ -393,98 +392,102 @@ export function Omnibar({
           </div>
         )}
 
-        {/* Suggestions — inline */}
-        {showSuggestions && (
-          <div className="border-t border-white/10">
-            {suggestions.map((suggestion, i) => (
-              <button
-                key={suggestion.id}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                  i === selectedSuggestion
-                    ? "bg-white/10 text-white"
-                    : "text-white/70 hover:bg-white/5"
-                }`}
-                onClick={() => handleSuggestionSelect(suggestion)}
-                onMouseEnter={() => setSelectedSuggestion(i)}
-              >
-                {suggestion.icon}
-                <span className="truncate">{suggestion.label}</span>
-                {suggestion.shortcut && (
-                  <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
-                    {suggestion.shortcut}
-                  </kbd>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Expanded content — animates out on close */}
+        <div className={`transition-all duration-150 ease-out origin-top ${
+          isClosing ? "opacity-0 scale-y-95 -translate-y-1" : ""
+        }`}>
+          {/* Suggestions — inline */}
+          {showSuggestions && (
+            <div className="border-t border-white/10">
+              {suggestions.map((suggestion, i) => (
+                <button
+                  key={suggestion.id}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                    i === selectedSuggestion
+                      ? "bg-white/10 text-white"
+                      : "text-white/70 hover:bg-white/5"
+                  }`}
+                  onClick={() => handleSuggestionSelect(suggestion)}
+                  onMouseEnter={() => setSelectedSuggestion(i)}
+                >
+                  {suggestion.icon}
+                  <span className="truncate">{suggestion.label}</span>
+                  {suggestion.shortcut && (
+                    <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+                      {suggestion.shortcut}
+                    </kbd>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
 
-        {/* Search Results — inline */}
-        {showSearchResults && (
-          <div className="border-t border-white/10">
-            {isSearching ? (
-              <div className="px-4 py-3 text-sm text-white/40 flex items-center gap-2">
-                <div className="w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
-                Searching...
-              </div>
-            ) : visibleResults.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-white/40">
-                No results found.
-              </div>
-            ) : (
-              <div className="max-h-[320px] overflow-y-auto scrollbar-hide">
-                {visibleResults.map((item, i) => (
-                  <button
-                    key={item.id}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                      i === selectedSearchIdx
-                        ? "bg-white/10 text-white"
-                        : "text-white/80 hover:bg-white/5"
-                    }`}
-                    onClick={() => onSearchResultClick?.(item.id)}
-                    onMouseEnter={() => setSelectedSearchIdx(i)}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                      item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
-                    }`} />
-                    <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
-                      {item.type === "content" ? (item.contentType || "content") : "task"}
-                    </span>
-                    <span className="truncate">{item.title}</span>
-                    <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
-                      {item.listName || "Inbox"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+          {/* Search Results — inline */}
+          {showSearchResults && (
+            <div className="border-t border-white/10">
+              {isSearching ? (
+                <div className="px-4 py-3 text-sm text-white/40 flex items-center gap-2">
+                  <div className="w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
+                  Searching...
+                </div>
+              ) : visibleResults.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-white/40">
+                  No results found.
+                </div>
+              ) : (
+                <div className="max-h-[320px] overflow-y-auto scrollbar-hide">
+                  {visibleResults.map((item, i) => (
+                    <button
+                      key={item.id}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                        i === selectedSearchIdx
+                          ? "bg-white/10 text-white"
+                          : "text-white/80 hover:bg-white/5"
+                      }`}
+                      onClick={() => onSearchResultClick?.(item.id)}
+                      onMouseEnter={() => setSelectedSearchIdx(i)}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
+                      }`} />
+                      <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
+                        {item.type === "content" ? (item.contentType || "content") : "task"}
+                      </span>
+                      <span className="truncate">{item.title}</span>
+                      <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
+                        {item.listName || "Inbox"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* Task Created — inline confirmation */}
-        {confirmedTask && (
-          <div className="border-t border-white/10">
-            <div className="flex items-center gap-3 px-4 py-3">
-              <div className="w-6 h-6 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center flex-shrink-0">
-                <Check size={12} className="text-green-400" />
-              </div>
-              <div>
-                <div className="text-sm text-white/85 font-medium">{confirmedTask}</div>
-                <div className="text-[11px] text-white/35">Added to Inbox</div>
+          {/* Task Created — inline confirmation */}
+          {confirmedTask && (
+            <div className="border-t border-white/10">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-6 h-6 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center flex-shrink-0">
+                  <Check size={12} className="text-green-400" />
+                </div>
+                <div>
+                  <div className="text-sm text-white/85 font-medium">{confirmedTask}</div>
+                  <div className="text-[11px] text-white/35">Added to Inbox</div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Weather Expanded View — hide when user is interacting with omnibar */}
-        {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && !confirmedTask && (
-          <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
-            <WeatherExpanded weather={weather} />
-          </div>
-        )}
+          {/* Weather Expanded View — hide when user is interacting with omnibar */}
+          {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && !confirmedTask && (
+            <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
+              <WeatherExpanded weather={weather} />
+            </div>
+          )}
 
-        {/* AI Upsell — shown when open, no input, no AI configured */}
-        {isOpen && !hasAI && !input.trim() && !hasConversation && !showSearchResults && !confirmedTask && (
+          {/* AI Upsell — shown when open, no input, no AI configured */}
+          {isOpen && !hasAI && !input.trim() && !hasConversation && !showSearchResults && !confirmedTask && (
           <div className="border-t border-white/10 px-4 py-3">
             <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
               <Sparkles size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
@@ -504,6 +507,7 @@ export function Omnibar({
             </div>
           </div>
         )}
+        </div>
 
         {/* Conversation Area — replaces the top bar entirely */}
         {isOpen && hasConversation && (
