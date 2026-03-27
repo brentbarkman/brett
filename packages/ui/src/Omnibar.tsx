@@ -353,10 +353,36 @@ export function Omnibar({
               <WeatherPillEmpty onClick={() => { onNavigateToSettings(); onClose(); }} />
             )}
             {!isOpen && (
-              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 ml-1.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
                 <span>&#8984;</span>K
               </kbd>
             )}
+          </div>
+        )}
+
+        {/* Suggestions — inline */}
+        {showSuggestions && (
+          <div className="border-t border-white/10">
+            {suggestions.map((suggestion, i) => (
+              <button
+                key={suggestion.id}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                  i === selectedSuggestion
+                    ? "bg-white/10 text-white"
+                    : "text-white/70 hover:bg-white/5"
+                }`}
+                onClick={() => handleSuggestionSelect(suggestion)}
+                onMouseEnter={() => setSelectedSuggestion(i)}
+              >
+                {suggestion.icon}
+                <span className="truncate">{suggestion.label}</span>
+                {suggestion.shortcut && (
+                  <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+                    {suggestion.shortcut}
+                  </kbd>
+                )}
+              </button>
+            ))}
           </div>
         )}
 
@@ -463,32 +489,6 @@ export function Omnibar({
           </div>
         )}
       </div>
-
-      {/* Suggestions Dropdown */}
-      {showSuggestions && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden shadow-xl">
-          {suggestions.map((suggestion, i) => (
-            <button
-              key={suggestion.id}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                i === selectedSuggestion
-                  ? "bg-white/10 text-white"
-                  : "text-white/70 hover:bg-white/5"
-              }`}
-              onClick={() => handleSuggestionSelect(suggestion)}
-              onMouseEnter={() => setSelectedSuggestion(i)}
-            >
-              {suggestion.icon}
-              <span className="truncate">{suggestion.label}</span>
-              {suggestion.shortcut && (
-                <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
-                  {suggestion.shortcut}
-                </kbd>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Search Results Dropdown */}
       {showSearchResults && (
