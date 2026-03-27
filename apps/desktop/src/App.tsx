@@ -340,6 +340,9 @@ export function App() {
     showTokenUsage ? omnibar.sessionId : null,
   );
 
+  // Track whether spotlight should open with search pre-selected (Cmd+F)
+  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
+
   // Global Cmd+K / Ctrl+K listener for spotlight
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -348,6 +351,19 @@ export function App() {
         if (omnibar.isOpen && omnibar.mode === "spotlight") {
           omnibar.close();
         } else {
+          setSpotlightInitialAction(null);
+          omnibar.open("spotlight");
+          setSelectedItem(null);
+          setIsDetailOpen(false);
+        }
+      }
+      // Cmd+F / Ctrl+F opens spotlight with search pre-selected
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault();
+        if (omnibar.isOpen && omnibar.mode === "spotlight") {
+          omnibar.close();
+        } else {
+          setSpotlightInitialAction("search");
           omnibar.open("spotlight");
           setSelectedItem(null);
           setIsDetailOpen(false);
@@ -889,7 +905,7 @@ export function App() {
               omnibar.close();
             }
           }}
-          onClose={omnibar.close}
+          onClose={() => { setSpotlightInitialAction(null); omnibar.close(); }}
           onCancel={omnibar.cancel}
           onReset={omnibar.reset}
           onNavigateToSettings={() => navigate("/settings#ai-settings")}
@@ -905,6 +921,7 @@ export function App() {
           sessionId={omnibar.sessionId}
           showTokenUsage={showTokenUsage}
           sessionUsage={sessionUsageData ?? null}
+          initialForcedAction={spotlightInitialAction}
         />
 
         {/* Archive list confirmation */}

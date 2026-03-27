@@ -46,6 +46,7 @@ export interface SpotlightModalProps {
   sessionId?: string | null;
   showTokenUsage?: boolean;
   sessionUsage?: { totalTokens: number } | null;
+  initialForcedAction?: "search" | "create" | null;
 }
 
 export function SpotlightModal({
@@ -70,6 +71,7 @@ export function SpotlightModal({
   sessionId,
   showTokenUsage,
   sessionUsage,
+  initialForcedAction,
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -95,6 +97,16 @@ export function SpotlightModal({
     }
     onInputChange(value);
   }, [forcedAction, onInputChange]);
+
+  // Apply initial forced action when opening
+  useEffect(() => {
+    if (isOpen && initialForcedAction) {
+      setForcedAction(initialForcedAction);
+    }
+    if (!isOpen) {
+      setForcedAction(null);
+    }
+  }, [isOpen, initialForcedAction]);
 
   // Focus input when opening
   useEffect(() => {
