@@ -3,7 +3,9 @@ import { Bot, Send, Search, Plus, Sparkles, X, Square } from "lucide-react";
 import { useClickOutside } from "./useClickOutside";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
-import type { DisplayHint } from "@brett/types";
+import { WeatherPill, WeatherPillSkeleton } from "./WeatherPill";
+import { WeatherExpanded } from "./WeatherExpanded";
+import type { DisplayHint, WeatherData } from "@brett/types";
 
 export interface OmnibarMessage {
   role: "user" | "assistant";
@@ -48,6 +50,10 @@ export interface OmnibarProps {
   sessionId?: string | null;
   showTokenUsage?: boolean;
   sessionUsage?: { totalTokens: number } | null;
+  weather?: WeatherData | null;
+  weatherLoading?: boolean;
+  onWeatherClick?: () => void;
+  showWeatherExpanded?: boolean;
 }
 
 type Suggestion = {
@@ -81,6 +87,10 @@ export function Omnibar({
   sessionId,
   showTokenUsage,
   sessionUsage,
+  weather,
+  weatherLoading,
+  onWeatherClick,
+  showWeatherExpanded,
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -321,11 +331,27 @@ export function Omnibar({
               data-1p-ignore
               autoComplete="off"
             />
+            {/* Weather pill */}
+            {weatherLoading && <WeatherPillSkeleton />}
+            {!weatherLoading && weather && onWeatherClick && (
+              <WeatherPill
+                current={weather.current}
+                isActive={showWeatherExpanded ?? false}
+                onClick={onWeatherClick}
+              />
+            )}
             {!isOpen && (
               <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
                 <span>&#8984;</span>K
               </kbd>
             )}
+          </div>
+        )}
+
+        {/* Weather Expanded View */}
+        {showWeatherExpanded && weather && !hasConversation && (
+          <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
+            <WeatherExpanded weather={weather} />
           </div>
         )}
 
