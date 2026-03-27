@@ -32,6 +32,7 @@ export interface WeatherData {
   city: string;
   fetchedAt: string; // ISO timestamp
   isStale: boolean;
+  unit: "fahrenheit" | "celsius";
 }
 
 export interface GeocodingResult {

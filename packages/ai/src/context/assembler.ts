@@ -413,17 +413,22 @@ async function assembleBriefing(
   }
 
   if (weatherData) {
-    const unit = resolveTempUnit(weatherData.tempUnit, weatherData.countryCode ?? undefined);
-    const current = weatherData.cache.current as any;
-    const daily = (weatherData.cache.daily as any[])?.[0];
-    const unitLabel = unit === "fahrenheit" ? "F" : "C";
-    const convert = (t: number) => convertTemp(t, unit);
+    const current = weatherData.cache.current as Record<string, unknown>;
+    const dailyArr = weatherData.cache.daily as unknown[];
+    const daily = dailyArr?.[0] as Record<string, unknown> | undefined;
 
-    let weatherBlock = `Current weather: ${convert(current.temp)}\u00B0${unitLabel}, ${current.condition}`;
-    if (daily) {
-      weatherBlock += `\nToday: High ${convert(daily.high)}\u00B0${unitLabel}, Low ${convert(daily.low)}\u00B0${unitLabel}, ${daily.precipProb}% chance of rain`;
+    // Validate cached data shape before using
+    if (typeof current?.temp === "number" && typeof current?.condition === "string") {
+      const unit = resolveTempUnit(weatherData.tempUnit, weatherData.countryCode ?? undefined);
+      const unitLabel = unit === "fahrenheit" ? "F" : "C";
+      const convert = (t: number) => convertTemp(t, unit);
+
+      let weatherBlock = `Current weather: ${convert(current.temp as number)}\u00B0${unitLabel}, ${current.condition}`;
+      if (daily && typeof daily.high === "number" && typeof daily.low === "number") {
+        weatherBlock += `\nToday: High ${convert(daily.high as number)}\u00B0${unitLabel}, Low ${convert(daily.low as number)}\u00B0${unitLabel}, ${daily.precipProb ?? 0}% chance of rain`;
+      }
+      dataParts.push(weatherBlock);
     }
-    dataParts.push(weatherBlock);
   }
 
   const dataBlock =

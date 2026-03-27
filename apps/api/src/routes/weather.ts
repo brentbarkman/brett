@@ -44,6 +44,7 @@ function formatWeatherResponse(
       city,
       fetchedAt: fetchedAt.toISOString(),
       isStale,
+      unit,
     },
   };
 }

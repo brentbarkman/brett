@@ -11,6 +11,6 @@ export function resolveTempUnit(
 
 /** Convert Celsius to the target unit. All cached temps are stored as Celsius. */
 export function convertTemp(celsius: number, unit: "fahrenheit" | "celsius"): number {
-  if (unit === "fahrenheit") return Math.round((celsius * 9) / 5 + 32);
-  return celsius;
+  if (unit === "fahrenheit") return Math.round(celsius * 9 / 5 + 32);
+  return Math.round(celsius);
 }

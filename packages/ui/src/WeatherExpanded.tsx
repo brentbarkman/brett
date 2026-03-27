@@ -8,11 +8,10 @@ interface WeatherExpandedProps {
 export function WeatherExpanded({ weather }: WeatherExpandedProps) {
   const hourlyRef = useRef<HTMLDivElement>(null);
   const now = new Date();
+  const today = now.toISOString().split("T")[0];
   const nowHourIdx = weather.hourly.findIndex((h) => new Date(h.hour) >= now);
-  const visibleHours = weather.hourly.slice(
-    Math.max(0, nowHourIdx),
-    Math.min(weather.hourly.length, nowHourIdx + 12)
-  );
+  const startIdx = nowHourIdx >= 0 ? nowHourIdx : Math.max(0, weather.hourly.length - 12);
+  const visibleHours = weather.hourly.slice(startIdx, startIdx + 12);
 
   useEffect(() => {
     hourlyRef.current?.scrollTo({ left: 0 });
@@ -21,8 +20,6 @@ export function WeatherExpanded({ weather }: WeatherExpandedProps) {
   const weekMin = Math.min(...weather.daily.map((d) => d.low));
   const weekMax = Math.max(...weather.daily.map((d) => d.high));
   const weekRange = weekMax - weekMin || 1;
-
-  const today = new Date().toISOString().split("T")[0];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const formatHour = (iso: string) => {

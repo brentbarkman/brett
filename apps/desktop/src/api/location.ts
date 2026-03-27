@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type { GeocodingResult, LocationSettings } from "@brett/types";
@@ -21,11 +21,18 @@ export function useLocationSettings() {
 
 export function useCitySearch() {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   const search = useQuery({
-    queryKey: ["city-search", query],
+    queryKey: ["city-search", debouncedQuery],
     queryFn: () =>
-      apiFetch<{ results: GeocodingResult[] }>(`/weather/geocode?q=${encodeURIComponent(query)}`),
-    enabled: query.length >= 2,
+      apiFetch<{ results: GeocodingResult[] }>(`/weather/geocode?q=${encodeURIComponent(debouncedQuery)}`),
+    enabled: debouncedQuery.length >= 2,
     staleTime: 60 * 1000,
   });
   return {
