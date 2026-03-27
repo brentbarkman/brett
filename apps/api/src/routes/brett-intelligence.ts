@@ -5,6 +5,17 @@ import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { registry } from "../lib/ai-registry.js";
 import { buildStream, sseResponse } from "../lib/ai-stream.js";
+import { getUserDayBounds } from "@brett/business";
+
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
+
+async function getUserTimezone(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  return user?.timezone ?? DEFAULT_TIMEZONE;
+}
 
 const brettIntelligence = new Hono<AIEnv>();
 
@@ -16,8 +27,8 @@ brettIntelligence.use("*", authMiddleware);
 brettIntelligence.get("/briefing", async (c) => {
   const user = c.get("user");
 
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const timezone = await getUserTimezone(user.id);
+  const { startOfDay } = getUserDayBounds(timezone);
 
   const session = await prisma.conversationSession.findFirst({
     where: {
@@ -49,6 +60,63 @@ brettIntelligence.get("/briefing", async (c) => {
   });
 });
 
+// ─── GET /briefing/summary — Lightweight counts, no AI required ───
+
+brettIntelligence.get("/briefing/summary", rateLimiter(30), async (c) => {
+  const user = c.get("user");
+
+  const timezone = await getUserTimezone(user.id);
+  const { startOfDay, endOfDay } = getUserDayBounds(timezone);
+
+  const [overdueCount, dueTodayCount, eventCount, overdueItems] =
+    await Promise.all([
+      prisma.item.count({
+        where: {
+          userId: user.id,
+          type: "task",
+          status: "active",
+          dueDate: { lt: startOfDay },
+        },
+      }),
+      prisma.item.count({
+        where: {
+          userId: user.id,
+          type: "task",
+          status: "active",
+          dueDate: { gte: startOfDay, lt: endOfDay },
+        },
+      }),
+      prisma.calendarEvent.count({
+        where: {
+          userId: user.id,
+          startTime: { gte: startOfDay, lt: endOfDay },
+          status: "confirmed",
+        },
+      }),
+      prisma.item.findMany({
+        where: {
+          userId: user.id,
+          type: "task",
+          status: "active",
+          dueDate: { lt: startOfDay },
+        },
+        select: { title: true, dueDate: true },
+        orderBy: { dueDate: "asc" },
+        take: 3,
+      }),
+    ]);
+
+  return c.json({
+    overdueTasks: overdueCount,
+    dueTodayTasks: dueTodayCount,
+    todayEvents: eventCount,
+    overdueItems: overdueItems.map((i) => ({
+      title: i.title,
+      dueDate: i.dueDate!.toISOString().split("T")[0],
+    })),
+  });
+});
+
 // ─── POST /briefing/generate — Force-regenerate briefing (streaming) ───
 
 brettIntelligence.post(
@@ -59,6 +127,8 @@ brettIntelligence.post(
     const user = c.get("user");
     const provider = c.get("aiProvider");
     const providerName = c.get("aiProviderName");
+
+    const timezone = await getUserTimezone(user.id);
 
     const session = await prisma.conversationSession.create({
       data: {
@@ -72,6 +142,7 @@ brettIntelligence.post(
     const input = {
       type: "briefing" as const,
       userId: user.id,
+      timezone,
     };
 
     const { stream } = buildStream(
