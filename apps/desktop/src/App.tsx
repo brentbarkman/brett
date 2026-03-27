@@ -53,6 +53,7 @@ import {
 } from "./api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
 import { useEventStream, useSSEHandler } from "./api/sse";
+import { useTimezoneSync } from "./api/timezone";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
 import { usePreference } from "./api/preferences";
@@ -133,6 +134,7 @@ export function App() {
 
   // Initialize SSE for real-time updates
   useEventStream();
+  useTimezoneSync();
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEventDisplay | null
   >(null);
