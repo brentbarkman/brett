@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import type { WeatherData } from "@brett/types";
 
 interface WeatherExpandedProps {
@@ -8,19 +8,31 @@ interface WeatherExpandedProps {
 export function WeatherExpanded({ weather }: WeatherExpandedProps) {
   const hourlyRef = useRef<HTMLDivElement>(null);
   const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  const nowHourIdx = weather.hourly.findIndex((h) => new Date(h.hour) >= now);
-  const startIdx = nowHourIdx >= 0 ? nowHourIdx : Math.max(0, weather.hourly.length - 12);
-  const visibleHours = weather.hourly.slice(startIdx, startIdx + 12);
-
-  useEffect(() => {
-    hourlyRef.current?.scrollTo({ left: 0 });
-  }, []);
+  const todayStr = now.toISOString().split("T")[0];
+  const [selectedDay, setSelectedDay] = useState(todayStr);
 
   const weekMin = Math.min(...weather.daily.map((d) => d.low));
   const weekMax = Math.max(...weather.daily.map((d) => d.high));
   const weekRange = weekMax - weekMin || 1;
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  // Filter hourly data to the selected day
+  const dayHours = weather.hourly.filter((h) => h.hour.startsWith(selectedDay));
+  const isToday = selectedDay === todayStr;
+
+  // For today, start from "now"; for other days show all hours
+  let visibleHours = dayHours;
+  let nowHourIdx = -1;
+  if (isToday) {
+    nowHourIdx = dayHours.findIndex((h) => new Date(h.hour) >= now);
+    const startIdx = nowHourIdx >= 0 ? nowHourIdx : Math.max(0, dayHours.length - 12);
+    visibleHours = dayHours.slice(startIdx, startIdx + 12);
+  }
+
+  // Scroll to start when day changes
+  useEffect(() => {
+    hourlyRef.current?.scrollTo({ left: 0 });
+  }, [selectedDay]);
 
   const formatHour = (iso: string) => {
     const d = new Date(iso);
@@ -31,31 +43,38 @@ export function WeatherExpanded({ weather }: WeatherExpandedProps) {
   };
 
   const getDayLabel = (dateStr: string) => {
-    if (dateStr === today) return "Today";
+    if (dateStr === todayStr) return "Today";
     const d = new Date(dateStr + "T12:00:00");
     return dayNames[d.getDay()];
   };
+
+  // Selected day's daily data for the header
+  const selectedDayData = weather.daily.find((d) => d.date === selectedDay);
 
   return (
     <div className="p-4">
       {/* Current conditions */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <span className="text-[32px] leading-none">{weather.current.icon}</span>
+          <span className="text-[32px] leading-none">
+            {isToday ? weather.current.icon : selectedDayData?.icon}
+          </span>
           <div>
             <div className="text-[28px] font-semibold text-white/95 leading-none">
-              {weather.current.temp}°
+              {isToday ? weather.current.temp : selectedDayData?.high}°
             </div>
-            <div className="text-xs text-white/50 mt-0.5">{weather.current.condition}</div>
+            <div className="text-xs text-white/50 mt-0.5">
+              {isToday ? weather.current.condition : getDayLabel(selectedDay)}
+            </div>
           </div>
         </div>
         <div className="text-right">
           <div className="font-mono text-[11px] uppercase tracking-wider text-white/40">
             {weather.city}
           </div>
-          {weather.daily[0] && (
+          {selectedDayData && (
             <div className="text-[11px] text-white/30 mt-0.5">
-              H: {weather.daily[0].high}° &nbsp; L: {weather.daily[0].low}°
+              H: {selectedDayData.high}° &nbsp; L: {selectedDayData.low}°
             </div>
           )}
         </div>
@@ -64,11 +83,11 @@ export function WeatherExpanded({ weather }: WeatherExpandedProps) {
       {/* Hourly strip */}
       <div className="mb-4">
         <div className="font-mono text-[10px] uppercase tracking-wider text-white/40 mb-2">
-          Today
+          {getDayLabel(selectedDay)}
         </div>
         <div ref={hourlyRef} className="flex gap-0.5 overflow-x-auto pb-1 scrollbar-hide">
           {visibleHours.map((h, i) => {
-            const isNow = i === 0 && nowHourIdx >= 0;
+            const isNow = isToday && i === 0 && nowHourIdx >= 0;
             return (
               <div
                 key={h.hour}
@@ -94,17 +113,25 @@ export function WeatherExpanded({ weather }: WeatherExpandedProps) {
         </div>
         <div className="flex flex-col gap-px">
           {weather.daily.map((d) => {
-            const isToday = d.date === today;
+            const isDayToday = d.date === todayStr;
+            const isSelected = d.date === selectedDay;
             const leftPct = ((d.low - weekMin) / weekRange) * 100;
             const rightPct = 100 - ((d.high - weekMin) / weekRange) * 100;
             return (
-              <div
+              <button
                 key={d.date}
-                className={`flex items-center py-1.5 px-2 rounded-md ${
-                  isToday ? "bg-blue-500/5" : ""
+                onClick={() => setSelectedDay(d.date)}
+                className={`flex items-center py-1.5 px-2 rounded-md transition-colors text-left ${
+                  isSelected
+                    ? "bg-blue-500/10"
+                    : "hover:bg-white/5"
                 }`}
               >
-                <span className={`text-xs w-12 ${isToday ? "text-blue-400 font-medium" : "text-white/50"}`}>
+                <span className={`text-xs w-12 ${
+                  isSelected ? "text-blue-400 font-medium"
+                    : isDayToday ? "text-white/70 font-medium"
+                    : "text-white/50"
+                }`}>
                   {getDayLabel(d.date)}
                 </span>
                 <span className="text-sm w-7 text-center">{d.icon}</span>
@@ -120,7 +147,7 @@ export function WeatherExpanded({ weather }: WeatherExpandedProps) {
                   />
                 </div>
                 <span className="text-[11px] text-white/80 w-8">{d.high}°</span>
-              </div>
+              </button>
             );
           })}
         </div>

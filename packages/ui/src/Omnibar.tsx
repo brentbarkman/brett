@@ -351,8 +351,8 @@ export function Omnibar({
           </div>
         )}
 
-        {/* Weather Expanded View */}
-        {showWeatherExpanded && weather && !hasConversation && (
+        {/* Weather Expanded View — hide when user is interacting with omnibar */}
+        {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && (
           <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
             <WeatherExpanded weather={weather} />
           </div>
