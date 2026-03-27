@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Check, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useLocationSettings, useCitySearch } from "../api/location";
@@ -22,7 +22,6 @@ export function LocationSection() {
 
   const [weatherEnabled, setWeatherEnabled] = useState(true);
   const [tempUnit, setTempUnit] = useState<"auto" | "fahrenheit" | "celsius">("auto");
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -67,12 +66,9 @@ export function LocationSection() {
   }, []);
 
   async function handleSave(patch: Parameters<typeof updateLocation>[0]) {
-    setSaved(false);
     try {
       await updateLocation(patch);
       setError(null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error("Failed to save location settings:", err);
       setError("Failed to save. Try again.");
@@ -124,7 +120,6 @@ export function LocationSection() {
         <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
           Weather &amp; Location
         </h3>
-        {saved && <Check size={14} className="text-emerald-400 ml-auto" />}
       </div>
 
       {error && <p className="text-xs text-red-400/80 mb-3">{error}</p>}
