@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   Omnibar,
   DailyBriefing,
-  UpNextCard,
+  NextUpCard,
+  useNextUpTimer,
   FilterPills,
   ThingsList,
   ThingsEmptyState,
@@ -10,7 +11,7 @@ import {
   TriagePopup,
   SkeletonListView,
 } from "@brett/ui";
-import type { OmnibarProps } from "@brett/ui";
+import type { OmnibarProps, NextUpTimerState } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, NavList, FilterType } from "@brett/types";
 import { getTodayUTC, getEndOfWeekUTC } from "@brett/business";
 import {
@@ -21,7 +22,6 @@ import {
 } from "../api/things";
 import { useBriefing, useBriefingSummary } from "../api/briefing";
 import { usePreference } from "../api/preferences";
-import { mockEvents } from "../data/mockData";
 
 interface TodayViewProps {
   lists: NavList[];
@@ -29,9 +29,11 @@ interface TodayViewProps {
   onTriageOpen: (mode: "list-first" | "date-first", ids: string[]) => void;
   onFocusChange?: (thing: Thing) => void;
   omnibarProps: OmnibarProps;
+  nextUpEvent?: CalendarEventDisplay | null;
+  nextUpTimer?: NextUpTimerState | null;
 }
 
-export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps }: TodayViewProps) {
+export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps, nextUpEvent, nextUpTimer }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [briefingEnabled] = usePreference("briefingEnabled");
   const [briefingDismissedDate, setBriefingDismissedDate] = usePreference("briefingDismissedDate");
@@ -111,7 +113,8 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     return true;
   });
 
-  const upNextEvent = mockEvents.find((e) => e.id === "e2");
+  // Next Up card shows expanded when ≤10 min away (passed from App.tsx)
+  const showExpandedNextUp = nextUpTimer?.isUrgent && !nextUpTimer?.isHappening;
 
   // Determine which state the things area is in for cross-fade
   const allCompleted = filteredThings.length > 0 && filteredThings.every((t) => t.isCompleted);
@@ -165,11 +168,15 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
         />
       )}
 
-      {upNextEvent && (
-        <UpNextCard
-          event={upNextEvent}
-          onClick={() => onItemClick(upNextEvent)}
-        />
+      {showExpandedNextUp && nextUpEvent && nextUpTimer && (
+        <div className="animate-[fadeSlideIn_0.5s_ease-out]">
+          <NextUpCard
+            event={nextUpEvent}
+            timer={nextUpTimer}
+            variant="expanded"
+            onEventClick={() => onItemClick(nextUpEvent)}
+          />
+        </div>
       )}
 
       <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 px-4 py-3">
