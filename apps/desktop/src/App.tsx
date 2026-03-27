@@ -362,8 +362,8 @@ export function App() {
     showTokenUsage ? omnibar.sessionId : null,
   );
 
-  // Track whether spotlight should open with search pre-selected (Cmd+F)
-  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
+  // Track whether spotlight should open with a tool pre-selected (Cmd+F → search, Cmd+T/N → create)
+  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | "create" | null>(null);
 
   // Global Cmd+K / Ctrl+K listener for spotlight
   useEffect(() => {
@@ -386,6 +386,18 @@ export function App() {
           omnibar.close();
         } else {
           setSpotlightInitialAction("search");
+          omnibar.open("spotlight");
+          setSelectedItem(null);
+          setIsDetailOpen(false);
+        }
+      }
+      // Cmd+T / Cmd+N opens spotlight with new task pre-selected
+      if ((e.metaKey || e.ctrlKey) && (e.key === "t" || e.key === "n")) {
+        e.preventDefault();
+        if (omnibar.isOpen && omnibar.mode === "spotlight") {
+          omnibar.close();
+        } else {
+          setSpotlightInitialAction("create");
           omnibar.open("spotlight");
           setSelectedItem(null);
           setIsDetailOpen(false);
