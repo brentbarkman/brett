@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { X, RefreshCw, Loader2, Settings } from "lucide-react";
 
 interface OverdueItem {
@@ -71,15 +71,10 @@ function fuzzyMatchItem(text: string, items: BriefingItem[]): BriefingItem | und
 
 function renderBriefingLine(
   text: string,
+  titleMap: Map<string, BriefingItem>,
   items: BriefingItem[],
   onItemClick?: (id: string) => void,
 ): React.ReactNode {
-  // Build a lookup of lowercase title → item for exact matching
-  const titleMap = new Map<string, BriefingItem>();
-  for (const item of items) {
-    titleMap.set(item.title.toLowerCase(), item);
-  }
-
   function matchItem(text: string): BriefingItem | undefined {
     return titleMap.get(text.toLowerCase()) ?? fuzzyMatchItem(text, items);
   }
@@ -129,6 +124,19 @@ function renderBriefingLine(
   });
 }
 
+function BriefingSkeleton({ rows }: { rows: number }) {
+  return (
+    <div className="space-y-2.5">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-start gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
+          <div className={`bg-white/5 animate-pulse rounded-lg h-3.5 ${i === 0 ? "w-full" : i === 1 ? "w-5/6" : "w-2/3"}`} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function DailyBriefing({
   content,
   isGenerating,
@@ -148,21 +156,23 @@ export function DailyBriefing({
     return () => clearTimeout(timer);
   }, []);
 
+  const titleMap = useMemo(
+    () => new Map(knownItems.map(item => [item.title.toLowerCase(), item])),
+    [knownItems],
+  );
+
   const renderLine = useCallback(
-    (text: string) => renderBriefingLine(text, knownItems, onItemClick),
-    [knownItems, onItemClick],
+    (text: string) => renderBriefingLine(text, titleMap, knownItems, onItemClick),
+    [titleMap, knownItems, onItemClick],
   );
 
   // Parse AI content into bullet points
-  const bulletItems = content
-    ? content
-        .split("\n")
-        .map((line) => line.replace(/^[-*•]\s*/, "").trim())
-        .filter((line) => line.length > 0)
-    : [];
-
-  const showAIBriefing = hasAI;
-  const showStaticFallback = !hasAI;
+  const bulletItems = useMemo(
+    () => content
+      ? content.split("\n").map((line) => line.replace(/^[-*•]\s*/, "").trim()).filter((line) => line.length > 0)
+      : [],
+    [content],
+  );
 
   // Check if the day is completely empty
   const isDayEmpty =
@@ -212,7 +222,7 @@ export function DailyBriefing({
       </div>
 
       {/* AI briefing content */}
-      {showAIBriefing && (
+      {hasAI && (
         <>
           {isError ? (
             <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
@@ -236,20 +246,7 @@ export function DailyBriefing({
               ))}
             </ul>
           ) : (
-            <div className="space-y-2.5">
-              <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
-                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-full" />
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
-                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-5/6" />
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
-                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-2/3" />
-              </div>
-            </div>
+            <BriefingSkeleton rows={3} />
           )}
           {generatedAt && !isGenerating && (
             <p className="mt-3 text-[10px] text-white/20">
@@ -264,19 +261,10 @@ export function DailyBriefing({
       )}
 
       {/* Static fallback (no AI) */}
-      {showStaticFallback && (
+      {!hasAI && (
         <div className="space-y-3">
           {!summary ? (
-            <div className="space-y-2.5">
-              <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
-                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-3/4" />
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
-                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-1/2" />
-              </div>
-            </div>
+            <BriefingSkeleton rows={2} />
           ) : isDayEmpty ? (
             <p className="text-sm text-white/60">
               Nothing on the books today. A rare opening — use it well.

@@ -66,6 +66,7 @@ export interface AssembledContext {
 const VALID_VIEWS = ["today", "upcoming", "inbox", "settings", "calendar"];
 const CUID_PATTERN = /^[a-z0-9]{20,30}$/;
 const MAX_FACTS = AI_CONFIG.context.maxFacts;
+const VALID_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
 
 // ─── Helpers ───
 
@@ -308,7 +309,6 @@ async function assembleBriefing(
   }
 
   // Validate timezone for system prompt (defense-in-depth)
-  const VALID_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
   const safeTimezone = VALID_TIMEZONES.has(timezone) ? timezone : "UTC";
 
   const system =

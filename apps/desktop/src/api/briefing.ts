@@ -92,6 +92,15 @@ export function useBriefing() {
     setIsGenerating(false);
   }, []);
 
+  // Cleanup: abort any in-flight generation on unmount
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+    };
+  }, []);
+
   // Auto-generate on first app open if no cached briefing
   useEffect(() => {
     if (

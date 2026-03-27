@@ -1,7 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Globe, Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
+
+const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+const commonTimezones = [
+  "America/Los_Angeles",
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Asia/Shanghai",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+];
 
 export function TimezoneSection() {
   const qc = useQueryClient();
@@ -28,29 +48,10 @@ export function TimezoneSection() {
     }
   }, [user]);
 
-  const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  const commonTimezones = [
-    "America/Los_Angeles",
-    "America/Denver",
-    "America/Chicago",
-    "America/New_York",
-    "America/Sao_Paulo",
-    "Europe/London",
-    "Europe/Paris",
-    "Europe/Berlin",
-    "Asia/Dubai",
-    "Asia/Kolkata",
-    "Asia/Singapore",
-    "Asia/Tokyo",
-    "Asia/Shanghai",
-    "Australia/Sydney",
-    "Pacific/Auckland",
-  ];
-
-  const allTimezones = [
-    ...new Set([detectedTz, selectedTz, ...commonTimezones]),
-  ].sort();
+  const allTimezones = useMemo(
+    () => [...new Set([detectedTz, selectedTz, ...commonTimezones])].sort(),
+    [selectedTz],
+  );
 
   async function handleSave(tz: string, auto: boolean) {
     setSaving(true);

@@ -43,24 +43,19 @@ users.patch("/timezone", authMiddleware, async (c) => {
     return c.json({ error: "Invalid timezone" }, 400);
   }
 
-  if (body.auto !== undefined && typeof body.auto !== "boolean") {
-    return c.json({ error: "auto must be a boolean" }, 400);
+  if (typeof body.auto !== "boolean") {
+    return c.json({ error: "auto is required and must be a boolean" }, 400);
   }
-
-  if (body.auto === undefined) {
-    return c.json({ error: "auto is required" }, 400);
-  }
-  const autoValue = body.auto;
 
   await prisma.user.update({
     where: { id: user.id },
     data: {
       timezone: body.timezone,
-      timezoneAuto: autoValue,
+      timezoneAuto: body.auto,
     },
   });
 
-  return c.json({ timezone: body.timezone, timezoneAuto: autoValue });
+  return c.json({ timezone: body.timezone, timezoneAuto: body.auto });
 });
 
 export { users };

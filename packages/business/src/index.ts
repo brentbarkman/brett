@@ -74,25 +74,31 @@ function getTimezoneOffsetMs(timezone: string, at: Date): number {
   return tzMs - utcMs;
 }
 
+const dtfCache = new Map<string, Intl.DateTimeFormat>();
+
 function getDateParts(date: Date, timezone: string): {
   year: number; month: number; day: number; hour: number; minute: number;
 } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: false,
-  }).formatToParts(date);
-
+  let fmt = dtfCache.get(timezone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    });
+    dtfCache.set(timezone, fmt);
+  }
+  const parts = fmt.formatToParts(date);
   const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
   return {
     year: get("year"),
     month: get("month"),
     day: get("day"),
-    hour: get("hour") === 24 ? 0 : get("hour"), // Some engines format midnight as 24 in 24h mode
+    hour: get("hour") === 24 ? 0 : get("hour"),
     minute: get("minute"),
   };
 }
