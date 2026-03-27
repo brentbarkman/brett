@@ -7,6 +7,7 @@ import {
   BRETTS_TAKE_SYSTEM_PROMPT,
 } from "./system-prompts.js";
 import { AI_CONFIG } from "../config.js";
+import { getUserDayBounds } from "@brett/business";
 
 // ─── Input types ───
 
@@ -30,6 +31,7 @@ interface BrettThreadContext {
 interface BriefingContext {
   type: "briefing";
   userId: string;
+  timezone: string;
 }
 
 interface BrettsTakeContext {
@@ -285,17 +287,27 @@ async function assembleBriefing(
 ): Promise<AssembledContext> {
   const facts = await loadUserFacts(prisma, input.userId);
 
-  const system =
-    BRIEFING_SYSTEM_PROMPT + formatFacts(facts) + currentDateLine();
-
-  // Load today's data
+  // Validate timezone at point-of-use (defense-in-depth)
+  const timezone = input.timezone;
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const endOfDay = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1
-  );
+  let currentDate: string;
+  try {
+    currentDate = now.toLocaleDateString("en-CA", { timeZone: timezone });
+  } catch {
+    currentDate = now.toLocaleDateString("en-CA", { timeZone: "UTC" });
+  }
+
+  // Validate timezone for system prompt (defense-in-depth)
+  const VALID_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
+  const safeTimezone = VALID_TIMEZONES.has(timezone) ? timezone : "UTC";
+
+  const system =
+    BRIEFING_SYSTEM_PROMPT +
+    formatFacts(facts) +
+    `\nCurrent date: ${currentDate}` +
+    `\nCurrent timezone: ${safeTimezone}`;
+
+  const { startOfDay, endOfDay } = getUserDayBounds(timezone, now);
 
   const [overdueTasks, dueTodayTasks, todayEvents] = await Promise.all([
     prisma.item.findMany({
@@ -339,13 +351,11 @@ async function assembleBriefing(
     }),
   ]);
 
-  // Build data block for the user message
   const dataParts: string[] = [];
 
   if (overdueTasks.length > 0) {
     const lines = overdueTasks.map(
-      (t) =>
-        `- ${t.title} (due ${t.dueDate!.toISOString().split("T")[0]})`
+      (t) => `- ${t.title} (due ${t.dueDate!.toISOString().split("T")[0]})`
     );
     dataParts.push(`Overdue tasks:\n${lines.join("\n")}`);
   }
@@ -360,6 +370,7 @@ async function assembleBriefing(
       const start = e.startTime.toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
+        timeZone: timezone,
       });
       const attendeeStr = formatAttendees(e.attendees);
       return `- ${start}: ${e.title}${attendeeStr !== "None" ? ` (with ${attendeeStr})` : ""}`;
@@ -375,7 +386,7 @@ async function assembleBriefing(
   const messages: Message[] = [
     {
       role: "user",
-      content: `Generate my morning briefing based on the following data:\n\n<user_data label="briefing_data">\n${dataBlock}\n</user_data>`,
+      content: `Generate my daily briefing based on the following data:\n\n${wrapUserData("briefing_data", dataBlock)}`,
     },
   ];
 

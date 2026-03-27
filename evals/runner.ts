@@ -49,6 +49,13 @@ interface ParameterExtractionFixture {
   expectedParams: Record<string, unknown>;
 }
 
+interface BriefingQualityFixture {
+  name: string;
+  description: string;
+  inputData: string;
+  criteria: string[];
+}
+
 // ─── Result types ─────────────────────────────────────────────────────────────
 
 interface EvalResult {
@@ -274,6 +281,82 @@ async function runParameterExtraction(fixtures: ParameterExtractionFixture[]): P
   };
 }
 
+async function runBriefingQuality(fixtures: BriefingQualityFixture[]): Promise<SuiteResult> {
+  const { judgeQuality } = await import("./judge.js");
+  const results: EvalResult[] = [];
+  const timestamp = new Date().toISOString();
+  const briefingModel = resolveModel(providerName, "medium");
+
+  console.log(`\nRunning briefing-quality (${fixtures.length} cases)...\n`);
+
+  for (const fixture of fixtures) {
+    process.stdout.write(`  "${fixture.name}" → `);
+
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of provider.chat({
+      model: briefingModel,
+      messages: [
+        {
+          role: "user",
+          content: `Generate my daily briefing based on the following data:\n\n<user_data label="briefing_data">\n${fixture.inputData}\n</user_data>`,
+        },
+      ],
+      system:
+        "You are Brett generating a daily briefing. Stay in character: direct, specific, no filler.\n\n" +
+        "## Format\n- 3-5 bullet points, each one sentence.\n" +
+        "- Reference actual names, times, and attendees.\n" +
+        "- If the day is light, say so and suggest an action.\n" +
+        "- If the day is heavy, end with a prioritization suggestion.\n\n" +
+        "## Rules\n- Skip empty categories.\n- Never invent data.\n- Under 120 words.",
+      maxTokens: 512,
+      temperature: 0,
+    })) {
+      chunks.push(chunk);
+    }
+
+    const output = chunks
+      .filter((c) => c.type === "text")
+      .map((c) => (c as { type: "text"; content: string }).content)
+      .join("");
+
+    const judgeResult = await judgeQuality(output, fixture.criteria, provider, model);
+
+    const passed = judgeResult.passed;
+    const failedCriteria = Object.entries(judgeResult.scores)
+      .filter(([, v]) => !v)
+      .map(([k]) => k);
+
+    const note = passed
+      ? undefined
+      : `Failed: ${failedCriteria.join("; ")}`;
+
+    console.log(passed ? "PASS" : `FAIL — ${note}`);
+
+    results.push({
+      input: fixture.name,
+      expected: "all criteria pass",
+      actual: passed ? "all pass" : `${failedCriteria.length} failed`,
+      passed,
+      note,
+    });
+  }
+
+  const passed = results.filter((r) => r.passed).length;
+  const total = results.length;
+  const score = total > 0 ? passed / total : 0;
+
+  return {
+    suite: "briefing-quality",
+    provider: providerName,
+    model: briefingModel,
+    timestamp,
+    passed,
+    total,
+    score,
+    results,
+  };
+}
+
 // ─── Score persistence ────────────────────────────────────────────────────────
 
 function saveScores(suiteResults: SuiteResult[]): void {
@@ -346,6 +429,15 @@ async function main(): Promise<void> {
     const fixturePath = path.join(fixturesDir, "parameter-extraction.json");
     const fixtures = JSON.parse(fs.readFileSync(fixturePath, "utf-8")) as ParameterExtractionFixture[];
     suiteResults.push(await runParameterExtraction(fixtures));
+  }
+
+  // Briefing quality
+  if (!suiteFilter || suiteFilter === "briefing-quality") {
+    const fixturePath = path.join(fixturesDir, "briefing-quality.json");
+    if (fs.existsSync(fixturePath)) {
+      const fixtures = JSON.parse(fs.readFileSync(fixturePath, "utf-8")) as BriefingQualityFixture[];
+      suiteResults.push(await runBriefingQuality(fixtures));
+    }
   }
 
   printSummary(suiteResults);

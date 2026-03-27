@@ -38,6 +38,65 @@ export function getEndOfWeekUTC(now: Date = new Date()): Date {
   return new Date(today.getTime() + daysUntilSunday * 86400000);
 }
 
+/**
+ * Returns UTC Date objects representing start/end of "today" in the given IANA timezone.
+ * All downstream date queries should use these bounds — never local `new Date()` math.
+ */
+export function getUserDayBounds(
+  timezone: string,
+  now: Date = new Date()
+): { startOfDay: Date; endOfDay: Date } {
+  // Get the calendar date in the user's timezone (e.g., "2026-03-26")
+  const dateStr = now.toLocaleDateString("en-CA", { timeZone: timezone });
+  const [year, month, day] = dateStr.split("-").map(Number);
+
+  // Convert that calendar day's midnight back to UTC using the timezone offset
+  const utcMidnight = new Date(Date.UTC(year, month - 1, day));
+  const offsetMs = getTimezoneOffsetMs(timezone, utcMidnight);
+  const startOfDay = new Date(utcMidnight.getTime() - offsetMs);
+
+  // Next day's midnight (offset may differ due to DST transitions)
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const offsetMsNext = getTimezoneOffsetMs(timezone, nextDay);
+  const endOfDay = new Date(nextDay.getTime() - offsetMsNext);
+
+  return { startOfDay, endOfDay };
+}
+
+/** Get the UTC offset in ms for a timezone at a given instant */
+function getTimezoneOffsetMs(timezone: string, at: Date): number {
+  const utcParts = getDateParts(at, "UTC");
+  const tzParts = getDateParts(at, timezone);
+
+  const utcMs = Date.UTC(utcParts.year, utcParts.month - 1, utcParts.day, utcParts.hour, utcParts.minute);
+  const tzMs = Date.UTC(tzParts.year, tzParts.month - 1, tzParts.day, tzParts.hour, tzParts.minute);
+
+  return tzMs - utcMs;
+}
+
+function getDateParts(date: Date, timezone: string): {
+  year: number; month: number; day: number; hour: number; minute: number;
+} {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour") === 24 ? 0 : get("hour"), // Some engines format midnight as 24 in 24h mode
+    minute: get("minute"),
+  };
+}
+
 export function computeUrgency(
   dueDate: Date | null,
   dueDatePrecision: DueDatePrecision | null,

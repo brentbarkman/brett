@@ -23,7 +23,7 @@ import { getCalendarEventsSkill } from "./get-calendar-events.js";
 import { getNextEventSkill } from "./get-next-event.js";
 
 // Brett Intelligence
-import { morningBriefingSkill } from "./morning-briefing.js";
+import { dailyBriefingSkill } from "./daily-briefing.js";
 import { brettsTakeSkill } from "./bretts-take.js";
 import { upNextSkill } from "./up-next.js";
 import { recallMemorySkill } from "./recall-memory.js";
@@ -64,7 +64,7 @@ export function createRegistry(): SkillRegistry {
 
   // Brett Intelligence (4)
   // Registered when functional — placeholder skills pollute the tool list and confuse routing
-  // registry.register(morningBriefingSkill);
+  // registry.register(dailyBriefingSkill);
   // registry.register(brettsTakeSkill);
   registry.register(upNextSkill);
   // registry.register(recallMemorySkill);

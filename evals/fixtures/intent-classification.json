@@ -11,7 +11,6 @@
   { "type": "intent", "input": "search for anything about NVDA", "expectedSkill": "search_things" },
   { "type": "intent", "input": "add a new list called Work Projects", "expectedSkill": "create_list" },
   { "type": "intent", "input": "what's in my inbox", "expectedSkill": "list_inbox" },
-  { "type": "intent", "input": "give me my morning briefing", "expectedSkill": "morning_briefing" },
   { "type": "intent", "input": "save this article about AI safety", "expectedSkill": "create_content" },
   { "type": "intent", "input": "how many tasks do I have", "expectedSkill": "get_stats" },
   { "type": "intent", "input": "what do I have coming up this week", "expectedSkill": "list_upcoming" },

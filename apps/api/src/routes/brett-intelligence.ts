@@ -5,6 +5,17 @@ import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { registry } from "../lib/ai-registry.js";
 import { buildStream, sseResponse } from "../lib/ai-stream.js";
+import { getUserDayBounds } from "@brett/business";
+
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
+
+async function getUserTimezone(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  return user?.timezone ?? DEFAULT_TIMEZONE;
+}
 
 const brettIntelligence = new Hono<AIEnv>();
 
@@ -13,17 +24,17 @@ brettIntelligence.use("*", authMiddleware);
 
 // ─── GET /briefing — Get today's cached briefing ───
 
-brettIntelligence.get("/briefing", async (c) => {
+brettIntelligence.get("/briefing", rateLimiter(60), async (c) => {
   const user = c.get("user");
 
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const timezone = await getUserTimezone(user.id);
+  const { startOfDay, endOfDay } = getUserDayBounds(timezone);
 
   const session = await prisma.conversationSession.findFirst({
     where: {
       userId: user.id,
       source: "briefing",
-      createdAt: { gte: startOfDay },
+      createdAt: { gte: startOfDay, lt: endOfDay },
     },
     orderBy: { createdAt: "desc" },
     include: {
@@ -40,12 +51,74 @@ brettIntelligence.get("/briefing", async (c) => {
     return c.json({ briefing: null });
   }
 
+  const content = session.messages[0].content;
+  if (!content || !content.trim()) {
+    return c.json({ briefing: null });
+  }
+
   return c.json({
     briefing: {
       sessionId: session.id,
-      content: session.messages[0].content,
+      content,
       generatedAt: session.messages[0].createdAt.toISOString(),
     },
+  });
+});
+
+// ─── GET /briefing/summary — Lightweight counts, no AI required ───
+
+brettIntelligence.get("/briefing/summary", rateLimiter(30), async (c) => {
+  const user = c.get("user");
+
+  const timezone = await getUserTimezone(user.id);
+  const { startOfDay, endOfDay } = getUserDayBounds(timezone);
+
+  const [overdueCount, dueTodayCount, eventCount, overdueItems] =
+    await Promise.all([
+      prisma.item.count({
+        where: {
+          userId: user.id,
+          type: "task",
+          status: "active",
+          dueDate: { lt: startOfDay },
+        },
+      }),
+      prisma.item.count({
+        where: {
+          userId: user.id,
+          type: "task",
+          status: "active",
+          dueDate: { gte: startOfDay, lt: endOfDay },
+        },
+      }),
+      prisma.calendarEvent.count({
+        where: {
+          userId: user.id,
+          startTime: { gte: startOfDay, lt: endOfDay },
+          status: "confirmed",
+        },
+      }),
+      prisma.item.findMany({
+        where: {
+          userId: user.id,
+          type: "task",
+          status: "active",
+          dueDate: { lt: startOfDay },
+        },
+        select: { title: true, dueDate: true },
+        orderBy: { dueDate: "asc" },
+        take: 3,
+      }),
+    ]);
+
+  return c.json({
+    overdueTasks: overdueCount,
+    dueTodayTasks: dueTodayCount,
+    todayEvents: eventCount,
+    overdueItems: overdueItems.map((i) => ({
+      title: i.title,
+      dueDate: i.dueDate!.toISOString().split("T")[0],
+    })),
   });
 });
 
@@ -60,6 +133,8 @@ brettIntelligence.post(
     const provider = c.get("aiProvider");
     const providerName = c.get("aiProviderName");
 
+    const timezone = await getUserTimezone(user.id);
+
     const session = await prisma.conversationSession.create({
       data: {
         userId: user.id,
@@ -72,6 +147,7 @@ brettIntelligence.post(
     const input = {
       type: "briefing" as const,
       userId: user.id,
+      timezone,
     };
 
     const { stream } = buildStream(
@@ -185,7 +261,7 @@ brettIntelligence.post(
 
 // ─── GET /up-next — Next event + cached take ───
 
-brettIntelligence.get("/up-next", async (c) => {
+brettIntelligence.get("/up-next", rateLimiter(60), async (c) => {
   const user = c.get("user");
   const now = new Date();
 

@@ -26,7 +26,7 @@ All containers use the glass morphism pattern. Never use solid opaque background
 | Surface | Classes | Use |
 |---------|---------|-----|
 | **Card** | `bg-black/30 backdrop-blur-xl rounded-xl border border-white/10` | Primary containers (ThingsList, Calendar) |
-| **Elevated card** | `bg-black/40 backdrop-blur-md border-{color}-500/30` | Accent cards (MorningBriefing, UpNextCard) |
+| **Elevated card** | `bg-black/40 backdrop-blur-md border-{color}-500/30` | Accent cards (DailyBriefing, UpNextCard) |
 | **Overlay** | `bg-black/60 backdrop-blur-2xl` | Panels over content (DetailPanel) |
 | **Inline input** | `bg-transparent` or `bg-white/5` | Inputs within cards |
 | **Hover surface** | `hover:bg-white/10` | Interactive list items, buttons |
@@ -254,7 +254,7 @@ className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4"
 className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
 ```
 
-### Colored Accent Card (e.g., MorningBriefing)
+### Colored Accent Card (e.g., DailyBriefing)
 ```jsx
 className="bg-black/40 backdrop-blur-md rounded-xl border border-blue-500/30 p-4"
 // With optional glow:
