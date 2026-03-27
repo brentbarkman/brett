@@ -33,9 +33,9 @@ export function WeatherExpanded({ weather }: WeatherExpandedProps) {
     if (!container) return;
 
     const containerLeft = container.getBoundingClientRect().left;
-    const containerCenter = containerLeft + container.clientWidth / 3;
+    const containerCenter = containerLeft + container.clientWidth / 2;
 
-    // Find which day marker is closest to the left third of the viewport
+    // Find which day marker is closest to the center of the viewport
     let closestDay = todayStr;
     let closestDist = Infinity;
     for (const [day, el] of dayMarkerRefs.current) {
