@@ -9,8 +9,10 @@ import { LocationSection } from "./LocationSection";
 import { BriefingSection } from "./BriefingSection";
 import { AISection } from "./AISection";
 import { MemorySection } from "./MemorySection";
+import { ImportSection } from "./ImportSection";
 import { SignOutSection } from "./SignOutSection";
 import { DangerZoneSection } from "./DangerZoneSection";
+import { useAuth } from "../auth/AuthContext";
 
 interface SettingsPageProps {
   onBack: () => void;
@@ -18,6 +20,7 @@ interface SettingsPageProps {
 
 export function SettingsPage({ onBack }: SettingsPageProps) {
   const location = useLocation();
+  const { user } = useAuth();
 
   // Scroll to section if hash is present (e.g., /settings#ai-settings)
   useEffect(() => {
@@ -52,6 +55,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         <BriefingSection />
         <AISection />
         <MemorySection />
+        <ImportSection userId={user?.id ?? ""} />
         <SignOutSection />
         <DangerZoneSection />
       </div>

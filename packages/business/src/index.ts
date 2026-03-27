@@ -15,6 +15,7 @@ import type {
   UpdateListInput,
   BulkUpdateInput,
   UpcomingSection,
+  Things3ImportPayload,
 } from "@brett/types";
 import { RRule } from "rrule";
 
@@ -891,6 +892,105 @@ export function detectUrl(input: string): { isUrl: true; url: string } | { isUrl
 // ── Calendar validation ──
 
 export { validateRsvpInput, validateCalendarNoteInput } from "./calendar-validation";
+
+// ── Things 3 Import validation ──
+
+const MAX_IMPORT_TASKS = 10_000;
+const MAX_IMPORT_LISTS = 500;
+const MAX_LIST_NAME_LEN = 100;
+const MAX_TASK_TITLE_LEN = 500;
+const VALID_IMPORT_STATUSES = new Set(["active", "done"]);
+
+/** Check if a string looks like an ISO date (YYYY-MM-DD or YYYY-MM-DDTHH:...) */
+function isISODateString(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}(T.+)?$/.test(s) && !isNaN(Date.parse(s));
+}
+
+export function validateThings3Import(
+  input: unknown
+): { ok: true; data: Things3ImportPayload } | { ok: false; error: string } {
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Request body is required" };
+  }
+
+  const obj = input as Record<string, unknown>;
+
+  if (!Array.isArray(obj.lists)) {
+    return { ok: false, error: "lists must be an array" };
+  }
+  if (!Array.isArray(obj.tasks)) {
+    return { ok: false, error: "tasks must be an array" };
+  }
+  if (obj.tasks.length > MAX_IMPORT_TASKS) {
+    return { ok: false, error: `Cannot import more than ${MAX_IMPORT_TASKS} tasks` };
+  }
+  if (obj.lists.length > MAX_IMPORT_LISTS) {
+    return { ok: false, error: `Cannot import more than ${MAX_IMPORT_LISTS} lists` };
+  }
+
+  const lists: Things3ImportPayload["lists"] = [];
+  for (const item of obj.lists) {
+    if (!item || typeof item !== "object") {
+      return { ok: false, error: "Each list must be an object" };
+    }
+    const l = item as Record<string, unknown>;
+    if (typeof l.name !== "string" || l.name.trim() === "") {
+      return { ok: false, error: "Each list must have a non-empty name" };
+    }
+    if (typeof l.thingsUuid !== "string" || l.thingsUuid.trim() === "") {
+      return { ok: false, error: "Each list must have a thingsUuid" };
+    }
+    lists.push({
+      name: l.name.trim().slice(0, MAX_LIST_NAME_LEN),
+      thingsUuid: l.thingsUuid.trim(),
+    });
+  }
+
+  const tasks: Things3ImportPayload["tasks"] = [];
+  for (const item of obj.tasks) {
+    if (!item || typeof item !== "object") {
+      return { ok: false, error: "Each task must be an object" };
+    }
+    const t = item as Record<string, unknown>;
+    if (typeof t.title !== "string") {
+      return { ok: false, error: "Each task must have a title string" };
+    }
+    if (t.title === "") {
+      return { ok: false, error: "Each task must have a non-empty title" };
+    }
+    const title = t.title.trim().slice(0, MAX_TASK_TITLE_LEN);
+    if (title === "") continue;
+
+    if (typeof t.status !== "string" || !VALID_IMPORT_STATUSES.has(t.status)) {
+      return { ok: false, error: `Invalid task status: ${String(t.status)}` };
+    }
+
+    const task: Things3ImportPayload["tasks"][number] = {
+      title,
+      status: t.status as "active" | "done",
+    };
+
+    if (typeof t.notes === "string" && t.notes.trim() !== "") {
+      task.notes = t.notes.slice(0, 100_000); // 100KB cap
+    }
+    if (typeof t.dueDate === "string" && isISODateString(t.dueDate)) {
+      task.dueDate = t.dueDate;
+    }
+    if (typeof t.completedAt === "string" && isISODateString(t.completedAt)) {
+      task.completedAt = t.completedAt;
+    }
+    if (typeof t.createdAt === "string" && isISODateString(t.createdAt)) {
+      task.createdAt = t.createdAt;
+    }
+    if (typeof t.thingsProjectUuid === "string" && t.thingsProjectUuid.trim() !== "") {
+      task.thingsProjectUuid = t.thingsProjectUuid.trim();
+    }
+
+    tasks.push(task);
+  }
+
+  return { ok: true, data: { lists, tasks } };
+}
 
 // ── Recurrence ──
 

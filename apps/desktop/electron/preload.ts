@@ -6,4 +6,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getToken: () => ipcRenderer.invoke("get-token"),
   clearToken: () => ipcRenderer.invoke("clear-token"),
   startGoogleOAuth: () => ipcRenderer.invoke("start-google-oauth"),
+  things3Scan: () => ipcRenderer.invoke("things3:scan"),
+  things3Import: () => ipcRenderer.invoke("things3:import"),
 });

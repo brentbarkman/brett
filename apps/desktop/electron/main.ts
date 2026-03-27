@@ -4,6 +4,7 @@ import crypto from "crypto";
 import path from "path";
 import { pathToFileURL } from "url";
 import Store from "electron-store";
+import { scanThings3, readThings3 } from "./things3";
 
 // #3: Load API URL from main process config — never accept from renderer
 // Reads from api-config.json generated at build time, falls back to env var
@@ -31,20 +32,8 @@ if (isDev) {
 
 const store = new Store<{ encryptedToken?: string }>();
 
-// Token storage IPC handlers
-ipcMain.handle("store-token", (_event, token: string) => {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(token);
-    store.set("encryptedToken", encrypted.toString("base64"));
-  } else if (isDev) {
-    // #6: Only allow unencrypted storage in dev
-    store.set("encryptedToken", token);
-  } else {
-    throw new Error("Secure storage is not available");
-  }
-});
-
-ipcMain.handle("get-token", () => {
+/** Read and decrypt the stored auth token. Returns null if not available. */
+function readStoredToken(): string | null {
   const stored = store.get("encryptedToken");
   if (!stored) return null;
 
@@ -60,13 +49,64 @@ ipcMain.handle("get-token", () => {
 
   if (isDev) return stored;
 
-  // #6: Production without encryption — clear stale unencrypted data
   store.delete("encryptedToken");
   return null;
+}
+
+// Token storage IPC handlers
+ipcMain.handle("store-token", (_event, token: string) => {
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(token);
+    store.set("encryptedToken", encrypted.toString("base64"));
+  } else if (isDev) {
+    // #6: Only allow unencrypted storage in dev
+    store.set("encryptedToken", token);
+  } else {
+    throw new Error("Secure storage is not available");
+  }
+});
+
+ipcMain.handle("get-token", () => {
+  return readStoredToken();
 });
 
 ipcMain.handle("clear-token", () => {
   store.delete("encryptedToken");
+});
+
+ipcMain.handle("things3:scan", () => {
+  try {
+    return scanThings3();
+  } catch (err: any) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle("things3:import", async () => {
+  try {
+    const payload = readThings3();
+
+    const authToken = readStoredToken();
+    if (!authToken) throw new Error("Not authenticated. Please sign in again.");
+
+    const res = await net.fetch(`${API_URL}/import/things3`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as any).error || `Import failed with status ${res.status}`);
+    }
+
+    return await res.json();
+  } catch (err: any) {
+    return { error: err.message };
+  }
 });
 
 // #5: Track in-progress OAuth to prevent concurrent flows
