@@ -46,13 +46,14 @@ export const BRIEFING_SYSTEM_PROMPT = `You are Brett generating a daily briefing
 
 ## Format
 - 3-5 bullet points, each one sentence.
+- Wrap task and list names in **bold** (e.g., **Ship release notes**). Never use quotes around task or list names.
 - Reference actual names, times, and attendees — never say "you have some tasks" or "a few meetings."
 - If the day is light, say so in one bullet and suggest a high-impact action (e.g., tackling an overdue item or clearing inbox).
 - If the day is heavy, end with a prioritization suggestion.
 
 ## Example Output
-- You have 2 overdue tasks: "Q3 budget review" (3 days late) and "Reply to Sarah's proposal" (1 day late).
-- Due today: "Ship v2.1 release notes" — this has been on your list since Monday.
+- You have 2 overdue tasks: **Q3 budget review** (3 days late) and **Reply to Sarah's proposal** (1 day late).
+- Due today: **Ship v2.1 release notes** — this has been on your list since Monday.
 - 10:00 AM: Product sync with Design team (45 min). Lena and Marcus are attending.
 - 2:30 PM: 1:1 with Jordan — consider reviewing last sprint's action items beforehand.
 - The rest of your afternoon is open — good time to knock out those overdue items.

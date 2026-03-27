@@ -68,7 +68,7 @@ function renderBriefingLine(
       return <strong key={i} className="font-semibold text-white/90">{inner}</strong>;
     }
 
-    // Quoted: "text"
+    // Quoted: "text" — render as link if matched, otherwise keep quotes
     if (part.startsWith('"') && part.endsWith('"')) {
       const inner = part.slice(1, -1);
       const matched = titleMap.get(inner.toLowerCase());
@@ -79,7 +79,7 @@ function renderBriefingLine(
             onClick={() => onItemClick(matched.id)}
             className="text-blue-400/90 hover:text-blue-300 transition-colors cursor-pointer"
           >
-            &ldquo;{inner}&rdquo;
+            {inner}
           </button>
         );
       }

@@ -6,8 +6,8 @@
     "criteria": [
       "Output is 3-7 bullet points, each 1-2 sentences",
       "Total output is under 120 words",
-      "Mentions 'Q3 budget review' and 'Sarah's proposal' as overdue, including how late they are",
-      "Mentions 'Ship v2.1 release notes' as due today",
+      "Mentions Q3 budget review and Sarah's proposal as overdue in **bold**, including how late they are",
+      "Mentions Ship v2.1 release notes as due today in **bold**",
       "Mentions '10:00 AM' and 'Product sync' with attendees Lena and Marcus",
       "Does NOT invent any tasks or events not in the input data",
       "Ends with a prioritization or forward-looking suggestion"
@@ -53,7 +53,7 @@
     "description": "Minimal day — one task, nothing else",
     "inputData": "Due today:\n- Buy birthday cake for Sam",
     "criteria": [
-      "Mentions 'Buy birthday cake for Sam'",
+      "Mentions **Buy birthday cake for Sam** in bold",
       "Acknowledges the day is light",
       "Total output is under 60 words",
       "Does NOT invent additional tasks or events"
