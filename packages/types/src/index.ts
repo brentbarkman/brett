@@ -361,3 +361,34 @@ export type {
   GeocodingResult,
   LocationSettings,
 } from "./weather.js";
+
+// Things 3 Import
+export interface Things3ImportList {
+  name: string;
+  thingsUuid: string;
+}
+
+export interface Things3ImportTask {
+  title: string;
+  notes?: string;
+  dueDate?: string; // ISO 8601 date
+  status: "active" | "done";
+  completedAt?: string; // ISO 8601 datetime
+  createdAt?: string; // ISO 8601 datetime
+  thingsProjectUuid?: string; // resolves to listId server-side
+}
+
+export interface Things3ImportPayload {
+  lists: Things3ImportList[];
+  tasks: Things3ImportTask[];
+}
+
+export interface Things3ImportResult {
+  lists: number;
+  tasks: number;
+}
+
+export interface Things3ScanResult {
+  projects: number;
+  tasks: { active: number; completed: number };
+}
