@@ -136,3 +136,5 @@ export function googleColorToGlass(hex: string): CalendarGlassColor {
 export function getEventGlassColor(calendarColor: string | undefined | null): CalendarGlassColor {
   return googleColorToGlass(calendarColor ?? GOOGLE_DEFAULT_COLOR_HEX);
 }
+
+export { resolveTempUnit, convertTemp } from "./weather.js";
