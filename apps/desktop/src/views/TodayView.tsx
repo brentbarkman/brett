@@ -20,6 +20,7 @@ import {
   useToggleThing,
 } from "../api/things";
 import { useBriefing, useBriefingSummary } from "../api/briefing";
+import { usePreference } from "../api/preferences";
 import { mockEvents } from "../data/mockData";
 
 interface TodayViewProps {
@@ -32,7 +33,11 @@ interface TodayViewProps {
 
 export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
-  const [isBriefingVisible, setIsBriefingVisible] = useState(true);
+  const [briefingDismissedDate, setBriefingDismissedDate] = usePreference("briefingDismissedDate");
+
+  // Briefing is visible unless dismissed today
+  const today = new Date().toLocaleDateString("en-CA");
+  const isBriefingVisible = briefingDismissedDate !== today;
 
   // Auto-focus omnibar when landing on Today view
   useEffect(() => {
@@ -40,6 +45,18 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
       omnibarProps.onOpen();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cmd+Ctrl+B — debug shortcut to re-show dismissed briefing
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey && e.ctrlKey && e.key === "b") {
+        e.preventDefault();
+        setBriefingDismissedDate(null);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [setBriefingDismissedDate]);
 
   // Daily briefing (real data from AI, or empty if not configured)
   const briefing = useBriefing();
@@ -138,7 +155,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
           hasAI={briefing.hasAI}
           generatedAt={briefing.generatedAt}
           items={things.map((t) => ({ id: t.id, title: t.title }))}
-          onDismiss={() => setIsBriefingVisible(false)}
+          onDismiss={() => setBriefingDismissedDate(new Date().toLocaleDateString("en-CA"))}
           onRegenerate={briefing.regenerate}
           onItemClick={(id) => {
             const item = things.find((t) => t.id === id);

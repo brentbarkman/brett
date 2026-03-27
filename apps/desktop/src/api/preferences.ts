@@ -5,10 +5,13 @@ const PREFS_EVENT = "brett_preferences_changed";
 
 interface Preferences {
   showTokenUsage: boolean;
+  /** ISO date string (YYYY-MM-DD) of when the briefing was last dismissed */
+  briefingDismissedDate: string | null;
 }
 
 const DEFAULTS: Preferences = {
   showTokenUsage: false,
+  briefingDismissedDate: null,
 };
 
 export function getPreferences(): Preferences {
