@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Bot, Send, Search, Plus, Sparkles, X, Square } from "lucide-react";
+import { Bot, Send, Search, Plus, Sparkles, X, Square, Check } from "lucide-react";
 import { useClickOutside } from "./useClickOutside";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
-import type { DisplayHint } from "@brett/types";
+import { WeatherPill, WeatherPillSkeleton, WeatherPillEmpty } from "./WeatherPill";
+import { WeatherExpanded } from "./WeatherExpanded";
+import type { DisplayHint, WeatherData } from "@brett/types";
 
 export interface OmnibarMessage {
   role: "user" | "assistant";
@@ -48,6 +50,10 @@ export interface OmnibarProps {
   sessionId?: string | null;
   showTokenUsage?: boolean;
   sessionUsage?: { totalTokens: number } | null;
+  weather?: WeatherData | null;
+  weatherLoading?: boolean;
+  onWeatherClick?: () => void;
+  showWeatherExpanded?: boolean;
 }
 
 type Suggestion = {
@@ -81,6 +87,10 @@ export function Omnibar({
   sessionId,
   showTokenUsage,
   sessionUsage,
+  weather,
+  weatherLoading,
+  onWeatherClick,
+  showWeatherExpanded,
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +98,20 @@ export function Omnibar({
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
   const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
+  const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Animated close — fade out then unmount
+  const animateClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      setForcedAction(null);
+      setConfirmedTask(null);
+      onClose();
+    }, 150);
+  }, [isClosing, onClose]);
 
   // Intercept input changes to detect shortcut prefixes
   const handleInputChange = useCallback((value: string) => {
@@ -113,8 +137,7 @@ export function Omnibar({
     // user might be clicking on a task or elsewhere and wants to come back.
     // Only suggestions/search dropdowns should close on click-outside.
     if (isOpen && !isStreaming && messages.length === 0) {
-      setForcedAction(null);
-      onClose();
+      animateClose();
     }
   }, isOpen);
 
@@ -144,10 +167,19 @@ export function Omnibar({
     setSelectedSearchIdx(-1);
   }, [searchResults]);
 
+  // Auto-dismiss task confirmation
+  useEffect(() => {
+    if (!confirmedTask) return;
+    const timer = setTimeout(() => {
+      animateClose();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [confirmedTask, animateClose]);
+
   const hasConversation = messages.length > 0;
 
-  const showSuggestions = isOpen && (input.trim().length > 0 || forcedAction !== null) && !hasConversation;
-  const showSearchResults = isOpen && !hasConversation && !showSuggestions && (isSearching || (searchResults !== null && searchResults !== undefined));
+  const showSuggestions = isOpen && (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
+  const showSearchResults = isOpen && !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));
   const visibleResults = searchResults?.slice(0, 8) ?? [];
 
   // Build suggestions
@@ -193,32 +225,51 @@ export function Omnibar({
     }
   }
 
+  const handleCreateTask = useCallback((title: string) => {
+    onCreateTask(title);
+    onInputChange("");
+    setConfirmedTask(title);
+  }, [onCreateTask, onInputChange]);
+
   const handleSuggestionSelect = useCallback(
     (suggestion: Suggestion) => {
       setForcedAction(null);
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "create") {
-        onCreateTask(input);
+        handleCreateTask(input);
       } else if (suggestion.action === "search") {
         onSearch(input);
       }
     },
-    [input, onSend, onCreateTask, onSearch]
+    [input, onSend, handleCreateTask, onSearch]
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        setForcedAction(null);
-        onClose();
+        // Layered dismiss: weather → conversation → forced action → omnibar
+        if (showWeatherExpanded && onWeatherClick) {
+          onWeatherClick();
+          return;
+        }
+        if (hasConversation && onReset) {
+          onReset();
+          return;
+        }
+        if (forcedAction) {
+          setForcedAction(null);
+          onInputChange("");
+          return;
+        }
+        animateClose();
         return;
       }
 
       // Tab out of omnibar — close it so keyboard nav can take over the list
       if (e.key === "Tab" && !showSuggestions && !showSearchResults) {
-        onClose();
+        animateClose();
         return; // let default Tab behavior move focus
       }
 
@@ -274,17 +325,17 @@ export function Omnibar({
           if (forcedAction === "search") {
             onSearch(input);
           } else if (forcedAction === "create") {
-            onCreateTask(input);
+            handleCreateTask(input);
           } else if (hasAI) {
             onSend(input);
           } else {
             // No AI: default Enter creates a task
-            onCreateTask(input);
+            handleCreateTask(input);
           }
         }
       }
     },
-    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, onCreateTask, onSearch, onClose]
+    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, handleCreateTask, onSearch, animateClose, onInputChange, showWeatherExpanded, onWeatherClick, hasConversation, onReset]
   );
 
   return (
@@ -292,7 +343,7 @@ export function Omnibar({
       {/* Top Pill / Input Area */}
       <div
         className={`
-          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-300 ease-in-out
+          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-300 ease-in-out overflow-hidden
           ${isOpen ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-white/10 hover:border-white/20"}
           ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
         `}
@@ -321,16 +372,122 @@ export function Omnibar({
               data-1p-ignore
               autoComplete="off"
             />
+            {/* Weather pill */}
+            {weatherLoading && <WeatherPillSkeleton />}
+            {!weatherLoading && weather && onWeatherClick && (
+              <WeatherPill
+                current={weather.current}
+                isActive={showWeatherExpanded ?? false}
+                onClick={onWeatherClick}
+              />
+            )}
+            {!weatherLoading && !weather && onNavigateToSettings && (
+              <WeatherPillEmpty onClick={() => { onNavigateToSettings(); onClose(); }} />
+            )}
             {!isOpen && (
-              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 ml-1.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
                 <span>&#8984;</span>K
               </kbd>
             )}
           </div>
         )}
 
-        {/* AI Upsell — shown when open, no input, no AI configured */}
-        {isOpen && !hasAI && !input.trim() && !hasConversation && !showSearchResults && (
+        {/* Expanded content — animates out on close */}
+        <div className={`transition-all duration-150 ease-out origin-top ${
+          isClosing ? "opacity-0 scale-y-95 -translate-y-1" : ""
+        }`}>
+          {/* Suggestions — inline */}
+          {showSuggestions && (
+            <div className="border-t border-white/10">
+              {suggestions.map((suggestion, i) => (
+                <button
+                  key={suggestion.id}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                    i === selectedSuggestion
+                      ? "bg-white/10 text-white"
+                      : "text-white/70 hover:bg-white/5"
+                  }`}
+                  onClick={() => handleSuggestionSelect(suggestion)}
+                  onMouseEnter={() => setSelectedSuggestion(i)}
+                >
+                  {suggestion.icon}
+                  <span className="truncate">{suggestion.label}</span>
+                  {suggestion.shortcut && (
+                    <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+                      {suggestion.shortcut}
+                    </kbd>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Search Results — inline */}
+          {showSearchResults && (
+            <div className="border-t border-white/10">
+              {isSearching ? (
+                <div className="px-4 py-3 text-sm text-white/40 flex items-center gap-2">
+                  <div className="w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
+                  Searching...
+                </div>
+              ) : visibleResults.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-white/40">
+                  No results found.
+                </div>
+              ) : (
+                <div className="max-h-[320px] overflow-y-auto scrollbar-hide">
+                  {visibleResults.map((item, i) => (
+                    <button
+                      key={item.id}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                        i === selectedSearchIdx
+                          ? "bg-white/10 text-white"
+                          : "text-white/80 hover:bg-white/5"
+                      }`}
+                      onClick={() => onSearchResultClick?.(item.id)}
+                      onMouseEnter={() => setSelectedSearchIdx(i)}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
+                      }`} />
+                      <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
+                        {item.type === "content" ? (item.contentType || "content") : "task"}
+                      </span>
+                      <span className="truncate">{item.title}</span>
+                      <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
+                        {item.listName || "Inbox"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Task Created — inline confirmation */}
+          {confirmedTask && (
+            <div className="border-t border-white/10">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-6 h-6 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center flex-shrink-0">
+                  <Check size={12} className="text-green-400" />
+                </div>
+                <div>
+                  <div className="text-sm text-white/85 font-medium">{confirmedTask}</div>
+                  <div className="text-[11px] text-white/35">Added to Inbox</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Weather Expanded View — hide when user is interacting with omnibar */}
+          {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && !confirmedTask && (
+            <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
+              <WeatherExpanded weather={weather} />
+            </div>
+          )}
+
+          {/* AI Upsell — shown when open, no input, no AI configured */}
+          {isOpen && !hasAI && !input.trim() && !hasConversation && !showSearchResults && !confirmedTask && (
           <div className="border-t border-white/10 px-4 py-3">
             <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
               <Sparkles size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
@@ -350,6 +507,7 @@ export function Omnibar({
             </div>
           </div>
         )}
+        </div>
 
         {/* Conversation Area — replaces the top bar entirely */}
         {isOpen && hasConversation && (
@@ -426,76 +584,6 @@ export function Omnibar({
         )}
       </div>
 
-      {/* Suggestions Dropdown */}
-      {showSuggestions && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden shadow-xl">
-          {suggestions.map((suggestion, i) => (
-            <button
-              key={suggestion.id}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                i === selectedSuggestion
-                  ? "bg-white/10 text-white"
-                  : "text-white/70 hover:bg-white/5"
-              }`}
-              onClick={() => handleSuggestionSelect(suggestion)}
-              onMouseEnter={() => setSelectedSuggestion(i)}
-            >
-              {suggestion.icon}
-              <span className="truncate">{suggestion.label}</span>
-              {suggestion.shortcut && (
-                <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
-                  {suggestion.shortcut}
-                </kbd>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Search Results Dropdown */}
-      {showSearchResults && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden shadow-xl">
-          {isSearching ? (
-            <div className="px-4 py-3 text-sm text-white/40 flex items-center gap-2">
-              <div className="w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
-              Searching...
-            </div>
-          ) : visibleResults.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-white/40">
-              No results found.
-            </div>
-          ) : (
-            <>
-              <div className="px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-white/30 border-b border-white/5">
-                {searchResults!.length} result{searchResults!.length === 1 ? "" : "s"}
-              </div>
-              {visibleResults.map((item, i) => (
-                <button
-                  key={item.id}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                    i === selectedSearchIdx
-                      ? "bg-white/10 text-white"
-                      : "text-white/80 hover:bg-white/5"
-                  }`}
-                  onClick={() => onSearchResultClick?.(item.id)}
-                  onMouseEnter={() => setSelectedSearchIdx(i)}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
-                  }`} />
-                  <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
-                    {item.type === "content" ? (item.contentType || "content") : "task"}
-                  </span>
-                  <span className="truncate">{item.title}</span>
-                  <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
-                    {item.listName || "Inbox"}
-                  </span>
-                </button>
-              ))}
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -19,6 +19,12 @@ model User {
   updatedAt     DateTime  @updatedAt
   timezone      String   @default("America/Los_Angeles")
   timezoneAuto  Boolean  @default(true)
+  city            String?
+  countryCode     String?   // ISO 3166-1 alpha-2, e.g. "US" — for resolving tempUnit "auto"
+  latitude        Float?
+  longitude       Float?
+  tempUnit        String   @default("auto")
+  weatherEnabled  Boolean  @default(true)
   sessions      Session[]
   accounts      Account[]
   lists         List[]
@@ -34,6 +40,7 @@ model User {
   facts                UserFact[]
   conversationEmbeddings ConversationEmbedding[]
   usageLogs            AIUsageLog[]
+  weatherCache         WeatherCache?
 }
 
 model Session {
@@ -376,4 +383,18 @@ model AIUsageLog {
 
   @@index([userId, createdAt])
   @@index([userId, provider, createdAt])
+}
+
+// ── Weather tables ──
+
+model WeatherCache {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  fetchedAt DateTime
+  expiresAt DateTime
+  current   Json
+  hourly    Json
+  daily     Json
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

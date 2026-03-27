@@ -60,6 +60,7 @@ import { useTimezoneSync } from "./api/timezone";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
 import { usePreference } from "./api/preferences";
+import { useWeather } from "./api/weather";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
@@ -334,6 +335,10 @@ export function App() {
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
 
+  // Weather state for omnibar pill
+  const { weather, isLoading: weatherLoading } = useWeather();
+  const [showWeatherExpanded, setShowWeatherExpanded] = useState(false);
+
   // Token usage tracking — reactive to Settings toggle
   const [showTokenUsage] = usePreference("showTokenUsage");
   const { data: sessionUsageData } = useSessionUsage(
@@ -425,7 +430,7 @@ export function App() {
           omnibar.close();
         }
       },
-      onClose: omnibar.close,
+      onClose: () => { omnibar.close(); setShowWeatherExpanded(false); },
       onOpen: () => { omnibar.open("bar"); setSelectedItem(null); setIsDetailOpen(false); },
       onCancel: omnibar.cancel,
       onReset: omnibar.reset,
@@ -433,8 +438,12 @@ export function App() {
       sessionId: omnibar.sessionId,
       showTokenUsage,
       sessionUsage: sessionUsageData ?? null,
+      weather,
+      weatherLoading,
+      showWeatherExpanded,
+      onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
     }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData]
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherLoading, showWeatherExpanded]
   );
 
   // Apply dark mode to root

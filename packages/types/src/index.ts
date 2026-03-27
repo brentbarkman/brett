@@ -352,3 +352,12 @@ export interface ScoutFinding {
   description: string;
   timestamp: string;
 }
+
+export type {
+  WeatherCurrent,
+  WeatherHourly,
+  WeatherDaily,
+  WeatherData,
+  GeocodingResult,
+  LocationSettings,
+} from "./weather.js";

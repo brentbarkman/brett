@@ -8,6 +8,7 @@ import {
 } from "./system-prompts.js";
 import { AI_CONFIG } from "../config.js";
 import { getUserDayBounds } from "@brett/business";
+import { resolveTempUnit, convertTemp } from "@brett/utils";
 
 // ─── Input types ───
 
@@ -319,7 +320,7 @@ async function assembleBriefing(
 
   const { startOfDay, endOfDay } = getUserDayBounds(timezone, now);
 
-  const [overdueTasksRaw, overdueCount, dueTodayTasks, todayEvents] = await Promise.all([
+  const [overdueTasksRaw, overdueCount, dueTodayTasks, todayEvents, weatherData] = await Promise.all([
     prisma.item.findMany({
       where: {
         userId: input.userId,
@@ -367,6 +368,18 @@ async function assembleBriefing(
       orderBy: { startTime: "asc" },
       take: 20,
     }),
+    prisma.weatherCache.findUnique({
+      where: { userId: input.userId },
+      select: { current: true, daily: true },
+    }).then(async (cache) => {
+      if (!cache) return null;
+      const user = await prisma.user.findUnique({
+        where: { id: input.userId },
+        select: { weatherEnabled: true, tempUnit: true, countryCode: true },
+      });
+      if (!user?.weatherEnabled) return null;
+      return { cache, tempUnit: user.tempUnit, countryCode: user.countryCode };
+    }),
   ]);
 
   const dataParts: string[] = [];
@@ -397,6 +410,25 @@ async function assembleBriefing(
       return `- ${start}: ${e.title}${attendeeStr !== "None" ? ` (with ${attendeeStr})` : ""}`;
     });
     dataParts.push(`Today's calendar:\n${lines.join("\n")}`);
+  }
+
+  if (weatherData) {
+    const current = weatherData.cache.current as Record<string, unknown>;
+    const dailyArr = weatherData.cache.daily as unknown[];
+    const daily = dailyArr?.[0] as Record<string, unknown> | undefined;
+
+    // Validate cached data shape before using
+    if (typeof current?.temp === "number" && typeof current?.condition === "string") {
+      const unit = resolveTempUnit(weatherData.tempUnit, weatherData.countryCode ?? undefined);
+      const unitLabel = unit === "fahrenheit" ? "F" : "C";
+      const convert = (t: number) => convertTemp(t, unit);
+
+      let weatherBlock = `Current weather: ${convert(current.temp as number)}\u00B0${unitLabel}, ${current.condition}`;
+      if (daily && typeof daily.high === "number" && typeof daily.low === "number") {
+        weatherBlock += `\nToday: High ${convert(daily.high as number)}\u00B0${unitLabel}, Low ${convert(daily.low as number)}\u00B0${unitLabel}, ${daily.precipProb ?? 0}% chance of rain`;
+      }
+      dataParts.push(weatherBlock);
+    }
   }
 
   const dataBlock =
