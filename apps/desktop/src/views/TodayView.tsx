@@ -126,9 +126,9 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
       : "has-things";
 
   const thingsContent = thingsLoading ? (
-    <SkeletonListView />
+    <SkeletonListView bare />
   ) : isEmpty ? (
-    <ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere={things.length > 0} allCompleted={false} lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />
+    <ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere={things.length > 0} allCompleted={false} inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />
   ) : allCompleted ? (
     <ThingsList
       things={filteredThings}
@@ -140,10 +140,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
       onTriageOpen={onTriageOpen}
       onFocusChange={onFocusChange}
       activeFilter={activeFilter}
+      bare
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
     />
   ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} />
+    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} bare />
   );
 
   return (
@@ -179,16 +180,18 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
         </div>
       )}
 
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 px-4 py-3">
-        <FilterPills
-          activeFilter={activeFilter}
-          onSelectFilter={setActiveFilter}
-        />
-      </div>
+      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+        <div className="pb-3">
+          <FilterPills
+            activeFilter={activeFilter}
+            onSelectFilter={setActiveFilter}
+          />
+        </div>
 
-      <CrossFade stateKey={thingsStateKey} exitMs={180} enterMs={280}>
-        {thingsContent}
-      </CrossFade>
+        <CrossFade stateKey={thingsStateKey} exitMs={180} enterMs={280}>
+          {thingsContent}
+        </CrossFade>
+      </div>
 
     </>
   );

@@ -18,9 +18,11 @@ interface ThingsListProps {
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
   header?: React.ReactNode;
   activeFilter?: string;
+  /** When true, skip the glass card wrapper (parent provides it) */
+  bare?: boolean;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare }: ThingsListProps) {
   // ── Deferred toggle: batch mutations so the list stays stable during rapid-fire ──
   const pendingToggles = useRef<Set<string>>(new Set());
   const freezeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,9 +106,11 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
   offset += grouped.this_week.length;
   const doneOffset = offset;
 
+  const cardClass = bare ? "" : "bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4";
+
   return (
     <div className="flex flex-col gap-4 pb-20">
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+      <div className={cardClass}>
         <div className="flex flex-col gap-4">
           {header && (
             <div

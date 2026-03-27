@@ -22,9 +22,9 @@ function SkeletonThingCard() {
 }
 
 /** Skeleton for a list/inbox view — header + add input + 3-4 item cards */
-export function SkeletonListView() {
+export function SkeletonListView({ bare }: { bare?: boolean } = {}) {
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+    <div className={bare ? "" : "bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4"}>
       {/* Header skeleton */}
       <div className="flex items-center gap-3 mb-4">
         <SkeletonBar className="w-5 h-5 rounded-full" />

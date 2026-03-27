@@ -10,7 +10,7 @@ const FILTERS: FilterType[] = ["All", "Tasks", "Content"];
 
 export function FilterPills({ activeFilter, onSelectFilter }: FilterPillsProps) {
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide w-full">
+    <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide w-full">
       {FILTERS.map((filter) => {
         const isActive = activeFilter === filter;
         return (
