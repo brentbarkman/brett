@@ -52,12 +52,14 @@ describe("findBestMatch", () => {
   });
 
   it("allows time overlap within 15-minute tolerance", () => {
+    // Candidate starts 10 min after meeting ends — no natural overlap,
+    // but within the 15-min tolerance window
     const candidates: MatchCandidate[] = [
       {
         id: "event-3",
         title: "Weekly Standup",
-        startTime: new Date("2026-03-27T14:10:00Z"),
-        endTime: new Date("2026-03-27T14:40:00Z"),
+        startTime: new Date("2026-03-27T14:40:00Z"),
+        endTime: new Date("2026-03-27T15:10:00Z"),
         attendees: [],
       },
     ];
