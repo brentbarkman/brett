@@ -1,0 +1,62 @@
+[
+  {
+    "name": "mixed_day",
+    "description": "Typical day with overdue, due today, and events",
+    "inputData": "Overdue tasks:\n- Q3 budget review (due 2026-03-23)\n- Reply to Sarah's proposal (due 2026-03-25)\n\nDue today:\n- Ship v2.1 release notes\n- Update team wiki\n\nToday's calendar:\n- 10:00 AM: Product sync with Design team (with Lena, Marcus)\n- 2:30 PM: 1:1 with Jordan\n- 4:00 PM: All-hands",
+    "criteria": [
+      "Output is 3-7 bullet points, each 1-2 sentences",
+      "Total output is under 120 words",
+      "Mentions 'Q3 budget review' and 'Sarah's proposal' as overdue, including how late they are",
+      "Mentions 'Ship v2.1 release notes' as due today",
+      "Mentions '10:00 AM' and 'Product sync' with attendees Lena and Marcus",
+      "Does NOT invent any tasks or events not in the input data",
+      "Ends with a prioritization or forward-looking suggestion"
+    ]
+  },
+  {
+    "name": "empty_day",
+    "description": "No tasks or events",
+    "inputData": "No tasks due and no calendar events today.",
+    "criteria": [
+      "Output acknowledges the day is light or clear",
+      "Does NOT invent any tasks or events",
+      "Total output is under 60 words",
+      "Suggests a productive action (e.g., tackling backlog, planning)"
+    ]
+  },
+  {
+    "name": "overdue_only",
+    "description": "Only overdue tasks, nothing else",
+    "inputData": "Overdue tasks:\n- Finish tax documents (due 2026-03-15)\n- Call dentist (due 2026-03-20)\n- Submit expense report (due 2026-03-24)",
+    "criteria": [
+      "Lists all 3 overdue tasks by name",
+      "Mentions how late each task is (days overdue)",
+      "Does NOT mention any calendar events or 'due today' tasks",
+      "Total output is under 120 words",
+      "Does NOT invent tasks not in the input"
+    ]
+  },
+  {
+    "name": "events_only",
+    "description": "Meeting-heavy day with no tasks",
+    "inputData": "Today's calendar:\n- 9:00 AM: Sprint planning (with Entire team)\n- 11:30 AM: Lunch with CEO (with Alexandra)\n- 1:00 PM: Design review\n- 3:00 PM: Interview — Senior Engineer candidate\n- 4:30 PM: Quick sync with VP Eng (with Chris)",
+    "criteria": [
+      "References all 5 meetings by name and time",
+      "Highlights the CEO lunch or interview as noteworthy",
+      "Does NOT mention any tasks",
+      "Total output is under 120 words",
+      "Ends with a time management suggestion given the packed day"
+    ]
+  },
+  {
+    "name": "single_task",
+    "description": "Minimal day — one task, nothing else",
+    "inputData": "Due today:\n- Buy birthday cake for Sam",
+    "criteria": [
+      "Mentions 'Buy birthday cake for Sam'",
+      "Acknowledges the day is light",
+      "Total output is under 60 words",
+      "Does NOT invent additional tasks or events"
+    ]
+  }
+]
