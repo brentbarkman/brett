@@ -44,6 +44,7 @@ function makeItem(overrides: Partial<ItemRecord> = {}): ItemRecord & { list: { n
     contentFavicon: null,
     contentDomain: null,
     contentMetadata: null,
+    granolaMeetingId: null,
     listId: "list-1",
     userId: "user-1",
     createdAt: new Date("2026-03-10T10:00:00Z"),

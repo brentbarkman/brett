@@ -84,6 +84,7 @@ export interface ItemRecord {
   contentFavicon: string | null;
   contentDomain: string | null;
   contentMetadata: Record<string, unknown> | null;
+  granolaMeetingId: string | null;
   listId: string | null;
   userId: string;
   createdAt: Date;
