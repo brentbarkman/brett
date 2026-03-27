@@ -386,6 +386,48 @@ export function Omnibar({
           </div>
         )}
 
+        {/* Search Results — inline */}
+        {showSearchResults && (
+          <div className="border-t border-white/10">
+            {isSearching ? (
+              <div className="px-4 py-3 text-sm text-white/40 flex items-center gap-2">
+                <div className="w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
+                Searching...
+              </div>
+            ) : visibleResults.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-white/40">
+                No results found.
+              </div>
+            ) : (
+              <div className="max-h-[320px] overflow-y-auto scrollbar-hide">
+                {visibleResults.map((item, i) => (
+                  <button
+                    key={item.id}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                      i === selectedSearchIdx
+                        ? "bg-white/10 text-white"
+                        : "text-white/80 hover:bg-white/5"
+                    }`}
+                    onClick={() => onSearchResultClick?.(item.id)}
+                    onMouseEnter={() => setSelectedSearchIdx(i)}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
+                    }`} />
+                    <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
+                      {item.type === "content" ? (item.contentType || "content") : "task"}
+                    </span>
+                    <span className="truncate">{item.title}</span>
+                    <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
+                      {item.listName || "Inbox"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Weather Expanded View — hide when user is interacting with omnibar */}
         {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && (
           <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
@@ -490,50 +532,6 @@ export function Omnibar({
         )}
       </div>
 
-      {/* Search Results Dropdown */}
-      {showSearchResults && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden shadow-xl">
-          {isSearching ? (
-            <div className="px-4 py-3 text-sm text-white/40 flex items-center gap-2">
-              <div className="w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
-              Searching...
-            </div>
-          ) : visibleResults.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-white/40">
-              No results found.
-            </div>
-          ) : (
-            <>
-              <div className="px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-white/30 border-b border-white/5">
-                {searchResults!.length} result{searchResults!.length === 1 ? "" : "s"}
-              </div>
-              {visibleResults.map((item, i) => (
-                <button
-                  key={item.id}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                    i === selectedSearchIdx
-                      ? "bg-white/10 text-white"
-                      : "text-white/80 hover:bg-white/5"
-                  }`}
-                  onClick={() => onSearchResultClick?.(item.id)}
-                  onMouseEnter={() => setSelectedSearchIdx(i)}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
-                  }`} />
-                  <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
-                    {item.type === "content" ? (item.contentType || "content") : "task"}
-                  </span>
-                  <span className="truncate">{item.title}</span>
-                  <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
-                    {item.listName || "Inbox"}
-                  </span>
-                </button>
-              ))}
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }
