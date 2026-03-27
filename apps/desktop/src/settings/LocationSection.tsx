@@ -143,7 +143,7 @@ export function LocationSection() {
           <>
             {/* City search */}
             <div className="space-y-1.5">
-              <div className="relative">
+              <div className="relative z-20">
                 <div className="relative">
                   <MapPin
                     size={13}
