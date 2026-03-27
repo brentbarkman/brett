@@ -4,6 +4,7 @@ import crypto from "crypto";
 import path from "path";
 import { pathToFileURL } from "url";
 import Store from "electron-store";
+import { scanThings3, readThings3 } from "./things3";
 
 // #3: Load API URL from main process config — never accept from renderer
 // Reads from api-config.json generated at build time, falls back to env var
@@ -67,6 +68,38 @@ ipcMain.handle("get-token", () => {
 
 ipcMain.handle("clear-token", () => {
   store.delete("encryptedToken");
+});
+
+ipcMain.handle("things3:scan", () => {
+  try {
+    return scanThings3();
+  } catch (err: any) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle("things3:import", async (_event, apiUrl: string, authToken: string) => {
+  try {
+    const payload = readThings3();
+
+    const res = await net.fetch(`${apiUrl}/import/things3`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as any).error || `Import failed with status ${res.status}`);
+    }
+
+    return await res.json();
+  } catch (err: any) {
+    return { error: err.message };
+  }
 });
 
 // #5: Track in-progress OAuth to prevent concurrent flows
