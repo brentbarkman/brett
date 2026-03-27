@@ -18,6 +18,7 @@ interface CalendarTimelineProps {
   date?: Date;
   onPrevDay?: () => void;
   onNextDay?: () => void;
+  onToday?: () => void;
 }
 
 interface ContextMenuState {
@@ -153,6 +154,7 @@ export function CalendarTimeline({
   date,
   onPrevDay,
   onNextDay,
+  onToday,
 }: CalendarTimelineProps) {
   // Empty state: real-looking timeline with ghost events + one live CTA at current time
   if (!isLoading && events.length === 0 && onConnect && onDismiss) {
@@ -401,7 +403,18 @@ export function CalendarTimeline({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <h2 className="text-white font-medium">{dateLabel}</h2>
+          {isDisplayToday ? (
+            <h2 className="text-white font-medium">{dateLabel}</h2>
+          ) : (
+            <button onClick={onToday} className="text-white font-medium hover:text-blue-400 transition-colors" title="Back to today">
+              {dateLabel}
+            </button>
+          )}
+          {!isDisplayToday && onToday && (
+            <button onClick={onToday} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium hover:bg-blue-500/25 transition-colors">
+              Today
+            </button>
+          )}
           {isDisplayToday && countdownText && countdownEvent && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/70 font-medium">
               {countdownText}
