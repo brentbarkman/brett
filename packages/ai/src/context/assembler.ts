@@ -309,7 +309,7 @@ async function assembleBriefing(
 
   const { startOfDay, endOfDay } = getUserDayBounds(timezone, now);
 
-  const [overdueTasks, dueTodayTasks, todayEvents] = await Promise.all([
+  const [overdueTasksRaw, overdueCount, dueTodayTasks, todayEvents] = await Promise.all([
     prisma.item.findMany({
       where: {
         userId: input.userId,
@@ -318,8 +318,16 @@ async function assembleBriefing(
         dueDate: { lt: startOfDay },
       },
       select: { title: true, dueDate: true },
-      orderBy: { dueDate: "asc" },
-      take: 20,
+      orderBy: { dueDate: "desc" },
+      take: 5,
+    }),
+    prisma.item.count({
+      where: {
+        userId: input.userId,
+        type: "task",
+        status: "active",
+        dueDate: { lt: startOfDay },
+      },
     }),
     prisma.item.findMany({
       where: {
@@ -353,11 +361,14 @@ async function assembleBriefing(
 
   const dataParts: string[] = [];
 
-  if (overdueTasks.length > 0) {
-    const lines = overdueTasks.map(
+  if (overdueCount > 0) {
+    const lines = overdueTasksRaw.map(
       (t) => `- ${t.title} (due ${t.dueDate!.toISOString().split("T")[0]})`
     );
-    dataParts.push(`Overdue tasks:\n${lines.join("\n")}`);
+    const header = overdueCount > overdueTasksRaw.length
+      ? `Overdue tasks (${overdueCount} total, showing ${overdueTasksRaw.length} most recent):`
+      : `Overdue tasks (${overdueCount}):`;
+    dataParts.push(`${header}\n${lines.join("\n")}`);
   }
 
   if (dueTodayTasks.length > 0) {

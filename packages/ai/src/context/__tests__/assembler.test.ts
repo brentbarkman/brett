@@ -27,6 +27,7 @@ function createMockPrisma() {
     item: {
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
     },
     calendarEvent: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -239,6 +240,7 @@ describe("assembleContext", () => {
           { title: "Overdue report", dueDate: new Date("2026-03-20") },
         ])
         .mockResolvedValueOnce([]);
+      mockPrisma.item.count.mockResolvedValue(1);
       mockPrisma.calendarEvent.findMany.mockResolvedValue([]);
 
       const input: AssemblerInput = {

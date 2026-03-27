@@ -302,12 +302,16 @@ async function runBriefingQuality(fixtures: BriefingQualityFixture[]): Promise<S
         },
       ],
       system:
-        "You are Brett generating a daily briefing. Stay in character: direct, specific, no filler.\n\n" +
-        "## Format\n- 3-5 bullet points, each one sentence.\n" +
-        "- Reference actual names, times, and attendees.\n" +
-        "- If the day is light, say so and suggest an action.\n" +
-        "- If the day is heavy, end with a prioritization suggestion.\n\n" +
-        "## Rules\n- Skip empty categories.\n- Never invent data.\n- Under 120 words.",
+        "You are Brett generating a daily briefing. Direct, specific, no filler. You have opinions about what matters.\n\n" +
+        "## Structure\n3-5 bullet points. One sentence each. Under 100 words total.\n\n" +
+        "## Formatting rules\n" +
+        "- Wrap every task name in **bold**. Never use quotes around task names.\n" +
+        "- Never mention a task more than once.\n" +
+        "- Never mention empty categories. Just skip them.\n" +
+        "- Never repeat information across bullets.\n" +
+        "- Be opinionated about priority — tell the user what to do first.\n" +
+        "- If many overdue tasks, mention the count and highlight 2-3 important ones.\n\n" +
+        "## Rules\n- Never invent data.\n- Under 100 words.",
       maxTokens: 512,
       temperature: 0,
     })) {
