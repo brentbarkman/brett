@@ -11,8 +11,13 @@ const GRANOLA_AUTH_URL = "https://mcp.granola.ai/oauth/authorize";
 const GRANOLA_TOKEN_URL = "https://mcp.granola.ai/oauth/token";
 const GRANOLA_REGISTER_URL = "https://mcp.granola.ai/oauth/register";
 
-// Cached client credentials from Dynamic Client Registration
-let registeredClient: { client_id: string; client_secret?: string } | null = null;
+// Cached client credentials from Dynamic Client Registration (with TTL)
+let registeredClient: { client_id: string; client_secret?: string; registeredAt: number } | null = null;
+const CLIENT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 function callbackHtml(
   c: Context,
@@ -24,16 +29,18 @@ function callbackHtml(
 <body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;font-family:system-ui,-apple-system,sans-serif;">
 <div style="text-align:center;max-width:360px;padding:40px;">
 <div style="font-size:36px;margin-bottom:16px;">${isError ? "😕" : "✅"}</div>
-<h1 style="color:${color};font-size:20px;font-weight:700;margin:0 0 8px;">${title}</h1>
-<p style="color:rgba(255,255,255,0.4);font-size:14px;line-height:1.6;margin:0 0 20px;">${message}</p>
+<h1 style="color:${color};font-size:20px;font-weight:700;margin:0 0 8px;">${escapeHtml(title)}</h1>
+<p style="color:rgba(255,255,255,0.4);font-size:14px;line-height:1.6;margin:0 0 20px;">${escapeHtml(message)}</p>
 <p style="color:rgba(255,255,255,0.2);font-size:12px;">You can close this tab.</p>
 <script>setTimeout(()=>window.close(),3000);</script>
 </div></body></html>`;
   return c.html(html);
 }
 
-async function ensureClientRegistered(): Promise<{ client_id: string; client_secret?: string }> {
-  if (registeredClient) return registeredClient;
+export async function ensureClientRegistered(): Promise<{ client_id: string; client_secret?: string }> {
+  if (registeredClient && (Date.now() - registeredClient.registeredAt) < CLIENT_TTL_MS) {
+    return registeredClient;
+  }
 
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
   const resp = await fetch(GRANOLA_REGISTER_URL, {
@@ -53,15 +60,20 @@ async function ensureClientRegistered(): Promise<{ client_id: string; client_sec
     throw new Error(`Granola client registration failed: ${resp.status} ${text}`);
   }
 
-  registeredClient = await resp.json();
-  return registeredClient!;
+  const client = (await resp.json()) as { client_id: string; client_secret?: string };
+  registeredClient = { ...client, registeredAt: Date.now() };
+  return registeredClient;
+}
+
+/** Clear cached client registration (used for retry on 401). */
+export function clearRegisteredClient(): void {
+  registeredClient = null;
 }
 
 const granolaAuth = new Hono<AuthEnv>();
-granolaAuth.use("*", authMiddleware);
 
 // GET / — Connection status
-granolaAuth.get("/", async (c) => {
+granolaAuth.get("/", authMiddleware, async (c) => {
   const user = c.get("user");
   const account = await prisma.granolaAccount.findUnique({
     where: { userId: user.id },
@@ -82,7 +94,7 @@ granolaAuth.get("/", async (c) => {
 });
 
 // POST /connect — Initiate OAuth (returns URL)
-granolaAuth.post("/connect", async (c) => {
+granolaAuth.post("/connect", authMiddleware, async (c) => {
   const user = c.get("user");
   const client = await ensureClientRegistered();
   const nonce = randomBytes(16).toString("hex");
@@ -147,25 +159,41 @@ granolaAuth.get("/callback", async (c) => {
     return callbackHtml(c, { title: "Security check failed", message: "The authorization signature didn't match. Please try connecting again.", isError: true });
   }
 
-  const user = c.get("user");
-  if (userId !== user.id) {
-    return callbackHtml(c, { title: "Session mismatch", message: "The authorization was started by a different session. Please try again.", isError: true });
+  // userId is verified via HMAC — no session needed on callback
+  // Look up user email for the account record
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  if (!user) {
+    return callbackHtml(c, { title: "User not found", message: "The user account no longer exists. Please try again.", isError: true });
   }
 
-  // Exchange code for tokens
-  const client = await ensureClientRegistered();
+  // Exchange code for tokens (with retry on 401 — re-register DCR client)
+  let client = await ensureClientRegistered();
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
-  const tokenResp = await fetch(GRANOLA_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: `${baseUrl}/granola/auth/callback`,
-      client_id: client.client_id,
-      ...(client.client_secret ? { client_secret: client.client_secret } : {}),
-    }),
-  });
+
+  async function exchangeCode(cl: { client_id: string; client_secret?: string }) {
+    return fetch(GRANOLA_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: code!,
+        redirect_uri: `${baseUrl}/granola/auth/callback`,
+        client_id: cl.client_id,
+        ...(cl.client_secret ? { client_secret: cl.client_secret } : {}),
+      }),
+    });
+  }
+
+  let tokenResp = await exchangeCode(client);
+  if (tokenResp.status === 401) {
+    // Client creds may be stale — re-register and retry once
+    clearRegisteredClient();
+    client = await ensureClientRegistered();
+    tokenResp = await exchangeCode(client);
+  }
 
   if (!tokenResp.ok) {
     return callbackHtml(c, { title: "Authorization failed", message: "Couldn't exchange the authorization code. Please try again.", isError: true });
@@ -178,21 +206,25 @@ granolaAuth.get("/callback", async (c) => {
     email?: string;
   };
 
-  if (!tokens.access_token) {
-    return callbackHtml(c, { title: "Something went wrong", message: "Didn't receive an access token from Granola. Please try again.", isError: true });
+  if (!tokens.access_token || !tokens.refresh_token) {
+    return callbackHtml(c, {
+      title: "Something went wrong",
+      message: "Didn't receive the required tokens from Granola. Please try again.",
+      isError: true,
+    });
   }
 
   const email = tokens.email || user.email;
 
   // Upsert GranolaAccount
   await prisma.granolaAccount.upsert({
-    where: { userId: user.id },
+    where: { userId },
     create: {
       id: generateId(),
-      userId: user.id,
+      userId,
       email,
       accessToken: encryptToken(tokens.access_token),
-      refreshToken: encryptToken(tokens.refresh_token ?? ""),
+      refreshToken: encryptToken(tokens.refresh_token),
       tokenExpiresAt: tokens.expires_in
         ? new Date(Date.now() + tokens.expires_in * 1000)
         : new Date(Date.now() + 3600 * 1000),
@@ -200,7 +232,7 @@ granolaAuth.get("/callback", async (c) => {
     update: {
       email,
       accessToken: encryptToken(tokens.access_token),
-      refreshToken: encryptToken(tokens.refresh_token ?? ""),
+      refreshToken: encryptToken(tokens.refresh_token),
       tokenExpiresAt: tokens.expires_in
         ? new Date(Date.now() + tokens.expires_in * 1000)
         : new Date(Date.now() + 3600 * 1000),
@@ -209,7 +241,7 @@ granolaAuth.get("/callback", async (c) => {
 
   // Trigger initial sync in background
   import("../services/granola-sync.js")
-    .then(({ initialGranolaSync }: { initialGranolaSync: (userId: string) => Promise<void> }) => initialGranolaSync(user.id))
+    .then(({ initialGranolaSync }: { initialGranolaSync: (userId: string) => Promise<void> }) => initialGranolaSync(userId))
     .catch((err: unknown) => console.error("[granola-auth] Initial sync failed:", err));
 
   return callbackHtml(c, {
@@ -219,7 +251,7 @@ granolaAuth.get("/callback", async (c) => {
 });
 
 // DELETE / — Disconnect
-granolaAuth.delete("/", async (c) => {
+granolaAuth.delete("/", authMiddleware, async (c) => {
   const user = c.get("user");
   const account = await prisma.granolaAccount.findUnique({ where: { userId: user.id } });
   if (!account) {
@@ -236,7 +268,7 @@ granolaAuth.delete("/", async (c) => {
 });
 
 // GET /meetings/by-event/:eventId — Get Granola meeting linked to a calendar event
-granolaAuth.get("/meetings/by-event/:eventId", async (c) => {
+granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
   const user = c.get("user");
   const eventId = c.req.param("eventId");
   const meeting = await prisma.granolaMeeting.findFirst({

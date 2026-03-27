@@ -8,6 +8,7 @@ import { createHmac } from "crypto";
 let webhookRenewalRunning = false;
 let reconciliationRunning = false;
 let granolaSyncRunning = false;
+let granolaSweepRunning = false;
 
 export function startCronJobs(): void {
   // SSE heartbeat — every 30 seconds
@@ -142,15 +143,15 @@ export function startCronJobs(): void {
 
       for (const account of granolaAccounts) {
         try {
-          // Find calendar events that ended 5-10 minutes ago
+          // Find calendar events that ended 5-15 minutes ago (window allows Granola processing time)
           const now = new Date();
-          const fiveMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
-          const tenMinAgo = new Date(now.getTime() - 15 * 60 * 1000);
+          const windowEnd = new Date(now.getTime() - 5 * 60 * 1000);   // 5 min ago
+          const windowStart = new Date(now.getTime() - 15 * 60 * 1000); // 15 min ago
 
           const recentlyEnded = await prisma.calendarEvent.findMany({
             where: {
               userId: account.userId,
-              endTime: { gte: tenMinAgo, lte: fiveMinAgo },
+              endTime: { gte: windowStart, lte: windowEnd },
               isAllDay: false,
             },
             select: { startTime: true, endTime: true },
@@ -173,6 +174,11 @@ export function startCronJobs(): void {
   // Granola: periodic sweep — every 30 minutes
   // Safety net that catches any meetings missed by the event-driven trigger
   cron.schedule("*/30 * * * *", async () => {
+    if (granolaSweepRunning) {
+      console.log("[cron] Granola sweep already running, skipping");
+      return;
+    }
+    granolaSweepRunning = true;
     try {
       const { incrementalGranolaSync } = await import("../services/granola-sync.js");
 
@@ -189,6 +195,8 @@ export function startCronJobs(): void {
       }
     } catch (err) {
       console.error("[cron] Granola sweep sync failed:", err);
+    } finally {
+      granolaSweepRunning = false;
     }
   });
 

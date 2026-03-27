@@ -1,16 +1,33 @@
 import { prisma } from "../lib/prisma.js";
+import type { PrismaClient } from "@prisma/client";
 import {
   listGranolaMeetings,
-  getGranolaMeetings,
-  getGranolaTranscript,
+  withGranolaClient,
 } from "../lib/granola-mcp.js";
 import { findBestMatch, type MatchCandidate } from "./meeting-matcher.js";
 import { publishSSE } from "../lib/sse.js";
 import { validateCreateItem } from "@brett/business";
 
+type TransactionClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
+
 // Working hours gate: 8am-7pm in user's timezone
 const WORKING_HOURS_START = 8;
 const WORKING_HOURS_END = 19;
+
+/** Compute start-of-day in the user's timezone, returned as a UTC Date. */
+function startOfDayInTimezone(timezone: string): Date {
+  try {
+    const now = new Date();
+    // en-CA gives YYYY-MM-DD format
+    const dateStr = now.toLocaleDateString("en-CA", { timeZone: timezone });
+    return new Date(dateStr + "T00:00:00");
+  } catch {
+    // Fallback: server-local start of day
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+}
 
 function isWithinWorkingHours(timezone: string): boolean {
   try {
@@ -73,8 +90,9 @@ export async function incrementalGranolaSync(userId: string): Promise<void> {
 
   try {
     // Fetch today's meetings (catches new ones since last sync)
+    const todayStart = startOfDayInTimezone(account.user.timezone);
     const meetings = await listGranolaMeetings(account.id, "custom",
-      new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
+      todayStart.toISOString(),
       new Date().toISOString(),
     );
     const newCount = await syncMeetings(account.id, userId, meetings);
@@ -149,11 +167,22 @@ async function syncMeetings(
 
   if (newMeetings.length === 0) return 0;
 
-  // Fetch full details for new meetings
-  const details = await getGranolaMeetings(
-    granolaAccountId,
-    newMeetings.map((m) => m.id),
-  );
+  // Fetch full details + transcripts using a single MCP client connection
+  const { details, transcripts } = await withGranolaClient(granolaAccountId, async (tools) => {
+    const meetingDetails = await tools.getMeetings(newMeetings.map((m) => m.id));
+
+    const meetingTranscripts = new Map<string, { turns: { source: string; speaker: string; text: string }[] } | null>();
+    for (const detail of meetingDetails) {
+      try {
+        meetingTranscripts.set(detail.id, await tools.getTranscript(detail.id));
+      } catch {
+        console.warn(`[granola-sync] Failed to fetch transcript for ${detail.id}`);
+        meetingTranscripts.set(detail.id, null);
+      }
+    }
+
+    return { details: meetingDetails, transcripts: meetingTranscripts };
+  });
 
   // Load calendar events for matching (same day window)
   const earliest = new Date(
@@ -192,13 +221,7 @@ async function syncMeetings(
 
   for (const detail of details) {
     try {
-      // Fetch transcript
-      let transcript = null;
-      try {
-        transcript = await getGranolaTranscript(granolaAccountId, detail.id);
-      } catch {
-        console.warn(`[granola-sync] Failed to fetch transcript for ${detail.id}`);
-      }
+      const transcript = transcripts.get(detail.id) ?? null;
 
       // Match to calendar event
       const meetingAttendees = detail.attendees?.map((a) => ({ email: a.email })) ?? [];
@@ -212,28 +235,34 @@ async function syncMeetings(
         candidates,
       );
 
-      // Store meeting
-      const meeting = await prisma.granolaMeeting.create({
-        data: {
-          granolaDocumentId: detail.id,
-          userId,
-          granolaAccountId,
-          calendarEventId: match?.id ?? null,
-          title: detail.title,
-          summary: detail.summary ?? detail.notes ?? null,
-          transcript: transcript?.turns ?? undefined,
-          attendees: detail.attendees ?? undefined,
-          meetingStartedAt: new Date(detail.start_time),
-          meetingEndedAt: new Date(detail.end_time),
-          rawData: detail as any,
-        },
+      // Store meeting + action items in a transaction to prevent duplicates
+      await prisma.$transaction(async (tx) => {
+        const meeting = await tx.granolaMeeting.create({
+          data: {
+            granolaDocumentId: detail.id,
+            userId,
+            granolaAccountId,
+            calendarEventId: match?.id ?? null,
+            title: detail.title,
+            summary: detail.summary ?? detail.notes ?? null,
+            transcript: transcript?.turns ?? undefined,
+            attendees: detail.attendees ?? undefined,
+            meetingStartedAt: new Date(detail.start_time),
+            meetingEndedAt: new Date(detail.end_time),
+            rawData: detail as any,
+          },
+        });
+
+        // Extract and create action items within the same transaction
+        await extractAndCreateActionItems(tx, meeting.id, userId, detail.summary ?? detail.notes ?? "");
       });
 
-      // Extract and create action items
-      await extractAndCreateActionItems(meeting.id, userId, detail.summary ?? detail.notes ?? "");
-
       syncedCount++;
-    } catch (err) {
+    } catch (err: any) {
+      // P2002 = unique constraint violation on granolaDocumentId — already synced by concurrent job
+      if (err?.code === "P2002") {
+        continue;
+      }
       console.error(`[granola-sync] Failed to sync meeting ${detail.id}:`, err);
     }
   }
@@ -244,8 +273,10 @@ async function syncMeetings(
 /**
  * Extract action items from meeting summary, then create them as tasks.
  * Uses simple pattern-based extraction for v1.
+ * Accepts a transaction client so it can run within a transaction.
  */
 async function extractAndCreateActionItems(
+  tx: TransactionClient,
   granolaMeetingId: string,
   userId: string,
   summaryText: string,
@@ -281,7 +312,7 @@ async function extractAndCreateActionItems(
 
   // Store extracted items on the meeting record
   if (unique.length > 0) {
-    await prisma.granolaMeeting.update({
+    await tx.granolaMeeting.update({
       where: { id: granolaMeetingId },
       data: { actionItems: unique },
     });
@@ -297,7 +328,7 @@ async function extractAndCreateActionItems(
 
     if (!validation.ok) continue;
 
-    await prisma.item.create({
+    await tx.item.create({
       data: {
         type: "task",
         title: validation.data.title,
