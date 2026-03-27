@@ -5,6 +5,7 @@ import { ProfileSection } from "./ProfileSection";
 import { SecuritySection } from "./SecuritySection";
 import { CalendarSection } from "./CalendarSection";
 import { TimezoneSection } from "./TimezoneSection";
+import { LocationSection } from "./LocationSection";
 import { BriefingSection } from "./BriefingSection";
 import { AISection } from "./AISection";
 import { MemorySection } from "./MemorySection";
@@ -47,6 +48,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         <SecuritySection />
         <CalendarSection />
         <TimezoneSection />
+        <LocationSection />
         <BriefingSection />
         <AISection />
         <MemorySection />
