@@ -133,6 +133,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
         <DailyBriefing
           content={briefing.content}
           isGenerating={briefing.isGenerating}
+          isError={briefing.isError}
           summary={summary.data ?? null}
           hasAI={briefing.hasAI}
           generatedAt={briefing.generatedAt}

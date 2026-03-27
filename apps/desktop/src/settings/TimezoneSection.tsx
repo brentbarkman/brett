@@ -19,6 +19,7 @@ export function TimezoneSection() {
   const [selectedTz, setSelectedTz] = useState("America/Los_Angeles");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -59,11 +60,14 @@ export function TimezoneSection() {
         method: "PATCH",
         body: JSON.stringify({ timezone: tz, auto }),
       });
+      setError(null);
       qc.invalidateQueries({ queryKey: ["user-me"] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error("Failed to update timezone:", err);
+      setError("Failed to save. Try again.");
+      setTimeout(() => setError(null), 4000);
     } finally {
       setSaving(false);
     }
@@ -91,10 +95,15 @@ export function TimezoneSection() {
           <Check size={14} className="text-emerald-400 ml-auto" />
         )}
       </div>
+      {error && (
+        <p className="text-xs text-red-400/80 mt-2">{error}</p>
+      )}
 
       <div className="space-y-3">
         <div className="text-sm text-white/60">
-          Current: <span className="text-white/80">{user?.timezone ?? "..."}</span>
+          Current: <span className="text-white/80">{user?.timezone ?? (
+            <span className="inline-block bg-white/5 animate-pulse rounded h-3.5 w-32 align-middle" />
+          )}</span>
         </div>
 
         <label className="flex items-center justify-between cursor-pointer">

@@ -16,6 +16,7 @@ interface BriefingSummary {
 interface DailyBriefingProps {
   content: string | null;
   isGenerating?: boolean;
+  isError?: boolean;
   summary?: BriefingSummary | null;
   hasAI: boolean;
   generatedAt?: string | null;
@@ -26,6 +27,7 @@ interface DailyBriefingProps {
 export function DailyBriefing({
   content,
   isGenerating,
+  isError,
   summary,
   hasAI,
   generatedAt,
@@ -100,7 +102,16 @@ export function DailyBriefing({
       {/* AI briefing content */}
       {showAIBriefing && (
         <>
-          {items.length > 0 ? (
+          {isError ? (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
+              <p className="text-sm text-red-400/90">
+                Failed to generate briefing.
+              </p>
+              <p className="text-xs text-white/40 mt-1">
+                Try again — if this keeps happening, check your AI provider in Settings.
+              </p>
+            </div>
+          ) : items.length > 0 ? (
             <ul className="space-y-2">
               {items.map((item, idx) => (
                 <li
@@ -113,9 +124,20 @@ export function DailyBriefing({
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-white/40">
-              Generating your briefing...
-            </p>
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
+                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-full" />
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
+                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-5/6" />
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
+                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-2/3" />
+              </div>
+            </div>
           )}
           {generatedAt && !isGenerating && (
             <p className="mt-3 text-[10px] text-white/20">
@@ -133,10 +155,19 @@ export function DailyBriefing({
       {showStaticFallback && (
         <div className="space-y-3">
           {!summary ? (
-            <p className="text-sm text-white/40">Loading your day...</p>
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
+                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-3/4" />
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
+                <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-1/2" />
+              </div>
+            </div>
           ) : isDayEmpty ? (
             <p className="text-sm text-white/60">
-              Your day is clear — no tasks or meetings.
+              Nothing on the books today. A rare opening — use it well.
             </p>
           ) : (
             <>
@@ -174,7 +205,7 @@ export function DailyBriefing({
           )}
           <p className="text-[11px] text-white/25 flex items-center gap-1">
             <Settings size={10} />
-            Configure AI in Settings for a personalized briefing
+            Add an AI provider in Settings for a personalized daily briefing
           </p>
         </div>
       )}
