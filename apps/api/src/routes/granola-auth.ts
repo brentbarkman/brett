@@ -207,8 +207,7 @@ granolaAuth.get("/callback", async (c) => {
     },
   });
 
-  // Trigger initial sync in background (granola-sync.js is created in Task 5)
-  // @ts-expect-error — forward reference to module created in a later task
+  // Trigger initial sync in background
   import("../services/granola-sync.js")
     .then(({ initialGranolaSync }: { initialGranolaSync: (userId: string) => Promise<void> }) => initialGranolaSync(user.id))
     .catch((err: unknown) => console.error("[granola-auth] Initial sync failed:", err));
