@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { ProfileSection } from "./ProfileSection";
 import { SecuritySection } from "./SecuritySection";
 import { CalendarSection } from "./CalendarSection";
+import { TimezoneSection } from "./TimezoneSection";
 import { AISection } from "./AISection";
 import { MemorySection } from "./MemorySection";
 import { SignOutSection } from "./SignOutSection";
@@ -44,6 +45,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         <ProfileSection />
         <SecuritySection />
         <CalendarSection />
+        <TimezoneSection />
         <AISection />
         <MemorySection />
         <SignOutSection />
