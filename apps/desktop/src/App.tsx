@@ -253,6 +253,12 @@ export function App() {
     }
   }, [hasCalendarAccounts, sidebarDismissed]);
 
+  // Today's date string (stable for the session — doesn't change when sidebar navigates)
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+
   // Sidebar calendar date navigation
   const [sidebarDate, setSidebarDate] = useState(() => new Date());
   const sidebarDateStr = useMemo(() => {
@@ -273,15 +279,22 @@ export function App() {
     [sidebarCalendarData],
   );
 
-  // Next Up: find the next upcoming event from sidebar calendar data
+  // Today's events for Next Up — always pinned to today, independent of sidebar navigation
+  const { data: todayCalendarData } = useCalendarEvents({ date: todayStr });
+  const todayCalendarEvents: CalendarEventDisplay[] = useMemo(
+    () => (todayCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay),
+    [todayCalendarData],
+  );
+
+  // Next Up: find the next upcoming event from TODAY (not the sidebar date)
   const nextUpEvent = useMemo(() => {
-    if (!sidebarCalendarEvents.length) return null;
+    if (!todayCalendarEvents.length) return null;
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-    return sidebarCalendarEvents.find((e) => {
+    return todayCalendarEvents.find((e) => {
       if (e.myResponseStatus === "declined" || e.isAllDay) return false;
       return parseTimeToMinutes(e.endTime) > nowMin;
     }) ?? null;
-  }, [sidebarCalendarEvents]);
+  }, [todayCalendarEvents]);
   const nextUpTimer = useNextUpTimer(nextUpEvent);
 
   // Fetch detail when panel is open and item is a task (not a CalendarEvent)
