@@ -99,6 +99,19 @@ export function Omnibar({
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
   const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Animated close — fade out then unmount
+  const animateClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      setForcedAction(null);
+      setConfirmedTask(null);
+      onClose();
+    }, 150);
+  }, [isClosing, onClose]);
 
   // Intercept input changes to detect shortcut prefixes
   const handleInputChange = useCallback((value: string) => {
@@ -124,8 +137,7 @@ export function Omnibar({
     // user might be clicking on a task or elsewhere and wants to come back.
     // Only suggestions/search dropdowns should close on click-outside.
     if (isOpen && !isStreaming && messages.length === 0) {
-      setForcedAction(null);
-      onClose();
+      animateClose();
     }
   }, isOpen);
 
@@ -159,11 +171,10 @@ export function Omnibar({
   useEffect(() => {
     if (!confirmedTask) return;
     const timer = setTimeout(() => {
-      setConfirmedTask(null);
-      onClose();
+      animateClose();
     }, 1500);
     return () => clearTimeout(timer);
-  }, [confirmedTask, onClose]);
+  }, [confirmedTask, animateClose]);
 
   const hasConversation = messages.length > 0;
 
@@ -252,14 +263,13 @@ export function Omnibar({
           onInputChange("");
           return;
         }
-        setConfirmedTask(null);
-        onClose();
+        animateClose();
         return;
       }
 
       // Tab out of omnibar — close it so keyboard nav can take over the list
       if (e.key === "Tab" && !showSuggestions && !showSearchResults) {
-        onClose();
+        animateClose();
         return; // let default Tab behavior move focus
       }
 
@@ -325,7 +335,7 @@ export function Omnibar({
         }
       }
     },
-    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, handleCreateTask, onSearch, onClose, onInputChange, showWeatherExpanded, onWeatherClick, hasConversation, onReset]
+    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, handleCreateTask, onSearch, animateClose, onInputChange, showWeatherExpanded, onWeatherClick, hasConversation, onReset]
   );
 
   return (
@@ -333,9 +343,10 @@ export function Omnibar({
       {/* Top Pill / Input Area */}
       <div
         className={`
-          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-300 ease-in-out
-          ${isOpen ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-white/10 hover:border-white/20"}
+          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-150 ease-out
+          ${isOpen && !isClosing ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-white/10 hover:border-white/20"}
           ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
+          ${isClosing ? "opacity-0 scale-[0.98] -translate-y-1" : "opacity-100 scale-100 translate-y-0"}
         `}
       >
         {/* Top Bar — visible when collapsed or when open without conversation */}
