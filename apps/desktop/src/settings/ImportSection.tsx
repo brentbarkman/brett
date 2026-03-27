@@ -54,6 +54,7 @@ export function ImportSection({ userId }: { userId: string }) {
   if (!electronAPI || electronAPI.platform !== "darwin") return null;
 
   async function handleScan() {
+    if (state.step !== "idle") return;
     setState({ step: "scanning" });
     const result = await electronAPI!.things3Scan();
     if ("error" in result) {
@@ -64,6 +65,7 @@ export function ImportSection({ userId }: { userId: string }) {
   }
 
   async function handleImport() {
+    if (state.step !== "preview") return;
     setState({ step: "importing" });
     try {
       const result = await electronAPI!.things3Import();

@@ -32,20 +32,8 @@ if (isDev) {
 
 const store = new Store<{ encryptedToken?: string }>();
 
-// Token storage IPC handlers
-ipcMain.handle("store-token", (_event, token: string) => {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(token);
-    store.set("encryptedToken", encrypted.toString("base64"));
-  } else if (isDev) {
-    // #6: Only allow unencrypted storage in dev
-    store.set("encryptedToken", token);
-  } else {
-    throw new Error("Secure storage is not available");
-  }
-});
-
-ipcMain.handle("get-token", () => {
+/** Read and decrypt the stored auth token. Returns null if not available. */
+function readStoredToken(): string | null {
   const stored = store.get("encryptedToken");
   if (!stored) return null;
 
@@ -61,9 +49,25 @@ ipcMain.handle("get-token", () => {
 
   if (isDev) return stored;
 
-  // #6: Production without encryption — clear stale unencrypted data
   store.delete("encryptedToken");
   return null;
+}
+
+// Token storage IPC handlers
+ipcMain.handle("store-token", (_event, token: string) => {
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(token);
+    store.set("encryptedToken", encrypted.toString("base64"));
+  } else if (isDev) {
+    // #6: Only allow unencrypted storage in dev
+    store.set("encryptedToken", token);
+  } else {
+    throw new Error("Secure storage is not available");
+  }
+});
+
+ipcMain.handle("get-token", () => {
+  return readStoredToken();
 });
 
 ipcMain.handle("clear-token", () => {
@@ -82,18 +86,8 @@ ipcMain.handle("things3:import", async () => {
   try {
     const payload = readThings3();
 
-    // Read token from secure storage (same as get-token handler)
-    const stored = store.get("encryptedToken");
-    if (!stored) throw new Error("Not authenticated");
-    let authToken: string;
-    if (safeStorage.isEncryptionAvailable()) {
-      const buffer = Buffer.from(stored, "base64");
-      authToken = safeStorage.decryptString(buffer);
-    } else if (isDev) {
-      authToken = stored;
-    } else {
-      throw new Error("Secure storage is not available");
-    }
+    const authToken = readStoredToken();
+    if (!authToken) throw new Error("Not authenticated. Please sign in again.");
 
     const res = await net.fetch(`${API_URL}/import/things3`, {
       method: "POST",

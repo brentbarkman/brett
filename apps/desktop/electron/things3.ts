@@ -145,6 +145,11 @@ export function readThings3(): Things3ImportPayload {
         notes = notes ? `${notes}\n\n${checklistMd}` : checklistMd;
       }
 
+      // Cap notes to prevent oversized payloads
+      if (notes && notes.length > 100_000) {
+        notes = notes.slice(0, 100_000);
+      }
+
       return {
         title: t.title || "Untitled",
         notes,
