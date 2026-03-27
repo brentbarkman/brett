@@ -78,11 +78,24 @@ ipcMain.handle("things3:scan", () => {
   }
 });
 
-ipcMain.handle("things3:import", async (_event, apiUrl: string, authToken: string) => {
+ipcMain.handle("things3:import", async () => {
   try {
     const payload = readThings3();
 
-    const res = await net.fetch(`${apiUrl}/import/things3`, {
+    // Read token from secure storage (same as get-token handler)
+    const stored = store.get("encryptedToken");
+    if (!stored) throw new Error("Not authenticated");
+    let authToken: string;
+    if (safeStorage.isEncryptionAvailable()) {
+      const buffer = Buffer.from(stored, "base64");
+      authToken = safeStorage.decryptString(buffer);
+    } else if (isDev) {
+      authToken = stored;
+    } else {
+      throw new Error("Secure storage is not available");
+    }
+
+    const res = await net.fetch(`${API_URL}/import/things3`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

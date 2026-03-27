@@ -1,16 +1,12 @@
 import React, { useState } from "react";
 import { Download, Check, Loader2, AlertCircle } from "lucide-react";
-import { getApiUrl, getAuthHeaders } from "../api/client";
 import type { Things3ScanResult, Things3ImportResult } from "@brett/types";
 
 const electronAPI = (window as any).electronAPI as
   | {
       platform: string;
       things3Scan: () => Promise<Things3ScanResult | { error: string }>;
-      things3Import: (
-        apiUrl: string,
-        authToken: string
-      ) => Promise<Things3ImportResult | { error: string }>;
+      things3Import: () => Promise<Things3ImportResult | { error: string }>;
     }
   | undefined;
 
@@ -47,12 +43,12 @@ function storeImportCompletion(userId: string, result: Things3ImportResult): str
 }
 
 export function ImportSection({ userId }: { userId: string }) {
-  const stored = getStoredImport(userId);
-  const [state, setState] = useState<ImportState>(
-    stored
+  const [state, setState] = useState<ImportState>(() => {
+    const stored = getStoredImport(userId);
+    return stored
       ? { step: "done", result: stored.result, importedAt: stored.importedAt }
-      : { step: "idle" }
-  );
+      : { step: "idle" };
+  });
 
   // Only show on macOS in Electron
   if (!electronAPI || electronAPI.platform !== "darwin") return null;
@@ -70,10 +66,7 @@ export function ImportSection({ userId }: { userId: string }) {
   async function handleImport() {
     setState({ step: "importing" });
     try {
-      const apiUrl = getApiUrl();
-      const headers = await getAuthHeaders();
-      const token = headers["Authorization"]?.replace("Bearer ", "") ?? "";
-      const result = await electronAPI!.things3Import(apiUrl, token);
+      const result = await electronAPI!.things3Import();
       if ("error" in result) {
         setState({ step: "error", message: result.error });
       } else {
@@ -114,23 +107,31 @@ export function ImportSection({ userId }: { userId: string }) {
       {state.step === "preview" && (
         <div className="space-y-3">
           <div className="bg-white/5 rounded-lg p-4 text-sm text-white/70">
-            Found <span className="text-white font-medium">{state.scan.projects}</span> project{state.scan.projects !== 1 ? "s" : ""}{" "}
-            and <span className="text-white font-medium">{state.scan.tasks.active + state.scan.tasks.completed}</span> task{state.scan.tasks.active + state.scan.tasks.completed !== 1 ? "s" : ""}{" "}
-            ({state.scan.tasks.active} active, {state.scan.tasks.completed} completed)
+            {state.scan.projects === 0 && state.scan.tasks.active === 0 && state.scan.tasks.completed === 0 ? (
+              "No tasks found in Things 3."
+            ) : (
+              <>
+                Found <span className="text-white font-medium">{state.scan.projects}</span> project{state.scan.projects !== 1 ? "s" : ""}{" "}
+                and <span className="text-white font-medium">{state.scan.tasks.active + state.scan.tasks.completed}</span> task{state.scan.tasks.active + state.scan.tasks.completed !== 1 ? "s" : ""}{" "}
+                ({state.scan.tasks.active} active, {state.scan.tasks.completed} completed)
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleImport}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-sm font-medium transition-colors"
-            >
-              <Download size={16} />
-              Import
-            </button>
+            {(state.scan.projects > 0 || state.scan.tasks.active > 0 || state.scan.tasks.completed > 0) && (
+              <button
+                onClick={handleImport}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-sm font-medium transition-colors"
+              >
+                <Download size={16} />
+                Import
+              </button>
+            )}
             <button
               onClick={() => setState({ step: "idle" })}
               className="px-4 py-2 rounded-lg text-white/50 hover:text-white/70 text-sm transition-colors"
             >
-              Cancel
+              {state.scan.projects === 0 && state.scan.tasks.active === 0 && state.scan.tasks.completed === 0 ? "OK" : "Cancel"}
             </button>
           </div>
         </div>

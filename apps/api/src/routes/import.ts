@@ -53,32 +53,32 @@ importRoutes.post("/things3", async (c) => {
       uuidToListId.set(list.thingsUuid, created.id);
     }
 
-    // 3. Create tasks
-    let taskCount = 0;
-    for (const task of tasks) {
+    // 3. Create tasks in bulk
+    const taskData = tasks.map((task) => {
       const listId = task.thingsProjectUuid
         ? uuidToListId.get(task.thingsProjectUuid) ?? null
         : null;
 
-      await tx.item.create({
-        data: {
-          type: "task",
-          title: task.title,
-          notes: task.notes ?? null,
-          source: "Things 3",
-          status: task.status,
-          dueDate: task.dueDate ? new Date(task.dueDate) : null,
-          dueDatePrecision: task.dueDate ? "day" : null,
-          completedAt: task.completedAt ? new Date(task.completedAt) : null,
-          createdAt: task.createdAt ? new Date(task.createdAt) : undefined,
-          listId,
-          userId: user.id,
-        },
-      });
-      taskCount++;
+      return {
+        type: "task" as const,
+        title: task.title,
+        notes: task.notes ?? null,
+        source: "Things 3",
+        status: task.status,
+        dueDate: task.dueDate ? new Date(task.dueDate) : null,
+        dueDatePrecision: task.dueDate ? "day" : null,
+        completedAt: task.completedAt ? new Date(task.completedAt) : null,
+        createdAt: task.createdAt ? new Date(task.createdAt) : undefined,
+        listId,
+        userId: user.id,
+      };
+    });
+
+    if (taskData.length > 0) {
+      await tx.item.createMany({ data: taskData });
     }
 
-    return { lists: lists.length, tasks: taskCount };
+    return { lists: lists.length, tasks: taskData.length };
   });
 
   return c.json(result, 201);

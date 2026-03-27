@@ -136,4 +136,24 @@ describe("validateThings3Import", () => {
       expect(result.data.tasks[0].completedAt).toBeUndefined();
     }
   });
+
+  it("rejects payload exceeding 500 lists", () => {
+    const lists = Array.from({ length: 501 }, (_, i) => ({
+      name: `List ${i}`,
+      thingsUuid: `uuid-${i}`,
+    }));
+    const result = validateThings3Import({ lists, tasks: [] });
+    expect(result.ok).toBe(false);
+  });
+
+  it("validates createdAt format", () => {
+    const result = validateThings3Import({
+      lists: [],
+      tasks: [{ title: "Test", status: "active", createdAt: "not-a-date" }],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.tasks[0].createdAt).toBeUndefined();
+    }
+  });
 });

@@ -901,6 +901,11 @@ const MAX_LIST_NAME_LEN = 100;
 const MAX_TASK_TITLE_LEN = 500;
 const VALID_IMPORT_STATUSES = new Set(["active", "done"]);
 
+/** Check if a string looks like an ISO date (YYYY-MM-DD or YYYY-MM-DDTHH:...) */
+function isISODateString(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}(T.+)?$/.test(s) && !isNaN(Date.parse(s));
+}
+
 export function validateThings3Import(
   input: unknown
 ): { ok: true; data: Things3ImportPayload } | { ok: false; error: string } {
@@ -966,15 +971,15 @@ export function validateThings3Import(
     };
 
     if (typeof t.notes === "string" && t.notes.trim() !== "") {
-      task.notes = t.notes;
+      task.notes = t.notes.slice(0, 100_000); // 100KB cap
     }
-    if (typeof t.dueDate === "string" && !isNaN(Date.parse(t.dueDate))) {
+    if (typeof t.dueDate === "string" && isISODateString(t.dueDate)) {
       task.dueDate = t.dueDate;
     }
-    if (typeof t.completedAt === "string" && !isNaN(Date.parse(t.completedAt))) {
+    if (typeof t.completedAt === "string" && isISODateString(t.completedAt)) {
       task.completedAt = t.completedAt;
     }
-    if (typeof t.createdAt === "string" && !isNaN(Date.parse(t.createdAt))) {
+    if (typeof t.createdAt === "string" && isISODateString(t.createdAt)) {
       task.createdAt = t.createdAt;
     }
     if (typeof t.thingsProjectUuid === "string" && t.thingsProjectUuid.trim() !== "") {
