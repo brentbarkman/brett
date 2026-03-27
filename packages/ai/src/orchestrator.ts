@@ -93,12 +93,15 @@ export async function* orchestrate(
     const system = ctx.system;
     let currentTier: ModelTier = ctx.modelTier;
 
-    // Context-aware tool selection: only send tools relevant to the user's message.
-    // Saves ~1,000 tokens per request vs sending all 21 tools every time.
-    const userMessage = "message" in input ? (input as { message: string }).message : "";
-    const tools = userMessage
-      ? registry.toToolDefinitionsForMessage(userMessage)
-      : registry.toToolDefinitions();
+    // Tool selection is driven by the assembler's toolMode:
+    // - "none": pure text generation (briefing, bretts_take) — saves ~2,500 tokens
+    // - "contextual": filter tools by user message (omnibar) — saves ~1,000 tokens
+    // - "all": send all registered tools (brett_thread)
+    const tools = ctx.toolMode === "none"
+      ? []
+      : ctx.toolMode === "contextual" && "message" in input
+        ? registry.toToolDefinitionsForMessage((input as { message: string }).message)
+        : registry.toToolDefinitions();
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalCacheCreationTokens = 0;

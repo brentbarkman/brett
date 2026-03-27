@@ -47,10 +47,18 @@ export type AssemblerInput =
   | BriefingContext
   | BrettsTakeContext;
 
+export type ToolMode = "all" | "contextual" | "none";
+
 export interface AssembledContext {
   system: string;
   messages: Message[];
   modelTier: ModelTier;
+  /** Controls which tools the orchestrator sends to the LLM.
+   *  - "contextual": filter tools by user message (default for omnibar)
+   *  - "all": send all registered tools
+   *  - "none": pure text generation, no tools (briefing, bretts_take)
+   */
+  toolMode: ToolMode;
 }
 
 // ─── Constants ───
@@ -215,7 +223,7 @@ async function assembleOmnibar(
   const isComplex = lower.length > 80 || (actionWords && actionWords.length >= 2);
   const tier = isComplex ? "medium" : "small";
 
-  return { system, messages, modelTier: tier };
+  return { system, messages, modelTier: tier, toolMode: "contextual" };
 }
 
 async function assembleBrettThread(
@@ -278,14 +286,16 @@ async function assembleBrettThread(
     { role: "user", content: input.message },
   ];
 
-  return { system, messages, modelTier: "medium" };
+  return { system, messages, modelTier: "medium", toolMode: "all" };
 }
 
 async function assembleBriefing(
   input: BriefingContext,
   prisma: PrismaClient
 ): Promise<AssembledContext> {
-  const facts = await loadUserFacts(prisma, input.userId);
+  // Briefing needs minimal facts — just enough for tone/context, not the full 20
+  const allFacts = await loadUserFacts(prisma, input.userId);
+  const facts = allFacts.slice(0, 5);
 
   // Validate timezone at point-of-use (defense-in-depth)
   const timezone = input.timezone;
@@ -401,7 +411,7 @@ async function assembleBriefing(
     },
   ];
 
-  return { system, messages, modelTier: "medium" };
+  return { system, messages, modelTier: "small", toolMode: "none" };
 }
 
 async function assembleBrettsTake(
@@ -479,7 +489,7 @@ async function assembleBrettsTake(
     },
   ];
 
-  return { system, messages, modelTier: "medium" };
+  return { system, messages, modelTier: "small", toolMode: "none" };
 }
 
 // ─── Main entry point ───

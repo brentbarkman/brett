@@ -157,8 +157,8 @@ describe("assembleContext", () => {
 
   // ─── Model tier ───
 
-  describe("model tier", () => {
-    it('returns "small" for omnibar', async () => {
+  describe("model tier and tool mode", () => {
+    it('returns "small" + "contextual" tools for omnibar', async () => {
       const input: AssemblerInput = {
         type: "omnibar",
         userId: "user-1",
@@ -166,9 +166,10 @@ describe("assembleContext", () => {
       };
       const ctx = await assembleContext(input, mockPrisma);
       expect(ctx.modelTier).toBe("small");
+      expect(ctx.toolMode).toBe("contextual");
     });
 
-    it('returns "medium" for brett_thread', async () => {
+    it('returns "medium" + "all" tools for brett_thread', async () => {
       const input: AssemblerInput = {
         type: "brett_thread",
         userId: "user-1",
@@ -176,25 +177,28 @@ describe("assembleContext", () => {
       };
       const ctx = await assembleContext(input, mockPrisma);
       expect(ctx.modelTier).toBe("medium");
+      expect(ctx.toolMode).toBe("all");
     });
 
-    it('returns "medium" for briefing', async () => {
+    it('returns "small" for briefing (pure text, no tools needed)', async () => {
       const input: AssemblerInput = {
         type: "briefing",
         userId: "user-1",
         timezone: "UTC",
       };
       const ctx = await assembleContext(input, mockPrisma);
-      expect(ctx.modelTier).toBe("medium");
+      expect(ctx.modelTier).toBe("small");
+      expect(ctx.toolMode).toBe("none");
     });
 
-    it('returns "medium" for bretts_take', async () => {
+    it('returns "small" for bretts_take (pure text, no tools needed)', async () => {
       const input: AssemblerInput = {
         type: "bretts_take",
         userId: "user-1",
       };
       const ctx = await assembleContext(input, mockPrisma);
-      expect(ctx.modelTier).toBe("medium");
+      expect(ctx.modelTier).toBe("small");
+      expect(ctx.toolMode).toBe("none");
     });
   });
 
