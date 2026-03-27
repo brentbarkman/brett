@@ -11,6 +11,7 @@ import calendar from "./routes/calendar.js";
 import calendarAccounts from "./routes/calendar-accounts.js";
 import sse from "./routes/sse.js";
 import webhooks from "./routes/webhooks.js";
+import granolaAuth from "./routes/granola-auth.js";
 import extract from "./routes/extract.js";
 import { aiConfig } from "./routes/ai-config.js";
 import { aiUsage } from "./routes/ai-usage.js";
@@ -63,5 +64,6 @@ app.route("/brett/memory", brettMemory);
 app.route("/weather", weather);
 app.route("/events", sse);
 app.route("/webhooks", webhooks);
+app.route("/granola/auth", granolaAuth);
 
 startCronJobs();
