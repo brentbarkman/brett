@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Check, MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
@@ -24,8 +25,17 @@ export function LocationSection() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputWrapperRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const updateDropdownPos = useCallback(() => {
+    const el = inputWrapperRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -35,8 +45,10 @@ export function LocationSection() {
   }, [user]);
 
   useEffect(() => {
-    setShowDropdown(results.length > 0 && query.length >= 2);
-  }, [results, query]);
+    const shouldShow = results.length > 0 && query.length >= 2;
+    setShowDropdown(shouldShow);
+    if (shouldShow) updateDropdownPos();
+  }, [results, query, updateDropdownPos]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -143,49 +155,54 @@ export function LocationSection() {
           <>
             {/* City search */}
             <div className="space-y-1.5">
-              <div className="relative z-20">
-                <div className="relative">
-                  <MapPin
-                    size={13}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
-                  />
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onFocus={() => results.length > 0 && setShowDropdown(true)}
-                    placeholder="Search city…"
-                    className="w-full bg-white/5 border border-white/[0.08] rounded-lg pl-8 pr-3 py-2 text-sm text-white/80
-                      placeholder:text-white/25 focus:outline-none focus:border-blue-500/50"
-                  />
-                  {isSearching && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-white/20 border-t-white/60 animate-spin" />
-                  )}
-                </div>
-
-                {/* Search results dropdown */}
-                {showDropdown && (
-                  <div
-                    ref={dropdownRef}
-                    className="absolute z-50 mt-1 w-full bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden"
-                  >
-                    {results.map((result, i) => (
-                      <button
-                        key={i}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          handleCitySelect(result);
-                        }}
-                        className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-white/5 transition-colors"
-                      >
-                        <MapPin size={12} className="text-white/30 flex-shrink-0" />
-                        <span className="text-sm text-white/80 truncate">{result.displayName}</span>
-                      </button>
-                    ))}
-                  </div>
+              <div ref={inputWrapperRef} className="relative">
+                <MapPin
+                  size={13}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
+                />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onFocus={() => {
+                    if (results.length > 0) {
+                      updateDropdownPos();
+                      setShowDropdown(true);
+                    }
+                  }}
+                  placeholder="Search city…"
+                  className="w-full bg-white/5 border border-white/[0.08] rounded-lg pl-8 pr-3 py-2 text-sm text-white/80
+                    placeholder:text-white/25 focus:outline-none focus:border-blue-500/50"
+                />
+                {isSearching && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-white/20 border-t-white/60 animate-spin" />
                 )}
               </div>
+
+              {/* Search results dropdown — portal to escape scroll container */}
+              {showDropdown && dropdownPos && createPortal(
+                <div
+                  ref={dropdownRef}
+                  className="fixed z-[9999] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden shadow-2xl"
+                  style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+                >
+                  {results.map((result, i) => (
+                    <button
+                      key={`${result.latitude}-${result.longitude}-${i}`}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleCitySelect(result);
+                      }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-white/10 transition-colors"
+                    >
+                      <MapPin size={12} className="text-white/30 flex-shrink-0" />
+                      <span className="text-sm text-white/80 truncate">{result.displayName}</span>
+                    </button>
+                  ))}
+                </div>,
+                document.body
+              )}
 
               {/* Current city label */}
               <p className="text-xs text-white/30">
