@@ -34,8 +34,10 @@ import { submitFeedbackSkill } from "./submit-feedback.js";
 import { explainFeatureSkill } from "./explain-feature.js";
 import { getStatsSkill } from "./get-stats.js";
 
-// MCP
+// MCP / Granola
 import { getMeetingNotesSkill } from "./get-meeting-notes.js";
+import { getMeetingActionItemsSkill } from "./get-meeting-action-items.js";
+import { analyzeMeetingPatternSkill } from "./analyze-meeting-pattern.js";
 
 export function createRegistry(): SkillRegistry {
   const registry = new SkillRegistry();
@@ -75,9 +77,10 @@ export function createRegistry(): SkillRegistry {
   registry.register(explainFeatureSkill);
   registry.register(getStatsSkill);
 
-  // MCP (1)
-  // Registered when functional — placeholder skills pollute the tool list and confuse routing
-  // registry.register(getMeetingNotesSkill);
+  // MCP / Granola (3)
+  registry.register(getMeetingNotesSkill);
+  registry.register(getMeetingActionItemsSkill);
+  registry.register(analyzeMeetingPatternSkill);
 
   return registry;
 }
