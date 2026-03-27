@@ -69,91 +69,6 @@ function fuzzyMatchItem(text: string, items: BriefingItem[]): BriefingItem | und
   return bestMatch;
 }
 
-/**
- * Scan plain text for n-gram spans that fuzzy-match known items.
- * Returns the text split into segments with matched spans replaced by link elements.
- */
-function linkifyPlainText(
-  text: string,
-  items: BriefingItem[],
-  onItemClick: (id: string) => void,
-  keyOffset: number,
-): React.ReactNode[] {
-  if (items.length === 0) return [<span key={keyOffset}>{text}</span>];
-
-  // Build keyword → item index for fast scanning
-  const itemKeywords: Array<{ item: BriefingItem; words: string[] }> = [];
-  for (const item of items) {
-    const words = sigWords(item.title);
-    if (words.length > 0) itemKeywords.push({ item, words });
-  }
-
-  // Try n-grams from longest (4) to shortest (2) to find the best match span
-  const words = text.split(/(\s+)/); // preserve whitespace as separate tokens
-  const textOnly = words.filter((_, i) => i % 2 === 0); // odd indices are whitespace
-  const result: React.ReactNode[] = [];
-  let consumed = 0; // index into `text`
-
-  for (let start = 0; start < textOnly.length; start++) {
-    // Try 4, 3, 2-word windows
-    for (let len = Math.min(4, textOnly.length - start); len >= 2; len--) {
-      const phrase = textOnly.slice(start, start + len).join(" ");
-      const matched = fuzzyMatchItem(phrase, items);
-      if (matched) {
-        // Find the actual position of this phrase in the original text
-        const phraseStart = findPhrasePosition(text, textOnly, start, consumed);
-        if (phraseStart > consumed) {
-          result.push(<span key={keyOffset + result.length}>{text.slice(consumed, phraseStart)}</span>);
-        }
-        const phraseEnd = findPhraseEnd(text, textOnly, start, len, phraseStart);
-        const matchedText = text.slice(phraseStart, phraseEnd);
-        result.push(
-          <button
-            key={keyOffset + result.length}
-            onClick={() => onItemClick(matched.id)}
-            className="text-blue-400/90 hover:text-blue-300 transition-colors cursor-pointer"
-          >
-            {matchedText}
-          </button>
-        );
-        consumed = phraseEnd;
-        start = start + len - 1; // -1 because loop increments
-        break;
-      }
-    }
-  }
-
-  if (consumed < text.length) {
-    result.push(<span key={keyOffset + result.length}>{text.slice(consumed)}</span>);
-  }
-
-  return result.length > 0 ? result : [<span key={keyOffset}>{text}</span>];
-}
-
-/** Find where a word at index `wordIdx` starts in the original text, searching from `searchFrom` */
-function findPhrasePosition(text: string, textWords: string[], wordIdx: number, searchFrom: number): number {
-  let pos = searchFrom;
-  for (let i = 0; i < wordIdx; i++) {
-    const idx = text.indexOf(textWords[i], pos);
-    if (idx === -1) return pos;
-    pos = idx + textWords[i].length;
-  }
-  // Find the start of the target word
-  const idx = text.indexOf(textWords[wordIdx], pos);
-  return idx === -1 ? pos : idx;
-}
-
-/** Find the end position of the phrase spanning wordIdx to wordIdx+len-1 */
-function findPhraseEnd(text: string, textWords: string[], wordIdx: number, len: number, phraseStart: number): number {
-  let pos = phraseStart;
-  for (let i = 0; i < len; i++) {
-    const idx = text.indexOf(textWords[wordIdx + i], pos);
-    if (idx === -1) return pos;
-    pos = idx + textWords[wordIdx + i].length;
-  }
-  return pos;
-}
-
 function renderBriefingLine(
   text: string,
   items: BriefingItem[],
@@ -171,20 +86,16 @@ function renderBriefingLine(
 
   // Split on **bold** and "quoted" patterns, preserving delimiters
   const parts = text.split(/(\*\*[^*]+\*\*|"[^"]+")/g);
-  let keyIdx = 0;
 
-  return parts.flatMap((part) => {
-    const baseKey = keyIdx;
-
-    // Bold: **text**
+  return parts.map((part, i) => {
+    // Bold: **text** — match against items (exact then fuzzy)
     if (part.startsWith("**") && part.endsWith("**")) {
       const inner = part.slice(2, -2);
       const matched = matchItem(inner);
-      keyIdx++;
       if (matched && onItemClick) {
         return (
           <button
-            key={baseKey}
+            key={i}
             onClick={() => onItemClick(matched.id)}
             className="font-semibold text-blue-400/90 hover:text-blue-300 transition-colors cursor-pointer"
           >
@@ -192,18 +103,17 @@ function renderBriefingLine(
           </button>
         );
       }
-      return <strong key={baseKey} className="font-semibold text-white/90">{inner}</strong>;
+      return <strong key={i} className="font-semibold text-white/90">{inner}</strong>;
     }
 
-    // Quoted: "text"
+    // Quoted: "text" — match against items (exact then fuzzy)
     if (part.startsWith('"') && part.endsWith('"')) {
       const inner = part.slice(1, -1);
       const matched = matchItem(inner);
-      keyIdx++;
       if (matched && onItemClick) {
         return (
           <button
-            key={baseKey}
+            key={i}
             onClick={() => onItemClick(matched.id)}
             className="text-blue-400/90 hover:text-blue-300 transition-colors cursor-pointer"
           >
@@ -211,18 +121,11 @@ function renderBriefingLine(
           </button>
         );
       }
-      return <span key={baseKey}>&ldquo;{inner}&rdquo;</span>;
+      return <span key={i}>&ldquo;{inner}&rdquo;</span>;
     }
 
-    // Plain text — scan for unbolded task references
-    if (onItemClick && items.length > 0) {
-      const nodes = linkifyPlainText(part, items, onItemClick, keyIdx);
-      keyIdx += nodes.length;
-      return nodes;
-    }
-
-    keyIdx++;
-    return <span key={baseKey}>{part}</span>;
+    // Plain text — render as-is, no guessing
+    return <span key={i}>{part}</span>;
   });
 }
 
