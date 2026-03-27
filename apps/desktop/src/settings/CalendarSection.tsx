@@ -7,6 +7,7 @@ import {
   useToggleCalendarVisibility,
 } from "../api/calendar-accounts";
 import { useFetchCalendarRange } from "../api/calendar";
+import { useGranolaAccount, useConnectGranola, useDisconnectGranola } from "../api/granola";
 import type { ConnectedCalendarAccount } from "@brett/types";
 
 const isDev = import.meta.env.DEV;
@@ -132,76 +133,160 @@ export function CalendarSection() {
   const { data: accounts = [], isLoading, error } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
   const fetchRange = useFetchCalendarRange();
+  const { data: granolaAccount } = useGranolaAccount();
+  const connectGranola = useConnectGranola();
+  const disconnectGranola = useDisconnectGranola();
+  const [confirmGranolaDisconnect, setConfirmGranolaDisconnect] = useState(false);
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-          Connected Calendars
-        </h3>
-        <button
-          onClick={() => connectCalendar.mutate()}
-          disabled={connectCalendar.isPending}
-          className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Plus size={12} />
-          Connect Google Calendar
-        </button>
-      </div>
-
-      {isLoading && (
-        <div className="space-y-2">
-          <div className="bg-white/5 animate-pulse rounded-lg h-12 w-full" />
-          <div className="bg-white/5 animate-pulse rounded-lg h-8 w-3/4" />
-        </div>
-      )}
-
-      {error && (
-        <div className="text-sm text-red-400">
-          Failed to load connected calendars.
-        </div>
-      )}
-
-      {!isLoading && !error && accounts.length === 0 && (
-        <div className="flex flex-col items-center gap-3 py-6 text-center">
-          <Calendar size={28} className="text-white/20" />
-          <div>
-            <p className="text-sm text-white/50">No calendars connected yet</p>
-            <p className="text-xs text-white/30 mt-1">
-              Connect your Google Calendar to see events alongside your tasks
-            </p>
-          </div>
-        </div>
-      )}
-
-      {!isLoading && !error && accounts.length > 0 && (
-        <div className="space-y-3">
-          {accounts.map((account) => (
-            <ConnectedAccountRow key={account.id} account={account} />
-          ))}
-        </div>
-      )}
-
-      {isDev && !isLoading && accounts.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5">
+    <>
+      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
+            Connected Calendars
+          </h3>
           <button
-            onClick={() => {
-              const now = new Date();
-              const start = new Date(now);
-              start.setDate(start.getDate() - 30);
-              const end = new Date(now);
-              end.setDate(end.getDate() + 90);
-              const fmt = (d: Date) => d.toISOString().split("T")[0];
-              fetchRange.mutate({ startDate: fmt(start), endDate: fmt(end) });
-            }}
-            disabled={fetchRange.isPending}
-            className="flex items-center gap-1.5 text-xs text-amber-400/60 hover:text-amber-400 transition-colors disabled:opacity-40"
+            onClick={() => connectCalendar.mutate()}
+            disabled={connectCalendar.isPending}
+            className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <RefreshCw size={12} className={fetchRange.isPending ? "animate-spin" : ""} />
-            {fetchRange.isPending ? "Resyncing..." : "Force resync (dev)"}
+            <Plus size={12} />
+            Connect Google Calendar
           </button>
         </div>
-      )}
-    </div>
+
+        {isLoading && (
+          <div className="space-y-2">
+            <div className="bg-white/5 animate-pulse rounded-lg h-12 w-full" />
+            <div className="bg-white/5 animate-pulse rounded-lg h-8 w-3/4" />
+          </div>
+        )}
+
+        {error && (
+          <div className="text-sm text-red-400">
+            Failed to load connected calendars.
+          </div>
+        )}
+
+        {!isLoading && !error && accounts.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <Calendar size={28} className="text-white/20" />
+            <div>
+              <p className="text-sm text-white/50">No calendars connected yet</p>
+              <p className="text-xs text-white/30 mt-1">
+                Connect your Google Calendar to see events alongside your tasks
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !error && accounts.length > 0 && (
+          <div className="space-y-3">
+            {accounts.map((account) => (
+              <ConnectedAccountRow key={account.id} account={account} />
+            ))}
+          </div>
+        )}
+
+        {isDev && !isLoading && accounts.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-white/5">
+            <button
+              onClick={() => {
+                const now = new Date();
+                const start = new Date(now);
+                start.setDate(start.getDate() - 30);
+                const end = new Date(now);
+                end.setDate(end.getDate() + 90);
+                const fmt = (d: Date) => d.toISOString().split("T")[0];
+                fetchRange.mutate({ startDate: fmt(start), endDate: fmt(end) });
+              }}
+              disabled={fetchRange.isPending}
+              className="flex items-center gap-1.5 text-xs text-amber-400/60 hover:text-amber-400 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={12} className={fetchRange.isPending ? "animate-spin" : ""} />
+              {fetchRange.isPending ? "Resyncing..." : "Force resync (dev)"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Meeting Notes (Granola) ── */}
+      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
+            Meeting Notes
+          </h3>
+        </div>
+
+        {granolaAccount?.connected && granolaAccount.account ? (
+          <div className="bg-white/5 rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                <span className="text-sm text-white truncate">{granolaAccount.account.email}</span>
+                {granolaAccount.account.lastSyncAt && (
+                  <span className="text-[10px] text-white/30 flex-shrink-0">
+                    Synced {new Date(granolaAccount.account.lastSyncAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                )}
+              </div>
+              {confirmGranolaDisconnect ? (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-white/50">Remove all meeting data?</span>
+                  <button
+                    onClick={() => {
+                      disconnectGranola.mutate(undefined, {
+                        onSuccess: () => setConfirmGranolaDisconnect(false),
+                      });
+                    }}
+                    disabled={disconnectGranola.isPending}
+                    className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-40"
+                  >
+                    {disconnectGranola.isPending ? "Removing..." : "Yes"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmGranolaDisconnect(false)}
+                    className="text-xs text-white/40 hover:text-white/60 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmGranolaDisconnect(true)}
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-red-400 transition-colors flex-shrink-0 ml-2"
+                >
+                  <Trash2 size={12} />
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <Calendar size={28} className="text-white/20" />
+            <div>
+              <p className="text-sm text-white/50">No meeting notes connected</p>
+              <p className="text-xs text-white/30 mt-1">
+                Connect Granola to sync meeting notes, summaries, and action items
+              </p>
+            </div>
+            <button
+              onClick={() => connectGranola.mutate()}
+              disabled={connectGranola.isPending}
+              className="flex items-center gap-1.5 text-xs text-amber-400/60 hover:text-amber-400 border border-amber-400/20 hover:border-amber-400/40 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-1"
+            >
+              <Plus size={12} />
+              {connectGranola.isPending ? "Connecting..." : "Connect Granola"}
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
