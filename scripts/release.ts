@@ -25,11 +25,12 @@ async function release() {
 
   // 3. Find the .dmg and latest-mac.yml
   const distDir = path.join(DESKTOP_DIR, "dist");
-  const dmgFile = `Brett-${version}.dmg`;
-  const dmgPath = path.join(distDir, dmgFile);
-  if (!fs.existsSync(dmgPath)) {
-    throw new Error(`Expected ${dmgFile} not found in dist/. Build may have failed.`);
+  const dmgFiles = fs.readdirSync(distDir).filter((f) => f.startsWith(`Brett-${version}`) && f.endsWith(".dmg"));
+  if (dmgFiles.length === 0) {
+    throw new Error(`No Brett-${version}*.dmg found in dist/. Build may have failed.`);
   }
+  const dmgFile = dmgFiles[0];
+  const dmgPath = path.join(distDir, dmgFile);
 
   const ymlPath = path.join(distDir, "latest-mac.yml");
   if (!fs.existsSync(ymlPath)) {
