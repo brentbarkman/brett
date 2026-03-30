@@ -4,7 +4,7 @@ import { scopedItems } from "./scoped-queries.js";
 export const completeTaskSkill: Skill = {
   name: "complete_task",
   description:
-    "Mark one or more tasks as done. Pass a single id or an array of ids. Use 'all_inbox' to complete everything in the inbox.",
+    "Mark one or more tasks as done. Pass a single id, an array of ids, or use 'all' to complete all active tasks (optionally filtered by scope: 'inbox', 'today', or 'all').",
   parameters: {
     type: "object",
     properties: {
@@ -16,7 +16,11 @@ export const completeTaskSkill: Skill = {
       },
       all_inbox: {
         type: "boolean",
-        description: "Complete all active inbox items",
+        description: "Complete all active inbox items (no list, no due date)",
+      },
+      all: {
+        type: "boolean",
+        description: "Complete ALL active tasks across inbox, today, and lists",
       },
     },
   },
@@ -24,10 +28,27 @@ export const completeTaskSkill: Skill = {
   requiresAI: false,
 
   async execute(params, ctx) {
-    const p = params as { id?: string; ids?: string[]; all_inbox?: boolean };
+    const p = params as { id?: string; ids?: string[]; all_inbox?: boolean; all?: boolean };
     const items = scopedItems(ctx.prisma, ctx.userId);
 
-    // Bulk: complete all inbox items
+    // Bulk: complete ALL active tasks
+    if (p.all) {
+      const result = await ctx.prisma.item.updateMany({
+        where: {
+          userId: ctx.userId,
+          status: { notIn: ["done", "archived"] },
+        },
+        data: { status: "done", completedAt: new Date() },
+      });
+      return {
+        success: true,
+        data: { completed: result.count },
+        displayHint: { type: "confirmation" },
+        message: `Completed ${result.count} task${result.count !== 1 ? "s" : ""}.`,
+      };
+    }
+
+    // Bulk: complete all inbox items (no list, no due date)
     if (p.all_inbox) {
       const result = await ctx.prisma.item.updateMany({
         where: {
