@@ -130,7 +130,10 @@ export type SSEEventType =
   | "calendar.event.updated"
   | "calendar.event.deleted"
   | "calendar.sync.complete"
-  | "content.extracted";
+  | "content.extracted"
+  | "granola.meeting.synced"
+  | "granola.action_items.created"
+  | "granola.account.disconnected";
 
 export interface SSEEvent {
   type: SSEEventType;

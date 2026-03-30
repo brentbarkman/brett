@@ -28,10 +28,11 @@ brettOmnibar.post(
       return c.json({ error: "Invalid request body" }, 400);
     }
 
-    const { message, sessionId, context } = body as {
+    const { message, sessionId, context, recentMessages: clientMessages } = body as {
       message?: unknown;
       sessionId?: unknown;
       context?: { currentView?: string; selectedItemId?: string };
+      recentMessages?: Array<{ role: string; content: string }>;
     };
 
     if (typeof message !== "string" || message.trim().length === 0) {
@@ -61,7 +62,10 @@ brettOmnibar.post(
         return c.json({ error: "Session not found" }, 404);
       }
       session = existing;
-      sessionMessages = existing.messages;
+      // Prefer client-side messages (always up-to-date) over DB messages (may lag due to async persist)
+      sessionMessages = Array.isArray(clientMessages) && clientMessages.length > 0
+        ? clientMessages.filter((m) => m.role === "user" || m.role === "assistant")
+        : existing.messages;
     } else {
       // Create new session
       session = await prisma.conversationSession.create({

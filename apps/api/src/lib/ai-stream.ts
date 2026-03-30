@@ -30,11 +30,14 @@ export function buildStream(
           if (chunk.type === "text") {
             assistantContentRef.value += chunk.content;
           }
-          // Persist fire-and-forget confirmations so subsequent messages
-          // in the session know what Brett already did. Without this,
-          // the LLM sees only user messages and re-creates/re-lists old tasks.
-          if (chunk.type === "tool_result" && chunk.displayHint?.type === "confirmation" && chunk.message) {
-            assistantContentRef.value += chunk.message;
+          // Persist tool result messages so subsequent messages in the session
+          // have context about what Brett found/did. Without this, the LLM
+          // loses context about meetings, search results, etc. between turns.
+          if (chunk.type === "tool_result") {
+            console.log(`[ai-stream] tool_result: message=${!!chunk.message} hint=${chunk.displayHint?.type ?? "none"}`);
+            if (chunk.message) {
+              assistantContentRef.value += chunk.message + "\n";
+            }
           }
           const data = `event: chunk\ndata: ${JSON.stringify(chunk)}\n\n`;
           controller.enqueue(encoder.encode(data));

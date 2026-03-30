@@ -43,7 +43,7 @@ export interface OmnibarProps {
   onReset?: () => void;
   onNavigateToSettings?: () => void;
   onItemClick?: (id: string) => void;
-  onEventClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
   searchResults?: SearchResultItem[] | null;
   isSearching?: boolean;
@@ -52,7 +52,6 @@ export interface OmnibarProps {
   showTokenUsage?: boolean;
   sessionUsage?: { totalTokens: number } | null;
   weather?: WeatherData | null;
-  weatherNow?: Date;
   weatherLoading?: boolean;
   onWeatherClick?: () => void;
   showWeatherExpanded?: boolean;
@@ -91,7 +90,6 @@ export function Omnibar({
   showTokenUsage,
   sessionUsage,
   weather,
-  weatherNow,
   weatherLoading,
   onWeatherClick,
   showWeatherExpanded,
@@ -176,7 +174,7 @@ export function Omnibar({
     if (!confirmedTask) return;
     const timer = setTimeout(() => {
       animateClose();
-    }, 2500);
+    }, 1500);
     return () => clearTimeout(timer);
   }, [confirmedTask, animateClose]);
 
@@ -471,11 +469,13 @@ export function Omnibar({
           {/* Task Created — inline confirmation */}
           {confirmedTask && (
             <div className="border-t border-white/10">
-              <div className="flex items-center gap-3 px-4 py-3 border-l-2 border-green-400/40 ml-4">
-                <Check size={14} className="text-green-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-sm text-white/85 font-medium truncate">{confirmedTask}</div>
-                  <div className="text-[11px] text-white/40">Added to Inbox</div>
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-6 h-6 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center flex-shrink-0">
+                  <Check size={12} className="text-green-400" />
+                </div>
+                <div>
+                  <div className="text-sm text-white/85 font-medium">{confirmedTask}</div>
+                  <div className="text-[11px] text-white/35">Added to Inbox</div>
                 </div>
               </div>
             </div>
@@ -484,7 +484,7 @@ export function Omnibar({
           {/* Weather Expanded View — hide when user is interacting with omnibar */}
           {showWeatherExpanded && weather && !hasConversation && !showSuggestions && !showSearchResults && !input.trim() && !confirmedTask && (
             <div className="border-t border-white/10 max-h-[400px] overflow-y-auto scrollbar-hide">
-              <WeatherExpanded weather={weather} now={weatherNow} />
+              <WeatherExpanded weather={weather} />
             </div>
           )}
 
@@ -515,7 +515,7 @@ export function Omnibar({
         {isOpen && hasConversation && (
           <div>
             {/* Messages */}
-            <div ref={chatContainerRef} className="max-h-[450px] overflow-y-auto scrollbar-hide p-4 space-y-4">
+            <div ref={chatContainerRef} className="max-h-[350px] overflow-y-auto scrollbar-hide p-4 space-y-4">
               {messages.map((msg, i) => (
                 <MessageBubble
                   key={i}
@@ -538,7 +538,7 @@ export function Omnibar({
 
             {/* Bottom Input — the ONLY input when conversation is active */}
             <div className="border-t border-white/10 px-4 py-2.5 flex items-center gap-3">
-              <Bot size={16} className="text-amber-400/70 flex-shrink-0" />
+              <Bot size={16} className="text-blue-400 flex-shrink-0" />
               {isStreaming ? (
                 <>
                   <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>
@@ -605,59 +605,68 @@ function MessageBubble({
   isLast: boolean;
   isStreaming: boolean;
   onItemClick?: (id: string) => void;
-  onEventClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
 }) {
   if (message.role === "user") {
     return (
-      <div className="flex justify-end">
-        <p className="text-sm text-white/90 bg-white/5 px-3 py-2 rounded-lg max-w-[85%]">
-          {message.content}
-        </p>
+      <div className="flex gap-3 flex-row-reverse">
+        <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-[10px] text-white/70">ME</span>
+        </div>
+        <div>
+          <p className="text-sm text-white/90 bg-white/5 px-3 py-2 rounded-lg rounded-tr-none">
+            {message.content}
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 min-w-0 space-y-2 bg-white/[0.03] rounded-lg px-3.5 py-3 border border-white/[0.06]">
-      {/* Text content — suppressed when a confirmation card exists (the card IS the response) */}
-      {(() => {
-        const hasConfirmation = message.toolCalls?.some((tc) => tc.displayHint?.type === "confirmation" || tc.displayHint?.type === "task_created");
-        if (!hasConfirmation && (message.content || isStreaming)) {
-          return (
-            <div className="text-sm text-white/90 leading-relaxed">
-              <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
-              {isStreaming && (
-                <span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
-              )}
-            </div>
-          );
-        }
-        if (isStreaming && !message.toolCalls?.length) {
-          return (
-            <div className="text-sm text-white/90 leading-relaxed">
-              <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
-              <span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
-            </div>
-          );
-        }
-        return null;
-      })()}
+    <div className="flex gap-3">
+      <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Bot size={12} className="text-blue-400" />
+      </div>
+      <div className="flex-1 min-w-0 space-y-2">
+        {/* Text content — suppressed when a confirmation card exists (the card IS the response) */}
+        {(() => {
+          const hasConfirmation = message.toolCalls?.some((tc) => tc.displayHint?.type === "confirmation" || tc.displayHint?.type === "task_created");
+          if (!hasConfirmation && (message.content || isStreaming)) {
+            return (
+              <div className="text-sm text-white/90 leading-relaxed">
+                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
+                {isStreaming && (
+                  <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+                )}
+              </div>
+            );
+          }
+          if (isStreaming && !message.toolCalls?.length) {
+            return (
+              <div className="text-sm text-white/90 leading-relaxed">
+                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
+                <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+              </div>
+            );
+          }
+          return null;
+        })()}
 
-      {/* Skill result cards */}
-      {message.toolCalls
-        ?.filter((tc) => tc.displayHint)
-        .map((tc, i) => (
-          <SkillResultCard
-            key={i}
-            displayHint={tc.displayHint!}
-            data={tc.result}
-            message={typeof tc.result === "object" && tc.result && "message" in (tc.result as Record<string, unknown>) ? String((tc.result as Record<string, unknown>).message) : undefined}
-            onItemClick={onItemClick}
-            onEventClick={onEventClick}
-            onNavigate={onNavigate}
-          />
-        ))}
+        {/* Skill result cards */}
+        {message.toolCalls
+          ?.filter((tc) => tc.displayHint)
+          .map((tc, i) => (
+            <SkillResultCard
+              key={i}
+              displayHint={tc.displayHint!}
+              data={tc.result}
+              message={typeof tc.result === "object" && tc.result && "message" in (tc.result as Record<string, unknown>) ? String((tc.result as Record<string, unknown>).message) : undefined}
+              onItemClick={onItemClick}
+              onNavigate={onNavigate}
+            />
+          ))}
+      </div>
     </div>
   );
 }

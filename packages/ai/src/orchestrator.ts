@@ -145,6 +145,7 @@ export async function* orchestrate(
             break;
 
           case "tool_call":
+            console.log(`[orchestrator] tool_call: ${chunk.name}`, JSON.stringify(chunk.args));
             pendingToolCalls.push({
               id: chunk.id,
               name: chunk.name,
@@ -319,6 +320,7 @@ export async function* orchestrate(
               continueLoop = true;
             } else {
               // No tool calls — we're done
+              console.log("[orchestrator] No tool calls — LLM responded with text only");
               yield {
                 type: "done",
                 sessionId: sessionId ?? "",

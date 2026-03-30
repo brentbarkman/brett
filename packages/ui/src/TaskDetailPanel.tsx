@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { CheckCircle, RotateCw, X } from "lucide-react";
+import { Calendar, CheckCircle, RotateCw, X } from "lucide-react";
 import type {
   ThingDetail,
   DueDatePrecision,
@@ -48,6 +48,10 @@ interface TaskDetailPanelProps {
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
+  onNavigateToCalendarEvent?: (calendarEventId: string) => void;
+  onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
+  onNavigate?: (path: string) => void;
 }
 
 export function TaskDetailPanel({
@@ -76,6 +80,10 @@ export function TaskDetailPanel({
   isBrettStreaming,
   isLoadingMoreBrettMessages,
   brettTotalCount,
+  onNavigateToCalendarEvent,
+  onItemClick,
+  onEventClick,
+  onNavigate,
 }: TaskDetailPanelProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(detail.title);
@@ -170,6 +178,21 @@ export function TaskDetailPanel({
             </h2>
           )}
 
+          {/* Meeting provenance */}
+          {detail.source === "Granola" && detail.meetingNoteTitle && (
+            <button
+              onClick={() => detail.meetingNoteCalendarEventId && onNavigateToCalendarEvent?.(detail.meetingNoteCalendarEventId)}
+              className={`flex items-center gap-1.5 text-xs text-amber-400/60 ${
+                detail.meetingNoteCalendarEventId && onNavigateToCalendarEvent
+                  ? "hover:text-amber-400 cursor-pointer"
+                  : "cursor-default"
+              } transition-colors`}
+            >
+              <Calendar className="w-3 h-3" />
+              <span>from {detail.meetingNoteTitle}</span>
+            </button>
+          )}
+
           {/* Schedule Row */}
           {onUpdateDueDate && onUpdateReminder && onUpdateRecurrence && (
             <ScheduleRow
@@ -255,6 +278,9 @@ export function TaskDetailPanel({
           isStreaming={isBrettStreaming}
           isLoadingMore={isLoadingMoreBrettMessages}
           totalCount={brettTotalCount}
+          onItemClick={onItemClick}
+          onEventClick={onEventClick}
+          onNavigate={onNavigate}
         />
       )}
     </>

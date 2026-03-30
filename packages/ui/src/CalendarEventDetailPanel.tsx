@@ -11,6 +11,7 @@ import {
   FileText,
   ExternalLink,
 } from "lucide-react";
+import { SimpleMarkdown } from "./SimpleMarkdown";
 import type {
   CalendarEventDetailResponse,
   CalendarRsvpStatus,
@@ -59,6 +60,22 @@ interface CalendarEventDetailPanelProps {
   isSendingBrettMessage: boolean;
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages: boolean;
+  meetingNote?: {
+    id: string;
+    title: string;
+    summary: string | null;
+    transcript: { source: string; speaker: string; text: string }[] | null;
+    actionItems: { title: string; dueDate?: string; assignee?: string; assigneeName?: string }[] | null;
+    items?: { id: string; title: string; status: string; dueDate: string | null }[];
+    meetingStartedAt: string;
+  } | null;
+  onToggleActionItem?: (itemId: string) => void;
+  onSelectActionItem?: (itemId: string) => void;
+  onReprocessActionItems?: (meetingId: string) => void;
+  isReprocessing?: boolean;
+  onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
+  onNavigate?: (path: string) => void;
 }
 
 function formatEventTime(start: string, end: string, isAllDay: boolean): string {
@@ -142,6 +159,14 @@ export function CalendarEventDetailPanel({
   isSendingBrettMessage,
   isBrettStreaming,
   isLoadingMoreBrettMessages,
+  meetingNote,
+  onToggleActionItem,
+  onSelectActionItem,
+  onReprocessActionItems,
+  isReprocessing,
+  onItemClick,
+  onEventClick,
+  onNavigate,
 }: CalendarEventDetailPanelProps) {
   const [showAllAttendees, setShowAllAttendees] = useState(false);
   const [rsvpNote, setRsvpNote] = useState("");
@@ -344,6 +369,139 @@ export function CalendarEventDetailPanel({
             </div>
           )}
 
+          {/* ── Meeting Notes (Granola) ── */}
+          {meetingNote && (
+            <div
+              className="pt-4"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+                  Meeting Notes
+                </span>
+                {onReprocessActionItems && meetingNote.id && (
+                  <button
+                    onClick={() => onReprocessActionItems(meetingNote!.id)}
+                    disabled={isReprocessing}
+                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors disabled:opacity-30"
+                    title="Reprocess action items"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isReprocessing ? "animate-spin" : ""}`} />
+                  </button>
+                )}
+              </div>
+
+              {/* Summary */}
+              {meetingNote.summary && (
+                <SimpleMarkdown
+                  content={meetingNote.summary}
+                  className="text-sm text-white/60 leading-relaxed mb-3"
+                />
+              )}
+
+              {/* Linked Tasks (real Item records) */}
+              {meetingNote.items && meetingNote.items.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-1.5 block">
+                    Tasks
+                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    {meetingNote.items.map((item) => {
+                      const isDone = item.status === "done";
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 px-1 py-1 rounded hover:bg-white/5 transition-colors group"
+                        >
+                          <button
+                            onClick={() => onToggleActionItem?.(item.id)}
+                            className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                              isDone
+                                ? "bg-white/10 border-white/20"
+                                : "border-white/20 hover:border-white/40"
+                            }`}
+                          >
+                            {isDone && <Check className="w-2.5 h-2.5 text-white/40" />}
+                          </button>
+                          <span
+                            onClick={() => onSelectActionItem?.(item.id)}
+                            className={`flex-1 text-sm truncate cursor-pointer ${
+                              isDone ? "text-white/30 line-through" : "text-white/70 hover:text-white/90"
+                            }`}
+                          >
+                            {item.title}
+                          </span>
+                          {item.dueDate && (
+                            <span className="text-[10px] text-white/30 flex-shrink-0">
+                              {new Date(item.dueDate).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Raw action items as bullet points (when no linked tasks exist) */}
+              {(!meetingNote.items || meetingNote.items.length === 0) &&
+                meetingNote.actionItems && meetingNote.actionItems.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-1.5 block">
+                    Action Items
+                  </span>
+                  <ul className="space-y-1 pl-3">
+                    {meetingNote.actionItems.map((item, idx) => (
+                      <li key={idx} className="text-sm text-white/50 list-disc list-outside">
+                        {item.title}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Transcript */}
+              {meetingNote.transcript && meetingNote.transcript.length > 0 && (() => {
+                // Combine all turns into one text, split into readable paragraphs
+                const fullText = meetingNote.transcript!
+                  .map((t) => t.text)
+                  .join(" ")
+                  .replace(/^(Them|You|Me):\s*/i, ""); // strip leading speaker label
+
+                // Break into paragraphs roughly every 3-5 sentences
+                const sentences = fullText.split(/(?<=[.!?])\s+/);
+                const paragraphs: string[] = [];
+                let current: string[] = [];
+                for (const s of sentences) {
+                  current.push(s);
+                  if (current.length >= 4) {
+                    paragraphs.push(current.join(" "));
+                    current = [];
+                  }
+                }
+                if (current.length > 0) paragraphs.push(current.join(" "));
+
+                return (
+                  <details className="group">
+                    <summary className="text-[10px] uppercase tracking-wider text-white/30 font-semibold cursor-pointer hover:text-white/50 transition-colors select-none">
+                      Transcript
+                    </summary>
+                    <div className="mt-2 max-h-64 overflow-y-auto scrollbar-hide bg-white/[0.02] rounded-lg p-3 border border-white/5 space-y-2">
+                      {paragraphs.map((para, idx) => (
+                        <p key={idx} className="text-xs text-white/50 leading-relaxed">
+                          {para}
+                        </p>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })()}
+            </div>
+          )}
+
           {/* ── Attendees ── */}
           {detail.attendees && detail.attendees.length > 0 && (
             <div
@@ -432,6 +590,9 @@ export function CalendarEventDetailPanel({
         isStreaming={isBrettStreaming}
         isLoadingMore={isLoadingMoreBrettMessages}
         totalCount={brettTotalCount}
+        onItemClick={onItemClick}
+        onEventClick={onEventClick}
+        onNavigate={onNavigate}
       />
     </>
   );

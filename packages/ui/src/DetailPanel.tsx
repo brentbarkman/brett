@@ -1,5 +1,5 @@
 import React from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import type {
   Thing,
   CalendarEventDisplay,
@@ -64,6 +64,26 @@ interface DetailPanelProps {
   isSendingCalendarBrettMessage?: boolean;
   isCalendarBrettStreaming?: boolean;
   isLoadingMoreCalendarBrettMessages?: boolean;
+  // Meeting notes
+  meetingNote?: {
+    id: string;
+    title: string;
+    summary: string | null;
+    transcript: { source: string; speaker: string; text: string }[] | null;
+    actionItems: { title: string; dueDate?: string; assignee?: string; assigneeName?: string }[] | null;
+    items?: { id: string; title: string; status: string; dueDate: string | null }[];
+    meetingStartedAt: string;
+  } | null;
+  onToggleActionItem?: (itemId: string) => void;
+  onSelectActionItem?: (itemId: string) => void;
+  onReprocessActionItems?: (meetingId: string) => void;
+  isReprocessing?: boolean;
+  onNavigateToCalendarEvent?: (calendarEventId: string) => void;
+  onBack?: () => void;
+  canGoBack?: boolean;
+  onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
+  onNavigate?: (path: string) => void;
 }
 
 export function DetailPanel({
@@ -108,6 +128,17 @@ export function DetailPanel({
   isSendingCalendarBrettMessage,
   isCalendarBrettStreaming,
   isLoadingMoreCalendarBrettMessages,
+  meetingNote,
+  onToggleActionItem,
+  onSelectActionItem,
+  onReprocessActionItems,
+  isReprocessing,
+  onNavigateToCalendarEvent,
+  onBack,
+  canGoBack,
+  onItemClick,
+  onEventClick,
+  onNavigate,
 }: DetailPanelProps) {
   if (!item) return null;
   const isCalendarEvent = "googleEventId" in item;
@@ -132,6 +163,17 @@ export function DetailPanel({
           ${isOpen ? "translate-x-0" : "translate-x-full"}
         `}
       >
+      {/* Back button */}
+      {canGoBack && onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-4 py-2 text-xs text-white/40 hover:text-white/70 transition-colors border-b border-white/5 flex-shrink-0"
+        >
+          <ArrowLeft className="w-3 h-3" />
+          Back
+        </button>
+      )}
+
       {/* Content */}
       {isTask ? (
         isLoadingDetail ? (
@@ -165,6 +207,10 @@ export function DetailPanel({
             isBrettStreaming={isBrettStreaming}
             isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
             brettTotalCount={brettTotalCount}
+            onNavigateToCalendarEvent={onNavigateToCalendarEvent}
+            onItemClick={onItemClick}
+            onEventClick={onEventClick}
+            onNavigate={onNavigate}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
@@ -206,6 +252,9 @@ export function DetailPanel({
             isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
             brettTotalCount={brettTotalCount}
             onRetryExtraction={onRetryExtraction}
+            onItemClick={onItemClick}
+            onEventClick={onEventClick}
+            onNavigate={onNavigate}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
@@ -232,6 +281,13 @@ export function DetailPanel({
           isSendingBrettMessage={isSendingCalendarBrettMessage ?? false}
           isBrettStreaming={isCalendarBrettStreaming}
           isLoadingMoreBrettMessages={isLoadingMoreCalendarBrettMessages ?? false}
+          meetingNote={meetingNote}
+          onToggleActionItem={onToggleActionItem}
+          onSelectActionItem={onSelectActionItem}
+          onReprocessActionItems={onReprocessActionItems}
+          isReprocessing={isReprocessing}
+          onItemClick={onItemClick}
+          onNavigate={onNavigate}
         />
       ) : (
         <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">

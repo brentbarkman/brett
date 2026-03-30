@@ -133,7 +133,7 @@ things.get("/", async (c) => {
 
   const items = await prisma.item.findMany({
     where,
-    include: { list: { select: { name: true } } },
+    include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } } },
     orderBy: [{ createdAt: "desc" }],
   });
 
@@ -197,7 +197,7 @@ things.get("/inbox", async (c) => {
       status: { notIn: ["done", "archived", "snoozed"] },
       OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }],
     },
-    include: { list: { select: { name: true } } },
+    include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } } },
     orderBy: [{ createdAt: "desc" }],
   });
 
@@ -213,6 +213,7 @@ things.get("/:id", async (c) => {
     where: { id: c.req.param("id"), userId: user.id },
     include: {
       list: { select: { name: true } },
+      meetingNote: { select: { title: true, calendarEventId: true } },
       attachments: { orderBy: { createdAt: "asc" } },
       linksFrom: { orderBy: { createdAt: "asc" } },
       brettMessages: { orderBy: { createdAt: "desc" }, take: 20 },
@@ -256,7 +257,7 @@ things.post("/", async (c) => {
       listId: data.listId ?? null,
       userId: user.id,
     },
-    include: { list: { select: { name: true } } },
+    include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } } },
   });
 
   const thing = itemToThing(item as any);
@@ -374,7 +375,7 @@ things.patch("/:id", async (c) => {
   const item = await prisma.item.update({
     where: { id: existing.id },
     data: updateData,
-    include: { list: { select: { name: true } }, linksFrom: true },
+    include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } }, linksFrom: true },
   });
 
   // If recurrence was just set on an already-completed task, spawn next occurrence now
@@ -393,7 +394,7 @@ things.patch("/:id/toggle", async (c) => {
   const user = c.get("user");
   const existing = await prisma.item.findFirst({
     where: { id: c.req.param("id"), userId: user.id },
-    include: { list: { select: { name: true } }, linksFrom: true },
+    include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } }, linksFrom: true },
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
 
@@ -404,7 +405,7 @@ things.patch("/:id/toggle", async (c) => {
       completedAt: isCompleted ? null : new Date(),
       status: isCompleted ? "active" : "done",
     },
-    include: { list: { select: { name: true } } },
+    include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } } },
   });
 
   // If completing a recurring task, spawn a new independent task

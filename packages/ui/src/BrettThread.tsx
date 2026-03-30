@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { ChevronDown, ChevronUp, User, Bot, Send, Loader2 } from "lucide-react";
 import type { DisplayHint } from "@brett/types";
 import { SkillResultCard } from "./SkillResultCard";
+import { SimpleMarkdown } from "./SimpleMarkdown";
 
 export interface BrettThreadMessage {
   id: string;
@@ -25,14 +26,23 @@ interface BrettThreadProps {
   isSending?: boolean;
   isStreaming?: boolean;
   isLoadingMore?: boolean;
+  onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
+  onNavigate?: (path: string) => void;
 }
 
 function MessageBubble({
   message,
   isStreamingMsg,
+  onItemClick,
+  onEventClick,
+  onNavigate,
 }: {
   message: BrettThreadMessage;
   isStreamingMsg?: boolean;
+  onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
+  onNavigate?: (path: string) => void;
 }) {
   const isUser = message.role === "user";
   return (
@@ -71,12 +81,17 @@ function MessageBubble({
 
         {/* Text content */}
         {message.content && (
-          <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap break-words">
-            {message.content}
+          <div className="text-sm text-white/80 leading-relaxed break-words">
+            <SimpleMarkdown
+              content={message.content}
+              onItemClick={onItemClick}
+              onEventClick={onEventClick}
+              onNavigate={onNavigate}
+            />
             {isStreamingMsg && (
               <span className="inline-block w-1.5 h-3.5 bg-blue-400/60 ml-0.5 animate-pulse rounded-sm" />
             )}
-          </p>
+          </div>
         )}
 
         {/* Streaming cursor when no content yet */}
@@ -107,6 +122,9 @@ export function BrettThread({
   isSending,
   isStreaming,
   isLoadingMore,
+  onItemClick,
+  onEventClick,
+  onNavigate,
 }: BrettThreadProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -229,6 +247,9 @@ export function BrettThread({
               isStreamingMsg={
                 lastIsStreaming && idx === displayMessages.length - 1
               }
+              onItemClick={onItemClick}
+              onEventClick={onEventClick}
+              onNavigate={onNavigate}
             />
           ))}
         </div>

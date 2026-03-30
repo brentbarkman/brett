@@ -55,6 +55,7 @@ import {
   useUpdateCalendarEventNotes,
 } from "./api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
+import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/granola";
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useOmnibar } from "./api/omnibar";
@@ -160,20 +161,10 @@ export function App() {
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEventDisplay | null
   >(null);
+  const [detailHistory, setDetailHistory] = useState<(Thing | CalendarEventDisplay)[]>([]);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [activePage, setActivePage] = useState<"today" | "inbox" | "scouts">("today");
   const [selectedScout, setSelectedScout] = useState<Scout | null>(null);
-
-  // Auto-update notification
-  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  useEffect(() => {
-    const cleanup = (window as any).electronAPI?.onUpdateDownloaded?.((version: string) => {
-      if (/^\d+\.\d+\.\d+/.test(version)) {
-        setUpdateVersion(version);
-      }
-    });
-    return () => cleanup?.();
-  }, []);
 
   // Triage popup state
   const [triageState, setTriageState] = useState<{
@@ -329,6 +320,10 @@ export function App() {
   const { data: calendarEventDetail, isLoading: isLoadingCalendarDetail } = useCalendarEventDetail(
     isDetailOpen && isCalendarSelected ? selectedId : null,
   );
+  const { data: meetingNote } = useGranolaMeetingForEvent(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const reprocessMeeting = useReprocessMeetingActions();
   const updateRsvp = useUpdateRsvp();
   const updateCalendarNotes = useUpdateCalendarEventNotes();
   const calendarBrett = useBrettChat({
@@ -364,7 +359,7 @@ export function App() {
   const omnibar = useOmnibar();
 
   // Weather state for omnibar pill
-  const { weather, now: weatherNow, isLoading: weatherLoading } = useWeather();
+  const { weather, isLoading: weatherLoading } = useWeather();
   const [showWeatherExpanded, setShowWeatherExpanded] = useState(false);
 
   // Token usage tracking — reactive to Settings toggle
@@ -373,8 +368,8 @@ export function App() {
     showTokenUsage ? omnibar.sessionId : null,
   );
 
-  // Track whether spotlight should open with a tool pre-selected (Cmd+F → search, Cmd+T/N → create)
-  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | "create" | null>(null);
+  // Track whether spotlight should open with search pre-selected (Cmd+F)
+  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
 
   // Global Cmd+K / Ctrl+K listener for spotlight
   useEffect(() => {
@@ -397,18 +392,6 @@ export function App() {
           omnibar.close();
         } else {
           setSpotlightInitialAction("search");
-          omnibar.open("spotlight");
-          setSelectedItem(null);
-          setIsDetailOpen(false);
-        }
-      }
-      // Cmd+T / Cmd+N opens spotlight with new task pre-selected
-      if ((e.metaKey || e.ctrlKey) && (e.key === "t" || e.key === "n")) {
-        e.preventDefault();
-        if (omnibar.isOpen && omnibar.mode === "spotlight") {
-          omnibar.close();
-        } else {
-          setSpotlightInitialAction("create");
           omnibar.open("spotlight");
           setSelectedItem(null);
           setIsDetailOpen(false);
@@ -452,8 +435,14 @@ export function App() {
         setSelectedItem({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
         setIsDetailOpen(true);
       },
-      onEventClick: (_id: string) => {
-        navigate("/calendar");
+      onEventClick: (eventId: string) => {
+        const event = sidebarCalendarEvents.find((e) => e.id === eventId);
+        if (event) {
+          handleItemClick(event);
+        } else {
+          setSelectedItem({ id: eventId, googleEventId: "", title: "", startTime: "", endTime: "", durationMinutes: 0, color: "blue", hasBrettContext: false, isAllDay: false, myResponseStatus: "needsAction" } as any);
+          setIsDetailOpen(true);
+        }
         omnibar.close();
       },
       searchResults: omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null,
@@ -483,12 +472,11 @@ export function App() {
       showTokenUsage,
       sessionUsage: sessionUsageData ?? null,
       weather,
-      weatherNow,
       weatherLoading,
       showWeatherExpanded,
       onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
     }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded]
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherLoading, showWeatherExpanded]
   );
 
   // Apply dark mode to root
@@ -514,7 +502,24 @@ export function App() {
 
   const handleItemClick = (item: Thing | CalendarEventDisplay) => {
     setSelectedItem(item);
+    setDetailHistory([]);
     setIsDetailOpen(true);
+  };
+
+  // Navigate within the detail panel (pushes current item to history stack)
+  const handleDetailDrillDown = (item: Thing | CalendarEventDisplay) => {
+    if (selectedItem) {
+      setDetailHistory((prev) => [...prev, selectedItem]);
+    }
+    setSelectedItem(item);
+  };
+
+  const handleDetailBack = () => {
+    const prev = detailHistory[detailHistory.length - 1];
+    if (prev) {
+      setDetailHistory((h) => h.slice(0, -1));
+      setSelectedItem(prev);
+    }
   };
 
   // Adapter for CalendarPage which passes CalendarEventRecord
@@ -531,6 +536,7 @@ export function App() {
 
   const handleCloseDetail = useCallback(() => {
     setIsDetailOpen(false);
+    setDetailHistory([]);
     setTimeout(() => setSelectedItem(null), 300);
   }, []);
 
@@ -830,6 +836,8 @@ export function App() {
           isOpen={isDetailOpen}
           item={selectedItem}
           onClose={handleCloseDetail}
+          onBack={handleDetailBack}
+          canGoBack={detailHistory.length > 0}
           onToggle={handleToggle}
           detail={thingDetail ?? null}
           isLoadingDetail={isLoadingDetail}
@@ -890,6 +898,84 @@ export function App() {
           isSendingCalendarBrettMessage={false}
           isCalendarBrettStreaming={calendarBrett.isStreaming}
           isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
+          meetingNote={meetingNote ? {
+            id: meetingNote.id,
+            title: meetingNote.title,
+            summary: meetingNote.summary,
+            transcript: meetingNote.transcript as any,
+            actionItems: meetingNote.actionItems as any,
+            items: meetingNote.items as any,
+            meetingStartedAt: meetingNote.meetingStartedAt,
+          } : null}
+          onToggleActionItem={handleToggle}
+          onSelectActionItem={(itemId) => {
+            const existing = allActiveThings.find((t) => t.id === itemId);
+            if (existing) {
+              handleDetailDrillDown(existing);
+            } else {
+              const linked = meetingNote?.items?.find((i) => i.id === itemId);
+              if (linked) {
+                handleDetailDrillDown({
+                  id: linked.id,
+                  type: "task",
+                  title: linked.title,
+                  status: linked.status as any,
+                  isCompleted: linked.status === "done",
+                  source: "Granola",
+                  list: "Inbox",
+                  listId: null,
+                  urgency: "normal",
+                } as any);
+              }
+            }
+          }}
+          onReprocessActionItems={import.meta.env.DEV ? (meetingId) => reprocessMeeting.mutate(meetingId) : undefined}
+          isReprocessing={reprocessMeeting.isPending}
+          onNavigateToCalendarEvent={(calendarEventId) => {
+            const event = sidebarCalendarEvents.find((e) => e.id === calendarEventId);
+            if (event) {
+              handleDetailDrillDown(event);
+            } else {
+              handleDetailDrillDown({
+                id: calendarEventId,
+                googleEventId: "",
+                title: "",
+                startTime: "",
+                endTime: "",
+                durationMinutes: 0,
+                color: "blue",
+                hasBrettContext: false,
+                isAllDay: false,
+                myResponseStatus: "needsAction",
+              } as any);
+            }
+          }}
+          onItemClick={(id) => {
+            const thing = allActiveThings.find((t) => t.id === id);
+            if (thing) handleDetailDrillDown(thing);
+          }}
+          onEventClick={(eventId) => {
+            const event = sidebarCalendarEvents.find((e) => e.id === eventId);
+            if (event) {
+              handleDetailDrillDown(event);
+            } else {
+              handleDetailDrillDown({
+                id: eventId,
+                googleEventId: "",
+                title: "",
+                startTime: "",
+                endTime: "",
+                durationMinutes: 0,
+                color: "blue",
+                hasBrettContext: false,
+                isAllDay: false,
+                myResponseStatus: "needsAction",
+              } as any);
+            }
+          }}
+          onNavigate={(path) => {
+            navigate(path);
+          }}
         />
 
         {/* Drag overlay */}
@@ -968,6 +1054,16 @@ export function App() {
             setIsDetailOpen(true);
             omnibar.close();
           }}
+          onEventClick={(eventId: string) => {
+            const event = sidebarCalendarEvents.find((e) => e.id === eventId);
+            if (event) {
+              handleItemClick(event);
+            } else {
+              setSelectedItem({ id: eventId, googleEventId: "", title: "", startTime: "", endTime: "", durationMinutes: 0, color: "blue", hasBrettContext: false, isAllDay: false, myResponseStatus: "needsAction" } as any);
+              setIsDetailOpen(true);
+            }
+            omnibar.close();
+          }}
           onNavigate={(path: string) => {
             navigate(path);
             omnibar.close();
@@ -992,24 +1088,6 @@ export function App() {
             }}
             onCancel={() => setArchiveListConfirm(null)}
           />
-        )}
-        {/* Auto-update notification */}
-        {updateVersion && (
-          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-xl border border-white/10 bg-black/60 backdrop-blur-2xl px-4 py-3 text-sm text-white/80">
-            <span>Brett v{updateVersion} is ready</span>
-            <button
-              onClick={() => (window as any).electronAPI?.installUpdate?.()}
-              className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-600 transition-colors"
-            >
-              Restart to update
-            </button>
-            <button
-              onClick={() => setUpdateVersion(null)}
-              className="text-white/40 hover:text-white/60 transition-colors"
-            >
-              ✕
-            </button>
-          </div>
         )}
       </div>
       </AppDropZone>

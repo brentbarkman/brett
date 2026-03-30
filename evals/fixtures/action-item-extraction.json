@@ -1,0 +1,114 @@
+[
+  {
+    "name": "clear_action_items_both_sides",
+    "description": "Meeting with clear action items for both the user and another attendee",
+    "userName": "Brent",
+    "meetingTitle": "Brent x Dan: Project Sync",
+    "meetingDate": "2026-03-27",
+    "attendees": [
+      { "name": "Dan Cole", "email": "dan@example.com" }
+    ],
+    "summary": "### Discussion\nBrent and Dan reviewed the Q2 roadmap. Dan mentioned he's behind on the API migration and needs another week. Brent agreed to push back the deadline.\n\n### Next Steps\n1. Brent to send revised timeline to stakeholders by end of week\n2. Dan to complete API migration by April 4th\n3. Brent to set up a follow-up sync for next Wednesday\n4. Dan to share his migration progress doc with the team",
+    "criteria": [
+      "Returns a valid JSON array with exactly 4 items",
+      "Items for Brent (the user) have assignee 'me'",
+      "Items for Dan have assignee 'other' and assigneeName set",
+      "No title starts with 'Brent' or contains 'Brent to' or 'Brent:'",
+      "Follow-up items for Dan use the format 'Follow up: Dan to {action}' — NOT 'Follow up with Dan:' or 'Follow up with Brent'",
+      "Uses 'Dan' not 'Dan Cole' or 'Daniel Cole' since the summary uses 'Dan'",
+      "The 'send revised timeline' task has dueDate set to '2026-03-27' (Friday of that week = end of week)",
+      "The 'API migration' task has dueDate set to '2026-04-04'"
+    ]
+  },
+  {
+    "name": "no_action_items",
+    "description": "Informational meeting with no clear action items",
+    "userName": "Brent",
+    "meetingTitle": "Team All-Hands",
+    "meetingDate": "2026-03-25",
+    "attendees": [
+      { "name": "Sarah Kim", "email": "sarah@example.com" },
+      { "name": "Mike Chen", "email": "mike@example.com" }
+    ],
+    "summary": "### Company Updates\nCEO shared Q1 results — revenue up 15%. New office opening in Austin next quarter. Engineering team grew by 4 this month.\n\n### Team Updates\nSarah presented the new design system rollout timeline. Mike demoed the improved onboarding flow. Good questions from the team about mobile support.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty or contains zero items — this meeting had no action items"
+    ]
+  },
+  {
+    "name": "user_only_tasks",
+    "description": "Meeting where all action items are for the user",
+    "userName": "Brent",
+    "meetingTitle": "1:1 with Manager",
+    "meetingDate": "2026-03-26",
+    "attendees": [
+      { "name": "Lisa Park", "email": "lisa@example.com" }
+    ],
+    "summary": "### Discussion\nLisa and Brent discussed performance review prep. Lisa is happy with progress on the calendar integration.\n\n### Action Items\n1. Brent to write self-review by next Monday\n2. Brent to gather peer feedback from 3 teammates\n3. Brent to schedule a follow-up before April 5th to review draft",
+    "criteria": [
+      "Returns a valid JSON array with exactly 3 items",
+      "All items have assignee 'me' — these are all Brent's tasks",
+      "No title starts with 'Brent' or contains 'Brent to'",
+      "Titles are clean action verbs like 'Write self-review' not 'Brent to write self-review'",
+      "Self-review task has dueDate '2026-03-30' (next Monday from March 26)",
+      "Follow-up task has dueDate on or before '2026-04-05'"
+    ]
+  },
+  {
+    "name": "colloquial_names",
+    "description": "Meeting where attendees are referenced by short names in the summary",
+    "userName": "Brent Barkman",
+    "meetingTitle": "Brent Barkman x Jennifer Martinez: Design Review",
+    "meetingDate": "2026-03-28",
+    "attendees": [
+      { "name": "Jennifer Martinez", "email": "jennifer@example.com" }
+    ],
+    "summary": "### Design Review\nBrent and Jen reviewed the new dashboard mockups. Jen flagged some accessibility concerns with the color contrast.\n\n### Next Steps\n1. Jen to update the color palette to meet WCAG AA standards\n2. Brent to share the updated component library link\n3. Jen to send revised mockups by Tuesday",
+    "criteria": [
+      "Returns a valid JSON array with exactly 3 items",
+      "Uses 'Jen' not 'Jennifer' or 'Jennifer Martinez' in follow-up titles — matching how the summary refers to her",
+      "Follow-up items for Jen use format 'Follow up: Jen to {action}'",
+      "No title contains 'Brent Barkman' or 'Brent' as a prefix",
+      "The 'share updated component library link' task has assignee 'me'"
+    ]
+  },
+  {
+    "name": "implicit_due_dates",
+    "description": "Meeting with relative date references that need resolving",
+    "userName": "Brent",
+    "meetingTitle": "Sprint Planning",
+    "meetingDate": "2026-03-24",
+    "attendees": [
+      { "name": "Alex Rivera", "email": "alex@example.com" }
+    ],
+    "summary": "### Sprint Planning\nDiscussed priorities for the upcoming sprint. The release is scheduled for end of next week.\n\n### Action Items\n1. Brent to finish the auth refactor by tomorrow\n2. Alex to write integration tests by end of week\n3. Brent to update the release notes before the release",
+    "criteria": [
+      "Returns a valid JSON array with exactly 3 items",
+      "Auth refactor task has dueDate '2026-03-25' (tomorrow from March 24)",
+      "Integration tests task has dueDate '2026-03-27' (Friday = end of that week)",
+      "Release notes task has dueDate '2026-04-03' (Friday of next week = end of next week)",
+      "No title starts with 'Brent' or 'Alex' as a name prefix"
+    ]
+  },
+  {
+    "name": "mixed_assignees_multiple_attendees",
+    "description": "Meeting with multiple attendees and tasks spread across them",
+    "userName": "Brent",
+    "meetingTitle": "Project Kickoff",
+    "meetingDate": "2026-03-27",
+    "attendees": [
+      { "name": "Tom Wilson", "email": "tom@example.com" },
+      { "name": "Amy Chen", "email": "amy@example.com" }
+    ],
+    "summary": "### Kickoff Discussion\nKicked off the new payments integration. Tom will own the backend, Amy handles the frontend, and Brent coordinates.\n\n### Next Steps\n1. Tom to set up the Stripe sandbox environment\n2. Amy to create the checkout flow wireframes\n3. Brent to draft the project brief and share with the team\n4. Tom to schedule a technical deep-dive with the Stripe team\n5. Amy to review the existing payment component library",
+    "criteria": [
+      "Returns a valid JSON array with exactly 5 items",
+      "Brent's task (project brief) has assignee 'me'",
+      "Tom's tasks have assignee 'other' with assigneeName containing 'Tom'",
+      "Amy's tasks have assignee 'other' with assigneeName containing 'Amy'",
+      "Follow-up titles use casual names 'Tom' and 'Amy', not full names",
+      "No title contains 'Brent' as a prefix or 'Brent to'"
+    ]
+  }
+]
