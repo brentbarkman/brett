@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   things3Import: () => ipcRenderer.invoke("things3:import"),
   installUpdate: () => ipcRenderer.invoke("install-update"),
   onUpdateDownloaded: (callback: (version: string) => void) => {
-    ipcRenderer.once("update-downloaded", (_event, version) => callback(version));
+    const handler = (_event: Electron.IpcRendererEvent, version: string) => callback(version);
+    ipcRenderer.on("update-downloaded", handler);
+    return () => ipcRenderer.removeListener("update-downloaded", handler);
   },
 });

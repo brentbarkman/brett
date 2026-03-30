@@ -167,9 +167,12 @@ export function App() {
   // Auto-update notification
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   useEffect(() => {
-    (window as any).electronAPI?.onUpdateDownloaded?.((version: string) => {
-      setUpdateVersion(version);
+    const cleanup = (window as any).electronAPI?.onUpdateDownloaded?.((version: string) => {
+      if (/^\d+\.\d+\.\d+/.test(version)) {
+        setUpdateVersion(version);
+      }
     });
+    return () => cleanup?.();
   }, []);
 
   // Triage popup state

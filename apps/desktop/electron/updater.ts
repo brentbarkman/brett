@@ -1,18 +1,45 @@
 import { autoUpdater } from "electron-updater";
 import { BrowserWindow } from "electron";
+import path from "path";
+
+function getUpdateFeedUrl(): string | null {
+  let endpoint = "";
+  let bucket = "brett";
+
+  // In production, read from build-time config (same as API URL pattern)
+  try {
+    const fs = require("fs");
+    const configPath = path.join(__dirname, "api-config.json");
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    if (config.storageEndpoint) endpoint = config.storageEndpoint;
+    if (config.storageBucket) bucket = config.storageBucket;
+  } catch {
+    // Fall through to env vars (dev mode)
+  }
+
+  // Dev fallback
+  if (!endpoint) endpoint = process.env.STORAGE_ENDPOINT || "";
+  if (!endpoint) return null;
+
+  return `${endpoint}/${bucket}/releases`;
+}
 
 export function initAutoUpdater(): void {
-  const endpoint = process.env.STORAGE_ENDPOINT;
-  const bucket = process.env.STORAGE_BUCKET || "brett";
+  const feedUrl = getUpdateFeedUrl();
 
-  if (!endpoint) {
-    console.log("[Updater] STORAGE_ENDPOINT not set — skipping auto-update");
+  if (!feedUrl) {
+    console.log("[Updater] No storage endpoint configured — skipping auto-update");
+    return;
+  }
+
+  if (!feedUrl.startsWith("https://")) {
+    console.warn("[Updater] Feed URL is not HTTPS — skipping auto-update for security");
     return;
   }
 
   autoUpdater.setFeedURL({
     provider: "generic",
-    url: `${endpoint}/${bucket}/releases`,
+    url: feedUrl,
   });
 
   autoUpdater.autoDownload = false;
@@ -23,16 +50,16 @@ export function initAutoUpdater(): void {
     autoUpdater.downloadUpdate();
   });
 
+  autoUpdater.on("update-not-available", () => {
+    console.log("[Updater] App is up to date");
+  });
+
   autoUpdater.on("update-downloaded", (info) => {
     console.log(`[Updater] Update downloaded: v${info.version}`);
     const win = BrowserWindow.getAllWindows()[0];
     if (win) {
       win.webContents.send("update-downloaded", info.version);
     }
-  });
-
-  autoUpdater.on("update-not-available", () => {
-    console.log("[Updater] App is up to date");
   });
 
   autoUpdater.on("error", (err) => {
@@ -48,6 +75,10 @@ export function initAutoUpdater(): void {
   }, 5000);
 }
 
+let installTriggered = false;
+
 export function quitAndInstall(): void {
+  if (installTriggered) return;
+  installTriggered = true;
   autoUpdater.quitAndInstall();
 }
