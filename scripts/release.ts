@@ -66,7 +66,22 @@ async function release() {
   );
   console.log("  ✓ latest-mac.yml uploaded");
 
-  // 6. Summary
+  // 6. Upload latest.json (used by download page to auto-detect version)
+  const latestKey = "releases/latest.json";
+  const latestBody = JSON.stringify({ version, dmg: dmgKey });
+  console.log(`Uploading latest.json → ${latestKey}`);
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: latestKey,
+      Body: latestBody,
+      ContentType: "application/json",
+      ACL: "public-read",
+    })
+  );
+  console.log("  ✓ latest.json uploaded");
+
+  // 7. Summary
   const endpoint = process.env.STORAGE_ENDPOINT;
   console.log(`\n✓ Release v${version} published!`);
   console.log(`  Download: ${endpoint}/${BUCKET}/${dmgKey}`);

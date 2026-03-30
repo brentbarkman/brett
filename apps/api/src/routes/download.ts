@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getStorageUrls } from "../lib/storage-urls.js";
+import { getStorageUrls, getLatestVersion } from "../lib/storage-urls.js";
 
 const download = new Hono();
 
@@ -12,9 +12,10 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
-download.get("/", (c) => {
+download.get("/", async (c) => {
   const { releasesUrl, videoFiles } = getStorageUrls();
-  const version = process.env.APP_VERSION || "0.0.1";
+  const latest = await getLatestVersion();
+  const version = latest.version;
 
   // Escape all interpolated values for safe HTML embedding
   const safeVersion = escapeHtml(version);
