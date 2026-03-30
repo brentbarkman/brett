@@ -34,6 +34,29 @@ export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: 
           return <div key={lineIdx} className="h-2" />;
         }
 
+        // Headers (### h3, ## h2, # h1)
+        if (trimmed.startsWith("### ")) {
+          return (
+            <div key={lineIdx} className="text-white/80 font-semibold text-[13px] mt-2 first:mt-0">
+              {renderInline(trimmed.slice(4), onItemClick, onNavigate)}
+            </div>
+          );
+        }
+        if (trimmed.startsWith("## ")) {
+          return (
+            <div key={lineIdx} className="text-white/80 font-semibold text-sm mt-2 first:mt-0">
+              {renderInline(trimmed.slice(3), onItemClick, onNavigate)}
+            </div>
+          );
+        }
+        if (trimmed.startsWith("# ")) {
+          return (
+            <div key={lineIdx} className="text-white font-semibold text-[15px] mt-2 first:mt-0">
+              {renderInline(trimmed.slice(2), onItemClick, onNavigate)}
+            </div>
+          );
+        }
+
         // Bullet point
         if (trimmed.startsWith("- ") || trimmed.startsWith("• ")) {
           return (

@@ -11,6 +11,7 @@ import {
   FileText,
   ExternalLink,
 } from "lucide-react";
+import { SimpleMarkdown } from "./SimpleMarkdown";
 import type {
   CalendarEventDetailResponse,
   CalendarRsvpStatus,
@@ -366,9 +367,10 @@ export function CalendarEventDetailPanel({
 
               {/* Summary */}
               {granolaMeeting.summary && (
-                <p className="text-sm text-white/60 leading-relaxed mb-3 whitespace-pre-wrap">
-                  {granolaMeeting.summary}
-                </p>
+                <SimpleMarkdown
+                  content={granolaMeeting.summary}
+                  className="text-sm text-white/60 leading-relaxed mb-3"
+                />
               )}
 
               {/* Action Items */}
