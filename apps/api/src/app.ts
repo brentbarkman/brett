@@ -23,6 +23,7 @@ import { weather } from "./routes/weather.js";
 import { importRoutes } from "./routes/import.js";
 import { download } from "./routes/download.js";
 import { config } from "./routes/config.js";
+import { scouts } from "./routes/scouts.js";
 import { startCronJobs } from "./jobs/cron.js";
 
 export const app = new Hono();
@@ -73,5 +74,6 @@ app.route("/import", importRoutes);
 app.route("/events", sse);
 app.route("/webhooks", webhooks);
 app.route("/granola/auth", granolaAuth);
+app.route("/scouts", scouts);
 
 startCronJobs();
