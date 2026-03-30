@@ -27,6 +27,14 @@ function callbackHtml(
   { title, message, isError }: { title: string; message: string; isError?: boolean },
 ) {
   const color = isError ? "#f87171" : "#60a5fa";
+  // On success, close immediately — the desktop app polls for status.
+  // On error, keep the tab open so the user can read the message.
+  const autoClose = isError
+    ? ""
+    : "<script>window.close();</script>";
+  const closeHint = isError
+    ? `<p style="color:rgba(255,255,255,0.2);font-size:12px;margin-top:20px;">You can close this tab.</p>`
+    : "";
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"></head>
 <body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;font-family:system-ui,-apple-system,sans-serif;">
@@ -34,8 +42,8 @@ function callbackHtml(
 <div style="font-size:36px;margin-bottom:16px;">${isError ? "😕" : "✅"}</div>
 <h1 style="color:${color};font-size:20px;font-weight:700;margin:0 0 8px;">${escapeHtml(title)}</h1>
 <p style="color:rgba(255,255,255,0.4);font-size:14px;line-height:1.6;margin:0 0 20px;">${escapeHtml(message)}</p>
-<p style="color:rgba(255,255,255,0.2);font-size:12px;">You can close this tab.</p>
-<script>setTimeout(()=>window.close(),3000);</script>
+${closeHint}
+${autoClose}
 </div></body></html>`;
   return c.html(html);
 }
