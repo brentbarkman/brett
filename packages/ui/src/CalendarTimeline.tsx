@@ -342,8 +342,10 @@ export function CalendarTimeline({
   const layout = useMemo(() => layoutEvents(events), [events]);
   const buffers = useMemo(() => findBuffers(events), [events]);
 
-  // Countdown: find next upcoming event
+  // Countdown: find next upcoming event (only for today's view)
   const nowMinutes = currentHour * 60 + currentMinute;
+  const displayDate = date ?? currentTime;
+  const isToday = displayDate.toDateString() === currentTime.toDateString();
   const sortedEvents = [...events].sort(
     (a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime)
   );
@@ -351,21 +353,23 @@ export function CalendarTimeline({
   let countdownEvent: CalendarEventDisplay | null = null;
   let countdownText: string | null = null;
 
-  for (const ev of sortedEvents) {
-    const evStart = parseTimeToMinutes(ev.startTime);
-    const evEnd = evStart + ev.durationMinutes;
+  if (isToday) {
+    for (const ev of sortedEvents) {
+      const evStart = parseTimeToMinutes(ev.startTime);
+      const evEnd = evStart + ev.durationMinutes;
 
-    if (evStart > nowMinutes) {
-      // Upcoming
-      const diff = evStart - nowMinutes;
-      countdownEvent = ev;
-      countdownText = `Starts in ${diff} min`;
-      break;
-    } else if (nowMinutes >= evStart && nowMinutes < evEnd) {
-      // Currently happening
-      countdownEvent = ev;
-      countdownText = "Now";
-      break;
+      if (evStart > nowMinutes) {
+        // Upcoming
+        const diff = evStart - nowMinutes;
+        countdownEvent = ev;
+        countdownText = `Starts in ${diff} min`;
+        break;
+      } else if (nowMinutes >= evStart && nowMinutes < evEnd) {
+        // Currently happening
+        countdownEvent = ev;
+        countdownText = "Now";
+        break;
+      }
     }
   }
 
@@ -390,13 +394,12 @@ export function CalendarTimeline({
   };
 
   // Format displayed date
-  const displayDate = date ?? currentTime;
   const dateLabel = displayDate.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
-  const isDisplayToday = displayDate.toDateString() === currentTime.toDateString();
+  const isDisplayToday = isToday;
 
   return (
     <div className="flex flex-col h-full bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">

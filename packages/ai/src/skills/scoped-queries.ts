@@ -33,13 +33,15 @@ export function scopedLists(prisma: PrismaClient, userId: string) {
 }
 
 export function scopedEvents(prisma: PrismaClient, userId: string) {
+  // Exclude "observer" events (shared calendar, user not invited) and cancelled events
+  const baseWhere = { userId, myResponseStatus: { not: "observer" }, status: { not: "cancelled" } };
   return {
     findFirst: (where: Record<string, unknown>) =>
-      prisma.calendarEvent.findFirst({ where: { ...(where as object), userId } }),
+      prisma.calendarEvent.findFirst({ where: { ...(where as object), ...baseWhere } }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     findMany: (args: { where?: Record<string, unknown>; orderBy?: any; take?: number }) =>
       prisma.calendarEvent.findMany({
-        where: { ...args.where, userId },
+        where: { ...args.where, ...baseWhere },
         orderBy: args.orderBy,
         take: args.take,
       }),

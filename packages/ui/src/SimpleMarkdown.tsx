@@ -11,14 +11,16 @@ interface SimpleMarkdownProps {
   className?: string;
   /** Callback when an item ID is clicked (for inline item references) */
   onItemClick?: (id: string) => void;
+  /** Callback when a calendar event is clicked */
+  onEventClick?: (id: string) => void;
   /** Callback when a navigation link is clicked (for list/view references) */
   onNavigate?: (path: string) => void;
 }
 
 // Pattern for inline item references: [title](brett-item:id)
-const ITEM_REF_PATTERN = /\[([^\]]+)\]\(brett-item:([a-z0-9]+)\)/g;
+const ITEM_REF_PATTERN = /\[([^\]]+)\]\(brett-item:([a-z0-9-]+)\)/g;
 
-export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: SimpleMarkdownProps) {
+export function SimpleMarkdown({ content, className, onItemClick, onEventClick, onNavigate }: SimpleMarkdownProps) {
   if (!content) return null;
 
   // Split into lines, render each line with inline formatting
@@ -39,7 +41,7 @@ export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: 
           return (
             <div key={lineIdx} className="flex gap-2 pl-1">
               <span className="text-white/40 select-none">•</span>
-              <span>{renderInline(trimmed.slice(2), onItemClick, onNavigate)}</span>
+              <span>{renderInline(trimmed.slice(2), onItemClick, onEventClick, onNavigate)}</span>
             </div>
           );
         }
@@ -50,13 +52,13 @@ export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: 
           return (
             <div key={lineIdx} className="flex gap-2 pl-1">
               <span className="text-white/40 select-none min-w-[1rem] text-right">{numMatch[1]}.</span>
-              <span>{renderInline(trimmed.slice(numMatch[0].length), onItemClick, onNavigate)}</span>
+              <span>{renderInline(trimmed.slice(numMatch[0].length), onItemClick, onEventClick, onNavigate)}</span>
             </div>
           );
         }
 
         // Regular line
-        return <div key={lineIdx}>{renderInline(trimmed, onItemClick, onNavigate)}</div>;
+        return <div key={lineIdx}>{renderInline(trimmed, onItemClick, onEventClick, onNavigate)}</div>;
       })}
     </div>
   );
@@ -65,6 +67,7 @@ export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: 
 function renderInline(
   text: string,
   onItemClick?: (id: string) => void,
+  onEventClick?: (id: string) => void,
   onNavigate?: (path: string) => void,
 ): React.ReactNode {
   // Process inline patterns: **bold**, *italic*, `code`, [text](brett-item:id), [text](brett-nav:path), [text](url)
@@ -99,10 +102,17 @@ function renderInline(
     }
 
     // [text](brett-item:id) — clickable item reference
-    const itemMatch = remaining.match(/\[([^\]]+)\]\(brett-item:([a-z0-9]+)\)/);
+    const itemMatch = remaining.match(/\[([^\]]+)\]\(brett-item:([a-z0-9-]+)\)/);
     if (itemMatch && itemMatch.index !== undefined && itemMatch.index < earliestIdx) {
       earliestIdx = itemMatch.index;
       match = { type: "item-ref", fullMatch: itemMatch[0], content: itemMatch[1], extra: itemMatch[2], index: itemMatch.index };
+    }
+
+    // [text](brett-event:id) — clickable calendar event reference
+    const eventMatch = remaining.match(/\[([^\]]+)\]\(brett-event:([a-z0-9-]+)\)/);
+    if (eventMatch && eventMatch.index !== undefined && eventMatch.index < earliestIdx) {
+      earliestIdx = eventMatch.index;
+      match = { type: "event-ref", fullMatch: eventMatch[0], content: eventMatch[1], extra: eventMatch[2], index: eventMatch.index };
     }
 
     // [text](brett-nav:/path) — clickable navigation link (lists, views)
@@ -145,6 +155,21 @@ function renderInline(
               key={key++}
               className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
               onClick={() => onItemClick(match!.extra!)}
+            >
+              {match.content}
+            </button>
+          ) : (
+            <span key={key++} className="text-blue-400">{match.content}</span>
+          )
+        );
+        break;
+      case "event-ref":
+        parts.push(
+          onEventClick ? (
+            <button
+              key={key++}
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              onClick={() => onEventClick(match!.extra!)}
             >
               {match.content}
             </button>

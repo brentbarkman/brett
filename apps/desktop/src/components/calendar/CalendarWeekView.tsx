@@ -32,9 +32,12 @@ function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+function formatDayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function getEventDay(event: CalendarEventRecord): string {
-  const d = new Date(event.startTime);
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return formatDayKey(new Date(event.startTime));
 }
 
 interface LayoutInfo {
@@ -130,7 +133,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
     const abd = new Map<string, CalendarEventRecord[]>();
 
     for (const day of days) {
-      const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+      const key = formatDayKey(day);
       ebd.set(key, []);
       abd.set(key, []);
     }
@@ -211,7 +214,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
             <span className="text-[9px] text-white/30 font-medium">ALL DAY</span>
           </div>
           {days.map((day) => {
-            const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+            const key = formatDayKey(day);
             const dayAllDay = allDayByDay.get(key) ?? [];
             return (
               <div key={key} className="flex-1 min-w-0 px-0.5 py-1 flex flex-wrap gap-0.5">
@@ -260,7 +263,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
 
           {/* Day columns */}
           {days.map((day, dayIndex) => {
-            const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+            const key = formatDayKey(day);
             const dayEvents = eventsByDay.get(key) ?? [];
             const dayLayout = layoutByDay.get(key) ?? new Map();
             const isCurrentDay = isSameDay(day, today);

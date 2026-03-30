@@ -439,7 +439,7 @@ async function upsertEvents(
   for (const event of events) {
     if (!event.id) continue;
 
-    // Handle cancelled events
+    // Handle cancelled events — soft-delete by setting status, preserving user notes
     if (event.status === "cancelled") {
       const existing = await prisma.calendarEvent.findUnique({
         where: {
@@ -450,7 +450,10 @@ async function upsertEvents(
         },
       });
       if (existing) {
-        await prisma.calendarEvent.delete({ where: { id: existing.id } });
+        await prisma.calendarEvent.update({
+          where: { id: existing.id },
+          data: { status: "cancelled" },
+        });
         deleted.push(existing.id);
       }
       continue;
@@ -471,7 +474,11 @@ async function upsertEvents(
 
     // Find self attendee for response status
     const selfAttendee = event.attendees?.find((a) => a.self);
-    const myResponseStatus = selfAttendee?.responseStatus ?? "needsAction";
+    const isOrganizer = event.organizer?.self === true;
+    // If user isn't an attendee and isn't the organizer, they're just observing
+    // a shared calendar event — mark as "observer" so AI skills can filter it out
+    const myResponseStatus = selfAttendee?.responseStatus
+      ?? (isOrganizer ? "accepted" : "observer");
 
     // Extract meeting link
     const meetingLink = extractMeetingLink(event);
