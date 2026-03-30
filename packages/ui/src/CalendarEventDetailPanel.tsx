@@ -60,14 +60,22 @@ interface CalendarEventDetailPanelProps {
   isSendingBrettMessage: boolean;
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages: boolean;
-  granolaMeeting?: {
+  meetingNote?: {
+    id: string;
     title: string;
     summary: string | null;
     transcript: { source: string; speaker: string; text: string }[] | null;
-    actionItems: { title: string; dueDate?: string }[] | null;
+    actionItems: { title: string; dueDate?: string; assignee?: string; assigneeName?: string }[] | null;
+    items?: { id: string; title: string; status: string; dueDate: string | null }[];
     meetingStartedAt: string;
   } | null;
-  onCreateActionItem?: (title: string, dueDate?: string) => void;
+  onToggleActionItem?: (itemId: string) => void;
+  onSelectActionItem?: (itemId: string) => void;
+  onReprocessActionItems?: (meetingId: string) => void;
+  isReprocessing?: boolean;
+  onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
+  onNavigate?: (path: string) => void;
 }
 
 function formatEventTime(start: string, end: string, isAllDay: boolean): string {
@@ -151,8 +159,14 @@ export function CalendarEventDetailPanel({
   isSendingBrettMessage,
   isBrettStreaming,
   isLoadingMoreBrettMessages,
-  granolaMeeting,
-  onCreateActionItem,
+  meetingNote,
+  onToggleActionItem,
+  onSelectActionItem,
+  onReprocessActionItems,
+  isReprocessing,
+  onItemClick,
+  onEventClick,
+  onNavigate,
 }: CalendarEventDetailPanelProps) {
   const [showAllAttendees, setShowAllAttendees] = useState(false);
   const [rsvpNote, setRsvpNote] = useState("");
@@ -356,64 +370,103 @@ export function CalendarEventDetailPanel({
           )}
 
           {/* ── Meeting Notes (Granola) ── */}
-          {granolaMeeting && (
+          {meetingNote && (
             <div
               className="pt-4"
               style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
             >
-              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3 block">
-                Meeting Notes
-              </span>
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+                  Meeting Notes
+                </span>
+                {onReprocessActionItems && meetingNote.id && (
+                  <button
+                    onClick={() => onReprocessActionItems(meetingNote!.id)}
+                    disabled={isReprocessing}
+                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors disabled:opacity-30"
+                    title="Reprocess action items"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isReprocessing ? "animate-spin" : ""}`} />
+                  </button>
+                )}
+              </div>
 
               {/* Summary */}
-              {granolaMeeting.summary && (
+              {meetingNote.summary && (
                 <SimpleMarkdown
-                  content={granolaMeeting.summary}
+                  content={meetingNote.summary}
                   className="text-sm text-white/60 leading-relaxed mb-3"
                 />
               )}
 
-              {/* Action Items */}
-              {granolaMeeting.actionItems && granolaMeeting.actionItems.length > 0 && (
+              {/* Linked Tasks (real Item records) */}
+              {meetingNote.items && meetingNote.items.length > 0 && (
                 <div className="mb-3">
                   <span className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-1.5 block">
-                    Action Items
+                    Tasks
                   </span>
-                  <div className="flex flex-col gap-1.5">
-                    {granolaMeeting.actionItems.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg border border-white/5"
-                      >
-                        <span className="flex-1 text-sm text-white/70 truncate">
-                          {item.title}
-                        </span>
-                        {item.dueDate && (
-                          <span className="text-[10px] text-white/30 flex-shrink-0">
-                            {new Date(item.dueDate).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                        )}
-                        {onCreateActionItem && (
+                  <div className="flex flex-col gap-0.5">
+                    {meetingNote.items.map((item) => {
+                      const isDone = item.status === "done";
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 px-1 py-1 rounded hover:bg-white/5 transition-colors group"
+                        >
                           <button
-                            onClick={() => onCreateActionItem(item.title, item.dueDate)}
-                            className="text-[10px] text-amber-400/60 hover:text-amber-400 font-medium transition-colors flex-shrink-0"
+                            onClick={() => onToggleActionItem?.(item.id)}
+                            className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                              isDone
+                                ? "bg-white/10 border-white/20"
+                                : "border-white/20 hover:border-white/40"
+                            }`}
                           >
-                            + Task
+                            {isDone && <Check className="w-2.5 h-2.5 text-white/40" />}
                           </button>
-                        )}
-                      </div>
-                    ))}
+                          <span
+                            onClick={() => onSelectActionItem?.(item.id)}
+                            className={`flex-1 text-sm truncate cursor-pointer ${
+                              isDone ? "text-white/30 line-through" : "text-white/70 hover:text-white/90"
+                            }`}
+                          >
+                            {item.title}
+                          </span>
+                          {item.dueDate && (
+                            <span className="text-[10px] text-white/30 flex-shrink-0">
+                              {new Date(item.dueDate).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
+              {/* Raw action items as bullet points (when no linked tasks exist) */}
+              {(!meetingNote.items || meetingNote.items.length === 0) &&
+                meetingNote.actionItems && meetingNote.actionItems.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-1.5 block">
+                    Action Items
+                  </span>
+                  <ul className="space-y-1 pl-3">
+                    {meetingNote.actionItems.map((item, idx) => (
+                      <li key={idx} className="text-sm text-white/50 list-disc list-outside">
+                        {item.title}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Transcript */}
-              {granolaMeeting.transcript && granolaMeeting.transcript.length > 0 && (() => {
+              {meetingNote.transcript && meetingNote.transcript.length > 0 && (() => {
                 // Combine all turns into one text, split into readable paragraphs
-                const fullText = granolaMeeting.transcript!
+                const fullText = meetingNote.transcript!
                   .map((t) => t.text)
                   .join(" ")
                   .replace(/^(Them|You|Me):\s*/i, ""); // strip leading speaker label
@@ -537,6 +590,9 @@ export function CalendarEventDetailPanel({
         isStreaming={isBrettStreaming}
         isLoadingMore={isLoadingMoreBrettMessages}
         totalCount={brettTotalCount}
+        onItemClick={onItemClick}
+        onEventClick={onEventClick}
+        onNavigate={onNavigate}
       />
     </>
   );

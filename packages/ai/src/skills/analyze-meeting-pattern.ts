@@ -39,7 +39,7 @@ export const analyzeMeetingPatternSkill: Skill = {
     }
 
     // Find all meetings matching the title
-    const meetings = await ctx.prisma.granolaMeeting.findMany({
+    const meetings = await ctx.prisma.meetingNote.findMany({
       where: {
         userId: ctx.userId,
         title: { contains: p.meetingTitle, mode: "insensitive" },

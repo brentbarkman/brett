@@ -1,9 +1,10 @@
 import type { Skill } from "./types.js";
+import { findMeetingByQuery, findMeetingsByQuery } from "./meeting-search.js";
 
 export const getMeetingNotesSkill: Skill = {
   name: "get_meeting_notes",
   description:
-    "Retrieve meeting notes and summaries. Use when the user asks about what happened in a meeting, what was discussed, or wants meeting notes. Can search by calendar event ID, date, or text query.",
+    "Retrieve meeting notes and summaries. ALWAYS use this (not search_things) when the user asks what happened in a meeting, what was discussed, or wants meeting notes. Searches by person name, meeting title, topic, date, or attendee.",
   parameters: {
     type: "object",
     properties: {
@@ -14,7 +15,7 @@ export const getMeetingNotesSkill: Skill = {
       query: {
         type: "string",
         description:
-          "Search query — a meeting title (partial match) or date (YYYY-MM-DD)",
+          "Person name, meeting title, topic, or date (YYYY-MM-DD). Searches titles, calendar events, and attendees. E.g. 'Dan Cole', 'sprint planning', '2026-03-27'.",
       },
     },
   },
@@ -29,7 +30,7 @@ export const getMeetingNotesSkill: Skill = {
 
     // 1. Lookup by calendar event ID
     if (p.calendarEventId) {
-      const meeting = await ctx.prisma.granolaMeeting.findFirst({
+      const meeting = await ctx.prisma.meetingNote.findFirst({
         where: { calendarEventId: p.calendarEventId, userId: ctx.userId },
       });
 
@@ -58,7 +59,7 @@ export const getMeetingNotesSkill: Skill = {
         const dayStart = new Date(p.query + "T00:00:00Z");
         const dayEnd = new Date(p.query + "T23:59:59.999Z");
 
-        const meetings = await ctx.prisma.granolaMeeting.findMany({
+        const meetings = await ctx.prisma.meetingNote.findMany({
           where: {
             userId: ctx.userId,
             meetingStartedAt: { gte: dayStart, lte: dayEnd },
@@ -83,15 +84,8 @@ export const getMeetingNotesSkill: Skill = {
         };
       }
 
-      // Title search (case-insensitive contains)
-      const meetings = await ctx.prisma.granolaMeeting.findMany({
-        where: {
-          userId: ctx.userId,
-          title: { contains: p.query, mode: "insensitive" },
-        },
-        orderBy: { meetingStartedAt: "desc" },
-        take: 5,
-      });
+      // Search by title, calendar event title, and attendee names
+      const meetings = await findMeetingsByQuery(ctx.prisma, ctx.userId, p.query, 5);
 
       if (meetings.length === 0) {
         return {
@@ -111,7 +105,7 @@ export const getMeetingNotesSkill: Skill = {
     }
 
     // 3. No params — return 3 most recent meetings
-    const meetings = await ctx.prisma.granolaMeeting.findMany({
+    const meetings = await ctx.prisma.meetingNote.findMany({
       where: { userId: ctx.userId },
       orderBy: { meetingStartedAt: "desc" },
       take: 3,

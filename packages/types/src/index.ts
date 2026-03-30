@@ -84,7 +84,7 @@ export interface ItemRecord {
   contentFavicon: string | null;
   contentDomain: string | null;
   contentMetadata: Record<string, unknown> | null;
-  granolaMeetingId: string | null;
+  meetingNoteId: string | null;
   listId: string | null;
   userId: string;
   createdAt: Date;
@@ -115,7 +115,8 @@ export interface Thing {
   contentStatus?: ContentStatus;
   contentDomain?: string;
   contentImageUrl?: string;
-  granolaMeetingTitle?: string;
+  meetingNoteTitle?: string;
+  meetingNoteCalendarEventId?: string;
 }
 
 export interface Attachment {
@@ -249,7 +250,7 @@ export interface CreateBrettMessageInput {
 }
 
 export * from "./calendar";
-export * from "./granola.js";
+export * from "./meeting-notes.js";
 
 // ─── AI Types ───
 

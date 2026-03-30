@@ -7,7 +7,7 @@ import {
   useToggleCalendarVisibility,
 } from "../api/calendar-accounts";
 import { useFetchCalendarRange } from "../api/calendar";
-import { useGranolaAccount, useConnectGranola, useDisconnectGranola } from "../api/granola";
+import { useGranolaAccount, useConnectGranola, useDisconnectGranola, useUpdateGranolaPreferences } from "../api/granola";
 import type { ConnectedCalendarAccount } from "@brett/types";
 
 const isDev = import.meta.env.DEV;
@@ -136,6 +136,7 @@ export function CalendarSection() {
   const { data: granolaAccount } = useGranolaAccount();
   const connectGranola = useConnectGranola();
   const disconnectGranola = useDisconnectGranola();
+  const updatePrefs = useUpdateGranolaPreferences();
   const [confirmGranolaDisconnect, setConfirmGranolaDisconnect] = useState(false);
 
   return (
@@ -265,6 +266,51 @@ export function CalendarSection() {
                   Disconnect
                 </button>
               )}
+            </div>
+
+            {/* Auto-create settings */}
+            <div className="px-3 py-3 border-t border-white/5 space-y-3">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div className="flex-1 mr-3">
+                  <span className="text-sm text-white/70">Create tasks for me</span>
+                  <p className="text-[10px] text-white/30 mt-0.5">Auto-create tasks assigned to you from meeting action items</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={granolaAccount.account.autoCreateMyTasks}
+                  onClick={() => updatePrefs.mutate({ autoCreateMyTasks: !granolaAccount.account!.autoCreateMyTasks })}
+                  className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
+                    granolaAccount.account.autoCreateMyTasks ? "bg-blue-500" : "bg-white/15"
+                  }`}
+                >
+                  <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
+                    granolaAccount.account.autoCreateMyTasks ? "translate-x-[16px]" : "translate-x-[2px]"
+                  }`} />
+                </button>
+              </label>
+
+              <label className="flex items-center justify-between cursor-pointer">
+                <div className="flex-1 mr-3">
+                  <span className="text-sm text-white/70">Create follow-ups</span>
+                  <p className="text-[10px] text-white/30 mt-0.5">Auto-create follow-up tasks for action items assigned to others</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={granolaAccount.account.autoCreateFollowUps}
+                  onClick={() => updatePrefs.mutate({ autoCreateFollowUps: !granolaAccount.account!.autoCreateFollowUps })}
+                  className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
+                    granolaAccount.account.autoCreateFollowUps ? "bg-blue-500" : "bg-white/15"
+                  }`}
+                >
+                  <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
+                    granolaAccount.account.autoCreateFollowUps ? "translate-x-[16px]" : "translate-x-[2px]"
+                  }`} />
+                </button>
+              </label>
+
+              <p className="text-[10px] text-white/25 leading-relaxed">
+                Brett uses AI to determine which action items are relevant and rewrites them as clear, actionable tasks with due dates when mentioned.
+              </p>
             </div>
           </div>
         ) : (

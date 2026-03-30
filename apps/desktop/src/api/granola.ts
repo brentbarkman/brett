@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
-import type { GranolaAccountStatus, GranolaMeetingDetail } from "@brett/types";
+import { invalidateAllThings } from "./invalidate";
+import type { GranolaAccountStatus, MeetingNoteDetail } from "@brett/types";
 
 export function useGranolaAccount() {
   return useQuery({
@@ -50,13 +51,42 @@ export function useDisconnectGranola() {
   });
 }
 
+export function useUpdateGranolaPreferences() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (prefs: { autoCreateMyTasks?: boolean; autoCreateFollowUps?: boolean }) =>
+      apiFetch("/granola/auth/preferences", {
+        method: "PATCH",
+        body: JSON.stringify(prefs),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["granola", "account"] });
+    },
+  });
+}
+
 export function useGranolaMeetingForEvent(calendarEventId: string | null) {
   return useQuery({
     queryKey: ["granola", "meeting", calendarEventId],
     queryFn: () =>
-      apiFetch<GranolaMeetingDetail | null>(
+      apiFetch<MeetingNoteDetail | null>(
         `/granola/auth/meetings/by-event/${calendarEventId}`,
       ),
     enabled: !!calendarEventId,
+  });
+}
+
+export function useReprocessMeetingActions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (meetingId: string) =>
+      apiFetch<{ ok: boolean; created: number }>(
+        `/granola/auth/meetings/${meetingId}/reprocess`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["granola", "meeting"] });
+      invalidateAllThings(queryClient);
+    },
   });
 }

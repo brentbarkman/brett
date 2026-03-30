@@ -1,14 +1,11 @@
 import { prisma } from "../lib/prisma.js";
-import type { PrismaClient } from "@prisma/client";
 import {
   listGranolaMeetings,
   withGranolaClient,
 } from "../lib/granola-mcp.js";
 import { findBestMatch, type MatchCandidate } from "./meeting-matcher.js";
 import { publishSSE } from "../lib/sse.js";
-import { validateCreateItem } from "@brett/business";
-
-type TransactionClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
+import { processActionItems } from "./granola-action-items.js";
 
 // Working hours gate: 8am-7pm in user's timezone
 const WORKING_HOURS_START = 8;
@@ -58,7 +55,7 @@ export async function initialGranolaSync(userId: string): Promise<void> {
 
   try {
     const meetings = await listGranolaMeetings(account.id, "last_30_days");
-    await syncMeetings(account.id, userId, meetings);
+    await syncMeetings(account.id, userId, meetings, { extractActions: false });
 
     await prisma.granolaAccount.update({
       where: { id: account.id },
@@ -151,11 +148,12 @@ async function syncMeetings(
   granolaAccountId: string,
   userId: string,
   meetingList: { id: string; title: string; start_time: string; end_time: string; attendees?: { name: string; email: string }[] }[],
+  options: { extractActions: boolean } = { extractActions: true },
 ): Promise<number> {
   if (meetingList.length === 0) return 0;
 
   // Filter to only new meetings we haven't synced
-  const existingIds = await prisma.granolaMeeting.findMany({
+  const existingIds = await prisma.meetingNote.findMany({
     where: {
       granolaDocumentId: { in: meetingList.map((m) => m.id) },
       userId,
@@ -242,28 +240,41 @@ async function syncMeetings(
 
       // Use list metadata for title/time/attendees, detail for notes/summary
       const summary = detail?.summary ?? detail?.notes ?? null;
+      const calendarEventId = match?.id ?? null;
 
-      // Store meeting + action items in a transaction to prevent duplicates
-      await prisma.$transaction(async (tx) => {
-        const meeting = await tx.granolaMeeting.create({
-          data: {
-            granolaDocumentId: listItem.id,
-            userId,
-            granolaAccountId,
-            calendarEventId: match?.id ?? null,
-            title: listItem.title,
-            summary,
-            transcript: transcript?.turns ?? undefined,
-            attendees: listItem.attendees ?? undefined,
-            meetingStartedAt: new Date(listItem.start_time),
-            meetingEndedAt: new Date(listItem.end_time),
-            rawData: (detail as any) ?? undefined,
-          },
-        });
-
-        // Extract and create action items within the same transaction
-        await extractAndCreateActionItems(tx, meeting.id, userId, summary ?? "");
+      // Create meeting record (action items processed separately to avoid long transactions)
+      const meeting = await prisma.meetingNote.create({
+        data: {
+          granolaDocumentId: listItem.id,
+          userId,
+          granolaAccountId,
+          calendarEventId,
+          title: listItem.title,
+          summary,
+          transcript: transcript?.turns ?? undefined,
+          attendees: listItem.attendees ?? undefined,
+          meetingStartedAt: new Date(listItem.start_time),
+          meetingEndedAt: new Date(listItem.end_time),
+          rawData: (detail as any) ?? undefined,
+        },
       });
+
+      // Extract action items outside the transaction (AI calls can be slow)
+      if (options.extractActions && summary) {
+        try {
+          await processActionItems(
+            meeting.id,
+            calendarEventId,
+            userId,
+            summary,
+            listItem.title,
+            new Date(listItem.start_time),
+            listItem.attendees ?? [],
+          );
+        } catch (actionErr) {
+          console.error(`[granola-sync] Action item extraction failed for ${listItem.id}:`, actionErr);
+        }
+      }
 
       syncedCount++;
     } catch (err: any) {
@@ -278,98 +289,3 @@ async function syncMeetings(
   return syncedCount;
 }
 
-/**
- * Extract action items from meeting summary, then create them as tasks.
- * Uses simple pattern-based extraction for v1.
- * Accepts a transaction client so it can run within a transaction.
- */
-async function extractAndCreateActionItems(
-  tx: TransactionClient,
-  granolaMeetingId: string,
-  userId: string,
-  summaryText: string,
-): Promise<void> {
-  if (!summaryText.trim()) return;
-
-  // Extract action items from Granola summaries.
-  // Granola typically formats these as numbered/bulleted lists under
-  // headers like "### Next Steps", "### Action Items", "### Follow-ups"
-  const items: { title: string }[] = [];
-
-  // Strategy 1: Find content under action-item-like headers
-  const headerPattern = /###?\s*(?:next steps|action items?|follow[- ]?ups?|todos?|takeaways)\s*\n([\s\S]*?)(?=\n###?\s|$)/gi;
-  let headerMatch;
-  while ((headerMatch = headerPattern.exec(summaryText)) !== null) {
-    const block = headerMatch[1];
-    // Extract numbered items (1. Do something) and bullet items (- Do something)
-    const linePattern = /^(?:\d+\.\s+|[-*•]\s+)(.+)/gm;
-    let lineMatch;
-    while ((lineMatch = linePattern.exec(block)) !== null) {
-      const title = lineMatch[1].trim();
-      if (title.length > 3 && title.length < 200) {
-        items.push({ title });
-      }
-    }
-  }
-
-  // Strategy 2: Explicit action item labels anywhere in the text
-  const labelPatterns = [
-    /^[-*•]\s*(?:action item|todo|task|follow[- ]?up):\s*(.+)/gim,
-    /^[-*•]\s*\[[ x]?\]\s*(.+)/gim,
-  ];
-  for (const pattern of labelPatterns) {
-    let match;
-    while ((match = pattern.exec(summaryText)) !== null) {
-      const title = match[1].trim();
-      if (title.length > 3 && title.length < 200) {
-        items.push({ title });
-      }
-    }
-  }
-
-  // Deduplicate by title
-  const seen = new Set<string>();
-  const unique = items.filter((item) => {
-    const key = item.title.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  // Store extracted items on the meeting record
-  if (unique.length > 0) {
-    await tx.granolaMeeting.update({
-      where: { id: granolaMeetingId },
-      data: { actionItems: unique },
-    });
-  }
-
-  // Create tasks for each action item
-  for (const actionItem of unique) {
-    const validation = validateCreateItem({
-      type: "task",
-      title: actionItem.title,
-      source: "Granola",
-    });
-
-    if (!validation.ok) continue;
-
-    await tx.item.create({
-      data: {
-        type: "task",
-        title: validation.data.title,
-        source: "Granola",
-        status: "active",
-        userId,
-        granolaMeetingId,
-      },
-    });
-  }
-
-  if (unique.length > 0) {
-    publishSSE(userId, {
-      type: "granola.action_items.created",
-      payload: { count: unique.length, granolaMeetingId },
-    });
-  }
-}

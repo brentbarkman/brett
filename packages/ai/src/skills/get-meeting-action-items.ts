@@ -1,10 +1,11 @@
 import type { Skill } from "./types.js";
 import { validateCreateItem } from "@brett/business";
+import { findMeetingByQuery, findMeetingsByQuery } from "./meeting-search.js";
 
 export const getMeetingActionItemsSkill: Skill = {
   name: "get_meeting_action_items",
   description:
-    "Get action items from a meeting. Use when the user asks for action items, todos, or follow-ups from a specific meeting. Can also create them as tasks.",
+    "Get action items from meeting notes. ALWAYS use this (not search_things) when the user mentions a meeting, a person they met with, or asks about action items/next steps/follow-ups from a meeting. Searches by person name, meeting title, topic, calendar event, and attendees.",
   parameters: {
     type: "object",
     properties: {
@@ -14,7 +15,7 @@ export const getMeetingActionItemsSkill: Skill = {
       },
       meetingTitle: {
         type: "string",
-        description: "Meeting title to search for (case-insensitive)",
+        description: "Person name, meeting title, or topic to search for (e.g. 'Dan Cole', 'sprint planning', 'adobe chat'). Searches titles, calendar events, and attendees.",
       },
       createTasks: {
         type: "boolean",
@@ -32,32 +33,22 @@ export const getMeetingActionItemsSkill: Skill = {
       createTasks?: boolean;
     };
 
-    // Find the meeting
-    let meeting = await findMeeting(ctx, p);
+    // Find the meeting(s)
+    console.log("[get_meeting_action_items] called with:", JSON.stringify(p));
+    const { meeting, otherMatches } = await findMeetings(ctx, p);
 
-    // On-demand fallback: if no meeting found, check if user has a Granola account
-    // and suggest waiting for sync rather than over-engineering a cross-package import
     if (!meeting) {
-      const hasGranola = await ctx.prisma.granolaAccount.findUnique({
+      const hasMeetingNotes = await ctx.prisma.granolaAccount.findUnique({
         where: { userId: ctx.userId },
       });
-
-      if (hasGranola) {
-        return {
-          success: true,
-          data: null,
-          displayHint: { type: "text" },
-          message:
-            "I couldn't find that meeting yet. It may not have synced from Granola. " +
-            "Meetings sync automatically every few minutes — try again shortly.",
-        };
-      }
 
       return {
         success: true,
         data: null,
         displayHint: { type: "text" },
-        message: "No matching meeting found.",
+        message: hasMeetingNotes
+          ? "No matching meeting found. It may not have synced yet — meetings sync automatically every few minutes."
+          : "No matching meeting found. Connect a meeting notes provider in Settings to sync meetings.",
       };
     }
 
@@ -96,7 +87,7 @@ export const getMeetingActionItemsSkill: Skill = {
               : null,
             status: "active",
             source: "Granola",
-            granolaMeetingId: meeting.id,
+            meetingNoteId: meeting.id,
             userId: ctx.userId,
           },
         });
@@ -125,25 +116,41 @@ export const getMeetingActionItemsSkill: Skill = {
       };
     }
 
-    // List action items without creating
+    // Fetch linked Item records (actual tasks) for clickable links
+    const linkedTasks = await ctx.prisma.item.findMany({
+      where: { meetingNoteId: meeting.id, userId: ctx.userId, source: "Granola" },
+      select: { id: true, title: true, status: true, dueDate: true },
+      orderBy: { createdAt: "asc" },
+    });
+
     const date = meeting.meetingStartedAt.toISOString().split("T")[0];
-    const itemLines = actionItems
-      .map((item) => {
-        const due = item.dueDate ? ` (due ${item.dueDate})` : "";
-        const assignee = item.assignee ? ` — ${item.assignee}` : "";
-        return `- ${item.title}${due}${assignee}`;
-      })
-      .join("\n");
+
+    // Prefer linked tasks (clickable), fall back to raw action items
+    const itemLines = linkedTasks.length > 0
+      ? linkedTasks.map((t) => {
+          const due = t.dueDate ? ` (due ${t.dueDate.toISOString().split("T")[0]})` : "";
+          const done = t.status === "done" ? " ~~" : "";
+          const doneEnd = t.status === "done" ? "~~" : "";
+          return `- ${done}[${t.title}](brett-item:${t.id})${doneEnd}${due}`;
+        }).join("\n")
+      : actionItems.map((item) => {
+          const due = item.dueDate ? ` (due ${item.dueDate})` : "";
+          return `- ${item.title}${due}`;
+        }).join("\n");
+
+    const otherMeetingsNote = otherMatches.length > 0
+      ? `\n\n_Also found: ${otherMatches.map((m) => `**${m.title}** (${m.meetingStartedAt.toISOString().split("T")[0]})`).join(", ")}_`
+      : "";
 
     return {
       success: true,
       data: {
         meetingId: meeting.id,
         title: meeting.title,
-        actionItemCount: actionItems.length,
+        actionItemCount: linkedTasks.length || actionItems.length,
       },
       displayHint: { type: "text" },
-      message: `**Action items from ${meeting.title}** (${date}):\n\n${itemLines}\n\n_Say "create tasks from this meeting" to turn these into tasks._`,
+      message: `**Action items from ${meeting.calendarEventId ? `[${meeting.title}](brett-event:${meeting.calendarEventId})` : meeting.title}** (${date}):\n\n${itemLines}${otherMeetingsNote}`,
     };
   },
 };
@@ -156,34 +163,23 @@ interface ActionItem {
   assignee?: string;
 }
 
-interface MeetingRecord {
-  id: string;
-  title: string;
-  actionItems: unknown;
-  meetingStartedAt: Date;
-}
+type MeetingRecord = { id: string; calendarEventId: string | null; title: string; actionItems: unknown; meetingStartedAt: Date };
 
-async function findMeeting(
+async function findMeetings(
   ctx: { prisma: import("@prisma/client").PrismaClient; userId: string },
   p: { calendarEventId?: string; meetingTitle?: string }
-): Promise<MeetingRecord | null> {
+): Promise<{ meeting: MeetingRecord | null; otherMatches: MeetingRecord[] }> {
   if (p.calendarEventId) {
-    return ctx.prisma.granolaMeeting.findFirst({
+    const meeting = await ctx.prisma.meetingNote.findFirst({
       where: { calendarEventId: p.calendarEventId, userId: ctx.userId },
     });
+    return { meeting, otherMatches: [] };
   }
-
   if (p.meetingTitle) {
-    return ctx.prisma.granolaMeeting.findFirst({
-      where: {
-        userId: ctx.userId,
-        title: { contains: p.meetingTitle, mode: "insensitive" },
-      },
-      orderBy: { meetingStartedAt: "desc" },
-    });
+    const all = await findMeetingsByQuery(ctx.prisma, ctx.userId, p.meetingTitle, 5);
+    return { meeting: all[0] ?? null, otherMatches: all.slice(1) };
   }
-
-  return null;
+  return { meeting: null, otherMatches: [] };
 }
 
 function parseActionItems(raw: unknown): ActionItem[] {

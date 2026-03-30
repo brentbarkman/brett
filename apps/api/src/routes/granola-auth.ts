@@ -98,9 +98,34 @@ granolaAuth.get("/", authMiddleware, async (c) => {
       id: account.id,
       email: account.email,
       lastSyncAt: account.lastSyncAt?.toISOString() ?? null,
+      autoCreateMyTasks: account.autoCreateMyTasks,
+      autoCreateFollowUps: account.autoCreateFollowUps,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
     },
+  });
+});
+
+// PATCH /preferences — Update auto-create settings
+granolaAuth.patch("/preferences", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json<{
+    autoCreateMyTasks?: boolean;
+    autoCreateFollowUps?: boolean;
+  }>();
+
+  const data: Record<string, boolean> = {};
+  if (typeof body.autoCreateMyTasks === "boolean") data.autoCreateMyTasks = body.autoCreateMyTasks;
+  if (typeof body.autoCreateFollowUps === "boolean") data.autoCreateFollowUps = body.autoCreateFollowUps;
+
+  const account = await prisma.granolaAccount.update({
+    where: { userId: user.id },
+    data,
+  });
+
+  return c.json({
+    autoCreateMyTasks: account.autoCreateMyTasks,
+    autoCreateFollowUps: account.autoCreateFollowUps,
   });
 });
 
@@ -310,12 +335,12 @@ granolaAuth.delete("/", authMiddleware, async (c) => {
   if (!account) {
     return c.json({ error: "Not connected" }, 404);
   }
-  // Null out granolaMeetingId on any linked items before cascade delete
+  // Null out meetingNoteId on any linked items before cascade delete
   await prisma.item.updateMany({
-    where: { granolaMeetingId: { not: null }, userId: user.id },
-    data: { granolaMeetingId: null },
+    where: { meetingNoteId: { not: null }, userId: user.id },
+    data: { meetingNoteId: null },
   });
-  // Cascade delete: GranolaAccount -> GranolaMeeting
+  // Cascade delete: GranolaAccount -> MeetingNote
   await prisma.granolaAccount.delete({ where: { id: account.id } });
   return c.json({ ok: true });
 });
@@ -324,7 +349,7 @@ granolaAuth.delete("/", authMiddleware, async (c) => {
 granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
   const user = c.get("user");
   const eventId = c.req.param("eventId");
-  const meeting = await prisma.granolaMeeting.findFirst({
+  const meeting = await prisma.meetingNote.findFirst({
     where: { calendarEventId: eventId, userId: user.id },
     select: {
       id: true,
@@ -338,9 +363,28 @@ granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
       meetingStartedAt: true,
       meetingEndedAt: true,
       syncedAt: true,
+      items: {
+        where: { source: "Granola" },
+        select: { id: true, title: true, status: true, dueDate: true },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   return c.json(meeting);
+});
+
+// POST /meetings/:meetingId/reprocess — Re-extract action items for a meeting
+granolaAuth.post("/meetings/:meetingId/reprocess", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const meetingId = c.req.param("meetingId");
+  try {
+    const { reprocessActionItems } = await import("../services/granola-action-items.js");
+    const result = await reprocessActionItems(meetingId, user.id);
+    return c.json({ ok: true, created: result.created });
+  } catch (err: any) {
+    console.error("[granola-auth] Reprocess failed:", err);
+    return c.json({ error: err?.message ?? "Reprocess failed" }, 500);
+  }
 });
 
 // POST /sync — Manually trigger sync
@@ -349,7 +393,7 @@ granolaAuth.post("/sync", authMiddleware, async (c) => {
   try {
     const { initialGranolaSync } = await import("../services/granola-sync.js");
     await initialGranolaSync(user.id);
-    const count = await prisma.granolaMeeting.count({ where: { userId: user.id } });
+    const count = await prisma.meetingNote.count({ where: { userId: user.id } });
     return c.json({ ok: true, meetingsSynced: count });
   } catch (err: any) {
     console.error("[granola-auth] Sync failed:", err);

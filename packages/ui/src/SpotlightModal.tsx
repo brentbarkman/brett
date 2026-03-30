@@ -42,6 +42,7 @@ export interface SpotlightModalProps {
   isSearching?: boolean;
   onSearchResultClick?: (id: string) => void;
   onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
   sessionId?: string | null;
   showTokenUsage?: boolean;
@@ -67,6 +68,7 @@ export function SpotlightModal({
   isSearching,
   onSearchResultClick,
   onItemClick,
+  onEventClick,
   onNavigate,
   sessionId,
   showTokenUsage,
@@ -365,6 +367,7 @@ export function SpotlightModal({
                   msg.role === "assistant"
                 }
                 onItemClick={onItemClick}
+                onEventClick={onEventClick}
                 onNavigate={onNavigate}
               />
             ))}
@@ -483,11 +486,13 @@ function SpotlightMessageBubble({
   message,
   isStreaming,
   onItemClick,
+  onEventClick,
   onNavigate,
 }: {
   message: SpotlightMessage;
   isStreaming: boolean;
   onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
 }) {
   if (message.role === "user") {
@@ -517,7 +522,7 @@ function SpotlightMessageBubble({
           if (!hasConfirmation && (message.content || isStreaming)) {
             return (
               <div className="text-sm text-white/90 leading-relaxed">
-                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onNavigate={onNavigate} />
+                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
                 {isStreaming && (
                   <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
                 )}
@@ -527,7 +532,7 @@ function SpotlightMessageBubble({
           if (isStreaming && !message.toolCalls?.length) {
             return (
               <div className="text-sm text-white/90 leading-relaxed">
-                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onNavigate={onNavigate} />
+                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
                 <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
               </div>
             );

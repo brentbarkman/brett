@@ -211,7 +211,7 @@ export const DEFAULT_LIST_NAME = "Inbox";
 
 type ItemWithRelations = ItemRecord & {
   list: { name: string } | null;
-  granolaMeeting?: { title: string } | null;
+  meetingNote?: { title: string; calendarEventId?: string | null } | null;
 };
 
 export function itemToThing(
@@ -238,7 +238,8 @@ export function itemToThing(
     description: item.description ?? undefined,
     stalenessDays: computeStalenessDays(item.updatedAt, now),
     createdAt: item.createdAt.toISOString(),
-    granolaMeetingTitle: item.granolaMeeting?.title ?? undefined,
+    meetingNoteTitle: item.meetingNote?.title ?? undefined,
+    meetingNoteCalendarEventId: item.meetingNote?.calendarEventId ?? undefined,
     ...(item.type === "content" && {
       contentType: (item.contentType as ContentType) ?? undefined,
       contentStatus: (item.contentStatus as ContentStatus) ?? undefined,

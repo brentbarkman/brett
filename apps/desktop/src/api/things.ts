@@ -119,6 +119,27 @@ export function useToggleThing() {
           visible: prev.visible.filter((t) => t.id !== id),
         });
       }
+
+      // Optimistically toggle item status in any cached granola meeting
+      await qc.cancelQueries({ queryKey: ["granola", "meeting"] });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const meetingQueries = qc.getQueriesData<any>({ queryKey: ["granola", "meeting"] });
+      for (const [key, data] of meetingQueries) {
+        if (data?.items) {
+          const item = data.items.find((i: { id: string }) => i.id === id);
+          if (item) {
+            qc.setQueryData(key, {
+              ...data,
+              items: data.items.map((i: { id: string; status: string }) =>
+                i.id === id
+                  ? { ...i, status: i.status === "done" ? "active" : "done" }
+                  : i,
+              ),
+            });
+          }
+        }
+      }
+
       return { prev };
     },
     onError: (_err, _id, context) => {
@@ -129,6 +150,7 @@ export function useToggleThing() {
     },
     onSettled: () => {
       invalidateAllThings(qc);
+      qc.invalidateQueries({ queryKey: ["granola", "meeting"] });
     },
   });
 }

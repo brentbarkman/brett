@@ -49,6 +49,9 @@ interface ContentDetailPanelProps {
   brettTotalCount?: number;
   // Content extraction retry
   onRetryExtraction?: () => void;
+  onItemClick?: (id: string) => void;
+  onEventClick?: (eventId: string) => void;
+  onNavigate?: (path: string) => void;
 }
 
 export function ContentDetailPanel({
@@ -78,6 +81,9 @@ export function ContentDetailPanel({
   isLoadingMoreBrettMessages,
   brettTotalCount,
   onRetryExtraction,
+  onItemClick,
+  onEventClick,
+  onNavigate,
 }: ContentDetailPanelProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(detail.title);
@@ -271,6 +277,9 @@ export function ContentDetailPanel({
           isStreaming={isBrettStreaming}
           isLoadingMore={isLoadingMoreBrettMessages}
           totalCount={brettTotalCount}
+          onItemClick={onItemClick}
+          onEventClick={onEventClick}
+          onNavigate={onNavigate}
         />
       )}
     </>

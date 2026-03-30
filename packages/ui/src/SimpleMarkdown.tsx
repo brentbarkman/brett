@@ -11,14 +11,13 @@ interface SimpleMarkdownProps {
   className?: string;
   /** Callback when an item ID is clicked (for inline item references) */
   onItemClick?: (id: string) => void;
+  /** Callback when a calendar event is clicked */
+  onEventClick?: (eventId: string) => void;
   /** Callback when a navigation link is clicked (for list/view references) */
   onNavigate?: (path: string) => void;
 }
 
-// Pattern for inline item references: [title](brett-item:id)
-const ITEM_REF_PATTERN = /\[([^\]]+)\]\(brett-item:([a-z0-9]+)\)/g;
-
-export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: SimpleMarkdownProps) {
+export function SimpleMarkdown({ content, className, onItemClick, onEventClick, onNavigate }: SimpleMarkdownProps) {
   if (!content) return null;
 
   // Split into lines, render each line with inline formatting
@@ -38,21 +37,21 @@ export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: 
         if (trimmed.startsWith("### ")) {
           return (
             <div key={lineIdx} className="text-white/80 font-semibold text-[13px] mt-2 first:mt-0">
-              {renderInline(trimmed.slice(4), onItemClick, onNavigate)}
+              {renderInline(trimmed.slice(4), onItemClick, onEventClick, onNavigate)}
             </div>
           );
         }
         if (trimmed.startsWith("## ")) {
           return (
             <div key={lineIdx} className="text-white/80 font-semibold text-sm mt-2 first:mt-0">
-              {renderInline(trimmed.slice(3), onItemClick, onNavigate)}
+              {renderInline(trimmed.slice(3), onItemClick, onEventClick, onNavigate)}
             </div>
           );
         }
         if (trimmed.startsWith("# ")) {
           return (
             <div key={lineIdx} className="text-white font-semibold text-[15px] mt-2 first:mt-0">
-              {renderInline(trimmed.slice(2), onItemClick, onNavigate)}
+              {renderInline(trimmed.slice(2), onItemClick, onEventClick, onNavigate)}
             </div>
           );
         }
@@ -62,7 +61,7 @@ export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: 
           return (
             <div key={lineIdx} className="flex gap-2 pl-1">
               <span className="text-white/40 select-none">•</span>
-              <span>{renderInline(trimmed.slice(2), onItemClick, onNavigate)}</span>
+              <span>{renderInline(trimmed.slice(2), onItemClick, onEventClick, onNavigate)}</span>
             </div>
           );
         }
@@ -73,91 +72,86 @@ export function SimpleMarkdown({ content, className, onItemClick, onNavigate }: 
           return (
             <div key={lineIdx} className="flex gap-2 pl-1">
               <span className="text-white/40 select-none min-w-[1rem] text-right">{numMatch[1]}.</span>
-              <span>{renderInline(trimmed.slice(numMatch[0].length), onItemClick, onNavigate)}</span>
+              <span>{renderInline(trimmed.slice(numMatch[0].length), onItemClick, onEventClick, onNavigate)}</span>
             </div>
           );
         }
 
         // Regular line
-        return <div key={lineIdx}>{renderInline(trimmed, onItemClick, onNavigate)}</div>;
+        return <div key={lineIdx}>{renderInline(trimmed, onItemClick, onEventClick, onNavigate)}</div>;
       })}
     </div>
   );
 }
 
+// All inline patterns, ordered by specificity (most specific first)
+const PATTERNS: { type: string; regex: RegExp }[] = [
+  // `code` — must come before bold/italic to avoid conflict
+  { type: "code", regex: /`([^`]+)`/ },
+  // ~~strikethrough~~
+  { type: "strike", regex: /~~(.+?)~~/ },
+  // **bold**
+  { type: "bold", regex: /\*\*(.+?)\*\*/ },
+  // *italic* (but not **)
+  { type: "italic", regex: /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/ },
+  // [text](brett-item:id) — clickable item reference
+  { type: "item-ref", regex: /\[([^\]]+)\]\(brett-item:([a-zA-Z0-9_-]+)\)/ },
+  // [text](brett-event:id) — clickable calendar event reference
+  { type: "event-ref", regex: /\[([^\]]+)\]\(brett-event:([a-zA-Z0-9_-]+)\)/ },
+  // [text](brett-nav:/path) — clickable navigation link
+  { type: "nav-ref", regex: /\[([^\]]+)\]\(brett-nav:(\/[^)]+)\)/ },
+  // [text](any-url) — generic markdown link (catch-all, render as styled text)
+  { type: "link", regex: /\[([^\]]+)\]\(([^)]+)\)/ },
+];
+
 function renderInline(
   text: string,
   onItemClick?: (id: string) => void,
+  onEventClick?: (eventId: string) => void,
   onNavigate?: (path: string) => void,
 ): React.ReactNode {
-  // Process inline patterns: **bold**, *italic*, `code`, [text](brett-item:id), [text](brett-nav:path), [text](url)
   const parts: React.ReactNode[] = [];
   let remaining = text;
   let key = 0;
 
   while (remaining.length > 0) {
-    // Find the earliest match among all patterns
-    let earliestIdx = remaining.length;
-    let match: { type: string; fullMatch: string; content: string; extra?: string; index: number } | null = null;
+    // Find the earliest match across all patterns
+    let best: { type: string; match: RegExpMatchArray; index: number } | null = null;
 
-    // **bold**
-    const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
-    if (boldMatch && boldMatch.index !== undefined && boldMatch.index < earliestIdx) {
-      earliestIdx = boldMatch.index;
-      match = { type: "bold", fullMatch: boldMatch[0], content: boldMatch[1], index: boldMatch.index };
+    for (const p of PATTERNS) {
+      const m = remaining.match(p.regex);
+      if (m && m.index !== undefined && (!best || m.index < best.index)) {
+        best = { type: p.type, match: m, index: m.index };
+      }
     }
 
-    // *italic* (but not **)
-    const italicMatch = remaining.match(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/);
-    if (italicMatch && italicMatch.index !== undefined && italicMatch.index < earliestIdx) {
-      earliestIdx = italicMatch.index;
-      match = { type: "italic", fullMatch: italicMatch[0], content: italicMatch[1], index: italicMatch.index };
-    }
-
-    // `code`
-    const codeMatch = remaining.match(/`([^`]+)`/);
-    if (codeMatch && codeMatch.index !== undefined && codeMatch.index < earliestIdx) {
-      earliestIdx = codeMatch.index;
-      match = { type: "code", fullMatch: codeMatch[0], content: codeMatch[1], index: codeMatch.index };
-    }
-
-    // [text](brett-item:id) — clickable item reference
-    const itemMatch = remaining.match(/\[([^\]]+)\]\(brett-item:([a-z0-9]+)\)/);
-    if (itemMatch && itemMatch.index !== undefined && itemMatch.index < earliestIdx) {
-      earliestIdx = itemMatch.index;
-      match = { type: "item-ref", fullMatch: itemMatch[0], content: itemMatch[1], extra: itemMatch[2], index: itemMatch.index };
-    }
-
-    // [text](brett-nav:/path) — clickable navigation link (lists, views)
-    const navMatch = remaining.match(/\[([^\]]+)\]\(brett-nav:(\/[^\)]+)\)/);
-    if (navMatch && navMatch.index !== undefined && navMatch.index < earliestIdx) {
-      earliestIdx = navMatch.index;
-      match = { type: "nav-ref", fullMatch: navMatch[0], content: navMatch[1], extra: navMatch[2], index: navMatch.index };
-    }
-
-    if (!match) {
-      // No more patterns — push the rest as plain text
+    if (!best) {
       parts.push(remaining);
       break;
     }
 
-    // Push text before the match
-    if (match.index > 0) {
-      parts.push(remaining.slice(0, match.index));
+    // Text before the match
+    if (best.index > 0) {
+      parts.push(remaining.slice(0, best.index));
     }
 
-    // Push the formatted element
-    switch (match.type) {
+    const content = best.match[1];
+    const extra = best.match[2];
+
+    switch (best.type) {
       case "bold":
-        parts.push(<strong key={key++} className="font-semibold text-white">{match.content}</strong>);
+        parts.push(<strong key={key++} className="font-semibold text-white">{renderInline(content, onItemClick, onEventClick, onNavigate)}</strong>);
         break;
       case "italic":
-        parts.push(<em key={key++} className="italic text-white/80">{match.content}</em>);
+        parts.push(<em key={key++} className="italic text-white/80">{renderInline(content, onItemClick, onEventClick, onNavigate)}</em>);
+        break;
+      case "strike":
+        parts.push(<span key={key++} className="line-through text-white/40">{renderInline(content, onItemClick, onEventClick, onNavigate)}</span>);
         break;
       case "code":
         parts.push(
           <code key={key++} className="px-1 py-0.5 rounded bg-white/10 text-white/90 text-xs font-mono">
-            {match.content}
+            {content}
           </code>
         );
         break;
@@ -167,12 +161,27 @@ function renderInline(
             <button
               key={key++}
               className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
-              onClick={() => onItemClick(match!.extra!)}
+              onClick={() => onItemClick(extra!)}
             >
-              {match.content}
+              {content}
             </button>
           ) : (
-            <span key={key++} className="text-blue-400">{match.content}</span>
+            <span key={key++} className="text-blue-400">{content}</span>
+          )
+        );
+        break;
+      case "event-ref":
+        parts.push(
+          onEventClick ? (
+            <button
+              key={key++}
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              onClick={() => onEventClick(extra!)}
+            >
+              {content}
+            </button>
+          ) : (
+            <span key={key++} className="text-blue-400">{content}</span>
           )
         );
         break;
@@ -182,18 +191,23 @@ function renderInline(
             <button
               key={key++}
               className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
-              onClick={() => onNavigate(match!.extra!)}
+              onClick={() => onNavigate(extra!)}
             >
-              {match.content}
+              {content}
             </button>
           ) : (
-            <span key={key++} className="text-blue-400">{match.content}</span>
+            <span key={key++} className="text-blue-400">{content}</span>
           )
         );
         break;
+      case "link":
+        // Generic link — strip markdown syntax, render text as styled span
+        // Don't make arbitrary URLs clickable (security)
+        parts.push(<span key={key++} className="text-blue-400">{content}</span>);
+        break;
     }
 
-    remaining = remaining.slice(match.index + match.fullMatch.length);
+    remaining = remaining.slice(best.index + best.match[0].length);
   }
 
   return <>{parts}</>;

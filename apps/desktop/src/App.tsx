@@ -55,7 +55,7 @@ import {
   useUpdateCalendarEventNotes,
 } from "./api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
-import { useGranolaMeetingForEvent } from "./api/granola";
+import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/granola";
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useOmnibar } from "./api/omnibar";
@@ -161,6 +161,7 @@ export function App() {
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEventDisplay | null
   >(null);
+  const [detailHistory, setDetailHistory] = useState<(Thing | CalendarEventDisplay)[]>([]);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [activePage, setActivePage] = useState<"today" | "inbox" | "scouts">("today");
   const [selectedScout, setSelectedScout] = useState<Scout | null>(null);
@@ -319,9 +320,10 @@ export function App() {
   const { data: calendarEventDetail, isLoading: isLoadingCalendarDetail } = useCalendarEventDetail(
     isDetailOpen && isCalendarSelected ? selectedId : null,
   );
-  const { data: granolaMeeting } = useGranolaMeetingForEvent(
+  const { data: meetingNote } = useGranolaMeetingForEvent(
     isDetailOpen && isCalendarSelected ? selectedId : null,
   );
+  const reprocessMeeting = useReprocessMeetingActions();
   const updateRsvp = useUpdateRsvp();
   const updateCalendarNotes = useUpdateCalendarEventNotes();
   const calendarBrett = useBrettChat({
@@ -433,6 +435,16 @@ export function App() {
         setSelectedItem({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
         setIsDetailOpen(true);
       },
+      onEventClick: (eventId: string) => {
+        const event = sidebarCalendarEvents.find((e) => e.id === eventId);
+        if (event) {
+          handleItemClick(event);
+        } else {
+          setSelectedItem({ id: eventId, googleEventId: "", title: "", startTime: "", endTime: "", durationMinutes: 0, color: "blue", hasBrettContext: false, isAllDay: false, myResponseStatus: "needsAction" } as any);
+          setIsDetailOpen(true);
+        }
+        omnibar.close();
+      },
       searchResults: omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null,
       isSearching: omnibar.isSearching,
       onSearchResultClick: (id: string) => {
@@ -490,7 +502,24 @@ export function App() {
 
   const handleItemClick = (item: Thing | CalendarEventDisplay) => {
     setSelectedItem(item);
+    setDetailHistory([]);
     setIsDetailOpen(true);
+  };
+
+  // Navigate within the detail panel (pushes current item to history stack)
+  const handleDetailDrillDown = (item: Thing | CalendarEventDisplay) => {
+    if (selectedItem) {
+      setDetailHistory((prev) => [...prev, selectedItem]);
+    }
+    setSelectedItem(item);
+  };
+
+  const handleDetailBack = () => {
+    const prev = detailHistory[detailHistory.length - 1];
+    if (prev) {
+      setDetailHistory((h) => h.slice(0, -1));
+      setSelectedItem(prev);
+    }
   };
 
   // Adapter for CalendarPage which passes CalendarEventRecord
@@ -507,6 +536,7 @@ export function App() {
 
   const handleCloseDetail = useCallback(() => {
     setIsDetailOpen(false);
+    setDetailHistory([]);
     setTimeout(() => setSelectedItem(null), 300);
   }, []);
 
@@ -806,6 +836,8 @@ export function App() {
           isOpen={isDetailOpen}
           item={selectedItem}
           onClose={handleCloseDetail}
+          onBack={handleDetailBack}
+          canGoBack={detailHistory.length > 0}
           onToggle={handleToggle}
           detail={thingDetail ?? null}
           isLoadingDetail={isLoadingDetail}
@@ -866,13 +898,84 @@ export function App() {
           isSendingCalendarBrettMessage={false}
           isCalendarBrettStreaming={calendarBrett.isStreaming}
           isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
-          granolaMeeting={granolaMeeting ? {
-            title: granolaMeeting.title,
-            summary: granolaMeeting.summary,
-            transcript: granolaMeeting.transcript as any,
-            actionItems: granolaMeeting.actionItems as any,
-            meetingStartedAt: granolaMeeting.meetingStartedAt,
+          meetingNote={meetingNote ? {
+            id: meetingNote.id,
+            title: meetingNote.title,
+            summary: meetingNote.summary,
+            transcript: meetingNote.transcript as any,
+            actionItems: meetingNote.actionItems as any,
+            items: meetingNote.items as any,
+            meetingStartedAt: meetingNote.meetingStartedAt,
           } : null}
+          onToggleActionItem={handleToggle}
+          onSelectActionItem={(itemId) => {
+            const existing = allActiveThings.find((t) => t.id === itemId);
+            if (existing) {
+              handleDetailDrillDown(existing);
+            } else {
+              const linked = meetingNote?.items?.find((i) => i.id === itemId);
+              if (linked) {
+                handleDetailDrillDown({
+                  id: linked.id,
+                  type: "task",
+                  title: linked.title,
+                  status: linked.status as any,
+                  isCompleted: linked.status === "done",
+                  source: "Granola",
+                  list: "Inbox",
+                  listId: null,
+                  urgency: "normal",
+                } as any);
+              }
+            }
+          }}
+          onReprocessActionItems={import.meta.env.DEV ? (meetingId) => reprocessMeeting.mutate(meetingId) : undefined}
+          isReprocessing={reprocessMeeting.isPending}
+          onNavigateToCalendarEvent={(calendarEventId) => {
+            const event = sidebarCalendarEvents.find((e) => e.id === calendarEventId);
+            if (event) {
+              handleDetailDrillDown(event);
+            } else {
+              handleDetailDrillDown({
+                id: calendarEventId,
+                googleEventId: "",
+                title: "",
+                startTime: "",
+                endTime: "",
+                durationMinutes: 0,
+                color: "blue",
+                hasBrettContext: false,
+                isAllDay: false,
+                myResponseStatus: "needsAction",
+              } as any);
+            }
+          }}
+          onItemClick={(id) => {
+            const thing = allActiveThings.find((t) => t.id === id);
+            if (thing) handleDetailDrillDown(thing);
+          }}
+          onEventClick={(eventId) => {
+            const event = sidebarCalendarEvents.find((e) => e.id === eventId);
+            if (event) {
+              handleDetailDrillDown(event);
+            } else {
+              handleDetailDrillDown({
+                id: eventId,
+                googleEventId: "",
+                title: "",
+                startTime: "",
+                endTime: "",
+                durationMinutes: 0,
+                color: "blue",
+                hasBrettContext: false,
+                isAllDay: false,
+                myResponseStatus: "needsAction",
+              } as any);
+            }
+          }}
+          onNavigate={(path) => {
+            navigate(path);
+          }}
         />
 
         {/* Drag overlay */}
@@ -949,6 +1052,16 @@ export function App() {
           onItemClick={(id: string) => {
             setSelectedItem({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
             setIsDetailOpen(true);
+            omnibar.close();
+          }}
+          onEventClick={(eventId: string) => {
+            const event = sidebarCalendarEvents.find((e) => e.id === eventId);
+            if (event) {
+              handleItemClick(event);
+            } else {
+              setSelectedItem({ id: eventId, googleEventId: "", title: "", startTime: "", endTime: "", durationMinutes: 0, color: "blue", hasBrettContext: false, isAllDay: false, myResponseStatus: "needsAction" } as any);
+              setIsDetailOpen(true);
+            }
             omnibar.close();
           }}
           onNavigate={(path: string) => {

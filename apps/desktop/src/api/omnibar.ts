@@ -55,6 +55,31 @@ export function useOmnibar() {
         const body: Record<string, unknown> = { message: trimmed };
         if (sessionId) body.sessionId = sessionId;
         if (currentView) body.context = { currentView };
+        // Send recent messages so server has context even if DB persist hasn't completed.
+        // For assistant messages, include tool result messages alongside text content
+        // so the LLM has full context about what was found/discussed.
+        if (messages.length > 0) {
+          body.recentMessages = messages
+            .filter((m) => m.content || m.toolCalls?.some((tc) => tc.result))
+            .slice(-10)
+            .map((m) => {
+              if (m.role === "assistant") {
+                // Combine text content with tool result messages
+                const toolResultText = (m.toolCalls ?? [])
+                  .filter((tc) => tc.result && typeof tc.result === "object" && tc.result !== null)
+                  .map((tc) => {
+                    const r = tc.result as Record<string, unknown>;
+                    return typeof r.message === "string" ? r.message : "";
+                  })
+                  .filter(Boolean)
+                  .join("\n");
+                const fullContent = [toolResultText, m.content].filter(Boolean).join("\n");
+                return { role: "assistant" as const, content: fullContent };
+              }
+              return { role: "user" as const, content: m.content };
+            })
+            .filter((m) => m.content);
+        }
 
         for await (const chunk of streamingFetch(
           "/brett/omnibar",

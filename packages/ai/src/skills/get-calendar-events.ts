@@ -1,9 +1,8 @@
 import type { Skill } from "./types.js";
-import { scopedEvents } from "./scoped-queries.js";
 
 export const getCalendarEventsSkill: Skill = {
   name: "get_calendar_events",
-  description: "Query calendar events by date range.",
+  description: "Query calendar events by date range. Results include action items and meeting notes availability when linked meeting notes exist.",
   parameters: {
     type: "object",
     properties: {
@@ -37,26 +36,50 @@ export const getCalendarEventsSkill: Skill = {
       return { success: false, message: "Invalid date format." };
     }
 
-    const events = scopedEvents(ctx.prisma, ctx.userId);
-    const results = await events.findMany({
+    const results = await ctx.prisma.calendarEvent.findMany({
       where: {
+        userId: ctx.userId,
         startTime: { lte: end },
         endTime: { gte: start },
       },
       orderBy: { startTime: "asc" },
       take: 50,
+      include: {
+        meetingNotes: {
+          select: {
+            id: true,
+            summary: true,
+            actionItems: true,
+          },
+          take: 1,
+        },
+      },
     });
 
-    const mapped = results.map((e) => ({
-      id: e.id,
-      title: e.title,
-      startTime: e.startTime.toISOString(),
-      endTime: e.endTime.toISOString(),
-      isAllDay: e.isAllDay,
-      location: e.location,
-      meetingLink: e.meetingLink,
-      myResponseStatus: e.myResponseStatus,
-    }));
+    const mapped = results.map((e) => {
+      const meeting = e.meetingNotes[0];
+      const actionItems = meeting?.actionItems;
+      return {
+        id: e.id,
+        title: e.title,
+        startTime: e.startTime.toISOString(),
+        endTime: e.endTime.toISOString(),
+        isAllDay: e.isAllDay,
+        location: e.location,
+        meetingLink: e.meetingLink,
+        myResponseStatus: e.myResponseStatus,
+        ...(meeting && {
+          meetingNotes: meeting.summary ? "(available — ask to see notes)" : undefined,
+          actionItems: Array.isArray(actionItems) && actionItems.length > 0
+            ? (actionItems as { title: string; assignee?: string; dueDate?: string }[]).map((a) => ({
+                title: a.title,
+                assignee: a.assignee,
+                dueDate: a.dueDate,
+              }))
+            : undefined,
+        }),
+      };
+    });
 
     return {
       success: true,

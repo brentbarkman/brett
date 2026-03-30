@@ -56,6 +56,17 @@ interface BriefingQualityFixture {
   criteria: string[];
 }
 
+interface ActionItemExtractionFixture {
+  name: string;
+  description: string;
+  userName: string;
+  meetingTitle: string;
+  meetingDate: string;
+  attendees: { name: string; email: string }[];
+  summary: string;
+  criteria: string[];
+}
+
 // ─── Result types ─────────────────────────────────────────────────────────────
 
 interface EvalResult {
@@ -361,6 +372,113 @@ async function runBriefingQuality(fixtures: BriefingQualityFixture[]): Promise<S
   };
 }
 
+async function runActionItemExtraction(fixtures: ActionItemExtractionFixture[]): Promise<SuiteResult> {
+  const { judgeQuality } = await import("./judge.js");
+  const results: EvalResult[] = [];
+  const timestamp = new Date().toISOString();
+
+  console.log(`\nRunning action-item-extraction (${fixtures.length} cases)...\n`);
+
+  for (const fixture of fixtures) {
+    process.stdout.write(`  "${fixture.name}" → `);
+
+    const attendeeList = fixture.attendees.length > 0
+      ? fixture.attendees.map((a) => `${a.name} <${a.email}>`).join(", ")
+      : "No attendee information available";
+
+    const prompt = `Analyze this meeting summary and extract action items. For each one, determine:
+1. Whether it's for the user ("me") or someone else ("other")
+2. A clear, concise task title
+3. A due date if mentioned or clearly implied
+
+The user is: ${fixture.userName}
+Meeting: "${fixture.meetingTitle}" on ${fixture.meetingDate}
+Attendees: ${attendeeList}
+
+Meeting summary:
+${fixture.summary}
+
+Return ONLY a JSON array (no markdown fencing, no explanation). Each item:
+{
+  "assignee": "me" or "other",
+  "assigneeName": "Person Name" (only if assignee is "other"),
+  "title": "Clean task title",
+  "dueDate": "YYYY-MM-DD" or null
+}
+
+Title guidelines:
+- Remove the user's name (${fixture.userName}) from all titles — never start with "${fixture.userName}:" or "${fixture.userName} to"
+- Make titles actionable verbs ("Send proposal" not "Proposal needs to be sent")
+- For the user's own tasks (assignee=me): just the action ("Send revised proposal to Dan")
+- For other people's tasks (assignee=other): format as "Follow up: {other person's name} to {action}" — NEVER use the user's name here, use the other person's name
+- Use the casual/short name used in the meeting (e.g. "Dan" not "Daniel Cole" if the summary says "Dan")
+- Keep titles concise (under 100 chars)
+- Don't include the meeting name unless it adds clarity
+
+Due date guidelines:
+- Today's date for reference: ${fixture.meetingDate}
+- "end of week" = the Friday of the meeting's week
+- "next week" = the Monday after the meeting
+- Only set dueDate when explicitly stated or strongly implied
+- Leave null if uncertain
+
+If no action items exist, return an empty array [].`;
+
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of provider.chat({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      system: "You extract structured action items from meeting notes. Return only valid JSON arrays.",
+      temperature: 0.1,
+      maxTokens: 2048,
+    })) {
+      chunks.push(chunk);
+    }
+
+    const output = chunks
+      .filter((c) => c.type === "text")
+      .map((c) => (c as { type: "text"; content: string }).content)
+      .join("");
+
+    // Judge the output against criteria
+    const judgeResult = await judgeQuality(output, fixture.criteria, provider, model);
+
+    const passed = judgeResult.passed;
+    const failedCriteria = Object.entries(judgeResult.scores)
+      .filter(([, v]) => !v)
+      .map(([k]) => k);
+
+    const note = passed
+      ? undefined
+      : `Failed: ${failedCriteria.join("; ")}`;
+
+    console.log(passed ? "PASS" : `FAIL — ${note}`);
+
+    results.push({
+      input: fixture.name,
+      expected: "all criteria pass",
+      actual: passed ? "all pass" : `${failedCriteria.length} failed`,
+      passed,
+      note,
+    });
+  }
+
+  const passed = results.filter((r) => r.passed).length;
+  const total = results.length;
+  const score = total > 0 ? passed / total : 0;
+
+  return {
+    suite: "action-item-extraction",
+    provider: providerName,
+    model,
+    timestamp,
+    passed,
+    total,
+    score,
+    results,
+  };
+}
+
 // ─── Score persistence ────────────────────────────────────────────────────────
 
 function saveScores(suiteResults: SuiteResult[]): void {
@@ -441,6 +559,15 @@ async function main(): Promise<void> {
     if (fs.existsSync(fixturePath)) {
       const fixtures = JSON.parse(fs.readFileSync(fixturePath, "utf-8")) as BriefingQualityFixture[];
       suiteResults.push(await runBriefingQuality(fixtures));
+    }
+  }
+
+  // Action item extraction
+  if (!suiteFilter || suiteFilter === "action-item-extraction") {
+    const fixturePath = path.join(fixturesDir, "action-item-extraction.json");
+    if (fs.existsSync(fixturePath)) {
+      const fixtures = JSON.parse(fs.readFileSync(fixturePath, "utf-8")) as ActionItemExtractionFixture[];
+      suiteResults.push(await runActionItemExtraction(fixtures));
     }
   }
 

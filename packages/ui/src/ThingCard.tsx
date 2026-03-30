@@ -166,9 +166,9 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
       </div>
 
       <div className="flex-shrink-0 flex items-center gap-2">
-        {thing.source === "Granola" && thing.granolaMeetingTitle && (
+        {thing.source === "Granola" && thing.meetingNoteTitle && (
           <span className="text-[10px] text-amber-400/40">
-            from {thing.granolaMeetingTitle}
+            from {thing.meetingNoteTitle}
           </span>
         )}
         {thing.list && thing.list !== "Inbox" && (

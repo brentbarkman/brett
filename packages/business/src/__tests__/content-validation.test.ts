@@ -30,7 +30,7 @@ function makeContentItem(overrides: Partial<ItemRecord> = {}): ItemRecord & { li
     contentFavicon: "https://medium.com/favicon.ico",
     contentDomain: "medium.com",
     contentMetadata: { type: "article", author: "Test Author", publishDate: "2026-03-01" },
-    granolaMeetingId: null,
+    meetingNoteId: null,
     listId: null,
     userId: "user-1",
     createdAt: new Date("2026-03-10T10:00:00Z"),
