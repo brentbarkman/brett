@@ -3,13 +3,16 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { encryptToken } from "../lib/encryption.js";
 import { generateId } from "@brett/utils";
-import { randomBytes, createHmac, timingSafeEqual } from "crypto";
+import { randomBytes, createHash, createHmac, timingSafeEqual } from "crypto";
 import type { Context } from "hono";
 
-// Granola MCP OAuth endpoints (Dynamic Client Registration)
-const GRANOLA_AUTH_URL = "https://mcp.granola.ai/oauth/authorize";
-const GRANOLA_TOKEN_URL = "https://mcp.granola.ai/oauth/token";
-const GRANOLA_REGISTER_URL = "https://mcp.granola.ai/oauth/register";
+// Granola MCP OAuth endpoints — discovered from https://mcp.granola.ai/.well-known/oauth-authorization-server
+const GRANOLA_AUTH_URL = "https://mcp-auth.granola.ai/oauth2/authorize";
+const GRANOLA_TOKEN_URL = "https://mcp-auth.granola.ai/oauth2/token";
+const GRANOLA_REGISTER_URL = "https://mcp-auth.granola.ai/oauth2/register";
+
+// In-memory PKCE verifier store (keyed by state nonce, short-lived)
+const pkceStore = new Map<string, string>();
 
 // Cached client credentials from Dynamic Client Registration (with TTL)
 let registeredClient: { client_id: string; client_secret?: string; registeredAt: number } | null = null;
@@ -108,13 +111,23 @@ granolaAuth.post("/connect", authMiddleware, async (c) => {
     .update(user.id + ":" + nonce)
     .digest("hex");
   const state = `${Buffer.from(user.id).toString("base64url")}.${nonce}.${hmac}`;
+
+  // PKCE: generate code_verifier and code_challenge (S256)
+  const codeVerifier = randomBytes(32).toString("base64url");
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+  pkceStore.set(nonce, codeVerifier);
+  // Clean up after 10 minutes (flow should complete well before)
+  setTimeout(() => pkceStore.delete(nonce), 10 * 60 * 1000);
+
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
   const params = new URLSearchParams({
     response_type: "code",
     client_id: client.client_id,
     redirect_uri: `${baseUrl}/granola/auth/callback`,
     state,
-    scope: "openid",
+    scope: "openid email offline_access",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
   });
   const url = `${GRANOLA_AUTH_URL}?${params.toString()}`;
   return c.json({ url });
@@ -175,6 +188,18 @@ granolaAuth.get("/callback", async (c) => {
     return callbackHtml(c, { title: "User not found", message: "The user account no longer exists. Please try again.", isError: true });
   }
 
+  // Retrieve PKCE code_verifier for this flow (keyed by nonce from state)
+  const stateNonce = parts[1];
+  const codeVerifier = pkceStore.get(stateNonce);
+  if (!codeVerifier) {
+    return callbackHtml(c, {
+      title: "Session expired",
+      message: "The authorization session has expired. Please try connecting again from Brett.",
+      isError: true,
+    });
+  }
+  pkceStore.delete(stateNonce);
+
   // Exchange code for tokens (with retry on 401 — re-register DCR client)
   let client = await ensureClientRegistered();
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
@@ -188,6 +213,7 @@ granolaAuth.get("/callback", async (c) => {
         code: code!,
         redirect_uri: `${baseUrl}/granola/auth/callback`,
         client_id: cl.client_id,
+        code_verifier: codeVerifier!,
         ...(cl.client_secret ? { client_secret: cl.client_secret } : {}),
       }),
     });

@@ -115,7 +115,7 @@ async function refreshGranolaTokens(refreshToken: string): Promise<{
     params.client_secret = client.client_secret;
   }
 
-  let resp = await fetch("https://mcp.granola.ai/oauth/token", {
+  let resp = await fetch("https://mcp-auth.granola.ai/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(params),
@@ -131,7 +131,7 @@ async function refreshGranolaTokens(refreshToken: string): Promise<{
     } else {
       delete params.client_secret;
     }
-    resp = await fetch("https://mcp.granola.ai/oauth/token", {
+    resp = await fetch("https://mcp-auth.granola.ai/oauth2/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(params),
