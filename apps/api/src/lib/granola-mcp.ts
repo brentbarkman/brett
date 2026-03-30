@@ -60,17 +60,57 @@ function parseMeetingList(text: string): GranolaMeetingListItem[] {
 }
 
 function parseMeetingDetails(text: string): GranolaMeetingDetail[] {
-  // get_meetings may return XML or structured text — try to extract what we can
-  // For now, return the raw text as a single meeting's notes field
-  // The actual format depends on what Granola returns for get_meetings
-  return []; // Will be refined once we see the actual response
+  // get_meetings returns XML with <meeting> blocks containing <summary> tags
+  const meetings: GranolaMeetingDetail[] = [];
+  const meetingRegex = /<meeting\s+id="([^"]+)"\s+title="([^"]+)"\s+date="([^"]+)">/g;
+  const summaryRegex = /<summary>\s*([\s\S]*?)\s*<\/summary>/g;
+
+  // Extract all summaries in order
+  const summaries: string[] = [];
+  let sMatch;
+  while ((sMatch = summaryRegex.exec(text)) !== null) {
+    summaries.push(sMatch[1].trim());
+  }
+
+  let idx = 0;
+  let match;
+  while ((match = meetingRegex.exec(text)) !== null) {
+    meetings.push({
+      id: match[1],
+      title: match[2],
+      start_time: new Date(match[3]).toISOString(),
+      end_time: new Date(match[3]).toISOString(),
+      summary: summaries[idx] ?? null,
+      notes: summaries[idx] ?? null,
+      attendees: [],
+    });
+    idx++;
+  }
+  return meetings;
 }
 
 function parseTranscript(text: string): GranolaTranscript | null {
   if (!text.trim()) return null;
-  // Try to parse as structured transcript
+
+  // Granola returns JSON: {id, title, transcript: "long text"}
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed.transcript && typeof parsed.transcript === "string") {
+      // Single block of text — store as one turn
+      return {
+        turns: [{
+          source: "speaker",
+          speaker: "Transcript",
+          text: parsed.transcript.trim(),
+        }],
+      };
+    }
+  } catch {
+    // Not JSON — fall through to line-based parsing
+  }
+
+  // Fallback: line-based "Speaker: text" parsing
   const turns: { source: string; speaker: string; text: string }[] = [];
-  // Common format: "Speaker Name: text" on each line
   const lines = text.split("\n").filter((l) => l.trim());
   for (const line of lines) {
     const colonIdx = line.indexOf(":");
@@ -264,25 +304,8 @@ export async function withGranolaClient<T>(
             arguments: { meeting_ids: batch },
           });
           const text = extractTextContent(result);
-          // get_meetings returns full notes — store the raw text as the summary
-          // Parse individual meeting blocks if possible
           const parsed = parseMeetingDetails(text);
-          if (parsed.length > 0) {
-            results.push(...parsed);
-          } else {
-            // Fallback: create one entry per requested ID with the full text as notes
-            for (const id of batch) {
-              results.push({
-                id,
-                title: "",
-                start_time: "",
-                end_time: "",
-                notes: text,
-                summary: text,
-                attendees: [],
-              });
-            }
-          }
+          results.push(...parsed);
         }
         return results;
       },
