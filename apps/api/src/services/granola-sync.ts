@@ -291,15 +291,33 @@ async function extractAndCreateActionItems(
 ): Promise<void> {
   if (!summaryText.trim()) return;
 
-  // Simple pattern-based extraction for v1
-  const actionItemPatterns = [
-    /^[-*\u2022]\s*(?:action item|todo|task|follow[- ]?up):\s*(.+)/gim,
-    /^[-*\u2022]\s*\[[ x]?\]\s*(.+)/gim,  // Checkbox items
-    /^(?:action item|todo|task|follow[- ]?up):\s*(.+)/gim,
-  ];
-
+  // Extract action items from Granola summaries.
+  // Granola typically formats these as numbered/bulleted lists under
+  // headers like "### Next Steps", "### Action Items", "### Follow-ups"
   const items: { title: string }[] = [];
-  for (const pattern of actionItemPatterns) {
+
+  // Strategy 1: Find content under action-item-like headers
+  const headerPattern = /###?\s*(?:next steps|action items?|follow[- ]?ups?|todos?|takeaways)\s*\n([\s\S]*?)(?=\n###?\s|\n*$)/gim;
+  let headerMatch;
+  while ((headerMatch = headerPattern.exec(summaryText)) !== null) {
+    const block = headerMatch[1];
+    // Extract numbered items (1. Do something) and bullet items (- Do something)
+    const linePattern = /^(?:\d+\.\s+|[-*•]\s+)(.+)/gm;
+    let lineMatch;
+    while ((lineMatch = linePattern.exec(block)) !== null) {
+      const title = lineMatch[1].trim();
+      if (title.length > 3 && title.length < 200) {
+        items.push({ title });
+      }
+    }
+  }
+
+  // Strategy 2: Explicit action item labels anywhere in the text
+  const labelPatterns = [
+    /^[-*•]\s*(?:action item|todo|task|follow[- ]?up):\s*(.+)/gim,
+    /^[-*•]\s*\[[ x]?\]\s*(.+)/gim,
+  ];
+  for (const pattern of labelPatterns) {
     let match;
     while ((match = pattern.exec(summaryText)) !== null) {
       const title = match[1].trim();
