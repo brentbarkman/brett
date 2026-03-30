@@ -1,4 +1,7 @@
 import type { Skill } from "./types.js";
+import { getCalendarDateBounds, getUserDayBounds } from "@brett/business";
+
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
 export const getCalendarEventsSkill: Skill = {
   name: "get_calendar_events",
@@ -17,30 +20,62 @@ export const getCalendarEventsSkill: Skill = {
   async execute(params, ctx) {
     const p = params as { startDate?: string; endDate?: string; date?: string };
 
+    // Look up user timezone for date-only string handling
+    const tz = (await ctx.prisma.user.findUnique({
+      where: { id: ctx.userId },
+      select: { timezone: true },
+    }))?.timezone ?? DEFAULT_TIMEZONE;
+
     let start: Date;
     let end: Date;
 
     if (p.date) {
-      start = new Date(p.date);
-      start.setUTCHours(0, 0, 0, 0);
-      end = new Date(p.date);
-      end.setUTCHours(23, 59, 59, 999);
+      // Date-only strings need timezone-aware bounds — never use setUTCHours()
+      // which assumes UTC midnight and shifts events near day boundaries.
+      const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(p.date);
+      if (isDateOnly) {
+        const bounds = getCalendarDateBounds(p.date, tz);
+        start = bounds.startOfDay;
+        end = bounds.endOfDay;
+      } else {
+        start = new Date(p.date);
+        end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      }
     } else {
-      start = p.startDate ? new Date(p.startDate) : new Date();
-      if (!p.startDate) start.setUTCHours(0, 0, 0, 0);
-      end = p.endDate ? new Date(p.endDate) : new Date(start);
-      if (!p.endDate) end.setUTCHours(23, 59, 59, 999);
+      if (p.startDate) {
+        start = new Date(p.startDate);
+      } else {
+        // Default to start of today in user's timezone
+        const bounds = getUserDayBounds(tz);
+        start = bounds.startOfDay;
+      }
+      if (p.endDate) {
+        end = new Date(p.endDate);
+      } else {
+        // Default to end of today in user's timezone
+        const bounds = getUserDayBounds(tz);
+        end = bounds.endOfDay;
+      }
     }
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return { success: false, message: "Invalid date format." };
     }
 
+    // Only include events from visible calendars
+    const visibleCalendars = await ctx.prisma.calendarList.findMany({
+      where: { googleAccount: { userId: ctx.userId }, isVisible: true },
+      select: { id: true },
+    });
+    const calendarListIds = visibleCalendars.map((c) => c.id);
+
     const results = await ctx.prisma.calendarEvent.findMany({
       where: {
         userId: ctx.userId,
+        calendarListId: { in: calendarListIds },
         startTime: { lte: end },
         endTime: { gte: start },
+        status: { not: "cancelled" },
       },
       orderBy: { startTime: "asc" },
       take: 50,

@@ -256,18 +256,23 @@ export function App() {
     }
   }, [hasCalendarAccounts, sidebarDismissed]);
 
-  // Today's date string (stable for the session — doesn't change when sidebar navigates)
-  const todayStr = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
+  // Local day boundaries as ISO timestamps for API queries.
+  // Always send full ISO strings — never date-only strings like "2026-03-29" —
+  // because the API would interpret them as UTC midnight, shifting day boundaries.
+  function localDayBounds(d: Date): { startDate: string; endDate: string } {
+    const start = new Date(d);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return { startDate: start.toISOString(), endDate: end.toISOString() };
+  }
+
+  // Today's bounds (stable for the session — doesn't change when sidebar navigates)
+  const todayBounds = useMemo(() => localDayBounds(new Date()), []);
 
   // Sidebar calendar date navigation
   const [sidebarDate, setSidebarDate] = useState(() => new Date());
-  const sidebarDateStr = useMemo(() => {
-    const d = sidebarDate;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, [sidebarDate]);
+  const sidebarBounds = useMemo(() => localDayBounds(sidebarDate), [sidebarDate]);
 
   const handleSidebarPrevDay = useCallback(() => {
     setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
@@ -279,14 +284,14 @@ export function App() {
     setSidebarDate(new Date());
   }, []);
 
-  const { data: sidebarCalendarData, isLoading: isLoadingSidebarCalendar } = useCalendarEvents({ date: sidebarDateStr });
+  const { data: sidebarCalendarData, isLoading: isLoadingSidebarCalendar } = useCalendarEvents(sidebarBounds);
   const sidebarCalendarEvents: CalendarEventDisplay[] = useMemo(
     () => (sidebarCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay),
     [sidebarCalendarData],
   );
 
   // Today's events for Next Up — always pinned to today, independent of sidebar navigation
-  const { data: todayCalendarData } = useCalendarEvents({ date: todayStr });
+  const { data: todayCalendarData } = useCalendarEvents(todayBounds);
   const todayCalendarEvents: CalendarEventDisplay[] = useMemo(
     () => (todayCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay),
     [todayCalendarData],

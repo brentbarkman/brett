@@ -73,6 +73,13 @@ brettIntelligence.get("/briefing/summary", rateLimiter(30), async (c) => {
   const timezone = await getUserTimezone(user.id);
   const { startOfDay, endOfDay } = getUserDayBounds(timezone);
 
+  // Only count events from visible calendars
+  const visibleCalendars = await prisma.calendarList.findMany({
+    where: { googleAccount: { userId: user.id }, isVisible: true },
+    select: { id: true },
+  });
+  const visibleCalendarIds = visibleCalendars.map((c) => c.id);
+
   const [overdueCount, dueTodayCount, eventCount, overdueItems] =
     await Promise.all([
       prisma.item.count({
@@ -94,6 +101,7 @@ brettIntelligence.get("/briefing/summary", rateLimiter(30), async (c) => {
       prisma.calendarEvent.count({
         where: {
           userId: user.id,
+          calendarListId: { in: visibleCalendarIds },
           startTime: { gte: startOfDay, lt: endOfDay },
           status: "confirmed",
         },

@@ -32,9 +32,21 @@ export function scopedLists(prisma: PrismaClient, userId: string) {
   };
 }
 
-export function scopedEvents(prisma: PrismaClient, userId: string) {
+export async function scopedEvents(prisma: PrismaClient, userId: string) {
+  // Only include events from visible calendars — respects user's calendar visibility settings
+  const visibleCalendars = await prisma.calendarList.findMany({
+    where: { googleAccount: { userId }, isVisible: true },
+    select: { id: true },
+  });
+  const calendarListIds = visibleCalendars.map((c) => c.id);
+
   // Exclude "observer" events (shared calendar, user not invited) and cancelled events
-  const baseWhere = { userId, myResponseStatus: { not: "observer" }, status: { not: "cancelled" } };
+  const baseWhere = {
+    userId,
+    calendarListId: { in: calendarListIds },
+    myResponseStatus: { not: "observer" },
+    status: { not: "cancelled" },
+  };
   return {
     findFirst: (where: Record<string, unknown>) =>
       prisma.calendarEvent.findFirst({ where: { ...(where as object), ...baseWhere } }),

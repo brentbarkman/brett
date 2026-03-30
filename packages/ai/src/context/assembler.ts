@@ -320,6 +320,13 @@ async function assembleBriefing(
 
   const { startOfDay, endOfDay } = getUserDayBounds(timezone, now);
 
+  // Only include events from visible calendars
+  const visibleCalendars = await prisma.calendarList.findMany({
+    where: { googleAccount: { userId: input.userId }, isVisible: true },
+    select: { id: true },
+  });
+  const visibleCalendarIds = visibleCalendars.map((c) => c.id);
+
   const [overdueTasksRaw, overdueCount, dueTodayTasks, todayEvents, weatherData] = await Promise.all([
     prisma.item.findMany({
       where: {
@@ -354,6 +361,7 @@ async function assembleBriefing(
     prisma.calendarEvent.findMany({
       where: {
         userId: input.userId,
+        calendarListId: { in: visibleCalendarIds },
         startTime: { gte: startOfDay, lt: endOfDay },
         status: "confirmed",
         myResponseStatus: { not: "observer" },

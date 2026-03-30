@@ -1,5 +1,8 @@
 import type { Skill } from "./types.js";
 import { findMeetingByQuery, findMeetingsByQuery } from "./meeting-search.js";
+import { getCalendarDateBounds } from "@brett/business";
+
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
 export const getMeetingNotesSkill: Skill = {
   name: "get_meeting_notes",
@@ -56,13 +59,18 @@ export const getMeetingNotesSkill: Skill = {
       const isDate = /^\d{4}-\d{2}-\d{2}$/.test(p.query);
 
       if (isDate) {
-        const dayStart = new Date(p.query + "T00:00:00Z");
-        const dayEnd = new Date(p.query + "T23:59:59.999Z");
+        // Use timezone-aware bounds — never use "T00:00:00Z" which assumes
+        // UTC midnight and misses meetings near day boundaries.
+        const tz = (await ctx.prisma.user.findUnique({
+          where: { id: ctx.userId },
+          select: { timezone: true },
+        }))?.timezone ?? DEFAULT_TIMEZONE;
+        const { startOfDay, endOfDay } = getCalendarDateBounds(p.query, tz);
 
         const meetings = await ctx.prisma.meetingNote.findMany({
           where: {
             userId: ctx.userId,
-            meetingStartedAt: { gte: dayStart, lte: dayEnd },
+            meetingStartedAt: { gte: startOfDay, lte: endOfDay },
           },
           orderBy: { meetingStartedAt: "asc" },
         });

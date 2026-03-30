@@ -512,3 +512,54 @@ Every empty state should be:
 4. **Actionable when appropriate** — if there's a next step, surface it naturally
 
 Empty states are where personality lives. They're the moments when the app has nothing to show, so it shows *character* instead.
+
+---
+
+## Date & Timezone Handling
+
+All date boundary logic must be timezone-aware. The user's IANA timezone is stored on their `User` record and synced from the browser on startup.
+
+### The Rule
+
+**Never use date-only strings (e.g., `"2026-03-29"`) for database queries.** JavaScript's `new Date("2026-03-29")` interprets date-only strings as UTC midnight — not the user's local midnight. For users west of UTC, this shifts events near the end of day onto the wrong calendar date.
+
+### Client-side (Electron renderer)
+
+When querying the API for events in a date range:
+
+```typescript
+// CORRECT — send full ISO timestamps computed from local midnight
+const start = new Date(someDate);
+start.setHours(0, 0, 0, 0);     // local midnight
+const end = new Date(start);
+end.setDate(end.getDate() + 1);  // next local midnight
+fetch(`/calendar/events?startDate=${start.toISOString()}&endDate=${end.toISOString()}`);
+
+// WRONG — date-only strings are interpreted as UTC midnight on the API
+fetch(`/calendar/events?startDate=2026-03-29&endDate=2026-03-30`);
+```
+
+### Server-side (API routes, AI skills)
+
+When computing day boundaries from a date string (e.g., from an AI model):
+
+```typescript
+import { getCalendarDateBounds, getUserDayBounds } from "@brett/business";
+
+// For a specific calendar date + timezone → UTC bounds
+const { startOfDay, endOfDay } = getCalendarDateBounds("2026-03-29", userTimezone);
+
+// For "today" in the user's timezone → UTC bounds
+const { startOfDay, endOfDay } = getUserDayBounds(userTimezone);
+```
+
+These helpers handle DST transitions correctly (spring-forward days are 23h, fall-back days are 25h).
+
+### Anti-patterns
+
+| Pattern | Problem |
+|---------|---------|
+| `new Date(dateStr); d.setUTCHours(0,0,0,0)` | Assumes UTC midnight = user's midnight |
+| `new Date(dateStr + "T00:00:00Z")` | Forces UTC, ignores user timezone |
+| `new Date(dateStr + "T00:00:00")` | Uses server's local timezone, not user's |
+| Formatting local dates as `YYYY-MM-DD` for API params | API parses as UTC, off by timezone offset |

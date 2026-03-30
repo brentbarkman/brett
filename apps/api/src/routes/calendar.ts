@@ -7,8 +7,11 @@ import {
   validateRsvpInput,
   validateCalendarNoteInput,
   validateCreateBrettMessage,
+  getCalendarDateBounds,
 } from "@brett/business";
 import { generateId } from "@brett/utils";
+
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
 const calendar = new Hono<AuthEnv>();
 
@@ -25,13 +28,25 @@ calendar.get("/events", async (c) => {
   let start: Date;
   let end: Date;
 
-  // Note: all-day events are stored with UTC midnight times. Clients should
-  // treat dates as calendar dates (ignoring time component) for all-day events.
   if (date) {
-    start = new Date(date);
-    start.setUTCHours(0, 0, 0, 0);
-    end = new Date(date);
-    end.setUTCHours(23, 59, 59, 999);
+    // Date-only strings (e.g., "2026-03-29") come from AI skills.
+    // Must use the user's timezone to compute correct UTC boundaries —
+    // new Date("2026-03-29") assumes UTC midnight, which shifts events
+    // near day boundaries in non-UTC timezones.
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(date);
+    if (isDateOnly) {
+      const tz = (await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { timezone: true },
+      }))?.timezone ?? DEFAULT_TIMEZONE;
+      const bounds = getCalendarDateBounds(date, tz);
+      start = bounds.startOfDay;
+      end = bounds.endOfDay;
+    } else {
+      // Full ISO timestamp — use directly, add 24h for end
+      start = new Date(date);
+      end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    }
   } else if (startDate && endDate) {
     start = new Date(startDate);
     end = new Date(endDate);

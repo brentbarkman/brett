@@ -13,7 +13,7 @@ export const getNextEventSkill: Skill = {
 
   async execute(_params, ctx) {
     const now = new Date();
-    const events = scopedEvents(ctx.prisma, ctx.userId);
+    const events = await scopedEvents(ctx.prisma, ctx.userId);
 
     const results = await events.findMany({
       where: {

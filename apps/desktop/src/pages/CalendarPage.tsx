@@ -12,8 +12,11 @@ interface CalendarPageProps {
   onEventClick: (event: CalendarEventRecord) => void;
 }
 
-function formatDateParam(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Convert a local Date to an ISO timestamp for API queries.
+ * Always send full ISO strings — never date-only strings like "2026-03-29" —
+ * because the API would interpret them as UTC midnight, shifting day boundaries. */
+function toISOParam(d: Date): string {
+  return d.toISOString();
 }
 
 export default function CalendarPage({ onEventClick }: CalendarPageProps) {
@@ -52,7 +55,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
       end.setDate(end.getDate() + 1);
-      return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
+      return { startDate: toISOParam(start), endDate: toISOParam(end) };
     }
 
     if (view === "5day") {
@@ -60,14 +63,14 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
       end.setDate(end.getDate() + 5);
-      return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
+      return { startDate: toISOParam(start), endDate: toISOParam(end) };
     }
 
     if (view === "week") {
       const monday = getSunday(currentDate);
       const end = new Date(monday);
       end.setDate(end.getDate() + 7);
-      return { startDate: formatDateParam(monday), endDate: formatDateParam(end) };
+      return { startDate: toISOParam(monday), endDate: toISOParam(end) };
     }
 
     // Month view — include padding days
@@ -80,7 +83,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
     const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7;
     const end = new Date(start);
     end.setDate(end.getDate() + totalCells);
-    return { startDate: formatDateParam(start), endDate: formatDateParam(end) };
+    return { startDate: toISOParam(start), endDate: toISOParam(end) };
   }, [view, currentDate]);
 
   const { data } = useCalendarEvents({ startDate, endDate });

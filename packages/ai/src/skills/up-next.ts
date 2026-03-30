@@ -19,7 +19,7 @@ export const upNextSkill: Skill = {
     const horizonEnd = new Date(todayStart.getTime() + 2 * 86400000 - 1);
 
     // Fetch next calendar event
-    const events = scopedEvents(ctx.prisma, ctx.userId);
+    const events = await scopedEvents(ctx.prisma, ctx.userId);
     const nextEvents = await events.findMany({
       where: {
         startTime: { gte: now },

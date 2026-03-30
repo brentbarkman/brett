@@ -49,6 +49,21 @@ export function getUserDayBounds(
 ): { startOfDay: Date; endOfDay: Date } {
   // Get the calendar date in the user's timezone (e.g., "2026-03-26")
   const dateStr = now.toLocaleDateString("en-CA", { timeZone: timezone });
+  return getCalendarDateBounds(dateStr, timezone);
+}
+
+/**
+ * Returns UTC Date objects for start/end of a specific calendar date (YYYY-MM-DD)
+ * in the given IANA timezone. Handles DST transitions correctly.
+ *
+ * Use this when you have a date string and need timezone-correct UTC boundaries
+ * for database queries. Never use `new Date(dateStr)` + `setUTCHours()` — that
+ * assumes UTC and shifts events near day boundaries.
+ */
+export function getCalendarDateBounds(
+  dateStr: string,
+  timezone: string
+): { startOfDay: Date; endOfDay: Date } {
   const [year, month, day] = dateStr.split("-").map(Number);
 
   // Convert that calendar day's midnight back to UTC using the timezone offset
