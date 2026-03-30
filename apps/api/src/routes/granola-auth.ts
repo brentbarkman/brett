@@ -243,6 +243,7 @@ granolaAuth.get("/callback", async (c) => {
     access_token: string;
     refresh_token?: string;
     expires_in?: number;
+    id_token?: string;
     email?: string;
   };
 
@@ -254,7 +255,19 @@ granolaAuth.get("/callback", async (c) => {
     });
   }
 
-  const email = tokens.email || user.email;
+  // Extract email from id_token (JWT payload), token response, or fall back to user email
+  let email = tokens.email;
+  if (!email && tokens.id_token) {
+    try {
+      const payload = JSON.parse(
+        Buffer.from(tokens.id_token.split(".")[1], "base64url").toString("utf8"),
+      );
+      email = payload.email;
+    } catch {
+      // Malformed id_token — fall through
+    }
+  }
+  if (!email) email = user.email;
 
   // Upsert GranolaAccount
   await prisma.granolaAccount.upsert({
