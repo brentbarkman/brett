@@ -18,7 +18,9 @@
     "test": "pnpm --filter @brett/api run test",
     "test:unit": "pnpm --filter @brett/api run test -- --testPathPattern=health",
     "eval": "pnpm --filter @brett/evals eval",
-    "eval:compare": "pnpm --filter @brett/evals eval:compare"
+    "eval:compare": "pnpm --filter @brett/evals eval:compare",
+    "upload:videos": "npx tsx scripts/upload-videos.ts",
+    "release": "npx tsx scripts/release.ts"
   },
   "devDependencies": {
     "turbo": "^2.8.20",
