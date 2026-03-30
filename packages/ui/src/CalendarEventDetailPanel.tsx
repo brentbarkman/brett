@@ -411,25 +411,41 @@ export function CalendarEventDetailPanel({
               )}
 
               {/* Transcript */}
-              {granolaMeeting.transcript && granolaMeeting.transcript.length > 0 && (
-                <details className="group">
-                  <summary className="text-[10px] uppercase tracking-wider text-white/30 font-semibold cursor-pointer hover:text-white/50 transition-colors select-none">
-                    Transcript
-                  </summary>
-                  <div className="mt-2 max-h-64 overflow-y-auto scrollbar-hide bg-white/[0.02] rounded-lg p-3 border border-white/5">
-                    {granolaMeeting.transcript.map((turn, idx) => (
-                      <div key={idx} className="mb-2 last:mb-0">
-                        <span className="text-[10px] font-semibold text-white/40">
-                          {turn.speaker}
-                        </span>
-                        <p className="text-xs text-white/50 leading-relaxed">
-                          {turn.text}
+              {granolaMeeting.transcript && granolaMeeting.transcript.length > 0 && (() => {
+                // Combine all turns into one text, split into readable paragraphs
+                const fullText = granolaMeeting.transcript!
+                  .map((t) => t.text)
+                  .join(" ")
+                  .replace(/^(Them|You|Me):\s*/i, ""); // strip leading speaker label
+
+                // Break into paragraphs roughly every 3-5 sentences
+                const sentences = fullText.split(/(?<=[.!?])\s+/);
+                const paragraphs: string[] = [];
+                let current: string[] = [];
+                for (const s of sentences) {
+                  current.push(s);
+                  if (current.length >= 4) {
+                    paragraphs.push(current.join(" "));
+                    current = [];
+                  }
+                }
+                if (current.length > 0) paragraphs.push(current.join(" "));
+
+                return (
+                  <details className="group">
+                    <summary className="text-[10px] uppercase tracking-wider text-white/30 font-semibold cursor-pointer hover:text-white/50 transition-colors select-none">
+                      Transcript
+                    </summary>
+                    <div className="mt-2 max-h-64 overflow-y-auto scrollbar-hide bg-white/[0.02] rounded-lg p-3 border border-white/5 space-y-2">
+                      {paragraphs.map((para, idx) => (
+                        <p key={idx} className="text-xs text-white/50 leading-relaxed">
+                          {para}
                         </p>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
+                      ))}
+                    </div>
+                  </details>
+                );
+              })()}
             </div>
           )}
 
