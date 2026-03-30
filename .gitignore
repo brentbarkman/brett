@@ -12,6 +12,9 @@ ios
 .DS_STORE
 .superpowers/
 
+# Login background videos (hosted on S3, not bundled)
+apps/desktop/public/videos/*.mp4
+
 # Firebase service account keys
 *-firebase-adminsdk-*.json
 firebase-service-account.json

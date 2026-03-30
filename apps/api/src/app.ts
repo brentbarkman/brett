@@ -21,6 +21,7 @@ import { brettMemory } from "./routes/brett-memory.js";
 import { weather } from "./routes/weather.js";
 import { importRoutes } from "./routes/import.js";
 import { download } from "./routes/download.js";
+import { config } from "./routes/config.js";
 import { startCronJobs } from "./jobs/cron.js";
 
 export const app = new Hono();
@@ -47,6 +48,7 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 
 // Public routes (no auth)
 app.route("/download", download);
+app.route("/config", config);
 
 // Routes
 app.route("/api/auth", authRouter);
