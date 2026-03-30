@@ -9,6 +9,82 @@ const GRANOLA_MCP_URL = "https://mcp.granola.ai/mcp";
 // Per-account mutex to prevent concurrent token refreshes
 const refreshLocks = new Map<string, Promise<void>>();
 
+// ── Response parsers ──
+// Granola MCP returns XML-like text, not JSON. Parse it with regex.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractTextContent(result: any): string {
+  const content = result?.content;
+  if (Array.isArray(content) && content[0]?.type === "text") {
+    return content[0].text as string;
+  }
+  return "";
+}
+
+function parseMeetingList(text: string): GranolaMeetingListItem[] {
+  const meetings: GranolaMeetingListItem[] = [];
+  const meetingRegex = /<meeting\s+id="([^"]+)"\s+title="([^"]+)"\s+date="([^"]+)">/g;
+  const participantRegex = /<known_participants>\s*([\s\S]*?)\s*<\/known_participants>/g;
+
+  let match;
+  const participantBlocks: string[] = [];
+  let pMatch;
+  while ((pMatch = participantRegex.exec(text)) !== null) {
+    participantBlocks.push(pMatch[1]);
+  }
+
+  let idx = 0;
+  while ((match = meetingRegex.exec(text)) !== null) {
+    const attendees: { name: string; email: string }[] = [];
+    const block = participantBlocks[idx] ?? "";
+    // Parse "Name <email>" or "Name from Company <email>" patterns
+    const emailRegex = /([^,<]+?)\s*<([^>]+)>/g;
+    let eMatch;
+    while ((eMatch = emailRegex.exec(block)) !== null) {
+      attendees.push({
+        name: eMatch[1].trim().replace(/\s+from\s+\S+$/i, ""),
+        email: eMatch[2].trim(),
+      });
+    }
+
+    meetings.push({
+      id: match[1],
+      title: match[2],
+      start_time: new Date(match[3]).toISOString(),
+      end_time: new Date(match[3]).toISOString(), // Granola list doesn't provide end time
+      attendees,
+    });
+    idx++;
+  }
+  return meetings;
+}
+
+function parseMeetingDetails(text: string): GranolaMeetingDetail[] {
+  // get_meetings may return XML or structured text — try to extract what we can
+  // For now, return the raw text as a single meeting's notes field
+  // The actual format depends on what Granola returns for get_meetings
+  return []; // Will be refined once we see the actual response
+}
+
+function parseTranscript(text: string): GranolaTranscript | null {
+  if (!text.trim()) return null;
+  // Try to parse as structured transcript
+  const turns: { source: string; speaker: string; text: string }[] = [];
+  // Common format: "Speaker Name: text" on each line
+  const lines = text.split("\n").filter((l) => l.trim());
+  for (const line of lines) {
+    const colonIdx = line.indexOf(":");
+    if (colonIdx > 0 && colonIdx < 50) {
+      turns.push({
+        source: "speaker",
+        speaker: line.slice(0, colonIdx).trim(),
+        text: line.slice(colonIdx + 1).trim(),
+      });
+    }
+  }
+  return turns.length > 0 ? { turns } : null;
+}
+
 interface GranolaMeetingListItem {
   id: string;
   title: string;
@@ -66,7 +142,7 @@ async function getGranolaClient(granolaAccountId: string): Promise<Client> {
         },
       });
 
-      return createMCPClient(newTokens.access_token);
+      return createAndConnectClient(newTokens.access_token);
     } finally {
       refreshLocks.delete(granolaAccountId);
       resolveRefresh!();
@@ -74,10 +150,14 @@ async function getGranolaClient(granolaAccountId: string): Promise<Client> {
   }
 
   const accessToken = decryptToken(account.accessToken);
-  return createMCPClient(accessToken);
+  return createAndConnectClient(accessToken);
 }
 
-function createMCPClient(accessToken: string): Client {
+/**
+ * Create and connect an MCP client in one step.
+ * The SDK requires connect() to be called exactly once per Client instance.
+ */
+async function createAndConnectClient(accessToken: string): Promise<Client> {
   const client = new Client({ name: "brett", version: "1.0.0" });
   const transport = new StreamableHTTPClientTransport(
     new URL(GRANOLA_MCP_URL),
@@ -89,15 +169,8 @@ function createMCPClient(accessToken: string): Client {
       },
     },
   );
-
-  // Note: caller must call client.connect(transport) before using
-  (client as any)._transport = transport;
-  return client;
-}
-
-async function connectClient(client: Client): Promise<void> {
-  const transport = (client as any)._transport;
   await client.connect(transport);
+  return client;
 }
 
 async function refreshGranolaTokens(refreshToken: string): Promise<{
@@ -167,7 +240,7 @@ export async function withGranolaClient<T>(
   fn: (tools: GranolaTools) => Promise<T>,
 ): Promise<T> {
   const client = await getGranolaClient(granolaAccountId);
-  await connectClient(client);
+  // Client is already connected by getGranolaClient -> createAndConnectClient
   try {
     const tools: GranolaTools = {
       async listMeetings(timeRange, customStart?, customEnd?) {
@@ -175,25 +248,41 @@ export async function withGranolaClient<T>(
         if (timeRange === "custom" && customStart) args.custom_start = customStart;
         if (timeRange === "custom" && customEnd) args.custom_end = customEnd;
         const result = await client.callTool({ name: "list_meetings", arguments: args });
-        return (result.content as any)?.[0]?.text
-          ? JSON.parse((result.content as any)[0].text)
-          : [];
+        const text = extractTextContent(result);
+        return parseMeetingList(text);
       },
       async getMeetings(meetingIds) {
+        // get_meetings returns detailed notes per meeting
+        const results: GranolaMeetingDetail[] = [];
         const batches: string[][] = [];
         for (let i = 0; i < meetingIds.length; i += 10) {
           batches.push(meetingIds.slice(i, i + 10));
         }
-        const results: GranolaMeetingDetail[] = [];
         for (const batch of batches) {
           const result = await client.callTool({
             name: "get_meetings",
             arguments: { meeting_ids: batch },
           });
-          const parsed = (result.content as any)?.[0]?.text
-            ? JSON.parse((result.content as any)[0].text)
-            : [];
-          results.push(...parsed);
+          const text = extractTextContent(result);
+          // get_meetings returns full notes — store the raw text as the summary
+          // Parse individual meeting blocks if possible
+          const parsed = parseMeetingDetails(text);
+          if (parsed.length > 0) {
+            results.push(...parsed);
+          } else {
+            // Fallback: create one entry per requested ID with the full text as notes
+            for (const id of batch) {
+              results.push({
+                id,
+                title: "",
+                start_time: "",
+                end_time: "",
+                notes: text,
+                summary: text,
+                attendees: [],
+              });
+            }
+          }
         }
         return results;
       },
@@ -202,8 +291,8 @@ export async function withGranolaClient<T>(
           name: "get_meeting_transcript",
           arguments: { meeting_id: meetingId },
         });
-        const text = (result.content as any)?.[0]?.text;
-        return text ? JSON.parse(text) : null;
+        const text = extractTextContent(result);
+        return parseTranscript(text);
       },
       async query(q, documentIds?) {
         const args: Record<string, unknown> = { query: q };
@@ -212,7 +301,7 @@ export async function withGranolaClient<T>(
           name: "query_granola_meetings",
           arguments: args,
         });
-        return (result.content as any)?.[0]?.text ?? "";
+        return extractTextContent(result);
       },
     };
     return await fn(tools);

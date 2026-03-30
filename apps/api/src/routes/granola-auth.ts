@@ -342,4 +342,18 @@ granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
   return c.json(meeting);
 });
 
+// POST /sync — Manually trigger sync
+granolaAuth.post("/sync", authMiddleware, async (c) => {
+  const user = c.get("user");
+  try {
+    const { initialGranolaSync } = await import("../services/granola-sync.js");
+    await initialGranolaSync(user.id);
+    const count = await prisma.granolaMeeting.count({ where: { userId: user.id } });
+    return c.json({ ok: true, meetingsSynced: count });
+  } catch (err: any) {
+    console.error("[granola-auth] Sync failed:", err);
+    return c.json({ error: err?.message ?? "Sync failed" }, 500);
+  }
+});
+
 export default granolaAuth;

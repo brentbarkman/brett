@@ -167,21 +167,24 @@ async function syncMeetings(
 
   if (newMeetings.length === 0) return 0;
 
-  // Fetch full details + transcripts using a single MCP client connection
-  const { details, transcripts } = await withGranolaClient(granolaAccountId, async (tools) => {
+  // Fetch details + transcripts using a single MCP client connection.
+  // Use list metadata (title, time, attendees) as primary source since
+  // getMeetings returns notes/summary but list_meetings has the metadata.
+  const detailMap = await withGranolaClient(granolaAccountId, async (tools) => {
     const meetingDetails = await tools.getMeetings(newMeetings.map((m) => m.id));
+    const detailById = new Map(meetingDetails.map((d) => [d.id, d]));
 
-    const meetingTranscripts = new Map<string, { turns: { source: string; speaker: string; text: string }[] } | null>();
-    for (const detail of meetingDetails) {
+    const transcripts = new Map<string, { turns: { source: string; speaker: string; text: string }[] } | null>();
+    for (const m of newMeetings) {
       try {
-        meetingTranscripts.set(detail.id, await tools.getTranscript(detail.id));
+        transcripts.set(m.id, await tools.getTranscript(m.id));
       } catch {
-        console.warn(`[granola-sync] Failed to fetch transcript for ${detail.id}`);
-        meetingTranscripts.set(detail.id, null);
+        console.warn(`[granola-sync] Failed to fetch transcript for ${m.id}`);
+        transcripts.set(m.id, null);
       }
     }
 
-    return { details: meetingDetails, transcripts: meetingTranscripts };
+    return { detailById, transcripts };
   });
 
   // Load calendar events for matching (same day window)
@@ -219,42 +222,47 @@ async function syncMeetings(
 
   let syncedCount = 0;
 
-  for (const detail of details) {
+  // Use list metadata as primary source, merge with detail notes
+  for (const listItem of newMeetings) {
     try {
-      const transcript = transcripts.get(detail.id) ?? null;
+      const detail = detailMap.detailById.get(listItem.id);
+      const transcript = detailMap.transcripts.get(listItem.id) ?? null;
 
-      // Match to calendar event
-      const meetingAttendees = detail.attendees?.map((a) => ({ email: a.email })) ?? [];
+      // Match to calendar event using list metadata (reliable title + time + attendees)
+      const meetingAttendees = listItem.attendees?.map((a) => ({ email: a.email })) ?? [];
       const match = findBestMatch(
         {
-          title: detail.title,
-          startTime: new Date(detail.start_time),
-          endTime: new Date(detail.end_time),
+          title: listItem.title,
+          startTime: new Date(listItem.start_time),
+          endTime: new Date(listItem.end_time),
           attendees: meetingAttendees,
         },
         candidates,
       );
 
+      // Use list metadata for title/time/attendees, detail for notes/summary
+      const summary = detail?.summary ?? detail?.notes ?? null;
+
       // Store meeting + action items in a transaction to prevent duplicates
       await prisma.$transaction(async (tx) => {
         const meeting = await tx.granolaMeeting.create({
           data: {
-            granolaDocumentId: detail.id,
+            granolaDocumentId: listItem.id,
             userId,
             granolaAccountId,
             calendarEventId: match?.id ?? null,
-            title: detail.title,
-            summary: detail.summary ?? detail.notes ?? null,
+            title: listItem.title,
+            summary,
             transcript: transcript?.turns ?? undefined,
-            attendees: detail.attendees ?? undefined,
-            meetingStartedAt: new Date(detail.start_time),
-            meetingEndedAt: new Date(detail.end_time),
-            rawData: detail as any,
+            attendees: listItem.attendees ?? undefined,
+            meetingStartedAt: new Date(listItem.start_time),
+            meetingEndedAt: new Date(listItem.end_time),
+            rawData: (detail as any) ?? undefined,
           },
         });
 
         // Extract and create action items within the same transaction
-        await extractAndCreateActionItems(tx, meeting.id, userId, detail.summary ?? detail.notes ?? "");
+        await extractAndCreateActionItems(tx, meeting.id, userId, summary ?? "");
       });
 
       syncedCount++;
@@ -263,7 +271,7 @@ async function syncMeetings(
       if (err?.code === "P2002") {
         continue;
       }
-      console.error(`[granola-sync] Failed to sync meeting ${detail.id}:`, err);
+      console.error(`[granola-sync] Failed to sync meeting ${listItem.id}:`, err);
     }
   }
 
