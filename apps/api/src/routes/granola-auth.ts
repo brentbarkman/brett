@@ -96,7 +96,13 @@ granolaAuth.get("/", authMiddleware, async (c) => {
 // POST /connect — Initiate OAuth (returns URL)
 granolaAuth.post("/connect", authMiddleware, async (c) => {
   const user = c.get("user");
-  const client = await ensureClientRegistered();
+  let client;
+  try {
+    client = await ensureClientRegistered();
+  } catch (err) {
+    console.error("[granola-auth] Client registration failed:", err);
+    return c.json({ error: "Failed to connect to Granola. Please try again." }, 502);
+  }
   const nonce = randomBytes(16).toString("hex");
   const hmac = createHmac("sha256", process.env.BETTER_AUTH_SECRET!)
     .update(user.id + ":" + nonce)

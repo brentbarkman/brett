@@ -284,6 +284,13 @@ export function CalendarSection() {
               <Plus size={12} />
               {connectGranola.isPending ? "Connecting..." : "Connect Granola"}
             </button>
+            {connectGranola.isError && (
+              <p className="text-xs text-red-400/80 mt-1">
+                {connectGranola.error instanceof Error
+                  ? connectGranola.error.message
+                  : "Failed to connect to Granola. Please try again."}
+              </p>
+            )}
           </div>
         )}
       </div>
