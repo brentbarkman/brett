@@ -297,7 +297,7 @@ async function extractAndCreateActionItems(
   const items: { title: string }[] = [];
 
   // Strategy 1: Find content under action-item-like headers
-  const headerPattern = /###?\s*(?:next steps|action items?|follow[- ]?ups?|todos?|takeaways)\s*\n([\s\S]*?)(?=\n###?\s|\n*$)/gim;
+  const headerPattern = /###?\s*(?:next steps|action items?|follow[- ]?ups?|todos?|takeaways)\s*\n([\s\S]*?)(?=\n###?\s|$)/gi;
   let headerMatch;
   while ((headerMatch = headerPattern.exec(summaryText)) !== null) {
     const block = headerMatch[1];
