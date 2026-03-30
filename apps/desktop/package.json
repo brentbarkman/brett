@@ -14,6 +14,10 @@
     ],
     "mac": {
       "target": "dmg"
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://placeholder.invalid/releases"
     }
   },
   "scripts": {
@@ -22,7 +26,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"tsc -p tsconfig.electron.json -w\" \"electron .\"",
-    "electron:build": "vite build && tsc -p tsconfig.electron.json && node -e \"require('fs').writeFileSync('dist/electron/api-config.json', JSON.stringify({apiURL: process.env.VITE_API_URL || 'http://localhost:3001'}))\" && electron-builder",
+    "electron:build": "vite build && tsc -p tsconfig.electron.json && node -e \"require('fs').writeFileSync('dist/electron/api-config.json', JSON.stringify({apiURL: process.env.VITE_API_URL || 'http://localhost:3001', storageEndpoint: process.env.STORAGE_ENDPOINT || '', storageBucket: process.env.STORAGE_BUCKET || 'brett'}))\" && electron-builder",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -35,6 +39,7 @@
     "better-auth": "^1.2.7",
     "better-sqlite3": "^12.8.0",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.13.1"

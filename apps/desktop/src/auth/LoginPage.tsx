@@ -2,17 +2,28 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { VideoBackground, VideoBackgroundHandle } from "./VideoBackground";
 
-const LOGIN_VIDEOS = [
-  "/videos/login-bg-1.mp4",
-  "/videos/login-bg-2.mp4",
-  "/videos/login-bg-3.mp4",
-  "/videos/login-bg-4.mp4",
-  "/videos/login-bg-5.mp4",
-  "/videos/login-bg-6.mp4",
-  "/videos/login-bg-7.mp4",
-  "/videos/login-bg-8.mp4",
-  "/videos/login-bg-9.mp4",
-];
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
+const VIDEO_FILENAMES = Array.from({ length: 9 }, (_, i) => `login-bg-${i + 1}.mp4`);
+
+function useLoginVideos(): string[] {
+  const [videos, setVideos] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/config`)
+      .then((res) => res.json())
+      .then((data: { videoBaseUrl: string }) => {
+        if (data.videoBaseUrl) {
+          setVideos(VIDEO_FILENAMES.map((f) => `${data.videoBaseUrl}/${f}`));
+        }
+      })
+      .catch(() => {
+        // Silently fail — login page works fine without video backgrounds
+      });
+  }, []);
+
+  return videos;
+}
 
 export function LoginPage() {
   const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
@@ -25,6 +36,7 @@ export function LoginPage() {
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const videoBgRef = useRef<VideoBackgroundHandle>(null);
+  const loginVideos = useLoginVideos();
 
   // Focus email on mount, name when switching to sign-up
   useEffect(() => {
@@ -90,7 +102,9 @@ export function LoginPage() {
       className="relative flex h-screen items-center justify-center overflow-hidden bg-black"
       onClick={() => videoBgRef.current?.skip()}
     >
-      <VideoBackground ref={videoBgRef} videos={LOGIN_VIDEOS} />
+      {loginVideos.length > 0 && (
+        <VideoBackground ref={videoBgRef} videos={loginVideos} />
+      )}
 
       <style>{`
         @keyframes cardEntrance {

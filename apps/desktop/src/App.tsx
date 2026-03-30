@@ -164,6 +164,17 @@ export function App() {
   const [activePage, setActivePage] = useState<"today" | "inbox" | "scouts">("today");
   const [selectedScout, setSelectedScout] = useState<Scout | null>(null);
 
+  // Auto-update notification
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  useEffect(() => {
+    const cleanup = (window as any).electronAPI?.onUpdateDownloaded?.((version: string) => {
+      if (/^\d+\.\d+\.\d+/.test(version)) {
+        setUpdateVersion(version);
+      }
+    });
+    return () => cleanup?.();
+  }, []);
+
   // Triage popup state
   const [triageState, setTriageState] = useState<{
     mode: "list-first" | "date-first";
@@ -976,6 +987,24 @@ export function App() {
             }}
             onCancel={() => setArchiveListConfirm(null)}
           />
+        )}
+        {/* Auto-update notification */}
+        {updateVersion && (
+          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-xl border border-white/10 bg-black/60 backdrop-blur-2xl px-4 py-3 text-sm text-white/80">
+            <span>Brett v{updateVersion} is ready</span>
+            <button
+              onClick={() => (window as any).electronAPI?.installUpdate?.()}
+              className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-600 transition-colors"
+            >
+              Restart to update
+            </button>
+            <button
+              onClick={() => setUpdateVersion(null)}
+              className="text-white/40 hover:text-white/60 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
         )}
       </div>
       </AppDropZone>
