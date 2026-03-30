@@ -270,6 +270,7 @@ brettIntelligence.get("/up-next", rateLimiter(60), async (c) => {
       userId: user.id,
       startTime: { gt: now },
       status: "confirmed",
+      myResponseStatus: { not: "observer" },
     },
     orderBy: { startTime: "asc" },
     select: {

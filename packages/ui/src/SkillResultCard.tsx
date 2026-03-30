@@ -8,10 +8,11 @@ interface SkillResultCardProps {
   data?: unknown;
   message?: string;
   onItemClick?: (id: string) => void;
+  onEventClick?: (id: string) => void;
   onNavigate?: (path: string) => void;
 }
 
-export function SkillResultCard({ displayHint, data, message, onItemClick, onNavigate }: SkillResultCardProps) {
+export function SkillResultCard({ displayHint, data, message, onItemClick, onEventClick, onNavigate }: SkillResultCardProps) {
   switch (displayHint.type) {
     // ─── Action confirmations (create, complete, move, etc.) ───
     // Subtle inline confirmation — small check icon, text with links.
@@ -25,6 +26,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onNav
             <SimpleMarkdown
               content={displayHint.type === "confirmation" ? (displayHint.message ?? message ?? "Done.") : (message ?? "Done.")}
               onItemClick={onItemClick}
+              onEventClick={onEventClick}
               onNavigate={onNavigate}
             />
           </div>
@@ -116,7 +118,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onNav
       if (message) {
         return (
           <div className="text-sm text-white/60">
-            <SimpleMarkdown content={message} onItemClick={onItemClick} onNavigate={onNavigate} />
+            <SimpleMarkdown content={message} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
           </div>
         );
       }

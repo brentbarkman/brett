@@ -63,6 +63,7 @@ calendar.get("/events", async (c) => {
       calendarListId: { in: calendarListIds },
       startTime: { lte: end },
       endTime: { gte: start },
+      status: { not: "cancelled" },
     },
     include: {
       calendarList: { select: { name: true, color: true } },

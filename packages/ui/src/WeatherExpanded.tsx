@@ -3,13 +3,14 @@ import type { WeatherData } from "@brett/types";
 
 interface WeatherExpandedProps {
   weather: WeatherData;
+  now?: Date;
 }
 
-export function WeatherExpanded({ weather }: WeatherExpandedProps) {
+export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps) {
   const hourlyRef = useRef<HTMLDivElement>(null);
   const dayMarkerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const scrollingToDay = useRef(false);
-  const now = new Date();
+  const now = nowProp ?? new Date();
   const todayStr = now.toISOString().split("T")[0];
   const [selectedDay, setSelectedDay] = useState(todayStr);
 
@@ -18,8 +19,12 @@ export function WeatherExpanded({ weather }: WeatherExpandedProps) {
   const weekRange = weekMax - weekMin || 1;
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // Build continuous hourly timeline — for today, start from "now"
-  const nowHourIdx = weather.hourly.findIndex((h) => new Date(h.hour) >= now);
+  // Build continuous hourly timeline — for today, start from current hour
+  const currentHourStart = new Date(now);
+  currentHourStart.setMinutes(0, 0, 0);
+  const nowHourIdx = weather.hourly.findIndex(
+    (h: { hour: string }) => new Date(h.hour).getTime() === currentHourStart.getTime()
+  );
   const startIdx = nowHourIdx >= 0 ? nowHourIdx : 0;
   const visibleHours = weather.hourly.slice(startIdx);
 

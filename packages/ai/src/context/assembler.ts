@@ -356,6 +356,7 @@ async function assembleBriefing(
         userId: input.userId,
         startTime: { gte: startOfDay, lt: endOfDay },
         status: "confirmed",
+        myResponseStatus: { not: "observer" },
       },
       select: {
         title: true,
