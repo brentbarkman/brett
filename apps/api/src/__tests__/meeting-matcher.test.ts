@@ -38,28 +38,28 @@ describe("findBestMatch", () => {
     expect(result!.score).toBeGreaterThan(0.8);
   });
 
-  it("rejects candidates with no time overlap", () => {
+  it("rejects candidates with no time overlap (>3h gap)", () => {
     const candidates: MatchCandidate[] = [
       {
         id: "event-2",
         title: "Weekly Standup",
-        startTime: new Date("2026-03-27T16:00:00Z"),
-        endTime: new Date("2026-03-27T16:30:00Z"),
+        startTime: new Date("2026-03-27T20:00:00Z"),
+        endTime: new Date("2026-03-27T20:30:00Z"),
         attendees: [{ email: "alice@example.com" }],
       },
     ];
     expect(findBestMatch(baseMeeting, candidates)).toBeNull();
   });
 
-  it("allows time overlap within 15-minute tolerance", () => {
-    // Candidate starts 10 min after meeting ends — no natural overlap,
-    // but within the 15-min tolerance window
+  it("allows time overlap within 3-hour tolerance (meeting started late)", () => {
+    // Candidate starts 2h after meeting — no natural overlap,
+    // but within the 3h tolerance (Granola reports actual start, not scheduled)
     const candidates: MatchCandidate[] = [
       {
         id: "event-3",
         title: "Weekly Standup",
-        startTime: new Date("2026-03-27T14:40:00Z"),
-        endTime: new Date("2026-03-27T15:10:00Z"),
+        startTime: new Date("2026-03-27T16:30:00Z"),
+        endTime: new Date("2026-03-27T17:00:00Z"),
         attendees: [],
       },
     ];

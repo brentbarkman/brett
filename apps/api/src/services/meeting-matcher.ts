@@ -1,4 +1,4 @@
-const TIME_TOLERANCE_MS = 15 * 60 * 1000; // 15 minutes
+const TIME_TOLERANCE_MS = 3 * 60 * 60 * 1000; // 3 hours — Granola reports actual start time which can differ from calendar scheduled time
 const CONFIDENCE_THRESHOLD = 0.5;
 const TITLE_WEIGHT = 0.6;
 const ATTENDEE_WEIGHT = 0.4;

@@ -37,7 +37,6 @@ function parseMeetingList(text: string): GranolaMeetingListItem[] {
   while ((match = meetingRegex.exec(text)) !== null) {
     const attendees: { name: string; email: string }[] = [];
     const block = participantBlocks[idx] ?? "";
-    // Parse "Name <email>" or "Name from Company <email>" patterns
     const emailRegex = /([^,<]+?)\s*<([^>]+)>/g;
     let eMatch;
     while ((eMatch = emailRegex.exec(block)) !== null) {
