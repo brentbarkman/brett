@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
-import type { GranolaAccountStatus, GranolaMeetingRecord } from "@brett/types";
+import type { GranolaAccountStatus, GranolaMeetingDetail } from "@brett/types";
 
 export function useGranolaAccount() {
   return useQuery({
@@ -54,7 +54,7 @@ export function useGranolaMeetingForEvent(calendarEventId: string | null) {
   return useQuery({
     queryKey: ["granola", "meeting", calendarEventId],
     queryFn: () =>
-      apiFetch<GranolaMeetingRecord | null>(
+      apiFetch<GranolaMeetingDetail | null>(
         `/granola/auth/meetings/by-event/${calendarEventId}`,
       ),
     enabled: !!calendarEventId,

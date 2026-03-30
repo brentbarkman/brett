@@ -55,6 +55,7 @@ import {
   useUpdateCalendarEventNotes,
 } from "./api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
+import { useGranolaMeetingForEvent } from "./api/granola";
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useOmnibar } from "./api/omnibar";
@@ -316,6 +317,9 @@ export function App() {
 
   // Calendar event detail panel hooks
   const { data: calendarEventDetail, isLoading: isLoadingCalendarDetail } = useCalendarEventDetail(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const { data: granolaMeeting } = useGranolaMeetingForEvent(
     isDetailOpen && isCalendarSelected ? selectedId : null,
   );
   const updateRsvp = useUpdateRsvp();
@@ -862,6 +866,13 @@ export function App() {
           isSendingCalendarBrettMessage={false}
           isCalendarBrettStreaming={calendarBrett.isStreaming}
           isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
+          granolaMeeting={granolaMeeting ? {
+            title: granolaMeeting.title,
+            summary: granolaMeeting.summary,
+            transcript: granolaMeeting.transcript as any,
+            actionItems: granolaMeeting.actionItems as any,
+            meetingStartedAt: granolaMeeting.meetingStartedAt,
+          } : null}
         />
 
         {/* Drag overlay */}

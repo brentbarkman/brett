@@ -64,6 +64,15 @@ interface DetailPanelProps {
   isSendingCalendarBrettMessage?: boolean;
   isCalendarBrettStreaming?: boolean;
   isLoadingMoreCalendarBrettMessages?: boolean;
+  // Granola meeting notes
+  granolaMeeting?: {
+    title: string;
+    summary: string | null;
+    transcript: { source: string; speaker: string; text: string }[] | null;
+    actionItems: { title: string; dueDate?: string }[] | null;
+    meetingStartedAt: string;
+  } | null;
+  onCreateActionItem?: (title: string, dueDate?: string) => void;
 }
 
 export function DetailPanel({
@@ -108,6 +117,8 @@ export function DetailPanel({
   isSendingCalendarBrettMessage,
   isCalendarBrettStreaming,
   isLoadingMoreCalendarBrettMessages,
+  granolaMeeting,
+  onCreateActionItem,
 }: DetailPanelProps) {
   if (!item) return null;
   const isCalendarEvent = "googleEventId" in item;
@@ -232,6 +243,8 @@ export function DetailPanel({
           isSendingBrettMessage={isSendingCalendarBrettMessage ?? false}
           isBrettStreaming={isCalendarBrettStreaming}
           isLoadingMoreBrettMessages={isLoadingMoreCalendarBrettMessages ?? false}
+          granolaMeeting={granolaMeeting}
+          onCreateActionItem={onCreateActionItem}
         />
       ) : (
         <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">

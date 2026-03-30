@@ -332,6 +332,7 @@ granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
       calendarEventId: true,
       title: true,
       summary: true,
+      transcript: true,
       attendees: true,
       actionItems: true,
       meetingStartedAt: true,
