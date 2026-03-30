@@ -31,6 +31,10 @@ export function initAutoUpdater(): void {
     }
   });
 
+  autoUpdater.on("update-not-available", () => {
+    console.log("[Updater] App is up to date");
+  });
+
   autoUpdater.on("error", (err) => {
     console.error("[Updater] Error:", err.message);
   });

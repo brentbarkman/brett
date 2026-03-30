@@ -1,18 +1,8 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
+import { s3, BUCKET } from "./s3";
 
-const s3 = new S3Client({
-  endpoint: process.env.STORAGE_ENDPOINT,
-  region: process.env.STORAGE_REGION || "us-east-1",
-  credentials: {
-    accessKeyId: process.env.STORAGE_ACCESS_KEY || "",
-    secretAccessKey: process.env.STORAGE_SECRET_KEY || "",
-  },
-  forcePathStyle: true,
-});
-
-const BUCKET = process.env.STORAGE_BUCKET || "brett";
 const VIDEO_DIR = path.resolve(__dirname, "../apps/desktop/public/videos");
 
 async function uploadVideos() {

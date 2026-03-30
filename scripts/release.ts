@@ -1,22 +1,16 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { s3, BUCKET } from "./s3";
 
-const s3 = new S3Client({
-  endpoint: process.env.STORAGE_ENDPOINT,
-  region: process.env.STORAGE_REGION || "us-east-1",
-  credentials: {
-    accessKeyId: process.env.STORAGE_ACCESS_KEY || "",
-    secretAccessKey: process.env.STORAGE_SECRET_KEY || "",
-  },
-  forcePathStyle: true,
-});
-
-const BUCKET = process.env.STORAGE_BUCKET || "brett";
 const DESKTOP_DIR = path.resolve(__dirname, "../apps/desktop");
 
 async function release() {
+  if (!process.env.STORAGE_ENDPOINT) {
+    throw new Error("STORAGE_ENDPOINT not set. Set it in your environment before running release.");
+  }
+
   // 1. Read version from package.json
   const pkg = JSON.parse(fs.readFileSync(path.join(DESKTOP_DIR, "package.json"), "utf-8"));
   const version = pkg.version;
@@ -74,7 +68,7 @@ async function release() {
   console.log("  ✓ latest-mac.yml uploaded");
 
   // 6. Summary
-  const endpoint = process.env.STORAGE_ENDPOINT || "";
+  const endpoint = process.env.STORAGE_ENDPOINT;
   console.log(`\n✓ Release v${version} published!`);
   console.log(`  Download: ${endpoint}/${BUCKET}/${dmgKey}`);
   console.log(`  Manifest: ${endpoint}/${BUCKET}/${ymlKey}`);
