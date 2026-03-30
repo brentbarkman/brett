@@ -34,9 +34,17 @@ export function findBestMatch(
   let bestMatch: MatchResult | null = null;
 
   for (const candidate of candidates) {
-    if (!hasTimeOverlap(meeting, candidate)) continue;
-
     const titleScore = titleSimilarity(meeting.title, candidate.title);
+
+    // Exact title + same day = match regardless of time gap
+    // (Granola's reported times can differ significantly from calendar)
+    const sameDay = meeting.startTime.toISOString().slice(0, 10) ===
+      candidate.startTime.toISOString().slice(0, 10);
+    const exactTitle = titleScore > 0.95;
+
+    if (!exactTitle && !hasTimeOverlap(meeting, candidate)) continue;
+    if (!sameDay && !hasTimeOverlap(meeting, candidate)) continue;
+
     const attendeeScore = attendeeOverlap(
       meeting.attendees,
       candidate.attendees,

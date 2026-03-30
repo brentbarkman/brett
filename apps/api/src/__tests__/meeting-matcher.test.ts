@@ -38,13 +38,13 @@ describe("findBestMatch", () => {
     expect(result!.score).toBeGreaterThan(0.8);
   });
 
-  it("rejects candidates with no time overlap (>3h gap)", () => {
+  it("rejects candidates on a different day", () => {
     const candidates: MatchCandidate[] = [
       {
         id: "event-2",
         title: "Weekly Standup",
-        startTime: new Date("2026-03-27T20:00:00Z"),
-        endTime: new Date("2026-03-27T20:30:00Z"),
+        startTime: new Date("2026-03-28T14:00:00Z"),
+        endTime: new Date("2026-03-28T14:30:00Z"),
         attendees: [{ email: "alice@example.com" }],
       },
     ];
