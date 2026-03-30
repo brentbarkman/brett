@@ -8,4 +8,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   startGoogleOAuth: () => ipcRenderer.invoke("start-google-oauth"),
   things3Scan: () => ipcRenderer.invoke("things3:scan"),
   things3Import: () => ipcRenderer.invoke("things3:import"),
+  installUpdate: () => ipcRenderer.invoke("install-update"),
+  onUpdateDownloaded: (callback: (version: string) => void) => {
+    ipcRenderer.on("update-downloaded", (_event, version) => callback(version));
+  },
 });

@@ -5,6 +5,7 @@ import path from "path";
 import { pathToFileURL } from "url";
 import Store from "electron-store";
 import { scanThings3, readThings3 } from "./things3";
+import { initAutoUpdater, quitAndInstall } from "./updater";
 
 // #3: Load API URL from main process config — never accept from renderer
 // Reads from api-config.json generated at build time, falls back to env var
@@ -72,6 +73,10 @@ ipcMain.handle("get-token", () => {
 
 ipcMain.handle("clear-token", () => {
   store.delete("encryptedToken");
+});
+
+ipcMain.handle("install-update", () => {
+  quitAndInstall();
 });
 
 ipcMain.handle("things3:scan", () => {
@@ -257,6 +262,7 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  initAutoUpdater();
 });
 
 app.on("window-all-closed", () => {
