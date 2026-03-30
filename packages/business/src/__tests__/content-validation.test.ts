@@ -32,6 +32,7 @@ function makeContentItem(overrides: Partial<ItemRecord> = {}): ItemRecord & { li
     contentMetadata: { type: "article", author: "Test Author", publishDate: "2026-03-01" },
     meetingNoteId: null,
     listId: null,
+    sourceId: null,
     userId: "user-1",
     createdAt: new Date("2026-03-10T10:00:00Z"),
     updatedAt: new Date("2026-03-13T10:00:00Z"),

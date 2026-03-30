@@ -3,6 +3,14 @@ import { Pencil, Pause, Zap, FileText, CircleCheck, ArrowLeft, ExternalLink, Che
 import type { Scout, ScoutFinding, ScoutSource } from "@brett/types";
 import { ScoutCard } from "./ScoutCard";
 
+function humanizeCadence(hours: number): string {
+  if (hours < 24) return hours === 1 ? "Every hour" : `Every ${hours}h`;
+  const days = hours / 24;
+  if (days === 1) return "Daily";
+  if (days === 7) return "Weekly";
+  return `Every ${days}d`;
+}
+
 interface ScoutDetailProps {
   scouts: Scout[];
   selectedScout: Scout;
@@ -183,14 +191,14 @@ export function ScoutDetail({
             >
               {editingField === "cadence" ? (
                 <CadencePicker
-                  baseInterval={selectedScout.cadenceBase}
-                  burstMin={selectedScout.cadenceCurrent}
+                  baseIntervalHours={selectedScout.cadenceIntervalHours}
+                  burstMinHours={selectedScout.cadenceMinIntervalHours}
                 />
               ) : (
                 <p className="text-[13px] text-white/50 whitespace-pre-line">
-                  {selectedScout.cadenceCurrent
-                    ? `Base: ${selectedScout.cadenceBase}\nCurrent: ${selectedScout.cadenceCurrent} (${selectedScout.cadenceReason})`
-                    : selectedScout.cadenceBase}
+                  {selectedScout.cadenceCurrentIntervalHours < selectedScout.cadenceIntervalHours
+                    ? `Base: ${humanizeCadence(selectedScout.cadenceIntervalHours)}\nCurrent: ${humanizeCadence(selectedScout.cadenceCurrentIntervalHours)} (${selectedScout.cadenceReason})`
+                    : humanizeCadence(selectedScout.cadenceIntervalHours)}
                 </p>
               )}
             </EditableCard>
@@ -413,13 +421,9 @@ const CADENCE_PRESETS = [
   { label: "Weekly", hours: 168 },
 ] as const;
 
-function CadencePicker({ baseInterval, burstMin }: { baseInterval: string; burstMin?: string }) {
-  const matchPreset = (label: string) =>
-    CADENCE_PRESETS.find((p) => p.label.toLowerCase() === label.toLowerCase()
-      || p.label.replace(/(\d+)h/, "Every $1 hours").toLowerCase() === label.toLowerCase()
-      || p.label.replace(/(\d+)d/, "Every $1 days").toLowerCase() === label.toLowerCase());
-  const [selectedBase, setSelectedBase] = useState<number>(matchPreset(baseInterval)?.hours ?? 72);
-  const [burstHours, setBurstHours] = useState<number>(matchPreset(burstMin ?? "")?.hours ?? 8);
+function CadencePicker({ baseIntervalHours, burstMinHours }: { baseIntervalHours: number; burstMinHours: number }) {
+  const [selectedBase, setSelectedBase] = useState<number>(baseIntervalHours);
+  const [burstHours, setBurstHours] = useState<number>(burstMinHours);
 
   return (
     <div className="space-y-4">
@@ -576,7 +580,7 @@ function FindingCard({ finding }: { finding: ScoutFinding }) {
       <div className="flex-1 min-w-0 space-y-1">
         <h4 className="text-[13px] font-semibold text-white">{finding.title}</h4>
         <p className="text-xs text-white/50 leading-relaxed">{finding.description}</p>
-        <span className="text-[11px] text-white/30">{typeLabel} · {finding.timestamp}</span>
+        <span className="text-[11px] text-white/30">{typeLabel} · {finding.createdAt}</span>
       </div>
     </div>
   );
