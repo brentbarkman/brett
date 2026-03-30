@@ -359,7 +359,7 @@ export function App() {
   const omnibar = useOmnibar();
 
   // Weather state for omnibar pill
-  const { weather, isLoading: weatherLoading } = useWeather();
+  const { weather, now: weatherNow, isLoading: weatherLoading } = useWeather();
   const [showWeatherExpanded, setShowWeatherExpanded] = useState(false);
 
   // Token usage tracking — reactive to Settings toggle
@@ -472,11 +472,12 @@ export function App() {
       showTokenUsage,
       sessionUsage: sessionUsageData ?? null,
       weather,
+      weatherNow,
       weatherLoading,
       showWeatherExpanded,
       onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
     }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherLoading, showWeatherExpanded]
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded]
   );
 
   // Apply dark mode to root

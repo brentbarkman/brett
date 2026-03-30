@@ -12,10 +12,13 @@ interface SimpleMarkdownProps {
   /** Callback when an item ID is clicked (for inline item references) */
   onItemClick?: (id: string) => void;
   /** Callback when a calendar event is clicked */
-  onEventClick?: (eventId: string) => void;
+  onEventClick?: (id: string) => void;
   /** Callback when a navigation link is clicked (for list/view references) */
   onNavigate?: (path: string) => void;
 }
+
+// Pattern for inline item references: [title](brett-item:id)
+const ITEM_REF_PATTERN = /\[([^\]]+)\]\(brett-item:([a-z0-9-]+)\)/g;
 
 export function SimpleMarkdown({ content, className, onItemClick, onEventClick, onNavigate }: SimpleMarkdownProps) {
   if (!content) return null;
@@ -107,7 +110,7 @@ const PATTERNS: { type: string; regex: RegExp }[] = [
 function renderInline(
   text: string,
   onItemClick?: (id: string) => void,
-  onEventClick?: (eventId: string) => void,
+  onEventClick?: (id: string) => void,
   onNavigate?: (path: string) => void,
 ): React.ReactNode {
   const parts: React.ReactNode[] = [];
@@ -182,6 +185,21 @@ function renderInline(
             </button>
           ) : (
             <span key={key++} className="text-blue-400">{content}</span>
+          )
+        );
+        break;
+      case "event-ref":
+        parts.push(
+          onEventClick ? (
+            <button
+              key={key++}
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              onClick={() => onEventClick(match!.extra!)}
+            >
+              {match.content}
+            </button>
+          ) : (
+            <span key={key++} className="text-blue-400">{match.content}</span>
           )
         );
         break;
