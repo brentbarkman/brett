@@ -124,18 +124,20 @@ function startOfNextMonth(from?: Date): Date {
 async function collectChatResponse(
   provider: AIProvider,
   params: Parameters<AIProvider["chat"]>[0],
-): Promise<{ text: string; tokensUsed: number }> {
+): Promise<{ text: string; tokensUsed: number; tokensInput: number; tokensOutput: number }> {
   let text = "";
-  let tokensUsed = 0;
+  let tokensInput = 0;
+  let tokensOutput = 0;
   for await (const chunk of provider.chat(params)) {
     if (chunk.type === "text") {
       text += chunk.content;
     }
     if (chunk.type === "done") {
-      tokensUsed = (chunk.usage.input ?? 0) + (chunk.usage.output ?? 0);
+      tokensInput = chunk.usage.input ?? 0;
+      tokensOutput = chunk.usage.output ?? 0;
     }
   }
-  return { text, tokensUsed };
+  return { text, tokensUsed: tokensInput + tokensOutput, tokensInput, tokensOutput };
 }
 
 // ── Search Query Generation ──
@@ -145,7 +147,7 @@ async function buildSearchQueries(
   providerName: AIProviderName,
   scout: { goal: string; context: string | null },
   recentFindings: Array<{ title: string; sourceUrl: string | null }>,
-): Promise<{ queries: string[]; tokensUsed: number }> {
+): Promise<{ queries: string[]; tokensUsed: number; tokensInput: number; tokensOutput: number; modelId: string }> {
   const model = resolveModel(providerName, "small");
 
   const today = new Date().toISOString().split("T")[0];
@@ -170,7 +172,7 @@ async function buildSearchQueries(
     recentContext;
 
   try {
-    const { text, tokensUsed } = await collectChatResponse(provider, {
+    const { text, tokensUsed, tokensInput, tokensOutput } = await collectChatResponse(provider, {
       model,
       system: systemMessage,
       messages: [{ role: "user", content: userMessage }],
@@ -183,13 +185,13 @@ async function buildSearchQueries(
     // Handle both { queries: [...] } (schema-enforced) and raw array (Google fallback)
     const queries = Array.isArray(parsed.queries) ? parsed.queries : Array.isArray(parsed) ? parsed : [];
     if (queries.length > 0 && queries.every((q: unknown) => typeof q === "string")) {
-      return { queries: (queries as string[]).slice(0, 3), tokensUsed };
+      return { queries: (queries as string[]).slice(0, 3), tokensUsed, tokensInput, tokensOutput, modelId: model };
     }
     // Fallback: use goal as query
-    return { queries: [scout.goal.slice(0, 200)], tokensUsed };
+    return { queries: [scout.goal.slice(0, 200)], tokensUsed, tokensInput, tokensOutput, modelId: model };
   } catch (err) {
     console.warn("[scout-runner] buildSearchQueries failed, using goal as fallback:", (err as Error).message);
-    return { queries: [scout.goal.slice(0, 200)], tokensUsed: 0 };
+    return { queries: [scout.goal.slice(0, 200)], tokensUsed: 0, tokensInput: 0, tokensOutput: 0, modelId: model };
   }
 }
 
@@ -301,6 +303,9 @@ interface JudgmentResult {
   cadenceReason: string;
   reasoning: string;
   tokensUsed: number;
+  tokensInput: number;
+  tokensOutput: number;
+  modelId: string;
   evaluatedCount: number;
 }
 
@@ -328,6 +333,9 @@ async function judgeResults(
       cadenceReason: "No new results found after deduplication",
       reasoning: "All search results were duplicates of recent findings.",
       tokensUsed: 0,
+      tokensInput: 0,
+      tokensOutput: 0,
+      modelId: model,
       evaluatedCount: 0,
     };
   }
@@ -381,7 +389,7 @@ Return a JSON object with: findings (array of {type, title, description, sourceU
     recentFindingsList +
     `\n\nSearch results to evaluate:\n${resultsText}`;
 
-  const { text, tokensUsed } = await collectChatResponse(provider, {
+  const { text, tokensUsed, tokensInput, tokensOutput } = await collectChatResponse(provider, {
     model,
     system: systemMessage,
     messages: [{ role: "user", content: userMessage }],
@@ -402,6 +410,9 @@ Return a JSON object with: findings (array of {type, title, description, sourceU
       cadenceReason: "JSON parse error — defaulting to maintain",
       reasoning: "Failed to parse LLM judgment response.",
       tokensUsed,
+      tokensInput,
+      tokensOutput,
+      modelId: model,
       evaluatedCount: dedupedResults.length,
     };
   }
@@ -447,6 +458,9 @@ Return a JSON object with: findings (array of {type, title, description, sourceU
     cadenceReason: String(parsed.cadenceReason ?? ""),
     reasoning: String(parsed.reasoning ?? ""),
     tokensUsed,
+    tokensInput,
+    tokensOutput,
+    modelId: model,
     evaluatedCount: dedupedResults.length,
   };
 }
@@ -560,6 +574,9 @@ export async function runScout(scoutId: string): Promise<void> {
       dismissedCount?: number;
       reasoning?: string;
       tokensUsed?: number;
+      tokensInput?: number;
+      tokensOutput?: number;
+      modelId?: string;
       error?: string;
     } = {},
   ) => {
@@ -575,6 +592,9 @@ export async function runScout(scoutId: string): Promise<void> {
         dismissedCount: updates.dismissedCount ?? 0,
         reasoning: updates.reasoning ?? null,
         tokensUsed: updates.tokensUsed ?? 0,
+        tokensInput: updates.tokensInput ?? 0,
+        tokensOutput: updates.tokensOutput ?? 0,
+        modelId: updates.modelId ?? null,
         error: updates.error ?? null,
       },
     });
@@ -632,7 +652,12 @@ export async function runScout(scoutId: string): Promise<void> {
     });
 
     // 7. Build search queries via LLM
-    const { queries, tokensUsed: queryTokens } = await buildSearchQueries(
+    const {
+      queries,
+      tokensUsed: queryTokens,
+      tokensInput: queryTokensInput,
+      tokensOutput: queryTokensOutput,
+    } = await buildSearchQueries(
       provider,
       providerName,
       scout,
@@ -662,6 +687,8 @@ export async function runScout(scoutId: string): Promise<void> {
         searchQueries: queries,
         resultCount: 0,
         tokensUsed: queryTokens,
+        tokensInput: queryTokensInput,
+        tokensOutput: queryTokensOutput,
         reasoning: "No search results returned",
       });
 
@@ -694,6 +721,8 @@ export async function runScout(scoutId: string): Promise<void> {
     );
 
     const totalTokens = queryTokens + judgment.tokensUsed;
+    const totalTokensInput = queryTokensInput + judgment.tokensInput;
+    const totalTokensOutput = queryTokensOutput + judgment.tokensOutput;
 
     // Validate LLM-returned sourceUrls against actual search results
     const validUrls = new Set(searchResults.map((r) => normalizeUrl(r.url)));
@@ -835,6 +864,9 @@ export async function runScout(scoutId: string): Promise<void> {
       dismissedCount,
       reasoning: judgment.reasoning,
       tokensUsed: totalTokens,
+      tokensInput: totalTokensInput,
+      tokensOutput: totalTokensOutput,
+      modelId: judgment.modelId,
     });
 
     // 14. SSE notification
