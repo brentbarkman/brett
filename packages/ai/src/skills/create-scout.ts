@@ -26,14 +26,14 @@ export const createScoutSkill: Skill = {
       context: { type: "string", description: "Background the scout should know but not search for directly (max 5000 chars). E.g., user's role, portfolio, expertise level, or filtering preferences." },
       sources: {
         type: "array",
-        description: "Sources to monitor (max 20). Each needs a name and optional URL. Common sources by domain: finance → Reuters, Bloomberg, SEC EDGAR, Yahoo Finance; tech → TechCrunch, Hacker News, Ars Technica, The Verge; research → PubMed, arXiv, Google Scholar; competitors → company blog, Crunchbase, LinkedIn, Product Hunt",
+        description: "Sources to monitor (max 20). Each MUST have a name and URL. The URL is used for site-scoped search queries. Common sources by domain: finance → Reuters (reuters.com), Bloomberg (bloomberg.com), SEC EDGAR (sec.gov), Yahoo Finance (finance.yahoo.com); tech → TechCrunch (techcrunch.com), Hacker News (news.ycombinator.com), Ars Technica (arstechnica.com); research → PubMed (pubmed.ncbi.nlm.nih.gov), arXiv (arxiv.org), Google Scholar (scholar.google.com); competitors → company blog, Crunchbase (crunchbase.com), LinkedIn (linkedin.com)",
         items: {
           type: "object",
           properties: {
             name: { type: "string" },
-            url: { type: "string" },
+            url: { type: "string", description: "Full URL of the source (e.g. https://pubmed.ncbi.nlm.nih.gov)" },
           },
-          required: ["name"],
+          required: ["name", "url"],
         },
       },
       sensitivity: {

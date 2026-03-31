@@ -19,26 +19,26 @@ export const updateScoutSkill: Skill = {
       context: { type: ["string", "null"], description: "Updated context (max 5000 chars), or null to clear" },
       addSources: {
         type: "array",
-        description: "Sources to ADD to existing sources (does not remove current ones)",
+        description: "Sources to ADD to existing sources (does not remove current ones). Each MUST have name and URL.",
         items: {
           type: "object",
           properties: {
             name: { type: "string" },
-            url: { type: "string" },
+            url: { type: "string", description: "Full URL of the source (e.g. https://pubmed.ncbi.nlm.nih.gov)" },
           },
-          required: ["name"],
+          required: ["name", "url"],
         },
       },
       sources: {
         type: "array",
-        description: "REPLACE all sources with this list (removes existing). Use addSources instead if you just want to add.",
+        description: "REPLACE all sources with this list (removes existing). Use addSources instead if you just want to add. Each MUST have name and URL.",
         items: {
           type: "object",
           properties: {
             name: { type: "string" },
-            url: { type: "string" },
+            url: { type: "string", description: "Full URL of the source" },
           },
-          required: ["name"],
+          required: ["name", "url"],
         },
       },
       sensitivity: {

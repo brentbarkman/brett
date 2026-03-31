@@ -34,6 +34,7 @@ import type {
 import { formatRelativeTime, humanizeCadence } from "@brett/utils";
 import { ScoutCard } from "./ScoutCard";
 import { ScoutMemoryTab } from "./ScoutMemoryTab";
+import { Tooltip } from "./Tooltip";
 
 interface ScoutDetailProps {
   scouts: Scout[];
@@ -364,18 +365,17 @@ export function ScoutDetail({
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-1.5">
                     {pendingSources.map((source, i) => (
-                      <span
-                        key={`${source.name}-${i}`}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50"
-                      >
-                        {source.name}
-                        <button
-                          onClick={() => setPendingSources(pendingSources.filter((_, j) => j !== i))}
-                          className="text-white/20 hover:text-red-400 transition-colors"
-                        >
-                          <X size={9} />
-                        </button>
-                      </span>
+                      <Tooltip key={`${source.name}-${i}`} content={source.url || "No URL"} position="bottom">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
+                          {source.name}
+                          <button
+                            onClick={() => setPendingSources(pendingSources.filter((_, j) => j !== i))}
+                            className="text-white/20 hover:text-red-400 transition-colors"
+                          >
+                            <X size={9} />
+                          </button>
+                        </span>
+                      </Tooltip>
                     ))}
                   </div>
                   <div className="flex gap-1.5">
@@ -388,20 +388,20 @@ export function ScoutDetail({
                     />
                     <input
                       type="text"
-                      placeholder="URL (optional)"
+                      placeholder="URL (e.g. https://pubmed.ncbi.nlm.nih.gov)"
                       value={newSourceUrl}
                       onChange={(e) => setNewSourceUrl(e.target.value)}
                       className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
                     />
                     <button
                       onClick={() => {
-                        if (newSourceName.trim()) {
-                          setPendingSources([...pendingSources, { name: newSourceName.trim(), url: newSourceUrl.trim() || undefined }]);
+                        if (newSourceName.trim() && newSourceUrl.trim()) {
+                          setPendingSources([...pendingSources, { name: newSourceName.trim(), url: newSourceUrl.trim() }]);
                           setNewSourceName("");
                           setNewSourceUrl("");
                         }
                       }}
-                      disabled={!newSourceName.trim()}
+                      disabled={!newSourceName.trim() || !newSourceUrl.trim()}
                       className="px-2 py-1 rounded-lg bg-blue-600/60 hover:bg-blue-500 text-white text-[10px] font-semibold transition-colors disabled:opacity-30"
                     >
                       <Plus size={12} />
@@ -410,27 +410,25 @@ export function ScoutDetail({
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {scout.sources.map((source) =>
-                    source.url ? (
-                      <a
-                        key={source.name}
-                        href={source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-blue-400/80 hover:text-blue-300 hover:border-blue-500/20 transition-all"
-                      >
-                        {source.name}
-                        <ExternalLink size={9} className="opacity-40" />
-                      </a>
-                    ) : (
-                      <span
-                        key={source.name}
-                        className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.04] text-[11px] text-white/30"
-                      >
-                        {source.name}
-                      </span>
-                    )
-                  )}
+                  {scout.sources.map((source) => (
+                    <Tooltip key={source.name} content={source.url || source.name} position="bottom">
+                      {source.url ? (
+                        <a
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-blue-400/80 hover:text-blue-300 hover:border-blue-500/20 transition-all"
+                        >
+                          {source.name}
+                          <ExternalLink size={9} className="opacity-40" />
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.04] text-[11px] text-white/30">
+                          {source.name}
+                        </span>
+                      )}
+                    </Tooltip>
+                  ))}
                 </div>
               )}
             </EditableCard>
