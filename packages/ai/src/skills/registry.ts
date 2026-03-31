@@ -7,16 +7,19 @@ const INTENT_GROUPS: Record<string, string[]> = {
   query: [
     "search_things", "get_item_detail", "list_today", "list_upcoming",
     "list_inbox", "get_list_items", "get_calendar_events", "get_next_event",
-    "up_next", "get_stats",
+    "up_next", "get_stats", "list_scouts",
   ],
   create: [
-    "create_task", "create_content", "create_list",
+    "create_task", "create_content", "create_list", "create_scout",
   ],
   mutate: [
     "update_item", "complete_task", "move_to_list", "snooze_item", "archive_list",
   ],
   meta: [
     "change_settings", "submit_feedback", "explain_feature",
+  ],
+  scout: [
+    "create_scout", "list_scouts",
   ],
 };
 
@@ -30,6 +33,7 @@ const INTENT_PATTERNS: Array<{ intent: string; pattern: RegExp }> = [
   { intent: "mutate", pattern: /\b(done|complete|finish|mark|move|put|update|edit|change|rename|set|snooze|defer|later|archive|delete|remove)\b/ },
   { intent: "query", pattern: /\b(what|when|where|show|list|how many|search|find|look|get|next|upcoming|today|inbox|schedule|meeting|calendar|stat)\b/ },
   { intent: "meta", pattern: /\b(settings?|provider|model|switch|feedback|bug|feature request|help|explain|how does)\b/ },
+  { intent: "scout", pattern: /\b(monitor|scout|watch\s+for|track|keep\s+an?\s+eye\s+on)\b/i },
 ];
 
 export class SkillRegistry {
