@@ -69,9 +69,16 @@ import { UpcomingView } from "./views/UpcomingView";
 import { NotFoundView } from "./views/NotFoundView";
 import CalendarPage from "./pages/CalendarPage";
 import {
-  mockScouts,
-  mockScoutFindings,
-} from "./data/mockData";
+  useScouts,
+  useScout,
+  useScoutFindings,
+  useScoutActivity,
+  usePauseScout,
+  useResumeScout,
+  useUpdateScout,
+  useDismissFinding,
+  usePromoteFinding,
+} from "./api/scouts";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
@@ -163,8 +170,7 @@ export function App() {
   >(null);
   const [detailHistory, setDetailHistory] = useState<(Thing | CalendarEventDisplay)[]>([]);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [activePage, setActivePage] = useState<"today" | "inbox" | "scouts">("today");
-  const [selectedScout, setSelectedScout] = useState<Scout | null>(null);
+  const [selectedScoutId, setSelectedScoutId] = useState<string | null>(null);
 
   // Triage popup state
   const [triageState, setTriageState] = useState<{
@@ -359,6 +365,17 @@ export function App() {
 
   // Inbox data
   const { data: inboxData } = useInboxThings();
+
+  // Scout hooks
+  const { data: scouts = [], isLoading: isLoadingScouts } = useScouts();
+  const { data: selectedScoutData } = useScout(selectedScoutId);
+  const { data: scoutFindings = [], isLoading: isLoadingFindings } = useScoutFindings(selectedScoutId);
+  const { data: scoutActivity = [], isLoading: isLoadingActivity } = useScoutActivity(selectedScoutId);
+  const pauseScout = usePauseScout();
+  const resumeScout = useResumeScout();
+  const updateScout = useUpdateScout();
+  const dismissFinding = useDismissFinding();
+  const promoteFinding = usePromoteFinding();
 
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
@@ -566,11 +583,11 @@ export function App() {
 
   // Scout handlers
   const handleSelectScout = (scout: Scout) => {
-    setSelectedScout(scout);
+    setSelectedScoutId(scout.id);
   };
 
   const handleBackToRoster = () => {
-    setSelectedScout(null);
+    setSelectedScoutId(null);
   };
 
   const handleInboxAddContent = (url: string) => {
@@ -741,7 +758,7 @@ export function App() {
         <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
           {/* Left Column: Navigation */}
           <LeftNav
-            isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScout !== null)}
+            isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScoutId !== null)}
             lists={lists}
             user={user}
             incompleteCount={activeThingsForCount.length}
@@ -774,18 +791,27 @@ export function App() {
             <Route path="/settings" element={<SettingsPage onBack={() => navigate("/today")} />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
             <Route path="/scouts" element={
-              selectedScout ? (
+              selectedScoutId && selectedScoutData ? (
                 <ScoutDetail
-                  scouts={mockScouts}
-                  selectedScout={selectedScout}
-                  findings={mockScoutFindings}
+                  scouts={scouts}
+                  scout={selectedScoutData}
+                  findings={scoutFindings}
+                  activity={scoutActivity}
+                  isLoadingFindings={isLoadingFindings}
+                  isLoadingActivity={isLoadingActivity}
                   onSelectScout={handleSelectScout}
                   onBack={handleBackToRoster}
+                  onPause={() => pauseScout.mutate(selectedScoutId)}
+                  onResume={() => resumeScout.mutate(selectedScoutId)}
+                  onUpdate={(data) => updateScout.mutate({ id: selectedScoutId, ...data })}
+                  onDismissFinding={(findingId) => dismissFinding.mutate({ scoutId: selectedScoutId, findingId })}
+                  onPromoteFinding={(findingId) => promoteFinding.mutate({ scoutId: selectedScoutId, findingId })}
                 />
               ) : (
                 <ScoutsRoster
-                  scouts={mockScouts}
+                  scouts={scouts}
                   onSelectScout={handleSelectScout}
+                  isLoading={isLoadingScouts}
                 />
               )
             } />
