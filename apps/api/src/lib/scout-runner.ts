@@ -147,6 +147,7 @@ async function buildSearchQueries(
 async function executeSearches(
   queries: string[],
   sources: ScoutSource[],
+  options?: { days?: number },
 ): Promise<SearchResult[]> {
   const allResults: SearchResult[] = [];
   const seenUrls = new Set<string>();
@@ -192,6 +193,8 @@ async function executeSearches(
         maxResults: 3,
         includeContent: false,
         domains: webDomains.length > 0 ? webDomains : undefined,
+        days: options?.days,
+        topic: "news",
       });
       for (const result of results) {
         const normalized = normalizeUrl(result.url);
@@ -213,6 +216,7 @@ async function executeSearches(
         const results = await entityProvider.search(query, {
           maxResults: 3,
           domains: entityDomains,
+          days: options?.days,
         });
         for (const result of results) {
           const normalized = normalizeUrl(result.url);
@@ -293,7 +297,7 @@ Evaluate each result's relevance to the user's goal. Score from 0.0 to 1.0:
 - 0.7-0.8: Highly relevant
 - 0.9-1.0: Exactly what the user is looking for
 
-If multiple results cover the same event or story from different sources, report only the most authoritative or comprehensive one. Do not create separate findings for each outlet covering the same news.
+GROUPING RULE: Multiple results about the same event, story, or development MUST be merged into a single finding. Pick the most authoritative source as the sourceUrl. Do NOT create separate findings for each outlet covering the same news. For example, if Reuters, Bloomberg, and WSJ all report the same earnings result, that is ONE finding, not three.
 
 For results scoring above ${threshold}, classify as:
 - "insight": Key information, analysis, or data relevant to the goal
@@ -594,8 +598,22 @@ export async function runScout(scoutId: string): Promise<void> {
     );
 
     // 8. Execute searches via search providers
+    // Calculate time window: search only for content since last successful run
+    // Add 1 day buffer. Minimum 1 day, maximum 30 days (for first run or long gaps)
+    const lastSuccessfulRun = await prisma.scoutRun.findFirst({
+      where: { scoutId: scout.id, status: "success" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+    const hoursSinceLastRun = lastSuccessfulRun
+      ? (Date.now() - lastSuccessfulRun.createdAt.getTime()) / 3600000
+      : 0;
+    const searchDays = lastSuccessfulRun
+      ? Math.min(30, Math.max(1, Math.ceil(hoursSinceLastRun / 24) + 1))
+      : 7; // First run: look back 1 week
+
     const sources = scout.sources as unknown as ScoutSource[];
-    const searchResults = await executeSearches(queries, sources);
+    const searchResults = await executeSearches(queries, sources, { days: searchDays });
 
     if (searchResults.length === 0) {
       await finalizeRun("success", {

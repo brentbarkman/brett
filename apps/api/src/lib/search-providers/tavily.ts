@@ -13,9 +13,10 @@ export class TavilySearchProvider implements SearchProvider {
       const response = await this.client.search(query, {
         maxResults: options?.maxResults ?? 10,
         searchDepth: options?.searchDepth ?? "basic",
-        // SDK accepts false | "markdown" | "text" — use "text" when content requested
         includeRawContent: options?.includeContent ? "text" : false,
         includeDomains: options?.domains,
+        days: options?.days,
+        topic: options?.topic ?? "general",
       });
 
       return (response.results ?? []).map((r) => ({

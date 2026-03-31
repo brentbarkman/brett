@@ -566,9 +566,9 @@ function EditableCard({
 // ── Sensitivity Picker ───────────────────────────────────────────
 
 const SENSITIVITY_OPTIONS: Array<{ value: ScoutSensitivity; label: string; desc: string }> = [
-  { value: "low", label: "Low", desc: "Surface anything from credible sources" },
-  { value: "medium", label: "Medium", desc: "Notable developments and signals only" },
-  { value: "high", label: "High", desc: "Only major, material developments" },
+  { value: "low", label: "Everything", desc: "Surface all mentions — even minor ones. Expect more findings per run." },
+  { value: "medium", label: "Notable", desc: "Only developments worth knowing about. Filters out routine noise." },
+  { value: "high", label: "Critical only", desc: "Only material changes that demand your attention. Very selective." },
 ];
 
 function SensitivityPicker({

@@ -10,11 +10,16 @@ export class ExaSearchProvider implements SearchProvider {
 
   async search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
     try {
+      // Calculate startPublishedDate from days option
+      const startPublishedDate = options?.days
+        ? new Date(Date.now() - options.days * 86400000).toISOString()
+        : undefined;
+
       if (options?.includeContent) {
-        // Request text contents explicitly so result.text is typed as string
         const response = await this.client.searchAndContents(query, {
           numResults: options?.maxResults ?? 10,
           includeDomains: options?.domains,
+          startPublishedDate,
           text: true,
         });
 
@@ -32,6 +37,7 @@ export class ExaSearchProvider implements SearchProvider {
       const response = await this.client.searchAndContents(query, {
         numResults: options?.maxResults ?? 10,
         includeDomains: options?.domains,
+        startPublishedDate,
       });
 
       return (response.results ?? []).map((r) => ({
