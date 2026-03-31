@@ -24,6 +24,8 @@ export interface ChatParams {
   temperature?: number;
   maxTokens?: number;
   system?: string;
+  /** Request JSON output from the model */
+  responseFormat?: { type: "json_object" };
 }
 
 // Each adapter accepts the provider-agnostic Message format and maps

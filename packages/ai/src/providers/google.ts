@@ -137,12 +137,15 @@ export class GoogleProvider implements AIProvider {
 
     const contents = mapMessages(params.messages);
 
-    const generationConfig: { temperature?: number; maxOutputTokens?: number } = {};
+    const generationConfig: { temperature?: number; maxOutputTokens?: number; responseMimeType?: string } = {};
     if (params.temperature !== undefined) {
       generationConfig.temperature = params.temperature;
     }
     if (params.maxTokens !== undefined) {
       generationConfig.maxOutputTokens = params.maxTokens;
+    }
+    if (params.responseFormat?.type === "json_object") {
+      generationConfig.responseMimeType = "application/json";
     }
 
     const streamResult = await model.generateContentStream({

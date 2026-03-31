@@ -26,7 +26,7 @@ export const createScoutSkill: Skill = {
       context: { type: "string", description: "Additional context or constraints for the scout (max 5000 chars). Include domain expertise or filtering criteria." },
       sources: {
         type: "array",
-        description: "Sources to monitor (max 20). Each source needs a name and optional URL. Example: [{name: 'TechCrunch', url: 'https://techcrunch.com'}]",
+        description: "Sources to monitor (max 20). Each needs a name and optional URL. Common sources by domain: finance → Reuters, Bloomberg, SEC EDGAR, Yahoo Finance; tech → TechCrunch, Hacker News, Ars Technica, The Verge; research → PubMed, arXiv, Google Scholar; competitors → company blog, Crunchbase, LinkedIn, Product Hunt",
         items: {
           type: "object",
           properties: {

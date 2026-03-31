@@ -96,6 +96,10 @@ export class OpenAIProvider implements AIProvider {
       requestParams.tools = mapTools(params.tools);
     }
 
+    if (params.responseFormat?.type === "json_object") {
+      requestParams.response_format = { type: "json_object" };
+    }
+
     const stream = await this.client.chat.completions.create(requestParams);
 
     // Accumulate tool calls by index

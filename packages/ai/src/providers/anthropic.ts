@@ -88,15 +88,20 @@ export class AnthropicProvider implements AIProvider {
     };
 
     if (params.system) {
+      // Anthropic doesn't have native JSON mode — append a hint when requested.
+      const systemText = params.responseFormat?.type === "json_object"
+        ? params.system + "\n\nYou must respond with valid JSON only. No other text."
+        : params.system;
+
       // Pass system prompt as a cacheable text block.
       // If tools are present, the tool-level cache_control covers both system + tools.
       // If no tools, cache the system prompt directly.
       if (!params.tools?.length) {
         requestParams.system = [
-          { type: "text", text: params.system, cache_control: { type: "ephemeral" } },
+          { type: "text", text: systemText, cache_control: { type: "ephemeral" } },
         ];
       } else {
-        requestParams.system = params.system;
+        requestParams.system = systemText;
       }
     }
 
