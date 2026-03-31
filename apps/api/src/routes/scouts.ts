@@ -62,7 +62,7 @@ scouts.get("/", async (c) => {
   const rows = await prisma.scout.findMany({
     where,
     include: {
-      _count: { select: { findings: { where: { dismissed: false } } } },
+      _count: { select: { findings: true } },
       runs: { take: 1, orderBy: { createdAt: "desc" }, select: { createdAt: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -206,7 +206,7 @@ scouts.get("/:id", async (c) => {
   const scout = await prisma.scout.findFirst({
     where: { id, userId: user.id },
     include: {
-      _count: { select: { findings: { where: { dismissed: false } } } },
+      _count: { select: { findings: true } },
       runs: { take: 1, orderBy: { createdAt: "desc" }, select: { createdAt: true } },
     },
   });
@@ -297,7 +297,7 @@ scouts.put("/:id", async (c) => {
       },
     },
     include: {
-      _count: { select: { findings: { where: { dismissed: false } } } },
+      _count: { select: { findings: true } },
       runs: { take: 1, orderBy: { createdAt: "desc" }, select: { createdAt: true } },
     },
   });
@@ -352,7 +352,7 @@ scouts.post("/:id/pause", async (c) => {
       },
     },
     include: {
-      _count: { select: { findings: { where: { dismissed: false } } } },
+      _count: { select: { findings: true } },
       runs: { take: 1, orderBy: { createdAt: "desc" }, select: { createdAt: true } },
     },
   });
@@ -390,7 +390,7 @@ scouts.post("/:id/resume", async (c) => {
       },
     },
     include: {
-      _count: { select: { findings: { where: { dismissed: false } } } },
+      _count: { select: { findings: true } },
       runs: { take: 1, orderBy: { createdAt: "desc" }, select: { createdAt: true } },
     },
   });
@@ -413,15 +413,17 @@ scouts.delete("/:id/history", async (c) => {
   const scout = await prisma.scout.findFirst({ where: { id, userId: user.id } });
   if (!scout) return c.json({ error: "Not found" }, 404);
 
-  // Delete in order: findings first (FK to runs), then runs, then activity
+  // Delete in order: memories/consolidations, findings (FK to runs), runs, activity
+  await prisma.scoutMemory.deleteMany({ where: { scoutId: id } });
+  await prisma.scoutConsolidation.deleteMany({ where: { scoutId: id } });
   await prisma.scoutFinding.deleteMany({ where: { scoutId: id } });
   await prisma.scoutRun.deleteMany({ where: { scoutId: id } });
   await prisma.scoutActivity.deleteMany({ where: { scoutId: id } });
 
-  // Reset budget
+  // Reset budget and consolidation state
   await prisma.scout.update({
     where: { id },
-    data: { budgetUsed: 0 },
+    data: { budgetUsed: 0, consolidationRunCount: 0, lastConsolidatedAt: null },
   });
 
   return c.json({ ok: true });
@@ -510,81 +512,14 @@ scouts.get("/:id/findings", async (c) => {
     relevanceScore: row.relevanceScore,
     reasoning: row.reasoning,
     itemId: row.itemId ?? undefined,
-    dismissed: row.dismissed,
+    feedbackUseful: row.feedbackUseful ?? undefined,
+    feedbackAt: row.feedbackAt?.toISOString(),
     createdAt: row.createdAt.toISOString(),
   }));
 
   const nextCursor = rows.length === limit ? rows[rows.length - 1].createdAt.toISOString() : null;
 
   return c.json({ findings, total, cursor: nextCursor });
-});
-
-// POST /scouts/:id/findings/:findingId/dismiss — dismiss a finding
-scouts.post("/:id/findings/:findingId/dismiss", async (c) => {
-  const user = c.get("user");
-  const id = c.req.param("id");
-  const findingId = c.req.param("findingId");
-
-  const scout = await prisma.scout.findFirst({
-    where: { id, userId: user.id },
-    select: { id: true },
-  });
-  if (!scout) return c.json({ error: "Not found" }, 404);
-
-  const finding = await prisma.scoutFinding.findFirst({
-    where: { id: findingId, scoutId: id },
-  });
-  if (!finding) return c.json({ error: "Finding not found" }, 404);
-
-  await prisma.scoutFinding.update({
-    where: { id: findingId },
-    data: { dismissed: true },
-  });
-
-  if (finding.itemId) {
-    await prisma.item.delete({ where: { id: finding.itemId } });
-  }
-
-  return c.json({ ok: true });
-});
-
-// POST /scouts/:id/findings/:findingId/promote — promote a finding to an item
-scouts.post("/:id/findings/:findingId/promote", async (c) => {
-  const user = c.get("user");
-  const id = c.req.param("id");
-  const findingId = c.req.param("findingId");
-
-  const scout = await prisma.scout.findFirst({
-    where: { id, userId: user.id },
-    select: { id: true },
-  });
-  if (!scout) return c.json({ error: "Not found" }, 404);
-
-  const finding = await prisma.scoutFinding.findFirst({
-    where: { id: findingId, scoutId: id },
-  });
-  if (!finding) return c.json({ error: "Finding not found" }, 404);
-  if (finding.itemId) return c.json({ error: "Finding has already been promoted" }, 409);
-
-  const item = await prisma.item.create({
-    data: {
-      type: finding.type === "task" ? "task" : "content",
-      title: finding.title,
-      description: finding.description,
-      source: "scout",
-      sourceId: id,
-      sourceUrl: finding.sourceUrl ?? null,
-      status: "active",
-      userId: user.id,
-    },
-  });
-
-  await prisma.scoutFinding.update({
-    where: { id: findingId },
-    data: { itemId: item.id },
-  });
-
-  return c.json(item);
 });
 
 // GET /scouts/:id/activity — merged run + activity log for a scout

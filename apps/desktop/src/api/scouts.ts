@@ -165,34 +165,8 @@ export function useClearScoutHistory() {
       qc.invalidateQueries({ queryKey: ["scout", id] });
       qc.invalidateQueries({ queryKey: ["scout-findings", id] });
       qc.invalidateQueries({ queryKey: ["scout-activity", id] });
+      qc.invalidateQueries({ queryKey: ["scout-memories", id] });
     },
   });
 }
 
-export function useDismissFinding() {
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ scoutId, findingId }: { scoutId: string; findingId: string }) =>
-      apiFetch<ScoutFinding>(`/scouts/${scoutId}/findings/${findingId}/dismiss`, {
-        method: "POST",
-      }),
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["scout-findings", variables.scoutId] });
-    },
-  });
-}
-
-export function usePromoteFinding() {
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ scoutId, findingId }: { scoutId: string; findingId: string }) =>
-      apiFetch<ScoutFinding>(`/scouts/${scoutId}/findings/${findingId}/promote`, {
-        method: "POST",
-      }),
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["scout-findings", variables.scoutId] });
-    },
-  });
-}

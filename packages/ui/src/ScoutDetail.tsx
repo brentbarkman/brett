@@ -65,8 +65,6 @@ interface ScoutDetailProps {
   onPause: () => void;
   onResume: () => void;
   onUpdate: (data: UpdateScoutInput) => void;
-  onDismissFinding: (findingId: string) => void;
-  onPromoteFinding: (findingId: string) => void;
   onEditWithBrett?: (field: string) => void;
   onTriggerRun?: () => void;
   isRunning?: boolean;
@@ -87,8 +85,6 @@ export function ScoutDetail({
   onPause,
   onResume,
   onUpdate,
-  onDismissFinding,
-  onPromoteFinding,
   onEditWithBrett,
   onTriggerRun,
   isRunning,
@@ -501,14 +497,10 @@ export function ScoutDetail({
                   ))}
                 </div>
               ) : findings.length > 0 ? (
-                findings
-                  .filter((f) => !f.dismissed)
-                  .map((finding) => (
+                findings.map((finding) => (
                     <FindingCard
                       key={finding.id}
                       finding={finding}
-                      onDismiss={() => onDismissFinding(finding.id)}
-                      onPromote={() => onPromoteFinding(finding.id)}
                     />
                   ))
               ) : (
@@ -1017,12 +1009,8 @@ function TabButton({
 
 function FindingCard({
   finding,
-  onDismiss,
-  onPromote,
 }: {
   finding: ScoutFinding;
-  onDismiss: () => void;
-  onPromote: () => void;
 }) {
   const config = {
     insight: {
@@ -1049,7 +1037,7 @@ function FindingCard({
 
   return (
     <div
-      className={`group flex gap-3.5 p-4 rounded-xl bg-white/[0.03] border ${config.border} hover:bg-white/[0.05] transition-colors`}
+      className={`flex gap-3.5 p-4 rounded-xl bg-white/[0.03] border ${config.border} hover:bg-white/[0.05] transition-colors`}
     >
       <div
         className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${config.bg}`}
@@ -1075,23 +1063,6 @@ function FindingCard({
             </a>
           )}
         </div>
-      </div>
-      {/* Actions — revealed on hover */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button
-          onClick={onPromote}
-          title="Add to inbox as task"
-          className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400/70 hover:text-emerald-400 transition-colors"
-        >
-          <CheckCircle2 size={13} />
-        </button>
-        <button
-          onClick={onDismiss}
-          title="Dismiss"
-          className="p-1.5 rounded-lg hover:bg-white/[0.06] text-white/20 hover:text-white/40 transition-colors"
-        >
-          <X size={13} />
-        </button>
       </div>
     </div>
   );

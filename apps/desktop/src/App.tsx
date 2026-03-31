@@ -76,8 +76,6 @@ import {
   usePauseScout,
   useResumeScout,
   useUpdateScout,
-  useDismissFinding,
-  usePromoteFinding,
   useTriggerScoutRun,
   useClearScoutHistory,
   useDeleteScout,
@@ -380,8 +378,6 @@ export function App() {
   const pauseScout = usePauseScout();
   const resumeScout = useResumeScout();
   const updateScout = useUpdateScout();
-  const dismissFinding = useDismissFinding();
-  const promoteFinding = usePromoteFinding();
   const triggerRun = useTriggerScoutRun();
   const clearHistory = useClearScoutHistory();
   const deleteScout = useDeleteScout();
@@ -867,8 +863,6 @@ export function App() {
                   onPause={() => pauseScout.mutate(selectedScoutId)}
                   onResume={() => resumeScout.mutate(selectedScoutId)}
                   onUpdate={(data) => updateScout.mutate({ id: selectedScoutId, ...data })}
-                  onDismissFinding={(findingId) => dismissFinding.mutate({ scoutId: selectedScoutId, findingId })}
-                  onPromoteFinding={(findingId) => promoteFinding.mutate({ scoutId: selectedScoutId, findingId })}
                   onEditWithBrett={handleEditWithBrett}
                   onTriggerRun={import.meta.env.DEV ? () => { triggerRun.mutate(selectedScoutId!); setScoutRunning(true); } : undefined}
                   isRunning={scoutRunning}
