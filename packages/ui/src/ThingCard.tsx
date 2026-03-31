@@ -171,6 +171,11 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
             from {thing.meetingNoteTitle}
           </span>
         )}
+        {thing.source === "scout" && thing.scoutName && (
+          <span className="text-[10px] text-blue-400/40">
+            from {thing.scoutName}
+          </span>
+        )}
         {thing.list && thing.list !== "Inbox" && (
           <span className="text-xs text-white/30 truncate max-w-[100px]">{thing.list}</span>
         )}

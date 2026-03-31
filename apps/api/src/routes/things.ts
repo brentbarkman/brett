@@ -9,7 +9,27 @@ import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkTyp
 
 const things = new Hono<AuthEnv>();
 
+/** Enrich items with scout names for items where source === "scout" */
+async function enrichWithScoutNames<T extends { source: string; sourceId: string | null }>(items: T[]): Promise<(T & { scoutName?: string })[]> {
+  const scoutIds = [...new Set(items.filter((i) => i.source === "scout" && i.sourceId).map((i) => i.sourceId!))];
+  if (scoutIds.length === 0) return items;
+  const scouts = await prisma.scout.findMany({
+    where: { id: { in: scoutIds } },
+    select: { id: true, name: true },
+  });
+  const nameMap = new Map(scouts.map((s) => [s.id, s.name]));
+  return items.map((item) => ({
+    ...item,
+    scoutName: item.source === "scout" && item.sourceId ? nameMap.get(item.sourceId) : undefined,
+  }));
+}
+
 async function itemToThingDetail(item: any): Promise<ThingDetail> {
+  // Enrich single item with scout name if applicable
+  if (item.source === "scout" && item.sourceId && !item.scoutName) {
+    const scout = await prisma.scout.findUnique({ where: { id: item.sourceId }, select: { name: true } });
+    if (scout) item.scoutName = scout.name;
+  }
   const thing = itemToThing(item);
 
   const attachments: AttachmentType[] = await Promise.all(
@@ -137,7 +157,8 @@ things.get("/", async (c) => {
     orderBy: [{ createdAt: "desc" }],
   });
 
-  const thingsList = items.map((item) => itemToThing(item as any));
+  const enriched = await enrichWithScoutNames(items);
+  const thingsList = enriched.map((item) => itemToThing(item as any));
   return c.json(thingsList);
 });
 
@@ -201,8 +222,9 @@ things.get("/inbox", async (c) => {
     orderBy: [{ createdAt: "desc" }],
   });
 
+  const enriched = await enrichWithScoutNames(items);
   return c.json({
-    visible: items.map((item) => itemToThing(item as any)),
+    visible: enriched.map((item) => itemToThing(item as any)),
   });
 });
 

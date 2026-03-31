@@ -3,6 +3,21 @@ import DOMPurify from "dompurify";
 import { AlertTriangle, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import type { ContentType, ContentStatus, ContentMetadata } from "@brett/types";
 
+// Dedicated DOMPurify instances to avoid global hook race conditions under React concurrent rendering.
+// Each instance gets its hooks configured once at module level.
+const tweetPurify = DOMPurify();
+const articlePurify = DOMPurify();
+
+// Force all links to open in new tab (critical in Electron — prevents navigating the app window)
+for (const instance of [tweetPurify, articlePurify]) {
+  instance.addHook("afterSanitizeAttributes", (node: Element) => {
+    if (node.tagName === "A") {
+      node.setAttribute("target", "_blank");
+      node.setAttribute("rel", "noopener noreferrer");
+    }
+  });
+}
+
 function isSafeHref(url?: string): boolean {
   if (!url) return false;
   try { return ["http:", "https:"].includes(new URL(url).protocol); }
@@ -97,20 +112,11 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
   // Sanitize to keep just the blockquote content (strips the script tag).
   const sanitizedEmbed = useMemo(() => {
     if (!embedHtml) return undefined;
-    // Force all links to open in new tab
-    DOMPurify.addHook("afterSanitizeAttributes", (node) => {
-      if (node.tagName === "A") {
-        node.setAttribute("target", "_blank");
-        node.setAttribute("rel", "noopener noreferrer");
-      }
-    });
-    const result = DOMPurify.sanitize(embedHtml, {
+    return tweetPurify.sanitize(embedHtml, {
       ALLOWED_TAGS: ["blockquote", "p", "a", "br", "em", "strong", "span"],
       ALLOWED_ATTR: ["href", "dir", "lang", "target", "rel"],
       ALLOW_DATA_ATTR: false,
     });
-    DOMPurify.removeHook("afterSanitizeAttributes");
-    return result;
   }, [embedHtml]);
 
   // If we have neither oEmbed HTML nor OG text, nothing to show
@@ -171,10 +177,9 @@ function VideoPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
         </a>
       )}
       <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10">
-        {/* No sandbox — embedUrl is validated against TRUSTED_VIDEO_ORIGINS before rendering.
-            YouTube's own embed code doesn't use sandbox. The URL allowlist is the security boundary. */}
         <iframe
           src={srcWithOrigin}
+          sandbox="allow-scripts allow-same-origin allow-popups"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           title="Video player"
@@ -199,9 +204,9 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
           </a>
         )}
         <div className="rounded-lg overflow-hidden border border-white/10">
-          {/* No sandbox — embedUrl is validated against TRUSTED_PODCAST_ORIGINS before rendering. */}
           <iframe
             src={embedUrl}
+            sandbox="allow-scripts allow-same-origin allow-popups"
             allow="autoplay; clipboard-write; encrypted-media"
             title="Podcast player"
             className="w-full h-[152px]"
@@ -231,6 +236,31 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
       )}
     </div>
   );
+}
+
+function sanitizeArticleBody(html: string): string {
+  // Strip dead interactive elements (video play buttons, watchlist dropdowns, etc.)
+  // that Readability extracts as plain text from JS-driven sites like CNBC
+  const cleaned = html
+    .replace(/<div[^>]*data-test="PlayButton"[^>]*>[\s\S]*?<\/div>/gi, "")
+    .replace(/<span[^>]*id="[^"]*WatchlistDropdown[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "");
+
+  // Uses dedicated articlePurify instance (hooks configured at module level) to avoid
+  // global hook race conditions under React concurrent rendering.
+  // No video/source tags — Readability strips media players, so these serve no purpose.
+  // No class attribute — article styling comes from parent descendant selectors, not inline classes
+  // that could apply Tailwind utilities (e.g. fixed/hidden) to disrupt layout.
+  // ACCEPTED RISK: <img> tags can load from any HTTPS origin (tracking pixels). Cannot restrict
+  // img-src CSP without breaking favicons/OG images. Mitigated: Electron sends no cookies to
+  // third-party origins, so tracking is limited to IP/timing.
+  return articlePurify.sanitize(cleaned, {
+    ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "img", "ul", "ol", "li",
+      "blockquote", "pre", "code", "em", "strong", "br", "hr", "figure", "figcaption", "b", "i"],
+    ALLOWED_ATTR: ["href", "src", "alt", "title", "target", "rel"],
+    ALLOW_DATA_ATTR: false,
+    FORBID_TAGS: ["form", "input", "button", "textarea", "select", "script", "style", "iframe", "object", "embed", "video", "source"],
+    FORBID_ATTR: ["style", "class", "onerror", "onload", "onclick", "onmouseover"],
+  });
 }
 
 function ArticlePreview({
@@ -269,30 +299,32 @@ function ArticlePreview({
       {/* Sanitized article HTML */}
       {contentBody && (
         <div
-          className="max-h-[50vh] overflow-y-auto scrollbar-hide text-sm text-white/80 leading-relaxed prose-invert prose-sm"
-          dangerouslySetInnerHTML={{
-            __html: DOMPurify.sanitize(contentBody, {
-              ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "img", "ul", "ol", "li",
-                "blockquote", "pre", "code", "em", "strong", "br", "hr", "figure", "figcaption", "b", "i"],
-              ALLOWED_ATTR: ["href", "src", "alt", "title", "class"],
-              ALLOW_DATA_ATTR: false,
-              FORBID_TAGS: ["form", "input", "button", "textarea", "select", "script", "style", "iframe", "object", "embed"],
-              FORBID_ATTR: ["style", "onerror", "onload", "onclick", "onmouseover"],
-            }),
-          }}
+          className="max-h-[50vh] overflow-y-auto scrollbar-hide text-sm text-white/80 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-3 [&_h1]:mt-5 [&_h2]:text-base [&_h2]:font-bold [&_h2]:mb-2 [&_h2]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mb-2 [&_h3]:mt-3 [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_blockquote]:my-3 [&_blockquote]:text-white/60 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_li]:mb-1 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-2 [&_pre]:bg-white/5 [&_pre]:rounded [&_pre]:p-3 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_code]:text-xs [&_hr]:border-white/10 [&_hr]:my-4 [&_img]:rounded [&_img]:my-3"
+          dangerouslySetInnerHTML={{ __html: sanitizeArticleBody(contentBody) }}
         />
       )}
     </div>
   );
 }
 
+// Trusted origins for PDF iframe rendering. Only presigned S3 URLs (Railway storage)
+// and well-known PDF hosts are allowed. This must stay in sync with frame-src CSP.
+const TRUSTED_PDF_ORIGINS = [
+  "https://brett.s3.",             // Railway object storage
+  "https://s3.",                    // Generic S3
+  "https://storage.googleapis.com", // GCS
+];
+
 function PdfPreview({ sourceUrl, attachmentUrl }: { sourceUrl?: string; attachmentUrl?: string }) {
+  // Prefer presigned S3 URL (drag-dropped PDFs), fall back to source URL
   const pdfUrl = attachmentUrl ?? sourceUrl;
   if (!pdfUrl) return null;
-  // Only allow https URLs
   try {
     const u = new URL(pdfUrl);
     if (u.protocol !== "https:") return null;
+    // Only allow trusted origins — arbitrary URLs in an iframe are a security risk
+    const isTrusted = TRUSTED_PDF_ORIGINS.some((origin) => pdfUrl.startsWith(origin));
+    if (!isTrusted && !attachmentUrl) return null; // presigned S3 URLs (attachmentUrl) are always trusted
   } catch { return null; }
 
   return (

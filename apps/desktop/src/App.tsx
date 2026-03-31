@@ -69,9 +69,19 @@ import { UpcomingView } from "./views/UpcomingView";
 import { NotFoundView } from "./views/NotFoundView";
 import CalendarPage from "./pages/CalendarPage";
 import {
-  mockScouts,
-  mockScoutFindings,
-} from "./data/mockData";
+  useScouts,
+  useScout,
+  useScoutFindings,
+  useScoutActivity,
+  usePauseScout,
+  useResumeScout,
+  useUpdateScout,
+  useDismissFinding,
+  usePromoteFinding,
+  useTriggerScoutRun,
+  useClearScoutHistory,
+  useDeleteScout,
+} from "./api/scouts";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
@@ -163,8 +173,8 @@ export function App() {
   >(null);
   const [detailHistory, setDetailHistory] = useState<(Thing | CalendarEventDisplay)[]>([]);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [activePage, setActivePage] = useState<"today" | "inbox" | "scouts">("today");
-  const [selectedScout, setSelectedScout] = useState<Scout | null>(null);
+  const [selectedScoutId, setSelectedScoutId] = useState<string | null>(null);
+  const [scoutRunning, setScoutRunning] = useState(false);
 
   // Triage popup state
   const [triageState, setTriageState] = useState<{
@@ -360,6 +370,22 @@ export function App() {
   // Inbox data
   const { data: inboxData } = useInboxThings();
 
+  // Scout hooks
+  const { data: scouts = [], isLoading: isLoadingScouts } = useScouts();
+  const { data: selectedScoutData } = useScout(selectedScoutId);
+  const { data: findingsData, isLoading: isLoadingFindings } = useScoutFindings(selectedScoutId);
+  const scoutFindings = findingsData?.findings ?? [];
+  const { data: activityData, isLoading: isLoadingActivity } = useScoutActivity(selectedScoutId);
+  const scoutActivity = activityData?.entries ?? [];
+  const pauseScout = usePauseScout();
+  const resumeScout = useResumeScout();
+  const updateScout = useUpdateScout();
+  const dismissFinding = useDismissFinding();
+  const promoteFinding = usePromoteFinding();
+  const triggerRun = useTriggerScoutRun();
+  const clearHistory = useClearScoutHistory();
+  const deleteScout = useDeleteScout();
+
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
 
@@ -485,6 +511,22 @@ export function App() {
     [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded]
   );
 
+  const scoutsOmnibarProps = useMemo(
+    () => ({
+      ...omnibarProps,
+      isOpen: omnibar.isOpen && omnibar.mode === "bar",
+      onSend: (text: string) => omnibar.send(text, "scouts"),
+      onOpen: () => { omnibar.open("bar"); },
+      weather: null,
+      weatherNow: undefined,
+      weatherLoading: false,
+      showWeatherExpanded: false,
+      onWeatherClick: undefined,
+      onNavigateToSettings: undefined,
+    }),
+    [omnibarProps, omnibar.isOpen, omnibar.mode, omnibar.send, omnibar.open],
+  );
+
   // Apply dark mode to root
   useEffect(() => {
     document.documentElement.classList.add("dark");
@@ -546,6 +588,10 @@ export function App() {
     setTimeout(() => setSelectedItem(null), 300);
   }, []);
 
+  useSSEHandler("scout.run.completed", useCallback(() => {
+    setScoutRunning(false);
+  }, []));
+
   useSSEHandler("calendar.event.deleted", useCallback((data: { eventId: string }) => {
     if (selectedItem && selectedItem.id === data.eventId) {
       handleCloseDetail();
@@ -554,6 +600,10 @@ export function App() {
 
   const handleToggle = (id: string) => {
     toggleThing.mutate(id);
+    // Close detail panel if the toggled item is the one currently open
+    if (selectedItem && selectedItem.id === id) {
+      handleCloseDetail();
+    }
   };
 
   // Inbox-specific handlers
@@ -566,12 +616,42 @@ export function App() {
 
   // Scout handlers
   const handleSelectScout = (scout: Scout) => {
-    setSelectedScout(scout);
+    setSelectedScoutId(scout.id);
   };
 
   const handleBackToRoster = () => {
-    setSelectedScout(null);
+    setSelectedScoutId(null);
   };
+
+  // Open omnibar pre-filled to start the create_scout conversational flow
+  const handleNewScout = useCallback(() => {
+    omnibar.reset();
+    omnibar.setInput("Create a scout to ");
+    omnibar.open("spotlight");
+  }, [omnibar]);
+
+  // Open omnibar pre-filled to edit a specific scout field with Brett
+  const handleEditWithBrett = useCallback((field: string) => {
+    const scoutName = selectedScoutData?.name ?? "this scout";
+    omnibar.reset();
+    omnibar.setInput(`Edit scout "${scoutName}": `);
+    omnibar.open("spotlight");
+  }, [omnibar, selectedScoutData]);
+
+  // Detect successful scout creation in the omnibar and navigate to the new scout
+  useEffect(() => {
+    for (const msg of omnibar.messages) {
+      if (msg.role !== "assistant") continue;
+      for (const tc of msg.toolCalls ?? []) {
+        if (tc.name === "create_scout" && tc.result) {
+          const result = tc.result as { success?: boolean; data?: { id?: string } };
+          if (result.success && result.data?.id) {
+            setSelectedScoutId(result.data.id);
+          }
+        }
+      }
+    }
+  }, [omnibar.messages]);
 
   const handleInboxAddContent = (url: string) => {
     createThing.mutate(
@@ -741,7 +821,7 @@ export function App() {
         <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
           {/* Left Column: Navigation */}
           <LeftNav
-            isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScout !== null)}
+            isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScoutId !== null)}
             lists={lists}
             user={user}
             incompleteCount={activeThingsForCount.length}
@@ -774,18 +854,34 @@ export function App() {
             <Route path="/settings" element={<SettingsPage onBack={() => navigate("/today")} />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
             <Route path="/scouts" element={
-              selectedScout ? (
+              selectedScoutId && selectedScoutData ? (
                 <ScoutDetail
-                  scouts={mockScouts}
-                  selectedScout={selectedScout}
-                  findings={mockScoutFindings}
+                  scouts={scouts}
+                  scout={selectedScoutData}
+                  findings={scoutFindings}
+                  activity={scoutActivity}
+                  isLoadingFindings={isLoadingFindings}
+                  isLoadingActivity={isLoadingActivity}
                   onSelectScout={handleSelectScout}
                   onBack={handleBackToRoster}
+                  onPause={() => pauseScout.mutate(selectedScoutId)}
+                  onResume={() => resumeScout.mutate(selectedScoutId)}
+                  onUpdate={(data) => updateScout.mutate({ id: selectedScoutId, ...data })}
+                  onDismissFinding={(findingId) => dismissFinding.mutate({ scoutId: selectedScoutId, findingId })}
+                  onPromoteFinding={(findingId) => promoteFinding.mutate({ scoutId: selectedScoutId, findingId })}
+                  onEditWithBrett={handleEditWithBrett}
+                  onTriggerRun={import.meta.env.DEV ? () => { triggerRun.mutate(selectedScoutId!); setScoutRunning(true); } : undefined}
+                  isRunning={scoutRunning}
+                  onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}
+                  isClearing={clearHistory.isPending}
+                  onDelete={() => { deleteScout.mutate(selectedScoutId!); setSelectedScoutId(null); }}
                 />
               ) : (
                 <ScoutsRoster
-                  scouts={mockScouts}
+                  scouts={scouts}
                   onSelectScout={handleSelectScout}
+                  isLoading={isLoadingScouts}
+                  omnibarProps={scoutsOmnibarProps}
                 />
               )
             } />
@@ -955,6 +1051,11 @@ export function App() {
                 myResponseStatus: "needsAction",
               } as any);
             }
+          }}
+          onNavigateToScout={(scoutId) => {
+            navigate("/scouts");
+            setSelectedScoutId(scoutId);
+            handleCloseDetail();
           }}
           onItemClick={(id) => {
             const thing = allActiveThings.find((t) => t.id === id);

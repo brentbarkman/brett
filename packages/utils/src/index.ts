@@ -137,4 +137,14 @@ export function getEventGlassColor(calendarColor: string | undefined | null): Ca
   return googleColorToGlass(calendarColor ?? GOOGLE_DEFAULT_COLOR_HEX);
 }
 
+/** Convert interval hours to a human-readable string */
+export function humanizeCadence(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)} minutes`;
+  if (hours === 1) return "1 hour";
+  if (hours < 24) return `${Math.round(hours)} hours`;
+  if (hours === 24) return "1 day";
+  if (hours < 168) return `${Math.round(hours / 24)} days`;
+  return `${Math.round(hours / 168)} weeks`;
+}
+
 export { resolveTempUnit, convertTemp } from "./weather.js";

@@ -24,6 +24,14 @@ export interface ChatParams {
   temperature?: number;
   maxTokens?: number;
   system?: string;
+  /** Request JSON output from the model.
+   *  - "json_object": hint-only, no schema enforcement
+   *  - "json_schema": schema-constrained decoding (Anthropic/OpenAI enforce, Google falls back to hint)
+   *    `name` is required by OpenAI; ignored by Anthropic/Google.
+   */
+  responseFormat?:
+    | { type: "json_object" }
+    | { type: "json_schema"; name: string; schema: Record<string, unknown> };
 }
 
 // Each adapter accepts the provider-agnostic Message format and maps

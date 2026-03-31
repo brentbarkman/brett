@@ -43,6 +43,7 @@ model User {
   weatherCache         WeatherCache?
   granolaAccount         GranolaAccount?
   meetingNotes           MeetingNote[]
+  scouts                 Scout[]
 }
 
 model Session {
@@ -107,6 +108,7 @@ model Item {
   title            String
   description      String?
   source           String    @default("Brett")
+  sourceId         String?
   sourceUrl        String?
   dueDate          DateTime?
   dueDatePrecision String?   // "day" | "week" — null means no due date
@@ -137,6 +139,7 @@ model Item {
   conversationSessions ConversationSession[]
   meetingNoteId    String?    @map("granolaMeetingId")
   meetingNote      MeetingNote? @relation(fields: [meetingNoteId], references: [id], onDelete: SetNull)
+  scoutFindings    ScoutFinding[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -145,6 +148,7 @@ model Item {
   @@index([userId, type])
   @@index([userId, source])
   @@index([userId, contentType])
+  @@index([userId, source, sourceId])
 }
 
 model Attachment {
@@ -453,4 +457,142 @@ model WeatherCache {
   daily     Json
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Scout tables ──
+
+enum ScoutStatus {
+  active
+  paused
+  completed
+  expired
+}
+
+enum ScoutSensitivity {
+  low
+  medium
+  high
+}
+
+enum ScoutRunStatus {
+  running
+  success
+  failed
+  skipped
+}
+
+enum FindingType {
+  insight
+  article
+  task
+}
+
+enum ScoutActivityType {
+  created
+  paused
+  resumed
+  completed
+  expired
+  config_changed
+  cadence_adapted
+  budget_alert
+}
+
+model Scout {
+  id                         String           @id @default(cuid())
+  userId                     String
+  user                       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+
+  name                       String
+  avatarLetter               String
+  avatarGradientFrom         String
+  avatarGradientTo           String
+  goal                       String           @db.Text
+  context                    String?          @db.Text
+  sources                    Json
+
+  sensitivity                ScoutSensitivity @default(medium)
+  analysisTier               String           @default("standard") // "standard" (fast/cheap) or "deep" (thorough/costly)
+  cadenceIntervalHours       Float
+  cadenceMinIntervalHours    Float
+  cadenceCurrentIntervalHours Float
+  cadenceReason              String?
+
+  budgetTotal                Int
+  budgetUsed                 Int              @default(0)
+  budgetResetAt              DateTime
+
+  status                     ScoutStatus      @default(active)
+  statusLine                 String?
+  endDate                    DateTime?
+  nextRunAt                  DateTime?
+
+  conversationSessionId      String?
+
+  runs                       ScoutRun[]
+  findings                   ScoutFinding[]
+  activity                   ScoutActivity[]
+
+  @@index([userId, status])
+  @@index([status, nextRunAt])
+}
+
+model ScoutRun {
+  id             String         @id @default(cuid())
+  scoutId        String
+  scout          Scout          @relation(fields: [scoutId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+
+  status         ScoutRunStatus
+  searchQueries  Json           @default("[]")
+  resultCount    Int            @default(0)
+  findingsCount  Int            @default(0)
+  dismissedCount Int            @default(0)
+  reasoning      String?        @db.Text
+  tokensUsed     Int            @default(0)
+  durationMs     Int            @default(0)
+  error          String?        @db.Text
+
+  findings       ScoutFinding[]
+
+  @@index([scoutId, createdAt])
+  @@index([status, createdAt])
+}
+
+model ScoutFinding {
+  id             String      @id @default(cuid())
+  scoutId        String
+  scout          Scout       @relation(fields: [scoutId], references: [id], onDelete: Cascade)
+  scoutRunId     String
+  scoutRun       ScoutRun    @relation(fields: [scoutRunId], references: [id], onDelete: Cascade)
+  createdAt      DateTime    @default(now())
+
+  type           FindingType
+  title          String
+  description    String      @db.Text
+  sourceUrl      String?
+  sourceName     String
+  relevanceScore Float
+  reasoning      String      @db.Text
+
+  itemId         String?     @unique
+  item           Item?       @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  dismissed      Boolean     @default(false)
+
+  @@index([scoutId, createdAt])
+}
+
+model ScoutActivity {
+  id          String            @id @default(cuid())
+  scoutId     String
+  scout       Scout             @relation(fields: [scoutId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+
+  type        ScoutActivityType
+  description String            @db.Text
+  metadata    Json?
+
+  @@index([scoutId, createdAt])
 }

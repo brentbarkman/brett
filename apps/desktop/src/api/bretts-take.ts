@@ -40,7 +40,7 @@ export function useBrettsTake() {
             setStreamingContent((prev) => prev + chunk.content);
           } else if (chunk.type === "error") {
             setStreamingContent(
-              (prev) => prev || `Error: ${chunk.message}`,
+              (prev) => prev || "Something went wrong. Please try again.",
             );
           }
         }

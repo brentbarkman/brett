@@ -188,21 +188,6 @@ function renderInline(
           )
         );
         break;
-      case "event-ref":
-        parts.push(
-          onEventClick ? (
-            <button
-              key={key++}
-              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
-              onClick={() => onEventClick(match!.extra!)}
-            >
-              {match.content}
-            </button>
-          ) : (
-            <span key={key++} className="text-blue-400">{match.content}</span>
-          )
-        );
-        break;
       case "nav-ref":
         parts.push(
           onNavigate ? (

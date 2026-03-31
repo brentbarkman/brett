@@ -29,8 +29,9 @@ export async function* streamingFetch(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "Request failed" }));
-    yield { type: "error", message: (error as { message?: string }).message || `HTTP ${response.status}` };
+    const errorBody = await response.text().catch(() => "");
+    console.error(`[streaming] HTTP ${response.status} from ${path}:`, errorBody);
+    yield { type: "error", message: "Something went wrong. Please try again." };
     return;
   }
 

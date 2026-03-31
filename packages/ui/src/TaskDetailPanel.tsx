@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Calendar, CheckCircle, RotateCw, X } from "lucide-react";
+import { Calendar, CheckCircle, Radar, RotateCw, X } from "lucide-react";
 import type {
   ThingDetail,
   DueDatePrecision,
@@ -49,6 +49,7 @@ interface TaskDetailPanelProps {
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
   onNavigateToCalendarEvent?: (calendarEventId: string) => void;
+  onNavigateToScout?: (scoutId: string) => void;
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
@@ -81,6 +82,7 @@ export function TaskDetailPanel({
   isLoadingMoreBrettMessages,
   brettTotalCount,
   onNavigateToCalendarEvent,
+  onNavigateToScout,
   onItemClick,
   onEventClick,
   onNavigate,
@@ -190,6 +192,17 @@ export function TaskDetailPanel({
             >
               <Calendar className="w-3 h-3" />
               <span>from {detail.meetingNoteTitle}</span>
+            </button>
+          )}
+
+          {/* Scout provenance */}
+          {detail.source === "scout" && detail.scoutName && detail.scoutId && (
+            <button
+              onClick={() => onNavigateToScout?.(detail.scoutId!)}
+              className="flex items-center gap-1.5 text-xs text-blue-400/60 hover:text-blue-400 cursor-pointer transition-colors"
+            >
+              <Radar className="w-3 h-3" />
+              <span>from {detail.scoutName}</span>
             </button>
           )}
 

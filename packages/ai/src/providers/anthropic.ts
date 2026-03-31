@@ -76,7 +76,7 @@ export class AnthropicProvider implements AIProvider {
   private client: Anthropic;
 
   constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+    this.client = new Anthropic({ apiKey, maxRetries: 3 });
   }
 
   async *chat(params: ChatParams): AsyncIterable<StreamChunk> {
@@ -87,16 +87,28 @@ export class AnthropicProvider implements AIProvider {
       stream: true,
     };
 
+    // Schema-constrained JSON: use native output_config (no text hint needed)
+    if (params.responseFormat?.type === "json_schema") {
+      requestParams.output_config = {
+        format: { type: "json_schema", schema: params.responseFormat.schema },
+      };
+    }
+
     if (params.system) {
+      // For json_object (hint-only), append text instruction. json_schema uses output_config above.
+      const systemText = params.responseFormat?.type === "json_object"
+        ? params.system + "\n\nYou must respond with valid JSON only. No other text."
+        : params.system;
+
       // Pass system prompt as a cacheable text block.
       // If tools are present, the tool-level cache_control covers both system + tools.
       // If no tools, cache the system prompt directly.
       if (!params.tools?.length) {
         requestParams.system = [
-          { type: "text", text: params.system, cache_control: { type: "ephemeral" } },
+          { type: "text", text: systemText, cache_control: { type: "ephemeral" } },
         ];
       } else {
-        requestParams.system = params.system;
+        requestParams.system = systemText;
       }
     }
 

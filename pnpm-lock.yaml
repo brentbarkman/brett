@@ -47,9 +47,15 @@ importers:
       '@prisma/client':
         specifier: ^6.4.1
         version: 6.19.2(prisma@6.19.2)(typescript@5.9.3)
+      '@tavily/core':
+        specifier: ^0.7.2
+        version: 0.7.2
       better-auth:
         specifier: ^1.2.7
         version: 1.5.4(@prisma/client@6.19.2)(drizzle-orm@0.45.1)(mongodb@7.1.0)(prisma@6.19.2)(vitest@3.2.4)
+      exa-js:
+        specifier: ^2.10.2
+        version: 2.10.2
       googleapis:
         specifier: ^171.4.0
         version: 171.4.0
@@ -5453,6 +5459,17 @@ packages:
       react: 18.2.0
     dev: false
 
+  /@tavily/core@0.7.2:
+    resolution: {integrity: sha512-N9xfw9miPD1jyVKYTMWV1hQvWPNjATT9Hffr6tv7VMHzwOPOeBwfX/R25ZE2F7meTyq6xSeGxclWnLVH2xHqFA==}
+    dependencies:
+      axios: 1.14.0
+      https-proxy-agent: 7.0.6
+      js-tiktoken: 1.0.21
+    transitivePeerDependencies:
+      - debug
+      - supports-color
+    dev: false
+
   /@testing-library/dom@10.4.1:
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
     engines: {node: '>=18'}
@@ -6656,6 +6673,16 @@ packages:
       possible-typed-array-names: 1.1.0
     dev: false
 
+  /axios@1.14.0:
+    resolution: {integrity: sha512-3Y8yrqLSwjuzpXuZ0oIYZ/XGgLwUIBU3uLvbcpb0pidD9ctpShJd43KSlEEkVQg6DS0G9NKyzOvBfUtDKEyHvQ==}
+    dependencies:
+      follow-redirects: 1.15.11
+      form-data: 4.0.5
+      proxy-from-env: 2.1.0
+    transitivePeerDependencies:
+      - debug
+    dev: false
+
   /babel-core@7.0.0-bridge.0(@babel/core@7.29.0):
     resolution: {integrity: sha512-poPX9mZH/5CSanm50Q+1toVci6pv5KSRv/5TWCwtzQS5XEwn40BcCrgIeMFWP9CKKIniKXNxoIOnOq4VVlGXhg==}
     peerDependencies:
@@ -7793,6 +7820,14 @@ packages:
       - encoding
     dev: false
 
+  /cross-fetch@4.1.0:
+    resolution: {integrity: sha512-uKm5PU+MHTootlWEY+mZ4vvXoCn4fLQxT9dSc1sXVMSFkINTJVN8cAQROpwcKm8bJ/c7rgZVIBWzH5T78sNZZw==}
+    dependencies:
+      node-fetch: 2.7.0
+    transitivePeerDependencies:
+      - encoding
+    dev: false
+
   /cross-spawn@6.0.6:
     resolution: {integrity: sha512-VqCUuhcd1iB+dsv8gxPttb5iZh/D0iubSP21g36KXdEuf6I5JiioesUVjpCdHV9MZRUfVFlvwtIUyPfxo5trtw==}
     engines: {node: '>=4.8'}
@@ -8720,6 +8755,19 @@ packages:
       eventsource-parser: 3.0.6
     dev: false
 
+  /exa-js@2.10.2:
+    resolution: {integrity: sha512-gHOvnKKO/sBCx7UEUTM3BZvvYm5KHbJB2tfMA7T63F6orHUnM2mjfqj3GVfM9pNRPhZhLO128iCzSFnpg3mI9w==}
+    dependencies:
+      cross-fetch: 4.1.0
+      dotenv: 16.4.7
+      openai: 5.23.2(zod@3.25.76)
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.2(zod@3.25.76)
+    transitivePeerDependencies:
+      - encoding
+      - ws
+    dev: false
+
   /execa@1.0.0:
     resolution: {integrity: sha512-adbxcyWV46qiHyvSp50TKt05tB4tK3HcmF7/nxfAdhnox83seTDbwnaqKO4sXRy7roHAIFqJP/Rw/AuEbX61LA==}
     engines: {node: '>=6'}
@@ -9262,6 +9310,16 @@ packages:
     engines: {node: '>=0.4.0'}
     dev: false
 
+  /follow-redirects@1.15.11:
+    resolution: {integrity: sha512-deG2P0JfjrTxl50XGCDyfI97ZGVCxIpfKYmfyrQ54n5FO/0gfIES8C/Psl6kWVDolizcaaxZJnTS0QSMxvnsBQ==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+    dev: false
+
   /fontfaceobserver@2.3.0:
     resolution: {integrity: sha512-6FPvD/IVyT4ZlNe7Wcn5Fb/4ChigpucKYSvD6a+0iMoLn2inpo711eyIcKjmDtE5XNcgAkSH9uN/nfAeZzHEfg==}
     dev: false
@@ -9300,7 +9358,6 @@ packages:
       es-set-tostringtag: 2.1.0
       hasown: 2.0.2
       mime-types: 2.1.35
-    dev: true
 
   /formdata-polyfill@4.0.10:
     resolution: {integrity: sha512-buewHzMvYL29jdeQTVILecSaZKnt/RJWjoZCF5OW60Z67/GmSLBkOFM7qh1PI3zFNtJbaZL5eQu1vLfazOwj4g==}
@@ -10455,6 +10512,12 @@ packages:
 
   /jose@6.2.1:
     resolution: {integrity: sha512-jUaKr1yrbfaImV7R2TN/b3IcZzsw38/chqMpo2XJ7i2F8AfM/lA4G1goC3JVEwg0H7UldTmSt3P68nt31W7/mw==}
+    dev: false
+
+  /js-tiktoken@1.0.21:
+    resolution: {integrity: sha512-biOj/6M5qdgx5TKjDnFT1ymSpM5tbd3ylwDtrQvFQSu0Z7bBYko2dF+W/aUkXUPuk6IVpRxk/3Q2sHOzGlS36g==}
+    dependencies:
+      base64-js: 1.5.1
     dev: false
 
   /js-tokens@4.0.0:
@@ -11825,6 +11888,21 @@ packages:
       is-wsl: 2.2.0
     dev: false
 
+  /openai@5.23.2(zod@3.25.76):
+    resolution: {integrity: sha512-MQBzmTulj+MM5O8SKEk/gL8a7s5mktS9zUtAkU257WjvobGc9nKcBuVwjyEEcb9SI8a8Y2G/mzn3vm9n1Jlleg==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+    dependencies:
+      zod: 3.25.76
+    dev: false
+
   /openai@6.32.0:
     resolution: {integrity: sha512-j3k+BjydAf8yQlcOI7WUQMQTbbF5GEIMAE2iZYCOzwwB3S2pCheaWYp+XZRNAch4jWVc52PMDGRRjutao3lLCg==}
     hasBin: true
@@ -12508,6 +12586,11 @@ packages:
     dependencies:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
+    dev: false
+
+  /proxy-from-env@2.1.0:
+    resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
+    engines: {node: '>=10'}
     dev: false
 
   /pump@3.0.4:
@@ -15154,6 +15237,14 @@ packages:
   /yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
+
+  /zod-to-json-schema@3.25.2(zod@3.25.76):
+    resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
+    peerDependencies:
+      zod: ^3.25.28 || ^4
+    dependencies:
+      zod: 3.25.76
+    dev: false
 
   /zod-to-json-schema@3.25.2(zod@4.3.6):
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}

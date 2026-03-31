@@ -2,8 +2,9 @@
  * Weather API integration tests.
  *
  * NETWORK DEPENDENCY: The geocoding tests hit the real Open-Meteo geocoding
- * API (free, no key required). The weather fetch tests also hit Open-Meteo's
- * forecast API. Tests may fail if the external service is down.
+ * API (free, no key required). The weather fetch tests hit OpenWeatherMap's
+ * One Call 3.0 API (requires OPENWEATHERMAP_API_KEY env var).
+ * Tests may fail if the external service is down.
  */
 
 import { describe, it, expect, beforeAll } from "vitest";

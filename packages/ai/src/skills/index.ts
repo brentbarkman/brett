@@ -39,6 +39,10 @@ import { getMeetingNotesSkill } from "./get-meeting-notes.js";
 import { getMeetingActionItemsSkill } from "./get-meeting-action-items.js";
 import { analyzeMeetingPatternSkill } from "./analyze-meeting-pattern.js";
 
+// Scouts
+import { createScoutSkill } from "./create-scout.js";
+import { listScoutsSkill } from "./list-scouts.js";
+
 export function createRegistry(): SkillRegistry {
   const registry = new SkillRegistry();
 
@@ -81,6 +85,10 @@ export function createRegistry(): SkillRegistry {
   registry.register(getMeetingNotesSkill);
   registry.register(getMeetingActionItemsSkill);
   registry.register(analyzeMeetingPatternSkill);
+
+  // Scouts (2)
+  registry.register(createScoutSkill);
+  registry.register(listScoutsSkill);
 
   return registry;
 }

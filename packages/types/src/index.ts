@@ -86,6 +86,7 @@ export interface ItemRecord {
   contentMetadata: Record<string, unknown> | null;
   meetingNoteId: string | null;
   listId: string | null;
+  sourceId: string | null;
   userId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -117,6 +118,8 @@ export interface Thing {
   contentImageUrl?: string;
   meetingNoteTitle?: string;
   meetingNoteCalendarEventId?: string;
+  scoutName?: string;
+  scoutId?: string;
 }
 
 export interface Attachment {
@@ -171,6 +174,7 @@ export interface CreateItemInput {
   listId?: string;
   status?: ItemStatus;
   contentType?: ContentType;
+  sourceId?: string;
 }
 
 export interface UpdateItemInput {
@@ -318,43 +322,147 @@ export type DisplayHint =
 
 // ─── Scout Types ───
 
+export type ScoutStatus = "active" | "paused" | "completed" | "expired";
+export type ScoutSensitivity = "low" | "medium" | "high";
+export type ScoutAnalysisTier = "standard" | "deep";
+export type ScoutRunStatus = "running" | "success" | "failed" | "skipped";
+export type FindingType = "insight" | "article" | "task";
+export type ScoutActivityType =
+  | "created"
+  | "paused"
+  | "resumed"
+  | "completed"
+  | "expired"
+  | "config_changed"
+  | "cadence_adapted"
+  | "budget_alert";
+
 export interface ScoutSource {
   name: string;
-  url?: string; // clickable when present
+  url?: string;
 }
 
-export type ScoutStatus = "active" | "paused" | "completed" | "expired";
-
+/** API response shape — serialized from Prisma model */
 export interface Scout {
   id: string;
   name: string;
   avatarLetter: string;
-  avatarGradient: [string, string]; // [fromColor, toColor]
+  avatarGradient: [string, string];
   goal: string;
   context?: string;
   sources: ScoutSource[];
-  sensitivity: string;
-  cadenceBase: string;
-  cadenceCurrent?: string;
+  sensitivity: ScoutSensitivity;
+  analysisTier: ScoutAnalysisTier;
+  cadenceIntervalHours: number;
+  cadenceMinIntervalHours: number;
+  cadenceCurrentIntervalHours: number;
   cadenceReason?: string;
   budgetUsed: number;
   budgetTotal: number;
   status: ScoutStatus;
-  statusLine?: string; // e.g., "Monitoring closely — earnings Apr 2"
-  lastRun?: string;
+  statusLine?: string;
   endDate?: string;
+  nextRunAt?: string;
+  lastRun?: string;
   findingsCount: number;
+  createdAt: string;
 }
-
-export type FindingType = "insight" | "article" | "task";
 
 export interface ScoutFinding {
   id: string;
   scoutId: string;
+  scoutRunId: string;
   type: FindingType;
   title: string;
   description: string;
-  timestamp: string;
+  sourceUrl?: string;
+  sourceName: string;
+  relevanceScore: number;
+  reasoning: string;
+  itemId?: string;
+  dismissed: boolean;
+  createdAt: string;
+}
+
+export interface ScoutRun {
+  id: string;
+  scoutId: string;
+  status: ScoutRunStatus;
+  searchQueries: string[];
+  resultCount: number;
+  findingsCount: number;
+  dismissedCount: number;
+  reasoning?: string;
+  tokensUsed: number;
+  durationMs: number;
+  error?: string;
+  createdAt: string;
+}
+
+export type ActivityEntry =
+  | {
+      entryType: "run";
+      id: string;
+      createdAt: string;
+      status: ScoutRunStatus;
+      resultCount: number;
+      findingsCount: number;
+      dismissedCount: number;
+      reasoning: string | null;
+      durationMs: number;
+      tokensUsed: number;
+      error: string | null;
+    }
+  | {
+      entryType: "activity";
+      id: string;
+      createdAt: string;
+      type: ScoutActivityType;
+      description: string;
+      metadata: unknown;
+    };
+
+export interface CreateScoutInput {
+  name: string;
+  avatarLetter: string;
+  avatarGradientFrom: string;
+  avatarGradientTo: string;
+  goal: string;
+  context?: string;
+  sources: ScoutSource[];
+  sensitivity?: ScoutSensitivity;
+  analysisTier?: ScoutAnalysisTier;
+  cadenceIntervalHours: number;
+  cadenceMinIntervalHours: number;
+  budgetTotal: number;
+  endDate?: string;
+  conversationSessionId?: string;
+}
+
+export interface UpdateScoutInput {
+  name?: string;
+  goal?: string;
+  context?: string;
+  sources?: ScoutSource[];
+  sensitivity?: ScoutSensitivity;
+  analysisTier?: ScoutAnalysisTier;
+  cadenceIntervalHours?: number;
+  cadenceMinIntervalHours?: number;
+  cadenceCurrentIntervalHours?: number;
+  cadenceReason?: string;
+  budgetTotal?: number;
+  statusLine?: string;
+  endDate?: string | null;
+}
+
+export interface ScoutBudgetSummary {
+  totalRunsThisMonth: number;
+  scouts: Array<{
+    id: string;
+    name: string;
+    budgetUsed: number;
+    budgetTotal: number;
+  }>;
 }
 
 export type {

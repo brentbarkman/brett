@@ -1,6 +1,14 @@
 import React from "react";
 import type { Scout } from "@brett/types";
 
+function humanizeCadence(hours: number): string {
+  if (hours < 24) return hours === 1 ? "Every hour" : `Every ${hours}h`;
+  const days = hours / 24;
+  if (days === 1) return "Daily";
+  if (days === 7) return "Weekly";
+  return `Every ${days}d`;
+}
+
 interface ScoutCardProps {
   scout: Scout;
   onClick: () => void;
@@ -90,10 +98,10 @@ export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: Scou
           <span className="text-white/10">·</span>
           <span>{scout.findingsCount} findings</span>
           <span className="text-white/10">·</span>
-          <span className={scout.cadenceCurrent ? "text-blue-400/70" : ""}>
-            {scout.cadenceCurrent
-              ? `${scout.cadenceCurrent} (elevated)`
-              : scout.cadenceBase}
+          <span className={scout.cadenceCurrentIntervalHours < scout.cadenceIntervalHours ? "text-blue-400/70" : ""}>
+            {scout.cadenceCurrentIntervalHours < scout.cadenceIntervalHours
+              ? `${humanizeCadence(scout.cadenceCurrentIntervalHours)} (elevated)`
+              : humanizeCadence(scout.cadenceIntervalHours)}
           </span>
         </div>
       </div>
