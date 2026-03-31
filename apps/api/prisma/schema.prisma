@@ -498,6 +498,26 @@ enum ScoutActivityType {
   budget_alert
 }
 
+enum ScoutMemoryType {
+  factual
+  judgment
+  pattern
+}
+
+enum ScoutMemoryStatus {
+  active
+  superseded
+  removed
+  user_deleted
+}
+
+enum ScoutConsolidationStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
 model Scout {
   id                         String           @id @default(cuid())
   userId                     String
@@ -531,9 +551,15 @@ model Scout {
 
   conversationSessionId      String?
 
+  consolidationRunCount      Int              @default(0)
+  consolidationThreshold     Int              @default(5)
+  lastConsolidatedAt         DateTime?
+
   runs                       ScoutRun[]
   findings                   ScoutFinding[]
   activity                   ScoutActivity[]
+  memories                   ScoutMemory[]
+  consolidations             ScoutConsolidation[]
 
   @@index([userId, status])
   @@index([status, nextRunAt])
@@ -553,6 +579,9 @@ model ScoutRun {
   reasoning      String?        @db.Text
   tokensUsed     Int            @default(0)
   durationMs     Int            @default(0)
+  tokensInput    Int?
+  tokensOutput   Int?
+  modelId        String?
   error          String?        @db.Text
 
   findings       ScoutFinding[]
@@ -579,7 +608,8 @@ model ScoutFinding {
 
   itemId         String?     @unique
   item           Item?       @relation(fields: [itemId], references: [id], onDelete: SetNull)
-  dismissed      Boolean     @default(false)
+  feedbackUseful Boolean?
+  feedbackAt     DateTime?
 
   @@index([scoutId, createdAt])
 }
@@ -595,4 +625,45 @@ model ScoutActivity {
   metadata    Json?
 
   @@index([scoutId, createdAt])
+}
+
+model ScoutMemory {
+  id            String             @id @default(cuid())
+  scoutId       String
+  scout         Scout              @relation(fields: [scoutId], references: [id], onDelete: Cascade)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  type          ScoutMemoryType
+  content       String             @db.VarChar(500)
+  confidence    Float
+  sourceRunIds  Json               @default("[]")
+  status        ScoutMemoryStatus  @default(active)
+  supersededBy  String?
+  supersededAt  DateTime?
+
+  @@index([scoutId, status])
+}
+
+model ScoutConsolidation {
+  id                          String                    @id @default(cuid())
+  scoutId                     String
+  scout                       Scout                     @relation(fields: [scoutId], references: [id], onDelete: Cascade)
+  createdAt                   DateTime                  @default(now())
+
+  runsSinceLastConsolidation  Int
+  memoriesBefore              Int
+  memoriesAfter               Int
+  memoriesCreated             Int
+  memoriesSuperseded          Int
+  tokensUsed                  Int
+  tokensInput                 Int?
+  tokensOutput                Int?
+  modelId                     String?
+  isBatch                     Boolean                   @default(false)
+  batchRequestId              String?
+  status                      ScoutConsolidationStatus  @default(pending)
+
+  @@index([scoutId, createdAt])
+  @@index([status])
 }
