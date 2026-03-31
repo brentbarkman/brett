@@ -213,47 +213,43 @@ export function ScoutDetail({
                 )}
               </div>
 
-              {!isCompleted && (
-                isPaused ? (
-                  <button
-                    onClick={onResume}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600/20 border border-emerald-500/20 hover:bg-emerald-600/30 hover:border-emerald-500/30 transition-all text-emerald-400 hover:text-emerald-300 text-xs font-medium flex-shrink-0"
-                  >
-                    <Play size={14} />
-                    Resume
-                  </button>
-                ) : (
-                  <button
-                    onClick={onPause}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] hover:border-white/[0.15] transition-all text-white/50 hover:text-white text-xs font-medium flex-shrink-0"
-                  >
-                    <Pause size={14} />
-                    Pause
-                  </button>
-                )
-              )}
-
-              {/* Dev tools — only show in development */}
-              {(onTriggerRun || onClearHistory) && (
-                <div className="flex items-center gap-2 ml-auto">
-                  {onTriggerRun && (
+              <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+                {!isCompleted && (
+                  isPaused ? (
                     <button
-                      onClick={onTriggerRun}
-                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                      onClick={onResume}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600/20 border border-emerald-500/20 hover:bg-emerald-600/30 hover:border-emerald-500/30 transition-all text-emerald-400 hover:text-emerald-300 text-xs font-medium"
                     >
-                      ▶ Run Now
+                      <Play size={14} />
+                      Resume
                     </button>
-                  )}
-                  {onClearHistory && (
+                  ) : (
                     <button
-                      onClick={onClearHistory}
-                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                      onClick={onPause}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] hover:border-white/[0.15] transition-all text-white/50 hover:text-white text-xs font-medium"
                     >
-                      ✕ Clear History
+                      <Pause size={14} />
+                      Pause
                     </button>
-                  )}
-                </div>
-              )}
+                  )
+                )}
+                {onTriggerRun && (
+                  <button
+                    onClick={onTriggerRun}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                  >
+                    ▶ Run Now
+                  </button>
+                )}
+                {onClearHistory && (
+                  <button
+                    onClick={onClearHistory}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                  >
+                    ✕ Clear History
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Goal */}
