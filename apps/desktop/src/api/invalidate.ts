@@ -6,4 +6,5 @@ export function invalidateAllThings(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["thing-detail"] });
   qc.invalidateQueries({ queryKey: ["inbox"] });
   qc.invalidateQueries({ queryKey: ["lists"] });
+  qc.invalidateQueries({ queryKey: ["scout-findings"] });
 }
