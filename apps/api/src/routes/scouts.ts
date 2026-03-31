@@ -409,6 +409,28 @@ scouts.post("/:id/resume", async (c) => {
   );
 });
 
+// DEV ONLY: Clear scout history (findings, runs, activity)
+scouts.delete("/:id/history", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const scout = await prisma.scout.findFirst({ where: { id, userId: user.id } });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  // Delete in order: findings first (FK to runs), then runs, then activity
+  await prisma.scoutFinding.deleteMany({ where: { scoutId: id } });
+  await prisma.scoutRun.deleteMany({ where: { scoutId: id } });
+  await prisma.scoutActivity.deleteMany({ where: { scoutId: id } });
+
+  // Reset budget
+  await prisma.scout.update({
+    where: { id },
+    data: { budgetUsed: 0 },
+  });
+
+  return c.json({ ok: true });
+});
+
 // POST /scouts/:id/run — manually trigger a scout run
 scouts.post("/:id/run", async (c) => {
   const user = c.get("user");

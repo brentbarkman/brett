@@ -66,6 +66,8 @@ interface ScoutDetailProps {
   onDismissFinding: (findingId: string) => void;
   onPromoteFinding: (findingId: string) => void;
   onEditWithBrett?: (field: string) => void;
+  onTriggerRun?: () => void;
+  onClearHistory?: () => void;
 }
 
 export function ScoutDetail({
@@ -83,6 +85,8 @@ export function ScoutDetail({
   onDismissFinding,
   onPromoteFinding,
   onEditWithBrett,
+  onTriggerRun,
+  onClearHistory,
 }: ScoutDetailProps) {
   const [activeTab, setActiveTab] = useState<"findings" | "log">("findings");
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -227,6 +231,28 @@ export function ScoutDetail({
                     Pause
                   </button>
                 )
+              )}
+
+              {/* Dev tools — only show in development */}
+              {(onTriggerRun || onClearHistory) && (
+                <div className="flex items-center gap-2 ml-auto">
+                  {onTriggerRun && (
+                    <button
+                      onClick={onTriggerRun}
+                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                    >
+                      ▶ Run Now
+                    </button>
+                  )}
+                  {onClearHistory && (
+                    <button
+                      onClick={onClearHistory}
+                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                    >
+                      ✕ Clear History
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 

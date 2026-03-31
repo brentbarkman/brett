@@ -78,6 +78,8 @@ import {
   useUpdateScout,
   useDismissFinding,
   usePromoteFinding,
+  useTriggerScoutRun,
+  useClearScoutHistory,
 } from "./api/scouts";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
@@ -378,6 +380,8 @@ export function App() {
   const updateScout = useUpdateScout();
   const dismissFinding = useDismissFinding();
   const promoteFinding = usePromoteFinding();
+  const triggerRun = useTriggerScoutRun();
+  const clearHistory = useClearScoutHistory();
 
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
@@ -843,6 +847,8 @@ export function App() {
                   onDismissFinding={(findingId) => dismissFinding.mutate({ scoutId: selectedScoutId, findingId })}
                   onPromoteFinding={(findingId) => promoteFinding.mutate({ scoutId: selectedScoutId, findingId })}
                   onEditWithBrett={handleEditWithBrett}
+                  onTriggerRun={import.meta.env.DEV ? () => triggerRun.mutate(selectedScoutId!) : undefined}
+                  onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}
                 />
               ) : (
                 <ScoutsRoster
