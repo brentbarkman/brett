@@ -890,6 +890,10 @@ export function App() {
                   onConsolidate={import.meta.env.DEV ? () => triggerConsolidation.mutate(selectedScoutId!) : undefined}
                   isConsolidating={triggerConsolidation.isPending}
                   onDelete={() => { deleteScout.mutate(selectedScoutId!); setSelectedScoutId(null); }}
+                  onClickFindingItem={(itemId) => {
+                    const thing = allActiveThings.find((t) => t.id === itemId);
+                    if (thing) handleItemClick(thing);
+                  }}
                   memories={scoutMemories}
                   isLoadingMemories={isLoadingMemories}
                   onDeleteMemory={(memoryId) => deleteMemory.mutate({ scoutId: selectedScoutId!, memoryId })}

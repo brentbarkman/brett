@@ -53,6 +53,7 @@ interface ScoutDetailProps {
   onConsolidate?: () => void;
   isConsolidating?: boolean;
   onDelete?: () => void;
+  onClickFindingItem?: (itemId: string) => void;
   memories: ScoutMemory[];
   isLoadingMemories: boolean;
   onDeleteMemory: (memoryId: string) => void;
@@ -78,6 +79,7 @@ export function ScoutDetail({
   onConsolidate,
   isConsolidating,
   onDelete,
+  onClickFindingItem,
   memories,
   isLoadingMemories,
   onDeleteMemory,
@@ -507,6 +509,7 @@ export function ScoutDetail({
                     <FindingCard
                       key={finding.id}
                       finding={finding}
+                      onClickItem={onClickFindingItem}
                     />
                   ))
               ) : (
@@ -1021,8 +1024,10 @@ function TabButton({
 
 function FindingCard({
   finding,
+  onClickItem,
 }: {
   finding: ScoutFinding;
+  onClickItem?: (itemId: string) => void;
 }) {
   const config = {
     insight: {
@@ -1047,9 +1052,12 @@ function FindingCard({
 
   const typeLabel = { insight: "Insight", article: "Article", task: "Task" }[finding.type];
 
+  const isClickable = !!(finding.itemId && onClickItem);
+
   return (
     <div
-      className={`flex gap-3.5 p-4 rounded-xl bg-white/[0.03] border ${config.border} hover:bg-white/[0.05] transition-colors`}
+      onClick={isClickable ? () => onClickItem!(finding.itemId!) : undefined}
+      className={`flex gap-3.5 p-4 rounded-xl bg-white/[0.03] border ${config.border} hover:bg-white/[0.05] transition-colors ${isClickable ? "cursor-pointer" : ""}`}
     >
       <div
         className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${config.bg}`}
