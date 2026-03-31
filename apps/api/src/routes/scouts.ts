@@ -283,7 +283,7 @@ scouts.put("/:id", async (c) => {
       activity: {
         create: {
           type: "config_changed",
-          description: "Scout configuration updated",
+          description: `Updated ${Object.keys(after).join(", ")}`,
           metadata: { before, after } as unknown as Prisma.InputJsonValue,
         },
       },
@@ -634,6 +634,7 @@ scouts.get("/:id/activity", async (c) => {
     dismissedCount: run.dismissedCount,
     reasoning: run.reasoning ?? null,
     durationMs: run.durationMs,
+    tokensUsed: run.tokensUsed,
     error: run.error ?? null,
   }));
 

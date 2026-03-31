@@ -406,6 +406,7 @@ export type ActivityEntry =
       dismissedCount: number;
       reasoning: string | null;
       durationMs: number;
+      tokensUsed: number;
       error: string | null;
     }
   | {

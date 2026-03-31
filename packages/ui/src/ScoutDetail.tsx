@@ -734,6 +734,24 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         <SkipForward size={14} className="text-white/30" />
       );
 
+    const stats = [
+      entry.resultCount > 0 && `${entry.resultCount} searched`,
+      entry.findingsCount > 0 && `${entry.findingsCount} found`,
+      entry.dismissedCount > 0 && `${entry.dismissedCount} dismissed`,
+    ].filter(Boolean);
+
+    const tokenStr = entry.tokensUsed > 0
+      ? entry.tokensUsed >= 1000
+        ? `${(entry.tokensUsed / 1000).toFixed(1)}k tokens`
+        : `${entry.tokensUsed} tokens`
+      : null;
+
+    const durationStr = entry.durationMs > 0
+      ? entry.durationMs >= 1000
+        ? `${(entry.durationMs / 1000).toFixed(1)}s`
+        : `${entry.durationMs}ms`
+      : null;
+
     return (
       <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
         <div className="mt-0.5 flex-shrink-0">{statusIcon}</div>
@@ -742,9 +760,9 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
             <span className="text-[12px] font-medium text-white/70 capitalize">
               Run {entry.status}
             </span>
-            {entry.findingsCount > 0 && (
-              <span className="text-[11px] text-blue-400/70">
-                {entry.findingsCount} finding{entry.findingsCount !== 1 ? "s" : ""}
+            {stats.length > 0 && (
+              <span className="text-[11px] text-white/30">
+                {stats.join(" · ")}
               </span>
             )}
           </div>
@@ -753,6 +771,11 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
           )}
           {entry.error && (
             <p className="text-[11px] text-red-400/70 mt-0.5">{entry.error}</p>
+          )}
+          {(tokenStr || durationStr) && (
+            <p className="text-[10px] text-white/20 mt-1">
+              {[durationStr, tokenStr].filter(Boolean).join(" · ")}
+            </p>
           )}
         </div>
         <span className="text-[10px] text-white/20 flex-shrink-0">
@@ -763,6 +786,9 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
   }
 
   // activity entry
+  const meta = entry.metadata as { before?: Record<string, unknown>; after?: Record<string, unknown> } | null;
+  const isConfigChange = entry.type === "config_changed" && meta?.before && meta?.after;
+
   return (
     <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
       <div className="mt-0.5 flex-shrink-0">
@@ -770,12 +796,55 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       </div>
       <div className="flex-1 min-w-0">
         <span className="text-[12px] text-white/60">{entry.description}</span>
+        {isConfigChange && (
+          <div className="mt-1 space-y-0.5">
+            {Object.keys(meta.after!).map((key) => {
+              const before = meta.before![key];
+              const after = meta.after![key];
+              const label = formatFieldName(key);
+              const beforeStr = formatFieldValue(key, before);
+              const afterStr = formatFieldValue(key, after);
+              return (
+                <p key={key} className="text-[11px] text-white/30">
+                  {label}: <span className="text-white/20 line-through">{beforeStr}</span> → <span className="text-white/50">{afterStr}</span>
+                </p>
+              );
+            })}
+          </div>
+        )}
       </div>
       <span className="text-[10px] text-white/20 flex-shrink-0">
         {formatRelativeTime(entry.createdAt)}
       </span>
     </div>
   );
+}
+
+function formatFieldName(key: string): string {
+  const names: Record<string, string> = {
+    sensitivity: "Sensitivity",
+    cadenceIntervalHours: "Cadence",
+    cadenceCurrentIntervalHours: "Current cadence",
+    cadenceMinIntervalHours: "Min cadence",
+    cadenceReason: "Cadence reason",
+    budgetTotal: "Budget",
+    goal: "Goal",
+    name: "Name",
+    context: "Context",
+    statusLine: "Status line",
+    endDate: "End date",
+  };
+  return names[key] ?? key;
+}
+
+function formatFieldValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) return "none";
+  if (key.includes("cadence") && key.includes("Hours") && typeof value === "number") {
+    return humanizeCadence(value);
+  }
+  if (key === "budgetTotal") return `${value} runs/mo`;
+  if (typeof value === "string" && value.length > 60) return value.slice(0, 60) + "...";
+  return String(value);
 }
 
 // ── Shared ───────────────────────────────────────────────────────
