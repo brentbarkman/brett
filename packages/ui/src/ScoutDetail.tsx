@@ -96,7 +96,6 @@ export function ScoutDetail({
   const [editingField, setEditingField] = useState<string | null>(null);
   const [pendingSensitivity, setPendingSensitivity] = useState<ScoutSensitivity | null>(null);
   const [pendingCadenceBase, setPendingCadenceBase] = useState<number | null>(null);
-  const [pendingCadenceBurst, setPendingCadenceBurst] = useState<number | null>(null);
   const [pendingBudget, setPendingBudget] = useState<number | null>(null);
 
   const isCompleted = scout.status === "completed" || scout.status === "expired";
@@ -112,12 +111,15 @@ export function ScoutDetail({
   };
 
   const handleSaveCadence = () => {
-    const updates: UpdateScoutInput = {};
-    if (pendingCadenceBase !== null) updates.cadenceIntervalHours = pendingCadenceBase;
-    if (pendingCadenceBurst !== null) updates.cadenceMinIntervalHours = pendingCadenceBurst;
-    if (Object.keys(updates).length > 0) onUpdate(updates);
+    if (pendingCadenceBase !== null) {
+      // User sets the cadence — update both base and current together
+      onUpdate({
+        cadenceIntervalHours: pendingCadenceBase,
+        cadenceCurrentIntervalHours: pendingCadenceBase,
+        cadenceReason: null as any,
+      });
+    }
     setPendingCadenceBase(null);
-    setPendingCadenceBurst(null);
     setEditingField(null);
   };
 
@@ -131,7 +133,7 @@ export function ScoutDetail({
 
   const handleCancelEdit = (field: string) => {
     if (field === "sensitivity") setPendingSensitivity(null);
-    if (field === "cadence") { setPendingCadenceBase(null); setPendingCadenceBurst(null); }
+    if (field === "cadence") { setPendingCadenceBase(null); }
     if (field === "budget") setPendingBudget(null);
     setEditingField(null);
   };
@@ -345,17 +347,20 @@ export function ScoutDetail({
             >
               {editingField === "cadence" ? (
                 <CadencePicker
-                  baseIntervalHours={pendingCadenceBase ?? scout.cadenceIntervalHours}
-                  burstMinHours={pendingCadenceBurst ?? scout.cadenceMinIntervalHours}
-                  onChangeBase={setPendingCadenceBase}
-                  onChangeBurst={setPendingCadenceBurst}
+                  intervalHours={pendingCadenceBase ?? scout.cadenceCurrentIntervalHours}
+                  onChange={setPendingCadenceBase}
                 />
               ) : (
-                <p className="text-[13px] text-white/50 whitespace-pre-line">
-                  {scout.cadenceCurrentIntervalHours < scout.cadenceIntervalHours
-                    ? `Base: ${humanizeCadence(scout.cadenceIntervalHours)}\nCurrent: ${humanizeCadence(scout.cadenceCurrentIntervalHours)}${scout.cadenceReason ? ` (${scout.cadenceReason})` : ""}`
-                    : humanizeCadence(scout.cadenceIntervalHours)}
-                </p>
+                <div className="space-y-1">
+                  <p className="text-[13px] text-white/50">
+                    {humanizeCadence(scout.cadenceCurrentIntervalHours)}
+                  </p>
+                  {scout.cadenceReason && scout.cadenceCurrentIntervalHours !== scout.cadenceIntervalHours && (
+                    <p className="text-[11px] text-blue-400/60">
+                      Adjusted by Brett: {scout.cadenceReason}
+                    </p>
+                  )}
+                </div>
               )}
             </EditableCard>
 
@@ -620,69 +625,29 @@ const CADENCE_PRESETS = [
 ] as const;
 
 function CadencePicker({
-  baseIntervalHours,
-  burstMinHours,
-  onChangeBase,
-  onChangeBurst,
+  intervalHours,
+  onChange,
 }: {
-  baseIntervalHours: number;
-  burstMinHours: number;
-  onChangeBase: (h: number) => void;
-  onChangeBurst: (h: number) => void;
+  intervalHours: number;
+  onChange: (h: number) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <div className="text-[11px] text-white/30 font-medium">Base check frequency</div>
-        <div className="grid grid-cols-4 gap-1.5">
-          {CADENCE_PRESETS.map((preset) => (
-            <button
-              key={preset.hours}
-              onClick={() => onChangeBase(preset.hours)}
-              className={`px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
-                baseIntervalHours === preset.hours
-                  ? "bg-blue-500/15 text-blue-300 border border-blue-500/25"
-                  : "bg-white/[0.03] text-white/30 border border-transparent hover:bg-white/[0.06]"
-              }`}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="text-[11px] text-white/30 font-medium">
-          Burst minimum <span className="text-white/15">— scout can speed up to this</span>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="space-y-2">
+      <div className="text-[11px] text-white/30 font-medium">Check frequency</div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {CADENCE_PRESETS.map((preset) => (
           <button
-            onClick={() =>
-              onChangeBurst(
-                Math.max(1, burstMinHours - (burstMinHours > 12 ? 12 : burstMinHours > 4 ? 4 : 1))
-              )
-            }
-            className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
+            key={preset.hours}
+            onClick={() => onChange(preset.hours)}
+            className={`px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+              intervalHours === preset.hours
+                ? "bg-blue-500/15 text-blue-300 border border-blue-500/25"
+                : "bg-white/[0.03] text-white/30 border border-transparent hover:bg-white/[0.06]"
+            }`}
           >
-            <Minus size={12} />
+            {preset.label}
           </button>
-          <span className="text-[13px] font-semibold text-white min-w-[80px] text-center">
-            {CADENCE_PRESETS.find((p) => p.hours === burstMinHours)?.label ?? `Every ${burstMinHours}h`}
-          </span>
-          <button
-            onClick={() =>
-              onChangeBurst(
-                Math.min(
-                  baseIntervalHours,
-                  burstMinHours + (burstMinHours >= 12 ? 12 : burstMinHours >= 4 ? 4 : 1)
-                )
-              )
-            }
-            className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
-          >
-            <Plus size={12} />
-          </button>
-        </div>
+        ))}
       </div>
     </div>
   );
