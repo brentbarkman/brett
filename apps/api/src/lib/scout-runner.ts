@@ -161,7 +161,7 @@ async function collectChatResponse(
 async function buildSearchQueries(
   provider: AIProvider,
   providerName: AIProviderName,
-  scout: { goal: string; context: string | null },
+  scout: { goal: string; context: string | null; sources: ScoutSource[] },
   recentFindings: Array<{ title: string; sourceUrl: string | null }>,
 ): Promise<{ queries: string[]; tokensUsed: number; tokensInput: number; tokensOutput: number; modelId: string }> {
   const model = resolveModel(providerName, "small");
@@ -173,14 +173,19 @@ async function buildSearchQueries(
       ? `\n\n<recent_findings>\n${recentFindings.map((f) => `- ${f.title}${f.sourceUrl ? ` (${f.sourceUrl})` : ""}`).join("\n")}\n</recent_findings>`
       : "";
 
+  const sourcesHint = scout.sources.length > 0
+    ? `\n- The user has specified preferred sources: ${scout.sources.map((s) => s.url ? `${s.name} (${s.url})` : s.name).join(", ")}. Use one query to target these (e.g. site:domain.com), but keep other queries open-ended for broader discovery.`
+    : "";
+
   const systemMessage =
     `You are a search query generator for a monitoring agent.\n\n` +
     `Today's date: ${today}\n\n` +
     `Generate 1-3 web search queries for the given monitoring goal. Rules:\n` +
     `- Each query should be 5-12 words, like a realistic Google search\n` +
-    `- Vary angles: one news-focused, one specific/technical, one broader discovery\n` +
+    `- Adapt query angles to the goal: if the goal is research/evidence-oriented, bias toward academic and primary-source queries (e.g. "site:pubmed.gov", "systematic review", "randomized controlled trial"). If the goal is news-oriented, bias toward news queries.\n` +
     `- Include time markers when relevant (year, month, "latest", "this week")\n` +
-    `- Avoid queries that would return results listed in <recent_findings>`;
+    `- Avoid queries that would return results listed in <recent_findings>` +
+    sourcesHint;
 
   const userMessage =
     `<user_goal>${scout.goal}</user_goal>` +
@@ -379,6 +384,13 @@ Score ALL results against the user's stated intent — not just topic relevance.
 - 0.5-0.6: Moderately relevant — useful context
 - 0.7-0.8: Highly relevant — directly informs the user's decision
 - 0.9-1.0: Critical — demands immediate attention or action
+
+## Source Quality
+When scoring, consider the authority and specificity of the source:
+- Primary sources (peer-reviewed journals, .gov, .edu, official reports, datasets) are more valuable than secondary coverage. Boost their score by ~0.1.
+- Pop-health articles, news summaries, and listicles that repackage research without adding substance should score lower than the original research they reference. Penalize by ~0.1.
+- When two results cover the same information, prefer the more authoritative source.
+- This is a tiebreaker, not a filter — a highly relevant news article still scores higher than a tangentially relevant study.
 
 ## Classification (for relevant results)
 - "insight": Analysis, data, or key information
@@ -693,7 +705,7 @@ export async function runScout(scoutId: string): Promise<void> {
     } = await buildSearchQueries(
       provider,
       providerName,
-      scout,
+      { goal: scout.goal, context: scout.context, sources: (scout.sources ?? []) as unknown as ScoutSource[] },
       recentFindings,
     );
 
