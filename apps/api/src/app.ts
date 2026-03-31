@@ -24,6 +24,7 @@ import { importRoutes } from "./routes/import.js";
 import { download } from "./routes/download.js";
 import { config } from "./routes/config.js";
 import { scouts } from "./routes/scouts.js";
+import { internalScoutsRouter } from "./routes/internal-scouts.js";
 import { startCronJobs } from "./jobs/cron.js";
 
 export const app = new Hono();
@@ -47,6 +48,9 @@ app.use(
 
 // Health check
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+// Internal routes (no auth — secret-gated)
+app.route("/internal/scouts", internalScoutsRouter);
 
 // Public routes (no auth)
 app.route("/download", download);

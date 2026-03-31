@@ -9,6 +9,7 @@ let webhookRenewalRunning = false;
 let reconciliationRunning = false;
 let granolaSyncRunning = false;
 let granolaSweepRunning = false;
+let scoutTickRunning = false;
 
 export function startCronJobs(): void {
   // SSE heartbeat — every 30 seconds
@@ -199,6 +200,25 @@ export function startCronJobs(): void {
       granolaSweepRunning = false;
     }
   });
+
+  // Scout tick — every 5 minutes
+  cron.schedule("*/5 * * * *", async () => {
+    if (scoutTickRunning) {
+      console.log("[cron] Scout tick already running, skipping");
+      return;
+    }
+    scoutTickRunning = true;
+    try {
+      const { tickScouts } = await import("../lib/scout-runner.js");
+      await tickScouts();
+    } catch (err) {
+      console.error("[cron] Scout tick failed:", err);
+    } finally {
+      scoutTickRunning = false;
+    }
+  });
+
+  console.log("[cron] Started: Scout tick (5m)");
 
   console.log(
     "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), granola post-meeting (5m), granola sweep (30m)",
