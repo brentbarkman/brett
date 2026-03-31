@@ -600,9 +600,7 @@ export function App() {
   const handleNewScout = useCallback(() => {
     omnibar.reset();
     omnibar.setInput("Create a scout to ");
-    omnibar.open("bar");
-    setSelectedItem(null);
-    setIsDetailOpen(false);
+    omnibar.open("spotlight");
   }, [omnibar]);
 
   // Open omnibar pre-filled to edit a specific scout field with Brett
@@ -610,9 +608,7 @@ export function App() {
     const scoutName = selectedScoutData?.name ?? "this scout";
     omnibar.reset();
     omnibar.setInput(`Edit scout "${scoutName}": `);
-    omnibar.open("bar");
-    setSelectedItem(null);
-    setIsDetailOpen(false);
+    omnibar.open("spotlight");
   }, [omnibar, selectedScoutData]);
 
   // Detect successful scout creation in the omnibar and navigate to the new scout
