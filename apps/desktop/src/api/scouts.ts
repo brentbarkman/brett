@@ -41,8 +41,11 @@ export function useScoutFindings(
   const qs = params.toString() ? `?${params.toString()}` : "";
 
   return useQuery({
-    queryKey: ["scout-findings", scoutId, options ?? {}],
-    queryFn: () => apiFetch<ScoutFinding[]>(`/scouts/${scoutId}/findings${qs}`),
+    queryKey: ["scout-findings", scoutId, options?.type, options?.cursor],
+    queryFn: () =>
+      apiFetch<{ findings: ScoutFinding[]; total: number; cursor: string | null }>(
+        `/scouts/${scoutId}/findings${qs}`
+      ),
     enabled: !!scoutId,
   });
 }
@@ -50,7 +53,10 @@ export function useScoutFindings(
 export function useScoutActivity(scoutId: string | null) {
   return useQuery({
     queryKey: ["scout-activity", scoutId],
-    queryFn: () => apiFetch<ActivityEntry[]>(`/scouts/${scoutId}/activity`),
+    queryFn: () =>
+      apiFetch<{ entries: ActivityEntry[]; cursor: string | null }>(
+        `/scouts/${scoutId}/activity`
+      ),
     enabled: !!scoutId,
   });
 }

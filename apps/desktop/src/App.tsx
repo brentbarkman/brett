@@ -369,8 +369,10 @@ export function App() {
   // Scout hooks
   const { data: scouts = [], isLoading: isLoadingScouts } = useScouts();
   const { data: selectedScoutData } = useScout(selectedScoutId);
-  const { data: scoutFindings = [], isLoading: isLoadingFindings } = useScoutFindings(selectedScoutId);
-  const { data: scoutActivity = [], isLoading: isLoadingActivity } = useScoutActivity(selectedScoutId);
+  const { data: findingsData, isLoading: isLoadingFindings } = useScoutFindings(selectedScoutId);
+  const scoutFindings = findingsData?.findings ?? [];
+  const { data: activityData, isLoading: isLoadingActivity } = useScoutActivity(selectedScoutId);
+  const scoutActivity = activityData?.entries ?? [];
   const pauseScout = usePauseScout();
   const resumeScout = useResumeScout();
   const updateScout = useUpdateScout();
