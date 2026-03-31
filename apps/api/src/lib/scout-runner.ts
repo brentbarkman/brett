@@ -259,14 +259,16 @@ async function executeSearches(
     }
   }
 
-  // Execute web searches
+  // Execute web searches — two passes:
+  // 1. Open-ended search (no domain filter) for broad discovery
+  // 2. Source-scoped search (domain filter) for preferred sources
+  const webProvider = getSearchProvider("web");
   for (const query of queries) {
+    // Open-ended search
     try {
-      const webProvider = getSearchProvider("web");
       const results = await webProvider.search(query, {
         maxResults: 3,
         includeContent: false,
-        domains: webDomains.length > 0 ? webDomains : undefined,
         days: options?.days,
         topic: "news",
       });
@@ -279,6 +281,27 @@ async function executeSearches(
       }
     } catch (err) {
       console.warn("[scout-runner] Web search failed for query:", query, (err as Error).message);
+    }
+  }
+
+  // Source-scoped search — run one query against preferred domains
+  if (webDomains.length > 0) {
+    try {
+      const results = await webProvider.search(queries[0]!, {
+        maxResults: 5,
+        includeContent: false,
+        domains: webDomains,
+        days: options?.days,
+      });
+      for (const result of results) {
+        const normalized = normalizeUrl(result.url);
+        if (!seenUrls.has(normalized)) {
+          seenUrls.add(normalized);
+          allResults.push(result);
+        }
+      }
+    } catch (err) {
+      console.warn("[scout-runner] Source-scoped search failed:", (err as Error).message);
     }
   }
 
@@ -335,7 +358,7 @@ async function judgeResults(
   provider: AIProvider,
   providerName: AIProviderName,
   results: SearchResult[],
-  scout: { goal: string; context: string | null; sensitivity: string; analysisTier?: string },
+  scout: { goal: string; context: string | null; sensitivity: string; analysisTier?: string; sources?: ScoutSource[] },
   threshold: number,
   recentFindings: Array<{ title: string; sourceUrl: string | null }>,
   memories: Array<{ id: string; type: string; confidence: number; content: string }>,
@@ -391,6 +414,7 @@ When scoring, consider the authority and specificity of the source:
 - Pop-health articles, news summaries, and listicles that repackage research without adding substance should score lower than the original research they reference. Penalize by ~0.1.
 - When two results cover the same information, prefer the more authoritative source.
 - This is a tiebreaker, not a filter — a highly relevant news article still scores higher than a tangentially relevant study.
+${(scout.sources ?? []).filter((s) => s.url).length > 0 ? `- The user has specified preferred sources: ${(scout.sources ?? []).filter((s) => s.url).map((s) => `${s.name} (${new URL(s.url!).hostname})`).join(", ")}. Results from these domains are higher trust — boost by ~0.05 on top of other quality signals.` : ""}
 
 ## Classification (for relevant results)
 - "insight": Analysis, data, or key information
@@ -761,7 +785,7 @@ export async function runScout(scoutId: string): Promise<void> {
       provider,
       providerName,
       searchResults,
-      scout,
+      { ...scout, sources: (scout.sources ?? []) as unknown as ScoutSource[] },
       threshold,
       recentFindings,
       activeMemories,
