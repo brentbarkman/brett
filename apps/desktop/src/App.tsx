@@ -634,14 +634,6 @@ export function App() {
     omnibar.open("spotlight");
   }, [omnibar]);
 
-  // Open omnibar pre-filled to edit a specific scout field with Brett
-  const handleEditWithBrett = useCallback((field: string) => {
-    const scoutName = selectedScoutData?.name ?? "this scout";
-    omnibar.reset();
-    omnibar.setInput(`Edit scout "${scoutName}": `);
-    omnibar.open("spotlight");
-  }, [omnibar, selectedScoutData]);
-
   // Track newly created scout for "NEW" badge
   const [newScoutId, setNewScoutId] = useState<string | null>(null);
   const newScoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -882,7 +874,6 @@ export function App() {
                   onPause={() => pauseScout.mutate(selectedScoutId)}
                   onResume={() => resumeScout.mutate(selectedScoutId)}
                   onUpdate={(data) => updateScout.mutate({ id: selectedScoutId, ...data })}
-                  onEditWithBrett={handleEditWithBrett}
                   onTriggerRun={import.meta.env.DEV ? () => { triggerRun.mutate(selectedScoutId!); setScoutRunning(true); } : undefined}
                   isRunning={scoutRunning}
                   onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}

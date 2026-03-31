@@ -10,7 +10,6 @@ import {
   ExternalLink,
   Check,
   X,
-  MessageSquare,
   Minus,
   Plus,
   Activity,
@@ -27,6 +26,7 @@ import type {
   ScoutFinding,
   ScoutMemory,
   ActivityEntry,
+  ScoutSource,
   ScoutSensitivity,
   ScoutAnalysisTier,
   UpdateScoutInput,
@@ -47,7 +47,6 @@ interface ScoutDetailProps {
   onPause: () => void;
   onResume: () => void;
   onUpdate: (data: UpdateScoutInput) => void;
-  onEditWithBrett?: (field: string) => void;
   onTriggerRun?: () => void;
   isRunning?: boolean;
   onClearHistory?: () => void;
@@ -73,7 +72,6 @@ export function ScoutDetail({
   onPause,
   onResume,
   onUpdate,
-  onEditWithBrett,
   onTriggerRun,
   isRunning,
   onClearHistory,
@@ -92,6 +90,9 @@ export function ScoutDetail({
   const [pendingAnalysisTier, setPendingAnalysisTier] = useState<ScoutAnalysisTier | null>(null);
   const [pendingCadenceBase, setPendingCadenceBase] = useState<number | null>(null);
   const [pendingBudget, setPendingBudget] = useState<number | null>(null);
+  const [pendingSources, setPendingSources] = useState<ScoutSource[] | null>(null);
+  const [newSourceName, setNewSourceName] = useState("");
+  const [newSourceUrl, setNewSourceUrl] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isCompleted = scout.status === "completed" || scout.status === "expired";
@@ -307,14 +308,26 @@ export function ScoutDetail({
             <EditableCard
               label="GOAL"
               isEditing={editingField === "goal"}
-              onEdit={() => {
-                setEditingField("goal");
-                onEditWithBrett?.("goal");
-              }}
+              onEdit={() => setEditingField("goal")}
               onCancel={() => handleCancelEdit("goal")}
-              editType="brett"
+              onSave={() => {
+                const el = document.querySelector<HTMLTextAreaElement>("[data-edit-goal]");
+                if (el) onUpdate({ goal: el.value.trim() });
+                setEditingField(null);
+              }}
+
             >
-              <p className="text-[14px] text-white/90 leading-relaxed">{scout.goal}</p>
+              {editingField === "goal" ? (
+                <textarea
+                  data-edit-goal
+                  defaultValue={scout.goal}
+                  rows={4}
+                  className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-white/90 placeholder-white/20 focus:outline-none focus:border-blue-500/30 resize-none leading-relaxed"
+                  autoFocus
+                />
+              ) : (
+                <p className="text-[14px] text-white/90 leading-relaxed">{scout.goal}</p>
+              )}
             </EditableCard>
           </div>
         </div>
@@ -328,34 +341,98 @@ export function ScoutDetail({
               isEditing={editingField === "sources"}
               onEdit={() => {
                 setEditingField("sources");
-                onEditWithBrett?.("sources");
+                setPendingSources([...scout.sources]);
               }}
-              onCancel={() => handleCancelEdit("sources")}
-              editType="brett"
+              onCancel={() => {
+                handleCancelEdit("sources");
+                setPendingSources(null);
+                setNewSourceName("");
+                setNewSourceUrl("");
+              }}
+              onSave={() => {
+                if (pendingSources && pendingSources.length > 0) {
+                  onUpdate({ sources: pendingSources });
+                }
+                setEditingField(null);
+                setPendingSources(null);
+                setNewSourceName("");
+                setNewSourceUrl("");
+              }}
+
             >
-              <div className="flex flex-wrap gap-1.5">
-                {scout.sources.map((source) =>
-                  source.url ? (
-                    <a
-                      key={source.name}
-                      href={source.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-blue-400/80 hover:text-blue-300 hover:border-blue-500/20 transition-all"
+              {editingField === "sources" && pendingSources ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {pendingSources.map((source, i) => (
+                      <span
+                        key={`${source.name}-${i}`}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50"
+                      >
+                        {source.name}
+                        <button
+                          onClick={() => setPendingSources(pendingSources.filter((_, j) => j !== i))}
+                          className="text-white/20 hover:text-red-400 transition-colors"
+                        >
+                          <X size={9} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Name"
+                      value={newSourceName}
+                      onChange={(e) => setNewSourceName(e.target.value)}
+                      className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
+                    />
+                    <input
+                      type="text"
+                      placeholder="URL (optional)"
+                      value={newSourceUrl}
+                      onChange={(e) => setNewSourceUrl(e.target.value)}
+                      className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
+                    />
+                    <button
+                      onClick={() => {
+                        if (newSourceName.trim()) {
+                          setPendingSources([...pendingSources, { name: newSourceName.trim(), url: newSourceUrl.trim() || undefined }]);
+                          setNewSourceName("");
+                          setNewSourceUrl("");
+                        }
+                      }}
+                      disabled={!newSourceName.trim()}
+                      className="px-2 py-1 rounded-lg bg-blue-600/60 hover:bg-blue-500 text-white text-[10px] font-semibold transition-colors disabled:opacity-30"
                     >
-                      {source.name}
-                      <ExternalLink size={9} className="opacity-40" />
-                    </a>
-                  ) : (
-                    <span
-                      key={source.name}
-                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.04] text-[11px] text-white/30"
-                    >
-                      {source.name}
-                    </span>
-                  )
-                )}
-              </div>
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {scout.sources.map((source) =>
+                    source.url ? (
+                      <a
+                        key={source.name}
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-blue-400/80 hover:text-blue-300 hover:border-blue-500/20 transition-all"
+                      >
+                        {source.name}
+                        <ExternalLink size={9} className="opacity-40" />
+                      </a>
+                    ) : (
+                      <span
+                        key={source.name}
+                        className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.04] text-[11px] text-white/30"
+                      >
+                        {source.name}
+                      </span>
+                    )
+                  )}
+                </div>
+              )}
             </EditableCard>
 
             {/* Sensitivity */}
@@ -365,7 +442,7 @@ export function ScoutDetail({
               onEdit={() => setEditingField("sensitivity")}
               onCancel={() => handleCancelEdit("sensitivity")}
               onSave={handleSaveSensitivity}
-              editType="inline"
+
             >
               {editingField === "sensitivity" ? (
                 <SensitivityPicker
@@ -387,7 +464,7 @@ export function ScoutDetail({
               onEdit={() => setEditingField("analysisTier")}
               onCancel={() => handleCancelEdit("analysisTier")}
               onSave={handleSaveAnalysisTier}
-              editType="inline"
+
             >
               {editingField === "analysisTier" ? (
                 <AnalysisTierPicker
@@ -413,7 +490,7 @@ export function ScoutDetail({
               onEdit={() => setEditingField("cadence")}
               onCancel={() => handleCancelEdit("cadence")}
               onSave={handleSaveCadence}
-              editType="inline"
+
             >
               {editingField === "cadence" ? (
                 <CadencePicker
@@ -441,7 +518,7 @@ export function ScoutDetail({
               onEdit={() => setEditingField("budget")}
               onCancel={() => handleCancelEdit("budget")}
               onSave={handleSaveBudget}
-              editType="inline"
+
             >
               {editingField === "budget" ? (
                 <BudgetEditor
@@ -561,7 +638,6 @@ function EditableCard({
   onEdit,
   onCancel,
   onSave,
-  editType,
 }: {
   label: string;
   children: React.ReactNode;
@@ -569,7 +645,6 @@ function EditableCard({
   onEdit: () => void;
   onCancel: () => void;
   onSave?: () => void;
-  editType: "inline" | "brett";
 }) {
   return (
     <div
@@ -606,38 +681,11 @@ function EditableCard({
             onClick={onEdit}
             className="flex items-center gap-1 px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/[0.06] text-white/30 hover:text-white/50 text-[10px] font-medium transition-all"
           >
-            {editType === "brett" ? (
-              <>
-                <MessageSquare size={10} />
-                Edit with Brett
-              </>
-            ) : (
-              <Pencil size={10} />
-            )}
+            <Pencil size={10} />
           </button>
         )}
       </div>
-
-      {isEditing && editType === "brett" ? (
-        <div className="space-y-3">
-          {children}
-          <div className="rounded-lg bg-white/[0.04] border border-white/[0.06] p-3 space-y-2">
-            <p className="text-[11px] text-white/30">What would you like to change?</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="e.g., Also watch for supply chain issues..."
-                className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2 text-[12px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30 focus:ring-1 focus:ring-blue-500/20"
-              />
-              <button className="px-3 py-2 rounded-lg bg-blue-600/80 hover:bg-blue-500 text-white text-[11px] font-semibold transition-colors flex-shrink-0">
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        children
-      )}
+      {children}
     </div>
   );
 }
