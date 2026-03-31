@@ -19,6 +19,7 @@ interface OmnibarContext {
   sessionMessages?: Array<{ role: string; content: string }>;
   currentView?: string;
   selectedItemId?: string;
+  intent?: string;
 }
 
 interface BrettThreadContext {
@@ -212,8 +213,16 @@ async function assembleOmnibar(
     // Invalid views are silently ignored (security: don't let injected view names through)
   }
 
-  const userContent = viewContext
-    ? `${viewContext}\n\n${input.message}`
+  // Add intent signal if present (e.g., user selected "Monitor" action)
+  const validIntents = new Set(["create_scout"]);
+  let intentContext = "";
+  if (input.intent && validIntents.has(input.intent)) {
+    intentContext = `[User intent: ${input.intent}]`;
+  }
+
+  const contextParts = [viewContext, intentContext].filter(Boolean).join("\n");
+  const userContent = contextParts
+    ? `${contextParts}\n\n${input.message}`
     : input.message;
 
   messages.push({ role: "user", content: userContent });

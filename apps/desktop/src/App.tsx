@@ -458,7 +458,7 @@ export function App() {
       messages: omnibar.messages,
       isStreaming: omnibar.isStreaming,
       hasAI: omnibar.hasAI,
-      onSend: (text: string) => omnibar.send(text, currentView),
+      onSend: (text: string, intent?: string) => omnibar.send(text, currentView, intent),
       onCreateTask: (title: string) => omnibar.createTask(title, currentView),
       onSearch: omnibar.searchThings,
       onNavigate: (path: string) => {
@@ -519,7 +519,7 @@ export function App() {
     () => ({
       ...omnibarProps,
       isOpen: omnibar.isOpen && omnibar.mode === "bar",
-      onSend: (text: string) => omnibar.send(text, "scouts"),
+      onSend: (text: string, intent?: string) => omnibar.send(text, "scouts", intent),
       onOpen: () => { omnibar.open("bar"); },
       weather: null,
       weatherNow: undefined,

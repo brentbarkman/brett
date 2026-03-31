@@ -31,7 +31,7 @@ brettOmnibar.post(
     const { message, sessionId, context, recentMessages: clientMessages } = body as {
       message?: unknown;
       sessionId?: unknown;
-      context?: { currentView?: string; selectedItemId?: string };
+      context?: { currentView?: string; selectedItemId?: string; intent?: string };
       recentMessages?: Array<{ role: string; content: string }>;
     };
 
@@ -95,6 +95,7 @@ brettOmnibar.post(
       sessionMessages,
       currentView: context?.currentView,
       selectedItemId: context?.selectedItemId,
+      intent: context?.intent,
     };
 
     // Build SSE stream

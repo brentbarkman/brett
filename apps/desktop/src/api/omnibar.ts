@@ -37,7 +37,7 @@ export function useOmnibar() {
   const hasAI = (aiConfigData?.configs ?? []).some((c) => c.isActive && c.isValid);
 
   const send = useCallback(
-    async (text: string, currentView?: string) => {
+    async (text: string, currentView?: string, intent?: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
 
@@ -56,7 +56,10 @@ export function useOmnibar() {
       try {
         const body: Record<string, unknown> = { message: trimmed };
         if (sessionId) body.sessionId = sessionId;
-        if (currentView) body.context = { currentView };
+        const ctx: Record<string, unknown> = {};
+        if (currentView) ctx.currentView = currentView;
+        if (intent) ctx.intent = intent;
+        if (Object.keys(ctx).length > 0) body.context = ctx;
         // Send recent messages so server has context even if DB persist hasn't completed.
         // For assistant messages, include tool result messages alongside text content
         // so the LLM has full context about what was found/discussed.

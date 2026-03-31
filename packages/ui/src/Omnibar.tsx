@@ -34,7 +34,7 @@ export interface OmnibarProps {
   messages: OmnibarMessage[];
   isStreaming: boolean;
   hasAI: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, intent?: string) => void;
   onCreateTask: (title: string) => void;
   onSearch: (query: string) => void;
   onClose: () => void;
@@ -253,7 +253,7 @@ export function Omnibar({
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "scout") {
-        onSend(`[Intent: create scout] ${input}`);
+        onSend(input, "create_scout");
       } else if (suggestion.action === "create") {
         handleCreateTask(input);
       } else if (suggestion.action === "search") {
