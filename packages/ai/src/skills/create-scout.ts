@@ -22,8 +22,8 @@ export const createScoutSkill: Skill = {
       avatarLetter: { type: "string", description: "Single letter for the avatar display" },
       avatarGradientFrom: { type: "string", description: "Hex color for avatar gradient start" },
       avatarGradientTo: { type: "string", description: "Hex color for avatar gradient end" },
-      goal: { type: "string", description: "What to monitor — the core objective (max 5000 chars). Be specific about what constitutes a relevant finding." },
-      context: { type: "string", description: "Additional context or constraints for the scout (max 5000 chars). Include domain expertise or filtering criteria." },
+      goal: { type: "string", description: "Actionable monitoring goal (max 5000 chars). Must include WHY the user cares and WHAT they'd do with the information. Bad: 'monitor Tesla stock'. Good: 'I hold a large TSLA position. Alert me when news challenges my bull thesis — delivery misses, competitive threats, regulatory risk, or insider selling.'" },
+      context: { type: "string", description: "Background the scout should know but not search for directly (max 5000 chars). E.g., user's role, portfolio, expertise level, or filtering preferences." },
       sources: {
         type: "array",
         description: "Sources to monitor (max 20). Each needs a name and optional URL. Common sources by domain: finance → Reuters, Bloomberg, SEC EDGAR, Yahoo Finance; tech → TechCrunch, Hacker News, Ars Technica, The Verge; research → PubMed, arXiv, Google Scholar; competitors → company blog, Crunchbase, LinkedIn, Product Hunt",
