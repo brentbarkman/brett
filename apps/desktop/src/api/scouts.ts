@@ -170,3 +170,19 @@ export function useClearScoutHistory() {
   });
 }
 
+export function useSubmitScoutFeedback() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scoutId, findingId, useful }: { scoutId: string; findingId: string; useful: boolean | null }) =>
+      apiFetch(`/scouts/${scoutId}/findings/${findingId}/feedback`, {
+        method: "POST",
+        body: JSON.stringify({ useful }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["thing"] });
+    },
+  });
+}
+

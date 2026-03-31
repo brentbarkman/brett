@@ -79,6 +79,7 @@ import {
   useTriggerScoutRun,
   useClearScoutHistory,
   useDeleteScout,
+  useSubmitScoutFeedback,
 } from "./api/scouts";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
@@ -381,6 +382,7 @@ export function App() {
   const triggerRun = useTriggerScoutRun();
   const clearHistory = useClearScoutHistory();
   const deleteScout = useDeleteScout();
+  const submitFeedback = useSubmitScoutFeedback();
 
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
@@ -1051,6 +1053,9 @@ export function App() {
             setSelectedScoutId(scoutId);
             handleCloseDetail();
           }}
+          onScoutFeedback={(scoutId, findingId, useful) =>
+            submitFeedback.mutate({ scoutId, findingId, useful })
+          }
           onItemClick={(id) => {
             const thing = allActiveThings.find((t) => t.id === id);
             if (thing) handleDetailDrillDown(thing);

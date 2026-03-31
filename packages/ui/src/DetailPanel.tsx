@@ -80,6 +80,7 @@ interface DetailPanelProps {
   isReprocessing?: boolean;
   onNavigateToCalendarEvent?: (calendarEventId: string) => void;
   onNavigateToScout?: (scoutId: string) => void;
+  onScoutFeedback?: (scoutId: string, findingId: string, useful: boolean | null) => void;
   onBack?: () => void;
   canGoBack?: boolean;
   onItemClick?: (id: string) => void;
@@ -136,6 +137,7 @@ export function DetailPanel({
   isReprocessing,
   onNavigateToCalendarEvent,
   onNavigateToScout,
+  onScoutFeedback,
   onBack,
   canGoBack,
   onItemClick,
@@ -211,6 +213,7 @@ export function DetailPanel({
             brettTotalCount={brettTotalCount}
             onNavigateToCalendarEvent={onNavigateToCalendarEvent}
             onNavigateToScout={onNavigateToScout}
+            onScoutFeedback={onScoutFeedback}
             onItemClick={onItemClick}
             onEventClick={onEventClick}
             onNavigate={onNavigate}
@@ -258,6 +261,7 @@ export function DetailPanel({
             onItemClick={onItemClick}
             onEventClick={onEventClick}
             onNavigateToScout={onNavigateToScout}
+            onScoutFeedback={onScoutFeedback}
             onNavigate={onNavigate}
           />
         ) : (

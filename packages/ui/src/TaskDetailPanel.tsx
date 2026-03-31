@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Calendar, CheckCircle, Radar, RotateCw, X } from "lucide-react";
+import { Calendar, CheckCircle, Radar, RotateCw, ThumbsUp, ThumbsDown, X } from "lucide-react";
 import type {
   ThingDetail,
   DueDatePrecision,
@@ -50,6 +50,7 @@ interface TaskDetailPanelProps {
   brettTotalCount?: number;
   onNavigateToCalendarEvent?: (calendarEventId: string) => void;
   onNavigateToScout?: (scoutId: string) => void;
+  onScoutFeedback?: (scoutId: string, findingId: string, useful: boolean | null) => void;
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
@@ -83,6 +84,7 @@ export function TaskDetailPanel({
   brettTotalCount,
   onNavigateToCalendarEvent,
   onNavigateToScout,
+  onScoutFeedback,
   onItemClick,
   onEventClick,
   onNavigate,
@@ -195,15 +197,43 @@ export function TaskDetailPanel({
             </button>
           )}
 
-          {/* Scout provenance */}
+          {/* Scout provenance + feedback */}
           {detail.source === "scout" && detail.scoutName && detail.scoutId && (
-            <button
-              onClick={() => onNavigateToScout?.(detail.scoutId!)}
-              className="flex items-center gap-1.5 text-xs text-blue-400/60 hover:text-blue-400 cursor-pointer transition-colors"
-            >
-              <Radar className="w-3 h-3" />
-              <span>from {detail.scoutName}</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => onNavigateToScout?.(detail.scoutId!)}
+                className="flex items-center gap-1.5 text-xs text-blue-400/60 hover:text-blue-400 cursor-pointer transition-colors"
+              >
+                <Radar className="w-3 h-3" />
+                <span>from {detail.scoutName}</span>
+              </button>
+              {detail.scoutFindingId && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => onScoutFeedback?.(detail.scoutId!, detail.scoutFindingId!, detail.scoutFeedbackUseful === true ? null : true)}
+                    className={`p-1 rounded transition-colors ${
+                      detail.scoutFeedbackUseful === true
+                        ? "text-emerald-400 bg-emerald-500/15"
+                        : "text-white/20 hover:text-white/40 hover:bg-white/[0.04]"
+                    }`}
+                    title="Useful"
+                  >
+                    <ThumbsUp className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => onScoutFeedback?.(detail.scoutId!, detail.scoutFindingId!, detail.scoutFeedbackUseful === false ? null : false)}
+                    className={`p-1 rounded transition-colors ${
+                      detail.scoutFeedbackUseful === false
+                        ? "text-red-400 bg-red-500/15"
+                        : "text-white/20 hover:text-white/40 hover:bg-white/[0.04]"
+                    }`}
+                    title="Not useful"
+                  >
+                    <ThumbsDown className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Schedule Row */}
