@@ -1,3 +1,9 @@
+export interface AirQuality {
+  aqi: number; // US EPA AQI (0-500+)
+  category: string; // "Good", "Moderate", "Unhealthy for Sensitive Groups", etc.
+  dominantPollutant?: string;
+}
+
 export interface WeatherCurrent {
   temp: number;
   feelsLike: number;
@@ -6,6 +12,7 @@ export interface WeatherCurrent {
   humidity: number;
   windSpeed: number;
   icon: string;
+  airQuality?: AirQuality;
 }
 
 export interface WeatherHourly {

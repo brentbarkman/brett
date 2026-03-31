@@ -1,121 +1,203 @@
 import type {
+  AirQuality,
   WeatherCurrent,
   WeatherHourly,
   WeatherDaily,
   GeocodingResult,
 } from "@brett/types";
 
-// ── OpenWeatherMap Condition Code → Emoji Mapping ──
-// https://openweathermap.org/weather-conditions
+// ── Google Weather API ──
+// https://developers.google.com/maps/documentation/weather
 
-function resolveOwmIcon(id: number): string {
-  if (id >= 200 && id < 300) return "\u26C8\uFE0F"; // Thunderstorm
-  if (id >= 300 && id < 400) return "\uD83C\uDF26\uFE0F"; // Drizzle
-  if (id >= 500 && id < 600) return "\uD83C\uDF27\uFE0F"; // Rain
-  if (id >= 600 && id < 700) return "\uD83C\uDF28\uFE0F"; // Snow
-  if (id >= 700 && id < 800) return "\uD83C\uDF2B\uFE0F"; // Atmosphere (fog, haze, etc.)
-  if (id === 800) return "\u2600\uFE0F"; // Clear
-  if (id === 801) return "\uD83C\uDF24\uFE0F"; // Few clouds
-  if (id === 802) return "\u26C5"; // Scattered clouds
-  if (id >= 803) return "\u2601\uFE0F"; // Broken/overcast clouds
-  return "\u2753"; // Unknown
-}
-
-// ── OpenWeatherMap One Call 3.0 API ──
-
-const OWM_BASE = "https://api.openweathermap.org/data/3.0/onecall";
+const GOOGLE_WEATHER_BASE = "https://weather.googleapis.com/v1";
+const GOOGLE_AQI_BASE = "https://airquality.googleapis.com/v1";
 const GEOCODING_BASE = "https://geocoding-api.open-meteo.com/v1/search";
 
-function getOwmApiKey(): string {
-  const key = process.env.OPENWEATHERMAP_API_KEY;
-  if (!key) throw new Error("OPENWEATHERMAP_API_KEY is not set");
+function getGoogleWeatherApiKey(): string {
+  const key = process.env.GOOGLE_WEATHER_API_KEY;
+  if (!key) throw new Error("GOOGLE_WEATHER_API_KEY is not set");
   return key;
 }
 
-interface OwmCurrentResponse {
-  dt: number;
-  temp: number;
-  feels_like: number;
-  humidity: number;
-  wind_speed: number;
-  weather: Array<{ id: number; description: string }>;
+// ── Google Weather condition type → emoji mapping ──
+
+const CONDITION_ICONS: Record<string, string> = {
+  CLEAR: "\u2600\uFE0F",
+  MOSTLY_CLEAR: "\uD83C\uDF24\uFE0F",
+  PARTLY_CLOUDY: "\u26C5",
+  MOSTLY_CLOUDY: "\u2601\uFE0F",
+  CLOUDY: "\u2601\uFE0F",
+  FOG: "\uD83C\uDF2B\uFE0F",
+  LIGHT_FOG: "\uD83C\uDF2B\uFE0F",
+  DRIZZLE: "\uD83C\uDF26\uFE0F",
+  LIGHT_RAIN: "\uD83C\uDF26\uFE0F",
+  RAIN: "\uD83C\uDF27\uFE0F",
+  HEAVY_RAIN: "\uD83C\uDF27\uFE0F",
+  SNOW: "\uD83C\uDF28\uFE0F",
+  LIGHT_SNOW: "\uD83C\uDF28\uFE0F",
+  HEAVY_SNOW: "\uD83C\uDF28\uFE0F",
+  RAIN_AND_SNOW: "\uD83C\uDF28\uFE0F",
+  SLEET: "\uD83C\uDF28\uFE0F",
+  FREEZING_RAIN: "\uD83C\uDF27\uFE0F",
+  THUNDERSTORM: "\u26C8\uFE0F",
+  HAIL: "\u26C8\uFE0F",
+  WINDY: "\uD83D\uDCA8",
+};
+
+function resolveIcon(type: string): string {
+  return CONDITION_ICONS[type] ?? "\u2753";
 }
 
-interface OwmHourlyResponse {
-  dt: number;
-  temp: number;
-  pop: number; // probability of precipitation (0-1)
-  weather: Array<{ id: number; description: string }>;
+// ── Response types ──
+
+interface GoogleTemp {
+  degrees: number;
+  unit: string;
 }
 
-interface OwmDailyResponse {
-  dt: number;
-  temp: { min: number; max: number };
-  pop: number;
-  weather: Array<{ id: number; description: string }>;
+interface GoogleWeatherCondition {
+  iconBaseUri: string;
+  description: { text: string };
+  type: string;
 }
 
-interface OwmOnecallResponse {
-  current: OwmCurrentResponse;
-  hourly: OwmHourlyResponse[];
-  daily: OwmDailyResponse[];
+interface GoogleWind {
+  speed: { value: number; unit: string };
 }
 
-/** Fetch 8-day forecast from OpenWeatherMap One Call 3.0. All temperatures returned in Celsius — conversion happens at response time. */
+interface GooglePrecipitation {
+  probability: { percent: number; type?: string };
+}
+
+interface GoogleCurrentConditions {
+  temperature: GoogleTemp;
+  feelsLikeTemperature: GoogleTemp;
+  relativeHumidity: number;
+  weatherCondition: GoogleWeatherCondition;
+  wind: GoogleWind;
+}
+
+interface GoogleForecastHour {
+  interval: { startTime: string };
+  temperature: GoogleTemp;
+  weatherCondition: GoogleWeatherCondition;
+  precipitation: GooglePrecipitation;
+}
+
+interface GoogleForecastDay {
+  displayDate: { year: number; month: number; day: number };
+  maxTemperature: GoogleTemp;
+  minTemperature: GoogleTemp;
+  daytimeForecast: {
+    weatherCondition: GoogleWeatherCondition;
+    precipitation: GooglePrecipitation;
+  };
+}
+
+// ── Google Air Quality API ──
+// https://developers.google.com/maps/documentation/air-quality
+
+interface GoogleAqiIndex {
+  code: string;
+  displayName: string;
+  aqi: number;
+  category: string;
+  dominantPollutant: string;
+}
+
+interface GoogleAqiResponse {
+  indexes?: GoogleAqiIndex[];
+}
+
+/** Fetch current AQI from Google Air Quality API. Returns null on failure (non-critical). */
+async function fetchAirQuality(latitude: number, longitude: number, key: string): Promise<AirQuality | undefined> {
+  try {
+    const res = await fetch(`${GOOGLE_AQI_BASE}/currentConditions:lookup?key=${key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: { latitude, longitude },
+        extraComputations: ["DOMINANT_POLLUTANT_CONCENTRATION"],
+      }),
+    });
+    if (!res.ok) return undefined;
+
+    const data: GoogleAqiResponse = await res.json();
+    // Prefer US EPA index, fall back to Universal AQI
+    const epa = data.indexes?.find((i) => i.code === "usa_epa");
+    const index = epa ?? data.indexes?.[0];
+    if (!index) return undefined;
+
+    return {
+      aqi: index.aqi,
+      category: index.category,
+      dominantPollutant: index.dominantPollutant,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Fetch weather + AQI from Google APIs. All temperatures returned in Celsius — conversion happens at response time. */
 export async function fetchForecast(
   latitude: number,
   longitude: number,
   _timezone: string,
 ): Promise<{ current: WeatherCurrent; hourly: WeatherHourly[]; daily: WeatherDaily[] }> {
-  const params = new URLSearchParams({
-    lat: String(latitude),
-    lon: String(longitude),
-    appid: getOwmApiKey(),
-    units: "metric",
-    exclude: "minutely,alerts",
-  });
+  const key = getGoogleWeatherApiKey();
+  const loc = `location.latitude=${latitude}&location.longitude=${longitude}`;
 
-  const res = await fetch(`${OWM_BASE}?${params}`);
-  if (!res.ok) {
-    throw new Error(`OpenWeatherMap forecast failed: ${res.status} ${res.statusText}`);
+  // Fetch weather (current, hourly, daily) + AQI in parallel
+  const [currentRes, hourlyRes, dailyRes, airQuality] = await Promise.all([
+    fetch(`${GOOGLE_WEATHER_BASE}/currentConditions:lookup?key=${key}&${loc}`),
+    fetch(`${GOOGLE_WEATHER_BASE}/forecast/hours:lookup?key=${key}&${loc}&hours=48`),
+    fetch(`${GOOGLE_WEATHER_BASE}/forecast/days:lookup?key=${key}&${loc}&days=7&pageSize=7`),
+    fetchAirQuality(latitude, longitude, key),
+  ]);
+
+  if (!currentRes.ok) {
+    throw new Error(`Google Weather current conditions failed: ${currentRes.status} ${currentRes.statusText}`);
+  }
+  if (!hourlyRes.ok) {
+    throw new Error(`Google Weather hourly forecast failed: ${hourlyRes.status} ${hourlyRes.statusText}`);
+  }
+  if (!dailyRes.ok) {
+    throw new Error(`Google Weather daily forecast failed: ${dailyRes.status} ${dailyRes.statusText}`);
   }
 
-  const data: OwmOnecallResponse = await res.json();
+  const currentData: GoogleCurrentConditions = await currentRes.json();
+  const hourlyData: { forecastHours: GoogleForecastHour[] } = await hourlyRes.json();
+  const dailyData: { forecastDays: GoogleForecastDay[] } = await dailyRes.json();
 
-  const currentWeather = data.current.weather[0];
   const current: WeatherCurrent = {
-    temp: data.current.temp,
-    feelsLike: data.current.feels_like,
-    conditionCode: currentWeather?.id ?? 0,
-    condition: currentWeather?.description ?? "Unknown",
-    humidity: data.current.humidity,
-    windSpeed: data.current.wind_speed,
-    icon: resolveOwmIcon(currentWeather?.id ?? 0),
+    temp: currentData.temperature.degrees,
+    feelsLike: currentData.feelsLikeTemperature.degrees,
+    conditionCode: 0,
+    condition: currentData.weatherCondition.description.text,
+    humidity: currentData.relativeHumidity,
+    windSpeed: currentData.wind.speed.value,
+    icon: resolveIcon(currentData.weatherCondition.type),
+    airQuality,
   };
 
-  // OWM returns 48 hours of hourly data
-  const hourly: WeatherHourly[] = data.hourly.map((h) => {
-    const w = h.weather[0];
-    return {
-      hour: new Date(h.dt * 1000).toISOString(),
-      temp: h.temp,
-      conditionCode: w?.id ?? 0,
-      icon: resolveOwmIcon(w?.id ?? 0),
-      precipProb: Math.round(h.pop * 100),
-    };
-  });
+  const hourly: WeatherHourly[] = (hourlyData.forecastHours ?? []).map((h) => ({
+    hour: h.interval.startTime,
+    temp: h.temperature.degrees,
+    conditionCode: 0,
+    icon: resolveIcon(h.weatherCondition.type),
+    precipProb: h.precipitation?.probability?.percent ?? 0,
+  }));
 
-  // OWM returns 8 days of daily data — trim to 7 for consistency
-  const daily: WeatherDaily[] = data.daily.slice(0, 7).map((d) => {
-    const w = d.weather[0];
-    const date = new Date(d.dt * 1000);
+  const daily: WeatherDaily[] = (dailyData.forecastDays ?? []).map((d) => {
+    const { year, month, day } = d.displayDate;
+    const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return {
-      date: date.toISOString().split("T")[0],
-      high: d.temp.max,
-      low: d.temp.min,
-      conditionCode: w?.id ?? 0,
-      icon: resolveOwmIcon(w?.id ?? 0),
-      precipProb: Math.round(d.pop * 100),
+      date: dateStr,
+      high: d.maxTemperature.degrees,
+      low: d.minTemperature.degrees,
+      conditionCode: 0,
+      icon: resolveIcon(d.daytimeForecast.weatherCondition.type),
+      precipProb: d.daytimeForecast.precipitation?.probability?.percent ?? 0,
     };
   });
 

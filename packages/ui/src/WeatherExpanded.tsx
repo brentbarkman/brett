@@ -1,9 +1,24 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import type { WeatherData } from "@brett/types";
+import type { WeatherData, AirQuality } from "@brett/types";
 
 interface WeatherExpandedProps {
   weather: WeatherData;
   now?: Date;
+}
+
+function aqiBadgeStyle(aqi: number): { bg: string; text: string; border: string } {
+  if (aqi <= 50) return { bg: "bg-green-500/20", text: "text-green-400", border: "border-green-500/20" };
+  if (aqi <= 100) return { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/20" };
+  return { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/20" };
+}
+
+function AqiBadge({ airQuality }: { airQuality: AirQuality }) {
+  const style = aqiBadgeStyle(airQuality.aqi);
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${style.bg} ${style.text} border ${style.border}`}>
+      AQI {airQuality.aqi}
+    </span>
+  );
 }
 
 export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps) {
@@ -114,8 +129,13 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
             <div className="text-[28px] font-semibold text-white/95 leading-none">
               {isToday ? weather.current.temp : selectedDayData?.high}°
             </div>
-            <div className="text-xs text-white/50 mt-0.5">
-              {isToday ? weather.current.condition : getDayLabel(selectedDay)}
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-xs text-white/50">
+                {isToday ? weather.current.condition : getDayLabel(selectedDay)}
+              </span>
+              {isToday && weather.current.airQuality && (
+                <AqiBadge airQuality={weather.current.airQuality} />
+              )}
             </div>
           </div>
         </div>
