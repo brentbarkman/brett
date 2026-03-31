@@ -29,6 +29,7 @@ import type {
   ScoutAnalysisTier,
   UpdateScoutInput,
 } from "@brett/types";
+import { formatRelativeTime } from "@brett/utils";
 import { ScoutCard } from "./ScoutCard";
 import { ScoutMemoryTab } from "./ScoutMemoryTab";
 
@@ -38,21 +39,6 @@ function humanizeCadence(hours: number): string {
   if (days === 1) return "Daily";
   if (days === 7) return "Weekly";
   return `Every ${days}d`;
-}
-
-function formatRelativeTime(isoString: string): string {
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return "just now";
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString();
 }
 
 interface ScoutDetailProps {

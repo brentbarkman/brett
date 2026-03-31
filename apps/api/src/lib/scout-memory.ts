@@ -156,6 +156,7 @@ function clampConfidence(value: unknown): number {
  * Apply parsed memory updates to the database.
  * Creates new ScoutMemory records for `create` actions.
  * Updates confidence for `strengthen`/`weaken` actions.
+ * Uses transactions for read-then-write safety and scoutId checks for authorization.
  */
 export async function applyMemoryUpdates(
   scoutId: string,
@@ -175,19 +176,21 @@ export async function applyMemoryUpdates(
         },
       });
     } else if (update.action === "strengthen" || update.action === "weaken") {
-      // sourceRunIds is a Json field — read-then-write to append
-      const existing = await prisma.scoutMemory.findUnique({
-        where: { id: update.memoryId },
-        select: { sourceRunIds: true },
-      });
-      const currentRunIds = Array.isArray(existing?.sourceRunIds) ? (existing.sourceRunIds as string[]) : [];
-
-      await prisma.scoutMemory.update({
-        where: { id: update.memoryId },
-        data: {
-          confidence: update.confidence,
-          sourceRunIds: [...currentRunIds, runId],
-        },
+      // Transaction: atomic read-then-write for sourceRunIds append + scoutId ownership check
+      await prisma.$transaction(async (tx) => {
+        const existing = await tx.scoutMemory.findFirst({
+          where: { id: update.memoryId, scoutId },
+          select: { sourceRunIds: true },
+        });
+        if (!existing) return;
+        const currentRunIds = Array.isArray(existing.sourceRunIds) ? (existing.sourceRunIds as string[]) : [];
+        await tx.scoutMemory.update({
+          where: { id: update.memoryId },
+          data: {
+            confidence: update.confidence,
+            sourceRunIds: [...currentRunIds, runId],
+          },
+        });
       });
     }
   }
@@ -216,29 +219,38 @@ export async function getActiveMemories(
 
 /**
  * Atomically increment consolidationRunCount and check if consolidation should run.
- * Uses raw SQL with RETURNING clause for atomic read-after-write.
+ * When the threshold is hit, the count resets to 0 in the same UPDATE — no race window
+ * for concurrent runs to trigger duplicate consolidations.
+ *
+ * RETURNING evaluates against the NEW row: if count reset to 0, shouldConsolidate is true.
  */
 export async function incrementAndCheckConsolidation(
   scoutId: string,
 ): Promise<{ shouldConsolidate: boolean; threshold: number }> {
   const result = await prisma.$queryRaw<
-    Array<{ consolidationRunCount: number; consolidationThreshold: number }>
+    Array<{ shouldConsolidate: boolean; consolidationThreshold: number }>
   >`
     UPDATE "Scout"
-    SET "consolidationRunCount" = "consolidationRunCount" + 1,
-        "updatedAt" = NOW()
+    SET
+      "consolidationRunCount" = CASE
+        WHEN "consolidationRunCount" + 1 >= "consolidationThreshold" THEN 0
+        ELSE "consolidationRunCount" + 1
+      END,
+      "updatedAt" = NOW()
     WHERE id = ${scoutId}
-    RETURNING "consolidationRunCount", "consolidationThreshold"
+    RETURNING
+      "consolidationRunCount" = 0 AS "shouldConsolidate",
+      "consolidationThreshold"
   `;
 
   if (!result || result.length === 0) {
     return { shouldConsolidate: false, threshold: 5 };
   }
 
-  const { consolidationRunCount, consolidationThreshold } = result[0]!;
+  const row = result[0]!;
   return {
-    shouldConsolidate: consolidationRunCount >= consolidationThreshold,
-    threshold: consolidationThreshold,
+    shouldConsolidate: Boolean(row.shouldConsolidate),
+    threshold: row.consolidationThreshold,
   };
 }
 
@@ -268,17 +280,17 @@ Rules:
 - Confidence should reflect how well-supported the memory is (0.0-1.0).
 - Factual memories should be verifiable statements. Judgment memories reflect user preferences. Pattern memories capture recurring behaviors.
 - Aim to keep total memories under the token budget — merge redundant memories via supersede.
+- Keep total memory under approximately 1000 tokens (~4000 characters). Each formatted memory line uses roughly 50-530 characters. Aim for at most 7-8 concise memories.
 - Consider user feedback signals when adjusting confidence.
 - When superseding, the new content should be a strict improvement — more accurate, more specific, or broader in scope.`;
 
+  // Cap memories at 2000 tokens to avoid blowing up consolidation context
   const memoryLines =
     memories.length > 0
-      ? memories
-          .map(
-            (m) =>
-              `[${m.id}] (${m.type}, confidence: ${m.confidence}, status: ${m.status}) ${m.content}`,
-          )
-          .join("\n")
+      ? formatMemoriesForPrompt(
+          memories.map((m) => ({ id: m.id, type: m.type, confidence: m.confidence, content: `(status: ${m.status}) ${m.content}` })),
+          2000,
+        ) || "(no memories yet)"
       : "(no memories yet)";
 
   const contextSection = scout.context
@@ -463,8 +475,8 @@ export async function runConsolidation(
           },
         });
 
-        await prisma.scoutMemory.update({
-          where: { id: memoryId },
+        await prisma.scoutMemory.updateMany({
+          where: { id: memoryId, scoutId },
           data: {
             status: "superseded",
             supersededBy: newMemory.id,
@@ -479,8 +491,8 @@ export async function runConsolidation(
         const memoryId = String(entry.memoryId ?? "");
         if (!activeMemoryIds.has(memoryId)) continue;
 
-        await prisma.scoutMemory.update({
-          where: { id: memoryId },
+        await prisma.scoutMemory.updateMany({
+          where: { id: memoryId, scoutId },
           data: { status: "removed" },
         });
         activeMemoryIds.delete(memoryId);
@@ -528,11 +540,10 @@ export async function runConsolidation(
       },
     });
 
-    // 10. Reset consolidation run count and set lastConsolidatedAt
+    // 10. Set lastConsolidatedAt (run count already reset atomically in incrementAndCheckConsolidation)
     await prisma.scout.update({
       where: { id: scoutId },
       data: {
-        consolidationRunCount: 0,
         lastConsolidatedAt: new Date(),
       },
     });
