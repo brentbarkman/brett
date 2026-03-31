@@ -7,6 +7,7 @@ import { apiFetch } from "./client";
 import type {
   Scout,
   ScoutFinding,
+  ScoutMemory,
   CreateScoutInput,
   UpdateScoutInput,
   ActivityEntry,
@@ -65,6 +66,19 @@ export function useScoutBudget() {
   return useQuery({
     queryKey: ["scout-budget"],
     queryFn: () => apiFetch<ScoutBudgetSummary>("/scouts/budget"),
+  });
+}
+
+export function useScoutMemories(scoutId: string | undefined, type?: string) {
+  return useQuery({
+    queryKey: ["scout-memories", scoutId, type],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (type) params.set("type", type);
+      const qs = params.toString();
+      return apiFetch<ScoutMemory[]>(`/scouts/${scoutId}/memories${qs ? `?${qs}` : ""}`);
+    },
+    enabled: !!scoutId,
   });
 }
 
@@ -186,3 +200,14 @@ export function useSubmitScoutFeedback() {
   });
 }
 
+export function useDeleteScoutMemory() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scoutId, memoryId }: { scoutId: string; memoryId: string }) =>
+      apiFetch(`/scouts/${scoutId}/memories/${memoryId}`, { method: "DELETE" }),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["scout-memories", variables.scoutId] });
+    },
+  });
+}
