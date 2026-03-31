@@ -1,6 +1,6 @@
 # Scout Memory System
 
-Scouts develop their own memory over time, improving judgment, tracking trends, and learning user preferences from feedback signals. Inspired by Claude Code's Dreams architecture — accumulate raw signal per run, periodically consolidate into durable memories via batch API.
+Scouts develop their own memory over time, improving judgment, tracking trends, and learning user preferences from feedback signals. Inspired by Claude Code's Dreams architecture — accumulate raw signal per run, periodically consolidate into durable memories. Batch API is a future optimization; v1 uses synchronous LLM calls via the existing `AIProvider.chat()` path.
 
 ## Data Model
 
@@ -17,11 +17,16 @@ Scouts develop their own memory over time, improving judgment, tracking trends, 
 | type | enum: factual, judgment, pattern | Memory category |
 | content | string (max 500) | LLM-generated memory text |
 | confidence | float (0-1) | Strengthened/weakened over time |
-| sourceRunIds | Json (string[]) | Which runs contributed |
-| supersededBy | string? | FK → ScoutMemory (self-ref), null = active |
-| supersededAt | DateTime? | When replaced |
+| sourceRunIds | Json (string[]) | Which runs contributed (see Population Rules below) |
+| status | enum: active, superseded, removed, user_deleted | Memory lifecycle state |
+| supersededBy | string? | ID of the memory that replaced this one (audit trail, not a FK constraint) |
+| supersededAt | DateTime? | When replaced/removed |
 
-Active memories: `WHERE scoutId = ? AND supersededBy IS NULL` ordered by confidence desc.
+Active memories: `WHERE scoutId = ? AND status = 'active'` ordered by confidence desc.
+
+**sourceRunIds population rules:**
+- Per-run creates: contains the current run's ID only
+- Consolidation creates/supersedes: contains all run IDs processed in that consolidation cycle (runs since `lastConsolidatedAt`)
 
 #### ScoutConsolidation
 
@@ -39,8 +44,8 @@ Active memories: `WHERE scoutId = ? AND supersededBy IS NULL` ordered by confide
 | tokensInput | int? | Input tokens |
 | tokensOutput | int? | Output tokens |
 | modelId | string? | Model used |
-| isBatch | boolean (default true) | Batch API vs regular |
-| batchRequestId | string? | Anthropic batch API request ID |
+| isBatch | boolean (default false) | Batch API vs regular (v1 always false, future optimization) |
+| batchRequestId | string? | Anthropic batch API request ID (future) |
 | status | enum: pending, processing, completed, failed | Async status |
 
 ### Changes to Existing Tables
@@ -74,7 +79,7 @@ Active memories: `WHERE scoutId = ? AND supersededBy IS NULL` ordered by confide
 | tokensOutput | int? | Output tokens |
 | modelId | string? | Model used (e.g., "claude-sonnet-4-6") |
 
-Existing `tokensUsed` field kept for backwards compatibility (total).
+Existing `tokensUsed` field kept for backwards compatibility (total). Modify `collectChatResponse()` in scout-runner.ts to return `{ text, tokensInput, tokensOutput, tokensUsed }` — the underlying `StreamChunk` done event already provides `usage.input` and `usage.output` separately.
 
 ### New Enums
 
@@ -83,6 +88,13 @@ enum ScoutMemoryType {
   factual
   judgment
   pattern
+}
+
+enum ScoutMemoryStatus {
+  active
+  superseded
+  removed
+  user_deleted
 }
 
 enum ScoutConsolidationStatus {
@@ -103,6 +115,15 @@ enum ScoutConsolidationStatus {
 4. Clicking one sends feedback to the API; clicking the same button again deselects (sets to null)
 5. Button state persists across panel opens
 
+### Data Path: Item → Finding
+
+The item detail panels need to know the finding ID and current feedback state. Extend `ThingDetail` (the type used by detail panels) with:
+
+- `scoutFindingId?: string` — the ScoutFinding that created this item
+- `scoutFeedbackUseful?: boolean | null` — current feedback state
+
+The items API resolves these by joining through `ScoutFinding WHERE itemId = item.id` when `source === 'scout'`. The detail panels use these fields to render button state and call the feedback endpoint.
+
 ### API Endpoint
 
 ```
@@ -110,6 +131,8 @@ POST /scouts/:id/findings/:findingId/feedback
 Body: { useful: boolean | null }
 Response: updated ScoutFinding
 ```
+
+Same auth/ownership pattern as existing finding endpoints: validate `scoutId` matches the finding's `scoutId` and the authenticated user owns the scout.
 
 ### What Consolidation Sees
 
@@ -128,18 +151,22 @@ The LLM synthesizes patterns ("user finds policy documents useful but not opinio
 
 ### Memory Injection
 
-The existing judgment LLM prompt (step 6 in scout-runner.ts) gains a new section between `context` and search results:
+The judgment function in scout-runner.ts (the `judgeResults` call that evaluates search results) gains a new prompt section between `context` and search results:
 
 ```
 ## Your Memory
-{active memories, ordered by confidence, up to ~1000 tokens}
+[mem_abc123] (factual, confidence: 0.9) EU AI Act entered into force August 1, 2024
+[mem_def456] (judgment, confidence: 0.8) User prefers policy documents over opinion pieces
+[mem_ghi789] (pattern, confidence: 0.7) Coverage shifting from broad policy to sector-specific rules
 
 Use this knowledge to inform your judgment. Do not re-discover things you already know.
 ```
 
+Each memory is prefixed with its ID so the LLM can reference specific memories in its response. Token budget: ~1000 tokens, estimated at character count / 4.
+
 ### Memory Extraction
 
-The judgment response schema is extended with one new field:
+The existing `JUDGMENT_SCHEMA` (which uses `additionalProperties: false`) is extended with one new field — `memoryUpdates`:
 
 ```json
 {
@@ -161,13 +188,25 @@ Three per-run actions:
 
 No deletion at this stage — consolidation handles that.
 
+**Validation:** All returned `memoryId` values must be validated — confirm they exist and belong to this scout. Skip invalid IDs silently.
+
+`memoryUpdates` must be added to both `properties` and `required` in the `JUDGMENT_SCHEMA` (which uses `additionalProperties: false`). Empty array is the base case when the LLM has no memory updates.
+
 ### Cost Impact
 
 No extra LLM call. Memory is injected into the existing judgment prompt (~1000 tokens added) and extracted from the same response.
 
 ### Run Count Tracking
 
-After processing memory updates, increment `Scout.consolidationRunCount`. If it hits `consolidationThreshold`, fire consolidation (async batch API) and reset counter.
+After processing memory updates, atomically increment `Scout.consolidationRunCount`:
+
+```sql
+-- Use prisma.$queryRaw (not $executeRaw) to get the RETURNING value
+UPDATE Scout SET consolidationRunCount = consolidationRunCount + 1
+WHERE id = ? RETURNING consolidationRunCount
+```
+
+If the returned value equals `consolidationThreshold`, fire consolidation and reset counter. The atomic increment-and-check prevents race conditions from concurrent runs.
 
 ## Consolidation Pass
 
@@ -178,10 +217,10 @@ After processing memory updates, increment `Scout.consolidationRunCount`. If it 
 ### Consolidation Prompt Input
 
 1. Scout identity — goal, context, sources
-2. All active memories — current state
+2. All active memories (with IDs) — current state
 3. Feedback since last consolidation — useful/not-useful signals with finding details
 4. Run summaries since last consolidation — findings, relevance scores, queries used
-5. Instruction — "Synthesize into durable memories. Stay within ~1000 tokens of total memory."
+5. Instruction — "Synthesize into durable memories. Stay within ~1000 tokens of total memory (estimated at character count / 4)."
 
 ### Output Schema
 
@@ -197,21 +236,54 @@ After processing memory updates, increment `Scout.consolidationRunCount`. If it 
 ```
 
 Four consolidation actions:
-- **create** — new synthesized memory
-- **supersede** — replace existing with refined version (old gets `supersededBy` set)
+- **create** — new synthesized memory (status: active)
+- **supersede** — replace existing with refined version (old memory → status: superseded, supersededBy: new memory ID)
 - **keep** — retain unchanged
-- **remove** — mark superseded with no replacement
+- **remove** — mark as removed (status: removed, no replacement needed)
 
-### Batch API Flow
+**Validation:** All `memoryId` values validated against active memories for this scout. Invalid IDs skipped.
 
-1. Runner hits threshold → create `ScoutConsolidation(status: pending)`, submit batch request, store `batchRequestId`
-2. Existing `tickScouts()` cron (5-minute interval) polls pending consolidations via batch API status endpoint
-3. Complete → process response, apply memory mutations, update to `status: completed` with token metrics
-4. Failed → mark `status: failed`, don't reset run counter (retries at next threshold)
+### Execution (v1: Synchronous)
+
+V1 uses synchronous `AIProvider.chat()` — the same path as scout runs. The consolidation function runs as fire-and-forget after the scout run completes:
+
+1. Runner hits threshold → create `ScoutConsolidation(status: pending)`, reset `consolidationRunCount` to 0
+2. Call `AIProvider.chat()` with consolidation prompt
+3. Process response → apply memory mutations → update consolidation to `status: completed` with token metrics
+4. Failed → mark `status: failed` (consolidation will be retried when the next threshold is hit)
+
+**Future optimization (batch API):** For Anthropic-provider users, consolidation can be submitted via the Messages Batch API for 50% cost savings. This requires adding a batch method to the Anthropic provider (bypassing the generic `AIProvider` abstraction since batch is Anthropic-specific) and a polling step in `tickScouts()`. The `isBatch` and `batchRequestId` fields on ScoutConsolidation support this future path.
 
 ### Token Budget Hard Cap
 
-After applying mutations, if active memories exceed ~1000 tokens, drop lowest-confidence memories by setting `supersededBy` to the consolidation ID. Safety net — the LLM should self-regulate, but this prevents unbounded growth.
+After applying mutations, count active memories. If total estimated tokens (character count / 4) exceed 1000, drop lowest-confidence memories by setting status to `removed`. Safety net — the LLM should self-regulate, but this prevents unbounded growth.
+
+## Memory API Endpoints
+
+All endpoints require auth via `authMiddleware`. Same ownership validation pattern as existing scout routes.
+
+### List Active Memories
+
+```
+GET /scouts/:id/memories
+Query: ?type=factual|judgment|pattern (optional filter)
+Response: ScoutMemory[] (status = active, ordered by type then confidence desc)
+```
+
+### Delete Memory
+
+```
+DELETE /scouts/:id/memories/:memoryId
+Effect: Sets memory status to user_deleted, supersededAt to now
+Response: 204 No Content
+```
+
+### Get Consolidation History
+
+```
+GET /scouts/:id/consolidations
+Response: ScoutConsolidation[] (ordered by createdAt desc, paginated)
+```
 
 ## Memory Visibility UI
 
@@ -238,7 +310,7 @@ Grouped by type (Factual Knowledge, Judgment & Preferences, Patterns & Trends), 
 ### Interaction
 
 - View and delete only — no edit, no manual add
-- Deleting a memory sets `supersededBy` to a sentinel value (or a dedicated "user_deleted" marker) so it's excluded from active queries but retains audit trail
+- Deleting a memory calls `DELETE /scouts/:id/memories/:memoryId` which sets status to `user_deleted`
 - The `context` field on the scout handles manual user input
 
 ## Cleanup: Removing Dead Weight
@@ -246,11 +318,27 @@ Grouped by type (Factual Knowledge, Judgment & Preferences, Patterns & Trends), 
 ### API Endpoints — Remove
 
 - `POST /scouts/:id/findings/:findingId/dismiss`
-- `POST /scouts/:id/findings/:findingId/promote`
+- `POST /scouts/:id/findings/:findingId/promote` (vestigial — all findings are auto-promoted at run time, promote endpoint is guarded by `if (finding.itemId) return conflict` and never reachable)
 
 ### Database — Remove
 
 - `ScoutFinding.dismissed` field
+
+### Backend Query Updates
+
+Remove `{ where: { dismissed: false } }` from all `_count` queries in scouts.ts — this filter appears in:
+- `GET /scouts` (findings count)
+- `GET /scouts/:id` (findings count)
+- `PUT /scouts/:id` (findings count)
+- `POST /scouts/:id/pause` (findings count)
+- `POST /scouts/:id/resume` (findings count)
+- `GET /scouts/:id/findings` (total count)
+
+### Type Updates
+
+- Remove `dismissed: boolean` from `ScoutFinding` in `@brett/types`
+- Add `feedbackUseful?: boolean | null` and `feedbackAt?: string` to `ScoutFinding` in `@brett/types`
+- Add `scoutFindingId?: string` and `scoutFeedbackUseful?: boolean | null` to `ThingDetail` in `@brett/types`
 
 ### UI — Remove
 
@@ -258,10 +346,23 @@ Grouped by type (Factual Knowledge, Judgment & Preferences, Patterns & Trends), 
 - `useDismissFinding()` and `usePromoteFinding()` mutation hooks
 - `.filter((f) => !f.dismissed)` in ScoutDetail findings rendering — show all findings
 
+### UI — Add
+
+- `useScoutMemories(scoutId)` query hook
+- `useDeleteScoutMemory()` mutation hook
+- `useSubmitScoutFeedback()` mutation hook
+- Memory tab component in ScoutDetail
+- Feedback buttons in TaskDetailPanel and ContentDetailPanel
+
+### Update Clear History
+
+`DELETE /scouts/:id/history` must also delete `ScoutMemory` and `ScoutConsolidation` records for the scout, and reset `consolidationRunCount` to 0.
+
 ### Keep
 
 - `ScoutFinding.itemId` — needed for finding → item linkage and feedback pipeline
-- Auto-promote logic in scout runner (step 7) — findings still land in inbox as Items
+- Auto-promote logic in scout runner — findings still land in inbox as Items
+- `ScoutRun.dismissedCount` — still valid, describes sub-threshold results from the LLM judgment (not user-dismissed findings). Name is slightly misleading but changing it is a separate concern.
 - Scout provenance display on item detail panels
 
 ## Token Tracking
@@ -271,4 +372,6 @@ All LLM calls track granular token usage:
 - **ScoutRun**: `tokensUsed` (total, backwards compat) + `tokensInput`, `tokensOutput`, `modelId`
 - **ScoutConsolidation**: `tokensUsed`, `tokensInput`, `tokensOutput`, `modelId`, `isBatch`
 
-The `isBatch` flag on consolidations enables accurate cost calculation (same tokens, 50% price via batch API).
+The `isBatch` flag on consolidations enables accurate cost calculation (same tokens, 50% price via batch API). V1 is always `false`.
+
+Token estimation for memory budgeting uses character count / 4 as a rough heuristic. Exact tokenization is unnecessary for this purpose.
