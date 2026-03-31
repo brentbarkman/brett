@@ -507,6 +507,7 @@ export interface ScoutBudgetSummary {
 }
 
 export type {
+  AirQuality,
   WeatherCurrent,
   WeatherHourly,
   WeatherDaily,

@@ -436,6 +436,10 @@ async function assembleBriefing(
       if (daily && typeof daily.high === "number" && typeof daily.low === "number") {
         weatherBlock += `\nToday: High ${convert(daily.high as number)}\u00B0${unitLabel}, Low ${convert(daily.low as number)}\u00B0${unitLabel}, ${daily.precipProb ?? 0}% chance of rain`;
       }
+      const airQuality = current.airQuality as { aqi?: number; category?: string } | undefined;
+      if (airQuality && typeof airQuality.aqi === "number") {
+        weatherBlock += `\nAir Quality: AQI ${airQuality.aqi} (${airQuality.category ?? "Unknown"})`;
+      }
       dataParts.push(weatherBlock);
     }
   }
