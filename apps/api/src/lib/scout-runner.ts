@@ -9,6 +9,7 @@ import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, ScoutSource, FindingType } from "@brett/types";
 import { humanizeCadence, detectContentType } from "@brett/utils";
 import type { Prisma } from "@prisma/client";
+import { getActiveMemories, formatMemoriesForPrompt, parseMemoryUpdates, applyMemoryUpdates, incrementAndCheckConsolidation, runConsolidation } from "./scout-memory.js";
 
 // ── Constants ──
 
@@ -58,8 +59,23 @@ const JUDGMENT_SCHEMA = {
     cadenceRecommendation: { type: "string" as const, enum: ["elevate", "maintain", "relax"] },
     cadenceReason: { type: "string" as const },
     reasoning: { type: "string" as const },
+    memoryUpdates: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          action: { type: "string" as const, enum: ["create", "strengthen", "weaken"] },
+          type: { type: "string" as const, enum: ["factual", "judgment", "pattern"] },
+          memoryId: { type: "string" as const },
+          content: { type: "string" as const },
+          confidence: { type: "number" as const },
+        },
+        required: ["action"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["findings", "cadenceRecommendation", "cadenceReason", "reasoning"],
+  required: ["findings", "cadenceRecommendation", "cadenceReason", "reasoning", "memoryUpdates"],
   additionalProperties: false,
 };
 
@@ -307,6 +323,7 @@ interface JudgmentResult {
   tokensOutput: number;
   modelId: string;
   evaluatedCount: number;
+  memoryUpdates: unknown[];
 }
 
 async function judgeResults(
@@ -316,6 +333,7 @@ async function judgeResults(
   scout: { goal: string; context: string | null; sensitivity: string; analysisTier?: string },
   threshold: number,
   recentFindings: Array<{ title: string; sourceUrl: string | null }>,
+  memories: Array<{ id: string; type: string; confidence: number; content: string }>,
 ): Promise<JudgmentResult> {
   const tier = scout.analysisTier === "deep" ? "medium" : "small";
   const model = resolveModel(providerName, tier);
@@ -337,6 +355,7 @@ async function judgeResults(
       tokensOutput: 0,
       modelId: model,
       evaluatedCount: 0,
+      memoryUpdates: [],
     };
   }
 
@@ -383,10 +402,15 @@ Return a JSON object with: findings (array of {type, title, description, sourceU
     )
     .join("\n\n");
 
+  const memorySection = memories.length > 0
+    ? `\n\n## Your Memory\n${formatMemoriesForPrompt(memories)}\n\nUse this knowledge to inform your judgment. Do not re-discover things you already know.`
+    : "";
+
   const userMessage =
     `<user_goal>${scout.goal}</user_goal>` +
     (scout.context ? `\n<user_context>${scout.context}</user_context>` : "") +
     recentFindingsList +
+    memorySection +
     `\n\nSearch results to evaluate:\n${resultsText}`;
 
   const { text, tokensUsed, tokensInput, tokensOutput } = await collectChatResponse(provider, {
@@ -414,6 +438,7 @@ Return a JSON object with: findings (array of {type, title, description, sourceU
       tokensOutput,
       modelId: model,
       evaluatedCount: dedupedResults.length,
+      memoryUpdates: [],
     };
   }
 
@@ -462,6 +487,7 @@ Return a JSON object with: findings (array of {type, title, description, sourceU
     tokensOutput,
     modelId: model,
     evaluatedCount: dedupedResults.length,
+    memoryUpdates: Array.isArray(parsed.memoryUpdates) ? parsed.memoryUpdates : [],
   };
 }
 
@@ -711,6 +737,7 @@ export async function runScout(scoutId: string): Promise<void> {
 
     // 9. LLM judgment
     const threshold = SENSITIVITY_THRESHOLDS[scout.sensitivity] ?? 0.5;
+    const activeMemories = await getActiveMemories(scout.id);
     const judgment = await judgeResults(
       provider,
       providerName,
@@ -718,6 +745,7 @@ export async function runScout(scoutId: string): Promise<void> {
       scout,
       threshold,
       recentFindings,
+      activeMemories,
     );
 
     const totalTokens = queryTokens + judgment.tokensUsed;
@@ -847,7 +875,23 @@ export async function runScout(scoutId: string): Promise<void> {
       });
     }
 
-    // 12. Budget alerts
+    // 12. Process memory updates from judgment
+    if (judgment.memoryUpdates && Array.isArray(judgment.memoryUpdates)) {
+      const validMemoryIds = new Set(activeMemories.map((m) => m.id));
+      const parsed = parseMemoryUpdates(judgment.memoryUpdates, validMemoryIds);
+      await applyMemoryUpdates(scout.id, run.id, parsed);
+    }
+
+    // 12b. Check consolidation threshold
+    const { shouldConsolidate } = await incrementAndCheckConsolidation(scout.id);
+    if (shouldConsolidate) {
+      // Fire-and-forget consolidation
+      runConsolidation(scout.id, provider, providerName, collectChatResponse, extractJSON).catch((err) =>
+        console.error(`[scout-runner] Consolidation failed for scout ${scout.id}:`, err),
+      );
+    }
+
+    // 13. Budget alerts
     await checkBudgetAlerts({
       id: scout.id,
       userId: scout.userId,
@@ -856,7 +900,7 @@ export async function runScout(scoutId: string): Promise<void> {
       budgetTotal: updatedScout.budgetTotal,
     });
 
-    // 13. Finalize run as success
+    // 14. Finalize run as success
     await finalizeRun("success", {
       searchQueries: queries,
       resultCount: searchResults.length,
@@ -869,7 +913,7 @@ export async function runScout(scoutId: string): Promise<void> {
       modelId: judgment.modelId,
     });
 
-    // 14. SSE notification
+    // 15. SSE notification
     publishSSE(scout.userId, {
       type: "scout.run.completed",
       payload: {
