@@ -29,11 +29,17 @@ export function useWeather(enabled: boolean = true) {
 
   const query = useQuery({
     queryKey: ["weather"],
-    queryFn: () => apiFetch<WeatherResponse>("/weather"),
+    queryFn: async () => {
+      const res = await apiFetch<WeatherResponse>("/weather");
+      if (!res.weather) throw new Error(res.reason ?? "Weather unavailable");
+      return res;
+    },
     enabled,
     staleTime: 5 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: 30_000, // 30s between retries for transient API failures
   });
 
   const raw = query.data?.weather ?? null;

@@ -307,24 +307,14 @@ function ArticlePreview({
   );
 }
 
-// Trusted origins for PDF iframe rendering. Only presigned S3 URLs (Railway storage)
-// and well-known PDF hosts are allowed. This must stay in sync with frame-src CSP.
-const TRUSTED_PDF_ORIGINS = [
-  "https://brett.s3.",             // Railway object storage
-  "https://s3.",                    // Generic S3
-  "https://storage.googleapis.com", // GCS
-];
-
 function PdfPreview({ sourceUrl, attachmentUrl }: { sourceUrl?: string; attachmentUrl?: string }) {
-  // Prefer presigned S3 URL (drag-dropped PDFs), fall back to source URL
+  // Prefer presigned S3 URL (drag-dropped PDFs), fall back to source URL.
+  // CSP frame-src is the real enforcement boundary for which origins can be iframed.
   const pdfUrl = attachmentUrl ?? sourceUrl;
   if (!pdfUrl) return null;
   try {
     const u = new URL(pdfUrl);
     if (u.protocol !== "https:") return null;
-    // Only allow trusted origins — arbitrary URLs in an iframe are a security risk
-    const isTrusted = TRUSTED_PDF_ORIGINS.some((origin) => pdfUrl.startsWith(origin));
-    if (!isTrusted && !attachmentUrl) return null; // presigned S3 URLs (attachmentUrl) are always trusted
   } catch { return null; }
 
   return (
