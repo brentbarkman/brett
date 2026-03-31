@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { slugify, getEventGlassColor } from "@brett/utils";
 import { getEndOfWeekUTC } from "@brett/business";
@@ -642,6 +642,10 @@ export function App() {
     omnibar.open("spotlight");
   }, [omnibar, selectedScoutData]);
 
+  // Track newly created scout for "NEW" badge
+  const [newScoutId, setNewScoutId] = useState<string | null>(null);
+  const newScoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Detect successful scout creation in the omnibar and navigate to the new scout
   useEffect(() => {
     for (const msg of omnibar.messages) {
@@ -650,7 +654,14 @@ export function App() {
         if (tc.name === "create_scout" && tc.result) {
           const result = tc.result as { success?: boolean; data?: { id?: string } };
           if (result.success && result.data?.id) {
-            setSelectedScoutId(result.data.id);
+            const scoutId = result.data.id;
+            setSelectedScoutId(scoutId);
+            // Collapse omnibar back to bar on the scouts page
+            omnibar.reset();
+            // Show "NEW" badge that fades after 5 seconds
+            setNewScoutId(scoutId);
+            if (newScoutTimerRef.current) clearTimeout(newScoutTimerRef.current);
+            newScoutTimerRef.current = setTimeout(() => setNewScoutId(null), 5000);
           }
         }
       }
@@ -889,6 +900,7 @@ export function App() {
                   onSelectScout={handleSelectScout}
                   isLoading={isLoadingScouts}
                   omnibarProps={scoutsOmnibarProps}
+                  newScoutId={newScoutId}
                 />
               )
             } />

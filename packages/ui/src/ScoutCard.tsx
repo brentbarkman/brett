@@ -1,15 +1,16 @@
 import React from "react";
 import type { Scout } from "@brett/types";
-import { humanizeCadence } from "@brett/utils";
+import { humanizeCadence, formatRelativeTime } from "@brett/utils";
 
 interface ScoutCardProps {
   scout: Scout;
   onClick: () => void;
   isSelected?: boolean;
+  isNew?: boolean;
   variant?: "full" | "compact";
 }
 
-export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: ScoutCardProps) {
+export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" }: ScoutCardProps) {
   const isCompleted = scout.status === "completed" || scout.status === "expired";
 
   if (variant === "compact") {
@@ -84,10 +85,15 @@ export function ScoutCard({ scout, onClick, isSelected, variant = "full" }: Scou
         <div className="flex items-center gap-2.5">
           <span className="text-[15px] font-semibold text-white truncate">{scout.name}</span>
           <StatusBadge status={scout.status} />
+          {isNew && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-500/20 text-[10px] font-semibold text-blue-400 border border-blue-500/20 animate-pulse">
+              NEW
+            </span>
+          )}
         </div>
         <p className="text-[13px] text-white/30 line-clamp-1">{scout.goal}</p>
         <div className="flex items-center gap-3 text-[11px] text-white/30 font-medium">
-          <span>Last run: {scout.lastRun ?? "Never"}</span>
+          <span>Last run: {scout.lastRun ? formatRelativeTime(scout.lastRun) : "Never"}</span>
           <span className="text-white/10">·</span>
           <span>{scout.findingsCount} findings</span>
           <span className="text-white/10">·</span>

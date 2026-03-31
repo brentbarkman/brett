@@ -10,9 +10,10 @@ interface ScoutsRosterProps {
   onNewScout?: () => void;
   isLoading?: boolean;
   omnibarProps?: OmnibarProps;
+  newScoutId?: string | null;
 }
 
-export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omnibarProps }: ScoutsRosterProps) {
+export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omnibarProps, newScoutId }: ScoutsRosterProps) {
   const activeScouts = scouts.filter((s) => s.status === "active" || s.status === "paused");
   const inactiveScouts = scouts.filter((s) => s.status === "completed" || s.status === "expired");
 
@@ -93,6 +94,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
                 key={scout.id}
                 scout={scout}
                 onClick={() => onSelectScout(scout)}
+                isNew={scout.id === newScoutId}
               />
             ))}
           </div>
