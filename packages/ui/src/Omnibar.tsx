@@ -211,7 +211,7 @@ export function Omnibar({
       if (showScoutAction && hasAI) {
         suggestions.push({
           id: "scout",
-          label: `Create Scout: "${input}"`,
+          label: `Monitor: "${input}"`,
           icon: <Radar size={14} className="text-blue-400" />,
           action: "scout",
         });
@@ -250,8 +250,10 @@ export function Omnibar({
   const handleSuggestionSelect = useCallback(
     (suggestion: Suggestion) => {
       setForcedAction(null);
-      if (suggestion.action === "ask" || suggestion.action === "scout") {
+      if (suggestion.action === "ask") {
         onSend(input);
+      } else if (suggestion.action === "scout") {
+        onSend(`[Intent: create scout] ${input}`);
       } else if (suggestion.action === "create") {
         handleCreateTask(input);
       } else if (suggestion.action === "search") {
