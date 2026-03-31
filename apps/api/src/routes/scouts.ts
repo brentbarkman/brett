@@ -630,4 +630,110 @@ scouts.get("/:id/activity", async (c) => {
   return c.json({ entries: page, cursor: nextCursor });
 });
 
+// GET /scouts/:id/memories — list active memories
+scouts.get("/:id/memories", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  const { type } = c.req.query();
+  const where: Record<string, unknown> = { scoutId: id, status: "active" };
+  if (type === "factual" || type === "judgment" || type === "pattern") {
+    where.type = type;
+  }
+
+  const memories = await prisma.scoutMemory.findMany({
+    where,
+    orderBy: [{ type: "asc" }, { confidence: "desc" }],
+  });
+
+  return c.json(memories.map((m) => ({
+    id: m.id,
+    scoutId: m.scoutId,
+    type: m.type,
+    content: m.content,
+    confidence: m.confidence,
+    sourceRunIds: m.sourceRunIds,
+    status: m.status,
+    createdAt: m.createdAt.toISOString(),
+    updatedAt: m.updatedAt.toISOString(),
+  })));
+});
+
+// DELETE /scouts/:id/memories/:memoryId — user-delete a memory
+scouts.delete("/:id/memories/:memoryId", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const memoryId = c.req.param("memoryId");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  const memory = await prisma.scoutMemory.findFirst({
+    where: { id: memoryId, scoutId: id, status: "active" },
+  });
+  if (!memory) return c.json({ error: "Memory not found" }, 404);
+
+  await prisma.scoutMemory.update({
+    where: { id: memoryId },
+    data: { status: "user_deleted", supersededAt: new Date() },
+  });
+
+  return c.body(null, 204);
+});
+
+// GET /scouts/:id/consolidations — consolidation history
+scouts.get("/:id/consolidations", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  const { cursor, limit: limitParam } = c.req.query();
+  const limit = Math.min(parseInt(limitParam ?? "20", 10) || 20, 50);
+
+  const where: Record<string, unknown> = { scoutId: id };
+  if (cursor) {
+    where.createdAt = { lt: new Date(cursor) };
+  }
+
+  const rows = await prisma.scoutConsolidation.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+
+  return c.json({
+    consolidations: rows.map((r) => ({
+      id: r.id,
+      scoutId: r.scoutId,
+      runsSinceLastConsolidation: r.runsSinceLastConsolidation,
+      memoriesBefore: r.memoriesBefore,
+      memoriesAfter: r.memoriesAfter,
+      memoriesCreated: r.memoriesCreated,
+      memoriesSuperseded: r.memoriesSuperseded,
+      tokensUsed: r.tokensUsed,
+      tokensInput: r.tokensInput,
+      tokensOutput: r.tokensOutput,
+      modelId: r.modelId,
+      isBatch: r.isBatch,
+      status: r.status,
+      createdAt: r.createdAt.toISOString(),
+    })),
+    cursor: rows.length === limit ? rows[rows.length - 1].createdAt.toISOString() : null,
+  });
+});
+
 export { scouts };
