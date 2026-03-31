@@ -3,7 +3,7 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 import { publishSSE } from "../lib/sse.js";
-import type { Scout, ScoutSource, CreateScoutInput } from "@brett/types";
+import type { Scout, ScoutSource, CreateScoutInput, ScoutFinding, ActivityEntry, ScoutBudgetSummary, ScoutRunStatus, ScoutActivityType } from "@brett/types";
 
 const scouts = new Hono<AuthEnv>();
 
@@ -156,6 +156,42 @@ scouts.post("/", async (c) => {
   return c.json(serializeScout(created, { findingsCount: 0 }), 201);
 });
 
+// GET /scouts/budget — budget summary for user's scouts (must be before /:id)
+scouts.get("/budget", async (c) => {
+  const user = c.get("user");
+
+  const now = new Date();
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+  const userScouts = await prisma.scout.findMany({
+    where: { userId: user.id },
+    select: { id: true, name: true, budgetUsed: true, budgetTotal: true },
+  });
+
+  const scoutIds = userScouts.map((s) => s.id);
+
+  const runsThisMonth = await prisma.scoutRun.findMany({
+    where: {
+      scoutId: { in: scoutIds },
+      status: "success",
+      createdAt: { gte: startOfMonth },
+    },
+    select: { scoutId: true },
+  });
+
+  const summary: ScoutBudgetSummary = {
+    totalRunsThisMonth: runsThisMonth.length,
+    scouts: userScouts.map((s) => ({
+      id: s.id,
+      name: s.name,
+      budgetUsed: s.budgetUsed,
+      budgetTotal: s.budgetTotal,
+    })),
+  };
+
+  return c.json(summary);
+});
+
 // GET /scouts/:id — scout detail
 scouts.get("/:id", async (c) => {
   const user = c.get("user");
@@ -268,6 +304,308 @@ scouts.delete("/:id", async (c) => {
   publishSSE(user.id, { type: "scout.status.changed", payload: { scoutId: updated.id, status: updated.status } });
 
   return c.json({ ok: true });
+});
+
+// POST /scouts/:id/pause — pause a scout
+scouts.post("/:id/pause", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const existing = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const updated = await prisma.scout.update({
+    where: { id: existing.id },
+    data: {
+      status: "paused",
+      nextRunAt: null,
+      activity: {
+        create: {
+          type: "paused",
+          description: "Scout paused by user",
+        },
+      },
+    },
+    include: {
+      _count: { select: { findings: { where: { dismissed: false } } } },
+      runs: { take: 1, orderBy: { createdAt: "desc" }, select: { createdAt: true } },
+    },
+  });
+
+  publishSSE(user.id, { type: "scout.status.changed", payload: { scoutId: updated.id, status: updated.status } });
+
+  return c.json(
+    serializeScout(updated, {
+      findingsCount: updated._count.findings,
+      lastRun: updated.runs[0]?.createdAt.toISOString(),
+    })
+  );
+});
+
+// POST /scouts/:id/resume — resume a paused scout
+scouts.post("/:id/resume", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const existing = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const updated = await prisma.scout.update({
+    where: { id: existing.id },
+    data: {
+      status: "active",
+      nextRunAt: new Date(),
+      activity: {
+        create: {
+          type: "resumed",
+          description: "Scout resumed by user",
+        },
+      },
+    },
+    include: {
+      _count: { select: { findings: { where: { dismissed: false } } } },
+      runs: { take: 1, orderBy: { createdAt: "desc" }, select: { createdAt: true } },
+    },
+  });
+
+  publishSSE(user.id, { type: "scout.status.changed", payload: { scoutId: updated.id, status: updated.status } });
+
+  return c.json(
+    serializeScout(updated, {
+      findingsCount: updated._count.findings,
+      lastRun: updated.runs[0]?.createdAt.toISOString(),
+    })
+  );
+});
+
+// POST /scouts/:id/run — manually trigger a scout run
+scouts.post("/:id/run", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const existing = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  // Rate limit: reject if a run is already in progress
+  const runningRun = await prisma.scoutRun.findFirst({
+    where: { scoutId: id, status: "running" },
+  });
+  if (runningRun) {
+    return c.json({ error: "A run is already in progress for this scout" }, 429);
+  }
+
+  // Rate limit: reject if the most recent run was less than 60 seconds ago
+  const mostRecentRun = await prisma.scoutRun.findFirst({
+    where: { scoutId: id },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  if (mostRecentRun && Date.now() - mostRecentRun.createdAt.getTime() < 60_000) {
+    return c.json({ error: "Please wait at least 60 seconds between manual runs" }, 429);
+  }
+
+  // Fire-and-forget: dynamically import runner so missing module doesn't crash the file.
+  // The path is constructed at runtime so tsc doesn't resolve the (not-yet-existing) module.
+  const runnerPath = new URL("../lib/scout-runner.js", import.meta.url).href;
+  (async () => {
+    try {
+      const mod = await import(/* @vite-ignore */ runnerPath);
+      await (mod as { runScout: (id: string) => Promise<void> }).runScout(id);
+    } catch {
+      // runner not yet implemented — silently ignore
+    }
+  })();
+
+  return c.json({ ok: true, message: "Run triggered" });
+});
+
+// GET /scouts/:id/findings — paginated findings for a scout
+scouts.get("/:id/findings", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  const { type, cursor, limit: limitParam } = c.req.query();
+  const limit = Math.min(parseInt(limitParam ?? "50", 10) || 50, 100);
+
+  const where: Record<string, unknown> = { scoutId: id };
+  if (type === "insight" || type === "article" || type === "task") {
+    where.type = type;
+  }
+  if (cursor) {
+    where.createdAt = { lt: new Date(cursor) };
+  }
+
+  const [rows, total] = await Promise.all([
+    prisma.scoutFinding.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    prisma.scoutFinding.count({ where: { scoutId: id } }),
+  ]);
+
+  const findings: ScoutFinding[] = rows.map((row) => ({
+    id: row.id,
+    scoutId: row.scoutId,
+    scoutRunId: row.scoutRunId,
+    type: row.type as ScoutFinding["type"],
+    title: row.title,
+    description: row.description,
+    sourceUrl: row.sourceUrl ?? undefined,
+    sourceName: row.sourceName,
+    relevanceScore: row.relevanceScore,
+    reasoning: row.reasoning,
+    itemId: row.itemId ?? undefined,
+    dismissed: row.dismissed,
+    createdAt: row.createdAt.toISOString(),
+  }));
+
+  const nextCursor = rows.length === limit ? rows[rows.length - 1].createdAt.toISOString() : null;
+
+  return c.json({ findings, total, cursor: nextCursor });
+});
+
+// POST /scouts/:id/findings/:findingId/dismiss — dismiss a finding
+scouts.post("/:id/findings/:findingId/dismiss", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const findingId = c.req.param("findingId");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  const finding = await prisma.scoutFinding.findFirst({
+    where: { id: findingId, scoutId: id },
+  });
+  if (!finding) return c.json({ error: "Finding not found" }, 404);
+
+  await prisma.scoutFinding.update({
+    where: { id: findingId },
+    data: { dismissed: true },
+  });
+
+  if (finding.itemId) {
+    await prisma.item.delete({ where: { id: finding.itemId } });
+  }
+
+  return c.json({ ok: true });
+});
+
+// POST /scouts/:id/findings/:findingId/promote — promote a finding to an item
+scouts.post("/:id/findings/:findingId/promote", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const findingId = c.req.param("findingId");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  const finding = await prisma.scoutFinding.findFirst({
+    where: { id: findingId, scoutId: id },
+  });
+  if (!finding) return c.json({ error: "Finding not found" }, 404);
+  if (finding.itemId) return c.json({ error: "Finding has already been promoted" }, 409);
+
+  const item = await prisma.item.create({
+    data: {
+      type: finding.type === "task" ? "task" : "content",
+      title: finding.title,
+      description: finding.description,
+      source: "scout",
+      sourceId: id,
+      sourceUrl: finding.sourceUrl ?? null,
+      status: "active",
+      userId: user.id,
+    },
+  });
+
+  await prisma.scoutFinding.update({
+    where: { id: findingId },
+    data: { itemId: item.id },
+  });
+
+  return c.json(item);
+});
+
+// GET /scouts/:id/activity — merged run + activity log for a scout
+scouts.get("/:id/activity", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  const { cursor, limit: limitParam } = c.req.query();
+  const limit = Math.min(parseInt(limitParam ?? "50", 10) || 50, 100);
+  const cursorDate = cursor ? new Date(cursor) : undefined;
+
+  const [runs, activities] = await Promise.all([
+    prisma.scoutRun.findMany({
+      where: { scoutId: id },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.scoutActivity.findMany({
+      where: { scoutId: id },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const runEntries: ActivityEntry[] = runs.map((run) => ({
+    entryType: "run" as const,
+    id: run.id,
+    createdAt: run.createdAt.toISOString(),
+    status: run.status as ScoutRunStatus,
+    resultCount: run.resultCount,
+    findingsCount: run.findingsCount,
+    dismissedCount: run.dismissedCount,
+    reasoning: run.reasoning ?? null,
+    durationMs: run.durationMs,
+    error: run.error ?? null,
+  }));
+
+  const activityEntries: ActivityEntry[] = activities.map((act) => ({
+    entryType: "activity" as const,
+    id: act.id,
+    createdAt: act.createdAt.toISOString(),
+    type: act.type as ScoutActivityType,
+    description: act.description,
+    metadata: act.metadata,
+  }));
+
+  // Merge, sort by createdAt desc, apply cursor + limit
+  const merged: ActivityEntry[] = [...runEntries, ...activityEntries].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  const afterCursor = cursorDate
+    ? merged.filter((e) => new Date(e.createdAt).getTime() < cursorDate.getTime())
+    : merged;
+
+  const page = afterCursor.slice(0, limit);
+  const nextCursor = page.length === limit ? page[page.length - 1].createdAt : null;
+
+  return c.json({ entries: page, cursor: nextCursor });
 });
 
 export { scouts };
