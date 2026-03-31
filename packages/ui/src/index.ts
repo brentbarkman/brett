@@ -51,5 +51,6 @@ export { getAvatarColor } from "./avatarColor";
 export { ScoutCard } from "./ScoutCard";
 export { ScoutsRoster } from "./ScoutsRoster";
 export { ScoutDetail } from "./ScoutDetail";
+export { ScoutMemoryTab } from "./ScoutMemoryTab";
 export { WeatherPill, WeatherPillSkeleton, WeatherPillEmpty } from "./WeatherPill";
 export { WeatherExpanded } from "./WeatherExpanded";

@@ -23,12 +23,14 @@ import {
 import type {
   Scout,
   ScoutFinding,
+  ScoutMemory,
   ActivityEntry,
   ScoutSensitivity,
   ScoutAnalysisTier,
   UpdateScoutInput,
 } from "@brett/types";
 import { ScoutCard } from "./ScoutCard";
+import { ScoutMemoryTab } from "./ScoutMemoryTab";
 
 function humanizeCadence(hours: number): string {
   if (hours < 24) return hours === 1 ? "Every hour" : `Every ${hours}h`;
@@ -71,6 +73,9 @@ interface ScoutDetailProps {
   onClearHistory?: () => void;
   isClearing?: boolean;
   onDelete?: () => void;
+  memories: ScoutMemory[];
+  isLoadingMemories: boolean;
+  onDeleteMemory: (memoryId: string) => void;
 }
 
 export function ScoutDetail({
@@ -91,8 +96,11 @@ export function ScoutDetail({
   onClearHistory,
   isClearing,
   onDelete,
+  memories,
+  isLoadingMemories,
+  onDeleteMemory,
 }: ScoutDetailProps) {
-  const [activeTab, setActiveTab] = useState<"findings" | "log">("findings");
+  const [activeTab, setActiveTab] = useState<"findings" | "log" | "memory">("findings");
   const [editingField, setEditingField] = useState<string | null>(null);
   const [pendingSensitivity, setPendingSensitivity] = useState<ScoutSensitivity | null>(null);
   const [pendingAnalysisTier, setPendingAnalysisTier] = useState<ScoutAnalysisTier | null>(null);
@@ -486,6 +494,12 @@ export function ScoutDetail({
               isActive={activeTab === "log"}
               onClick={() => setActiveTab("log")}
             />
+            <TabButton
+              label="Memory"
+              count={memories.length}
+              isActive={activeTab === "memory"}
+              onClick={() => setActiveTab("memory")}
+            />
           </div>
 
           {activeTab === "findings" ? (
@@ -510,7 +524,7 @@ export function ScoutDetail({
                 </div>
               )}
             </div>
-          ) : (
+          ) : activeTab === "log" ? (
             <div className="space-y-2">
               {isLoadingActivity ? (
                 <div className="space-y-2">
@@ -528,7 +542,13 @@ export function ScoutDetail({
                 </div>
               )}
             </div>
-          )}
+          ) : activeTab === "memory" ? (
+            <ScoutMemoryTab
+              memories={memories}
+              isLoading={isLoadingMemories}
+              onDelete={onDeleteMemory}
+            />
+          ) : null}
         </div>
       </div>
     </div>

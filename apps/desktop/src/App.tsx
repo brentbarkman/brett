@@ -73,6 +73,8 @@ import {
   useScout,
   useScoutFindings,
   useScoutActivity,
+  useScoutMemories,
+  useDeleteScoutMemory,
   usePauseScout,
   useResumeScout,
   useUpdateScout,
@@ -383,6 +385,8 @@ export function App() {
   const clearHistory = useClearScoutHistory();
   const deleteScout = useDeleteScout();
   const submitFeedback = useSubmitScoutFeedback();
+  const { data: scoutMemories = [], isLoading: isLoadingMemories } = useScoutMemories(selectedScoutId ?? undefined);
+  const deleteMemory = useDeleteScoutMemory();
 
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
@@ -871,6 +875,9 @@ export function App() {
                   onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}
                   isClearing={clearHistory.isPending}
                   onDelete={() => { deleteScout.mutate(selectedScoutId!); setSelectedScoutId(null); }}
+                  memories={scoutMemories}
+                  isLoadingMemories={isLoadingMemories}
+                  onDeleteMemory={(memoryId) => deleteMemory.mutate({ scoutId: selectedScoutId!, memoryId })}
                 />
               ) : (
                 <ScoutsRoster
