@@ -957,6 +957,35 @@ export async function runScout(scoutId: string): Promise<void> {
   }
 }
 
+// ── Manual Consolidation Trigger (dev only) ──
+
+export async function triggerConsolidation(scoutId: string): Promise<void> {
+  const scout = await prisma.scout.findUnique({
+    where: { id: scoutId },
+    include: {
+      user: {
+        include: {
+          aiConfigs: {
+            where: { isActive: true, isValid: true },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  if (!scout) throw new Error("Scout not found");
+
+  const aiConfig = scout.user.aiConfigs[0];
+  if (!aiConfig) throw new Error("No active AI configuration found");
+
+  const apiKey = decryptToken(aiConfig.encryptedKey);
+  const providerName = aiConfig.provider as AIProviderName;
+  const provider = getProvider(providerName, apiKey);
+
+  await runConsolidation(scoutId, provider, providerName, collectChatResponse, extractJSON);
+}
+
 // ── Cron Tick ──
 
 export async function tickScouts(): Promise<void> {

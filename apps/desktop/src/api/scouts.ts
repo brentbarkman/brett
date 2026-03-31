@@ -169,6 +169,19 @@ export function useTriggerScoutRun() {
   });
 }
 
+export function useTriggerConsolidation() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ status: string }>(`/scouts/${id}/consolidate`, { method: "POST" }),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["scout-memories", id] });
+      qc.invalidateQueries({ queryKey: ["scout-activity", id] });
+    },
+  });
+}
+
 export function useClearScoutHistory() {
   const qc = useQueryClient();
   return useMutation({

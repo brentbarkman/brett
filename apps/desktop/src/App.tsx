@@ -79,6 +79,7 @@ import {
   useResumeScout,
   useUpdateScout,
   useTriggerScoutRun,
+  useTriggerConsolidation,
   useClearScoutHistory,
   useDeleteScout,
   useSubmitScoutFeedback,
@@ -382,6 +383,7 @@ export function App() {
   const resumeScout = useResumeScout();
   const updateScout = useUpdateScout();
   const triggerRun = useTriggerScoutRun();
+  const triggerConsolidation = useTriggerConsolidation();
   const clearHistory = useClearScoutHistory();
   const deleteScout = useDeleteScout();
   const submitFeedback = useSubmitScoutFeedback();
@@ -874,6 +876,8 @@ export function App() {
                   isRunning={scoutRunning}
                   onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}
                   isClearing={clearHistory.isPending}
+                  onConsolidate={import.meta.env.DEV ? () => triggerConsolidation.mutate(selectedScoutId!) : undefined}
+                  isConsolidating={triggerConsolidation.isPending}
                   onDelete={() => { deleteScout.mutate(selectedScoutId!); setSelectedScoutId(null); }}
                   memories={scoutMemories}
                   isLoadingMemories={isLoadingMemories}

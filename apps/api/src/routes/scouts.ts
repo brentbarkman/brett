@@ -465,6 +465,24 @@ scouts.post("/:id/run", async (c) => {
   return c.json({ ok: true, message: "Run triggered" });
 });
 
+// POST /scouts/:id/consolidate — DEV ONLY: manually trigger memory consolidation
+scouts.post("/:id/consolidate", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  // Fire-and-forget
+  import("../lib/scout-runner.js")
+    .then((mod) => mod.triggerConsolidation(id))
+    .catch((err) => console.error(`[scouts] Manual consolidation failed for ${id}:`, err));
+
+  return c.json({ ok: true, message: "Consolidation triggered" });
+});
+
 // GET /scouts/:id/findings — paginated findings for a scout
 scouts.get("/:id/findings", async (c) => {
   const user = c.get("user");
