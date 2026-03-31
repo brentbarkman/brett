@@ -332,7 +332,10 @@ export function ScoutDetail({
                   onChange={setPendingSensitivity}
                 />
               ) : (
-                <p className="text-[13px] text-white/50 capitalize">{scout.sensitivity}</p>
+                <p className="text-[13px] text-white/50">
+                  {SENSITIVITY_OPTIONS.find((o) => o.value === scout.sensitivity)?.label ?? scout.sensitivity}
+                  <span className="text-white/25"> — {SENSITIVITY_OPTIONS.find((o) => o.value === scout.sensitivity)?.desc}</span>
+                </p>
               )}
             </EditableCard>
 
