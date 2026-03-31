@@ -892,7 +892,12 @@ export function App() {
                   onDelete={() => { deleteScout.mutate(selectedScoutId!); setSelectedScoutId(null); }}
                   onClickFindingItem={(itemId) => {
                     const thing = allActiveThings.find((t) => t.id === itemId);
-                    if (thing) handleItemClick(thing);
+                    if (thing) {
+                      handleItemClick(thing);
+                    } else {
+                      // Item may be completed/archived — open detail panel with minimal stub, it will fetch full data
+                      handleItemClick({ id: itemId, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
+                    }
                   }}
                   memories={scoutMemories}
                   isLoadingMemories={isLoadingMemories}
