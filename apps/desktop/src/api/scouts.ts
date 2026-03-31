@@ -206,9 +206,10 @@ export function useSubmitScoutFeedback() {
         method: "POST",
         body: JSON.stringify({ useful }),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["things"] });
       qc.invalidateQueries({ queryKey: ["thing"] });
+      qc.invalidateQueries({ queryKey: ["scout-findings", variables.scoutId] });
     },
   });
 }

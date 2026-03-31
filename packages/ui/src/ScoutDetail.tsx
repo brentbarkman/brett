@@ -29,17 +29,9 @@ import type {
   ScoutAnalysisTier,
   UpdateScoutInput,
 } from "@brett/types";
-import { formatRelativeTime } from "@brett/utils";
+import { formatRelativeTime, humanizeCadence } from "@brett/utils";
 import { ScoutCard } from "./ScoutCard";
 import { ScoutMemoryTab } from "./ScoutMemoryTab";
-
-function humanizeCadence(hours: number): string {
-  if (hours < 24) return hours === 1 ? "Every hour" : `Every ${hours}h`;
-  const days = hours / 24;
-  if (days === 1) return "Daily";
-  if (days === 7) return "Weekly";
-  return `Every ${days}d`;
-}
 
 interface ScoutDetailProps {
   scouts: Scout[];

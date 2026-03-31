@@ -475,6 +475,14 @@ scouts.post("/:id/consolidate", async (c) => {
   });
   if (!scout) return c.json({ error: "Not found" }, 404);
 
+  // Rate limit: reject if a consolidation is already in progress
+  const pendingConsolidation = await prisma.scoutConsolidation.findFirst({
+    where: { scoutId: id, status: { in: ["pending", "processing"] } },
+  });
+  if (pendingConsolidation) {
+    return c.json({ error: "A consolidation is already in progress for this scout" }, 429);
+  }
+
   // Fire-and-forget
   import("../lib/scout-runner.js")
     .then((mod) => mod.triggerConsolidation(id))

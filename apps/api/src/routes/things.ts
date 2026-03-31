@@ -25,20 +25,20 @@ async function enrichWithScoutNames<T extends { source: string; sourceId: string
 }
 
 async function itemToThingDetail(item: any): Promise<ThingDetail> {
-  // Enrich single item with scout name if applicable
-  if (item.source === "scout" && item.sourceId && !item.scoutName) {
-    const scout = await prisma.scout.findUnique({ where: { id: item.sourceId }, select: { name: true } });
-    if (scout) item.scoutName = scout.name;
-  }
-
-  // Enrich scout-originated items with finding ID and feedback state
+  // Enrich scout-originated items with scout name + finding feedback (parallelized)
   let scoutFindingId: string | undefined;
   let scoutFeedbackUseful: boolean | null | undefined;
   if (item.source === "scout") {
-    const finding = await prisma.scoutFinding.findFirst({
-      where: { itemId: item.id },
-      select: { id: true, feedbackUseful: true },
-    });
+    const [scout, finding] = await Promise.all([
+      item.sourceId && !item.scoutName
+        ? prisma.scout.findUnique({ where: { id: item.sourceId }, select: { name: true } })
+        : null,
+      prisma.scoutFinding.findFirst({
+        where: { itemId: item.id },
+        select: { id: true, feedbackUseful: true },
+      }),
+    ]);
+    if (scout) item.scoutName = scout.name;
     if (finding) {
       scoutFindingId = finding.id;
       scoutFeedbackUseful = finding.feedbackUseful;
