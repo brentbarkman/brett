@@ -30,6 +30,21 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
     const scout = await prisma.scout.findUnique({ where: { id: item.sourceId }, select: { name: true } });
     if (scout) item.scoutName = scout.name;
   }
+
+  // Enrich scout-originated items with finding ID and feedback state
+  let scoutFindingId: string | undefined;
+  let scoutFeedbackUseful: boolean | null | undefined;
+  if (item.source === "scout") {
+    const finding = await prisma.scoutFinding.findFirst({
+      where: { itemId: item.id },
+      select: { id: true, feedbackUseful: true },
+    });
+    if (finding) {
+      scoutFindingId = finding.id;
+      scoutFeedbackUseful = finding.feedbackUseful;
+    }
+  }
+
   const thing = itemToThing(item);
 
   const attachments: AttachmentType[] = await Promise.all(
@@ -109,6 +124,8 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
     attachments,
     links,
     brettMessages,
+    scoutFindingId,
+    scoutFeedbackUseful,
   };
 }
 

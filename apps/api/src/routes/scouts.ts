@@ -522,6 +522,43 @@ scouts.get("/:id/findings", async (c) => {
   return c.json({ findings, total, cursor: nextCursor });
 });
 
+// POST /scouts/:id/findings/:findingId/feedback — submit finding feedback
+scouts.post("/:id/findings/:findingId/feedback", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const findingId = c.req.param("findingId");
+
+  const scout = await prisma.scout.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+  if (!scout) return c.json({ error: "Not found" }, 404);
+
+  const finding = await prisma.scoutFinding.findFirst({
+    where: { id: findingId, scoutId: id },
+  });
+  if (!finding) return c.json({ error: "Finding not found" }, 404);
+
+  const body = await c.req.json<{ useful: boolean | null }>();
+  if (body.useful !== null && body.useful !== true && body.useful !== false) {
+    return c.json({ error: "useful must be true, false, or null" }, 400);
+  }
+
+  const updated = await prisma.scoutFinding.update({
+    where: { id: findingId },
+    data: {
+      feedbackUseful: body.useful,
+      feedbackAt: body.useful !== null ? new Date() : null,
+    },
+  });
+
+  return c.json({
+    id: updated.id,
+    feedbackUseful: updated.feedbackUseful,
+    feedbackAt: updated.feedbackAt?.toISOString(),
+  });
+});
+
 // GET /scouts/:id/activity — merged run + activity log for a scout
 scouts.get("/:id/activity", async (c) => {
   const user = c.get("user");
