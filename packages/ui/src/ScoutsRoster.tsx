@@ -48,7 +48,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
         {omnibarProps && (
           <Omnibar
             {...omnibarProps}
-            placeholder="I want to know when..."
+            placeholder="What do you want to monitor?"
             showScoutAction
           />
         )}
