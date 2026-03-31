@@ -174,13 +174,14 @@ export function useOmnibar() {
               break;
 
             case "error":
+              console.error("[omnibar] SSE error event:", chunk);
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
                 if (last && last.role === "assistant") {
                   updated[updated.length - 1] = {
                     ...last,
-                    content: last.content || `Error: ${chunk.message}`,
+                    content: last.content || "Something went wrong. Please try again.",
                   };
                 }
                 return updated;
@@ -189,6 +190,7 @@ export function useOmnibar() {
           }
         }
       } catch (err) {
+        console.error("[omnibar] Stream exception:", err);
         if ((err as Error).name !== "AbortError") {
           setMessages((prev) => {
             const updated = [...prev];

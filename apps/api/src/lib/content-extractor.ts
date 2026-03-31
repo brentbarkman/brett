@@ -332,6 +332,10 @@ export async function runExtraction(itemId: string, url: string, userId: string)
       }
     }
 
+    // Preserve source for scout-created items (source === "scout" + sourceId links back to the scout)
+    const existingItem = await prisma.item.findUnique({ where: { id: itemId }, select: { source: true } });
+    const preserveSource = existingItem?.source === "scout";
+
     const updateData: Record<string, unknown> = {
       contentType: result.contentType,
       contentStatus: result.contentStatus,
@@ -342,7 +346,7 @@ export async function runExtraction(itemId: string, url: string, userId: string)
       contentFavicon: result.contentFavicon,
       contentDomain: result.contentDomain,
       contentMetadata: result.contentMetadata,
-      source: result.contentDomain,
+      ...(preserveSource ? {} : { source: result.contentDomain }),
     };
 
     // Update title from extraction if the current title is a placeholder

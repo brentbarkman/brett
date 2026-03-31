@@ -228,6 +228,7 @@ export const DEFAULT_LIST_NAME = "Inbox";
 type ItemWithRelations = ItemRecord & {
   list: { name: string } | null;
   meetingNote?: { title: string; calendarEventId?: string | null } | null;
+  scoutName?: string; // Populated by API for items where source === "scout"
 };
 
 export function itemToThing(
@@ -256,6 +257,10 @@ export function itemToThing(
     createdAt: item.createdAt.toISOString(),
     meetingNoteTitle: item.meetingNote?.title ?? undefined,
     meetingNoteCalendarEventId: item.meetingNote?.calendarEventId ?? undefined,
+    ...(item.source === "scout" && item.sourceId && {
+      scoutId: item.sourceId,
+      scoutName: item.scoutName ?? undefined,
+    }),
     ...(item.type === "content" && {
       contentType: (item.contentType as ContentType) ?? undefined,
       contentStatus: (item.contentStatus as ContentStatus) ?? undefined,

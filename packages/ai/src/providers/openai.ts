@@ -73,7 +73,7 @@ export class OpenAIProvider implements AIProvider {
   private client: OpenAI;
 
   constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey });
+    this.client = new OpenAI({ apiKey, maxRetries: 3 });
   }
 
   async *chat(params: ChatParams): AsyncIterable<StreamChunk> {
@@ -96,7 +96,16 @@ export class OpenAIProvider implements AIProvider {
       requestParams.tools = mapTools(params.tools);
     }
 
-    if (params.responseFormat?.type === "json_object") {
+    if (params.responseFormat?.type === "json_schema") {
+      requestParams.response_format = {
+        type: "json_schema",
+        json_schema: {
+          name: params.responseFormat.name,
+          strict: true,
+          schema: params.responseFormat.schema,
+        },
+      };
+    } else if (params.responseFormat?.type === "json_object") {
       requestParams.response_format = { type: "json_object" };
     }
 

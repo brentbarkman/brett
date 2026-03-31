@@ -2,15 +2,17 @@ import React from "react";
 import { Plus, Radar } from "lucide-react";
 import type { Scout } from "@brett/types";
 import { ScoutCard } from "./ScoutCard";
+import { Omnibar, type OmnibarProps } from "./Omnibar";
 
 interface ScoutsRosterProps {
   scouts: Scout[];
   onSelectScout: (scout: Scout) => void;
   onNewScout?: () => void;
   isLoading?: boolean;
+  omnibarProps?: OmnibarProps;
 }
 
-export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading }: ScoutsRosterProps) {
+export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omnibarProps }: ScoutsRosterProps) {
   const activeScouts = scouts.filter((s) => s.status === "active" || s.status === "paused");
   const inactiveScouts = scouts.filter((s) => s.status === "completed" || s.status === "expired");
 
@@ -31,14 +33,25 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading }: S
             </div>
           </div>
 
-          <button
-            onClick={onNewScout}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 transition-all duration-200 text-white text-[13px] font-semibold shadow-[0_0_16px_rgba(59,130,246,0.25)] hover:shadow-[0_0_24px_rgba(59,130,246,0.4)]"
-          >
-            <Plus size={15} />
-            New Scout
-          </button>
+          {!omnibarProps && onNewScout && (
+            <button
+              onClick={onNewScout}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 transition-all duration-200 text-white text-[13px] font-semibold shadow-[0_0_16px_rgba(59,130,246,0.25)] hover:shadow-[0_0_24px_rgba(59,130,246,0.4)]"
+            >
+              <Plus size={15} />
+              New Scout
+            </button>
+          )}
         </div>
+
+        {/* Inline scout creation */}
+        {omnibarProps && (
+          <Omnibar
+            {...omnibarProps}
+            placeholder="I want to know when..."
+            showScoutAction
+          />
+        )}
 
         {/* Loading skeleton */}
         {isLoading && (
@@ -63,7 +76,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading }: S
               <p className="text-[13px] text-white/30">Create a scout to start monitoring anything on the internet.</p>
             </div>
             <button
-              onClick={onNewScout}
+              onClick={omnibarProps?.onOpen ?? onNewScout}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 transition-all duration-200 text-white text-[13px] font-semibold shadow-[0_0_16px_rgba(59,130,246,0.25)]"
             >
               <Plus size={15} />

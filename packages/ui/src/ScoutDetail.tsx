@@ -18,6 +18,7 @@ import {
   XCircle,
   SkipForward,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import type {
   Scout,
@@ -71,6 +72,7 @@ interface ScoutDetailProps {
   isRunning?: boolean;
   onClearHistory?: () => void;
   isClearing?: boolean;
+  onDelete?: () => void;
 }
 
 export function ScoutDetail({
@@ -92,6 +94,7 @@ export function ScoutDetail({
   isRunning,
   onClearHistory,
   isClearing,
+  onDelete,
 }: ScoutDetailProps) {
   const [activeTab, setActiveTab] = useState<"findings" | "log">("findings");
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -99,6 +102,7 @@ export function ScoutDetail({
   const [pendingAnalysisTier, setPendingAnalysisTier] = useState<ScoutAnalysisTier | null>(null);
   const [pendingCadenceBase, setPendingCadenceBase] = useState<number | null>(null);
   const [pendingBudget, setPendingBudget] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isCompleted = scout.status === "completed" || scout.status === "expired";
   const isPaused = scout.status === "paused";
@@ -231,33 +235,14 @@ export function ScoutDetail({
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-                {!isCompleted && (
-                  isPaused ? (
-                    <button
-                      onClick={onResume}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600/20 border border-emerald-500/20 hover:bg-emerald-600/30 hover:border-emerald-500/30 transition-all text-emerald-400 hover:text-emerald-300 text-xs font-medium"
-                    >
-                      <Play size={14} />
-                      Resume
-                    </button>
-                  ) : (
-                    <button
-                      onClick={onPause}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] hover:border-white/[0.15] transition-all text-white/50 hover:text-white text-xs font-medium"
-                    >
-                      <Pause size={14} />
-                      Pause
-                    </button>
-                  )
-                )}
                 {onTriggerRun && (
                   <button
                     onClick={onTriggerRun}
                     disabled={isRunning}
                     className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   >
-                    {isRunning ? <Loader2 size={12} className="animate-spin" /> : "▶"}
-                    {isRunning ? "Running..." : "Run Now"}
+                    {isRunning ? <Loader2 size={12} className="animate-spin" /> : <span>▶</span>}
+                    <span>{isRunning ? "Running..." : "Run Now"}</span>
                   </button>
                 )}
                 {onClearHistory && (
@@ -266,9 +251,54 @@ export function ScoutDetail({
                     disabled={isClearing}
                     className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   >
-                    {isClearing ? <Loader2 size={12} className="animate-spin" /> : "✕"}
-                    {isClearing ? "Clearing..." : "Clear History"}
+                    {isClearing ? <Loader2 size={12} className="animate-spin" /> : <span>✕</span>}
+                    <span>{isClearing ? "Clearing..." : "Clear History"}</span>
                   </button>
+                )}
+                {!isCompleted && (
+                  isPaused ? (
+                    <button
+                      onClick={onResume}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors text-xs font-medium"
+                    >
+                      <Play size={12} />
+                      Resume
+                    </button>
+                  ) : (
+                    <button
+                      onClick={onPause}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/[0.05] text-white/50 hover:bg-white/[0.10] hover:text-white transition-colors text-xs font-medium"
+                    >
+                      <Pause size={12} />
+                      Pause
+                    </button>
+                  )
+                )}
+                {onDelete && (
+                  confirmDelete ? (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-500/10 border border-red-500/20">
+                      <span className="text-xs text-red-400">Delete?</span>
+                      <button
+                        onClick={() => { onDelete(); setConfirmDelete(false); }}
+                        className="px-2 py-0.5 text-xs font-medium rounded bg-red-500/30 text-red-300 hover:bg-red-500/40 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        className="px-2 py-0.5 text-xs font-medium rounded bg-white/[0.05] text-white/50 hover:bg-white/[0.10] transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-white/[0.05] text-white/30 hover:bg-red-500/20 hover:text-red-400 transition-colors flex items-center"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )
                 )}
               </div>
             </div>

@@ -144,7 +144,7 @@ export class GoogleProvider implements AIProvider {
     if (params.maxTokens !== undefined) {
       generationConfig.maxOutputTokens = params.maxTokens;
     }
-    if (params.responseFormat?.type === "json_object") {
+    if (params.responseFormat?.type === "json_schema" || params.responseFormat?.type === "json_object") {
       generationConfig.responseMimeType = "application/json";
     }
 

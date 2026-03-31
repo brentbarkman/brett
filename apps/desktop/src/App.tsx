@@ -80,6 +80,7 @@ import {
   usePromoteFinding,
   useTriggerScoutRun,
   useClearScoutHistory,
+  useDeleteScout,
 } from "./api/scouts";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
@@ -173,6 +174,7 @@ export function App() {
   const [detailHistory, setDetailHistory] = useState<(Thing | CalendarEventDisplay)[]>([]);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedScoutId, setSelectedScoutId] = useState<string | null>(null);
+  const [scoutRunning, setScoutRunning] = useState(false);
 
   // Triage popup state
   const [triageState, setTriageState] = useState<{
@@ -382,6 +384,7 @@ export function App() {
   const promoteFinding = usePromoteFinding();
   const triggerRun = useTriggerScoutRun();
   const clearHistory = useClearScoutHistory();
+  const deleteScout = useDeleteScout();
 
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
@@ -508,6 +511,22 @@ export function App() {
     [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded]
   );
 
+  const scoutsOmnibarProps = useMemo(
+    () => ({
+      ...omnibarProps,
+      isOpen: omnibar.isOpen && omnibar.mode === "bar",
+      onSend: (text: string) => omnibar.send(text, "scouts"),
+      onOpen: () => { omnibar.open("bar"); },
+      weather: null,
+      weatherNow: undefined,
+      weatherLoading: false,
+      showWeatherExpanded: false,
+      onWeatherClick: undefined,
+      onNavigateToSettings: undefined,
+    }),
+    [omnibarProps, omnibar.isOpen, omnibar.mode, omnibar.send, omnibar.open],
+  );
+
   // Apply dark mode to root
   useEffect(() => {
     document.documentElement.classList.add("dark");
@@ -569,6 +588,10 @@ export function App() {
     setTimeout(() => setSelectedItem(null), 300);
   }, []);
 
+  useSSEHandler("scout.run.completed", useCallback(() => {
+    setScoutRunning(false);
+  }, []));
+
   useSSEHandler("calendar.event.deleted", useCallback((data: { eventId: string }) => {
     if (selectedItem && selectedItem.id === data.eventId) {
       handleCloseDetail();
@@ -577,6 +600,10 @@ export function App() {
 
   const handleToggle = (id: string) => {
     toggleThing.mutate(id);
+    // Close detail panel if the toggled item is the one currently open
+    if (selectedItem && selectedItem.id === id) {
+      handleCloseDetail();
+    }
   };
 
   // Inbox-specific handlers
@@ -843,17 +870,18 @@ export function App() {
                   onDismissFinding={(findingId) => dismissFinding.mutate({ scoutId: selectedScoutId, findingId })}
                   onPromoteFinding={(findingId) => promoteFinding.mutate({ scoutId: selectedScoutId, findingId })}
                   onEditWithBrett={handleEditWithBrett}
-                  onTriggerRun={import.meta.env.DEV ? () => triggerRun.mutate(selectedScoutId!) : undefined}
-                  isRunning={triggerRun.isPending}
+                  onTriggerRun={import.meta.env.DEV ? () => { triggerRun.mutate(selectedScoutId!); setScoutRunning(true); } : undefined}
+                  isRunning={scoutRunning}
                   onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}
                   isClearing={clearHistory.isPending}
+                  onDelete={() => { deleteScout.mutate(selectedScoutId!); setSelectedScoutId(null); }}
                 />
               ) : (
                 <ScoutsRoster
                   scouts={scouts}
                   onSelectScout={handleSelectScout}
-                  onNewScout={handleNewScout}
                   isLoading={isLoadingScouts}
+                  omnibarProps={scoutsOmnibarProps}
                 />
               )
             } />
@@ -1023,6 +1051,11 @@ export function App() {
                 myResponseStatus: "needsAction",
               } as any);
             }
+          }}
+          onNavigateToScout={(scoutId) => {
+            navigate("/scouts");
+            setSelectedScoutId(scoutId);
+            handleCloseDetail();
           }}
           onItemClick={(id) => {
             const thing = allActiveThings.find((t) => t.id === id);

@@ -312,7 +312,7 @@ scouts.put("/:id", async (c) => {
   );
 });
 
-// DELETE /scouts/:id — soft delete (mark completed)
+// DELETE /scouts/:id — hard delete (cascades runs, findings, activity; promoted items are preserved via SetNull)
 scouts.delete("/:id", async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
@@ -322,21 +322,9 @@ scouts.delete("/:id", async (c) => {
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
 
-  const updated = await prisma.scout.update({
-    where: { id: existing.id },
-    data: {
-      status: "completed",
-      nextRunAt: null,
-      activity: {
-        create: {
-          type: "completed",
-          description: "Scout completed",
-        },
-      },
-    },
-  });
+  await prisma.scout.delete({ where: { id: existing.id } });
 
-  publishSSE(user.id, { type: "scout.status.changed", payload: { scoutId: updated.id, status: updated.status } });
+  publishSSE(user.id, { type: "scout.status.changed", payload: { scoutId: id, status: "deleted" } });
 
   return c.json({ ok: true });
 });

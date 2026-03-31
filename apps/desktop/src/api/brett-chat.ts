@@ -208,7 +208,7 @@ export function useBrettChat(opts: {
                 if (last && last.role === "assistant") {
                   updated[updated.length - 1] = {
                     ...last,
-                    content: last.content || `Error: ${chunk.message}`,
+                    content: last.content || "Something went wrong. Please try again.",
                   };
                 }
                 return updated;

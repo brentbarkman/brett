@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { CheckCircle, RotateCw, X } from "lucide-react";
+import { CheckCircle, Radar, RotateCw, X } from "lucide-react";
 import type {
   ThingDetail,
   DueDatePrecision,
@@ -51,6 +51,7 @@ interface ContentDetailPanelProps {
   onRetryExtraction?: () => void;
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
+  onNavigateToScout?: (scoutId: string) => void;
   onNavigate?: (path: string) => void;
 }
 
@@ -83,6 +84,7 @@ export function ContentDetailPanel({
   onRetryExtraction,
   onItemClick,
   onEventClick,
+  onNavigateToScout,
   onNavigate,
 }: ContentDetailPanelProps) {
   const [editingTitle, setEditingTitle] = useState(false);
@@ -170,6 +172,17 @@ export function ContentDetailPanel({
             >
               {detail.title}
             </h2>
+          )}
+
+          {/* Scout provenance */}
+          {detail.source === "scout" && detail.scoutName && detail.scoutId && (
+            <button
+              onClick={() => onNavigateToScout?.(detail.scoutId!)}
+              className="flex items-center gap-1.5 text-xs text-blue-400/60 hover:text-blue-400 cursor-pointer transition-colors"
+            >
+              <Radar className="w-3 h-3" />
+              <span>from {detail.scoutName}</span>
+            </button>
           )}
 
           {/* Schedule Row */}

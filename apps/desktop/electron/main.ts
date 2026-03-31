@@ -236,6 +236,26 @@ function createWindow() {
     },
   });
 
+  // #9: Prevent navigation to external URLs — open in system browser instead.
+  // Without this, a compromised iframe or crafted link could navigate the Electron
+  // window to an attacker page that has access to the electronAPI IPC bridge.
+  const allowedOrigins = isDev
+    ? ["http://localhost:5173"]
+    : ["app://."];
+
+  win.webContents.on("will-navigate", (event, url) => {
+    if (!allowedOrigins.some((origin) => url.startsWith(origin))) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  // #9: External links (target=_blank) open in system browser, not new Electron window
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
+
   if (isDev) {
     win.loadURL("http://localhost:5173");
     // #8: Only open DevTools in development

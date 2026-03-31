@@ -109,18 +109,27 @@ export function useEventStream(): void {
     });
 
     // Scout events
-    es.addEventListener("scout.finding.created", () => {
+    es.addEventListener("scout.finding.created", (e) => {
       qc.invalidateQueries({ queryKey: ["scouts"] });
       qc.invalidateQueries({ queryKey: ["scout-findings"] });
+      const data = (() => { try { return JSON.parse((e as MessageEvent).data); } catch { return {}; } })();
+      const eventHandlers = handlers.get("scout.finding.created");
+      if (eventHandlers) for (const h of eventHandlers) h(data);
     });
 
-    es.addEventListener("scout.run.completed", () => {
+    es.addEventListener("scout.run.completed", (e) => {
       qc.invalidateQueries({ queryKey: ["scouts"] });
       qc.invalidateQueries({ queryKey: ["scout-activity"] });
+      const data = (() => { try { return JSON.parse((e as MessageEvent).data); } catch { return {}; } })();
+      const eventHandlers = handlers.get("scout.run.completed");
+      if (eventHandlers) for (const h of eventHandlers) h(data);
     });
 
-    es.addEventListener("scout.status.changed", () => {
+    es.addEventListener("scout.status.changed", (e) => {
       qc.invalidateQueries({ queryKey: ["scouts"] });
+      const data = (() => { try { return JSON.parse((e as MessageEvent).data); } catch { return {}; } })();
+      const eventHandlers = handlers.get("scout.status.changed");
+      if (eventHandlers) for (const h of eventHandlers) h(data);
     });
   }, [qc]);
 

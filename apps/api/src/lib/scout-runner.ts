@@ -2,11 +2,12 @@ import { prisma } from "./prisma.js";
 import { publishSSE } from "./sse.js";
 import { decryptToken } from "./encryption.js";
 import { getSearchProvider, classifySourceType } from "./search-providers/index.js";
+import { runExtraction } from "./content-extractor.js";
 import type { SearchResult } from "./search-providers/types.js";
 import { getProvider, resolveModel } from "@brett/ai";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, ScoutSource, FindingType } from "@brett/types";
-import { humanizeCadence } from "@brett/utils";
+import { humanizeCadence, detectContentType } from "@brett/utils";
 import type { Prisma } from "@prisma/client";
 
 // ── Constants ──
@@ -19,6 +20,48 @@ const SENSITIVITY_THRESHOLDS: Record<string, number> = {
   high: 0.3,
 };
 const VALID_FINDING_TYPES = new Set<string>(["insight", "article", "task"]);
+
+/** Schema-constrained output: query generation wraps queries in an object */
+const QUERY_GENERATION_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    queries: {
+      type: "array" as const,
+      items: { type: "string" as const },
+    },
+  },
+  required: ["queries"],
+  additionalProperties: false,
+};
+
+/** Schema-constrained output: judgment returns findings + cadence recommendation */
+const JUDGMENT_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    findings: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          type: { type: "string" as const, enum: ["insight", "article", "task"] },
+          title: { type: "string" as const },
+          description: { type: "string" as const },
+          sourceUrl: { type: "string" as const },
+          sourceName: { type: "string" as const },
+          relevanceScore: { type: "number" as const },
+          reasoning: { type: "string" as const },
+        },
+        required: ["type", "title", "description", "sourceUrl", "sourceName", "relevanceScore", "reasoning"],
+        additionalProperties: false,
+      },
+    },
+    cadenceRecommendation: { type: "string" as const, enum: ["elevate", "maintain", "relax"] },
+    cadenceReason: { type: "string" as const },
+    reasoning: { type: "string" as const },
+  },
+  required: ["findings", "cadenceRecommendation", "cadenceReason", "reasoning"],
+  additionalProperties: false,
+};
 
 // ── Utility Functions ──
 
@@ -119,8 +162,7 @@ async function buildSearchQueries(
     `- Each query should be 5-12 words, like a realistic Google search\n` +
     `- Vary angles: one news-focused, one specific/technical, one broader discovery\n` +
     `- Include time markers when relevant (year, month, "latest", "this week")\n` +
-    `- Avoid queries that would return results listed in <recent_findings>\n\n` +
-    `Output a JSON array of strings. Nothing else.`;
+    `- Avoid queries that would return results listed in <recent_findings>`;
 
   const userMessage =
     `<user_goal>${scout.goal}</user_goal>` +
@@ -134,12 +176,14 @@ async function buildSearchQueries(
       messages: [{ role: "user", content: userMessage }],
       maxTokens: 500,
       temperature: 0.3,
-      responseFormat: { type: "json_object" },
+      responseFormat: { type: "json_schema", name: "search_queries", schema: QUERY_GENERATION_SCHEMA },
     });
 
     const parsed = JSON.parse(extractJSON(text));
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((q) => typeof q === "string")) {
-      return { queries: parsed.slice(0, 3), tokensUsed };
+    // Handle both { queries: [...] } (schema-enforced) and raw array (Google fallback)
+    const queries = Array.isArray(parsed.queries) ? parsed.queries : Array.isArray(parsed) ? parsed : [];
+    if (queries.length > 0 && queries.every((q: unknown) => typeof q === "string")) {
+      return { queries: (queries as string[]).slice(0, 3), tokensUsed };
     }
     // Fallback: use goal as query
     return { queries: [scout.goal.slice(0, 200)], tokensUsed };
@@ -322,8 +366,7 @@ Same story from multiple outlets = ONE finding. Use the most authoritative sourc
 - "maintain": 0-2 findings, no urgency (DEFAULT)
 - "relax": 0 findings, or consistently low signal
 
-Return a JSON object:
-{"findings": [{"type": "...", "title": "...", "description": "what this means for the goal (2-3 sentences)", "sourceUrl": "...", "sourceName": "domain.com", "relevanceScore": 0.0-1.0, "reasoning": "..."}], "cadenceRecommendation": "...", "cadenceReason": "...", "reasoning": "overall assessment"}`;
+Return a JSON object with: findings (array of {type, title, description, sourceUrl, sourceName, relevanceScore, reasoning}), cadenceRecommendation, cadenceReason, reasoning.`;
 
   const resultsText = dedupedResults
     .map(
@@ -344,7 +387,7 @@ Return a JSON object:
     messages: [{ role: "user", content: userMessage }],
     maxTokens: 6000,
     temperature: 0.3,
-    responseFormat: { type: "json_object" },
+    responseFormat: { type: "json_schema", name: "judgment", schema: JUDGMENT_SCHEMA },
   });
 
   // Parse and validate the response
@@ -676,19 +719,31 @@ export async function runScout(scoutId: string): Promise<void> {
     const dismissedCount = judgment.evaluatedCount - judgment.findings.length;
 
     for (const finding of judgment.findings) {
+      const isContent = finding.type !== "task";
+      const hasUrl = !!(finding.sourceUrl);
+
       // Create inbox item (auto-promote)
       const item = await prisma.item.create({
         data: {
-          type: finding.type === "task" ? "task" : "content",
+          type: isContent ? "content" : "task",
           title: finding.title,
           description: finding.description,
           source: "scout",
           sourceId: scout.id,
           sourceUrl: finding.sourceUrl || null,
+          contentType: isContent && hasUrl ? detectContentType(finding.sourceUrl) : null,
+          contentStatus: isContent && hasUrl ? "pending" : null,
           status: "active",
           userId: scout.userId,
         },
       });
+
+      // Fire-and-forget content extraction (OG tags, favicon, article body)
+      if (isContent && hasUrl) {
+        runExtraction(item.id, finding.sourceUrl, scout.userId).catch((err) =>
+          console.error(`[scout-runner] Content extraction failed for finding ${item.id}:`, err),
+        );
+      }
 
       // Create the finding record linked to the item
       const scoutFinding = await prisma.scoutFinding.create({

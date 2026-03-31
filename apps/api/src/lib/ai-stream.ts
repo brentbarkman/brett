@@ -27,6 +27,13 @@ export function buildStream(
     async start(controller) {
       try {
         for await (const chunk of orchestrate(params)) {
+          // Intercept error chunks from the orchestrator — never forward raw error details to the client
+          if (chunk.type === "error") {
+            console.error("[ai-stream] Orchestrator error chunk:", chunk.message);
+            const safeError = { type: "error", message: "Something went wrong. Please try again." };
+            controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify(safeError)}\n\n`));
+            continue;
+          }
           if (chunk.type === "text") {
             assistantContentRef.value += chunk.content;
           }

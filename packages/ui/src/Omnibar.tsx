@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Bot, Send, Search, Plus, Sparkles, X, Square, Check } from "lucide-react";
+import { Bot, Send, Search, Plus, Sparkles, X, Square, Check, Radar } from "lucide-react";
 import { useClickOutside } from "./useClickOutside";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
@@ -56,13 +56,15 @@ export interface OmnibarProps {
   weatherLoading?: boolean;
   onWeatherClick?: () => void;
   showWeatherExpanded?: boolean;
+  placeholder?: string;
+  showScoutAction?: boolean;
 }
 
 type Suggestion = {
   id: string;
   label: string;
   icon: React.ReactNode;
-  action: "ask" | "create" | "search";
+  action: "ask" | "create" | "search" | "scout";
   shortcut?: string;
 };
 
@@ -95,6 +97,8 @@ export function Omnibar({
   weatherLoading,
   onWeatherClick,
   showWeatherExpanded,
+  placeholder: placeholderOverride,
+  showScoutAction,
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -204,6 +208,14 @@ export function Omnibar({
         action: "create",
       });
     } else {
+      if (showScoutAction && hasAI) {
+        suggestions.push({
+          id: "scout",
+          label: `Create Scout: "${input}"`,
+          icon: <Radar size={14} className="text-blue-400" />,
+          action: "scout",
+        });
+      }
       if (hasAI) {
         suggestions.push({
           id: "ask",
@@ -238,7 +250,7 @@ export function Omnibar({
   const handleSuggestionSelect = useCallback(
     (suggestion: Suggestion) => {
       setForcedAction(null);
-      if (suggestion.action === "ask") {
+      if (suggestion.action === "ask" || suggestion.action === "scout") {
         onSend(input);
       } else if (suggestion.action === "create") {
         handleCreateTask(input);
@@ -367,7 +379,7 @@ export function Omnibar({
             <input
               ref={!hasConversation ? inputRef : undefined}
               type="text"
-              placeholder={forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? "Ask Brett anything..." : "Create a task or search..."}
+              placeholder={placeholderOverride ?? (forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? "Ask Brett anything..." : "Create a task or search...")}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}

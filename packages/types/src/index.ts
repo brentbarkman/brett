@@ -118,6 +118,8 @@ export interface Thing {
   contentImageUrl?: string;
   meetingNoteTitle?: string;
   meetingNoteCalendarEventId?: string;
+  scoutName?: string;
+  scoutId?: string;
 }
 
 export interface Attachment {
