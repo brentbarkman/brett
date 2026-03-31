@@ -160,6 +160,8 @@ export interface ThingDetail extends Thing {
   attachments: Attachment[];
   links: ItemLink[];
   brettMessages: BrettMessage[];
+  scoutFindingId?: string;
+  scoutFeedbackUseful?: boolean | null;
 }
 
 export interface CreateItemInput {
@@ -337,6 +339,10 @@ export type ScoutActivityType =
   | "cadence_adapted"
   | "budget_alert";
 
+export type ScoutMemoryType = "factual" | "judgment" | "pattern";
+export type ScoutMemoryStatus = "active" | "superseded" | "removed" | "user_deleted";
+export type ScoutConsolidationStatus = "pending" | "processing" | "completed" | "failed";
+
 export interface ScoutSource {
   name: string;
   url?: string;
@@ -380,7 +386,39 @@ export interface ScoutFinding {
   relevanceScore: number;
   reasoning: string;
   itemId?: string;
-  dismissed: boolean;
+  feedbackUseful?: boolean | null;
+  feedbackAt?: string;
+  createdAt: string;
+}
+
+export interface ScoutMemory {
+  id: string;
+  scoutId: string;
+  type: ScoutMemoryType;
+  content: string;
+  confidence: number;
+  sourceRunIds: string[];
+  status: ScoutMemoryStatus;
+  supersededBy?: string;
+  supersededAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScoutConsolidation {
+  id: string;
+  scoutId: string;
+  runsSinceLastConsolidation: number;
+  memoriesBefore: number;
+  memoriesAfter: number;
+  memoriesCreated: number;
+  memoriesSuperseded: number;
+  tokensUsed: number;
+  tokensInput?: number;
+  tokensOutput?: number;
+  modelId?: string;
+  isBatch: boolean;
+  status: ScoutConsolidationStatus;
   createdAt: string;
 }
 
@@ -394,6 +432,9 @@ export interface ScoutRun {
   dismissedCount: number;
   reasoning?: string;
   tokensUsed: number;
+  tokensInput?: number;
+  tokensOutput?: number;
+  modelId?: string;
   durationMs: number;
   error?: string;
   createdAt: string;
