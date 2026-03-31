@@ -541,7 +541,7 @@ scouts.get("/:id/findings", async (c) => {
     itemId: row.itemId ?? undefined,
     feedbackUseful: row.feedbackUseful ?? undefined,
     feedbackAt: row.feedbackAt?.toISOString(),
-    itemCompleted: row.item?.status === "completed",
+    itemCompleted: row.item?.status === "done",
     createdAt: row.createdAt.toISOString(),
   }));
 
