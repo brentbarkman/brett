@@ -41,6 +41,7 @@ import { analyzeMeetingPatternSkill } from "./analyze-meeting-pattern.js";
 
 // Scouts
 import { createScoutSkill } from "./create-scout.js";
+import { updateScoutSkill } from "./update-scout.js";
 import { listScoutsSkill } from "./list-scouts.js";
 
 export function createRegistry(): SkillRegistry {
@@ -86,8 +87,9 @@ export function createRegistry(): SkillRegistry {
   registry.register(getMeetingActionItemsSkill);
   registry.register(analyzeMeetingPatternSkill);
 
-  // Scouts (2)
+  // Scouts (3)
   registry.register(createScoutSkill);
+  registry.register(updateScoutSkill);
   registry.register(listScoutsSkill);
 
   return registry;
