@@ -590,6 +590,40 @@ export function App() {
     setSelectedScoutId(null);
   };
 
+  // Open omnibar pre-filled to start the create_scout conversational flow
+  const handleNewScout = useCallback(() => {
+    omnibar.reset();
+    omnibar.setInput("Create a scout to ");
+    omnibar.open("bar");
+    setSelectedItem(null);
+    setIsDetailOpen(false);
+  }, [omnibar]);
+
+  // Open omnibar pre-filled to edit a specific scout field with Brett
+  const handleEditWithBrett = useCallback((field: string) => {
+    const scoutName = selectedScoutData?.name ?? "this scout";
+    omnibar.reset();
+    omnibar.setInput(`Edit scout "${scoutName}": `);
+    omnibar.open("bar");
+    setSelectedItem(null);
+    setIsDetailOpen(false);
+  }, [omnibar, selectedScoutData]);
+
+  // Detect successful scout creation in the omnibar and navigate to the new scout
+  useEffect(() => {
+    for (const msg of omnibar.messages) {
+      if (msg.role !== "assistant") continue;
+      for (const tc of msg.toolCalls ?? []) {
+        if (tc.name === "create_scout" && tc.result) {
+          const result = tc.result as { success?: boolean; data?: { id?: string } };
+          if (result.success && result.data?.id) {
+            setSelectedScoutId(result.data.id);
+          }
+        }
+      }
+    }
+  }, [omnibar.messages]);
+
   const handleInboxAddContent = (url: string) => {
     createThing.mutate(
       { type: "content", title: url, sourceUrl: url },
@@ -806,11 +840,13 @@ export function App() {
                   onUpdate={(data) => updateScout.mutate({ id: selectedScoutId, ...data })}
                   onDismissFinding={(findingId) => dismissFinding.mutate({ scoutId: selectedScoutId, findingId })}
                   onPromoteFinding={(findingId) => promoteFinding.mutate({ scoutId: selectedScoutId, findingId })}
+                  onEditWithBrett={handleEditWithBrett}
                 />
               ) : (
                 <ScoutsRoster
                   scouts={scouts}
                   onSelectScout={handleSelectScout}
+                  onNewScout={handleNewScout}
                   isLoading={isLoadingScouts}
                 />
               )

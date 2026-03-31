@@ -28,6 +28,8 @@ export function useOmnibar() {
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  // Maps tool call id → name so we can look up the name when the result arrives
+  const toolCallNamesRef = useRef<Map<string, string>>(new Map());
   const queryClient = useQueryClient();
 
   // Check if AI is configured
@@ -104,6 +106,8 @@ export function useOmnibar() {
               break;
 
             case "tool_call":
+              // Record the tool name so we can look it up when the result arrives
+              toolCallNamesRef.current.set(chunk.id, chunk.name);
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -150,6 +154,16 @@ export function useOmnibar() {
                 queryClient.invalidateQueries({ queryKey: ["inbox"] });
                 queryClient.refetchQueries({ queryKey: ["inbox"] });
                 queryClient.invalidateQueries({ queryKey: ["lists"] });
+              }
+              // Invalidate scouts queries when a scout skill modifies data.
+              // tool_result chunks have no name field; we look up the name via the ref
+              // populated when the corresponding tool_call chunk was processed.
+              {
+                const toolName = toolCallNamesRef.current.get(chunk.id);
+                if (toolName === "create_scout" || toolName === "update_scout" || toolName === "delete_scout") {
+                  queryClient.invalidateQueries({ queryKey: ["scouts"] });
+                  queryClient.refetchQueries({ queryKey: ["scouts"] });
+                }
               }
               break;
 
@@ -222,6 +236,7 @@ export function useOmnibar() {
     setSessionId(null);
     setInput("");
     setSearchResults(null);
+    toolCallNamesRef.current.clear();
   }, [cancel]);
 
   // Local action: create a task directly (no AI needed)
