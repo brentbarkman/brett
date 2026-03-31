@@ -189,8 +189,8 @@ async function executeSearches(
     try {
       const webProvider = getSearchProvider("web");
       const results = await webProvider.search(query, {
-        maxResults: 5,
-        includeContent: true,
+        maxResults: 3,
+        includeContent: false,
         domains: webDomains.length > 0 ? webDomains : undefined,
       });
       for (const result of results) {
@@ -326,7 +326,7 @@ Output ONLY a JSON object with this exact shape:
   const resultsText = dedupedResults
     .map(
       (r, i) =>
-        `<result index="${i}">\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.snippet}\n${r.content ? `Content: ${r.content.slice(0, 500)}` : ""}\n${r.publishedDate ? `Published: ${r.publishedDate}` : ""}\n</result>`,
+        `<result index="${i}">\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.snippet}\n${r.publishedDate ? `Published: ${r.publishedDate}` : ""}\n</result>`,
     )
     .join("\n\n");
 
