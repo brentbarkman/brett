@@ -459,17 +459,10 @@ scouts.post("/:id/run", async (c) => {
     return c.json({ error: "Please wait at least 60 seconds between manual runs" }, 429);
   }
 
-  // Fire-and-forget: dynamically import runner so missing module doesn't crash the file.
-  // The path is constructed at runtime so tsc doesn't resolve the (not-yet-existing) module.
-  const runnerPath = new URL("../lib/scout-runner.js", import.meta.url).href;
-  (async () => {
-    try {
-      const mod = await import(/* @vite-ignore */ runnerPath);
-      await (mod as { runScout: (id: string) => Promise<void> }).runScout(id);
-    } catch {
-      // runner not yet implemented — silently ignore
-    }
-  })();
+  // Fire-and-forget
+  import("../lib/scout-runner.js")
+    .then((mod) => mod.runScout(id))
+    .catch((err) => console.error(`[scouts] Manual run failed for ${id}:`, err));
 
   return c.json({ ok: true, message: "Run triggered" });
 });
