@@ -36,11 +36,11 @@ export function Tooltip({ content, children, delay = 200, position = "top" }: To
       {children}
       {visible && (
         <div
-          className={`absolute ${isTop ? "bottom-full mb-2" : "top-full mt-2"} left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg bg-black/80 backdrop-blur-xl border border-white/10 shadow-xl z-50 whitespace-nowrap transition-opacity duration-150`}
+          className={`absolute ${isTop ? "bottom-full mb-2" : "top-full mt-2"} left-0 px-3 py-1.5 rounded-lg bg-black/80 backdrop-blur-xl border border-white/10 shadow-xl z-50 whitespace-nowrap transition-opacity duration-150`}
         >
           <span className="text-[11px] text-white/70">{content}</span>
           <div
-            className={`absolute ${isTop ? "top-full -mt-1" : "bottom-full -mb-1"} left-1/2 -translate-x-1/2 w-2 h-2 bg-black/80 border-white/10 rotate-45 ${isTop ? "border-r border-b" : "border-l border-t"}`}
+            className={`absolute ${isTop ? "top-full -mt-1" : "bottom-full -mb-1"} left-3 w-2 h-2 bg-black/80 border-white/10 rotate-45 ${isTop ? "border-r border-b" : "border-l border-t"}`}
           />
         </div>
       )}
