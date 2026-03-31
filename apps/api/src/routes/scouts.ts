@@ -50,8 +50,12 @@ scouts.get("/", async (c) => {
   const { status } = c.req.query();
 
   const where: Record<string, unknown> = { userId: user.id };
-  if (status !== "all") {
-    where.status = { not: "completed" };
+  if (status === "all") {
+    // no status filter
+  } else if (["active", "paused", "completed", "expired"].includes(status ?? "")) {
+    where.status = status;
+  } else {
+    where.status = { not: "completed" }; // default
   }
 
   const rows = await prisma.scout.findMany({
@@ -225,6 +229,29 @@ scouts.put("/:id", async (c) => {
     where: { id, userId: user.id },
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
+
+  // Validate provided fields
+  if (body.name !== undefined && typeof body.name === "string" && body.name.length > 100) {
+    return c.json({ error: "name must be 100 characters or fewer" }, 400);
+  }
+  if (body.goal !== undefined && typeof body.goal === "string" && body.goal.length > 5000) {
+    return c.json({ error: "goal must be 5000 characters or fewer" }, 400);
+  }
+  if (body.context !== undefined && typeof body.context === "string" && body.context.length > 5000) {
+    return c.json({ error: "context must be 5000 characters or fewer" }, 400);
+  }
+  if (body.cadenceMinIntervalHours !== undefined && body.cadenceMinIntervalHours < 0.25) {
+    return c.json({ error: "cadenceMinIntervalHours must be at least 0.25 (15 minutes)" }, 400);
+  }
+  if (body.cadenceIntervalHours !== undefined && body.cadenceIntervalHours <= 0) {
+    return c.json({ error: "cadenceIntervalHours must be positive" }, 400);
+  }
+  if (body.budgetTotal !== undefined && body.budgetTotal <= 0) {
+    return c.json({ error: "budgetTotal must be positive" }, 400);
+  }
+  if (body.sensitivity !== undefined && !["low", "medium", "high"].includes(body.sensitivity)) {
+    return c.json({ error: "sensitivity must be one of: low, medium, high" }, 400);
+  }
 
   // Build update object from provided fields only
   const scoutUpdateData: Prisma.ScoutUpdateInput = {};
@@ -439,6 +466,10 @@ scouts.get("/:id/findings", async (c) => {
   const { type, cursor, limit: limitParam } = c.req.query();
   const limit = Math.min(parseInt(limitParam ?? "50", 10) || 50, 100);
 
+  if (cursor && isNaN(new Date(cursor).getTime())) {
+    return c.json({ error: "Invalid cursor" }, 400);
+  }
+
   const where: Record<string, unknown> = { scoutId: id };
   if (type === "insight" || type === "article" || type === "task") {
     where.type = type;
@@ -558,16 +589,23 @@ scouts.get("/:id/activity", async (c) => {
 
   const { cursor, limit: limitParam } = c.req.query();
   const limit = Math.min(parseInt(limitParam ?? "50", 10) || 50, 100);
+
+  if (cursor && isNaN(new Date(cursor).getTime())) {
+    return c.json({ error: "Invalid cursor" }, 400);
+  }
+
   const cursorDate = cursor ? new Date(cursor) : undefined;
 
   const [runs, activities] = await Promise.all([
     prisma.scoutRun.findMany({
       where: { scoutId: id },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     prisma.scoutActivity.findMany({
       where: { scoutId: id },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
   ]);
 

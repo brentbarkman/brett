@@ -1,27 +1,13 @@
-import crypto from "node:crypto";
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma.js";
+import { requireSecret } from "../middleware/scout-secret.js";
 
 const adminScoutsRouter = new Hono();
 
-// Auth middleware: all routes require valid SCOUT_TICK_SECRET header
+// Auth middleware: use ADMIN_SECRET (falling back to SCOUT_TICK_SECRET if not set)
 adminScoutsRouter.use("*", async (c, next) => {
-  const secret = c.req.header("x-scout-secret") ?? "";
-  const expected = process.env.SCOUT_TICK_SECRET ?? "";
-
-  if (!expected || secret.length !== expected.length) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  try {
-    if (!crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(expected))) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-  } catch {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  await next();
+  const envVar = process.env.ADMIN_SECRET ? "ADMIN_SECRET" : "SCOUT_TICK_SECRET";
+  return requireSecret(envVar)(c, next);
 });
 
 // GET /admin/scouts/stats — global stats for the current calendar month (UTC)
@@ -51,22 +37,61 @@ adminScoutsRouter.get("/stats", async (c) => {
 
 // POST /admin/scouts/pause-all — emergency kill switch: pause all active scouts
 adminScoutsRouter.post("/pause-all", async (c) => {
-  const result = await prisma.scout.updateMany({
+  // Only pause active scouts (skip already-paused ones)
+  const activeScouts = await prisma.scout.findMany({
     where: { status: "active" },
+    select: { id: true },
+  });
+
+  if (activeScouts.length === 0) {
+    return c.json({ ok: true, paused: 0 });
+  }
+
+  const activeIds = activeScouts.map((s) => s.id);
+
+  await prisma.scout.updateMany({
+    where: { id: { in: activeIds } },
     data: { status: "paused" },
   });
 
-  console.log(`[admin-scouts] pause-all: paused ${result.count} active scout(s)`);
+  // Log kill switch activity for each paused scout (for resume-all to identify)
+  await prisma.scoutActivity.createMany({
+    data: activeIds.map((scoutId) => ({
+      scoutId,
+      type: "paused" as const,
+      description: "Scout paused by admin kill switch",
+    })),
+  });
 
-  return c.json({ ok: true, paused: result.count });
+  console.log(`[admin-scouts] pause-all: paused ${activeIds.length} active scout(s)`);
+
+  return c.json({ ok: true, paused: activeIds.length });
 });
 
-// POST /admin/scouts/resume-all — lift kill switch: resume all paused scouts
+// POST /admin/scouts/resume-all — lift kill switch: resume only scouts paused by kill switch
 adminScoutsRouter.post("/resume-all", async (c) => {
   const now = new Date();
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+  // Find scouts that were paused by the kill switch (activity within the last hour)
+  const killSwitchActivities = await prisma.scoutActivity.findMany({
+    where: {
+      type: "paused",
+      description: { contains: "kill switch" },
+      createdAt: { gte: oneHourAgo },
+    },
+    select: { scoutId: true },
+    distinct: ["scoutId"],
+  });
+
+  const scoutIds = killSwitchActivities.map((a) => a.scoutId);
+
+  if (scoutIds.length === 0) {
+    return c.json({ ok: true, resumed: 0 });
+  }
 
   const result = await prisma.scout.updateMany({
-    where: { status: "paused" },
+    where: { id: { in: scoutIds }, status: "paused" },
     data: { status: "active", nextRunAt: now },
   });
 

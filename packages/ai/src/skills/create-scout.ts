@@ -1,4 +1,5 @@
 import type { Skill } from "./types.js";
+import { humanizeCadence } from "@brett/utils";
 
 const GRADIENT_PAIRS: Array<[string, string]> = [
   ["#f59e0b", "#ef4444"],
@@ -9,20 +10,6 @@ const GRADIENT_PAIRS: Array<[string, string]> = [
   ["#14b8a6", "#22c55e"],
 ];
 
-/** Convert cadence interval hours to a human-readable string */
-function humanizeCadence(hours: number): string {
-  if (hours < 1) {
-    const minutes = Math.round(hours * 60);
-    return `every ${minutes} minute${minutes !== 1 ? "s" : ""}`;
-  }
-  if (hours < 24) {
-    const rounded = Math.round(hours * 10) / 10;
-    return `every ${rounded} hour${rounded !== 1 ? "s" : ""}`;
-  }
-  const days = Math.round((hours / 24) * 10) / 10;
-  return `every ${days} day${days !== 1 ? "s" : ""}`;
-}
-
 export const createScoutSkill: Skill = {
   name: "create_scout",
   description:
@@ -31,15 +18,15 @@ export const createScoutSkill: Skill = {
   parameters: {
     type: "object",
     properties: {
-      name: { type: "string", description: "Scout name" },
+      name: { type: "string", description: "Short, descriptive scout name (max 100 chars). Example: 'AI Regulation Tracker'" },
       avatarLetter: { type: "string", description: "Single letter for the avatar display" },
       avatarGradientFrom: { type: "string", description: "Hex color for avatar gradient start" },
       avatarGradientTo: { type: "string", description: "Hex color for avatar gradient end" },
-      goal: { type: "string", description: "What to monitor — the core objective" },
-      context: { type: "string", description: "Additional context or constraints for the scout" },
+      goal: { type: "string", description: "What to monitor — the core objective (max 5000 chars). Be specific about what constitutes a relevant finding." },
+      context: { type: "string", description: "Additional context or constraints for the scout (max 5000 chars). Include domain expertise or filtering criteria." },
       sources: {
         type: "array",
-        description: "Sources to monitor",
+        description: "Sources to monitor (max 20). Each source needs a name and optional URL. Example: [{name: 'TechCrunch', url: 'https://techcrunch.com'}]",
         items: {
           type: "object",
           properties: {
@@ -52,23 +39,23 @@ export const createScoutSkill: Skill = {
       sensitivity: {
         type: "string",
         enum: ["low", "medium", "high"],
-        description: "How sensitive the scout is to new findings. Default: medium.",
+        description: "Relevance threshold. 'low' = only highly relevant (0.7+), 'medium' = moderately relevant (0.5+), 'high' = cast a wide net (0.3+). Default: medium.",
       },
       cadenceIntervalHours: {
         type: "number",
-        description: "How often to check (in hours)",
+        description: "Base check interval in hours. Guidelines: breaking news = 1-4h, daily monitoring = 12-24h, weekly digest = 168h. Min 0.25 (15 min).",
       },
       cadenceMinIntervalHours: {
         type: "number",
-        description: "Minimum interval between checks (in hours). Default: 1.",
+        description: "Floor for adaptive cadence (hours). Prevents checking too frequently even when elevating. Min 0.25. Default: 1.",
       },
       budgetTotal: {
         type: "integer",
-        description: "Maximum number of runs per monthly period",
+        description: "Max runs per month (1-500). A 24h cadence scout needs ~30/month. Add buffer for adaptive elevation.",
       },
       endDate: {
         type: "string",
-        description: "ISO date string after which the scout expires (optional)",
+        description: "ISO date string after which the scout expires (optional). Use for time-bounded monitoring (e.g., event tracking).",
       },
     },
     required: ["name", "goal", "sources", "cadenceIntervalHours", "budgetTotal"],
@@ -96,17 +83,43 @@ export const createScoutSkill: Skill = {
     if (!p.name?.trim()) {
       return { success: false, message: "Scout name is required." };
     }
+    if (p.name.length > 100) {
+      return { success: false, message: "Scout name must be 100 characters or fewer." };
+    }
     if (!p.goal?.trim()) {
       return { success: false, message: "Scout goal is required." };
+    }
+    if (p.goal.length > 5000) {
+      return { success: false, message: "Scout goal must be 5000 characters or fewer." };
+    }
+    if (p.context && p.context.length > 5000) {
+      return { success: false, message: "Scout context must be 5000 characters or fewer." };
     }
     if (!Array.isArray(p.sources) || p.sources.length === 0) {
       return { success: false, message: "At least one source is required." };
     }
+    if (p.sources.length > 20) {
+      return { success: false, message: "Maximum of 20 sources allowed." };
+    }
     if (!p.cadenceIntervalHours || p.cadenceIntervalHours <= 0) {
       return { success: false, message: "Cadence interval must be a positive number." };
     }
+    if (p.cadenceMinIntervalHours !== undefined && p.cadenceMinIntervalHours < 0.25) {
+      return { success: false, message: "Minimum cadence interval must be at least 0.25 hours (15 minutes)." };
+    }
     if (!p.budgetTotal || p.budgetTotal <= 0) {
       return { success: false, message: "Budget total must be a positive integer." };
+    }
+    if (p.budgetTotal > 500) {
+      return { success: false, message: "Budget total must be 500 or fewer runs per month." };
+    }
+
+    // Check active scouts limit
+    const activeCount = await ctx.prisma.scout.count({
+      where: { userId: ctx.userId, status: { not: "completed" } },
+    });
+    if (activeCount >= 20) {
+      return { success: false, message: "Maximum of 20 active scouts allowed. Please complete or remove an existing scout first." };
     }
 
     // Default avatarLetter to first char of name
@@ -123,8 +136,8 @@ export const createScoutSkill: Skill = {
     const now = new Date();
     const nextRunAt = new Date(now.getTime() + p.cadenceIntervalHours * 60 * 60 * 1000);
 
-    // budgetResetAt = first day of next month
-    const budgetResetAt = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    // budgetResetAt = first day of next month (UTC)
+    const budgetResetAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
     const scout = await ctx.prisma.scout.create({
       data: {

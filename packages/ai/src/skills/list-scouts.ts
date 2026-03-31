@@ -30,7 +30,7 @@ export const listScoutsSkill: Skill = {
         ...(statusFilter !== "all" ? { status: statusFilter } : {}),
       },
       include: {
-        _count: { select: { findings: true } },
+        _count: { select: { findings: { where: { dismissed: false } } } },
       },
       orderBy: { createdAt: "desc" },
     });
