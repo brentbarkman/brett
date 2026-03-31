@@ -5,136 +5,124 @@ import type {
   GeocodingResult,
 } from "@brett/types";
 
-// ── WMO Weather Code Mapping ──
+// ── OpenWeatherMap Condition Code → Emoji Mapping ──
+// https://openweathermap.org/weather-conditions
 
-const WMO_CODES: Record<number, { condition: string; icon: string }> = {
-  0: { condition: "Clear sky", icon: "\u2600\uFE0F" },
-  1: { condition: "Mainly clear", icon: "\uD83C\uDF24\uFE0F" },
-  2: { condition: "Partly cloudy", icon: "\u26C5" },
-  3: { condition: "Overcast", icon: "\u2601\uFE0F" },
-  45: { condition: "Fog", icon: "\uD83C\uDF2B\uFE0F" },
-  48: { condition: "Rime fog", icon: "\uD83C\uDF2B\uFE0F" },
-  51: { condition: "Light drizzle", icon: "\uD83C\uDF26\uFE0F" },
-  53: { condition: "Moderate drizzle", icon: "\uD83C\uDF26\uFE0F" },
-  55: { condition: "Dense drizzle", icon: "\uD83C\uDF26\uFE0F" },
-  56: { condition: "Light freezing drizzle", icon: "\uD83C\uDF27\uFE0F" },
-  57: { condition: "Dense freezing drizzle", icon: "\uD83C\uDF27\uFE0F" },
-  61: { condition: "Slight rain", icon: "\uD83C\uDF27\uFE0F" },
-  63: { condition: "Moderate rain", icon: "\uD83C\uDF27\uFE0F" },
-  65: { condition: "Heavy rain", icon: "\uD83C\uDF27\uFE0F" },
-  66: { condition: "Light freezing rain", icon: "\uD83C\uDF27\uFE0F" },
-  67: { condition: "Heavy freezing rain", icon: "\uD83C\uDF27\uFE0F" },
-  71: { condition: "Slight snow", icon: "\uD83C\uDF28\uFE0F" },
-  73: { condition: "Moderate snow", icon: "\uD83C\uDF28\uFE0F" },
-  75: { condition: "Heavy snow", icon: "\uD83C\uDF28\uFE0F" },
-  77: { condition: "Snow grains", icon: "\uD83C\uDF28\uFE0F" },
-  80: { condition: "Slight showers", icon: "\uD83C\uDF26\uFE0F" },
-  81: { condition: "Moderate showers", icon: "\uD83C\uDF27\uFE0F" },
-  82: { condition: "Violent showers", icon: "\uD83C\uDF27\uFE0F" },
-  85: { condition: "Slight snow showers", icon: "\uD83C\uDF28\uFE0F" },
-  86: { condition: "Heavy snow showers", icon: "\uD83C\uDF28\uFE0F" },
-  95: { condition: "Thunderstorm", icon: "\u26C8\uFE0F" },
-  96: { condition: "Thunderstorm with hail", icon: "\u26C8\uFE0F" },
-  99: { condition: "Thunderstorm with heavy hail", icon: "\u26C8\uFE0F" },
-};
-
-function resolveWmo(code: number): { condition: string; icon: string } {
-  return WMO_CODES[code] ?? { condition: "Unknown", icon: "\u2753" };
+function resolveOwmIcon(id: number): string {
+  if (id >= 200 && id < 300) return "\u26C8\uFE0F"; // Thunderstorm
+  if (id >= 300 && id < 400) return "\uD83C\uDF26\uFE0F"; // Drizzle
+  if (id >= 500 && id < 600) return "\uD83C\uDF27\uFE0F"; // Rain
+  if (id >= 600 && id < 700) return "\uD83C\uDF28\uFE0F"; // Snow
+  if (id >= 700 && id < 800) return "\uD83C\uDF2B\uFE0F"; // Atmosphere (fog, haze, etc.)
+  if (id === 800) return "\u2600\uFE0F"; // Clear
+  if (id === 801) return "\uD83C\uDF24\uFE0F"; // Few clouds
+  if (id === 802) return "\u26C5"; // Scattered clouds
+  if (id >= 803) return "\u2601\uFE0F"; // Broken/overcast clouds
+  return "\u2753"; // Unknown
 }
 
-// ── Open-Meteo Forecast API ──
+// ── OpenWeatherMap One Call 3.0 API ──
 
-const FORECAST_BASE = "https://api.open-meteo.com/v1/forecast";
+const OWM_BASE = "https://api.openweathermap.org/data/3.0/onecall";
 const GEOCODING_BASE = "https://geocoding-api.open-meteo.com/v1/search";
-// (IP geolocation uses ipapi.co inline — no base URL constant needed)
 
-interface ForecastResponse {
-  current: {
-    temperature_2m: number;
-    apparent_temperature: number;
-    weather_code: number;
-    relative_humidity_2m: number;
-    wind_speed_10m: number;
-  };
-  hourly: {
-    time: string[];
-    temperature_2m: number[];
-    weather_code: number[];
-    precipitation_probability: number[];
-  };
-  daily: {
-    time: string[];
-    temperature_2m_max: number[];
-    temperature_2m_min: number[];
-    weather_code: number[];
-    precipitation_probability_max: number[];
-  };
+function getOwmApiKey(): string {
+  const key = process.env.OPENWEATHERMAP_API_KEY;
+  if (!key) throw new Error("OPENWEATHERMAP_API_KEY is not set");
+  return key;
 }
 
-/** Fetch 7-day forecast from Open-Meteo. All temperatures returned in Celsius — conversion happens at response time. */
+interface OwmCurrentResponse {
+  dt: number;
+  temp: number;
+  feels_like: number;
+  humidity: number;
+  wind_speed: number;
+  weather: Array<{ id: number; description: string }>;
+}
+
+interface OwmHourlyResponse {
+  dt: number;
+  temp: number;
+  pop: number; // probability of precipitation (0-1)
+  weather: Array<{ id: number; description: string }>;
+}
+
+interface OwmDailyResponse {
+  dt: number;
+  temp: { min: number; max: number };
+  pop: number;
+  weather: Array<{ id: number; description: string }>;
+}
+
+interface OwmOnecallResponse {
+  current: OwmCurrentResponse;
+  hourly: OwmHourlyResponse[];
+  daily: OwmDailyResponse[];
+}
+
+/** Fetch 8-day forecast from OpenWeatherMap One Call 3.0. All temperatures returned in Celsius — conversion happens at response time. */
 export async function fetchForecast(
   latitude: number,
   longitude: number,
-  timezone: string,
+  _timezone: string,
 ): Promise<{ current: WeatherCurrent; hourly: WeatherHourly[]; daily: WeatherDaily[] }> {
   const params = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    timezone,
-    temperature_unit: "celsius",
-    current:
-      "temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,wind_speed_10m",
-    hourly: "temperature_2m,weather_code,precipitation_probability",
-    daily:
-      "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max",
-    forecast_days: "7",
+    lat: String(latitude),
+    lon: String(longitude),
+    appid: getOwmApiKey(),
+    units: "metric",
+    exclude: "minutely,alerts",
   });
 
-  const res = await fetch(`${FORECAST_BASE}?${params}`);
+  const res = await fetch(`${OWM_BASE}?${params}`);
   if (!res.ok) {
-    throw new Error(`Open-Meteo forecast failed: ${res.status} ${res.statusText}`);
+    throw new Error(`OpenWeatherMap forecast failed: ${res.status} ${res.statusText}`);
   }
 
-  const data: ForecastResponse = await res.json();
+  const data: OwmOnecallResponse = await res.json();
 
-  const currentWmo = resolveWmo(data.current.weather_code);
+  const currentWeather = data.current.weather[0];
   const current: WeatherCurrent = {
-    temp: data.current.temperature_2m,
-    feelsLike: data.current.apparent_temperature,
-    conditionCode: data.current.weather_code,
-    condition: currentWmo.condition,
-    humidity: data.current.relative_humidity_2m,
-    windSpeed: data.current.wind_speed_10m,
-    icon: currentWmo.icon,
+    temp: data.current.temp,
+    feelsLike: data.current.feels_like,
+    conditionCode: currentWeather?.id ?? 0,
+    condition: currentWeather?.description ?? "Unknown",
+    humidity: data.current.humidity,
+    windSpeed: data.current.wind_speed,
+    icon: resolveOwmIcon(currentWeather?.id ?? 0),
   };
 
-  const hourly: WeatherHourly[] = data.hourly.time.map((time, i) => {
-    const wmo = resolveWmo(data.hourly.weather_code[i]);
+  // OWM returns 48 hours of hourly data
+  const hourly: WeatherHourly[] = data.hourly.map((h) => {
+    const w = h.weather[0];
     return {
-      hour: time,
-      temp: data.hourly.temperature_2m[i],
-      conditionCode: data.hourly.weather_code[i],
-      icon: wmo.icon,
-      precipProb: data.hourly.precipitation_probability[i],
+      hour: new Date(h.dt * 1000).toISOString(),
+      temp: h.temp,
+      conditionCode: w?.id ?? 0,
+      icon: resolveOwmIcon(w?.id ?? 0),
+      precipProb: Math.round(h.pop * 100),
     };
   });
 
-  const daily: WeatherDaily[] = data.daily.time.map((time, i) => {
-    const wmo = resolveWmo(data.daily.weather_code[i]);
+  // OWM returns 8 days of daily data — trim to 7 for consistency
+  const daily: WeatherDaily[] = data.daily.slice(0, 7).map((d) => {
+    const w = d.weather[0];
+    const date = new Date(d.dt * 1000);
     return {
-      date: time,
-      high: data.daily.temperature_2m_max[i],
-      low: data.daily.temperature_2m_min[i],
-      conditionCode: data.daily.weather_code[i],
-      icon: wmo.icon,
-      precipProb: data.daily.precipitation_probability_max[i],
+      date: date.toISOString().split("T")[0],
+      high: d.temp.max,
+      low: d.temp.min,
+      conditionCode: w?.id ?? 0,
+      icon: resolveOwmIcon(w?.id ?? 0),
+      precipProb: Math.round(d.pop * 100),
     };
   });
 
   return { current, hourly, daily };
 }
 
-// ── Open-Meteo Geocoding API ──
+// ── Open-Meteo Geocoding API (kept — free, no key required) ──
 
 interface GeocodingApiResult {
   name: string;
