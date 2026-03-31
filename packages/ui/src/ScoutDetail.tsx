@@ -19,6 +19,8 @@ import {
   SkipForward,
   Loader2,
   Trash2,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import type {
   Scout,
@@ -1065,8 +1067,16 @@ function FindingCard({
         <span className={config.color}>{config.icon}</span>
       </div>
       <div className="flex-1 min-w-0 space-y-1">
-        <h4 className="text-[13px] font-semibold text-white">{finding.title}</h4>
-        <p className="text-xs text-white/50 leading-relaxed">{finding.description}</p>
+        <div className="flex items-center gap-2">
+          <h4 className={`text-[13px] font-semibold ${finding.itemCompleted ? "text-white/30 line-through" : "text-white"}`}>{finding.title}</h4>
+          {finding.itemCompleted && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-[9px] font-semibold text-emerald-400/70">
+              <Check size={8} />
+              Done
+            </span>
+          )}
+        </div>
+        <p className={`text-xs leading-relaxed ${finding.itemCompleted ? "text-white/30" : "text-white/50"}`}>{finding.description}</p>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-white/30">
             {typeLabel} · {formatRelativeTime(finding.createdAt)}
@@ -1076,11 +1086,24 @@ function FindingCard({
               href={finding.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="text-[11px] text-blue-400/60 hover:text-blue-400 transition-colors inline-flex items-center gap-0.5"
             >
               {finding.sourceName}
               <ExternalLink size={9} className="opacity-60" />
             </a>
+          )}
+          {finding.feedbackUseful === true && (
+            <span className="inline-flex items-center gap-0.5 text-[11px] text-emerald-400/60">
+              <ThumbsUp size={9} />
+              Helpful
+            </span>
+          )}
+          {finding.feedbackUseful === false && (
+            <span className="inline-flex items-center gap-0.5 text-[11px] text-red-400/60">
+              <ThumbsDown size={9} />
+              Not helpful
+            </span>
           )}
         </div>
       </div>

@@ -388,6 +388,7 @@ export interface ScoutFinding {
   itemId?: string;
   feedbackUseful?: boolean | null;
   feedbackAt?: string;
+  itemCompleted?: boolean;
   createdAt: string;
 }
 

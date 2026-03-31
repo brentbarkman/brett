@@ -522,6 +522,7 @@ scouts.get("/:id/findings", async (c) => {
       where,
       orderBy: { createdAt: "desc" },
       take: limit,
+      include: { item: { select: { status: true } } },
     }),
     prisma.scoutFinding.count({ where: { scoutId: id } }),
   ]);
@@ -540,6 +541,7 @@ scouts.get("/:id/findings", async (c) => {
     itemId: row.itemId ?? undefined,
     feedbackUseful: row.feedbackUseful ?? undefined,
     feedbackAt: row.feedbackAt?.toISOString(),
+    itemCompleted: row.item?.status === "completed",
     createdAt: row.createdAt.toISOString(),
   }));
 
