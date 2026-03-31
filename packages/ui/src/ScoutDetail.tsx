@@ -67,7 +67,9 @@ interface ScoutDetailProps {
   onPromoteFinding: (findingId: string) => void;
   onEditWithBrett?: (field: string) => void;
   onTriggerRun?: () => void;
+  isRunning?: boolean;
   onClearHistory?: () => void;
+  isClearing?: boolean;
 }
 
 export function ScoutDetail({
@@ -86,7 +88,9 @@ export function ScoutDetail({
   onPromoteFinding,
   onEditWithBrett,
   onTriggerRun,
+  isRunning,
   onClearHistory,
+  isClearing,
 }: ScoutDetailProps) {
   const [activeTab, setActiveTab] = useState<"findings" | "log">("findings");
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -236,17 +240,21 @@ export function ScoutDetail({
                 {onTriggerRun && (
                   <button
                     onClick={onTriggerRun}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                    disabled={isRunning}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   >
-                    ▶ Run Now
+                    {isRunning ? <Loader2 size={12} className="animate-spin" /> : "▶"}
+                    {isRunning ? "Running..." : "Run Now"}
                   </button>
                 )}
                 {onClearHistory && (
                   <button
                     onClick={onClearHistory}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                    disabled={isClearing}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   >
-                    ✕ Clear History
+                    {isClearing ? <Loader2 size={12} className="animate-spin" /> : "✕"}
+                    {isClearing ? "Clearing..." : "Clear History"}
                   </button>
                 )}
               </div>

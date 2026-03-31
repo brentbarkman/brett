@@ -844,7 +844,9 @@ export function App() {
                   onPromoteFinding={(findingId) => promoteFinding.mutate({ scoutId: selectedScoutId, findingId })}
                   onEditWithBrett={handleEditWithBrett}
                   onTriggerRun={import.meta.env.DEV ? () => triggerRun.mutate(selectedScoutId!) : undefined}
+                  isRunning={triggerRun.isPending}
                   onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}
+                  isClearing={clearHistory.isPending}
                 />
               ) : (
                 <ScoutsRoster
