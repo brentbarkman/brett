@@ -20,6 +20,7 @@ function serializeScout(scout: any, extras?: { findingsCount?: number; lastRun?:
     context: scout.context ?? undefined,
     sources: scout.sources as ScoutSource[],
     sensitivity: scout.sensitivity,
+    analysisTier: scout.analysisTier ?? "standard",
     cadenceIntervalHours: scout.cadenceIntervalHours,
     cadenceMinIntervalHours: scout.cadenceMinIntervalHours,
     cadenceCurrentIntervalHours: scout.cadenceCurrentIntervalHours,
@@ -138,6 +139,7 @@ scouts.post("/", async (c) => {
       context: body.context ?? null,
       sources: body.sources as unknown as Prisma.InputJsonValue,
       sensitivity: body.sensitivity ?? "medium",
+      analysisTier: body.analysisTier ?? "standard",
       cadenceIntervalHours: body.cadenceIntervalHours,
       cadenceMinIntervalHours: body.cadenceMinIntervalHours,
       cadenceCurrentIntervalHours: body.cadenceIntervalHours,
@@ -260,6 +262,12 @@ scouts.put("/:id", async (c) => {
   if (body.context !== undefined) scoutUpdateData.context = body.context;
   if (body.sources !== undefined) scoutUpdateData.sources = body.sources as unknown as Prisma.InputJsonValue;
   if (body.sensitivity !== undefined) scoutUpdateData.sensitivity = body.sensitivity;
+  if (body.analysisTier !== undefined) {
+    if (!["standard", "deep"].includes(body.analysisTier)) {
+      return c.json({ error: "analysisTier must be 'standard' or 'deep'" }, 400);
+    }
+    scoutUpdateData.analysisTier = body.analysisTier;
+  }
   if (body.cadenceIntervalHours !== undefined) scoutUpdateData.cadenceIntervalHours = body.cadenceIntervalHours;
   if (body.cadenceMinIntervalHours !== undefined) scoutUpdateData.cadenceMinIntervalHours = body.cadenceMinIntervalHours;
   if (body.cadenceCurrentIntervalHours !== undefined) scoutUpdateData.cadenceCurrentIntervalHours = body.cadenceCurrentIntervalHours;

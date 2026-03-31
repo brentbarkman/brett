@@ -257,11 +257,12 @@ async function judgeResults(
   provider: AIProvider,
   providerName: AIProviderName,
   results: SearchResult[],
-  scout: { goal: string; context: string | null; sensitivity: string },
+  scout: { goal: string; context: string | null; sensitivity: string; analysisTier?: string },
   threshold: number,
   recentFindings: Array<{ title: string; sourceUrl: string | null }>,
 ): Promise<JudgmentResult> {
-  const model = resolveModel(providerName, "medium");
+  const tier = scout.analysisTier === "deep" ? "medium" : "small";
+  const model = resolveModel(providerName, tier);
 
   // URL-based pre-filter for dedup
   const recentUrls = new Set(

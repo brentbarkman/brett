@@ -24,6 +24,7 @@ import type {
   ScoutFinding,
   ActivityEntry,
   ScoutSensitivity,
+  ScoutAnalysisTier,
   UpdateScoutInput,
 } from "@brett/types";
 import { ScoutCard } from "./ScoutCard";
@@ -95,6 +96,7 @@ export function ScoutDetail({
   const [activeTab, setActiveTab] = useState<"findings" | "log">("findings");
   const [editingField, setEditingField] = useState<string | null>(null);
   const [pendingSensitivity, setPendingSensitivity] = useState<ScoutSensitivity | null>(null);
+  const [pendingAnalysisTier, setPendingAnalysisTier] = useState<ScoutAnalysisTier | null>(null);
   const [pendingCadenceBase, setPendingCadenceBase] = useState<number | null>(null);
   const [pendingBudget, setPendingBudget] = useState<number | null>(null);
 
@@ -107,6 +109,14 @@ export function ScoutDetail({
       onUpdate({ sensitivity: pendingSensitivity });
     }
     setPendingSensitivity(null);
+    setEditingField(null);
+  };
+
+  const handleSaveAnalysisTier = () => {
+    if (pendingAnalysisTier !== null) {
+      onUpdate({ analysisTier: pendingAnalysisTier });
+    }
+    setPendingAnalysisTier(null);
     setEditingField(null);
   };
 
@@ -133,6 +143,7 @@ export function ScoutDetail({
 
   const handleCancelEdit = (field: string) => {
     if (field === "sensitivity") setPendingSensitivity(null);
+    if (field === "analysisTier") setPendingAnalysisTier(null);
     if (field === "cadence") { setPendingCadenceBase(null); }
     if (field === "budget") setPendingBudget(null);
     setEditingField(null);
@@ -335,6 +346,32 @@ export function ScoutDetail({
                 <p className="text-[13px] text-white/50">
                   {SENSITIVITY_OPTIONS.find((o) => o.value === scout.sensitivity)?.label ?? scout.sensitivity}
                   <span className="text-white/25"> — {SENSITIVITY_OPTIONS.find((o) => o.value === scout.sensitivity)?.desc}</span>
+                </p>
+              )}
+            </EditableCard>
+
+            {/* Analysis Tier */}
+            <EditableCard
+              label="ANALYSIS"
+              isEditing={editingField === "analysisTier"}
+              onEdit={() => setEditingField("analysisTier")}
+              onCancel={() => handleCancelEdit("analysisTier")}
+              onSave={handleSaveAnalysisTier}
+              editType="inline"
+            >
+              {editingField === "analysisTier" ? (
+                <AnalysisTierPicker
+                  current={pendingAnalysisTier ?? scout.analysisTier}
+                  onChange={setPendingAnalysisTier}
+                />
+              ) : (
+                <p className="text-[13px] text-white/50">
+                  {scout.analysisTier === "deep" ? "Deep" : "Standard"}
+                  <span className="text-white/25">
+                    {scout.analysisTier === "deep"
+                      ? " — thorough analysis, higher cost per run"
+                      : " — fast and cost-effective"}
+                  </span>
                 </p>
               )}
             </EditableCard>
@@ -608,6 +645,52 @@ function SensitivityPicker({
             </div>
             <div className="text-[11px] text-white/30">{opt.desc}</div>
           </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Analysis Tier Picker ─────────────────────────────────────────
+
+const ANALYSIS_TIER_OPTIONS: Array<{ value: ScoutAnalysisTier; label: string; desc: string; cost: string }> = [
+  { value: "standard", label: "Standard", desc: "Fast, cost-effective. Good for news and event monitoring.", cost: "~$0.001/run" },
+  { value: "deep", label: "Deep", desc: "Thorough analysis. Better at nuanced relevance and complex goals.", cost: "~$0.013/run" },
+];
+
+function AnalysisTierPicker({
+  current,
+  onChange,
+}: {
+  current: ScoutAnalysisTier;
+  onChange: (v: ScoutAnalysisTier) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {ANALYSIS_TIER_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-all duration-150 ${
+            current === opt.value
+              ? "bg-blue-500/10 border border-blue-500/20"
+              : "bg-white/[0.02] border border-transparent hover:bg-white/[0.04]"
+          }`}
+        >
+          <div
+            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+              current === opt.value ? "border-blue-400" : "border-white/20"
+            }`}
+          >
+            {current === opt.value && <div className="w-2 h-2 rounded-full bg-blue-400" />}
+          </div>
+          <div className="flex-1">
+            <div className={`text-[12px] font-semibold ${current === opt.value ? "text-white" : "text-white/50"}`}>
+              {opt.label}
+            </div>
+            <div className="text-[11px] text-white/30">{opt.desc}</div>
+          </div>
+          <span className="text-[10px] text-white/20 flex-shrink-0">{opt.cost}</span>
         </button>
       ))}
     </div>

@@ -322,6 +322,7 @@ export type DisplayHint =
 
 export type ScoutStatus = "active" | "paused" | "completed" | "expired";
 export type ScoutSensitivity = "low" | "medium" | "high";
+export type ScoutAnalysisTier = "standard" | "deep";
 export type ScoutRunStatus = "running" | "success" | "failed" | "skipped";
 export type FindingType = "insight" | "article" | "task";
 export type ScoutActivityType =
@@ -349,6 +350,7 @@ export interface Scout {
   context?: string;
   sources: ScoutSource[];
   sensitivity: ScoutSensitivity;
+  analysisTier: ScoutAnalysisTier;
   cadenceIntervalHours: number;
   cadenceMinIntervalHours: number;
   cadenceCurrentIntervalHours: number;
@@ -427,6 +429,7 @@ export interface CreateScoutInput {
   context?: string;
   sources: ScoutSource[];
   sensitivity?: ScoutSensitivity;
+  analysisTier?: ScoutAnalysisTier;
   cadenceIntervalHours: number;
   cadenceMinIntervalHours: number;
   budgetTotal: number;
@@ -440,6 +443,7 @@ export interface UpdateScoutInput {
   context?: string;
   sources?: ScoutSource[];
   sensitivity?: ScoutSensitivity;
+  analysisTier?: ScoutAnalysisTier;
   cadenceIntervalHours?: number;
   cadenceMinIntervalHours?: number;
   cadenceCurrentIntervalHours?: number;

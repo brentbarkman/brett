@@ -53,6 +53,11 @@ export const createScoutSkill: Skill = {
         type: "integer",
         description: "Max runs per month (1-500). A 24h cadence scout needs ~30/month. Add buffer for adaptive elevation.",
       },
+      analysisTier: {
+        type: "string",
+        enum: ["standard", "deep"],
+        description: "Analysis quality. 'standard' (default) — fast, low cost, good for straightforward monitoring. 'deep' — more thorough analysis, better at nuanced relevance, costs ~10x more per run. Recommend 'deep' for complex goals (thesis tracking, multi-signal analysis) and 'standard' for news/event monitoring.",
+      },
       endDate: {
         type: "string",
         description: "ISO date string after which the scout expires (optional). Use for time-bounded monitoring (e.g., event tracking).",
@@ -73,6 +78,7 @@ export const createScoutSkill: Skill = {
       context?: string;
       sources: Array<{ name: string; url?: string }>;
       sensitivity?: "low" | "medium" | "high";
+      analysisTier?: "standard" | "deep";
       cadenceIntervalHours: number;
       cadenceMinIntervalHours?: number;
       budgetTotal: number;
@@ -150,6 +156,7 @@ export const createScoutSkill: Skill = {
         context: p.context?.trim() ?? null,
         sources: p.sources,
         sensitivity: p.sensitivity ?? "medium",
+        analysisTier: p.analysisTier ?? "standard",
         cadenceIntervalHours: p.cadenceIntervalHours,
         cadenceMinIntervalHours,
         cadenceCurrentIntervalHours: p.cadenceIntervalHours,

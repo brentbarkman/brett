@@ -514,6 +514,7 @@ model Scout {
   sources                    Json
 
   sensitivity                ScoutSensitivity @default(medium)
+  analysisTier               String           @default("standard") // "standard" (fast/cheap) or "deep" (thorough/costly)
   cadenceIntervalHours       Float
   cadenceMinIntervalHours    Float
   cadenceCurrentIntervalHours Float
