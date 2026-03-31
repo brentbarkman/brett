@@ -187,28 +187,28 @@ export function ContentDetailPanel({
                 <span>from {detail.scoutName}</span>
               </button>
               {detail.scoutFindingId && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => onScoutFeedback?.(detail.scoutId!, detail.scoutFindingId!, detail.scoutFeedbackUseful === true ? null : true)}
-                    className={`p-1 rounded transition-colors ${
+                    className={`p-1.5 rounded-md transition-colors ${
                       detail.scoutFeedbackUseful === true
                         ? "text-emerald-400 bg-emerald-500/15"
-                        : "text-white/20 hover:text-white/40 hover:bg-white/[0.04]"
+                        : "text-white/40 hover:text-white/60 hover:bg-white/[0.06]"
                     }`}
-                    title="Useful"
+                    title="Helpful — scout will find more like this"
                   >
-                    <ThumbsUp className="w-3 h-3" />
+                    <ThumbsUp className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => onScoutFeedback?.(detail.scoutId!, detail.scoutFindingId!, detail.scoutFeedbackUseful === false ? null : false)}
-                    className={`p-1 rounded transition-colors ${
+                    className={`p-1.5 rounded-md transition-colors ${
                       detail.scoutFeedbackUseful === false
                         ? "text-red-400 bg-red-500/15"
-                        : "text-white/20 hover:text-white/40 hover:bg-white/[0.04]"
+                        : "text-white/40 hover:text-white/60 hover:bg-white/[0.06]"
                     }`}
-                    title="Not useful"
+                    title="Not helpful — scout will learn to skip these"
                   >
-                    <ThumbsDown className="w-3 h-3" />
+                    <ThumbsDown className="w-3.5 h-3.5" />
                   </button>
                 </div>
               )}
