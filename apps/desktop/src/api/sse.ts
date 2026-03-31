@@ -107,6 +107,21 @@ export function useEventStream(): void {
       qc.invalidateQueries({ queryKey: ["inbox"] });
       qc.refetchQueries({ queryKey: ["inbox"] });
     });
+
+    // Scout events
+    es.addEventListener("scout.finding.created", () => {
+      qc.invalidateQueries({ queryKey: ["scouts"] });
+      qc.invalidateQueries({ queryKey: ["scout-findings"] });
+    });
+
+    es.addEventListener("scout.run.completed", () => {
+      qc.invalidateQueries({ queryKey: ["scouts"] });
+      qc.invalidateQueries({ queryKey: ["scout-activity"] });
+    });
+
+    es.addEventListener("scout.status.changed", () => {
+      qc.invalidateQueries({ queryKey: ["scouts"] });
+    });
   }, [qc]);
 
   useEffect(() => {
