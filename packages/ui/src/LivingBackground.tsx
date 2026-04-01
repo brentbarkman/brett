@@ -60,11 +60,13 @@ export function LivingBackground({
         </>
       )}
 
-      {/* Vignette overlay for readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
-
-      {/* Left-side scrim for nav readability */}
-      <div className="absolute inset-y-0 left-0 w-[312px] bg-gradient-to-r from-black/60 to-transparent pointer-events-none" />
+      {/* Readability overlays — only for images, not solid colors */}
+      {!useGradients && (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
+          <div className="absolute inset-y-0 left-0 w-[312px] bg-gradient-to-r from-black/60 to-transparent pointer-events-none" />
+        </>
+      )}
     </div>
   );
 }
