@@ -34,7 +34,7 @@ export function DashboardPage() {
       ) : null}
 
       <div>
-        <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">
+        <h2 className="font-mono text-xs uppercase tracking-wider text-white/50 font-semibold mb-3">
           Recent Scout Runs
         </h2>
         <DataTable

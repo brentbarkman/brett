@@ -42,7 +42,7 @@ export function DataTable<T extends Record<string, any>>({
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-widest text-white/35 font-semibold ${col.className ?? ""}`}
+                className={`px-4 py-2.5 text-left font-mono text-[11px] uppercase tracking-widest text-white/50 font-semibold ${col.className ?? ""}`}
               >
                 {col.header}
               </th>
@@ -52,7 +52,7 @@ export function DataTable<T extends Record<string, any>>({
         <tbody>
           {data.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-4 py-8 text-center text-white/30">
+              <td colSpan={columns.length} className="px-4 py-8 text-center text-white/40">
                 {emptyMessage}
               </td>
             </tr>
@@ -66,7 +66,7 @@ export function DataTable<T extends Record<string, any>>({
                 } transition-colors`}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={`px-4 py-2.5 text-white/70 ${col.className ?? ""}`}>
+                  <td key={col.key} className={`px-4 py-2.5 text-white/80 ${col.className ?? ""}`}>
                     {col.render ? col.render(item) : String(item[col.key] ?? "")}
                   </td>
                 ))}

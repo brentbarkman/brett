@@ -25,7 +25,7 @@ export function AIUsagePage() {
       {/* Filtered section — stats, by model, by feature */}
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-5">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-white/35">
+          <span className="font-mono text-[11px] uppercase tracking-widest text-white/50">
             Filtered view
           </span>
           <div className="flex rounded-lg border border-white/[0.08] overflow-hidden">
@@ -36,7 +36,7 @@ export function AIUsagePage() {
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   days === range.days
                     ? "bg-blue-500/15 text-blue-400"
-                    : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                    : "text-white/50 hover:text-white/70 hover:bg-white/5"
                 }`}
               >
                 {range.label}
@@ -62,7 +62,7 @@ export function AIUsagePage() {
 
         {/* Spend by model */}
         <div>
-          <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">
+          <h2 className="font-mono text-xs uppercase tracking-wider text-white/50 font-semibold mb-3">
             Spend by Model
           </h2>
           <DataTable
@@ -82,7 +82,7 @@ export function AIUsagePage() {
 
         {/* Spend by feature */}
         <div>
-          <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">
+          <h2 className="font-mono text-xs uppercase tracking-wider text-white/50 font-semibold mb-3">
             Spend by Feature
           </h2>
           <DataTable
@@ -105,7 +105,7 @@ export function AIUsagePage() {
 
       {/* Daily trend — always 30d, not filtered */}
       <div>
-        <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Daily Trend</h2>
+        <h2 className="font-mono text-xs uppercase tracking-wider text-white/50 font-semibold mb-3">Daily Trend</h2>
         <DataTable
           loading={dailyLoading}
           data={daily?.daily ?? []}
@@ -122,7 +122,7 @@ export function AIUsagePage() {
 
       {/* Recent sessions — not filtered */}
       <div>
-        <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Recent Sessions</h2>
+        <h2 className="font-mono text-xs uppercase tracking-wider text-white/50 font-semibold mb-3">Recent Sessions</h2>
         <DataTable
           loading={sessionsLoading}
           data={sessions?.sessions ?? []}

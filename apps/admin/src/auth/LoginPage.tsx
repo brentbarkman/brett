@@ -54,7 +54,7 @@ export function LoginPage() {
       <div className="w-full max-w-sm space-y-6 rounded-xl border border-white/10 bg-black/40 p-8 backdrop-blur-2xl">
         <div className="text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-white">Brett Admin</h1>
-          <p className="mt-1 text-sm text-white/50">Sign in with your admin account</p>
+          <p className="mt-1 text-sm text-white/60">Sign in with your admin account</p>
         </div>
 
         {error && (
@@ -95,7 +95,7 @@ export function LoginPage() {
           <>
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 border-t border-white/10" />
-              <span className="font-mono text-xs uppercase tracking-wider text-white/40">dev only</span>
+              <span className="font-mono text-xs uppercase tracking-wider text-white/50">dev only</span>
               <div className="h-px flex-1 border-t border-white/10" />
             </div>
 

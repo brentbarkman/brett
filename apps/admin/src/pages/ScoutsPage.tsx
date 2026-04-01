@@ -36,7 +36,7 @@ export function ScoutsPage() {
       </div>
 
       <div>
-        <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">All Scouts</h2>
+        <h2 className="font-mono text-xs uppercase tracking-wider text-white/50 font-semibold mb-3">All Scouts</h2>
         <DataTable
           loading={scoutsLoading}
           data={scoutsData?.scouts ?? []}
@@ -90,7 +90,7 @@ export function ScoutsPage() {
       </div>
 
       <div>
-        <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Recent Runs</h2>
+        <h2 className="font-mono text-xs uppercase tracking-wider text-white/50 font-semibold mb-3">Recent Runs</h2>
         <DataTable
           loading={runsLoading}
           data={runsData?.runs ?? []}
