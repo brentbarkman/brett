@@ -10,11 +10,34 @@ export function getTimeSegment(hour: number): TimeSegment {
   return "night";
 }
 
-export function getBusynessTier(meetingCount: number, taskCount: number): BusynessTier {
+/**
+ * Compute busyness tier. When avgScore is provided, tiers are relative
+ * to the user's normal workload. Otherwise falls back to fixed thresholds.
+ */
+export function getBusynessTier(
+  meetingCount: number,
+  taskCount: number,
+  avgScore?: number,
+): BusynessTier {
   const score = meetingCount * 2 + taskCount;
+
+  // Relative mode: compare today to user's 14-day average
+  if (avgScore && avgScore > 0) {
+    const ratio = score / avgScore;
+    if (ratio < 0.7) return "light";
+    if (ratio <= 1.3) return "moderate";
+    return "packed";
+  }
+
+  // Fixed fallback for new users with no history
   if (score <= 4) return "light";
   if (score <= 10) return "moderate";
   return "packed";
+}
+
+/** Raw busyness score — used for computing averages */
+export function getBusynessScore(meetingCount: number, taskCount: number): number {
+  return meetingCount * 2 + taskCount;
 }
 
 export type BackgroundStyle = "photography" | "abstract";

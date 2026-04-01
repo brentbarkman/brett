@@ -1059,6 +1059,7 @@ export function computeNextDueDate(
 export {
   getTimeSegment,
   getBusynessTier,
+  getBusynessScore,
   selectImage,
   type TimeSegment,
   type BusynessTier,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getTimeSegment, getBusynessTier, selectImage } from "../background";
+import { getTimeSegment, getBusynessTier, getBusynessScore, selectImage } from "../background";
 
 describe("getTimeSegment", () => {
   it("returns dawn for 5am-6:59am", () => {
@@ -61,6 +61,51 @@ describe("getBusynessTier", () => {
     expect(getBusynessTier(0, 6)).toBe("moderate");
     expect(getBusynessTier(4, 3)).toBe("packed");
     expect(getBusynessTier(0, 11)).toBe("packed");
+  });
+
+  describe("relative mode (with avgScore)", () => {
+    // avgScore = 10 → light < 7, moderate 7-13, packed > 13
+    it("returns light when ratio < 0.7", () => {
+      // score = 6, ratio = 0.6
+      expect(getBusynessTier(2, 2, 10)).toBe("light");
+      // score = 0, ratio = 0
+      expect(getBusynessTier(0, 0, 10)).toBe("light");
+    });
+
+    it("returns moderate when ratio 0.7-1.3", () => {
+      // score = 8, ratio = 0.8
+      expect(getBusynessTier(3, 2, 10)).toBe("moderate");
+      // score = 10, ratio = 1.0
+      expect(getBusynessTier(3, 4, 10)).toBe("moderate");
+      // score = 13, ratio = 1.3
+      expect(getBusynessTier(5, 3, 10)).toBe("moderate");
+    });
+
+    it("returns packed when ratio > 1.3", () => {
+      // score = 14, ratio = 1.4
+      expect(getBusynessTier(5, 4, 10)).toBe("packed");
+      // score = 20, ratio = 2.0
+      expect(getBusynessTier(8, 4, 10)).toBe("packed");
+    });
+
+    it("falls back to fixed thresholds when avgScore is 0", () => {
+      expect(getBusynessTier(0, 3, 0)).toBe("light");
+      expect(getBusynessTier(3, 2, 0)).toBe("moderate");
+      expect(getBusynessTier(5, 1, 0)).toBe("packed");
+    });
+
+    it("falls back to fixed thresholds when avgScore is undefined", () => {
+      expect(getBusynessTier(0, 3)).toBe("light");
+      expect(getBusynessTier(3, 2)).toBe("moderate");
+    });
+  });
+});
+
+describe("getBusynessScore", () => {
+  it("computes score as meetings*2 + tasks", () => {
+    expect(getBusynessScore(0, 0)).toBe(0);
+    expect(getBusynessScore(3, 4)).toBe(10);
+    expect(getBusynessScore(5, 1)).toBe(11);
   });
 });
 

@@ -24,6 +24,7 @@ users.get("/me", authMiddleware, async (c) => {
       tempUnit: true,
       weatherEnabled: true,
       backgroundStyle: true,
+      avgBusynessScore: true,
     },
   });
 
@@ -41,7 +42,88 @@ users.get("/me", authMiddleware, async (c) => {
     tempUnit: fullUser?.tempUnit ?? "auto",
     weatherEnabled: fullUser?.weatherEnabled ?? true,
     backgroundStyle: fullUser?.backgroundStyle ?? "photography",
+    avgBusynessScore: fullUser?.avgBusynessScore ?? 0,
   });
+});
+
+// POST /users/busyness-sync — compute and store 14-day avg busyness score
+users.post("/busyness-sync", authMiddleware, async (c) => {
+  const user = c.get("user");
+
+  // Get user timezone for day boundary computation
+  const userData = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { timezone: true },
+  });
+  const tz = userData?.timezone ?? "America/Los_Angeles";
+
+  // Compute 14-day window in UTC using user's timezone
+  const now = new Date();
+  const fourteenDaysAgo = new Date(now);
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+  // Count tasks that were due in each of the past 14 days
+  const tasks = await prisma.item.findMany({
+    where: {
+      userId: user.id,
+      type: "task",
+      dueDate: {
+        gte: fourteenDaysAgo,
+        lte: now,
+      },
+    },
+    select: { dueDate: true },
+  });
+
+  // Count calendar events per day
+  const events = await prisma.calendarEvent.findMany({
+    where: {
+      userId: user.id,
+      startTime: {
+        gte: fourteenDaysAgo,
+        lte: now,
+      },
+      isAllDay: false, // All-day events don't count
+    },
+    select: { startTime: true },
+  });
+
+  // Group by calendar date in user's timezone and compute daily scores
+  const dailyScores: Record<string, { meetings: number; tasks: number }> = {};
+
+  for (let d = 0; d < 14; d++) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - d);
+    const dateKey = date.toLocaleDateString("en-CA", { timeZone: tz });
+    dailyScores[dateKey] = { meetings: 0, tasks: 0 };
+  }
+
+  for (const task of tasks) {
+    if (!task.dueDate) continue;
+    const dateKey = task.dueDate.toLocaleDateString("en-CA", { timeZone: tz });
+    if (dailyScores[dateKey]) dailyScores[dateKey].tasks++;
+  }
+
+  for (const event of events) {
+    const dateKey = event.startTime.toLocaleDateString("en-CA", { timeZone: tz });
+    if (dailyScores[dateKey]) dailyScores[dateKey].meetings++;
+  }
+
+  // Compute average score: (meetings * 2 + tasks) per day
+  const scores = Object.values(dailyScores).map(
+    (d) => d.meetings * 2 + d.tasks
+  );
+  const avgScore = scores.length > 0
+    ? scores.reduce((a, b) => a + b, 0) / scores.length
+    : 0;
+
+  // Store it
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { avgBusynessScore: Math.round(avgScore * 10) / 10 },
+  });
+
+  return c.json({ avgBusynessScore: Math.round(avgScore * 10) / 10 });
 });
 
 // PATCH /users/timezone — update user timezone

@@ -421,18 +421,25 @@ export function App() {
   // Meeting count from today's calendar events
   const todayMeetingCount = todayCalendarEvents?.length ?? 0;
 
-  // Background style from user preferences
+  // Background style + avg busyness from user preferences
   const { data: userPrefs } = useQuery({
     queryKey: ["user-me"],
-    queryFn: () => apiFetch<{ backgroundStyle?: string }>("/users/me"),
+    queryFn: () => apiFetch<{ backgroundStyle?: string; avgBusynessScore?: number }>("/users/me"),
     staleTime: 5 * 60 * 1000,
   });
   const backgroundStyle: BackgroundStyle = (userPrefs?.backgroundStyle as BackgroundStyle) ?? "photography";
+  const avgBusynessScore = userPrefs?.avgBusynessScore ?? 0;
+
+  // Sync busyness average on app mount (fire-and-forget)
+  useEffect(() => {
+    apiFetch("/users/busyness-sync", { method: "POST" }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const background = useBackground({
     meetingCount: todayMeetingCount,
     taskCount: todayTaskCount,
     backgroundStyle,
+    avgBusynessScore,
   });
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)

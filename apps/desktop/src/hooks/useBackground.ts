@@ -22,6 +22,7 @@ interface UseBackgroundInput {
   meetingCount: number;
   taskCount: number;
   backgroundStyle: BackgroundStyle;
+  avgBusynessScore?: number;
 }
 
 interface UseBackgroundOutput {
@@ -40,6 +41,7 @@ export function useBackground({
   meetingCount,
   taskCount,
   backgroundStyle,
+  avgBusynessScore,
 }: UseBackgroundInput): UseBackgroundOutput {
   const { data: config } = useAppConfig();
   const baseUrl = config?.storageBaseUrl ?? "";
@@ -49,7 +51,7 @@ export function useBackground({
     getTimeSegment(new Date().getHours())
   );
   const [busynessTier, setBusynessTier] = useState<BusynessTier>(() =>
-    getBusynessTier(meetingCount, taskCount)
+    getBusynessTier(meetingCount, taskCount, avgBusynessScore)
   );
 
   // Image state (photography)
@@ -93,7 +95,7 @@ export function useBackground({
 
   const rotateImage = useCallback(() => {
     const seg = getTimeSegment(new Date().getHours());
-    const tier = getBusynessTier(meetingCount, taskCount);
+    const tier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
 
     // Reset shown list if category changed
     const cat = categoryRef.current;
@@ -192,7 +194,7 @@ export function useBackground({
 
   // Recalculate busyness when inputs change
   useEffect(() => {
-    const newTier = getBusynessTier(meetingCount, taskCount);
+    const newTier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
     setBusynessTier(newTier);
   }, [meetingCount, taskCount]);
 
@@ -237,7 +239,7 @@ export function useBackground({
 
       if (minutesUntilBoundary <= 5 && minutesUntilBoundary > 0) {
         const nextSeg = getTimeSegment(nextBoundaryHour);
-        const tier = getBusynessTier(meetingCount, taskCount);
+        const tier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
         const path = selectImage(manifest as BackgroundManifest, backgroundStyle, nextSeg, tier, []);
         if (path && baseUrl) {
           const img = new Image();
