@@ -26,6 +26,122 @@ function GoogleIcon() {
   );
 }
 
+function PasskeyManager() {
+  const [passkeys, setPasskeys] = useState<
+    Array<{ id: string; name?: string | null; createdAt?: Date | null }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [registering, setRegistering] = useState(false);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  async function loadPasskeys() {
+    try {
+      const res = await authClient.passkey.listUserPasskeys();
+      if (res.data) setPasskeys(res.data);
+    } catch {
+      // silently fail — passkeys may not be supported
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  React.useEffect(() => {
+    loadPasskeys();
+  }, []);
+
+  async function handleRegister() {
+    setRegistering(true);
+    setMessage(null);
+    try {
+      const res = await authClient.passkey.addPasskey();
+      if (res?.error) throw new Error(String(res.error.message));
+      setMessage({ type: "success", text: "Passkey registered" });
+      loadPasskeys();
+    } catch (err: unknown) {
+      setMessage({
+        type: "error",
+        text:
+          err instanceof Error ? err.message : "Failed to register passkey",
+      });
+    } finally {
+      setRegistering(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Remove this passkey?")) return;
+    try {
+      await authClient.passkey.deletePasskey({ id });
+      setMessage({ type: "success", text: "Passkey removed" });
+      loadPasskeys();
+    } catch (err: unknown) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to remove passkey",
+      });
+    }
+  }
+
+  if (loading) {
+    return <div className="bg-white/5 animate-pulse rounded-lg h-10 w-full" />;
+  }
+
+  return (
+    <div className="space-y-3">
+      {passkeys.length > 0 ? (
+        <div className="space-y-2">
+          {passkeys.map((pk) => (
+            <div
+              key={pk.id}
+              className="flex items-center justify-between p-2.5 bg-white/5 rounded-lg"
+            >
+              <div>
+                <div className="text-sm text-white">
+                  {pk.name || "Passkey"}
+                </div>
+                {pk.createdAt && (
+                  <div className="text-xs text-white/40">
+                    Added {new Date(pk.createdAt).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => handleDelete(pk.id)}
+                className="text-xs text-red-400/60 hover:text-red-400 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-white/40 italic">
+          No passkeys registered.
+        </p>
+      )}
+
+      {message && (
+        <p
+          className={`text-xs ${message.type === "success" ? "text-green-400" : "text-red-400"}`}
+        >
+          {message.text}
+        </p>
+      )}
+
+      <button
+        onClick={handleRegister}
+        disabled={registering}
+        className="bg-white/10 text-white border border-white/15 rounded-lg px-4 py-2 text-sm font-medium hover:bg-white/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        {registering ? "Registering..." : "Register Passkey"}
+      </button>
+    </div>
+  );
+}
+
 export function SecuritySection() {
   const { user } = useAuth();
   const { isGoogle, isEmailPassword, loading, error: accountError } = useAccountType();
@@ -165,6 +281,12 @@ export function SecuritySection() {
           </p>
         )
       )}
+
+      {/* Passkeys section — always shown regardless of auth method */}
+      <div className="mt-6 pt-6 border-t border-white/10">
+        <h4 className="text-xs text-white/50 mb-3">Passkeys</h4>
+        <PasskeyManager />
+      </div>
     </div>
   );
 }

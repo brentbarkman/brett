@@ -3,6 +3,7 @@ import { useDashboardStats } from "../api/dashboard";
 import { useAdminScoutRuns } from "../api/scouts";
 import { StatCard } from "../components/StatCard";
 import { DataTable } from "../components/DataTable";
+import { PasskeyBanner } from "../components/PasskeyBanner";
 
 export function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
@@ -11,6 +12,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-lg font-semibold text-white">Dashboard</h1>
+      <PasskeyBanner />
 
       {statsLoading ? (
         <div className="grid grid-cols-4 gap-3">
