@@ -10,9 +10,12 @@ import {
   type BackgroundManifest,
 } from "@brett/business";
 import manifest from "../data/background-manifest.json";
-import { selectGradient } from "../data/abstract-gradients";
+import { selectGradient, gradients } from "../data/abstract-gradients";
 import { useAppConfig } from "./useAppConfig";
 import fallbackBg from "../assets/fallback-bg.webp";
+
+const SEGMENTS: TimeSegment[] = ["dawn", "morning", "afternoon", "goldenHour", "evening", "night"];
+const TIERS: BusynessTier[] = ["light", "moderate", "packed"];
 
 const ROTATION_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 const SEGMENT_CHECK_MS = 60 * 1000; // 60 seconds
@@ -35,6 +38,10 @@ interface UseBackgroundOutput {
   /** CSS background value for abstract mode, null for photography */
   gradient: string | null;
   nextGradient: string | null;
+  /** Dev only: cycle to the next image/gradient sequentially */
+  devNext: () => void;
+  /** Dev only: label for current background (segment/tier/index) */
+  devLabel: string;
 }
 
 export function useBackground({
@@ -252,6 +259,60 @@ export function useBackground({
     return () => clearInterval(interval);
   }, [isAbstract, meetingCount, taskCount, backgroundStyle, baseUrl, buildUrl]);
 
+  // Dev: sequential cycling through ALL images, ignoring smart logic
+  const devIndexRef = useRef(-1);
+  const [devLabel, setDevLabel] = useState("");
+
+  const devNext = useCallback(() => {
+    devIndexRef.current++;
+
+    if (isAbstract) {
+      // Flatten all gradients: segment → tier → index
+      const allGradients: { seg: TimeSegment; tier: BusynessTier; idx: number; bg: string }[] = [];
+      for (const seg of SEGMENTS) {
+        for (const tier of TIERS) {
+          const defs = gradients[seg]?.[tier] ?? [];
+          defs.forEach((g, i) => allGradients.push({ seg, tier, idx: i, bg: g.background }));
+        }
+      }
+      const pos = devIndexRef.current % allGradients.length;
+      const entry = allGradients[pos];
+      setDevLabel(`${entry.seg}/${entry.tier}/${entry.idx + 1} (${pos + 1}/${allGradients.length})`);
+
+      setNextGradient(entry.bg);
+      startCrossfade(() => {
+        setCurrentGradient(entry.bg);
+        setNextGradient(null);
+      });
+    } else {
+      // Flatten all photo paths: segment → tier → image
+      const allImages: { seg: string; tier: string; path: string }[] = [];
+      const photoSet = (manifest as BackgroundManifest).sets.photography;
+      for (const seg of SEGMENTS) {
+        for (const tier of TIERS) {
+          const paths = photoSet?.[seg]?.[tier] ?? [];
+          paths.forEach((p) => allImages.push({ seg, tier, path: p }));
+        }
+      }
+      const pos = devIndexRef.current % allImages.length;
+      const entry = allImages[pos];
+      if (!baseUrl) return;
+      const fullUrl = buildUrl(entry.path);
+      setDevLabel(`${entry.seg}/${entry.tier}/${entry.path.split("/").pop()} (${pos + 1}/${allImages.length})`);
+
+      cancelTransition();
+      const img = new Image();
+      img.onload = () => {
+        setNextImage(fullUrl);
+        startCrossfade(() => {
+          setCurrentImage(fullUrl);
+          setNextImage(null);
+        });
+      };
+      img.src = fullUrl;
+    }
+  }, [isAbstract, baseUrl, buildUrl, cancelTransition, startCrossfade]);
+
   return {
     imageUrl: currentImage,
     nextImageUrl: nextImage,
@@ -260,5 +321,7 @@ export function useBackground({
     busynessTier,
     gradient: isAbstract ? currentGradient : null,
     nextGradient: isAbstract ? nextGradient : null,
+    devNext,
+    devLabel,
   };
 }
