@@ -134,8 +134,11 @@ export function BackgroundSection() {
       ) : null}
 
       {/* Gallery */}
-      {style === "photography" && (
+      {style === "photography" && baseUrl && (
         <PhotoGallery baseUrl={baseUrl} pinned={pinned} onPin={handlePin} />
+      )}
+      {style === "photography" && !baseUrl && (
+        <div className="text-xs text-white/30 py-4 text-center">Loading images...</div>
       )}
       {style === "abstract" && (
         <GradientGallery pinned={pinned} onPin={handlePin} />
@@ -175,7 +178,7 @@ function PhotoGallery({ baseUrl, pinned, onPin }: { baseUrl: string; pinned: str
                       src={`${baseUrl}/backgrounds/${path}`}
                       alt=""
                       className="w-full h-full object-cover"
-                      loading="lazy"
+                      loading="eager"
                     />
                     {isPinned ? (
                       <div className="absolute top-1 right-1 p-1 rounded-full bg-blue-500/80">
