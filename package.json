@@ -9,6 +9,7 @@
     "dev:desktop": "turbo run dev --filter=@brett/desktop",
     "dev:mobile": "turbo run dev --filter=@brett/mobile",
     "dev:api": "turbo run dev --filter=@brett/api",
+    "dev:admin": "turbo run dev --filter=@brett/admin-api --filter=@brett/admin",
     "dev:full": "./scripts/dev.sh",
     "db:up": "docker compose up -d 2>/dev/null || brew services start postgresql@16 2>/dev/null || brew services start postgresql",
     "db:down": "docker compose down 2>/dev/null || brew services stop postgresql@16 2>/dev/null || brew services stop postgresql",
