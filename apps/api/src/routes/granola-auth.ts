@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { encryptToken } from "../lib/encryption.js";
+import { resolveRelinkTask } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { randomBytes, createHash, createHmac, timingSafeEqual } from "crypto";
 import type { Context } from "hono";
@@ -295,7 +296,7 @@ granolaAuth.get("/callback", async (c) => {
   if (!email) email = user.email;
 
   // Upsert GranolaAccount
-  await prisma.granolaAccount.upsert({
+  const granolaAccount = await prisma.granolaAccount.upsert({
     where: { userId },
     create: {
       id: generateId(),
@@ -316,6 +317,11 @@ granolaAuth.get("/callback", async (c) => {
         : new Date(Date.now() + 3600 * 1000),
     },
   });
+
+  // Resolve any existing re-link task for this connection
+  await resolveRelinkTask(userId, "granola").catch((e) =>
+    console.error("[granola-auth] Failed to resolve re-link task:", e),
+  );
 
   // Trigger initial sync in background
   import("../services/granola-sync.js")

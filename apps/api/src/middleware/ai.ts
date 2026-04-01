@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import type { AuthEnv } from "./auth.js";
 import { prisma } from "../lib/prisma.js";
 import { decryptToken } from "../lib/encryption.js";
+import { createRelinkTask } from "../lib/connection-health.js";
 import { getProvider } from "@brett/ai";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName } from "@brett/types";
@@ -37,6 +38,10 @@ export const aiMiddleware = createMiddleware<AIEnv>(async (c, next) => {
       where: { id: config.id },
       data: { isValid: false },
     });
+    await createRelinkTask(
+      user.id, "ai", config.id,
+      `Your ${config.provider} API key is no longer valid. Go to Settings → AI Provider to enter a new key.`,
+    ).catch((e) => console.error("[ai-middleware] Failed to create re-link task:", e));
     return c.json(
       {
         error: "ai_key_invalid",

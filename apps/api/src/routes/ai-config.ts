@@ -3,6 +3,7 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { encryptToken } from "../lib/encryption.js";
+import { resolveRelinkTask } from "../lib/connection-health.js";
 import type { AIProviderName } from "@brett/types";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
@@ -133,6 +134,11 @@ aiConfig.post("/config", rateLimiter(5), async (c) => {
       },
     });
   });
+
+  // Resolve any existing re-link task for AI
+  await resolveRelinkTask(user.id, "ai").catch((e) =>
+    console.error("[ai-config] Failed to resolve re-link task:", e),
+  );
 
   return c.json(
     {

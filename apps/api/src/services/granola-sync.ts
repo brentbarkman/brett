@@ -6,6 +6,12 @@ import {
 import { findBestMatch, type MatchCandidate } from "./meeting-matcher.js";
 import { publishSSE } from "../lib/sse.js";
 import { processActionItems } from "./granola-action-items.js";
+import { createRelinkTask } from "../lib/connection-health.js";
+
+function isAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("Token refresh failed") || /^(401|403)\b/.test(msg);
+}
 
 // Working hours gate: 8am-7pm in user's timezone
 const WORKING_HOURS_START = 8;
@@ -68,6 +74,12 @@ export async function initialGranolaSync(userId: string): Promise<void> {
     });
   } catch (err) {
     console.error(`[granola-sync] Initial sync failed for user ${userId}:`, err);
+    if (isAuthError(err)) {
+      await createRelinkTask(
+        userId, "granola", account.id,
+        "Granola sync failed — your connection was lost or the token expired. Go to Settings → Granola to reconnect.",
+      ).catch((e) => console.error("[granola-sync] Failed to create re-link task:", e));
+    }
   }
 }
 
@@ -107,6 +119,12 @@ export async function incrementalGranolaSync(userId: string): Promise<void> {
     }
   } catch (err) {
     console.error(`[granola-sync] Incremental sync failed for user ${userId}:`, err);
+    if (isAuthError(err)) {
+      await createRelinkTask(
+        userId, "granola", account.id,
+        "Granola sync failed — your connection was lost or the token expired. Go to Settings → Granola to reconnect.",
+      ).catch((e) => console.error("[granola-sync] Failed to create re-link task:", e));
+    }
   }
 }
 
@@ -136,6 +154,12 @@ export async function syncAfterMeeting(
     await syncMeetings(account.id, userId, meetings);
   } catch (err) {
     console.error(`[granola-sync] Post-meeting sync failed for user ${userId}:`, err);
+    if (isAuthError(err)) {
+      await createRelinkTask(
+        userId, "granola", account.id,
+        "Granola sync failed — your connection was lost or the token expired. Go to Settings → Granola to reconnect.",
+      ).catch((e) => console.error("[granola-sync] Failed to create re-link task:", e));
+    }
   }
 }
 

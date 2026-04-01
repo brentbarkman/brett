@@ -10,6 +10,7 @@ import type { AIProviderName, ScoutSource, FindingType } from "@brett/types";
 import { humanizeCadence, detectContentType } from "@brett/utils";
 import type { Prisma } from "@prisma/client";
 import { getActiveMemories, formatMemoriesForPrompt, parseMemoryUpdates, applyMemoryUpdates, incrementAndCheckConsolidation, runConsolidation } from "./scout-memory.js";
+import { createRelinkTask } from "./connection-health.js";
 
 // ── Constants ──
 
@@ -720,6 +721,10 @@ export async function runScout(scoutId: string): Promise<void> {
         where: { id: aiConfig.id },
         data: { isValid: false },
       });
+      await createRelinkTask(
+        scout.userId, "ai", aiConfig.id,
+        `Your ${aiConfig.provider} API key is no longer valid. Go to Settings → AI Provider to enter a new key.`,
+      ).catch((e) => console.error("[scout-runner] Failed to create re-link task:", e));
       await finalizeRun("skipped", { reasoning: "AI API key is no longer valid" });
       return;
     }

@@ -9,6 +9,7 @@ import {
 } from "../lib/google-calendar.js";
 import { extractMeetingLink } from "./meeting-link.js";
 import { publishSSE } from "../lib/sse.js";
+import { createRelinkTask } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { createHmac } from "crypto";
 import type { calendar_v3 } from "googleapis";
@@ -81,7 +82,19 @@ export async function initialSync(googleAccountId: string): Promise<void> {
     where: { id: googleAccountId },
   });
 
-  const client = await getCalendarClient(googleAccountId);
+  let client;
+  try {
+    client = await getCalendarClient(googleAccountId);
+  } catch (err) {
+    if (isGoogleApiError(err) && (err.code === 401 || err.code === 403)) {
+      await createRelinkTask(
+        account.userId, "google-calendar", googleAccountId,
+        `Google Calendar sync failed — your access was revoked or expired (error ${err.code}). Go to Settings → Calendar to reconnect.`,
+      ).catch((e) => console.error("[calendar-sync] Failed to create re-link task:", e));
+    }
+    throw err;
+  }
+
   const calendars = await fetchCalendarList(client);
 
   const { timeMin, timeMax } = getSyncTimeRange();
@@ -255,6 +268,12 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
           console.error(
             `[calendar-sync] Auth failed for account ${googleAccountId} (${err.code}): ${err.message}. Account needs re-authorization.`,
           );
+          await createRelinkTask(
+            account.userId,
+            "google-calendar",
+            googleAccountId,
+            `Google Calendar sync failed — your access was revoked or expired (error ${err.code}). Go to Settings → Calendar to reconnect.`,
+          ).catch((e) => console.error("[calendar-sync] Failed to create re-link task:", e));
           return;
         } else {
           throw err;

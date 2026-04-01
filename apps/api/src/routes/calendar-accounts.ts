@@ -9,6 +9,7 @@ import {
 } from "../lib/google-calendar.js";
 import { encryptToken } from "../lib/encryption.js";
 import { initialSync } from "../services/calendar-sync.js";
+import { resolveRelinkTask } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { google } from "googleapis";
 import { randomBytes, createHmac, timingSafeEqual } from "crypto";
@@ -199,6 +200,11 @@ calendarAccounts.get("/callback", async (c) => {
         : new Date(Date.now() + 3600 * 1000),
     },
   });
+
+  // Resolve any existing re-link task for this connection
+  await resolveRelinkTask(user.id, "google-calendar").catch((e) =>
+    console.error("[calendar-accounts] Failed to resolve re-link task:", e),
+  );
 
   // Trigger initial sync in background
   initialSync(account.id).catch((err) => {
