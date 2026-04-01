@@ -12,6 +12,7 @@ import type {
   UpdateScoutInput,
   ActivityEntry,
   ScoutBudgetSummary,
+  FindingType,
 } from "@brett/types";
 
 // ─── Queries ───
@@ -223,5 +224,32 @@ export function useDeleteScoutMemory() {
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["scout-memories", variables.scoutId] });
     },
+  });
+}
+
+// ─── Recent Findings ───
+
+export interface RecentFinding {
+  id: string;
+  scoutId: string;
+  type: FindingType;
+  title: string;
+  description: string;
+  sourceUrl?: string;
+  sourceName: string;
+  relevanceScore: number;
+  createdAt: string;
+  scoutName: string;
+  scoutAvatarLetter: string;
+  scoutAvatarGradient: [string, string];
+}
+
+export function useRecentFindings(limit = 20) {
+  return useQuery({
+    queryKey: ["recent-findings", limit],
+    queryFn: () =>
+      apiFetch<{ findings: RecentFinding[] }>(
+        `/scouts/findings/recent?limit=${limit}`
+      ),
   });
 }
