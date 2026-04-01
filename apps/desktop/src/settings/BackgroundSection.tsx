@@ -5,7 +5,6 @@ import { useAppConfig } from "../hooks/useAppConfig";
 import { Image, Sparkles, Circle, Pin } from "lucide-react";
 import type { BackgroundManifest, TimeSegment, BusynessTier } from "@brett/business";
 import manifest from "../data/background-manifest.json";
-import { gradients } from "../data/abstract-gradients";
 import { solidColors } from "../data/solid-colors";
 
 type Style = "photography" | "abstract" | "solid";
@@ -111,7 +110,7 @@ export function BackgroundSection() {
         <div className="text-xs text-white/30 py-4 text-center">Loading images...</div>
       )}
       {style === "abstract" && (
-        <GradientGallery pinned={pinned} onPin={handlePin} />
+        <AbstractGallery baseUrl={baseUrl} pinned={pinned} onPin={handlePin} />
       )}
       {style === "solid" && (
         <SolidGallery pinned={pinned} onPin={handlePin} />
@@ -170,7 +169,9 @@ function PhotoGallery({ baseUrl, pinned, onPin }: { baseUrl: string; pinned: str
   );
 }
 
-function GradientGallery({ pinned, onPin }: { pinned: string | null; onPin: (id: string) => void }) {
+function AbstractGallery({ baseUrl, pinned, onPin }: { baseUrl: string; pinned: string | null; onPin: (id: string) => void }) {
+  const abstractSet = (manifest as BackgroundManifest).sets.abstract;
+
   return (
     <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide">
       {SEGMENTS.map((seg) => (
@@ -180,20 +181,24 @@ function GradientGallery({ pinned, onPin }: { pinned: string | null; onPin: (id:
           </div>
           <div className="grid grid-cols-3 gap-2">
             {TIERS.flatMap((tier) =>
-              (gradients[seg]?.[tier] ?? []).map((def, idx) => {
-                const id = `abstract:${seg}:${tier}:${idx}`;
-                const isPinned = pinned === id;
+              (abstractSet?.[seg]?.[tier] ?? []).map((path) => {
+                const isPinned = pinned === path;
                 return (
                   <button
-                    key={id}
-                    onClick={() => onPin(id)}
+                    key={path}
+                    onClick={() => onPin(path)}
                     className={`relative group rounded-lg overflow-hidden border transition-all duration-200 aspect-video ${
                       isPinned
                         ? "border-blue-500/50 ring-1 ring-blue-500/30"
                         : "border-white/10 hover:border-white/20"
                     }`}
                   >
-                    <div className="w-full h-full" style={{ background: def.background }} />
+                    <img
+                      src={`${baseUrl}/backgrounds/${path}`}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      loading="eager"
+                    />
                     {isPinned ? (
                       <div className="absolute top-1 right-1 p-1 rounded-full bg-blue-500/80">
                         <Pin size={10} className="text-white" />

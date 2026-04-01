@@ -10,7 +10,6 @@ import {
   type BackgroundManifest,
 } from "@brett/business";
 import manifest from "../data/background-manifest.json";
-import { selectGradient, gradients } from "../data/abstract-gradients";
 import { solidColors } from "../data/solid-colors";
 import { useAppConfig } from "./useAppConfig";
 import fallbackBg from "../assets/fallback-bg.webp";
@@ -70,10 +69,6 @@ export function useBackground({
   const [currentImage, setCurrentImage] = useState<string>(fallbackBg);
   const [nextImage, setNextImage] = useState<string | null>(null);
 
-  // Gradient state (abstract)
-  const [currentGradient, setCurrentGradient] = useState<string | null>(null);
-  const [nextGradient, setNextGradient] = useState<string | null>(null);
-
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Track shown items for shuffle-without-replacement
@@ -119,24 +114,11 @@ export function useBackground({
     setSegment(seg);
     setBusynessTier(tier);
 
-    if (isAbstract) {
-      // Abstract mode: pick a gradient
-      const result = selectGradient(seg, tier, shownRef.current as number[]);
-      if (!result) return;
-
-      shownRef.current.push(result.index);
-      const gradientCss = result.gradient.background;
-
-      setNextGradient(gradientCss);
-      startCrossfade(() => {
-        setCurrentGradient(gradientCss);
-        setNextGradient(null);
-      });
-    } else {
-      // Photography mode: pick and preload an image
+    {
+      // Photography and Abstract both use images from the manifest
       const relativePath = selectImage(
         manifest as BackgroundManifest,
-        backgroundStyle,
+        isAbstract ? "abstract" : backgroundStyle,
         seg,
         tier,
         shownRef.current as string[]
@@ -164,15 +146,12 @@ export function useBackground({
     }
   }, [meetingCount, taskCount, backgroundStyle, isAbstract, baseUrl, buildUrl, cancelTransition, startCrossfade]);
 
-  // Initial load
+  // Initial load when config becomes available
   useEffect(() => {
-    if (isAbstract) {
-      // Gradients don't need network — load immediately
-      rotateImage();
-    } else if (baseUrl) {
+    if (baseUrl) {
       rotateImage();
     }
-  }, [baseUrl, isAbstract]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Rotation timer (10 min)
   useEffect(() => {
@@ -215,22 +194,13 @@ export function useBackground({
   useEffect(() => {
     if (prevStyleRef.current !== backgroundStyle) {
       prevStyleRef.current = backgroundStyle;
-      // Clear opposite mode's state
-      if (backgroundStyle === "abstract") {
-        setCurrentImage(fallbackBg);
-        setNextImage(null);
-      } else {
-        setCurrentGradient(null);
-        setNextGradient(null);
-      }
       shownRef.current = [];
       rotateImage();
     }
   }, [backgroundStyle, rotateImage]);
 
-  // Preload next segment's image 5 minutes before boundary (photography only)
+  // Preload next segment's image 5 minutes before boundary
   useEffect(() => {
-    if (isAbstract) return; // Gradients don't need preloading
 
     const preloadCheck = () => {
       const now = new Date();
@@ -271,51 +241,31 @@ export function useBackground({
   const devNext = useCallback(() => {
     devIndexRef.current++;
 
-    if (isAbstract) {
-      // Flatten all gradients: segment → tier → index
-      const allGradients: { seg: TimeSegment; tier: BusynessTier; idx: number; bg: string }[] = [];
-      for (const seg of SEGMENTS) {
-        for (const tier of TIERS) {
-          const defs = gradients[seg]?.[tier] ?? [];
-          defs.forEach((g, i) => allGradients.push({ seg, tier, idx: i, bg: g.background }));
-        }
+    const setName = isAbstract ? "abstract" : "photography";
+    const imageSet = (manifest as BackgroundManifest).sets[setName];
+    const allImages: { seg: string; tier: string; path: string }[] = [];
+    for (const seg of SEGMENTS) {
+      for (const tier of TIERS) {
+        const paths = imageSet?.[seg]?.[tier] ?? [];
+        paths.forEach((p) => allImages.push({ seg, tier, path: p }));
       }
-      const pos = devIndexRef.current % allGradients.length;
-      const entry = allGradients[pos];
-      setDevLabel(`${entry.seg}/${entry.tier}/${entry.idx + 1} (${pos + 1}/${allGradients.length})`);
-
-      setNextGradient(entry.bg);
-      startCrossfade(() => {
-        setCurrentGradient(entry.bg);
-        setNextGradient(null);
-      });
-    } else {
-      // Flatten all photo paths: segment → tier → image
-      const allImages: { seg: string; tier: string; path: string }[] = [];
-      const photoSet = (manifest as BackgroundManifest).sets.photography;
-      for (const seg of SEGMENTS) {
-        for (const tier of TIERS) {
-          const paths = photoSet?.[seg]?.[tier] ?? [];
-          paths.forEach((p) => allImages.push({ seg, tier, path: p }));
-        }
-      }
-      const pos = devIndexRef.current % allImages.length;
-      const entry = allImages[pos];
-      if (!baseUrl) return;
-      const fullUrl = buildUrl(entry.path);
-      setDevLabel(`${entry.seg}/${entry.tier}/${entry.path.split("/").pop()} (${pos + 1}/${allImages.length})`);
-
-      cancelTransition();
-      const img = new Image();
-      img.onload = () => {
-        setNextImage(fullUrl);
-        startCrossfade(() => {
-          setCurrentImage(fullUrl);
-          setNextImage(null);
-        });
-      };
-      img.src = fullUrl;
     }
+    const pos = devIndexRef.current % allImages.length;
+    const entry = allImages[pos];
+    if (!baseUrl) return;
+    const fullUrl = buildUrl(entry.path);
+    setDevLabel(`${entry.seg}/${entry.tier}/${entry.path.split("/").pop()} (${pos + 1}/${allImages.length})`);
+
+    cancelTransition();
+    const img = new Image();
+    img.onload = () => {
+      setNextImage(fullUrl);
+      startCrossfade(() => {
+        setCurrentImage(fullUrl);
+        setNextImage(null);
+      });
+    };
+    img.src = fullUrl;
   }, [isAbstract, baseUrl, buildUrl, cancelTransition, startCrossfade]);
 
   // Resolve pinned background — overrides smart rotation
@@ -335,23 +285,7 @@ export function useBackground({
         devLabel,
       };
     }
-    if (pinnedBackground.startsWith("abstract:")) {
-      const [, seg, tier, idx] = pinnedBackground.split(":");
-      const defs = gradients[seg as TimeSegment]?.[tier as BusynessTier];
-      const bg = defs?.[Number(idx)]?.background ?? null;
-      return {
-        imageUrl: fallbackBg,
-        nextImageUrl: null,
-        isTransitioning: false,
-        segment,
-        busynessTier,
-        gradient: bg,
-        nextGradient: null,
-        devNext,
-        devLabel,
-      };
-    }
-    // Photography pin: "photo/dawn/light-1.webp"
+    // Photography or Abstract pin: "photo/dawn/light-1.webp" or "abstract/dawn/light-1.webp"
     const pinnedUrl = baseUrl ? buildUrl(pinnedBackground) : fallbackBg;
     return {
       imageUrl: pinnedUrl,
@@ -387,8 +321,8 @@ export function useBackground({
     isTransitioning,
     segment,
     busynessTier,
-    gradient: isAbstract ? currentGradient : null,
-    nextGradient: isAbstract ? nextGradient : null,
+    gradient: null,
+    nextGradient: null,
     devNext,
     devLabel,
   };
