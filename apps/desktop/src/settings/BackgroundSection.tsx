@@ -25,20 +25,23 @@ export function BackgroundSection() {
   const { data: config } = useAppConfig();
   const baseUrl = config?.storageBaseUrl ?? "";
 
-  const [style, setStyle] = useState<Style>("photography");
+  // activeStyle = what's actually rendering as your background (saved to DB)
+  // viewingStyle = which gallery tab you're browsing (local UI state only)
+  const [activeStyle, setActiveStyle] = useState<Style>("photography");
+  const [viewingStyle, setViewingStyle] = useState<Style>("photography");
   const [pinned, setPinned] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Track the latest save to discard stale responses
   const saveVersionRef = useRef(0);
 
   useEffect(() => {
     if (user) {
-      setStyle(user.backgroundStyle as Style);
+      const s = user.backgroundStyle as Style;
+      setActiveStyle(s);
+      setViewingStyle(s);
       setPinned(user.pinnedBackground ?? null);
     }
   }, [user]);
 
-  // Save to API without triggering query invalidation (avoids race conditions)
   function saveBackground(patch: Record<string, unknown>) {
     const version = ++saveVersionRef.current;
     queryClient.setQueryData(["user-me"], (old: any) =>
@@ -48,7 +51,6 @@ export function BackgroundSection() {
       method: "PATCH",
       body: JSON.stringify(patch),
     }).catch(() => {
-      // Only revert if no newer save has happened
       if (saveVersionRef.current === version) {
         setError("Failed to save.");
         setTimeout(() => setError(null), 4000);
@@ -56,16 +58,18 @@ export function BackgroundSection() {
     });
   }
 
-  function handleStyleChange(newStyle: Style) {
-    setStyle(newStyle);
-    setPinned(null);
-    saveBackground({ backgroundStyle: newStyle, pinnedBackground: null });
-  }
-
   function handlePin(id: string) {
-    const newPinned = pinned === id ? null : id;
-    setPinned(newPinned);
-    saveBackground({ pinnedBackground: newPinned });
+    if (pinned === id) {
+      // Unpin → return to smart rotation on the current viewing style
+      setPinned(null);
+      setActiveStyle(viewingStyle);
+      saveBackground({ backgroundStyle: viewingStyle, pinnedBackground: null });
+    } else {
+      // Pin this background — also set the active style to match what we're viewing
+      setPinned(id);
+      setActiveStyle(viewingStyle);
+      saveBackground({ backgroundStyle: viewingStyle, pinnedBackground: id });
+    }
   }
 
   return (
@@ -76,43 +80,53 @@ export function BackgroundSection() {
 
       {error && <p className="text-xs text-red-400/80 mb-3">{error}</p>}
 
-      {/* Style selector */}
+      {/* Style tabs — just gallery navigation, doesn't change background */}
       <div className="flex gap-2 mb-4">
         {([
           { key: "photography" as Style, icon: Image, label: "Photography" },
           { key: "abstract" as Style, icon: Sparkles, label: "Abstract" },
           { key: "solid" as Style, icon: Circle, label: "Solid" },
-        ]).map(({ key, icon: Icon, label }) => (
-          <button
-            key={key}
-            onClick={() => handleStyleChange(key)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition-all duration-200 ${
-              style === key
-                ? "bg-blue-500/10 border-blue-500/30 text-white"
-                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"
-            }`}
-          >
-            <Icon size={15} />
-            <span className="text-sm font-medium">{label}</span>
-          </button>
-        ))}
+        ]).map(({ key, icon: Icon, label }) => {
+          const isViewing = viewingStyle === key;
+          const isActive = activeStyle === key && !pinned;
+          return (
+            <button
+              key={key}
+              onClick={() => setViewingStyle(key)}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition-all duration-200 ${
+                isViewing
+                  ? "bg-blue-500/10 border-blue-500/30 text-white"
+                  : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"
+              }`}
+            >
+              <Icon size={15} />
+              <span className="text-sm font-medium">{label}</span>
+              {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
+            </button>
+          );
+        })}
       </div>
 
       <p className="text-xs text-white/40 mb-3">
-        {pinned ? "Pinned to a background. Click it again to unpin." : "Pin a background or leave it on smart rotation."}
+        {pinned
+          ? "Pinned. Click it again to unpin and return to smart rotation."
+          : "Click any background to pin it, or leave on smart rotation."}
       </p>
 
       {/* Gallery */}
-      {style === "photography" && baseUrl && (
+      {viewingStyle === "photography" && baseUrl && (
         <PhotoGallery baseUrl={baseUrl} pinned={pinned} onPin={handlePin} />
       )}
-      {style === "photography" && !baseUrl && (
+      {viewingStyle === "photography" && !baseUrl && (
         <div className="text-xs text-white/30 py-4 text-center">Loading images...</div>
       )}
-      {style === "abstract" && (
+      {viewingStyle === "abstract" && baseUrl && (
         <AbstractGallery baseUrl={baseUrl} pinned={pinned} onPin={handlePin} />
       )}
-      {style === "solid" && (
+      {viewingStyle === "abstract" && !baseUrl && (
+        <div className="text-xs text-white/30 py-4 text-center">Loading images...</div>
+      )}
+      {viewingStyle === "solid" && (
         <SolidGallery pinned={pinned} onPin={handlePin} />
       )}
     </div>
