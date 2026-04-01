@@ -1055,3 +1055,5 @@ export function computeNextDueDate(
       return null;
   }
 }
+
+export { getTimeSegment, getBusynessTier, type TimeSegment, type BusynessTier } from "./background";
