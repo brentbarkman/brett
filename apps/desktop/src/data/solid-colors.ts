@@ -1,8 +1,7 @@
 /**
- * Curated solid background colors.
- * Each "solid" is actually a subtle radial gradient — lighter center,
- * darker edges — so it has depth and feels like a lit surface rather
- * than a flat hex code. Apple's "solid" wallpapers do this.
+ * Curated solid background colors — inspired by macOS Sequoia.
+ * Richer mid-dark tones, not extreme darks. Each has subtle radial
+ * depth (lighter center, darker edges) for a lit-surface feel.
  */
 export interface SolidColor {
   id: string;
@@ -23,51 +22,51 @@ function solidWithDepth(base: string, highlight: string): string {
 
 export const solidColors: SolidColor[] = [
   {
-    id: "graphite", label: "Graphite", color: "#1c1c1e",
-    background: solidWithDepth("#1c1c1e", "rgba(60,60,65,0.5)"),
+    id: "black", label: "Black", color: "#1d1d1f",
+    background: solidWithDepth("#1d1d1f", "rgba(50,50,52,0.5)"),
   },
   {
-    id: "midnight", label: "Midnight", color: "#0d1b2a",
-    background: solidWithDepth("#0d1b2a", "rgba(25,50,75,0.5)"),
+    id: "blue", label: "Blue", color: "#1c3a5f",
+    background: solidWithDepth("#1c3a5f", "rgba(40,80,140,0.5)"),
   },
   {
-    id: "ocean", label: "Ocean", color: "#0a2463",
-    background: solidWithDepth("#0a2463", "rgba(20,55,130,0.5)"),
+    id: "indigo", label: "Indigo", color: "#2e1a6b",
+    background: solidWithDepth("#2e1a6b", "rgba(65,40,140,0.5)"),
   },
   {
-    id: "indigo", label: "Indigo", color: "#2b1055",
-    background: solidWithDepth("#2b1055", "rgba(65,30,115,0.5)"),
+    id: "purple", label: "Purple", color: "#452170",
+    background: solidWithDepth("#452170", "rgba(90,50,145,0.5)"),
   },
   {
-    id: "berry", label: "Berry", color: "#3b0764",
-    background: solidWithDepth("#3b0764", "rgba(80,20,130,0.5)"),
+    id: "pink", label: "Pink", color: "#5c1a3e",
+    background: solidWithDepth("#5c1a3e", "rgba(120,40,80,0.5)"),
   },
   {
-    id: "wine", label: "Wine", color: "#4a0e2e",
-    background: solidWithDepth("#4a0e2e", "rgba(100,25,60,0.5)"),
+    id: "red", label: "Red", color: "#5c1a1a",
+    background: solidWithDepth("#5c1a1a", "rgba(120,40,40,0.5)"),
   },
   {
-    id: "ember", label: "Ember", color: "#451a03",
-    background: solidWithDepth("#451a03", "rgba(100,45,10,0.5)"),
+    id: "orange", label: "Orange", color: "#5c2e0e",
+    background: solidWithDepth("#5c2e0e", "rgba(120,65,25,0.5)"),
   },
   {
-    id: "forest", label: "Forest", color: "#052e16",
-    background: solidWithDepth("#052e16", "rgba(15,75,40,0.5)"),
+    id: "yellow", label: "Yellow", color: "#4a3a0a",
+    background: solidWithDepth("#4a3a0a", "rgba(100,80,20,0.5)"),
   },
   {
-    id: "teal", label: "Teal", color: "#042f2e",
-    background: solidWithDepth("#042f2e", "rgba(12,80,75,0.5)"),
+    id: "green", label: "Green", color: "#1a3d20",
+    background: solidWithDepth("#1a3d20", "rgba(40,85,45,0.5)"),
   },
   {
-    id: "slate", label: "Slate", color: "#1e293b",
-    background: solidWithDepth("#1e293b", "rgba(50,65,85,0.5)"),
+    id: "teal", label: "Teal", color: "#0f3d3d",
+    background: solidWithDepth("#0f3d3d", "rgba(25,85,85,0.5)"),
   },
   {
-    id: "storm", label: "Storm", color: "#172554",
-    background: solidWithDepth("#172554", "rgba(35,55,115,0.5)"),
+    id: "grey", label: "Grey", color: "#2c2c2e",
+    background: solidWithDepth("#2c2c2e", "rgba(65,65,68,0.5)"),
   },
   {
-    id: "void", label: "Void", color: "#09090b",
-    background: solidWithDepth("#09090b", "rgba(25,25,30,0.4)"),
+    id: "warmgrey", label: "Warm Grey", color: "#33302a",
+    background: solidWithDepth("#33302a", "rgba(70,65,55,0.5)"),
   },
 ];
