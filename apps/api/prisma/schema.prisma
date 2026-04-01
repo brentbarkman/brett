@@ -33,6 +33,8 @@ model User {
   tempUnit        String   @default("auto")
   weatherEnabled  Boolean  @default(true)
   role            UserRole @default(user)
+  banned          Boolean  @default(false)
+  banReason       String?
   sessions      Session[]
   accounts      Account[]
   lists         List[]

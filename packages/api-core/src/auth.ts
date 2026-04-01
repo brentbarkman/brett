@@ -25,6 +25,18 @@ export function createAuth(options: AuthOptions) {
           fieldName: "role",
           input: false,
         },
+        banned: {
+          type: "boolean",
+          defaultValue: false,
+          fieldName: "banned",
+          input: false,
+        },
+        banReason: {
+          type: "string",
+          required: false,
+          fieldName: "banReason",
+          input: false,
+        },
       },
       deleteUser: {
         enabled: options.enableDeleteUser ?? true,

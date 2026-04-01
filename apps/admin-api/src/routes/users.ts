@@ -20,6 +20,8 @@ users.get("/", async (c) => {
         name: true,
         image: true,
         role: true,
+        banned: true,
+        banReason: true,
         createdAt: true,
         _count: { select: { items: true, scouts: true } },
       },
@@ -34,6 +36,8 @@ users.get("/", async (c) => {
       name: u.name,
       image: u.image,
       role: u.role,
+      banned: u.banned,
+      banReason: u.banReason,
       createdAt: u.createdAt,
       itemCount: u._count.items,
       scoutCount: u._count.scouts,
@@ -102,4 +106,108 @@ users.patch("/:id/role", async (c) => {
 
   if (!updated) return c.json({ error: "Cannot demote the last admin" }, 400);
   return c.json({ user: updated });
+});
+
+// POST /admin/users/:id/lock — ban a user
+users.post("/:id/lock", async (c) => {
+  const userId = c.req.param("id");
+  const currentUser = c.get("user");
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({}));
+
+  // Cannot lock yourself
+  if (userId === currentUser.id) {
+    return c.json({ error: "Cannot lock your own account" }, 400);
+  }
+
+  // Cannot lock another admin
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, banned: true },
+  });
+  if (!target) return c.json({ error: "User not found" }, 404);
+  if (target.role === "admin") return c.json({ error: "Cannot lock an admin account" }, 400);
+  if (target.banned) return c.json({ error: "User is already locked" }, 400);
+
+  // Lock the user and revoke all their sessions
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { banned: true, banReason: (body as any)?.reason || null },
+    }),
+    prisma.session.deleteMany({ where: { userId } }),
+  ]);
+
+  return c.json({ ok: true });
+});
+
+// POST /admin/users/:id/unlock — unban a user
+users.post("/:id/unlock", async (c) => {
+  const userId = c.req.param("id");
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, banned: true },
+  });
+  if (!target) return c.json({ error: "User not found" }, 404);
+  if (!target.banned) return c.json({ error: "User is not locked" }, 400);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { banned: false, banReason: null },
+  });
+
+  return c.json({ ok: true });
+});
+
+// DELETE /admin/users/:id — permanently delete a user and all their data
+users.delete("/:id", async (c) => {
+  const userId = c.req.param("id");
+  const currentUser = c.get("user");
+
+  if (userId === currentUser.id) {
+    return c.json({ error: "Cannot delete your own account" }, 400);
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true },
+  });
+  if (!target) return c.json({ error: "User not found" }, 404);
+  if (target.role === "admin") return c.json({ error: "Cannot delete an admin account — demote first" }, 400);
+
+  // Delete in order: dependent data first, then user
+  // Passkeys cascade automatically. Sessions, Accounts, Verification handled by better-auth.
+  // We need to clean up application data explicitly.
+  await prisma.$transaction([
+    prisma.scoutActivity.deleteMany({ where: { scout: { userId } } }),
+    prisma.scoutMemory.deleteMany({ where: { scout: { userId } } }),
+    prisma.scoutConsolidation.deleteMany({ where: { scout: { userId } } }),
+    prisma.scoutFinding.deleteMany({ where: { scout: { userId } } }),
+    prisma.scoutRun.deleteMany({ where: { scout: { userId } } }),
+    prisma.scout.deleteMany({ where: { userId } }),
+    prisma.conversationEmbedding.deleteMany({ where: { userId } }),
+    prisma.userFact.deleteMany({ where: { userId } }),
+    prisma.conversationMessage.deleteMany({ where: { session: { userId } } }),
+    prisma.conversationSession.deleteMany({ where: { userId } }),
+    prisma.aIUsageLog.deleteMany({ where: { userId } }),
+    prisma.userAIConfig.deleteMany({ where: { userId } }),
+    prisma.brettMessage.deleteMany({ where: { userId } }),
+    prisma.calendarEventNote.deleteMany({ where: { userId } }),
+    prisma.calendarEvent.deleteMany({ where: { userId } }),
+    prisma.calendarList.deleteMany({ where: { googleAccount: { userId } } }),
+    prisma.googleAccount.deleteMany({ where: { userId } }),
+    prisma.weatherCache.deleteMany({ where: { userId } }),
+    prisma.meetingNote.deleteMany({ where: { userId } }),
+    prisma.granolaAccount.deleteMany({ where: { userId } }),
+    prisma.attachment.deleteMany({ where: { userId } }),
+    prisma.itemLink.deleteMany({ where: { userId } }),
+    prisma.item.deleteMany({ where: { userId } }),
+    prisma.list.deleteMany({ where: { userId } }),
+    prisma.passkey.deleteMany({ where: { userId } }),
+    prisma.session.deleteMany({ where: { userId } }),
+    prisma.account.deleteMany({ where: { userId } }),
+    prisma.user.delete({ where: { id: userId } }),
+  ]);
+
+  return c.json({ ok: true });
 });

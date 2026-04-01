@@ -7,6 +7,8 @@ interface UserListItem {
   name: string;
   image: string | null;
   role: string;
+  banned: boolean;
+  banReason: string | null;
   createdAt: string;
   itemCount: number;
   scoutCount: number;
@@ -35,6 +37,42 @@ export function useUpdateUserRole() {
         method: "PATCH",
         body: JSON.stringify({ role }),
       }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+export function useLockUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
+      adminFetch(`/admin/users/${userId}/lock`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+export function useUnlockUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      adminFetch(`/admin/users/${userId}/unlock`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      adminFetch(`/admin/users/${userId}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "users"] });
     },
