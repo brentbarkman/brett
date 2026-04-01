@@ -83,7 +83,9 @@ import {
   useClearScoutHistory,
   useDeleteScout,
   useSubmitScoutFeedback,
+  useRecentFindings,
 } from "./api/scouts";
+import type { RecentFindingItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
@@ -376,6 +378,7 @@ export function App() {
   const { data: scouts = [], isLoading: isLoadingScouts } = useScouts();
   const { data: selectedScoutData } = useScout(selectedScoutId);
   const { data: findingsData, isLoading: isLoadingFindings } = useScoutFindings(selectedScoutId);
+  const { data: recentFindingsData, isLoading: isLoadingRecentFindings } = useRecentFindings();
   const scoutFindings = findingsData?.findings ?? [];
   const { data: activityData, isLoading: isLoadingActivity } = useScoutActivity(selectedScoutId);
   const scoutActivity = activityData?.entries ?? [];
@@ -905,6 +908,11 @@ export function App() {
                   isLoading={isLoadingScouts}
                   omnibarProps={scoutsOmnibarProps}
                   newScoutId={newScoutId}
+                  recentFindings={recentFindingsData?.findings}
+                  isLoadingFindings={isLoadingRecentFindings}
+                  onFindingClick={(finding: RecentFindingItem) => {
+                    setSelectedScoutId(finding.scoutId);
+                  }}
                 />
               )
             } />

@@ -4,6 +4,7 @@ import type { Scout } from "@brett/types";
 import { formatRelativeTime } from "@brett/utils";
 import { ScoutCard } from "./ScoutCard";
 import { Omnibar, type OmnibarProps } from "./Omnibar";
+import { RecentFindingsPanel, type RecentFindingItem } from "./RecentFindingsPanel";
 
 interface ScoutsRosterProps {
   scouts: Scout[];
@@ -12,9 +13,12 @@ interface ScoutsRosterProps {
   isLoading?: boolean;
   omnibarProps?: OmnibarProps;
   newScoutId?: string | null;
+  recentFindings?: RecentFindingItem[];
+  isLoadingFindings?: boolean;
+  onFindingClick?: (finding: RecentFindingItem) => void;
 }
 
-export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omnibarProps, newScoutId }: ScoutsRosterProps) {
+export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omnibarProps, newScoutId, recentFindings, isLoadingFindings, onFindingClick }: ScoutsRosterProps) {
   const activeScouts = scouts.filter((s) => s.status === "active" || s.status === "paused");
   const inactiveScouts = scouts.filter((s) => s.status === "completed" || s.status === "expired");
 
@@ -24,8 +28,10 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
     .sort((a, b) => new Date(b.lastRun!).getTime() - new Date(a.lastRun!).getTime())[0];
 
   return (
-    <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
-      <div className="max-w-4xl mx-auto w-full px-10 py-6 space-y-6">
+    <div className="flex-1 min-w-0 flex h-full py-2">
+      {/* Scout list — scrolls independently */}
+      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide">
+      <div className="max-w-4xl w-full px-10 py-6 space-y-6">
         {/* Header — lightweight, content-forward */}
         <div className="flex items-center justify-between">
           <div>
@@ -127,6 +133,18 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
           </div>
         )}
       </div>
+      </div>
+
+      {/* Recent findings panel — only show if prop provided */}
+      {recentFindings !== undefined && (
+        <div className="flex-shrink-0 py-6 pr-6">
+          <RecentFindingsPanel
+            findings={recentFindings}
+            onFindingClick={onFindingClick}
+            isLoading={isLoadingFindings}
+          />
+        </div>
+      )}
     </div>
   );
 }
