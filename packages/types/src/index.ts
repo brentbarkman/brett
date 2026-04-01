@@ -310,7 +310,7 @@ export type StreamChunk =
   | { type: "text"; content: string }
   | { type: "tool_call"; id: string; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; id: string; data: unknown; displayHint?: DisplayHint; message?: string }
-  | { type: "done"; sessionId: string; usage: { input: number; output: number; cacheCreation?: number; cacheRead?: number } }
+  | { type: "done"; sessionId: string; model?: string; usage: { input: number; output: number; cacheCreation?: number; cacheRead?: number } }
   | { type: "error"; message: string };
 
 export type DisplayHint =

@@ -86,6 +86,8 @@ export async function* orchestrate(
   const { input, provider, providerName, prisma, registry, sessionId } =
     params;
 
+  let lastModel = "";
+
   try {
     // 1. Assemble context
     const ctx = await assembleContext(input, prisma);
@@ -123,6 +125,7 @@ export async function* orchestrate(
       round++;
 
       const model = resolveModel(providerName, currentTier);
+      lastModel = model;
 
       // Collect tool calls and text from this round
       const pendingToolCalls: Array<{
@@ -297,6 +300,7 @@ export async function* orchestrate(
                 yield {
                   type: "done",
                   sessionId: sessionId ?? "",
+                  model: lastModel,
                   usage: { input: totalInputTokens, output: totalOutputTokens, cacheCreation: totalCacheCreationTokens, cacheRead: totalCacheReadTokens },
                 };
                 return;
@@ -351,6 +355,7 @@ export async function* orchestrate(
     yield {
       type: "done",
       sessionId: sessionId ?? "",
+      model: lastModel,
       usage: { input: totalInputTokens, output: totalOutputTokens, cacheCreation: totalCacheCreationTokens, cacheRead: totalCacheReadTokens },
     };
   } catch (err) {
@@ -361,6 +366,7 @@ export async function* orchestrate(
     yield {
       type: "done",
       sessionId: sessionId ?? "",
+      model: lastModel,
       usage: { input: 0, output: 0 },
     };
   }

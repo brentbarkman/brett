@@ -104,12 +104,17 @@ export function AIUsagePage() {
               key: "source",
               header: "Source",
               render: (r: any) => {
-                const failed = r.totalTokens === 0 && r._count?.messages === 0;
+                const isError = r.modelUsed?.startsWith("error:");
+                const failed = isError || (r.totalTokens === 0 && r._count?.messages === 0);
+                const errorReason = isError ? r.modelUsed.slice(6) : null;
                 return (
                   <span className="flex items-center gap-1.5">
                     {r.source}
                     {failed && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400">
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400"
+                        title={errorReason || undefined}
+                      >
                         failed
                       </span>
                     )}
@@ -117,7 +122,11 @@ export function AIUsagePage() {
                 );
               },
             },
-            { key: "modelUsed", header: "Model", render: (r: any) => <span className="font-mono text-xs">{r.modelUsed || "—"}</span> },
+            { key: "modelUsed", header: "Model", render: (r: any) => {
+              const val = r.modelUsed || "";
+              if (val.startsWith("error:")) return <span className="font-mono text-xs text-red-400/60">—</span>;
+              return <span className="font-mono text-xs">{val || "—"}</span>;
+            }},
             { key: "user", header: "User", render: (r: any) => r.user?.email ?? "—" },
             { key: "totalTokens", header: "Tokens", render: (r: any) => r.totalTokens?.toLocaleString() ?? "0" },
             { key: "costUsd", header: "Cost", render: (r: any) => <span className="text-green-400">${r.costUsd?.toFixed(2) ?? "0.00"}</span> },

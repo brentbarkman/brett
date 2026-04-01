@@ -7,10 +7,12 @@ import type { AIProviderName, StreamChunk } from "@brett/types";
  * Build a ReadableStream that pipes orchestrator chunks as SSE events.
  *
  * After the stream completes, it fires-and-forgets:
+ *   - Updating modelUsed on the session
  *   - Persisting the assistant message
  *   - Extracting facts (if memoryCtx provided)
- *   - Embedding the conversation (if memoryCtx provided and OpenAI key exists)
  *   - Calling opts.onDone (if provided)
+ *
+ * On error, marks the session with modelUsed = "error:<reason>".
  */
 export function buildStream(
   params: Parameters<typeof orchestrate>[0],
@@ -25,11 +27,15 @@ export function buildStream(
 
   const stream = new ReadableStream({
     async start(controller) {
+      let streamModel = "";
+      let hadError = false;
+
       try {
         for await (const chunk of orchestrate(params)) {
           // Intercept error chunks from the orchestrator — never forward raw error details to the client
           if (chunk.type === "error") {
             console.error("[ai-stream] Orchestrator error chunk:", chunk.message);
+            hadError = true;
             const safeError = { type: "error", message: "Something went wrong. Please try again." };
             controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify(safeError)}\n\n`));
             continue;
@@ -37,9 +43,12 @@ export function buildStream(
           if (chunk.type === "text") {
             assistantContentRef.value += chunk.content;
           }
+          // Capture model from done chunk
+          if (chunk.type === "done" && chunk.model) {
+            streamModel = chunk.model;
+          }
           // Persist tool result messages so subsequent messages in the session
-          // have context about what Brett found/did. Without this, the LLM
-          // loses context about meetings, search results, etc. between turns.
+          // have context about what Brett found/did.
           if (chunk.type === "tool_result") {
             console.log(`[ai-stream] tool_result: message=${!!chunk.message} hint=${chunk.displayHint?.type ?? "none"}`);
             if (chunk.message) {
@@ -50,6 +59,13 @@ export function buildStream(
           controller.enqueue(encoder.encode(data));
         }
         controller.close();
+
+        // Update session with the actual model used
+        if (streamModel) {
+          prisma.conversationSession
+            .update({ where: { id: sessionId }, data: { modelUsed: streamModel } })
+            .catch((err) => console.error("[ai-stream] Failed to update modelUsed:", err));
+        }
 
         // Fire-and-forget: store assistant response
         if (assistantContentRef.value.trim()) {
@@ -64,13 +80,8 @@ export function buildStream(
             .then(() => {
               const memoryCtx = opts?.memoryCtx;
               if (memoryCtx) {
-                // Fire-and-forget: extract facts
                 extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma)
                   .catch((err) => console.error("[fact-extraction] Failed:", err.message));
-
-                // Embeddings disabled — OpenAI-only strategy doesn't work for non-OpenAI users.
-                // Layer C (vector memory) deferred until multi-provider embedding strategy is designed.
-                // Raw logs (Layer A) + structured facts (Layer B) provide memory without embeddings.
               }
 
               if (opts?.onDone) {
@@ -84,9 +95,21 @@ export function buildStream(
             .catch((err: unknown) =>
               console.error("Failed to store assistant message:", err),
             );
+        } else if (hadError) {
+          // Stream completed but produced no content — mark as failed
+          prisma.conversationSession
+            .update({ where: { id: sessionId }, data: { modelUsed: streamModel || "error:no-output" } })
+            .catch(() => {});
         }
       } catch (err) {
         console.error("[ai-stream] Stream error:", err);
+
+        // Mark session as failed with error reason
+        const reason = err instanceof Error ? err.message.slice(0, 100) : "unknown";
+        prisma.conversationSession
+          .update({ where: { id: sessionId }, data: { modelUsed: `error:${reason}` } })
+          .catch(() => {});
+
         const errorChunk: StreamChunk = {
           type: "error",
           message: "Something went wrong. Please try again.",
