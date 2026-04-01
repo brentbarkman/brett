@@ -23,6 +23,7 @@ users.get("/me", authMiddleware, async (c) => {
       longitude: true,
       tempUnit: true,
       weatherEnabled: true,
+      backgroundStyle: true,
     },
   });
 
@@ -39,6 +40,7 @@ users.get("/me", authMiddleware, async (c) => {
     longitude: fullUser?.longitude ?? null,
     tempUnit: fullUser?.tempUnit ?? "auto",
     weatherEnabled: fullUser?.weatherEnabled ?? true,
+    backgroundStyle: fullUser?.backgroundStyle ?? "photography",
   });
 });
 
@@ -89,6 +91,7 @@ users.patch("/location", authMiddleware, rateLimiter(20), async (c) => {
   }
 
   const { city, countryCode, latitude, longitude, tempUnit, weatherEnabled, timezone } = body;
+  const backgroundStyle = body.backgroundStyle as string | undefined;
 
   // Validate each field before constructing data
   if (city !== undefined && (typeof city !== "string" || city.length > 200)) {
@@ -114,6 +117,12 @@ users.patch("/location", authMiddleware, rateLimiter(20), async (c) => {
   if (tempUnit !== undefined && (typeof tempUnit !== "string" || !VALID_TEMP_UNITS.has(tempUnit))) {
     return c.json({ error: "tempUnit must be one of: auto, fahrenheit, celsius" }, 400);
   }
+  if (backgroundStyle !== undefined) {
+    const validStyles = ["photography", "abstract"];
+    if (!validStyles.includes(backgroundStyle)) {
+      return c.json({ error: "backgroundStyle must be 'photography' or 'abstract'" }, 400);
+    }
+  }
 
   // Build update data with only provided fields
   const data: Record<string, unknown> = {};
@@ -124,6 +133,7 @@ users.patch("/location", authMiddleware, rateLimiter(20), async (c) => {
   if (tempUnit !== undefined) data.tempUnit = tempUnit;
   if (weatherEnabled !== undefined) data.weatherEnabled = weatherEnabled;
   if (timezone !== undefined) data.timezone = timezone;
+  if (backgroundStyle !== undefined) data.backgroundStyle = backgroundStyle;
 
   if (Object.keys(data).length === 0) {
     return c.json({ error: "No fields provided" }, 400);
@@ -146,6 +156,7 @@ users.patch("/location", authMiddleware, rateLimiter(20), async (c) => {
       tempUnit: true,
       weatherEnabled: true,
       timezone: true,
+      backgroundStyle: true,
     },
   });
 

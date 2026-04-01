@@ -32,6 +32,7 @@ model User {
   longitude       Float?
   tempUnit        String   @default("auto")
   weatherEnabled  Boolean  @default(true)
+  backgroundStyle String   @default("photography")
   role            UserRole @default(user)
   banned          Boolean  @default(false)
   banReason       String?
