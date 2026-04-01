@@ -32,6 +32,8 @@ import {
   LivingBackground,
 } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
 import {
   useActiveThings,
@@ -419,9 +421,13 @@ export function App() {
   // Meeting count from today's calendar events
   const todayMeetingCount = todayCalendarEvents?.length ?? 0;
 
-  // Background style from user preferences — no user-me query exists in this
-  // component yet; hardcoded to "photography" until Settings wires it up.
-  const backgroundStyle: BackgroundStyle = "photography";
+  // Background style from user preferences
+  const { data: userPrefs } = useQuery({
+    queryKey: ["user-me"],
+    queryFn: () => apiFetch<{ backgroundStyle?: string }>("/users/me"),
+    staleTime: 5 * 60 * 1000,
+  });
+  const backgroundStyle: BackgroundStyle = (userPrefs?.backgroundStyle as BackgroundStyle) ?? "photography";
 
   const background = useBackground({
     meetingCount: todayMeetingCount,
