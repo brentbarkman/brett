@@ -22,30 +22,43 @@ function getGoogleWeatherApiKey(): string {
 // ── Google Weather condition type → emoji mapping ──
 
 const CONDITION_ICONS: Record<string, string> = {
-  CLEAR: "\u2600\uFE0F",
-  MOSTLY_CLEAR: "\uD83C\uDF24\uFE0F",
-  PARTLY_CLOUDY: "\u26C5",
-  MOSTLY_CLOUDY: "\u2601\uFE0F",
-  CLOUDY: "\u2601\uFE0F",
-  FOG: "\uD83C\uDF2B\uFE0F",
-  LIGHT_FOG: "\uD83C\uDF2B\uFE0F",
-  DRIZZLE: "\uD83C\uDF26\uFE0F",
-  LIGHT_RAIN: "\uD83C\uDF26\uFE0F",
-  RAIN: "\uD83C\uDF27\uFE0F",
-  HEAVY_RAIN: "\uD83C\uDF27\uFE0F",
-  SNOW: "\uD83C\uDF28\uFE0F",
-  LIGHT_SNOW: "\uD83C\uDF28\uFE0F",
-  HEAVY_SNOW: "\uD83C\uDF28\uFE0F",
-  RAIN_AND_SNOW: "\uD83C\uDF28\uFE0F",
-  SLEET: "\uD83C\uDF28\uFE0F",
-  FREEZING_RAIN: "\uD83C\uDF27\uFE0F",
-  THUNDERSTORM: "\u26C8\uFE0F",
-  HAIL: "\u26C8\uFE0F",
-  WINDY: "\uD83D\uDCA8",
+  CLEAR: "☀️",
+  MOSTLY_CLEAR: "🌤️",
+  PARTLY_CLOUDY: "⛅",
+  MOSTLY_CLOUDY: "☁️",
+  CLOUDY: "☁️",
+  FOG: "🌫️",
+  LIGHT_FOG: "🌫️",
+  HAZE: "🌫️",
+  DUST: "🌫️",
+  SMOKE: "🌫️",
+  SAND: "🌫️",
+  DRIZZLE: "🌦️",
+  LIGHT_RAIN: "🌦️",
+  FREEZING_DRIZZLE: "🌦️",
+  RAIN: "🌧️",
+  HEAVY_RAIN: "🌧️",
+  FREEZING_RAIN: "🌧️",
+  SNOW: "🌨️",
+  LIGHT_SNOW: "🌨️",
+  HEAVY_SNOW: "🌨️",
+  BLOWING_SNOW: "🌨️",
+  RAIN_AND_SNOW: "🌨️",
+  SLEET: "🌨️",
+  ICE_PELLETS: "🌨️",
+  THUNDERSTORM: "⛈️",
+  HAIL: "⛈️",
+  TORNADO: "🌪️",
+  TROPICAL_STORM: "🌪️",
+  WINDY: "💨",
 };
 
 function resolveIcon(type: string): string {
-  return CONDITION_ICONS[type] ?? "\u2753";
+  const icon = CONDITION_ICONS[type];
+  if (!icon) {
+    console.warn(`[weather] Unmapped condition type: ${type}`);
+  }
+  return icon ?? "☁️";
 }
 
 // ── Response types ──

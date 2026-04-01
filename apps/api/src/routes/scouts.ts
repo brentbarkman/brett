@@ -225,6 +225,7 @@ scouts.get("/findings/recent", async (c) => {
   const findings = rows.map((row) => ({
     id: row.id,
     scoutId: row.scoutId,
+    itemId: row.itemId ?? undefined,
     type: row.type as ScoutFinding["type"],
     title: row.title,
     description: row.description,

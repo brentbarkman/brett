@@ -232,6 +232,7 @@ export function useDeleteScoutMemory() {
 export interface RecentFinding {
   id: string;
   scoutId: string;
+  itemId?: string;
   type: FindingType;
   title: string;
   description: string;

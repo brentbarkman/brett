@@ -32,8 +32,6 @@ interface LeftNavProps {
   upcomingCount?: number;
   /** Real inbox badge count */
   inboxCount?: number;
-  /** Number of active scouts */
-  scoutsCount?: number;
   onCreateList?: (name: string) => void;
   onRenameList?: (id: string, newName: string) => void;
   onDeleteList?: (id: string) => void;
@@ -54,7 +52,6 @@ export function LeftNav({
   navigate,
   upcomingCount,
   inboxCount,
-  scoutsCount,
   onCreateList,
   onRenameList,
   onDeleteList,
@@ -151,7 +148,7 @@ export function LeftNav({
         <NavItem
           icon={<Radar size={18} />}
           label="Scouts"
-          badge={scoutsCount}
+          tag="Beta"
           isActive={currentPath === "/scouts"}
           isCollapsed={isCollapsed}
           onClick={() => navigate?.("/scouts")}
@@ -553,6 +550,7 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   badge?: number;
+  tag?: string;
   isActive?: boolean;
   isCollapsed: boolean;
   onClick?: () => void;
@@ -562,6 +560,7 @@ function NavItem({
   icon,
   label,
   badge,
+  tag,
   isActive,
   isCollapsed,
   onClick,
@@ -589,6 +588,11 @@ function NavItem({
           <span className="text-sm font-medium flex-1 text-left truncate">
             {label}
           </span>
+          {tag && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-400/70 bg-amber-400/10 border border-amber-400/15 rounded-full px-1.5 py-0.5">
+              {tag}
+            </span>
+          )}
           {badge !== undefined && badge > 0 && (
             <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
               {badge}

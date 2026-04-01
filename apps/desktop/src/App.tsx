@@ -381,7 +381,10 @@ export function App() {
 
   // Scout hooks
   const { data: scouts = [], isLoading: isLoadingScouts } = useScouts();
-  const { data: selectedScoutData } = useScout(selectedScoutId);
+  const { data: selectedScoutDetail } = useScout(selectedScoutId);
+  // Use detail from React Query if available, otherwise fall back to the scout from the list
+  // to avoid a flash on first open while the detail query loads
+  const selectedScoutData = selectedScoutDetail ?? scouts.find((s) => s.id === selectedScoutId);
   const { data: findingsData, isLoading: isLoadingFindings } = useScoutFindings(selectedScoutId);
   const { data: recentFindingsData, isLoading: isLoadingRecentFindings } = useRecentFindings();
   const scoutFindings = findingsData?.findings ?? [];
@@ -581,7 +584,7 @@ export function App() {
     document.documentElement.classList.add("dark");
   }, []);
 
-  // Handle escape key to close detail panel
+  // Handle escape key to close detail panel or navigate back from scout detail
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -589,13 +592,20 @@ export function App() {
           setTriageState(null);
           return;
         }
-        setIsDetailOpen(false);
-        setTimeout(() => setSelectedItem(null), 300);
+        if (isDetailOpen) {
+          setIsDetailOpen(false);
+          setTimeout(() => setSelectedItem(null), 300);
+          return;
+        }
+        if (location.pathname === "/scouts" && selectedScoutId) {
+          setSelectedScoutId(null);
+          return;
+        }
       }
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [triageState]);
+  }, [triageState, isDetailOpen, location.pathname, selectedScoutId]);
 
   const handleItemClick = (item: Thing | CalendarEventDisplay) => {
     setSelectedItem(item);
@@ -948,7 +958,16 @@ export function App() {
                   recentFindings={recentFindingsData?.findings}
                   isLoadingFindings={isLoadingRecentFindings}
                   onFindingClick={(finding: RecentFindingItem) => {
-                    setSelectedScoutId(finding.scoutId);
+                    if (finding.itemId) {
+                      const thing = allActiveThings.find((t) => t.id === finding.itemId);
+                      if (thing) {
+                        handleItemClick(thing);
+                      } else {
+                        handleItemClick({ id: finding.itemId, title: finding.title, type: "content", list: "", listId: null, status: "active", source: "scout", urgency: "later", isCompleted: false } as any);
+                      }
+                    } else {
+                      setSelectedScoutId(finding.scoutId);
+                    }
                   }}
                 />
               )

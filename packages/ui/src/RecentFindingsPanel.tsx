@@ -4,6 +4,7 @@ import { formatRelativeTime } from "@brett/utils";
 export interface RecentFindingItem {
   id: string;
   scoutId: string;
+  itemId?: string;
   type: string;
   title: string;
   sourceName: string;

@@ -53,9 +53,8 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
     <button
       onClick={onClick}
       className={`
-        group flex items-center gap-5 w-full p-5 rounded-2xl transition-all duration-200 text-left
-        bg-white/5 backdrop-blur-md border border-white/10
-        hover:bg-white/10 hover:border-white/15 hover:shadow-[0_4px_24px_rgba(0,0,0,0.3)]
+        group flex items-center gap-4 w-full p-4 rounded-xl transition-all duration-200 text-left
+        bg-white/5 hover:bg-white/10
         ${isCompleted ? "opacity-50" : ""}
       `}
     >
