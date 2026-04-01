@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@better-auth/passkey": "^1.5.6",
     "@brett/api-core": "workspace:*",
     "@brett/types": "workspace:*",
     "@brett/utils": "workspace:*",

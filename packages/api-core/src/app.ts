@@ -9,6 +9,7 @@ export interface BaseAppOptions {
   corsOrigins: string[] | ((origin: string) => string | null);
   enableEmailPassword?: boolean;
   enableDeleteUser?: boolean;
+  enablePasskeys?: boolean;
 }
 
 export function createBaseApp(options: BaseAppOptions) {
@@ -16,6 +17,7 @@ export function createBaseApp(options: BaseAppOptions) {
     trustedOrigins: options.trustedOrigins,
     enableEmailPassword: options.enableEmailPassword,
     enableDeleteUser: options.enableDeleteUser,
+    enablePasskeys: options.enablePasskeys,
   });
   const authMiddleware = createAuthMiddleware(auth);
 

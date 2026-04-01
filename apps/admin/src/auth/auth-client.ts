@@ -1,4 +1,5 @@
 import { createAuthClient } from "better-auth/react";
+import { passkeyClient } from "@better-auth/passkey/client";
 
 const API_URL = import.meta.env.VITE_ADMIN_API_URL || "http://localhost:3002";
 
@@ -12,6 +13,7 @@ const tokenReady = (async () => {
 
 export const authClient = createAuthClient({
   baseURL: API_URL,
+  plugins: [passkeyClient()],
   fetchOptions: {
     auth: {
       type: "Bearer",

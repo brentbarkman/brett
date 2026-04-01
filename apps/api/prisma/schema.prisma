@@ -52,6 +52,7 @@ model User {
   granolaAccount         GranolaAccount?
   meetingNotes           MeetingNote[]
   scouts                 Scout[]
+  passkeys               Passkey[]
 }
 
 model Session {
@@ -90,6 +91,21 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model Passkey {
+  id            String    @id
+  name          String?
+  publicKey     String
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialID  String
+  counter       Int
+  deviceType    String
+  backedUp      Boolean
+  transports    String?
+  createdAt     DateTime?
+  aaguid        String?
 }
 
 // ── Application tables ──

@@ -24,8 +24,9 @@ const { app, auth, authMiddleware } = createBaseApp({
         return null;
       }
     : [adminFrontendUrl],
-  enableEmailPassword: false,
+  enableEmailPassword: isLocal,
   enableDeleteUser: false,
+  enablePasskeys: true,
 });
 
 // Mount only sign-in and session endpoints — no sign-up on admin API

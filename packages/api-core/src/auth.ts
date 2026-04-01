@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
+import { passkey } from "@better-auth/passkey";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma.js";
 
@@ -7,6 +8,7 @@ export interface AuthOptions {
   trustedOrigins: string[] | ((request?: Request) => (string | null | undefined)[]);
   enableEmailPassword?: boolean;
   enableDeleteUser?: boolean;
+  enablePasskeys?: boolean;
 }
 
 export function createAuth(options: AuthOptions) {
@@ -34,7 +36,10 @@ export function createAuth(options: AuthOptions) {
         clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       },
     },
-    plugins: [bearer()],
+    plugins: [
+      bearer(),
+      ...(options.enablePasskeys ? [passkey()] : []),
+    ],
     trustedOrigins: options.trustedOrigins,
   });
 }

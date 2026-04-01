@@ -14,4 +14,5 @@ export const auth = createAuth({
         "app://.",
         process.env.BETTER_AUTH_URL!, // API's own origin (for desktop OAuth HTML page)
       ],
+  enablePasskeys: true,
 });
