@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useLocationSettings } from "../api/location";
 import { useAppConfig } from "../hooks/useAppConfig";
-import { Image, Sparkles, Circle, Pin, PinOff, ChevronDown, ChevronUp } from "lucide-react";
+import { Image, Sparkles, Circle, Pin, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import type { BackgroundManifest, TimeSegment, BusynessTier } from "@brett/business";
 import manifest from "../data/background-manifest.json";
 import { gradients } from "../data/abstract-gradients";
@@ -16,9 +16,6 @@ const TIERS: BusynessTier[] = ["light", "moderate", "packed"];
 const SEGMENT_LABELS: Record<TimeSegment, string> = {
   dawn: "Dawn", morning: "Morning", afternoon: "Afternoon",
   goldenHour: "Golden Hour", evening: "Evening", night: "Night",
-};
-const TIER_LABELS: Record<BusynessTier, string> = {
-  light: "Light", moderate: "Moderate", packed: "Packed",
 };
 
 export function BackgroundSection() {
@@ -43,7 +40,6 @@ export function BackgroundSection() {
     }
   }, [user]);
 
-  // Optimistic update helper
   function optimisticUpdate(patch: Record<string, unknown>) {
     queryClient.setQueryData(["user-me"], (old: any) =>
       old ? { ...old, ...patch } : old
@@ -54,25 +50,38 @@ export function BackgroundSection() {
     const oldStyle = style;
     const oldPinned = pinned;
     setStyle(newStyle);
-    setPinned(null); // Clear pin when switching styles
+    setPinned(null);
 
     optimisticUpdate({ backgroundStyle: newStyle, pinnedBackground: null });
     updateLocation({ backgroundStyle: newStyle, pinnedBackground: null } as any).catch(() => {
       setStyle(oldStyle);
       setPinned(oldPinned);
       optimisticUpdate({ backgroundStyle: oldStyle, pinnedBackground: oldPinned });
-      setError("Failed to save. Try again.");
+      setError("Failed to save.");
       setTimeout(() => setError(null), 4000);
     });
   }
 
   function handlePin(id: string) {
-    const newPinned = pinned === id ? null : id; // Toggle
     const oldPinned = pinned;
+    const newPinned = id;
     setPinned(newPinned);
 
     optimisticUpdate({ pinnedBackground: newPinned });
     updateLocation({ pinnedBackground: newPinned } as any).catch(() => {
+      setPinned(oldPinned);
+      optimisticUpdate({ pinnedBackground: oldPinned });
+      setError("Failed to save.");
+      setTimeout(() => setError(null), 4000);
+    });
+  }
+
+  function handleUnpin() {
+    const oldPinned = pinned;
+    setPinned(null);
+
+    optimisticUpdate({ pinnedBackground: null });
+    updateLocation({ pinnedBackground: null } as any).catch(() => {
       setPinned(oldPinned);
       optimisticUpdate({ pinnedBackground: oldPinned });
       setError("Failed to save.");
@@ -110,21 +119,20 @@ export function BackgroundSection() {
         ))}
       </div>
 
-      {/* Smart mode indicator */}
-      {!pinned && style !== "solid" && (
-        <p className="text-xs text-white/40 mb-3">
-          Smart mode — shifts with time of day and busyness
-        </p>
-      )}
-      {pinned && (
+      {/* Mode indicator */}
+      {pinned ? (
         <button
-          onClick={() => handlePin(pinned)}
+          onClick={handleUnpin}
           className="flex items-center gap-1.5 text-xs text-blue-400/80 hover:text-blue-400 mb-3 transition-colors"
         >
-          <PinOff size={12} />
-          Unpin — return to smart rotation
+          <RotateCcw size={12} />
+          Pinned — click to return to smart rotation
         </button>
-      )}
+      ) : style !== "solid" ? (
+        <p className="text-xs text-white/40 mb-3">
+          Smart rotation — shifts with time of day and busyness
+        </p>
+      ) : null}
 
       {/* Gallery toggle */}
       <button
@@ -132,7 +140,7 @@ export function BackgroundSection() {
         className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/60 transition-colors mb-3"
       >
         {showGallery ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-        {showGallery ? "Hide gallery" : "Browse & pin a background"}
+        {showGallery ? "Hide gallery" : "Choose a background"}
       </button>
 
       {/* Gallery */}
@@ -162,12 +170,11 @@ function PhotoGallery({ baseUrl, pinned, onPin }: { baseUrl: string; pinned: str
           <div className="grid grid-cols-3 gap-2">
             {TIERS.flatMap((tier) =>
               (photoSet?.[seg]?.[tier] ?? []).map((path) => {
-                const id = path;
-                const isPinned = pinned === id;
+                const isPinned = pinned === path;
                 return (
                   <button
                     key={path}
-                    onClick={() => onPin(id)}
+                    onClick={() => onPin(path)}
                     className={`relative group rounded-lg overflow-hidden border transition-all duration-200 aspect-video ${
                       isPinned
                         ? "border-blue-500/50 ring-1 ring-blue-500/30"
@@ -180,14 +187,15 @@ function PhotoGallery({ baseUrl, pinned, onPin }: { baseUrl: string; pinned: str
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />
-                    {isPinned && (
+                    {isPinned ? (
                       <div className="absolute top-1 right-1 p-1 rounded-full bg-blue-500/80">
                         <Pin size={10} className="text-white" />
                       </div>
+                    ) : (
+                      <div className="absolute top-1 right-1 p-1 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Pin size={10} className="text-white/60" />
+                      </div>
                     )}
-                    <div className="absolute bottom-0 inset-x-0 p-1 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[9px] text-white/60 font-mono">{TIER_LABELS[tier]}</span>
-                    </div>
                   </button>
                 );
               })
@@ -223,14 +231,15 @@ function GradientGallery({ pinned, onPin }: { pinned: string | null; onPin: (id:
                     }`}
                   >
                     <div className="w-full h-full" style={{ background: def.background }} />
-                    {isPinned && (
+                    {isPinned ? (
                       <div className="absolute top-1 right-1 p-1 rounded-full bg-blue-500/80">
                         <Pin size={10} className="text-white" />
                       </div>
+                    ) : (
+                      <div className="absolute top-1 right-1 p-1 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Pin size={10} className="text-white/60" />
+                      </div>
                     )}
-                    <div className="absolute bottom-0 inset-x-0 p-1 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[9px] text-white/60 font-mono">{TIER_LABELS[tier]}</span>
-                    </div>
                   </button>
                 );
               })
@@ -244,7 +253,7 @@ function GradientGallery({ pinned, onPin }: { pinned: string | null; onPin: (id:
 
 function SolidGallery({ pinned, onPin }: { pinned: string | null; onPin: (id: string) => void }) {
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div className="grid grid-cols-6 gap-2">
       {solidColors.map((sc) => {
         const id = `solid:${sc.color}`;
         const isPinned = pinned === id;
@@ -252,22 +261,17 @@ function SolidGallery({ pinned, onPin }: { pinned: string | null; onPin: (id: st
           <button
             key={sc.id}
             onClick={() => onPin(id)}
-            className={`relative group flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all duration-200 ${
+            className={`relative flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all duration-200 ${
               isPinned
                 ? "border-blue-500/50 ring-1 ring-blue-500/30 bg-white/5"
                 : "border-white/10 hover:border-white/20 hover:bg-white/5"
             }`}
           >
             <div
-              className="w-8 h-8 rounded-full border border-white/10"
+              className="w-8 h-8 rounded-full border border-white/10 flex-shrink-0"
               style={{ background: sc.color }}
             />
-            <span className="text-[10px] text-white/40">{sc.label}</span>
-            {isPinned && (
-              <div className="absolute top-1 right-1 p-0.5 rounded-full bg-blue-500/80">
-                <Pin size={8} className="text-white" />
-              </div>
-            )}
+            <span className="text-[10px] text-white/40 leading-tight">{sc.label}</span>
           </button>
         );
       })}

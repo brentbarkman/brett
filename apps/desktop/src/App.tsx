@@ -862,15 +862,7 @@ export function App() {
           nextGradient={background.nextGradient}
         />
 
-        {/* Dev: background cycling button */}
-        {import.meta.env.DEV && (
-          <button
-            onClick={background.devNext}
-            className="absolute bottom-3 right-3 z-50 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-mono text-white/50 hover:text-white/80 hover:bg-black/70 transition-colors"
-          >
-            {background.devLabel || "Next BG →"}
-          </button>
-        )}
+
 
         {/* Main Layout Shell */}
         <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
