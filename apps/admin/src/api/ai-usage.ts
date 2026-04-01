@@ -4,7 +4,7 @@ import { adminFetch } from "./client";
 export function useAIUsage(days = 30) {
   return useQuery({
     queryKey: ["admin", "ai-usage", days],
-    queryFn: () => adminFetch<{ days: number; byModel: any; bySource: any }>(`/admin/ai/usage?days=${days}`),
+    queryFn: () => adminFetch<{ days: number; totalTokens: number; totalCostUsd: number; totalCalls: number; byModel: any; byFeature: any }>(`/admin/ai/usage?days=${days}`),
   });
 }
 
