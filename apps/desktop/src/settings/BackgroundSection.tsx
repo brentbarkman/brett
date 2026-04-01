@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useLocationSettings } from "../api/location";
 import { useAppConfig } from "../hooks/useAppConfig";
-import { Image, Sparkles, Circle, Pin, RotateCcw } from "lucide-react";
+import { Image, Sparkles, Circle, Pin } from "lucide-react";
 import type { BackgroundManifest, TimeSegment, BusynessTier } from "@brett/business";
 import manifest from "../data/background-manifest.json";
 import { gradients } from "../data/abstract-gradients";
@@ -63,24 +63,11 @@ export function BackgroundSection() {
 
   function handlePin(id: string) {
     const oldPinned = pinned;
-    const newPinned = id;
+    const newPinned = pinned === id ? null : id; // Toggle: click pinned = unpin
     setPinned(newPinned);
 
     optimisticUpdate({ pinnedBackground: newPinned });
     updateLocation({ pinnedBackground: newPinned } as any).catch(() => {
-      setPinned(oldPinned);
-      optimisticUpdate({ pinnedBackground: oldPinned });
-      setError("Failed to save.");
-      setTimeout(() => setError(null), 4000);
-    });
-  }
-
-  function handleUnpin() {
-    const oldPinned = pinned;
-    setPinned(null);
-
-    optimisticUpdate({ pinnedBackground: null });
-    updateLocation({ pinnedBackground: null } as any).catch(() => {
       setPinned(oldPinned);
       optimisticUpdate({ pinnedBackground: oldPinned });
       setError("Failed to save.");
@@ -118,20 +105,9 @@ export function BackgroundSection() {
         ))}
       </div>
 
-      {/* Mode indicator */}
-      {pinned ? (
-        <button
-          onClick={handleUnpin}
-          className="flex items-center gap-1.5 text-xs text-blue-400/80 hover:text-blue-400 mb-3 transition-colors"
-        >
-          <RotateCcw size={12} />
-          Pinned — click to return to smart rotation
-        </button>
-      ) : style !== "solid" ? (
-        <p className="text-xs text-white/40 mb-3">
-          Smart rotation — shifts with time of day and busyness
-        </p>
-      ) : null}
+      <p className="text-xs text-white/40 mb-3">
+        {pinned ? "Pinned to a background. Click it again to unpin." : "Pin a background or leave it on smart rotation."}
+      </p>
 
       {/* Gallery */}
       {style === "photography" && baseUrl && (
