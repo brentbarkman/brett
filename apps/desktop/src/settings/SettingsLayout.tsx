@@ -19,9 +19,7 @@ type SettingsTab =
   | "security"
   | "calendar"
   | "ai-providers"
-  | "memory"
   | "timezone-location"
-  | "briefing"
   | "import"
   | "account";
 
@@ -30,9 +28,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "security", label: "Security" },
   { id: "calendar", label: "Calendar" },
   { id: "ai-providers", label: "AI Providers" },
-  { id: "memory", label: "Memory" },
   { id: "timezone-location", label: "Personalize" },
-  { id: "briefing", label: "Briefing" },
   { id: "import", label: "Import" },
   { id: "account", label: "Account" },
 ];
@@ -94,18 +90,16 @@ export function SettingsLayout() {
         return <CalendarSection />;
       case "ai-providers":
         return <AISection />;
-      case "memory":
-        return <MemorySection />;
       case "timezone-location":
         return (
           <div className="space-y-5">
             <TimezoneSection />
             <LocationSection />
             <BackgroundSection />
+            <BriefingSection />
+            <MemorySection />
           </div>
         );
-      case "briefing":
-        return <BriefingSection />;
       case "import":
         return <ImportSection userId={user?.id ?? ""} />;
       case "account":
