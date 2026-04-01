@@ -862,7 +862,7 @@ export function App() {
           />
 
           <Routes>
-            <Route path="/settings" element={<SettingsPage onBack={() => navigate(-1)} />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
             <Route path="/scouts" element={
               selectedScoutId && selectedScoutData ? (

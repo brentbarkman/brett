@@ -1,6 +1,5 @@
 import React, { useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
 import { ProfileSection } from "./ProfileSection";
 import { SecuritySection } from "./SecuritySection";
 import { CalendarSection } from "./CalendarSection";
@@ -45,11 +44,7 @@ function tabFromHash(hash: string): SettingsTab | null {
   return null;
 }
 
-interface SettingsLayoutProps {
-  onBack: () => void;
-}
-
-export function SettingsLayout({ onBack }: SettingsLayoutProps) {
+export function SettingsLayout() {
   const location = useLocation();
   const { user } = useAuth();
 
@@ -142,15 +137,7 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
     <div className="flex-1 min-w-0 flex flex-col h-full">
       {/* Header */}
       <div className="max-w-4xl px-10 pt-4 pb-0">
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={onBack}
-            className="text-white/50 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <h1 className="text-xl font-semibold text-white">Settings</h1>
-        </div>
+        <h1 className="text-xl font-semibold text-white mb-4">Settings</h1>
 
         {/* Tab bar */}
         <div className="flex items-center gap-0 border-b border-white/10">
