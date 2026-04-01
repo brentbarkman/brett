@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useLocationSettings } from "../api/location";
 import { Image, Sparkles } from "lucide-react";
 
 export function BackgroundSection() {
+  const queryClient = useQueryClient();
   const { data: user } = useQuery({
     queryKey: ["user-me"],
     queryFn: () => apiFetch<{ backgroundStyle: string }>("/users/me"),
   });
-  const { updateLocation, isSaving } = useLocationSettings();
+  const { updateLocation } = useLocationSettings();
   const [style, setStyle] = useState<"photography" | "abstract">("photography");
   const [error, setError] = useState<string | null>(null);
 
@@ -19,15 +20,24 @@ export function BackgroundSection() {
     }
   }, [user]);
 
-  async function handleChange(newStyle: "photography" | "abstract") {
+  function handleChange(newStyle: "photography" | "abstract") {
+    const oldStyle = style;
     setStyle(newStyle);
-    try {
-      await updateLocation({ backgroundStyle: newStyle });
-      setError(null);
-    } catch {
+
+    // Optimistic update — App.tsx sees the change instantly via cache
+    queryClient.setQueryData(["user-me"], (old: any) =>
+      old ? { ...old, backgroundStyle: newStyle } : old
+    );
+
+    // Persist in background, revert on failure
+    updateLocation({ backgroundStyle: newStyle }).catch(() => {
+      setStyle(oldStyle);
+      queryClient.setQueryData(["user-me"], (old: any) =>
+        old ? { ...old, backgroundStyle: oldStyle } : old
+      );
       setError("Failed to save. Try again.");
       setTimeout(() => setError(null), 4000);
-    }
+    });
   }
 
   return (
@@ -41,7 +51,6 @@ export function BackgroundSection() {
       <div className="flex gap-3">
         <button
           onClick={() => handleChange("photography")}
-          disabled={isSaving}
           className={`flex-1 flex items-center gap-3 p-4 rounded-lg border transition-all duration-200 ${
             style === "photography"
               ? "bg-blue-500/10 border-blue-500/30 text-white"
@@ -57,7 +66,6 @@ export function BackgroundSection() {
 
         <button
           onClick={() => handleChange("abstract")}
-          disabled={isSaving}
           className={`flex-1 flex items-center gap-3 p-4 rounded-lg border transition-all duration-200 ${
             style === "abstract"
               ? "bg-blue-500/10 border-blue-500/30 text-white"
