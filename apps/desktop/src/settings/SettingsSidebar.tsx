@@ -69,7 +69,7 @@ export function SettingsSidebar({
   onDeleteAccount,
 }: SettingsSidebarProps) {
   return (
-    <div className="w-[200px] flex-shrink-0 bg-white/5 border-r border-white/5 flex flex-col h-full">
+    <div className="w-[200px] flex-shrink-0 bg-black/30 backdrop-blur-xl border-r border-white/10 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pt-4 pb-5">
         <button
@@ -85,7 +85,7 @@ export function SettingsSidebar({
       <div className="flex-1 overflow-y-auto scrollbar-hide px-2">
         {GROUPS.map((group, gi) => (
           <div key={group.label} className={gi > 0 ? "mt-4" : ""}>
-            <div className="text-[8px] uppercase tracking-[1.5px] text-white/30 px-2.5 mb-2 font-semibold">
+            <div className="text-[8px] uppercase tracking-[1.5px] text-white/40 px-2.5 mb-2 font-semibold">
               {group.label}
             </div>
             <div className="space-y-0.5">
@@ -96,7 +96,7 @@ export function SettingsSidebar({
                   className={`w-full text-left text-[11px] px-2.5 py-[7px] rounded-md transition-colors ${
                     activeCategory === item.id
                       ? "bg-white/10 text-white/90"
-                      : "text-white/40 hover:bg-white/5 hover:text-white/50"
+                      : "text-white/50 hover:bg-white/5 hover:text-white/60"
                   }`}
                 >
                   {item.label}

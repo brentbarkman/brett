@@ -160,8 +160,8 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
       />
 
       {/* Detail pane */}
-      <div ref={contentRef} className="flex-1 min-w-0 overflow-y-auto scrollbar-hide">
-        <div className="max-w-[640px] px-8 pt-5 pb-12">
+      <div ref={contentRef} className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/20 backdrop-blur-xl">
+        <div className="max-w-[720px] mx-auto px-8 pt-5 pb-12">
           <div
             className={`transition-all duration-200 ease-out ${contentClasses}`}
           >
