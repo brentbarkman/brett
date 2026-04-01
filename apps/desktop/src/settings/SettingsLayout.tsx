@@ -128,7 +128,7 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full">
       {/* Header */}
-      <div className="px-10 pt-4 pb-0">
+      <div className="max-w-4xl px-10 pt-4 pb-0">
         <div className="flex items-center gap-3 mb-4">
           <button
             onClick={onBack}
