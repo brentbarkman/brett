@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
-import { useLocationSettings } from "../api/location";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { Image, Sparkles, Circle, Pin } from "lucide-react";
 import type { BackgroundManifest, TimeSegment, BusynessTier } from "@brett/business";
@@ -26,11 +25,12 @@ export function BackgroundSection() {
   });
   const { data: config } = useAppConfig();
   const baseUrl = config?.storageBaseUrl ?? "";
-  const { updateLocation } = useLocationSettings();
 
   const [style, setStyle] = useState<Style>("photography");
   const [pinned, setPinned] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Track the latest save to discard stale responses
+  const saveVersionRef = useRef(0);
 
   useEffect(() => {
     if (user) {
@@ -39,40 +39,34 @@ export function BackgroundSection() {
     }
   }, [user]);
 
-  function optimisticUpdate(patch: Record<string, unknown>) {
+  // Save to API without triggering query invalidation (avoids race conditions)
+  function saveBackground(patch: Record<string, unknown>) {
+    const version = ++saveVersionRef.current;
     queryClient.setQueryData(["user-me"], (old: any) =>
       old ? { ...old, ...patch } : old
     );
+    apiFetch("/users/location", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }).catch(() => {
+      // Only revert if no newer save has happened
+      if (saveVersionRef.current === version) {
+        setError("Failed to save.");
+        setTimeout(() => setError(null), 4000);
+      }
+    });
   }
 
   function handleStyleChange(newStyle: Style) {
-    const oldStyle = style;
-    const oldPinned = pinned;
     setStyle(newStyle);
     setPinned(null);
-
-    optimisticUpdate({ backgroundStyle: newStyle, pinnedBackground: null });
-    updateLocation({ backgroundStyle: newStyle, pinnedBackground: null } as any).catch(() => {
-      setStyle(oldStyle);
-      setPinned(oldPinned);
-      optimisticUpdate({ backgroundStyle: oldStyle, pinnedBackground: oldPinned });
-      setError("Failed to save.");
-      setTimeout(() => setError(null), 4000);
-    });
+    saveBackground({ backgroundStyle: newStyle, pinnedBackground: null });
   }
 
   function handlePin(id: string) {
-    const oldPinned = pinned;
-    const newPinned = pinned === id ? null : id; // Toggle: click pinned = unpin
+    const newPinned = pinned === id ? null : id;
     setPinned(newPinned);
-
-    optimisticUpdate({ pinnedBackground: newPinned });
-    updateLocation({ pinnedBackground: newPinned } as any).catch(() => {
-      setPinned(oldPinned);
-      optimisticUpdate({ pinnedBackground: oldPinned });
-      setError("Failed to save.");
-      setTimeout(() => setError(null), 4000);
-    });
+    saveBackground({ pinnedBackground: newPinned });
   }
 
   return (
