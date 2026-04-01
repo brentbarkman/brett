@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useAppConfig } from "../hooks/useAppConfig";
-import { Image, Sparkles, Circle, Pin } from "lucide-react";
+import { Image, Sparkles, Circle, Pin, RotateCcw } from "lucide-react";
 import type { BackgroundManifest, TimeSegment, BusynessTier } from "@brett/business";
 import manifest from "../data/background-manifest.json";
 import { solidColors } from "../data/solid-colors";
@@ -25,8 +25,6 @@ export function BackgroundSection() {
   const { data: config } = useAppConfig();
   const baseUrl = config?.storageBaseUrl ?? "";
 
-  // activeStyle = what's actually rendering as your background (saved to DB)
-  // viewingStyle = which gallery tab you're browsing (local UI state only)
   const [activeStyle, setActiveStyle] = useState<Style>("photography");
   const [viewingStyle, setViewingStyle] = useState<Style>("photography");
   const [pinned, setPinned] = useState<string | null>(null);
@@ -58,18 +56,18 @@ export function BackgroundSection() {
     });
   }
 
+  // Click "Smart Rotation" in a gallery → smart mode for that category
+  function handleSmart(style: Style) {
+    setPinned(null);
+    setActiveStyle(style);
+    saveBackground({ backgroundStyle: style, pinnedBackground: null });
+  }
+
+  // Click an image/solid → pin it
   function handlePin(id: string) {
-    if (pinned === id) {
-      // Unpin → return to smart rotation on the current viewing style
-      setPinned(null);
-      setActiveStyle(viewingStyle);
-      saveBackground({ backgroundStyle: viewingStyle, pinnedBackground: null });
-    } else {
-      // Pin this background — also set the active style to match what we're viewing
-      setPinned(id);
-      setActiveStyle(viewingStyle);
-      saveBackground({ backgroundStyle: viewingStyle, pinnedBackground: id });
-    }
+    setPinned(id);
+    setActiveStyle(viewingStyle);
+    saveBackground({ backgroundStyle: viewingStyle, pinnedBackground: id });
   }
 
   return (
@@ -86,177 +84,143 @@ export function BackgroundSection() {
           { key: "photography" as Style, icon: Image, label: "Photography" },
           { key: "abstract" as Style, icon: Sparkles, label: "Abstract" },
           { key: "solid" as Style, icon: Circle, label: "Solid" },
-        ]).map(({ key, icon: Icon, label }) => {
-          const isViewing = viewingStyle === key;
-          const isActive = activeStyle === key && !pinned;
-          return (
-            <button
-              key={key}
-              onClick={() => setViewingStyle(key)}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition-all duration-200 ${
-                isViewing
-                  ? "bg-blue-500/10 border-blue-500/30 text-white"
-                  : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"
-              }`}
-            >
-              <Icon size={15} />
-              <span className="text-sm font-medium">{label}</span>
-              {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
-            </button>
-          );
-        })}
+        ]).map(({ key, icon: Icon, label }) => (
+          <button
+            key={key}
+            onClick={() => setViewingStyle(key)}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition-all duration-200 ${
+              viewingStyle === key
+                ? "bg-blue-500/10 border-blue-500/30 text-white"
+                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"
+            }`}
+          >
+            <Icon size={15} />
+            <span className="text-sm font-medium">{label}</span>
+          </button>
+        ))}
       </div>
-
-      <p className="text-xs text-white/40 mb-3">
-        {pinned
-          ? "Pinned. Click it again to unpin and return to smart rotation."
-          : "Click any background to pin it, or leave on smart rotation."}
-      </p>
 
       {/* Gallery */}
       {viewingStyle === "photography" && baseUrl && (
-        <PhotoGallery baseUrl={baseUrl} pinned={pinned} onPin={handlePin} />
+        <ImageGallery baseUrl={baseUrl} setName="photography" pinned={pinned} activeStyle={activeStyle} onPin={handlePin} onSmart={() => handleSmart("photography")} />
       )}
       {viewingStyle === "photography" && !baseUrl && (
         <div className="text-xs text-white/30 py-4 text-center">Loading images...</div>
       )}
       {viewingStyle === "abstract" && baseUrl && (
-        <AbstractGallery baseUrl={baseUrl} pinned={pinned} onPin={handlePin} />
+        <ImageGallery baseUrl={baseUrl} setName="abstract" pinned={pinned} activeStyle={activeStyle} onPin={handlePin} onSmart={() => handleSmart("abstract")} />
       )}
       {viewingStyle === "abstract" && !baseUrl && (
         <div className="text-xs text-white/30 py-4 text-center">Loading images...</div>
       )}
       {viewingStyle === "solid" && (
-        <SolidGallery pinned={pinned} onPin={handlePin} />
+        <SolidGallery pinned={pinned} activeStyle={activeStyle} onPin={handlePin} onSmart={() => handleSmart("solid")} />
       )}
     </div>
   );
 }
 
-function PhotoGallery({ baseUrl, pinned, onPin }: { baseUrl: string; pinned: string | null; onPin: (id: string) => void }) {
-  const photoSet = (manifest as BackgroundManifest).sets.photography;
+interface GalleryProps {
+  pinned: string | null;
+  activeStyle: Style;
+  onPin: (id: string) => void;
+  onSmart: () => void;
+}
+
+function SmartOption({ style, activeStyle, pinned, onSmart }: { style: Style; activeStyle: Style; pinned: string | null; onSmart: () => void }) {
+  const isActive = activeStyle === style && !pinned;
+  return (
+    <button
+      onClick={onSmart}
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-200 mb-3 ${
+        isActive
+          ? "bg-blue-500/10 border-blue-500/30 text-white"
+          : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"
+      }`}
+    >
+      <RotateCcw size={14} />
+      <span className="text-xs font-medium">Smart Rotation</span>
+      {isActive && <span className="text-[10px] text-white/40 ml-1">Active — shifts with time & busyness</span>}
+    </button>
+  );
+}
+
+function ImageGallery({ baseUrl, setName, pinned, activeStyle, onPin, onSmart }: GalleryProps & { baseUrl: string; setName: string }) {
+  const imageSet = (manifest as BackgroundManifest).sets[setName];
 
   return (
-    <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide">
-      {SEGMENTS.map((seg) => (
-        <div key={seg}>
-          <div className="font-mono text-[10px] uppercase tracking-wider text-white/30 mb-2">
-            {SEGMENT_LABELS[seg]}
+    <div>
+      <SmartOption style={setName as Style} activeStyle={activeStyle} pinned={pinned} onSmart={onSmart} />
+      <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide">
+        {SEGMENTS.map((seg) => (
+          <div key={seg}>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-white/30 mb-2">
+              {SEGMENT_LABELS[seg]}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {TIERS.flatMap((tier) =>
+                (imageSet?.[seg]?.[tier] ?? []).map((path) => {
+                  const isPinned = pinned === path;
+                  return (
+                    <button
+                      key={path}
+                      onClick={() => onPin(path)}
+                      className={`relative group rounded-lg overflow-hidden border transition-all duration-200 aspect-video ${
+                        isPinned
+                          ? "border-blue-500/50 ring-1 ring-blue-500/30"
+                          : "border-white/10 hover:border-white/20"
+                      }`}
+                    >
+                      <img
+                        src={`${baseUrl}/backgrounds/${path}`}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        loading="eager"
+                      />
+                      {isPinned && (
+                        <div className="absolute top-1 right-1 p-1 rounded-full bg-blue-500/80">
+                          <Pin size={10} className="text-white" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {TIERS.flatMap((tier) =>
-              (photoSet?.[seg]?.[tier] ?? []).map((path) => {
-                const isPinned = pinned === path;
-                return (
-                  <button
-                    key={path}
-                    onClick={() => onPin(path)}
-                    className={`relative group rounded-lg overflow-hidden border transition-all duration-200 aspect-video ${
-                      isPinned
-                        ? "border-blue-500/50 ring-1 ring-blue-500/30"
-                        : "border-white/10 hover:border-white/20"
-                    }`}
-                  >
-                    <img
-                      src={`${baseUrl}/backgrounds/${path}`}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      loading="eager"
-                    />
-                    {isPinned ? (
-                      <div className="absolute top-1 right-1 p-1 rounded-full bg-blue-500/80">
-                        <Pin size={10} className="text-white" />
-                      </div>
-                    ) : (
-                      <div className="absolute top-1 right-1 p-1 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Pin size={10} className="text-white/60" />
-                      </div>
-                    )}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
 
-function AbstractGallery({ baseUrl, pinned, onPin }: { baseUrl: string; pinned: string | null; onPin: (id: string) => void }) {
-  const abstractSet = (manifest as BackgroundManifest).sets.abstract;
-
+function SolidGallery({ pinned, activeStyle, onPin, onSmart }: GalleryProps) {
   return (
-    <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide">
-      {SEGMENTS.map((seg) => (
-        <div key={seg}>
-          <div className="font-mono text-[10px] uppercase tracking-wider text-white/30 mb-2">
-            {SEGMENT_LABELS[seg]}
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {TIERS.flatMap((tier) =>
-              (abstractSet?.[seg]?.[tier] ?? []).map((path) => {
-                const isPinned = pinned === path;
-                return (
-                  <button
-                    key={path}
-                    onClick={() => onPin(path)}
-                    className={`relative group rounded-lg overflow-hidden border transition-all duration-200 aspect-video ${
-                      isPinned
-                        ? "border-blue-500/50 ring-1 ring-blue-500/30"
-                        : "border-white/10 hover:border-white/20"
-                    }`}
-                  >
-                    <img
-                      src={`${baseUrl}/backgrounds/${path}`}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      loading="eager"
-                    />
-                    {isPinned ? (
-                      <div className="absolute top-1 right-1 p-1 rounded-full bg-blue-500/80">
-                        <Pin size={10} className="text-white" />
-                      </div>
-                    ) : (
-                      <div className="absolute top-1 right-1 p-1 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Pin size={10} className="text-white/60" />
-                      </div>
-                    )}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SolidGallery({ pinned, onPin }: { pinned: string | null; onPin: (id: string) => void }) {
-  return (
-    <div className="grid grid-cols-6 gap-2">
-      {solidColors.map((sc) => {
-        const id = `solid:${sc.color}`;
-        const isPinned = pinned === id;
-        return (
-          <button
-            key={sc.id}
-            onClick={() => onPin(id)}
-            className={`relative flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all duration-200 ${
-              isPinned
-                ? "border-blue-500/50 ring-1 ring-blue-500/30 bg-white/5"
-                : "border-white/10 hover:border-white/20 hover:bg-white/5"
-            }`}
-          >
-            <div
-              className="w-8 h-8 rounded-full border border-white/10 flex-shrink-0"
-              style={{ background: sc.color }}
-            />
-            <span className="text-[10px] text-white/40 leading-tight">{sc.label}</span>
-          </button>
-        );
-      })}
+    <div>
+      <SmartOption style="solid" activeStyle={activeStyle} pinned={pinned} onSmart={onSmart} />
+      <div className="grid grid-cols-6 gap-2">
+        {solidColors.map((sc) => {
+          const id = `solid:${sc.color}`;
+          const isPinned = pinned === id;
+          return (
+            <button
+              key={sc.id}
+              onClick={() => onPin(id)}
+              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all duration-200 ${
+                isPinned
+                  ? "border-blue-500/50 ring-1 ring-blue-500/30 bg-white/5"
+                  : "border-white/10 hover:border-white/20 hover:bg-white/5"
+              }`}
+            >
+              <div
+                className="w-8 h-8 rounded-full border border-white/10 flex-shrink-0"
+                style={{ background: sc.color }}
+              />
+              <span className="text-[10px] text-white/40 leading-tight">{sc.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
