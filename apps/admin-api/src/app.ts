@@ -6,7 +6,8 @@ import { users } from "./routes/users.js";
 import { scouts } from "./routes/scouts.js";
 import { aiUsage } from "./routes/ai-usage.js";
 
-const isLocal = !process.env.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL.includes("localhost");
+const isLocal = process.env.NODE_ENV !== "production" &&
+  (!process.env.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL.includes("localhost"));
 const adminFrontendUrl = process.env.ADMIN_FRONTEND_URL || "http://localhost:5174";
 
 const { app, auth, authMiddleware } = createBaseApp({
@@ -23,9 +24,11 @@ const { app, auth, authMiddleware } = createBaseApp({
         return null;
       }
     : [adminFrontendUrl],
+  enableEmailPassword: false,
+  enableDeleteUser: false,
 });
 
-// Mount better-auth handler for /api/auth/*
+// Mount only sign-in and session endpoints — no sign-up on admin API
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 // All admin routes require auth + admin role

@@ -42,6 +42,8 @@ export function UsersPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   const newRole = u.role === "admin" ? "user" : "admin";
+                  const action = newRole === "admin" ? "promote to admin" : "demote to user";
+                  if (!confirm(`Are you sure you want to ${action} ${u.email}?`)) return;
                   updateRole.mutate({ userId: u.id, role: newRole });
                 }}
                 className="text-xs text-white/30 hover:text-white/60 transition-colors"

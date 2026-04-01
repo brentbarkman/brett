@@ -4,8 +4,13 @@ import type { AuthEnv } from "@brett/api-core";
 
 export const scouts = new Hono<AuthEnv>();
 
+const VALID_STATUSES = ["active", "paused", "completed", "expired"];
+
 scouts.get("/", async (c) => {
   const status = c.req.query("status");
+  if (status && !VALID_STATUSES.includes(status)) {
+    return c.json({ error: "Invalid status filter" }, 400);
+  }
   const where = status ? { status: status as any } : {};
 
   const scoutList = await prisma.scout.findMany({
@@ -166,18 +171,19 @@ scouts.post("/pause-all", async (c) => {
 
 scouts.post("/resume-all", async (c) => {
   const now = new Date();
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
+  // Find scouts paused by kill switch (no time constraint — if you used the
+  // kill switch, resume-all should always work regardless of when)
   const killSwitchActivities = await prisma.scoutActivity.findMany({
     where: {
       type: "paused",
       description: { contains: "kill switch" },
-      createdAt: { gte: oneHourAgo },
     },
     select: { scoutId: true },
     distinct: ["scoutId"],
   });
 
+  // Only resume scouts that are currently still paused
   const scoutIds = killSwitchActivities.map((a) => a.scoutId);
   if (scoutIds.length === 0) return c.json({ ok: true, resumed: 0 });
 
@@ -185,6 +191,21 @@ scouts.post("/resume-all", async (c) => {
     where: { id: { in: scoutIds }, status: "paused" },
     data: { status: "active", nextRunAt: now },
   });
+
+  // Log activity for resumed scouts
+  if (result.count > 0) {
+    const resumedScouts = await prisma.scout.findMany({
+      where: { id: { in: scoutIds }, status: "active" },
+      select: { id: true },
+    });
+    await prisma.scoutActivity.createMany({
+      data: resumedScouts.map((s) => ({
+        scoutId: s.id,
+        type: "resumed" as const,
+        description: "Scout resumed by admin (kill switch lifted)",
+      })),
+    });
+  }
 
   return c.json({ ok: true, resumed: result.count });
 });

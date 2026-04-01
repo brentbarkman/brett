@@ -1,14 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "@brett/api-core";
 import type { AuthEnv } from "@brett/api-core";
-
-// Per-model pricing in USD per 1M tokens (input / output)
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-4-20250514": { input: 3.0, output: 15.0 },
-  "claude-haiku-3-20240307": { input: 0.25, output: 1.25 },
-  "claude-3-5-haiku-20241022": { input: 1.0, output: 5.0 },
-};
-const DEFAULT_PRICING = { input: 3.0, output: 15.0 };
+import { estimateCost } from "../lib/pricing.js";
 
 export const dashboard = new Hono<AuthEnv>();
 
@@ -23,27 +16,30 @@ dashboard.get("/stats", async (c) => {
     totalRuns,
     failedRuns,
     totalFindings,
-    usageLogs,
     totalItems,
+    tokenAgg,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.scout.count({ where: { status: "active" } }),
     prisma.scoutRun.count({ where: { status: "success", createdAt: { gte: startOfMonth } } }),
     prisma.scoutRun.count({ where: { status: "failed", createdAt: { gte: startOfMonth } } }),
     prisma.scoutFinding.count({ where: { createdAt: { gte: startOfMonth } } }),
-    prisma.aIUsageLog.findMany({
-      where: { createdAt: { gte: startOfMonth } },
-      select: { model: true, inputTokens: true, outputTokens: true },
-    }),
     prisma.item.count(),
+    prisma.aIUsageLog.groupBy({
+      by: ["model"],
+      where: { createdAt: { gte: startOfMonth } },
+      _sum: { inputTokens: true, outputTokens: true },
+    }),
   ]);
 
+  // Compute spend from aggregated data (no full table scan)
   let aiSpendUsd = 0;
   let totalTokens = 0;
-  for (const log of usageLogs) {
-    const pricing = MODEL_PRICING[log.model ?? ""] ?? DEFAULT_PRICING;
-    aiSpendUsd += (log.inputTokens * pricing.input + log.outputTokens * pricing.output) / 1_000_000;
-    totalTokens += log.inputTokens + log.outputTokens;
+  for (const group of tokenAgg) {
+    const input = group._sum.inputTokens ?? 0;
+    const output = group._sum.outputTokens ?? 0;
+    aiSpendUsd += estimateCost(group.model, input, output);
+    totalTokens += input + output;
   }
 
   const totalAttempts = totalRuns + failedRuns;

@@ -7,10 +7,16 @@ import { errorHandler } from "./middleware/error-handler.js";
 export interface BaseAppOptions {
   trustedOrigins: AuthOptions["trustedOrigins"];
   corsOrigins: string[] | ((origin: string) => string | null);
+  enableEmailPassword?: boolean;
+  enableDeleteUser?: boolean;
 }
 
 export function createBaseApp(options: BaseAppOptions) {
-  const auth = createAuth({ trustedOrigins: options.trustedOrigins });
+  const auth = createAuth({
+    trustedOrigins: options.trustedOrigins,
+    enableEmailPassword: options.enableEmailPassword,
+    enableDeleteUser: options.enableDeleteUser,
+  });
   const authMiddleware = createAuthMiddleware(auth);
 
   const app = new Hono();

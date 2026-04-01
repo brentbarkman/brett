@@ -5,13 +5,15 @@ import { prisma } from "./prisma.js";
 
 export interface AuthOptions {
   trustedOrigins: string[] | ((request?: Request) => (string | null | undefined)[]);
+  enableEmailPassword?: boolean;
+  enableDeleteUser?: boolean;
 }
 
 export function createAuth(options: AuthOptions) {
   return betterAuth({
     database: prismaAdapter(prisma, { provider: "postgresql" }),
     emailAndPassword: {
-      enabled: true,
+      enabled: options.enableEmailPassword ?? true,
     },
     user: {
       additionalFields: {
@@ -23,7 +25,7 @@ export function createAuth(options: AuthOptions) {
         },
       },
       deleteUser: {
-        enabled: true,
+        enabled: options.enableDeleteUser ?? true,
       },
     },
     socialProviders: {

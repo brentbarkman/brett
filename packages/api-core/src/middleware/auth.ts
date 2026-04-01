@@ -3,7 +3,7 @@ import type { Auth } from "../auth.js";
 
 export type AuthEnv = {
   Variables: {
-    user: { id: string; email: string; name: string; image: string | null; role: string };
+    user: { id: string; email: string; name: string; image: string | null; role: "user" | "admin" };
     session: { id: string; token: string; userId: string; expiresAt: Date };
   };
 };

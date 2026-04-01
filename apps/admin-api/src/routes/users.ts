@@ -76,19 +76,30 @@ users.patch("/:id/role", async (c) => {
     return c.json({ error: "role must be 'user' or 'admin'" }, 400);
   }
 
-  // Prevent last admin from demoting themselves
-  if (userId === currentUser.id && body.role === "user") {
+  // Prevent demoting the last admin (any demotion, not just self)
+  if (body.role === "user") {
     const adminCount = await prisma.user.count({ where: { role: "admin" } });
     if (adminCount <= 1) {
       return c.json({ error: "Cannot demote the last admin" }, 400);
     }
   }
 
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: { role: body.role as any },
-    select: { id: true, email: true, role: true },
+  // Use transaction to prevent TOCTOU race on concurrent demotions
+  const updated = await prisma.$transaction(async (tx) => {
+    if (body.role === "user") {
+      const count = await tx.user.count({ where: { role: "admin" } });
+      if (count <= 1) throw new Error("Cannot demote the last admin");
+    }
+    return tx.user.update({
+      where: { id: userId },
+      data: { role: body.role as "user" | "admin" },
+      select: { id: true, email: true, role: true },
+    });
+  }).catch((err) => {
+    if (err.message === "Cannot demote the last admin") return null;
+    throw err;
   });
 
+  if (!updated) return c.json({ error: "Cannot demote the last admin" }, 400);
   return c.json({ user: updated });
 });

@@ -27,7 +27,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: sessionData.user.email,
         name: sessionData.user.name,
         image: sessionData.user.image ?? null,
-        role: (sessionData.user as any).role ?? "user",
+        role: typeof (sessionData.user as Record<string, unknown>).role === "string"
+          ? ((sessionData.user as Record<string, unknown>).role as string)
+          : "user",
       }
     : null;
 

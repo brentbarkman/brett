@@ -10,6 +10,7 @@ interface Column<T> {
 interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
+  keyField?: string;
   onRowClick?: (item: T) => void;
   emptyMessage?: string;
   loading?: boolean;
@@ -18,6 +19,7 @@ interface DataTableProps<T> {
 export function DataTable<T extends Record<string, any>>({
   columns,
   data,
+  keyField = "id",
   onRowClick,
   emptyMessage = "No data",
   loading,
@@ -57,7 +59,7 @@ export function DataTable<T extends Record<string, any>>({
           ) : (
             data.map((item, i) => (
               <tr
-                key={i}
+                key={item[keyField] ?? i}
                 onClick={() => onRowClick?.(item)}
                 className={`border-b border-white/[0.04] last:border-0 ${
                   onRowClick ? "cursor-pointer hover:bg-white/[0.03]" : ""

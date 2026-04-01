@@ -17,7 +17,7 @@ export function ScoutsPage() {
         <h1 className="text-lg font-semibold text-white">Scouts</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => pauseAll.mutate()}
+            onClick={() => { if (confirm("Pause ALL active scouts? This is a kill switch.")) pauseAll.mutate(); }}
             disabled={pauseAll.isPending}
             className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-30"
           >
@@ -25,7 +25,7 @@ export function ScoutsPage() {
             Pause All
           </button>
           <button
-            onClick={() => resumeAll.mutate()}
+            onClick={() => { if (confirm("Resume all kill-switch paused scouts?")) resumeAll.mutate(); }}
             disabled={resumeAll.isPending}
             className="flex items-center gap-1.5 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-30"
           >

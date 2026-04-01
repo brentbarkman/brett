@@ -1,4 +1,4 @@
-import { getToken } from "../auth/auth-client";
+import { getToken, clearStoredToken } from "../auth/auth-client";
 
 const API_URL = import.meta.env.VITE_ADMIN_API_URL || "http://localhost:3002";
 
@@ -18,7 +18,7 @@ export async function adminFetch<T = unknown>(
   const res = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: "include" });
 
   if (res.status === 401) {
-    localStorage.removeItem(`brett_admin_token_${API_URL}`);
+    await clearStoredToken();
     window.location.reload();
     throw new Error("Session expired");
   }
