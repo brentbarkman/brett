@@ -1,0 +1,21 @@
+{
+  "name": "@brett/api-core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@brett/types": "workspace:*",
+    "@prisma/client": "^6.4.1",
+    "better-auth": "^1.2.7",
+    "hono": "^4.7.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
