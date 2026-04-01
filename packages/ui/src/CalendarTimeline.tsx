@@ -558,20 +558,6 @@ export function CalendarTimeline({
                           : "")}
                     </p>
                   )}
-                  {/* Countdown badge on the specific event */}
-                  {countdownEvent?.id === event.id && countdownText && (
-                    <div className="absolute bottom-1 right-1">
-                      <span
-                        className={`text-[9px] px-1 py-0.5 rounded-full font-medium ${
-                          countdownText === "Now"
-                            ? "bg-green-500/20 text-green-400"
-                            : "bg-amber-500/20 text-amber-400"
-                        }`}
-                      >
-                        {countdownText}
-                      </span>
-                    </div>
-                  )}
                 </div>
               );
             })}
