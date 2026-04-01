@@ -50,6 +50,8 @@ export function UsersPage() {
           },
           { key: "itemCount", header: "Items" },
           { key: "scoutCount", header: "Scouts" },
+          { key: "spend7d", header: "7d Spend", render: (u: any) => <span className="text-green-400">${(u.spend7d ?? 0).toFixed(2)}</span> },
+          { key: "spend30d", header: "30d Spend", render: (u: any) => <span className="text-green-400">${(u.spend30d ?? 0).toFixed(2)}</span> },
           {
             key: "createdAt",
             header: "Joined",

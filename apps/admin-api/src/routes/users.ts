@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "@brett/api-core";
 import type { AuthEnv } from "@brett/api-core";
+import { estimateCost } from "../lib/pricing.js";
 
 export const users = new Hono<AuthEnv>();
 
@@ -9,7 +10,11 @@ users.get("/", async (c) => {
   const limit = Math.min(100, Math.max(1, Number(c.req.query("limit")) || 25));
   const offset = (page - 1) * limit;
 
-  const [userList, total] = await Promise.all([
+  const now = Date.now();
+  const since7d = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const since30d = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+  const [userList, total, usageLogs7d, usageLogs30d, scoutRuns7d, scoutRuns30d] = await Promise.all([
     prisma.user.findMany({
       skip: offset,
       take: limit,
@@ -27,7 +32,44 @@ users.get("/", async (c) => {
       },
     }),
     prisma.user.count(),
+    prisma.aIUsageLog.groupBy({
+      by: ["userId"],
+      where: { createdAt: { gte: since7d } },
+      _sum: { inputTokens: true, outputTokens: true },
+    }),
+    prisma.aIUsageLog.groupBy({
+      by: ["userId"],
+      where: { createdAt: { gte: since30d } },
+      _sum: { inputTokens: true, outputTokens: true },
+    }),
+    prisma.scoutRun.findMany({
+      where: { createdAt: { gte: since7d }, status: "success" },
+      select: { tokensInput: true, tokensOutput: true, modelId: true, scout: { select: { userId: true } } },
+    }),
+    prisma.scoutRun.findMany({
+      where: { createdAt: { gte: since30d }, status: "success" },
+      select: { tokensInput: true, tokensOutput: true, modelId: true, scout: { select: { userId: true } } },
+    }),
   ]);
+
+  // Build per-user spend maps (AI usage logs use default pricing since model isn't grouped)
+  const spend7d: Record<string, number> = {};
+  const spend30d: Record<string, number> = {};
+
+  for (const g of usageLogs7d) {
+    spend7d[g.userId] = (spend7d[g.userId] ?? 0) + estimateCost(null, g._sum.inputTokens ?? 0, g._sum.outputTokens ?? 0);
+  }
+  for (const g of usageLogs30d) {
+    spend30d[g.userId] = (spend30d[g.userId] ?? 0) + estimateCost(null, g._sum.inputTokens ?? 0, g._sum.outputTokens ?? 0);
+  }
+  for (const r of scoutRuns7d) {
+    const uid = r.scout?.userId;
+    if (uid) spend7d[uid] = (spend7d[uid] ?? 0) + estimateCost(r.modelId, r.tokensInput ?? 0, r.tokensOutput ?? 0);
+  }
+  for (const r of scoutRuns30d) {
+    const uid = r.scout?.userId;
+    if (uid) spend30d[uid] = (spend30d[uid] ?? 0) + estimateCost(r.modelId, r.tokensInput ?? 0, r.tokensOutput ?? 0);
+  }
 
   return c.json({
     users: userList.map((u) => ({
@@ -41,6 +83,8 @@ users.get("/", async (c) => {
       createdAt: u.createdAt,
       itemCount: u._count.items,
       scoutCount: u._count.scouts,
+      spend7d: Math.round((spend7d[u.id] ?? 0) * 100) / 100,
+      spend30d: Math.round((spend30d[u.id] ?? 0) * 100) / 100,
     })),
     total,
     page,
