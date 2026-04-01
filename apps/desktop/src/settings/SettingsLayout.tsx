@@ -93,11 +93,11 @@ export function SettingsLayout() {
       case "timezone-location":
         return (
           <div className="space-y-5">
+            <BriefingSection />
             <TimezoneSection />
             <LocationSection />
-            <BackgroundSection />
-            <BriefingSection />
             <MemorySection />
+            <BackgroundSection />
           </div>
         );
       case "import":
