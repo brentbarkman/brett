@@ -48,7 +48,7 @@ aiUsage.get("/usage/daily", async (c) => {
   const logs = await prisma.aIUsageLog.findMany({
     where: { createdAt: { gte: since } },
     select: { createdAt: true, model: true, inputTokens: true, outputTokens: true },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
   });
 
   const daily: Record<string, { tokens: number; costUsd: number; count: number }> = {};
@@ -65,7 +65,9 @@ aiUsage.get("/usage/daily", async (c) => {
 
   return c.json({
     days,
-    daily: Object.entries(daily).map(([date, data]) => ({ date, ...data })),
+    daily: Object.entries(daily)
+      .map(([date, data]) => ({ date, ...data }))
+      .sort((a, b) => b.date.localeCompare(a.date)),
   });
 });
 
@@ -84,8 +86,25 @@ aiUsage.get("/sessions", async (c) => {
       userId: true,
       user: { select: { email: true, name: true } },
       _count: { select: { messages: true } },
+      usageLogs: {
+        select: { inputTokens: true, outputTokens: true },
+      },
     },
   });
 
-  return c.json({ sessions });
+  // Flatten token totals per session
+  const result = sessions.map((s) => {
+    const inputTokens = s.usageLogs.reduce((sum, l) => sum + l.inputTokens, 0);
+    const outputTokens = s.usageLogs.reduce((sum, l) => sum + l.outputTokens, 0);
+    const { usageLogs: _, ...rest } = s;
+    return {
+      ...rest,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      costUsd: Math.round(estimateCost(s.modelUsed, inputTokens, outputTokens) * 100) / 100,
+    };
+  });
+
+  return c.json({ sessions: result });
 });

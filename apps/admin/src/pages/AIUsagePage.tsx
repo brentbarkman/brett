@@ -103,7 +103,9 @@ export function AIUsagePage() {
             { key: "source", header: "Source" },
             { key: "modelUsed", header: "Model", render: (r: any) => <span className="font-mono text-xs">{r.modelUsed ?? "—"}</span> },
             { key: "user", header: "User", render: (r: any) => r.user?.email ?? "—" },
-            { key: "messages", header: "Messages", render: (r: any) => r._count?.messages ?? 0 },
+            { key: "totalTokens", header: "Tokens", render: (r: any) => r.totalTokens?.toLocaleString() ?? "0" },
+            { key: "costUsd", header: "Cost", render: (r: any) => <span className="text-green-400">${r.costUsd?.toFixed(2) ?? "0.00"}</span> },
+            { key: "messages", header: "Msgs", render: (r: any) => r._count?.messages ?? 0 },
             { key: "createdAt", header: "When", render: (r: any) => new Date(r.createdAt).toLocaleString() },
           ]}
         />
