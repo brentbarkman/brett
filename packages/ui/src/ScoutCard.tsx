@@ -91,12 +91,12 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
             </span>
           )}
         </div>
-        <p className="text-[13px] text-white/40 line-clamp-2">{scout.goal}</p>
+        <p className="text-[13px] text-white/50 line-clamp-2">{scout.goal}</p>
         <div className="flex items-center gap-3 text-[11px] text-white/40 font-medium">
           <span>Last run: {scout.lastRun ? formatRelativeTime(scout.lastRun) : "Never"}</span>
-          <span className="text-white/10">·</span>
+          <span className="text-white/20">·</span>
           <span>{scout.findingsCount} findings</span>
-          <span className="text-white/10">·</span>
+          <span className="text-white/20">·</span>
           <span className={scout.cadenceCurrentIntervalHours < scout.cadenceIntervalHours ? "text-blue-400/70" : ""}>
             {scout.cadenceCurrentIntervalHours < scout.cadenceIntervalHours
               ? `${humanizeCadence(scout.cadenceCurrentIntervalHours)} (elevated)`

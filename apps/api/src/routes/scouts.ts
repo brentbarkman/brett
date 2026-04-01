@@ -198,6 +198,48 @@ scouts.get("/budget", async (c) => {
   return c.json(summary);
 });
 
+// GET /scouts/findings/recent — recent findings across all user's scouts (must be before /:id)
+scouts.get("/findings/recent", async (c) => {
+  const user = c.get("user");
+  const { limit: limitParam } = c.req.query();
+  const limit = Math.min(parseInt(limitParam ?? "20", 10) || 20, 50);
+
+  const rows = await prisma.scoutFinding.findMany({
+    where: {
+      scout: { userId: user.id },
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: {
+      scout: {
+        select: {
+          name: true,
+          avatarLetter: true,
+          avatarGradientFrom: true,
+          avatarGradientTo: true,
+        },
+      },
+    },
+  });
+
+  const findings = rows.map((row) => ({
+    id: row.id,
+    scoutId: row.scoutId,
+    type: row.type as ScoutFinding["type"],
+    title: row.title,
+    description: row.description,
+    sourceUrl: row.sourceUrl ?? undefined,
+    sourceName: row.sourceName,
+    relevanceScore: row.relevanceScore,
+    createdAt: row.createdAt.toISOString(),
+    scoutName: row.scout.name,
+    scoutAvatarLetter: row.scout.avatarLetter,
+    scoutAvatarGradient: [row.scout.avatarGradientFrom, row.scout.avatarGradientTo] as [string, string],
+  }));
+
+  return c.json({ findings });
+});
+
 // GET /scouts/:id — scout detail
 scouts.get("/:id", async (c) => {
   const user = c.get("user");
