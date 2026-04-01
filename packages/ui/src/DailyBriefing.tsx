@@ -192,7 +192,7 @@ export function DailyBriefing({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+          <div className="w-2 h-2 rounded-full bg-blue-500" />
           <span className="font-mono text-xs uppercase tracking-wider text-blue-400/90 font-semibold">
             Daily Briefing
           </span>
