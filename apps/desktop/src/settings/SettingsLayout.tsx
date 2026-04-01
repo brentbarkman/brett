@@ -55,32 +55,37 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
 
   const initialTab = tabFromHash(location.hash) || "profile";
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
-  const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(
-    null
-  );
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  // "exiting" = old content sliding out, "entering" = new content sliding in
+  const [phase, setPhase] = useState<"idle" | "exiting" | "entering">("idle");
+  const [direction, setDirection] = useState<"left" | "right">("left");
   const contentRef = useRef<HTMLDivElement>(null);
 
   function handleTabSelect(tab: SettingsTab) {
-    if (tab === activeTab) return;
+    if (tab === activeTab || phase !== "idle") return;
 
     const oldIndex = TABS.findIndex((t) => t.id === activeTab);
     const newIndex = TABS.findIndex((t) => t.id === tab);
-    const direction = newIndex > oldIndex ? "left" : "right";
+    const dir = newIndex > oldIndex ? "left" : "right";
 
-    setSlideDirection(direction);
-    setIsTransitioning(true);
+    setDirection(dir);
+    // Phase 1: slide old content out
+    setPhase("exiting");
 
-    requestAnimationFrame(() => {
+    setTimeout(() => {
+      // Swap content and position off-screen on entering side
       setActiveTab(tab);
       if (contentRef.current) {
         contentRef.current.scrollTop = 0;
       }
-      setTimeout(() => {
-        setIsTransitioning(false);
-        setSlideDirection(null);
-      }, 200);
-    });
+      setPhase("entering");
+
+      // Phase 2: slide new content in on next frame
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setPhase("idle");
+        });
+      });
+    }, 150);
   }
 
   function renderContent() {
@@ -118,12 +123,20 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
     }
   }
 
-  // Slide animation: pure horizontal slide, no fade
-  const enterFrom =
-    slideDirection === "left" ? "translate-x-8" : "-translate-x-8";
-  const contentClasses = isTransitioning
-    ? enterFrom
-    : "translate-x-0";
+  // Carousel: exit one side, enter from the other
+  let contentClasses: string;
+  let useTransition = true;
+  if (phase === "exiting") {
+    // Slide old content out
+    contentClasses = direction === "left" ? "-translate-x-full opacity-0" : "translate-x-full opacity-0";
+  } else if (phase === "entering") {
+    // Position new content off-screen instantly (no transition)
+    contentClasses = direction === "left" ? "translate-x-full opacity-0" : "-translate-x-full opacity-0";
+    useTransition = false;
+  } else {
+    // Idle: content at rest
+    contentClasses = "translate-x-0 opacity-100";
+  }
 
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full">
@@ -163,11 +176,11 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
       {/* Content area */}
       <div
         ref={contentRef}
-        className="flex-1 min-w-0 overflow-y-auto scrollbar-hide"
+        className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto scrollbar-hide"
       >
         <div className="max-w-4xl px-10 pt-6 pb-12">
           <div
-            className={`transition-all duration-200 ease-out ${contentClasses}`}
+            className={`${useTransition ? "transition-all duration-150 ease-out" : ""} ${contentClasses}`}
           >
             <div className="space-y-5">{renderContent()}</div>
           </div>
