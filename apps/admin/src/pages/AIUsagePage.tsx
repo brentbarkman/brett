@@ -100,8 +100,24 @@ export function AIUsagePage() {
           data={sessions?.sessions ?? []}
           emptyMessage="No sessions"
           columns={[
-            { key: "source", header: "Source" },
-            { key: "modelUsed", header: "Model", render: (r: any) => <span className="font-mono text-xs">{r.modelUsed ?? "—"}</span> },
+            {
+              key: "source",
+              header: "Source",
+              render: (r: any) => {
+                const failed = r.totalTokens === 0 && r._count?.messages === 0;
+                return (
+                  <span className="flex items-center gap-1.5">
+                    {r.source}
+                    {failed && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400">
+                        failed
+                      </span>
+                    )}
+                  </span>
+                );
+              },
+            },
+            { key: "modelUsed", header: "Model", render: (r: any) => <span className="font-mono text-xs">{r.modelUsed || "—"}</span> },
             { key: "user", header: "User", render: (r: any) => r.user?.email ?? "—" },
             { key: "totalTokens", header: "Tokens", render: (r: any) => r.totalTokens?.toLocaleString() ?? "0" },
             { key: "costUsd", header: "Cost", render: (r: any) => <span className="text-green-400">${r.costUsd?.toFixed(2) ?? "0.00"}</span> },
