@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { slugify, getEventGlassColor } from "@brett/utils";
 import { getEndOfWeekUTC } from "@brett/business";
+import type { BackgroundStyle } from "@brett/business";
 import {
   DndContext,
   DragOverlay,
@@ -28,6 +29,7 @@ import {
   SpotlightModal,
   ScoutsRoster,
   ScoutDetail,
+  LivingBackground,
 } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useAuth } from "./auth/AuthContext";
@@ -58,6 +60,7 @@ import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts
 import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/granola";
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
+import { useBackground } from "./hooks/useBackground";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
 import { usePreference } from "./api/preferences";
@@ -402,6 +405,29 @@ export function App() {
   const { data: sessionUsageData } = useSessionUsage(
     showTokenUsage ? omnibar.sessionId : null,
   );
+
+  // Compute today's task count — tasks due today or overdue
+  const todayTaskCount = useMemo(() => {
+    if (!activeThingsForCount) return 0;
+    const endOfToday = new Date(todayBounds.endDate);
+    return activeThingsForCount.filter((t: any) => {
+      if (!t.dueDate) return false;
+      return new Date(t.dueDate) <= endOfToday;
+    }).length;
+  }, [activeThingsForCount, todayBounds]);
+
+  // Meeting count from today's calendar events
+  const todayMeetingCount = todayCalendarEvents?.length ?? 0;
+
+  // Background style from user preferences — no user-me query exists in this
+  // component yet; hardcoded to "photography" until Settings wires it up.
+  const backgroundStyle: BackgroundStyle = "photography";
+
+  const background = useBackground({
+    meetingCount: todayMeetingCount,
+    taskCount: todayTaskCount,
+    backgroundStyle,
+  });
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
@@ -809,20 +835,11 @@ export function App() {
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <AppDropZone onDropPdf={handleDropPdf}>
       <div className="relative flex h-screen w-full overflow-hidden text-white font-sans bg-black">
-        {/* Full-bleed Photographic Background */}
-        <div
-          className="absolute inset-0 z-0 bg-cover bg-center opacity-80"
-          style={{
-            backgroundImage:
-              'url("https://images.unsplash.com/photo-1633306593834-92cf7af67d2f?w=1920&q=80")',
-          }}
+        <LivingBackground
+          imageUrl={background.imageUrl}
+          nextImageUrl={background.nextImageUrl}
+          isTransitioning={background.isTransitioning}
         />
-
-        {/* Vignette overlay for better text readability */}
-        <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
-
-        {/* Left-side scrim for nav readability over any background */}
-        <div className="absolute inset-y-0 left-0 w-[312px] z-0 bg-gradient-to-r from-black/60 to-transparent pointer-events-none" />
 
         {/* Main Layout Shell */}
         <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
