@@ -11,6 +11,7 @@ import {
 } from "@brett/business";
 import manifest from "../data/background-manifest.json";
 import { selectGradient, gradients } from "../data/abstract-gradients";
+import { solidColors } from "../data/solid-colors";
 import { useAppConfig } from "./useAppConfig";
 import fallbackBg from "../assets/fallback-bg.webp";
 
@@ -26,6 +27,8 @@ interface UseBackgroundInput {
   taskCount: number;
   backgroundStyle: BackgroundStyle;
   avgBusynessScore?: number;
+  /** When set, overrides smart rotation with a fixed background */
+  pinnedBackground?: string | null;
 }
 
 interface UseBackgroundOutput {
@@ -49,10 +52,12 @@ export function useBackground({
   taskCount,
   backgroundStyle,
   avgBusynessScore,
+  pinnedBackground,
 }: UseBackgroundInput): UseBackgroundOutput {
   const { data: config } = useAppConfig();
   const baseUrl = config?.storageBaseUrl ?? "";
   const isAbstract = backgroundStyle === "abstract";
+  const isSolid = backgroundStyle === "solid";
 
   const [segment, setSegment] = useState<TimeSegment>(() =>
     getTimeSegment(new Date().getHours())
@@ -312,6 +317,68 @@ export function useBackground({
       img.src = fullUrl;
     }
   }, [isAbstract, baseUrl, buildUrl, cancelTransition, startCrossfade]);
+
+  // Resolve pinned background — overrides smart rotation
+  if (pinnedBackground) {
+    if (pinnedBackground.startsWith("solid:")) {
+      const color = pinnedBackground.slice(6);
+      return {
+        imageUrl: fallbackBg,
+        nextImageUrl: null,
+        isTransitioning: false,
+        segment,
+        busynessTier,
+        gradient: color,
+        nextGradient: null,
+        devNext,
+        devLabel,
+      };
+    }
+    if (pinnedBackground.startsWith("abstract:")) {
+      const [, seg, tier, idx] = pinnedBackground.split(":");
+      const defs = gradients[seg as TimeSegment]?.[tier as BusynessTier];
+      const bg = defs?.[Number(idx)]?.background ?? null;
+      return {
+        imageUrl: fallbackBg,
+        nextImageUrl: null,
+        isTransitioning: false,
+        segment,
+        busynessTier,
+        gradient: bg,
+        nextGradient: null,
+        devNext,
+        devLabel,
+      };
+    }
+    // Photography pin: "photo/dawn/light-1.webp"
+    const pinnedUrl = baseUrl ? buildUrl(pinnedBackground) : fallbackBg;
+    return {
+      imageUrl: pinnedUrl,
+      nextImageUrl: null,
+      isTransitioning: false,
+      segment,
+      busynessTier,
+      gradient: null,
+      nextGradient: null,
+      devNext,
+      devLabel,
+    };
+  }
+
+  // Solid color mode (unpinned) — use a default dark color
+  if (isSolid) {
+    return {
+      imageUrl: fallbackBg,
+      nextImageUrl: null,
+      isTransitioning: false,
+      segment,
+      busynessTier,
+      gradient: solidColors[0].color,
+      nextGradient: null,
+      devNext,
+      devLabel,
+    };
+  }
 
   return {
     imageUrl: currentImage,

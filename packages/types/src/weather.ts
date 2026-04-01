@@ -60,5 +60,6 @@ export interface LocationSettings {
   longitude: number | null;
   tempUnit: "auto" | "fahrenheit" | "celsius";
   weatherEnabled: boolean;
-  backgroundStyle?: "photography" | "abstract";
+  backgroundStyle?: "photography" | "abstract" | "solid";
+  pinnedBackground?: string | null;
 }

@@ -40,7 +40,7 @@ export function getBusynessScore(meetingCount: number, taskCount: number): numbe
   return meetingCount * 2 + taskCount;
 }
 
-export type BackgroundStyle = "photography" | "abstract";
+export type BackgroundStyle = "photography" | "abstract" | "solid";
 
 export interface BackgroundManifest {
   version: number;

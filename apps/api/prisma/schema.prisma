@@ -33,6 +33,7 @@ model User {
   tempUnit        String   @default("auto")
   weatherEnabled  Boolean  @default(true)
   backgroundStyle   String   @default("photography")
+  pinnedBackground  String?
   avgBusynessScore  Float    @default(0)
   role              UserRole @default(user)
   banned          Boolean  @default(false)

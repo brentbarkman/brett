@@ -24,6 +24,7 @@ users.get("/me", authMiddleware, async (c) => {
       tempUnit: true,
       weatherEnabled: true,
       backgroundStyle: true,
+      pinnedBackground: true,
       avgBusynessScore: true,
     },
   });
@@ -42,6 +43,7 @@ users.get("/me", authMiddleware, async (c) => {
     tempUnit: fullUser?.tempUnit ?? "auto",
     weatherEnabled: fullUser?.weatherEnabled ?? true,
     backgroundStyle: fullUser?.backgroundStyle ?? "photography",
+    pinnedBackground: fullUser?.pinnedBackground ?? null,
     avgBusynessScore: fullUser?.avgBusynessScore ?? 0,
   });
 });
@@ -200,9 +202,16 @@ users.patch("/location", authMiddleware, rateLimiter(20), async (c) => {
     return c.json({ error: "tempUnit must be one of: auto, fahrenheit, celsius" }, 400);
   }
   if (backgroundStyle !== undefined) {
-    const validStyles = ["photography", "abstract"];
+    const validStyles = ["photography", "abstract", "solid"];
     if (!validStyles.includes(backgroundStyle)) {
-      return c.json({ error: "backgroundStyle must be 'photography' or 'abstract'" }, 400);
+      return c.json({ error: "backgroundStyle must be 'photography', 'abstract', or 'solid'" }, 400);
+    }
+  }
+  const pinnedBackground = body.pinnedBackground;
+  if (pinnedBackground !== undefined) {
+    // null clears the pin, string sets it (max 200 chars for safety)
+    if (pinnedBackground !== null && (typeof pinnedBackground !== "string" || pinnedBackground.length > 200)) {
+      return c.json({ error: "pinnedBackground must be a string (max 200 chars) or null" }, 400);
     }
   }
 
@@ -216,6 +225,7 @@ users.patch("/location", authMiddleware, rateLimiter(20), async (c) => {
   if (weatherEnabled !== undefined) data.weatherEnabled = weatherEnabled;
   if (timezone !== undefined) data.timezone = timezone;
   if (backgroundStyle !== undefined) data.backgroundStyle = backgroundStyle;
+  if (pinnedBackground !== undefined) data.pinnedBackground = pinnedBackground;
 
   if (Object.keys(data).length === 0) {
     return c.json({ error: "No fields provided" }, 400);
@@ -239,6 +249,7 @@ users.patch("/location", authMiddleware, rateLimiter(20), async (c) => {
       weatherEnabled: true,
       timezone: true,
       backgroundStyle: true,
+      pinnedBackground: true,
     },
   });
 
