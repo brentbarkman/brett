@@ -30,7 +30,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white">Scouts</h1>
-            <p className="text-[12px] text-white/50">
+            <p className="text-[12px] text-white/60">
               {isLoading ? "Loading..." : `${activeScouts.length} active · ${totalFindings} findings${lastActivity ? ` · Last run ${formatRelativeTime(lastActivity.lastRun!)}` : ''}`}
             </p>
           </div>
