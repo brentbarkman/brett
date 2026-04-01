@@ -128,10 +128,10 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
   let useTransition = true;
   if (phase === "exiting") {
     // Slide old content out
-    contentClasses = direction === "left" ? "-translate-x-full opacity-0" : "translate-x-full opacity-0";
+    contentClasses = direction === "left" ? "-translate-x-full opacity-100" : "translate-x-full opacity-100";
   } else if (phase === "entering") {
     // Position new content off-screen instantly (no transition)
-    contentClasses = direction === "left" ? "translate-x-full opacity-0" : "-translate-x-full opacity-0";
+    contentClasses = direction === "left" ? "translate-x-full opacity-100" : "-translate-x-full opacity-100";
     useTransition = false;
   } else {
     // Idle: content at rest
