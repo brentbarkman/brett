@@ -118,12 +118,12 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
     }
   }
 
-  // Slide animation: horizontal direction since tabs are horizontal
+  // Slide animation: pure horizontal slide, no fade
   const enterFrom =
-    slideDirection === "left" ? "translate-x-3" : "-translate-x-3";
+    slideDirection === "left" ? "translate-x-8" : "-translate-x-8";
   const contentClasses = isTransitioning
-    ? `opacity-0 ${enterFrom}`
-    : "opacity-100 translate-x-0";
+    ? enterFrom
+    : "translate-x-0";
 
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full">
