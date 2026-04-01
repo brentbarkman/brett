@@ -4,7 +4,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma.js";
 
 export interface AuthOptions {
-  trustedOrigins: string[] | ((request: Request) => string[]);
+  trustedOrigins: string[] | ((request?: Request) => (string | null | undefined)[]);
 }
 
 export function createAuth(options: AuthOptions) {

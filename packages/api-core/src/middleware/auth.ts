@@ -18,8 +18,8 @@ export function createAuthMiddleware(auth: Auth) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    c.set("user", session.user as AuthEnv["Variables"]["user"]);
-    c.set("session", session.session as AuthEnv["Variables"]["session"]);
+    c.set("user", session.user as unknown as AuthEnv["Variables"]["user"]);
+    c.set("session", session.session as unknown as AuthEnv["Variables"]["session"]);
 
     return next();
   });

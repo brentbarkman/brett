@@ -16,6 +16,7 @@
     "@aws-sdk/client-s3": "^3.1010.0",
     "@aws-sdk/s3-request-presigner": "^3.1010.0",
     "@brett/ai": "workspace:*",
+    "@brett/api-core": "workspace:*",
     "@brett/business": "workspace:*",
     "@brett/types": "workspace:*",
     "@brett/utils": "workspace:*",

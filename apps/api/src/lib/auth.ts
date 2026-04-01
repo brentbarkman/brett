@@ -1,29 +1,10 @@
-import { betterAuth } from "better-auth";
-import { bearer } from "better-auth/plugins";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { prisma } from "./prisma.js";
+import { createAuth } from "@brett/api-core";
 
 const isLocal = !process.env.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL.includes("localhost");
 
-export const auth = betterAuth({
-  database: prismaAdapter(prisma, { provider: "postgresql" }),
-  emailAndPassword: {
-    enabled: true,
-  },
-  user: {
-    deleteUser: {
-      enabled: true,
-    },
-  },
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    },
-  },
-  plugins: [bearer()],
+export const auth = createAuth({
   trustedOrigins: isLocal
-    ? (request) => {
+    ? (request?: Request) => {
         const origin = request?.headers.get("origin") ?? "";
         if (origin === "app://." || /^http:\/\/localhost:\d+$/.test(origin))
           return [origin];
