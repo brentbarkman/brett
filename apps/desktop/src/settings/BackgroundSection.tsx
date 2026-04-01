@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useLocationSettings } from "../api/location";
 import { useAppConfig } from "../hooks/useAppConfig";
-import { Image, Sparkles, Circle, Pin, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { Image, Sparkles, Circle, Pin, RotateCcw } from "lucide-react";
 import type { BackgroundManifest, TimeSegment, BusynessTier } from "@brett/business";
 import manifest from "../data/background-manifest.json";
 import { gradients } from "../data/abstract-gradients";
@@ -30,7 +30,6 @@ export function BackgroundSection() {
 
   const [style, setStyle] = useState<Style>("photography");
   const [pinned, setPinned] = useState<string | null>(null);
-  const [showGallery, setShowGallery] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -134,23 +133,14 @@ export function BackgroundSection() {
         </p>
       ) : null}
 
-      {/* Gallery toggle */}
-      <button
-        onClick={() => setShowGallery(!showGallery)}
-        className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/60 transition-colors mb-3"
-      >
-        {showGallery ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-        {showGallery ? "Hide gallery" : "Choose a background"}
-      </button>
-
       {/* Gallery */}
-      {showGallery && style === "photography" && (
+      {style === "photography" && (
         <PhotoGallery baseUrl={baseUrl} pinned={pinned} onPin={handlePin} />
       )}
-      {showGallery && style === "abstract" && (
+      {style === "abstract" && (
         <GradientGallery pinned={pinned} onPin={handlePin} />
       )}
-      {showGallery && style === "solid" && (
+      {style === "solid" && (
         <SolidGallery pinned={pinned} onPin={handlePin} />
       )}
     </div>
