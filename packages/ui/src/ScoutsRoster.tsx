@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus, Radar } from "lucide-react";
 import type { Scout } from "@brett/types";
+import { formatRelativeTime } from "@brett/utils";
 import { ScoutCard } from "./ScoutCard";
 import { Omnibar, type OmnibarProps } from "./Omnibar";
 
@@ -17,21 +18,21 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
   const activeScouts = scouts.filter((s) => s.status === "active" || s.status === "paused");
   const inactiveScouts = scouts.filter((s) => s.status === "completed" || s.status === "expired");
 
+  const totalFindings = scouts.reduce((sum, s) => sum + s.findingsCount, 0);
+  const lastActivity = scouts
+    .filter(s => s.lastRun)
+    .sort((a, b) => new Date(b.lastRun!).getTime() - new Date(a.lastRun!).getTime())[0];
+
   return (
-    <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/20 backdrop-blur-lg rounded-2xl border border-white/[0.06] my-2 mr-4">
-      <div className="max-w-3xl mx-auto w-full px-10 py-8 space-y-6">
+    <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
+      <div className="max-w-4xl mx-auto w-full px-10 py-6 space-y-6">
         {/* Header — lightweight, content-forward */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/15 flex items-center justify-center">
-              <Radar size={18} className="text-blue-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">Scouts</h1>
-              <p className="text-[12px] text-white/30">
-                {isLoading ? "Loading..." : `${activeScouts.length} active, watching for you`}
-              </p>
-            </div>
+          <div>
+            <h1 className="text-xl font-bold text-white">Scouts</h1>
+            <p className="text-[12px] text-white/50">
+              {isLoading ? "Loading..." : `${activeScouts.length} active · ${totalFindings} findings${lastActivity ? ` · Last run ${formatRelativeTime(lastActivity.lastRun!)}` : ''}`}
+            </p>
           </div>
 
           {!omnibarProps && onNewScout && (
@@ -49,9 +50,19 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
         {omnibarProps && (
           <Omnibar
             {...omnibarProps}
-            placeholder="What do you want to monitor?"
+            placeholder="What do you want to scout?"
             showScoutAction
           />
+        )}
+
+        {/* Ghost examples when omnibar is closed and few scouts exist */}
+        {omnibarProps && !omnibarProps.isOpen && scouts.length < 3 && (
+          <div className="flex items-center gap-3 px-2 -mt-2">
+            <span className="text-[11px] text-white/30">Try:</span>
+            <span className="text-[11px] text-white/20 italic">"Track SEC filings for AAPL"</span>
+            <span className="text-white/20">&middot;</span>
+            <span className="text-[11px] text-white/20 italic">"Monitor competitor pricing"</span>
+          </div>
         )}
 
         {/* Loading skeleton */}
@@ -60,7 +71,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-[88px] rounded-2xl bg-white/[0.04] border border-white/[0.07] animate-pulse"
+                className="h-[88px] rounded-2xl bg-white/5 border border-white/10 animate-pulse"
               />
             ))}
           </div>
@@ -74,7 +85,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
             </div>
             <div className="text-center space-y-1">
               <p className="text-[15px] font-semibold text-white/50">No scouts yet</p>
-              <p className="text-[13px] text-white/30">Create a scout to start monitoring anything on the internet.</p>
+              <p className="text-[13px] text-white/30">Create a scout to start tracking anything on the internet.</p>
             </div>
             <button
               onClick={omnibarProps?.onOpen ?? onNewScout}
@@ -103,7 +114,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
         {/* Completed / Expired */}
         {!isLoading && inactiveScouts.length > 0 && (
           <div className="space-y-3">
-            <h3 className="text-[11px] font-semibold tracking-widest text-white/25 uppercase px-1">
+            <h3 className="font-mono text-[11px] font-semibold tracking-wider text-white/40 uppercase px-1">
               Completed
             </h3>
             {inactiveScouts.map((scout) => (

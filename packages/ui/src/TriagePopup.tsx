@@ -263,7 +263,7 @@ export function TriagePopup({
                 setFilterText(e.target.value);
                 setFocusedIndex(0);
               }}
-              className="w-full bg-transparent border-none outline-none text-sm text-white placeholder:text-white/25"
+              className="w-full bg-transparent border-none outline-none text-sm text-white placeholder:text-white/20"
             />
           </div>
           <div className="max-h-48 overflow-y-auto py-1">
@@ -279,7 +279,7 @@ export function TriagePopup({
                 <div className={`w-2 h-2 rounded-full ${list.colorClass}`} />
                 <span className="text-sm flex-1 truncate">{list.name}</span>
                 {i < 9 && (
-                  <span className="text-[10px] text-white/25 font-mono">
+                  <span className="text-[10px] text-white/20 font-mono">
                     {i + 1}
                   </span>
                 )}

@@ -152,12 +152,19 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
 
       {/* Keyboard hint bar */}
       {allItems.length > 0 && (
-        <div className="flex items-center justify-center gap-4 text-[10px] text-white/20 font-mono">
-          <span>j/k navigate</span>
-          <span>e done</span>
-          <span>l list</span>
-          <span>d date</span>
-          <span>n add</span>
+        <div className="flex items-center justify-center gap-3 text-[10px] text-white/30 font-mono bg-black/20 backdrop-blur-xl rounded-lg px-4 py-2 mx-auto w-fit">
+          {["j/k navigate", "e done", "l list", "d date", "n add"].map((hint) => {
+            const spaceIdx = hint.indexOf(" ");
+            if (spaceIdx === -1) return <span key={hint}>{hint}</span>;
+            const key = hint.slice(0, spaceIdx);
+            const desc = hint.slice(spaceIdx + 1);
+            return (
+              <span key={hint} className="flex items-center gap-1">
+                <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white/50 text-[10px]">{key}</kbd>
+                <span>{desc}</span>
+              </span>
+            );
+          })}
         </div>
       )}
 

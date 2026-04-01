@@ -11,6 +11,8 @@ interface InboxItemRowProps {
   isNew?: boolean;
   relativeAge: string;
   selectedIds: Set<string>;
+  /** When true, suppress the source pill (all items share the same source) */
+  hideSource?: boolean;
   onClick: () => void;
   onFocus?: () => void;
   onToggle?: (id: string) => void;
@@ -25,6 +27,7 @@ export function InboxItemRow({
   isNew,
   relativeAge,
   selectedIds,
+  hideSource,
   onClick,
   onFocus,
   onToggle,
@@ -94,8 +97,8 @@ export function InboxItemRow({
         ${isFocused
           ? "bg-blue-500/15 border border-blue-500/30"
           : isSelected
-            ? "bg-white/[0.07] border border-white/10"
-            : "border border-transparent hover:bg-white/[0.06] hover:-translate-y-[1px] hover:shadow-lg"
+            ? "bg-white/10 border border-white/10"
+            : "border border-transparent hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg"
         }
       `}
       style={animationStyle}
@@ -130,14 +133,14 @@ export function InboxItemRow({
       </span>
 
       {/* Source pill */}
-      {thing.source && thing.source !== "Brett" && (
+      {!hideSource && thing.source && thing.source !== "Brett" && (
         <span className="flex-shrink-0 text-[11px] text-white/40 px-1.5 py-0.5 rounded bg-white/5">
           {thing.source}
         </span>
       )}
 
       {/* Relative age */}
-      <span className="flex-shrink-0 text-xs text-white/30 tabular-nums">
+      <span className="flex-shrink-0 text-xs text-white/40 tabular-nums">
         {relativeAge}
       </span>
 

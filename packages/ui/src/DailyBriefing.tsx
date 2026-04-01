@@ -303,7 +303,7 @@ export function DailyBriefing({
               )}
             </>
           )}
-          <p className="text-[11px] text-white/25 flex items-center gap-1">
+          <p className="text-[11px] text-white/20 flex items-center gap-1">
             <Settings size={10} />
             Add an AI provider in Settings for a personalized daily briefing
           </p>

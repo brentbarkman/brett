@@ -74,7 +74,7 @@ export function AppDropZone({ children, onDropPdf }: AppDropZoneProps) {
 
       {/* Full-window overlay */}
       {isDragging && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xl pointer-events-none">
           <div className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-dashed border-amber-500/50 bg-amber-500/10">
             <FileText size={48} className="text-amber-400" />
             <span className="text-sm font-medium text-amber-400">

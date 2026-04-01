@@ -24,7 +24,7 @@ export function ItemListShell({ header, children, hints }: ItemListShellProps) {
 
       {/* Keyboard hint bar */}
       {hints && hints.length > 0 && (
-        <div className="flex items-center justify-center gap-3 text-[10px] text-white/30 font-mono bg-black/20 backdrop-blur-sm rounded-lg px-4 py-2 mx-auto w-fit">
+        <div className="flex items-center justify-center gap-3 text-[10px] text-white/30 font-mono bg-black/20 backdrop-blur-xl rounded-lg px-4 py-2 mx-auto w-fit">
           {hints.map((hint) => {
             const spaceIdx = hint.indexOf(" ");
             if (spaceIdx === -1) return <span key={hint}>{hint}</span>;

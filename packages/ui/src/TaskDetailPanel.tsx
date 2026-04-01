@@ -216,7 +216,7 @@ export function TaskDetailPanel({
                       className={`p-1.5 rounded-md transition-colors ${
                         detail.scoutFeedbackUseful === true
                           ? "text-emerald-400 bg-emerald-500/15"
-                          : "text-white/40 hover:text-white/60 hover:bg-white/[0.06]"
+                          : "text-white/40 hover:text-white/60 hover:bg-white/10"
                       }`}
                     >
                       <ThumbsUp className="w-3.5 h-3.5" />
@@ -228,7 +228,7 @@ export function TaskDetailPanel({
                       className={`p-1.5 rounded-md transition-colors ${
                         detail.scoutFeedbackUseful === false
                           ? "text-red-400 bg-red-500/15"
-                          : "text-white/40 hover:text-white/60 hover:bg-white/[0.06]"
+                          : "text-white/40 hover:text-white/60 hover:bg-white/10"
                       }`}
                     >
                       <ThumbsDown className="w-3.5 h-3.5" />

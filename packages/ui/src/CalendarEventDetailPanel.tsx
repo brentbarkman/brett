@@ -489,7 +489,7 @@ export function CalendarEventDetailPanel({
                     <summary className="text-[10px] uppercase tracking-wider text-white/30 font-semibold cursor-pointer hover:text-white/50 transition-colors select-none">
                       Transcript
                     </summary>
-                    <div className="mt-2 max-h-64 overflow-y-auto scrollbar-hide bg-white/[0.02] rounded-lg p-3 border border-white/5 space-y-2">
+                    <div className="mt-2 max-h-64 overflow-y-auto scrollbar-hide bg-white/5 rounded-lg p-3 border border-white/5 space-y-2">
                       {paragraphs.map((para, idx) => (
                         <p key={idx} className="text-xs text-white/50 leading-relaxed">
                           {para}
@@ -567,7 +567,7 @@ export function CalendarEventDetailPanel({
             <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-2 block">
               Your Notes
             </span>
-            <p className="text-[10px] text-white/25 mb-2">Not synced to Google</p>
+            <p className="text-[10px] text-white/20 mb-2">Not synced to Google</p>
             <RichTextEditor
               content={detail.notes ?? ""}
               onChange={onUpdateNotes}

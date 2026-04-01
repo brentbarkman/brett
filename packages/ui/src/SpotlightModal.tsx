@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useCallback } from "react";
-import { Bot, Send, Square, X, Sparkles, Search, Plus } from "lucide-react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
+import { Bot, Send, Square, X, Sparkles, Search, Plus, Check, Radar } from "lucide-react";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
 import type { DisplayHint } from "@brett/types";
@@ -31,7 +31,7 @@ export interface SpotlightModalProps {
   messages: SpotlightMessage[];
   isStreaming: boolean;
   hasAI: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, intent?: string) => void;
   onCreateTask: (title: string) => void;
   onSearch: (query: string) => void;
   onClose: () => void;
@@ -48,6 +48,7 @@ export interface SpotlightModalProps {
   showTokenUsage?: boolean;
   sessionUsage?: { totalTokens: number } | null;
   initialForcedAction?: "search" | "create" | null;
+  showScoutAction?: boolean;
 }
 
 export function SpotlightModal({
@@ -74,12 +75,14 @@ export function SpotlightModal({
   showTokenUsage,
   sessionUsage,
   initialForcedAction,
+  showScoutAction,
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [selectedSuggestion, setSelectedSuggestion] = React.useState(0);
-  const [selectedSearchIdx, setSelectedSearchIdx] = React.useState(-1);
-  const [forcedAction, setForcedAction] = React.useState<"search" | "create" | null>(null);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(0);
+  const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
+  const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
+  const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
 
   // Intercept input changes to detect shortcut prefixes
   const handleInputChange = useCallback((value: string) => {
@@ -132,17 +135,33 @@ export function SpotlightModal({
     setSelectedSearchIdx(-1);
   }, [searchResults]);
 
+  // Auto-dismiss task confirmation
+  useEffect(() => {
+    if (!confirmedTask) return;
+    const timer = setTimeout(() => {
+      onClose();
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [confirmedTask, onClose]);
+
+  // Clear confirmedTask when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setConfirmedTask(null);
+    }
+  }, [isOpen]);
+
   const hasConversation = messages.length > 0;
 
-  const showSuggestions = (input.trim().length > 0 || forcedAction !== null) && !hasConversation;
-  const showSearchResults = !hasConversation && !showSuggestions && (isSearching || (searchResults !== null && searchResults !== undefined));
+  const showSuggestions = (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
+  const showSearchResults = !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));
   const visibleResults = searchResults?.slice(0, 8) ?? [];
 
   type Suggestion = {
     id: string;
     label: string;
     icon: React.ReactNode;
-    action: "ask" | "create" | "search";
+    action: "ask" | "create" | "search" | "scout";
     shortcut?: string;
   };
 
@@ -163,6 +182,14 @@ export function SpotlightModal({
         action: "create",
       });
     } else {
+      if (showScoutAction && hasAI) {
+        suggestions.push({
+          id: "scout",
+          label: `Scout: "${input}"`,
+          icon: <Radar size={14} className="text-blue-400" />,
+          action: "scout",
+        });
+      }
       if (hasAI) {
         suggestions.push({
           id: "ask",
@@ -188,18 +215,26 @@ export function SpotlightModal({
     }
   }
 
+  const handleCreateTask = useCallback((title: string) => {
+    onCreateTask(title);
+    onInputChange("");
+    setConfirmedTask(title);
+  }, [onCreateTask, onInputChange]);
+
   const handleSuggestionSelect = useCallback(
     (suggestion: Suggestion) => {
       setForcedAction(null);
       if (suggestion.action === "ask") {
         onSend(input);
+      } else if (suggestion.action === "scout") {
+        onSend(input, "create_scout");
       } else if (suggestion.action === "create") {
-        onCreateTask(input);
+        handleCreateTask(input);
       } else if (suggestion.action === "search") {
         onSearch(input);
       }
     },
-    [input, onSend, onCreateTask, onSearch]
+    [input, onSend, handleCreateTask, onSearch]
   );
 
   const handleKeyDown = useCallback(
@@ -259,16 +294,16 @@ export function SpotlightModal({
           if (forcedAction === "search") {
             onSearch(input);
           } else if (forcedAction === "create") {
-            onCreateTask(input);
+            handleCreateTask(input);
           } else if (hasAI) {
             onSend(input);
           } else {
-            onCreateTask(input);
+            handleCreateTask(input);
           }
         }
       }
     },
-    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, onCreateTask, onSearch, onClose]
+    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, handleCreateTask, onSearch, onClose]
   );
 
   if (!isOpen) return null;
@@ -277,12 +312,12 @@ export function SpotlightModal({
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" data-spotlight-modal>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-2xl"
         onClick={() => !isStreaming && onClose()}
       />
 
       {/* Modal */}
-      <div className="relative w-[640px] max-h-[70vh] bg-black/70 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-[640px] max-h-[70vh] bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Input Row */}
         <div className="flex items-center h-14 px-5 border-b border-white/10">
           <Bot
@@ -351,6 +386,19 @@ export function SpotlightModal({
                 )}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Task Created — inline confirmation */}
+        {confirmedTask && (
+          <div className="border-b border-white/10">
+            <div className="flex items-center gap-3 px-5 py-3 border-l-2 border-green-400/40 ml-4">
+              <Check size={14} className="text-green-400 flex-shrink-0" />
+              <div className="min-w-0">
+                <div className="text-sm text-white/85 font-medium truncate">{confirmedTask}</div>
+                <div className="text-[11px] text-white/40">Added to Inbox</div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -449,7 +497,7 @@ export function SpotlightModal({
         )}
 
         {/* Empty state */}
-        {!hasConversation && !showSuggestions && !showSearchResults && (
+        {!hasConversation && !showSuggestions && !showSearchResults && !confirmedTask && (
           <div className="px-5 py-6">
             {!hasAI ? (
               <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
@@ -470,7 +518,7 @@ export function SpotlightModal({
               </div>
             ) : (
               <p className="text-sm text-white/30 text-center">
-                Ask a question, create a task, or search...
+                Ask a question, add a task, search your stuff, or start scouting something new.
               </p>
             )}
           </div>
@@ -497,70 +545,62 @@ function SpotlightMessageBubble({
 }) {
   if (message.role === "user") {
     return (
-      <div className="flex gap-3 flex-row-reverse">
-        <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <span className="text-[10px] text-white/70">ME</span>
-        </div>
-        <div>
-          <p className="text-sm text-white/90 bg-white/5 px-3 py-2 rounded-lg rounded-tr-none">
-            {message.content}
-          </p>
-        </div>
+      <div className="flex justify-end">
+        <p className="text-sm text-white/90 bg-white/5 px-3 py-2 rounded-lg max-w-[85%]">
+          {message.content}
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex gap-3">
-      <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Bot size={12} className="text-blue-400" />
-      </div>
-      <div className="flex-1 min-w-0 space-y-2">
-        {/* Text content — suppressed when a confirmation card exists (the card IS the response) */}
-        {(() => {
-          const hasConfirmation = message.toolCalls?.some((tc) => tc.displayHint?.type === "confirmation" || tc.displayHint?.type === "task_created");
-          if (!hasConfirmation && (message.content || isStreaming)) {
-            return (
-              <div className="text-sm text-white/90 leading-relaxed">
-                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
-                {isStreaming && (
-                  <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
-                )}
-              </div>
-            );
-          }
-          if (isStreaming && !message.toolCalls?.length) {
-            return (
-              <div className="text-sm text-white/90 leading-relaxed">
-                <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
-                <span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
-              </div>
-            );
-          }
-          return null;
-        })()}
+    <div className="flex-1 min-w-0 space-y-2 bg-white/5 rounded-lg px-3.5 py-3 border border-white/10">
+      {/* Text content — suppressed when a confirmation card exists (the card IS the response) */}
+      {(() => {
+        const hasConfirmation = message.toolCalls?.some((tc) => tc.displayHint?.type === "confirmation" || tc.displayHint?.type === "task_created");
+        if (!hasConfirmation && (message.content || isStreaming)) {
+          return (
+            <div className="text-sm text-white/90 leading-relaxed">
+              <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
+              {isStreaming && (
+                <span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+              )}
+            </div>
+          );
+        }
+        if (isStreaming && !message.toolCalls?.length) {
+          return (
+            <div className="text-sm text-white/90 leading-relaxed">
+              <SimpleMarkdown content={message.content} onItemClick={onItemClick} onEventClick={onEventClick} onNavigate={onNavigate} />
+              <span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+            </div>
+          );
+        }
+        return null;
+      })()}
 
-        {message.toolCalls
-          ?.filter((tc) => tc.displayHint)
-          .map((tc, i) => (
-            <SkillResultCard
-              key={i}
-              displayHint={tc.displayHint!}
-              data={tc.result}
-              message={
-                typeof tc.result === "object" &&
-                tc.result &&
-                "message" in (tc.result as Record<string, unknown>)
-                  ? String(
-                      (tc.result as Record<string, unknown>).message
-                    )
-                  : undefined
-              }
-              onItemClick={onItemClick}
-              onNavigate={onNavigate}
-            />
-          ))}
-      </div>
+      {/* Skill result cards */}
+      {message.toolCalls
+        ?.filter((tc) => tc.displayHint)
+        .map((tc, i) => (
+          <SkillResultCard
+            key={i}
+            displayHint={tc.displayHint!}
+            data={tc.result}
+            message={
+              typeof tc.result === "object" &&
+              tc.result &&
+              "message" in (tc.result as Record<string, unknown>)
+                ? String(
+                    (tc.result as Record<string, unknown>).message
+                  )
+                : undefined
+            }
+            onItemClick={onItemClick}
+            onEventClick={onEventClick}
+            onNavigate={onNavigate}
+          />
+        ))}
     </div>
   );
 }

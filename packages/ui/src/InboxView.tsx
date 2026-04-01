@@ -89,10 +89,55 @@ export function InboxView({
     return result;
   }, [filteredThings]);
 
-  // Active items (for focus/selection) — excludes animating out
+  // ── Temporal grouping (must come before activeThings so keyboard nav matches visual order) ──
+  type TimeBucket = "NEW" | "EARLIER TODAY" | "YESTERDAY" | "THIS WEEK" | "OLDER";
+  const bucketOrder: TimeBucket[] = ["NEW", "EARLIER TODAY", "YESTERDAY", "THIS WEEK", "OLDER"];
+
+  const getTimeBucket = useCallback((thing: Thing): TimeBucket => {
+    if (!thing.createdAt) return "OLDER";
+    const created = new Date(thing.createdAt);
+    const diffMs = now.current.getTime() - created.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const today = new Date(now.current);
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekStart = new Date(today);
+    weekStart.setDate(weekStart.getDate() - today.getDay());
+
+    if (diffHours < 2 && created >= today) return "NEW";
+    if (created >= today) return "EARLIER TODAY";
+    if (created >= yesterday) return "YESTERDAY";
+    if (created >= weekStart) return "THIS WEEK";
+    return "OLDER";
+  }, []);
+
+  const groupedDisplay = useMemo(() => {
+    const groups = new Map<TimeBucket, Thing[]>();
+    for (const bucket of bucketOrder) {
+      groups.set(bucket, []);
+    }
+    for (const thing of displayThings) {
+      const bucket = getTimeBucket(thing);
+      groups.get(bucket)!.push(thing);
+    }
+    return groups;
+  }, [displayThings, getTimeBucket]);
+
+  // Flat ordered list matching visual bucket order
+  const orderedDisplayThings = useMemo(() => {
+    const result: Thing[] = [];
+    for (const bucket of bucketOrder) {
+      const items = groupedDisplay.get(bucket);
+      if (items && items.length > 0) result.push(...items);
+    }
+    return result;
+  }, [groupedDisplay]);
+
+  // Active items (for focus/selection) — excludes animating out, in visual bucket order
   const activeThings = useMemo(
-    () => displayThings.filter((t) => !animatingOutIds.has(t.id)),
-    [displayThings, animatingOutIds]
+    () => orderedDisplayThings.filter((t) => !animatingOutIds.has(t.id)),
+    [orderedDisplayThings, animatingOutIds]
   );
 
   // Index map for O(1) focus lookups
@@ -342,6 +387,12 @@ export function InboxView({
     onTriageOpen,
   ]);
 
+  // Determine if all visible items share the same source (suppress redundant pills)
+  const allSameSource = useMemo(() => {
+    const sources = displayThings.map((t) => t.source).filter(Boolean);
+    return sources.length > 0 && sources.every((s) => s === sources[0]);
+  }, [displayThings]);
+
   const isEmpty = displayThings.length === 0;
 
   const inboxHeader = (
@@ -377,78 +428,89 @@ export function InboxView({
           </div>
         )}
 
-        {/* Item list */}
+        {/* Item list with temporal grouping */}
         {displayThings.length > 0 && (
           <div className="flex flex-col">
-            {displayThings.map((thing) => {
-              const isOut = animatingOutIds.has(thing.id);
-              const isNew = newItemIds.has(thing.id);
-              const activeIdx = activeIndexMap.get(thing.id) ?? -1;
-
+            {bucketOrder.map((bucket) => {
+              const items = groupedDisplay.get(bucket);
+              if (!items || items.length === 0) return null;
               return (
-                <div
-                  key={thing.id}
-                  className="inbox-item-wrapper"
-                  style={{
-                    overflow: "hidden",
-                    // During freeze: keep full height, item stays visible (check mark shows)
-                    // After freeze lifts: collapse height
-                    maxHeight: isOut ? 0 : 56,
-                    marginBottom: isOut ? 0 : 2,
-                    transition: isOut
-                      ? "max-height 200ms ease-out 120ms, margin-bottom 200ms ease-out 120ms"
-                      : "none",
-                    animation: isNew
-                      ? "inboxItemExpand 250ms ease-out"
-                      : undefined,
-                  }}
-                  onTransitionEnd={(e) => {
-                    if (isOut && e.propertyName === "max-height") {
-                      handleAnimationEnd(thing.id);
-                    }
-                  }}
-                >
-                  <InboxItemRow
-                    thing={thing}
-                    isFocused={!addInputFocused && activeIdx === focusedIndex}
-                    isSelected={selectedIds.has(thing.id)}
-                    isAnimatingOut={isOut}
-                    isNew={isNew}
-                    selectedIds={selectedIds}
-                    relativeAge={
-                      thing.createdAt
-                        ? computeRelativeAge(new Date(thing.createdAt), now.current)
-                        : ""
-                    }
-                    onClick={() => onItemClick(thing)}
-                    onFocus={() => {
-                      if (activeIdx >= 0) setFocusedIndex(activeIdx);
-                    }}
-                    onToggle={(id) => {
-                      // Defer EVERYTHING — no slideOut, no mutation yet
-                      pendingToggles.current.add(id);
-                      if (toggleTimer.current) clearTimeout(toggleTimer.current);
-                      toggleTimer.current = setTimeout(() => {
-                        const ids = [...pendingToggles.current];
-                        pendingToggles.current = new Set();
-                        // Now slide out + fire mutations together
-                        slideOut(ids);
-                        ids.forEach(toggleId => onToggle(toggleId));
-                      }, 600);
-                    }}
-                    onSelect={() => {
-                      setSelectedIds((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(thing.id)) {
-                          next.delete(thing.id);
-                        } else {
-                          next.add(thing.id);
-                        }
-                        return next;
-                      });
-                    }}
-                  />
-                </div>
+                <React.Fragment key={bucket}>
+                  <div className="flex items-center gap-3 pt-2">
+                    <span className="font-mono text-[11px] uppercase tracking-wider text-white/40 font-semibold whitespace-nowrap">
+                      {bucket}
+                    </span>
+                    <div className="flex-1 h-px bg-white/10" />
+                  </div>
+                  {items.map((thing) => {
+                    const isOut = animatingOutIds.has(thing.id);
+                    const isNewItem = newItemIds.has(thing.id);
+                    const activeIdx = activeIndexMap.get(thing.id) ?? -1;
+
+                    return (
+                      <div
+                        key={thing.id}
+                        className="inbox-item-wrapper"
+                        style={{
+                          overflow: "hidden",
+                          maxHeight: isOut ? 0 : 56,
+                          marginBottom: isOut ? 0 : 2,
+                          transition: isOut
+                            ? "max-height 200ms ease-out 120ms, margin-bottom 200ms ease-out 120ms"
+                            : "none",
+                          animation: isNewItem
+                            ? "inboxItemExpand 250ms ease-out"
+                            : undefined,
+                        }}
+                        onTransitionEnd={(e) => {
+                          if (isOut && e.propertyName === "max-height") {
+                            handleAnimationEnd(thing.id);
+                          }
+                        }}
+                      >
+                        <InboxItemRow
+                          thing={thing}
+                          isFocused={!addInputFocused && activeIdx === focusedIndex}
+                          isSelected={selectedIds.has(thing.id)}
+                          isAnimatingOut={isOut}
+                          isNew={isNewItem}
+                          selectedIds={selectedIds}
+                          hideSource={allSameSource}
+                          relativeAge={
+                            thing.createdAt
+                              ? computeRelativeAge(new Date(thing.createdAt), now.current)
+                              : ""
+                          }
+                          onClick={() => onItemClick(thing)}
+                          onFocus={() => {
+                            if (activeIdx >= 0) setFocusedIndex(activeIdx);
+                          }}
+                          onToggle={(id) => {
+                            pendingToggles.current.add(id);
+                            if (toggleTimer.current) clearTimeout(toggleTimer.current);
+                            toggleTimer.current = setTimeout(() => {
+                              const ids = [...pendingToggles.current];
+                              pendingToggles.current = new Set();
+                              slideOut(ids);
+                              ids.forEach(toggleId => onToggle(toggleId));
+                            }, 600);
+                          }}
+                          onSelect={() => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(thing.id)) {
+                                next.delete(thing.id);
+                              } else {
+                                next.add(thing.id);
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
               );
             })}
           </div>

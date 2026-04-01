@@ -57,13 +57,12 @@ export function ProfileSection() {
           </div>
         )}
         <div>
-          <div className="text-xs text-white/50 mb-1">Profile photo</div>
-          <span
-            className="text-xs text-white/30 cursor-default"
-            title="Coming soon"
-          >
-            Change photo (coming soon)
-          </span>
+          <div className="text-sm font-medium text-white">
+            {user?.name || user?.email || "?"}
+          </div>
+          <div className="text-xs text-white/40">
+            {user?.email || ""}
+          </div>
         </div>
       </div>
 

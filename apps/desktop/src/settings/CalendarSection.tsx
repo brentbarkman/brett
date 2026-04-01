@@ -308,7 +308,7 @@ export function CalendarSection() {
                 </button>
               </label>
 
-              <p className="text-[10px] text-white/25 leading-relaxed">
+              <p className="text-[10px] text-white/20 leading-relaxed">
                 Brett uses AI to determine which action items are relevant and rewrites them as clear, actionable tasks with due dates when mentioned.
               </p>
             </div>

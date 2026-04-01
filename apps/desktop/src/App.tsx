@@ -855,6 +855,10 @@ export function App() {
             archivedLists={archivedLists}
             onArchiveList={handleArchiveList}
             onUnarchiveList={(id) => unarchiveList.mutate(id)}
+            onOpenSpotlight={() => {
+              setSpotlightInitialAction("search");
+              omnibar.open("spotlight");
+            }}
           />
 
           <Routes>
@@ -1119,7 +1123,7 @@ export function App() {
 
         {/* Triage popup (global — works from any view) */}
         {triageState && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-2xl">
             <TriagePopup
               mode={triageState.mode}
               lists={lists}
@@ -1155,7 +1159,7 @@ export function App() {
           messages={omnibar.messages}
           isStreaming={omnibar.isStreaming}
           hasAI={omnibar.hasAI}
-          onSend={(text) => omnibar.send(text, currentView)}
+          onSend={(text, intent) => omnibar.send(text, currentView, intent)}
           onCreateTask={(title: string) => omnibar.createTask(title, currentView)}
           onSearch={omnibar.searchThings}
           searchResults={omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null}
@@ -1201,6 +1205,7 @@ export function App() {
           showTokenUsage={showTokenUsage}
           sessionUsage={sessionUsageData ?? null}
           initialForcedAction={spotlightInitialAction}
+          showScoutAction={true}
         />
 
         {/* Archive list confirmation */}

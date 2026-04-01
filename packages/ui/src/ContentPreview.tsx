@@ -95,7 +95,7 @@ function ErrorState({ sourceUrl, onRetry }: { sourceUrl?: string; onRetry?: () =
             Try again
           </button>
         )}
-        <span className="text-[10px] text-white/25">
+        <span className="text-[10px] text-white/20">
           If this persists, ask Brett to report it.
         </span>
       </div>

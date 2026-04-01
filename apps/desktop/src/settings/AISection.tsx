@@ -267,7 +267,7 @@ export function AISection() {
                 Usage
               </button>
               {expandedUsage === config.id && (
-                <div className="bg-white/[0.03] rounded-lg border border-white/5 mb-1">
+                <div className="bg-white/5 rounded-lg border border-white/5 mb-1">
                   <UsageStats provider={config.provider} />
                 </div>
               )}

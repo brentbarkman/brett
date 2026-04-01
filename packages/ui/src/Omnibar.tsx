@@ -211,7 +211,7 @@ export function Omnibar({
       if (showScoutAction && hasAI) {
         suggestions.push({
           id: "scout",
-          label: `Monitor: "${input}"`,
+          label: `Scout: "${input}"`,
           icon: <Radar size={14} className="text-blue-400" />,
           action: "scout",
         });
@@ -633,7 +633,7 @@ function MessageBubble({
   }
 
   return (
-    <div className="flex-1 min-w-0 space-y-2 bg-white/[0.03] rounded-lg px-3.5 py-3 border border-white/[0.06]">
+    <div className="flex-1 min-w-0 space-y-2 bg-white/5 rounded-lg px-3.5 py-3 border border-white/10">
       {/* Text content — suppressed when a confirmation card exists (the card IS the response) */}
       {(() => {
         const hasConfirmation = message.toolCalls?.some((tc) => tc.displayHint?.type === "confirmation" || tc.displayHint?.type === "task_created");

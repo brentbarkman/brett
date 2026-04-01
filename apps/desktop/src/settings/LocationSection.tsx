@@ -167,9 +167,9 @@ export function LocationSection() {
                     }
                   }}
                   placeholder={user?.city ?? "Search city…"}
-                  className={`w-full bg-white/5 border border-white/[0.08] rounded-lg pl-8 pr-3 py-2 text-sm
+                  className={`w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-sm
                     focus:outline-none focus:border-blue-500/50
-                    ${query ? "text-white/80 placeholder:text-white/25" : user?.city ? "text-white/80 placeholder:text-white/70" : "text-white/80 placeholder:text-white/25"}`}
+                    ${query ? "text-white/80 placeholder:text-white/20" : user?.city ? "text-white/80 placeholder:text-white/70" : "text-white/80 placeholder:text-white/20"}`}
                 />
                 {isSearching && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-white/20 border-t-white/60 animate-spin" />

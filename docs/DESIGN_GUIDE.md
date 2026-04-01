@@ -35,6 +35,9 @@ All containers use the glass morphism pattern. Never use solid opaque background
 - Standard card padding is `p-4` (16px)
 - Border radius is `rounded-xl` (12px) for cards, `rounded-lg` (8px) for inner elements, `rounded-full` for badges/pills
 - Never mix glass cards with solid-background cards in the same view
+- **`backdrop-blur` has exactly three tiers:** `backdrop-blur-xl` (cards), `backdrop-blur-md` (elevated/accent cards only), `backdrop-blur-2xl` (overlays/modals). Never use `backdrop-blur-sm` or `backdrop-blur-lg`.
+- **`bg-black` standard stops:** `/20` (light dimming), `/30` (cards), `/40` (elevated cards), `/60` (overlays/modals), `/80` (tooltips/dropdowns). Never use in-between values like `/50`, `/55`, `/70`, `/85`.
+- **`bg-white` standard stops:** `/5` (subtle tint, resting surfaces), `/10` (hover surfaces), `/15` (strong hover), `/20` (active/pressed). Never use fractional values like `bg-white/[0.03]`, `[0.06]`, `[0.07]` — use the nearest standard stop.
 
 ---
 
@@ -69,6 +72,9 @@ This is the primary hierarchy tool. Master it.
 - Never use `text-gray-*` — always use `text-white/{opacity}`
 - Body text should be `/80`, not `/100` — pure white is reserved for headings and active states
 - Muted metadata uses `/40`, not `/60`
+- **Readability floor: `/20`.** Nothing the user needs to *read* (not just glance at) should be below `/30`. Ghost text (`/20`) is for decorative separators, disabled icons, and whisper-level hints only.
+- **Timestamps and relative ages always use `/40`** — they carry meaning and must remain readable on any background image
+- Only use standard opacity stops: `/20`, `/30`, `/40`, `/50`, `/60`, `/80`, `/90`, `white`. Avoid fractional or in-between values like `/15`, `/25`, `/35`, `/55`, `/75`.
 
 ### Border Opacity Scale
 
@@ -76,8 +82,11 @@ This is the primary hierarchy tool. Master it.
 |---------|------|
 | `border-white/10` | Default card/divider borders |
 | `border-white/5` | Very subtle grid lines |
-| `border-white/[0.03]` | Nearly invisible (unfocused inputs) |
 | `border-{color}-500/20–/50` | Colored accent borders |
+
+**Rules:**
+- Only use `border-white/5`, `border-white/10`, `border-white/15`, or `border-white/20` — never fractional values like `border-white/[0.03]`, `[0.06]`, `[0.07]`
+- Divider lines (horizontal separators) always use `bg-white/10` for the 1px line
 
 ### Background Opacity for Color
 
@@ -108,9 +117,10 @@ This is the primary hierarchy tool. Master it.
 | Metadata | `text-xs text-white/40` |
 
 **Rules:**
-- Section headers are ALWAYS `font-mono uppercase tracking-wider` — this is a signature pattern
+- Section headers are ALWAYS `font-mono text-[11px] uppercase tracking-wider text-white/40 font-semibold` — this is a signature pattern. Never deviate from `/40` opacity (not `/25`, `/30`, or `/55`). The `SectionHeader` component enforces this for list views; inline section headers must match.
 - Don't use `text-lg` — jump from `text-base` to `text-xl`
 - Avoid `font-light` — minimum weight is `font-normal`
+- Page subtitles (metadata below page headings like "2 active · 7 findings") use `/50`, not `/30`
 
 ---
 
@@ -435,6 +445,7 @@ The app should feel alive and responsive to context — not a static dark shell.
 - Source different background images. Factor in: time of day, season, how busy the user's day is.
 - A packed day might feel denser, more focused. A clear day might breathe more.
 - Evening should feel warmer. Morning should feel crisp.
+- **Readability contract:** Because the background image changes, ALL text must remain readable on any image — bright mountainscapes, dark nightscapes, high-contrast scenes. Glass surfaces (`bg-black/30 backdrop-blur-xl`) provide isolation, but text opacity must never rely on a dark background being behind it. This is why the readability floor exists (see Text Opacity Scale rules).
 
 **Time-of-day evolution:**
 - This goes beyond cosmetic. Brett's personality should shift with the time:

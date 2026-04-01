@@ -20,8 +20,8 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
         className={`
           flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-200 text-left
           ${isSelected
-            ? "bg-white/[0.08] border border-blue-500/25 shadow-[0_0_12px_rgba(59,130,246,0.06)]"
-            : "bg-white/[0.03] border border-transparent hover:bg-white/[0.06]"}
+            ? "bg-white/10 border border-blue-500/25 shadow-[0_0_12px_rgba(59,130,246,0.06)]"
+            : "bg-white/5 border border-transparent hover:bg-white/10"}
         `}
       >
         <div
@@ -54,8 +54,8 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
       onClick={onClick}
       className={`
         group flex items-center gap-5 w-full p-5 rounded-2xl transition-all duration-200 text-left
-        bg-white/[0.04] backdrop-blur-md border border-white/[0.07]
-        hover:bg-white/[0.07] hover:border-white/[0.12] hover:shadow-[0_4px_24px_rgba(0,0,0,0.3)]
+        bg-white/5 backdrop-blur-md border border-white/10
+        hover:bg-white/10 hover:border-white/15 hover:shadow-[0_4px_24px_rgba(0,0,0,0.3)]
         ${isCompleted ? "opacity-50" : ""}
       `}
     >
@@ -91,8 +91,8 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
             </span>
           )}
         </div>
-        <p className="text-[13px] text-white/30 line-clamp-1">{scout.goal}</p>
-        <div className="flex items-center gap-3 text-[11px] text-white/30 font-medium">
+        <p className="text-[13px] text-white/40 line-clamp-2">{scout.goal}</p>
+        <div className="flex items-center gap-3 text-[11px] text-white/40 font-medium">
           <span>Last run: {scout.lastRun ? formatRelativeTime(scout.lastRun) : "Never"}</span>
           <span className="text-white/10">·</span>
           <span>{scout.findingsCount} findings</span>
@@ -118,7 +118,7 @@ function StatusBadge({ status }: { status: Scout["status"] }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] text-[10px] font-semibold text-white/30 border border-white/[0.04]">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold text-white/30 border border-white/5">
       {status === "completed" ? "Completed" : status === "paused" ? "Paused" : "Expired"}
     </span>
   );

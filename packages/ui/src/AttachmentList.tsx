@@ -185,7 +185,7 @@ export function AttachmentList({
       {/* Fullscreen image preview — portaled to body to escape panel stacking context */}
       {previewUrl && createPortal(
         <div
-          className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center cursor-pointer"
+          className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-2xl flex items-center justify-center cursor-pointer"
           onClick={() => setPreviewUrl(null)}
         >
           <img

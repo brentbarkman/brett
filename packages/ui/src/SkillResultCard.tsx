@@ -38,12 +38,12 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
     case "task_list": {
       const items = displayHint.items ?? [];
       return (
-        <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] overflow-hidden">
+        <div className="rounded-lg bg-white/5 border border-white/10 overflow-hidden">
           {items.slice(0, 8).map((item, i) => (
             <button
               key={item.id}
               className={`w-full px-3 py-1.5 flex items-center gap-2.5 hover:bg-white/5 transition-colors text-left ${
-                i > 0 ? "border-t border-white/[0.03]" : ""
+                i > 0 ? "border-t border-white/5" : ""
               }`}
               onClick={() => onItemClick?.(item.id)}
             >
@@ -61,7 +61,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
             </button>
           ))}
           {items.length > 8 && (
-            <div className="px-3 py-1.5 text-[10px] text-white/30 border-t border-white/[0.03]">
+            <div className="px-3 py-1.5 text-[10px] text-white/30 border-t border-white/5">
               +{items.length - 8} more
             </div>
           )}
@@ -73,7 +73,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
     case "calendar_events": {
       const events = displayHint.events ?? [];
       return (
-        <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] overflow-hidden">
+        <div className="rounded-lg bg-white/5 border border-white/10 overflow-hidden">
           {events.slice(0, 6).map((event, i) => {
             const start = new Date(event.startTime);
             const time = start.toLocaleTimeString("en-US", {
@@ -84,7 +84,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
               <div
                 key={event.id}
                 className={`px-3 py-1.5 flex items-center gap-2.5 ${
-                  i > 0 ? "border-t border-white/[0.03]" : ""
+                  i > 0 ? "border-t border-white/5" : ""
                 }`}
               >
                 <span className="text-[11px] font-mono text-blue-400/60 w-14 flex-shrink-0">

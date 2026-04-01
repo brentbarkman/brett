@@ -149,7 +149,7 @@ export function EventHoverTooltip({
           }}
         >
           <div
-            className="bg-black/85 backdrop-blur-xl border border-white/[0.12] rounded-xl shadow-2xl overflow-hidden transition-all duration-300 ease-out"
+            className="bg-black/80 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl overflow-hidden transition-all duration-300 ease-out"
             style={{
               transformOrigin,
               width: isExpanded ? 320 : 260,
@@ -189,7 +189,7 @@ export function EventHoverTooltip({
 
               {/* Expanded: additional details */}
               {isExpanded && (
-                <div className="mt-2 pt-2 border-t border-white/[0.06] space-y-2">
+                <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
                   {/* RSVP badge */}
                   <RsvpBadge status={event.myResponseStatus} />
 

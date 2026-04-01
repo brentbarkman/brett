@@ -20,6 +20,7 @@ import {
   Trash2,
   ThumbsUp,
   ThumbsDown,
+  ChevronDown,
 } from "lucide-react";
 import type {
   Scout,
@@ -95,6 +96,8 @@ export function ScoutDetail({
   const [newSourceName, setNewSourceName] = useState("");
   const [newSourceUrl, setNewSourceUrl] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [configExpanded, setConfigExpanded] = useState(false);
+  const [goalExpanded, setGoalExpanded] = useState(false);
 
   const isCompleted = scout.status === "completed" || scout.status === "expired";
   const isPaused = scout.status === "paused";
@@ -148,7 +151,7 @@ export function ScoutDetail({
   return (
     <div className="flex flex-1 min-w-0 h-full gap-4 py-2 pr-4">
       {/* Scout List Panel */}
-      <div className="w-[340px] flex-shrink-0 bg-black/30 backdrop-blur-xl rounded-2xl border border-white/[0.06] overflow-y-auto scrollbar-hide p-5 space-y-4">
+      <div className="w-[260px] flex-shrink-0 bg-black/30 backdrop-blur-xl rounded-2xl border border-white/10 overflow-y-auto scrollbar-hide p-5 space-y-4">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-sm font-semibold text-white/50 hover:text-white transition-colors"
@@ -170,7 +173,7 @@ export function ScoutDetail({
       </div>
 
       {/* Detail Panel */}
-      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/20 backdrop-blur-lg rounded-2xl border border-white/[0.06]">
+      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/30 backdrop-blur-xl rounded-2xl border border-white/10">
         {/* Header */}
         <div className="relative overflow-hidden">
           {!isCompleted && (
@@ -184,49 +187,51 @@ export function ScoutDetail({
 
           <div className="relative z-10 p-8 pb-6 space-y-5">
             {/* Identity row */}
-            <div className="flex items-start gap-5">
-              <div className="relative flex-shrink-0">
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center relative z-10"
-                  style={{
-                    background: isCompleted
-                      ? "rgba(255,255,255,0.06)"
-                      : `linear-gradient(135deg, ${scout.avatarGradient[0]}, ${scout.avatarGradient[1]})`,
-                  }}
-                >
-                  <span className={`text-2xl font-bold ${isCompleted ? "text-white/30" : "text-white"}`}>
-                    {scout.avatarLetter}
-                  </span>
-                </div>
-                {!isCompleted && (
+            <div>
+              <div className="flex items-start gap-5">
+                <div className="relative flex-shrink-0">
                   <div
-                    className="absolute inset-0 rounded-2xl blur-xl opacity-30"
-                    style={{ background: scout.avatarGradient[0] }}
-                  />
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-white">{scout.name}</h2>
-                  <StatusBadge status={scout.status} />
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center relative z-10"
+                    style={{
+                      background: isCompleted
+                        ? "rgba(255,255,255,0.06)"
+                        : `linear-gradient(135deg, ${scout.avatarGradient[0]}, ${scout.avatarGradient[1]})`,
+                    }}
+                  >
+                    <span className={`text-2xl font-bold ${isCompleted ? "text-white/30" : "text-white"}`}>
+                      {scout.avatarLetter}
+                    </span>
+                  </div>
+                  {!isCompleted && (
+                    <div
+                      className="absolute inset-0 rounded-2xl blur-xl opacity-30"
+                      style={{ background: scout.avatarGradient[0] }}
+                    />
+                  )}
                 </div>
-                {scout.statusLine && (
-                  <p className="text-[13px] font-medium text-blue-400/70">
-                    {scout.statusLine}
-                  </p>
-                )}
-                {scout.endDate && (
-                  <p className="text-[12px] text-white/30">Ended {scout.endDate}</p>
-                )}
-                {!isCompleted && scout.nextRunAt && (
-                  <p className="text-[12px] text-white/30">
-                    Next run {formatRelativeTime(scout.nextRunAt)}
-                  </p>
-                )}
+
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold text-white">{scout.name}</h2>
+                    <StatusBadge status={scout.status} />
+                  </div>
+                  {scout.statusLine && (
+                    <p className="text-[13px] font-medium text-blue-400/70">
+                      {scout.statusLine}
+                    </p>
+                  )}
+                  {scout.endDate && (
+                    <p className="text-xs text-white/40">Ended {scout.endDate}</p>
+                  )}
+                  {!isCompleted && scout.nextRunAt && (
+                    <p className="text-xs text-white/40">
+                      Next run {formatRelativeTime(scout.nextRunAt)}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+              <div className="flex items-center gap-2 mt-3">
                 {onTriggerRun && (
                   <button
                     onClick={onTriggerRun}
@@ -269,7 +274,7 @@ export function ScoutDetail({
                   ) : (
                     <button
                       onClick={onPause}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/[0.05] text-white/50 hover:bg-white/[0.10] hover:text-white transition-colors text-xs font-medium"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 text-white/50 hover:bg-white/10 hover:text-white transition-colors text-xs font-medium"
                     >
                       <Pause size={12} />
                       Pause
@@ -288,7 +293,7 @@ export function ScoutDetail({
                       </button>
                       <button
                         onClick={() => setConfirmDelete(false)}
-                        className="px-2 py-0.5 text-xs font-medium rounded bg-white/[0.05] text-white/50 hover:bg-white/[0.10] transition-colors"
+                        className="px-2 py-0.5 text-xs font-medium rounded bg-white/5 text-white/50 hover:bg-white/10 transition-colors"
                       >
                         No
                       </button>
@@ -296,7 +301,7 @@ export function ScoutDetail({
                   ) : (
                     <button
                       onClick={() => setConfirmDelete(true)}
-                      className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-white/[0.05] text-white/30 hover:bg-red-500/20 hover:text-red-400 transition-colors flex items-center"
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-white/5 text-white/30 hover:bg-red-500/20 hover:text-red-400 transition-colors flex items-center"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -323,19 +328,50 @@ export function ScoutDetail({
                   data-edit-goal
                   defaultValue={scout.goal}
                   rows={4}
-                  className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-white/90 placeholder-white/20 focus:outline-none focus:border-blue-500/30 resize-none leading-relaxed"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white/90 placeholder-white/20 focus:outline-none focus:border-blue-500/30 resize-none leading-relaxed"
                   autoFocus
                 />
               ) : (
-                <p className="text-[14px] text-white/90 leading-relaxed">{scout.goal}</p>
+                <div>
+                  <p className={`text-sm text-white/80 leading-relaxed ${!goalExpanded ? 'line-clamp-2' : ''}`}>
+                    {scout.goal}
+                  </p>
+                  {scout.goal.length > 150 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setGoalExpanded(!goalExpanded); }}
+                      className="text-xs text-white/30 hover:text-white/50 mt-1.5 transition-colors"
+                    >
+                      {goalExpanded ? 'Show less' : 'Show more'}
+                    </button>
+                  )}
+                </div>
               )}
             </EditableCard>
           </div>
         </div>
 
         <div className="px-8 pb-8 space-y-5">
-          {/* Config Grid */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Config Summary Strip */}
+          <button
+            onClick={() => setConfigExpanded(!configExpanded)}
+            className="flex items-center justify-between w-full p-3.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-2 text-sm text-white/60 flex-wrap">
+              <span className="text-white/80 font-medium">{scout.sources.length} sources</span>
+              <span className="text-white/20">·</span>
+              <span>{SENSITIVITY_OPTIONS.find((o) => o.value === scout.sensitivity)?.label ?? scout.sensitivity}</span>
+              <span className="text-white/20">·</span>
+              <span>{scout.analysisTier === "deep" ? "Deep" : "Standard"}</span>
+              <span className="text-white/20">·</span>
+              <span>{humanizeCadence(scout.cadenceCurrentIntervalHours)}</span>
+              <span className="text-white/20">·</span>
+              <span>{scout.budgetUsed}/{scout.budgetTotal} runs</span>
+            </div>
+            <ChevronDown size={14} className={`text-white/30 transition-transform duration-200 ${configExpanded ? 'rotate-180' : ''}`} />
+          </button>
+
+          {configExpanded && (
+          <div className="grid grid-cols-2 gap-4 mt-4">
             {/* Sources */}
             <EditableCard
               label="SOURCES"
@@ -366,7 +402,7 @@ export function ScoutDetail({
                   <div className="flex flex-wrap gap-1.5">
                     {pendingSources.map((source, i) => (
                       <Tooltip key={`${source.name}-${i}`} content={source.url || "No URL"} position="bottom">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[11px] text-white/50">
                           {source.name}
                           <button
                             onClick={() => setPendingSources(pendingSources.filter((_, j) => j !== i))}
@@ -384,14 +420,14 @@ export function ScoutDetail({
                       placeholder="Name"
                       value={newSourceName}
                       onChange={(e) => setNewSourceName(e.target.value)}
-                      className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
                     />
                     <input
                       type="text"
                       placeholder="URL (e.g. https://pubmed.ncbi.nlm.nih.gov)"
                       value={newSourceUrl}
                       onChange={(e) => setNewSourceUrl(e.target.value)}
-                      className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
                     />
                     <button
                       onClick={() => {
@@ -417,13 +453,13 @@ export function ScoutDetail({
                           href={source.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[11px] text-blue-400/80 hover:text-blue-300 hover:border-blue-500/20 transition-all"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-[11px] text-blue-400 hover:text-blue-300 hover:border-blue-500/20 transition-all"
                         >
                           {source.name}
                           <ExternalLink size={9} className="opacity-40" />
                         </a>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.04] text-[11px] text-white/30">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[11px] text-white/50">
                           {source.name}
                         </span>
                       )}
@@ -448,9 +484,9 @@ export function ScoutDetail({
                   onChange={setPendingSensitivity}
                 />
               ) : (
-                <p className="text-[13px] text-white/50">
+                <p className="text-sm text-white/80">
                   {SENSITIVITY_OPTIONS.find((o) => o.value === scout.sensitivity)?.label ?? scout.sensitivity}
-                  <span className="text-white/25"> — {SENSITIVITY_OPTIONS.find((o) => o.value === scout.sensitivity)?.desc}</span>
+                  <span className="text-white/40"> — {SENSITIVITY_OPTIONS.find((o) => o.value === scout.sensitivity)?.desc}</span>
                 </p>
               )}
             </EditableCard>
@@ -470,9 +506,9 @@ export function ScoutDetail({
                   onChange={setPendingAnalysisTier}
                 />
               ) : (
-                <p className="text-[13px] text-white/50">
+                <p className="text-sm text-white/80">
                   {scout.analysisTier === "deep" ? "Deep" : "Standard"}
-                  <span className="text-white/25">
+                  <span className="text-white/40">
                     {scout.analysisTier === "deep"
                       ? " — thorough analysis, higher cost per run"
                       : " — fast and cost-effective"}
@@ -497,11 +533,11 @@ export function ScoutDetail({
                 />
               ) : (
                 <div className="space-y-1">
-                  <p className="text-[13px] text-white/50">
+                  <p className="text-sm text-white/80">
                     {humanizeCadence(scout.cadenceCurrentIntervalHours)}
                   </p>
                   {scout.cadenceReason && scout.cadenceCurrentIntervalHours !== scout.cadenceIntervalHours && (
-                    <p className="text-[11px] text-blue-400/60">
+                    <p className="text-xs text-blue-400/70">
                       Adjusted by Brett: {scout.cadenceReason}
                     </p>
                   )}
@@ -510,6 +546,7 @@ export function ScoutDetail({
             </EditableCard>
 
             {/* Budget */}
+            <div className="col-span-2">
             <EditableCard
               label="BUDGET"
               isEditing={editingField === "budget"}
@@ -528,9 +565,9 @@ export function ScoutDetail({
                 <div className="space-y-2.5">
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-lg font-bold text-white">{scout.budgetUsed}</span>
-                    <span className="text-sm text-white/30">/ {scout.budgetTotal} runs</span>
+                    <span className="text-sm text-white/40">/ {scout.budgetTotal} runs</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       style={{
@@ -544,16 +581,18 @@ export function ScoutDetail({
                       }}
                     />
                   </div>
-                  <div className="text-[11px] text-white/30">{budgetPercent}% used this month</div>
+                  <div className="text-xs text-white/40">{budgetPercent}% used this month</div>
                 </div>
               )}
             </EditableCard>
+            </div>
           </div>
+          )}
 
-          <div className="h-px bg-white/[0.06]" />
+          <div className="h-px bg-white/10" />
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-white/[0.03] rounded-lg p-1 w-fit">
+          <div className="flex gap-1 bg-white/5 rounded-lg p-1 w-fit">
             <TabButton
               label="Findings"
               count={findings.length}
@@ -578,7 +617,7 @@ export function ScoutDetail({
               {isLoadingFindings ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-20 rounded-xl bg-white/[0.03] border border-white/[0.06] animate-pulse" />
+                    <div key={i} className="h-20 rounded-xl bg-white/5 border border-white/10 animate-pulse" />
                   ))}
                 </div>
               ) : findings.length > 0 ? (
@@ -601,7 +640,7 @@ export function ScoutDetail({
               {isLoadingActivity ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-12 rounded-xl bg-white/[0.03] border border-white/[0.06] animate-pulse" />
+                    <div key={i} className="h-12 rounded-xl bg-white/5 border border-white/10 animate-pulse" />
                   ))}
                 </div>
               ) : activity.length > 0 ? (
@@ -648,12 +687,12 @@ function EditableCard({
     <div
       className={`group rounded-xl border p-4 space-y-2.5 transition-all duration-200 ${
         isEditing
-          ? "bg-white/[0.05] border-blue-500/20 shadow-[0_0_16px_rgba(59,130,246,0.05)]"
-          : "bg-white/[0.03] border-white/[0.06]"
+          ? "bg-white/5 border-blue-500/20 shadow-[0_0_16px_rgba(59,130,246,0.05)]"
+          : "bg-white/5 border-white/10"
       }`}
     >
       <div className="flex items-center justify-between">
-        <div className="text-[10px] font-semibold tracking-widest text-white/30 uppercase">
+        <div className="text-[10px] font-semibold tracking-widest text-white/40 uppercase">
           {label}
         </div>
         {isEditing ? (
@@ -669,7 +708,7 @@ function EditableCard({
             )}
             <button
               onClick={onCancel}
-              className="flex items-center px-1.5 py-1 rounded-md hover:bg-white/[0.06] text-white/30 hover:text-white/50 transition-colors"
+              className="flex items-center px-1.5 py-1 rounded-md hover:bg-white/10 text-white/30 hover:text-white/50 transition-colors"
             >
               <X size={12} />
             </button>
@@ -677,7 +716,7 @@ function EditableCard({
         ) : (
           <button
             onClick={onEdit}
-            className="flex items-center gap-1 px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/[0.06] text-white/30 hover:text-white/50 text-[10px] font-medium transition-all"
+            className="flex items-center gap-1 px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/10 text-white/30 hover:text-white/50 text-[10px] font-medium transition-all"
           >
             <Pencil size={10} />
           </button>
@@ -712,7 +751,7 @@ function SensitivityPicker({
           className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-all duration-150 ${
             current === opt.value
               ? "bg-blue-500/10 border border-blue-500/20"
-              : "bg-white/[0.02] border border-transparent hover:bg-white/[0.04]"
+              : "bg-white/5 border border-transparent hover:bg-white/10"
           }`}
         >
           <div
@@ -759,7 +798,7 @@ function AnalysisTierPicker({
           className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-all duration-150 ${
             current === opt.value
               ? "bg-blue-500/10 border border-blue-500/20"
-              : "bg-white/[0.02] border border-transparent hover:bg-white/[0.04]"
+              : "bg-white/5 border border-transparent hover:bg-white/10"
           }`}
         >
           <div
@@ -813,7 +852,7 @@ function CadencePicker({
             className={`px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
               intervalHours === preset.hours
                 ? "bg-blue-500/15 text-blue-300 border border-blue-500/25"
-                : "bg-white/[0.03] text-white/30 border border-transparent hover:bg-white/[0.06]"
+                : "bg-white/5 text-white/30 border border-transparent hover:bg-white/10"
             }`}
           >
             {preset.label}
@@ -849,14 +888,14 @@ function BudgetEditor({
         <div className="flex items-center gap-3">
           <button
             onClick={() => onChange(Math.max(used, total - 10))}
-            className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors"
           >
             <Minus size={12} />
           </button>
           <span className="text-xl font-bold text-white min-w-[50px] text-center">{total}</span>
           <button
             onClick={() => onChange(total + 10)}
-            className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors"
           >
             <Plus size={12} />
           </button>
@@ -872,7 +911,7 @@ function BudgetEditor({
             className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
               total === p
                 ? "bg-blue-500/15 text-blue-300 border border-blue-500/25"
-                : "bg-white/[0.03] text-white/30 border border-transparent hover:bg-white/[0.06]"
+                : "bg-white/5 text-white/30 border border-transparent hover:bg-white/10"
             }`}
           >
             {p}
@@ -880,7 +919,7 @@ function BudgetEditor({
         ))}
       </div>
 
-      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
         <div
           className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
           style={{ width: `${Math.round((used / total) * 100)}%` }}
@@ -924,32 +963,32 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       : null;
 
     return (
-      <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+      <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
         <div className="mt-0.5 flex-shrink-0">{statusIcon}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[12px] font-medium text-white/70 capitalize">
+            <span className="text-xs font-medium text-white/70 capitalize">
               Run {entry.status}
             </span>
             {stats.length > 0 && (
-              <span className="text-[11px] text-white/30">
+              <span className="text-xs text-white/40">
                 {stats.join(" · ")}
               </span>
             )}
           </div>
           {entry.reasoning && (
-            <p className="text-[11px] text-white/30 mt-0.5 line-clamp-2">{entry.reasoning}</p>
+            <p className="text-xs text-white/40 mt-0.5 line-clamp-2">{entry.reasoning}</p>
           )}
           {entry.error && (
-            <p className="text-[11px] text-red-400/70 mt-0.5">{entry.error}</p>
+            <p className="text-xs text-red-400/70 mt-0.5">{entry.error}</p>
           )}
           {(tokenStr || durationStr) && (
-            <p className="text-[10px] text-white/20 mt-1">
+            <p className="text-xs text-white/30 mt-1">
               {[durationStr, tokenStr].filter(Boolean).join(" · ")}
             </p>
           )}
         </div>
-        <span className="text-[10px] text-white/20 flex-shrink-0">
+        <span className="text-xs text-white/30 flex-shrink-0">
           {formatRelativeTime(entry.createdAt)}
         </span>
       </div>
@@ -961,12 +1000,12 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
   const isConfigChange = entry.type === "config_changed" && meta?.before && meta?.after;
 
   return (
-    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
       <div className="mt-0.5 flex-shrink-0">
-        <Activity size={14} className="text-white/30" />
+        <Activity size={14} className="text-white/40" />
       </div>
       <div className="flex-1 min-w-0">
-        <span className="text-[12px] text-white/60">{entry.description}</span>
+        <span className="text-xs text-white/70">{entry.description}</span>
         {isConfigChange && (
           <div className="mt-1 space-y-0.5">
             {Object.keys(meta.after!).map((key) => {
@@ -976,15 +1015,15 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
               const beforeStr = formatFieldValue(key, before);
               const afterStr = formatFieldValue(key, after);
               return (
-                <p key={key} className="text-[11px] text-white/30">
-                  {label}: <span className="text-white/20 line-through">{beforeStr}</span> → <span className="text-white/50">{afterStr}</span>
+                <p key={key} className="text-xs text-white/40">
+                  {label}: <span className="text-white/30 line-through">{beforeStr}</span> → <span className="text-white/60">{afterStr}</span>
                 </p>
               );
             })}
           </div>
         )}
       </div>
-      <span className="text-[10px] text-white/20 flex-shrink-0">
+      <span className="text-xs text-white/30 flex-shrink-0">
         {formatRelativeTime(entry.createdAt)}
       </span>
     </div>
@@ -1038,7 +1077,7 @@ function StatusBadge({ status }: { status: Scout["status"] }) {
     );
   }
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/[0.06] text-[11px] font-semibold text-white/30 border border-white/[0.04]">
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/10 text-[11px] font-semibold text-white/30 border border-white/5">
       {status === "completed" ? "Completed" : "Expired"}
     </span>
   );
@@ -1059,7 +1098,7 @@ function TabButton({
     <button
       onClick={onClick}
       className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-medium transition-all duration-200 ${
-        isActive ? "bg-white/[0.08] text-white shadow-sm" : "text-white/30 hover:text-white/50"
+        isActive ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white/70"
       }`}
     >
       {label}
@@ -1105,7 +1144,7 @@ function FindingCard({
   return (
     <div
       onClick={isClickable ? () => onClickItem!(finding.itemId!) : undefined}
-      className={`flex gap-3.5 p-4 rounded-xl bg-white/[0.03] border ${config.border} hover:bg-white/[0.05] transition-colors ${isClickable ? "cursor-pointer" : ""}`}
+      className={`flex gap-3.5 p-4 rounded-xl bg-white/5 border ${config.border} hover:bg-white/10 transition-colors ${isClickable ? "cursor-pointer" : ""}`}
     >
       <div
         className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${config.bg}`}
@@ -1114,17 +1153,17 @@ function FindingCard({
       </div>
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2">
-          <h4 className={`text-[13px] font-semibold ${finding.itemCompleted ? "text-white/30 line-through" : "text-white"}`}>{finding.title}</h4>
+          <h4 className={`text-sm font-semibold ${finding.itemCompleted ? "text-white/30 line-through" : "text-white"}`}>{finding.title}</h4>
           {finding.itemCompleted && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-[9px] font-semibold text-emerald-400/70">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-[10px] font-semibold text-emerald-400/70">
               <Check size={8} />
               Done
             </span>
           )}
         </div>
-        <p className={`text-xs leading-relaxed ${finding.itemCompleted ? "text-white/30" : "text-white/50"}`}>{finding.description}</p>
+        <p className={`text-sm leading-relaxed ${finding.itemCompleted ? "text-white/40" : "text-white/70"}`}>{finding.description}</p>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-white/30">
+          <span className="text-xs text-white/40">
             {typeLabel} · {formatRelativeTime(finding.createdAt)}
           </span>
           {finding.sourceUrl && (
@@ -1133,20 +1172,20 @@ function FindingCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-[11px] text-blue-400/60 hover:text-blue-400 transition-colors inline-flex items-center gap-0.5"
+              className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors inline-flex items-center gap-0.5"
             >
               {finding.sourceName}
               <ExternalLink size={9} className="opacity-60" />
             </a>
           )}
           {finding.feedbackUseful === true && (
-            <span className="inline-flex items-center gap-0.5 text-[11px] text-emerald-400/60">
+            <span className="inline-flex items-center gap-0.5 text-xs text-emerald-400/60">
               <ThumbsUp size={9} />
               Helpful
             </span>
           )}
           {finding.feedbackUseful === false && (
-            <span className="inline-flex items-center gap-0.5 text-[11px] text-red-400/60">
+            <span className="inline-flex items-center gap-0.5 text-xs text-red-400/60">
               <ThumbsDown size={9} />
               Not helpful
             </span>

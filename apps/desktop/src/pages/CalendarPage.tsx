@@ -207,7 +207,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
                     {isToday && (
                       <button
                         onClick={() => connectCalendar.mutate()}
-                        className="absolute left-0 right-0 rounded-lg border border-blue-500/30 px-2.5 py-2 text-left cursor-pointer transition-all hover:brightness-125 hover:border-blue-500/50 group bg-blue-500/10 backdrop-blur-sm"
+                        className="absolute left-0 right-0 rounded-lg border border-blue-500/30 px-2.5 py-2 text-left cursor-pointer transition-all hover:brightness-125 hover:border-blue-500/50 group bg-blue-500/10 backdrop-blur-xl"
                         style={{
                           top: `${ctaTop}px`,
                           height: `${1.5 * gh}px`,

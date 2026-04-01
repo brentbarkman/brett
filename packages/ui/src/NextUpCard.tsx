@@ -35,7 +35,7 @@ function CompactCard({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={`
-        bg-black/50 backdrop-blur-md rounded-xl p-3 cursor-pointer
+        bg-black/40 backdrop-blur-md rounded-xl p-3 cursor-pointer
         transition-all duration-200 relative overflow-hidden
         ${isNow ? "border border-emerald-500/25" : "border border-amber-500/25"}
         ${isHovered ? (isNow ? "border-emerald-500/35 shadow-[0_0_20px_rgba(16,185,129,0.08)]" : "border-amber-500/35 shadow-[0_0_20px_rgba(245,158,11,0.08)]") : ""}
@@ -70,7 +70,7 @@ function CompactCard({
       </div>
 
       {isHovered && (
-        <div className="border-t border-white/[0.06] mt-2.5 pt-2.5 space-y-1.5 text-[11px] text-white/50">
+        <div className="border-t border-white/10 mt-2.5 pt-2.5 space-y-1.5 text-[11px] text-white/50">
           {event.attendees && event.attendees.length > 0 && (
             <div className="flex items-center gap-1.5">
               <Users size={11} className="text-white/30" />
@@ -123,7 +123,7 @@ function ExpandedCard({
   return (
     <div
       onClick={onEventClick}
-      className="w-full bg-black/50 backdrop-blur-md border border-amber-500/30 rounded-xl p-5 cursor-pointer hover:bg-black/55 transition-all duration-200 group relative overflow-hidden"
+      className="w-full bg-black/40 backdrop-blur-md border border-amber-500/30 rounded-xl p-5 cursor-pointer hover:bg-black/40 transition-all duration-200 group relative overflow-hidden"
     >
       <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/[0.06] rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none" />
 
@@ -171,7 +171,7 @@ function ExpandedCard({
         )}
       </div>
 
-      <div className="border-t border-white/[0.06] mb-3" />
+      <div className="border-t border-white/10 mb-3" />
 
       {event.description && (
         <div className="mb-4">

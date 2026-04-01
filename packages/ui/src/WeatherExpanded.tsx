@@ -222,7 +222,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
                   {getDayLabel(d.date)}
                 </span>
                 <span className="text-sm w-7 text-center">{d.icon}</span>
-                <span className="text-[11px] text-white/35 w-8 text-right">{d.low}°</span>
+                <span className="text-[11px] text-white/40 w-8 text-right">{d.low}°</span>
                 <div className="flex-1 h-1 rounded-full bg-white/5 mx-2.5 relative overflow-hidden">
                   <div
                     className="absolute h-full rounded-full"

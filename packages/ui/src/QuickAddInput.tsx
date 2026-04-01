@@ -54,7 +54,7 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
           flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-3
           ${isFocused
             ? "bg-white/5 border border-blue-500/20"
-            : "border border-transparent hover:bg-white/[0.03]"
+            : "border border-transparent hover:bg-white/5"
           }
         `}
       >
@@ -78,7 +78,7 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
           className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/20 text-sm"
         />
         {isFocused && value.trim() && (
-          <span className="text-[10px] text-white/25 font-mono">enter</span>
+          <span className="text-[10px] text-white/20 font-mono">enter</span>
         )}
       </div>
     );

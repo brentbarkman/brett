@@ -82,12 +82,8 @@ export function ImportSection({ userId }: { userId: string }) {
 
   return (
     <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Import</h2>
-          <p className="text-sm text-white/50">Import your tasks from other apps</p>
-        </div>
-      </div>
+      <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-1">Import</h3>
+      <p className="text-sm text-white/50 mb-4">Import your tasks from other apps</p>
 
       {state.step === "idle" && (
         <button

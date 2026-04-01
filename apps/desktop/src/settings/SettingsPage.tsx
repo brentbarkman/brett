@@ -35,7 +35,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
 
   return (
     <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
-      <div className="max-w-xl mx-auto w-full space-y-5 px-4 pb-12">
+      <div className="max-w-4xl mx-auto w-full space-y-5 px-10 pb-12">
         {/* Header */}
         <div className="flex items-center gap-3 pt-2">
           <button
@@ -47,17 +47,60 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
           <h1 className="text-xl font-semibold text-white">Settings</h1>
         </div>
 
-        <ProfileSection />
-        <SecuritySection />
-        <CalendarSection />
-        <TimezoneSection />
-        <LocationSection />
-        <BriefingSection />
-        <AISection />
-        <MemorySection />
-        <ImportSection userId={user?.id ?? ""} />
-        <SignOutSection />
-        <DangerZoneSection />
+        {/* Section nav */}
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10 sticky top-0 z-10 backdrop-blur-xl">
+          {[
+            { label: "Profile", id: "profile" },
+            { label: "Integrations", id: "integrations" },
+            { label: "Preferences", id: "preferences" },
+            { label: "AI & Memory", id: "ai-memory" },
+            { label: "Account", id: "account" },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => document.getElementById(tab.id)?.scrollIntoView({ behavior: "smooth" })}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:text-white hover:bg-white/10 transition-all"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div id="profile">
+          <div className="space-y-5">
+            <ProfileSection />
+            <SecuritySection />
+          </div>
+        </div>
+
+        <div id="integrations">
+          <div className="space-y-5">
+            <CalendarSection />
+          </div>
+        </div>
+
+        <div id="preferences">
+          <div className="space-y-5">
+            <TimezoneSection />
+            <LocationSection />
+            <BriefingSection />
+          </div>
+        </div>
+
+        <div id="ai-memory">
+          <div className="space-y-5">
+            <AISection />
+            <MemorySection />
+          </div>
+        </div>
+
+        <div id="account">
+          <div className="space-y-5">
+            <ImportSection userId={user?.id ?? ""} />
+            <SignOutSection />
+            <DangerZoneSection />
+          </div>
+        </div>
       </div>
     </main>
   );

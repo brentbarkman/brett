@@ -10,7 +10,7 @@ export function UpNextCard({ event, onClick }: UpNextCardProps) {
   return (
     <div
       onClick={onClick}
-      className="w-full bg-black/40 backdrop-blur-md border border-amber-500/30 rounded-xl p-4 cursor-pointer hover:bg-black/50 transition-colors duration-200 group relative overflow-hidden"
+      className="w-full bg-black/40 backdrop-blur-md border border-amber-500/30 rounded-xl p-4 cursor-pointer hover:bg-black/60 transition-colors duration-200 group relative overflow-hidden"
     >
       {/* Subtle warm glow background */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />

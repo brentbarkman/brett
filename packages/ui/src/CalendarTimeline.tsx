@@ -244,7 +244,7 @@ export function CalendarTimeline({
               {/* Live CTA event — prominent, clickable */}
               <button
                 onClick={onConnect}
-                className="absolute left-0 right-0 rounded-lg border border-blue-500/30 px-3 py-2.5 text-left cursor-pointer transition-all hover:brightness-125 hover:border-blue-500/50 group bg-blue-500/10 backdrop-blur-sm"
+                className="absolute left-0 right-0 rounded-lg border border-blue-500/30 px-3 py-2.5 text-left cursor-pointer transition-all hover:brightness-125 hover:border-blue-500/50 group bg-blue-500/10 backdrop-blur-xl"
                 style={{
                   top: `${ctaTop}px`,
                   height: `${1.5 * gh}px`,
@@ -451,11 +451,13 @@ export function CalendarTimeline({
             >
               <div className="w-12 text-right pr-2 -mt-2.5">
                 <span className="text-[10px] text-white/30 font-medium">
-                  {hour === 12
-                    ? "12 PM"
-                    : hour > 12
-                      ? `${hour - 12} PM`
-                      : `${hour} AM`}
+                  {hour === 0 || hour === 24
+                    ? "12 AM"
+                    : hour === 12
+                      ? "12 PM"
+                      : hour > 12
+                        ? `${hour - 12} PM`
+                        : `${hour} AM`}
                 </span>
               </div>
               <div className="flex-1 border-t border-white/5" />
