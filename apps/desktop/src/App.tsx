@@ -828,7 +828,7 @@ export function App() {
         <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
           {/* Left Column: Navigation */}
           <LeftNav
-            isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScoutId !== null) || location.pathname === "/settings"}
+            isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScoutId !== null)}
             lists={lists}
             user={user}
             incompleteCount={activeThingsForCount.length}

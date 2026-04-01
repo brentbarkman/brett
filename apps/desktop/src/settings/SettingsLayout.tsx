@@ -1,10 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import {
-  SettingsSidebar,
-  SettingsCategory,
-  ALL_CATEGORIES,
-} from "./SettingsSidebar";
+import { ArrowLeft } from "lucide-react";
 import { ProfileSection } from "./ProfileSection";
 import { SecuritySection } from "./SecuritySection";
 import { CalendarSection } from "./CalendarSection";
@@ -14,54 +10,72 @@ import { BriefingSection } from "./BriefingSection";
 import { AISection } from "./AISection";
 import { MemorySection } from "./MemorySection";
 import { ImportSection } from "./ImportSection";
-import { DeleteAccountDialog } from "./DeleteAccountDialog";
+import { SignOutSection } from "./SignOutSection";
+import { DangerZoneSection } from "./DangerZoneSection";
 import { useAuth } from "../auth/AuthContext";
-import { authClient } from "../auth/auth-client";
+
+type SettingsTab =
+  | "profile"
+  | "security"
+  | "calendar"
+  | "ai-providers"
+  | "memory"
+  | "timezone-location"
+  | "briefing"
+  | "import"
+  | "account";
+
+const TABS: { id: SettingsTab; label: string }[] = [
+  { id: "profile", label: "Profile" },
+  { id: "security", label: "Security" },
+  { id: "calendar", label: "Calendar" },
+  { id: "ai-providers", label: "AI Providers" },
+  { id: "memory", label: "Memory" },
+  { id: "timezone-location", label: "Preferences" },
+  { id: "briefing", label: "Briefing" },
+  { id: "import", label: "Import" },
+  { id: "account", label: "Account" },
+];
+
+function tabFromHash(hash: string): SettingsTab | null {
+  const id = hash.slice(1);
+  if (TABS.some((t) => t.id === id)) {
+    return id as SettingsTab;
+  }
+  return null;
+}
 
 interface SettingsLayoutProps {
   onBack: () => void;
 }
 
-function categoryFromHash(hash: string): SettingsCategory | null {
-  const id = hash.slice(1); // remove '#'
-  if (ALL_CATEGORIES.includes(id as SettingsCategory)) {
-    return id as SettingsCategory;
-  }
-  return null;
-}
-
 export function SettingsLayout({ onBack }: SettingsLayoutProps) {
   const location = useLocation();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
 
-  const initialCategory = categoryFromHash(location.hash) || "profile";
-  const [activeCategory, setActiveCategory] =
-    useState<SettingsCategory>(initialCategory);
-  const [slideDirection, setSlideDirection] = useState<"up" | "down" | null>(
+  const initialTab = tabFromHash(location.hash) || "profile";
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(
     null
   );
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  function handleCategorySelect(category: SettingsCategory) {
-    if (category === activeCategory) return;
+  function handleTabSelect(tab: SettingsTab) {
+    if (tab === activeTab) return;
 
-    const oldIndex = ALL_CATEGORIES.indexOf(activeCategory);
-    const newIndex = ALL_CATEGORIES.indexOf(category);
-    const direction = newIndex > oldIndex ? "up" : "down";
+    const oldIndex = TABS.findIndex((t) => t.id === activeTab);
+    const newIndex = TABS.findIndex((t) => t.id === tab);
+    const direction = newIndex > oldIndex ? "left" : "right";
 
     setSlideDirection(direction);
     setIsTransitioning(true);
 
-    // After old content fades out, swap and slide in
     requestAnimationFrame(() => {
-      setActiveCategory(category);
-      // Reset scroll
+      setActiveTab(tab);
       if (contentRef.current) {
         contentRef.current.scrollTop = 0;
       }
-      // Allow the entering animation to play, then clear transition state
       setTimeout(() => {
         setIsTransitioning(false);
         setSlideDirection(null);
@@ -69,16 +83,8 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
     });
   }
 
-  async function handleDeleteAccount() {
-    const { error } = await authClient.deleteUser();
-    if (error) {
-      throw new Error(error.message || "Failed to delete account");
-    }
-    await signOut();
-  }
-
   function renderContent() {
-    switch (activeCategory) {
+    switch (activeTab) {
       case "profile":
         return <ProfileSection />;
       case "security":
@@ -91,7 +97,7 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
         return <MemorySection />;
       case "timezone-location":
         return (
-          <div className="space-y-3">
+          <div className="space-y-5">
             <TimezoneSection />
             <LocationSection />
           </div>
@@ -100,85 +106,73 @@ export function SettingsLayout({ onBack }: SettingsLayoutProps) {
         return <BriefingSection />;
       case "import":
         return <ImportSection userId={user?.id ?? ""} />;
+      case "account":
+        return (
+          <div className="space-y-5">
+            <SignOutSection />
+            <DangerZoneSection />
+          </div>
+        );
       default:
         return null;
     }
   }
 
-  // Compute page title and subtitle
-  const PAGE_META: Record<SettingsCategory, { title: string; subtitle: string }> = {
-    profile: {
-      title: "Profile",
-      subtitle: "Your personal information and display settings",
-    },
-    security: {
-      title: "Security",
-      subtitle: "Password, passkeys, and sign-in methods",
-    },
-    calendar: {
-      title: "Calendar",
-      subtitle: "Connected calendars and integrations",
-    },
-    "ai-providers": {
-      title: "AI Providers",
-      subtitle: "Configure AI models and API keys",
-    },
-    memory: {
-      title: "Memory",
-      subtitle: "What Brett knows about you",
-    },
-    "timezone-location": {
-      title: "Timezone & Location",
-      subtitle: "Time, location, and weather preferences",
-    },
-    briefing: {
-      title: "Briefing",
-      subtitle: "Daily briefing preferences",
-    },
-    import: {
-      title: "Import",
-      subtitle: "Import data from other apps",
-    },
-  };
-
-  const meta = PAGE_META[activeCategory];
-
-  // Slide animation classes
-  const enterFrom = slideDirection === "up" ? "translate-y-3" : "-translate-y-3";
+  // Slide animation: horizontal direction since tabs are horizontal
+  const enterFrom =
+    slideDirection === "left" ? "translate-x-3" : "-translate-x-3";
   const contentClasses = isTransitioning
     ? `opacity-0 ${enterFrom}`
-    : "opacity-100 translate-y-0";
+    : "opacity-100 translate-x-0";
 
   return (
-    <div className="flex-1 min-w-0 flex h-full">
-      <SettingsSidebar
-        activeCategory={activeCategory}
-        onCategorySelect={handleCategorySelect}
-        onBack={onBack}
-        onSignOut={signOut}
-        onDeleteAccount={() => setDeleteDialogOpen(true)}
-      />
-
-      {/* Detail pane */}
-      <div ref={contentRef} className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/20 backdrop-blur-xl">
-        <div className="max-w-[720px] mx-auto px-8 pt-5 pb-12">
-          <div
-            className={`transition-all duration-200 ease-out ${contentClasses}`}
+    <div className="flex-1 min-w-0 flex flex-col h-full">
+      {/* Header */}
+      <div className="px-10 pt-4 pb-0">
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={onBack}
+            className="text-white/50 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
           >
-            <h1 className="text-[17px] font-semibold text-white">
-              {meta.title}
-            </h1>
-            <p className="text-[11px] text-white/30 mt-1 mb-5">{meta.subtitle}</p>
-            <div className="space-y-3">{renderContent()}</div>
-          </div>
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="text-xl font-semibold text-white">Settings</h1>
+        </div>
+
+        {/* Tab bar */}
+        <div className="flex items-center gap-0 border-b border-white/10">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabSelect(tab.id)}
+              className={`px-4 py-2.5 text-xs font-medium transition-colors relative ${
+                activeTab === tab.id
+                  ? "text-white"
+                  : "text-white/40 hover:text-white/60"
+              }`}
+            >
+              {tab.label}
+              {activeTab === tab.id && (
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500" />
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
-      <DeleteAccountDialog
-        isOpen={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={handleDeleteAccount}
-      />
+      {/* Content area */}
+      <div
+        ref={contentRef}
+        className="flex-1 min-w-0 overflow-y-auto scrollbar-hide"
+      >
+        <div className="max-w-4xl px-10 pt-6 pb-12">
+          <div
+            className={`transition-all duration-200 ease-out ${contentClasses}`}
+          >
+            <div className="space-y-5">{renderContent()}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
