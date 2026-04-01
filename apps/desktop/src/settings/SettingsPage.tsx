@@ -7,6 +7,7 @@ import { CalendarSection } from "./CalendarSection";
 import { TimezoneSection } from "./TimezoneSection";
 import { LocationSection } from "./LocationSection";
 import { BriefingSection } from "./BriefingSection";
+import { BackgroundSection } from "./BackgroundSection";
 import { AISection } from "./AISection";
 import { MemorySection } from "./MemorySection";
 import { ImportSection } from "./ImportSection";
@@ -83,6 +84,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
           <div className="space-y-5">
             <TimezoneSection />
             <LocationSection />
+            <BackgroundSection />
             <BriefingSection />
           </div>
         </div>

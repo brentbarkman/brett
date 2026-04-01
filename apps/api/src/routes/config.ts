@@ -5,8 +5,8 @@ const config = new Hono();
 
 // Public — no auth middleware
 config.get("/", (c) => {
-  const { videoBaseUrl } = getStorageUrls();
-  return c.json({ videoBaseUrl });
+  const { base, videoBaseUrl } = getStorageUrls();
+  return c.json({ videoBaseUrl, storageBaseUrl: base });
 });
 
 export { config };

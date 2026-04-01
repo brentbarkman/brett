@@ -15,6 +15,9 @@ ios
 # Login background videos (hosted on S3, not bundled)
 apps/desktop/public/videos/*.mp4
 
+# Background images (hosted on Railway Object Storage, not bundled)
+backgrounds/
+
 # Firebase service account keys
 *-firebase-adminsdk-*.json
 firebase-service-account.json

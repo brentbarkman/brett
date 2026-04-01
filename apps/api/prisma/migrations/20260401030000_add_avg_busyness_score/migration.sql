@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "user" ADD COLUMN "avgBusynessScore" DOUBLE PRECISION NOT NULL DEFAULT 0;

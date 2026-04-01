@@ -1055,3 +1055,14 @@ export function computeNextDueDate(
       return null;
   }
 }
+
+export {
+  getTimeSegment,
+  getBusynessTier,
+  getBusynessScore,
+  selectImage,
+  type TimeSegment,
+  type BusynessTier,
+  type BackgroundStyle,
+  type BackgroundManifest,
+} from "./background";
