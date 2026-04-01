@@ -151,7 +151,7 @@ function ImageGallery({ baseUrl, setName, pinned, activeStyle, onPin, onSmart }:
   return (
     <div>
       <SmartOption style={setName as Style} activeStyle={activeStyle} pinned={pinned} onSmart={onSmart} />
-      <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide">
+      <div className="space-y-4 max-h-[600px] overflow-y-auto scrollbar-hide">
         {SEGMENTS.map((seg) => (
           <div key={seg}>
             <div className="font-mono text-[10px] uppercase tracking-wider text-white/30 mb-2">

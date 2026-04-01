@@ -31,7 +31,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "calendar", label: "Calendar" },
   { id: "ai-providers", label: "AI Providers" },
   { id: "memory", label: "Memory" },
-  { id: "timezone-location", label: "Preferences" },
+  { id: "timezone-location", label: "Personalize" },
   { id: "briefing", label: "Briefing" },
   { id: "import", label: "Import" },
   { id: "account", label: "Account" },
