@@ -6,9 +6,8 @@ import { estimateCost } from "../lib/pricing.js";
 export const dashboard = new Hono<AuthEnv>();
 
 dashboard.get("/stats", async (c) => {
-  const startOfMonth = new Date();
-  startOfMonth.setUTCDate(1);
-  startOfMonth.setUTCHours(0, 0, 0, 0);
+  // Use last 30 days instead of calendar month so there's always data
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [
     totalUsers,
@@ -21,13 +20,13 @@ dashboard.get("/stats", async (c) => {
   ] = await Promise.all([
     prisma.user.count(),
     prisma.scout.count({ where: { status: "active" } }),
-    prisma.scoutRun.count({ where: { status: "success", createdAt: { gte: startOfMonth } } }),
-    prisma.scoutRun.count({ where: { status: "failed", createdAt: { gte: startOfMonth } } }),
-    prisma.scoutFinding.count({ where: { createdAt: { gte: startOfMonth } } }),
+    prisma.scoutRun.count({ where: { status: "success", createdAt: { gte: since } } }),
+    prisma.scoutRun.count({ where: { status: "failed", createdAt: { gte: since } } }),
+    prisma.scoutFinding.count({ where: { createdAt: { gte: since } } }),
     prisma.item.count(),
     prisma.aIUsageLog.groupBy({
       by: ["model"],
-      where: { createdAt: { gte: startOfMonth } },
+      where: { createdAt: { gte: since } },
       _sum: { inputTokens: true, outputTokens: true },
     }),
   ]);

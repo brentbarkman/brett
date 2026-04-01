@@ -1,11 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 import { useAIUsage, useAIUsageDaily, useAISessions } from "../api/ai-usage";
 import { StatCard } from "../components/StatCard";
 import { DataTable } from "../components/DataTable";
 
+const TIME_RANGES = [
+  { label: "Today", days: 1 },
+  { label: "7d", days: 7 },
+  { label: "30d", days: 30 },
+  { label: "90d", days: 90 },
+] as const;
+
 export function AIUsagePage() {
-  const { data: usage, isLoading: usageLoading } = useAIUsage();
-  const { data: daily, isLoading: dailyLoading } = useAIUsageDaily();
+  const [days, setDays] = useState(30);
+  const { data: usage, isLoading: usageLoading } = useAIUsage(days);
+  const { data: daily, isLoading: dailyLoading } = useAIUsageDaily(days);
   const { data: sessions, isLoading: sessionsLoading } = useAISessions();
 
   const totalCost = usage
@@ -15,9 +23,28 @@ export function AIUsagePage() {
     ? Object.values(usage.byModel as Record<string, any>).reduce((sum: number, m: any) => sum + m.count, 0)
     : 0;
 
+  const rangeLabel = TIME_RANGES.find((r) => r.days === days)?.label ?? `${days}d`;
+
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold text-white">AI Usage</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-white">AI Usage</h1>
+        <div className="flex rounded-lg border border-white/[0.08] overflow-hidden">
+          {TIME_RANGES.map((range) => (
+            <button
+              key={range.days}
+              onClick={() => setDays(range.days)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                days === range.days
+                  ? "bg-blue-500/15 text-blue-400"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5"
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {usageLoading ? (
         <div className="grid grid-cols-3 gap-3">
@@ -27,8 +54,8 @@ export function AIUsagePage() {
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Total Spend (30d)" value={`$${totalCost.toFixed(2)}`} color="green" />
-          <StatCard label="API Calls (30d)" value={totalCalls.toLocaleString()} />
+          <StatCard label={`Total Spend (${rangeLabel})`} value={`$${totalCost.toFixed(2)}`} color="green" />
+          <StatCard label={`API Calls (${rangeLabel})`} value={totalCalls.toLocaleString()} />
           <StatCard label="Models Used" value={Object.keys(usage?.byModel ?? {}).length} />
         </div>
       )}
@@ -38,6 +65,7 @@ export function AIUsagePage() {
         <DataTable
           loading={usageLoading}
           data={Object.entries(usage?.byModel ?? {}).map(([model, data]: [string, any]) => ({ model, ...data }))}
+          keyField="model"
           emptyMessage="No usage data"
           columns={[
             { key: "model", header: "Model", render: (r: any) => <span className="text-white/90 font-mono text-xs">{r.model}</span> },
@@ -54,6 +82,7 @@ export function AIUsagePage() {
         <DataTable
           loading={dailyLoading}
           data={daily?.daily ?? []}
+          keyField="date"
           emptyMessage="No daily data"
           columns={[
             { key: "date", header: "Date" },
