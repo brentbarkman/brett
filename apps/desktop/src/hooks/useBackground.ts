@@ -322,13 +322,14 @@ export function useBackground({
   if (pinnedBackground) {
     if (pinnedBackground.startsWith("solid:")) {
       const color = pinnedBackground.slice(6);
+      const solid = solidColors.find((s) => s.color === color);
       return {
         imageUrl: fallbackBg,
         nextImageUrl: null,
         isTransitioning: false,
         segment,
         busynessTier,
-        gradient: color,
+        gradient: solid?.background ?? color,
         nextGradient: null,
         devNext,
         devLabel,
@@ -373,7 +374,7 @@ export function useBackground({
       isTransitioning: false,
       segment,
       busynessTier,
-      gradient: solidColors[0].color,
+      gradient: solidColors[0].background,
       nextGradient: null,
       devNext,
       devLabel,
