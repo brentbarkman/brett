@@ -845,6 +845,8 @@ export function App() {
           imageUrl={background.imageUrl}
           nextImageUrl={background.nextImageUrl}
           isTransitioning={background.isTransitioning}
+          gradient={background.gradient}
+          nextGradient={background.nextGradient}
         />
 
         {/* Main Layout Shell */}

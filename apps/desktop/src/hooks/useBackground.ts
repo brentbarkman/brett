@@ -10,6 +10,7 @@ import {
   type BackgroundManifest,
 } from "@brett/business";
 import manifest from "../data/background-manifest.json";
+import { selectGradient } from "../data/abstract-gradients";
 import { useAppConfig } from "./useAppConfig";
 import fallbackBg from "../assets/fallback-bg.webp";
 
@@ -24,11 +25,15 @@ interface UseBackgroundInput {
 }
 
 interface UseBackgroundOutput {
+  /** Image URL for photography mode, empty string for abstract */
   imageUrl: string;
   nextImageUrl: string | null;
   isTransitioning: boolean;
   segment: TimeSegment;
   busynessTier: BusynessTier;
+  /** CSS background value for abstract mode, null for photography */
+  gradient: string | null;
+  nextGradient: string | null;
 }
 
 export function useBackground({
@@ -38,6 +43,7 @@ export function useBackground({
 }: UseBackgroundInput): UseBackgroundOutput {
   const { data: config } = useAppConfig();
   const baseUrl = config?.storageBaseUrl ?? "";
+  const isAbstract = backgroundStyle === "abstract";
 
   const [segment, setSegment] = useState<TimeSegment>(() =>
     getTimeSegment(new Date().getHours())
@@ -46,11 +52,18 @@ export function useBackground({
     getBusynessTier(meetingCount, taskCount)
   );
 
+  // Image state (photography)
   const [currentImage, setCurrentImage] = useState<string>(fallbackBg);
   const [nextImage, setNextImage] = useState<string | null>(null);
+
+  // Gradient state (abstract)
+  const [currentGradient, setCurrentGradient] = useState<string | null>(null);
+  const [nextGradient, setNextGradient] = useState<string | null>(null);
+
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  const shownRef = useRef<string[]>([]);
+  // Track shown items for shuffle-without-replacement
+  const shownRef = useRef<(string | number)[]>([]);
   const categoryRef = useRef({ segment, busynessTier, backgroundStyle });
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,10 +72,30 @@ export function useBackground({
     [baseUrl]
   );
 
+  // Cancel any in-flight transition
+  const cancelTransition = useCallback(() => {
+    if (transitionTimeoutRef.current) {
+      clearTimeout(transitionTimeoutRef.current);
+      transitionTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Finalize a crossfade after CROSSFADE_MS
+  const startCrossfade = useCallback((onComplete: () => void) => {
+    cancelTransition();
+    setIsTransitioning(true);
+    transitionTimeoutRef.current = setTimeout(() => {
+      onComplete();
+      setIsTransitioning(false);
+      transitionTimeoutRef.current = null;
+    }, CROSSFADE_MS);
+  }, [cancelTransition]);
+
   const rotateImage = useCallback(() => {
     const seg = getTimeSegment(new Date().getHours());
     const tier = getBusynessTier(meetingCount, taskCount);
 
+    // Reset shown list if category changed
     const cat = categoryRef.current;
     if (cat.segment !== seg || cat.busynessTier !== tier || cat.backgroundStyle !== backgroundStyle) {
       shownRef.current = [];
@@ -72,49 +105,60 @@ export function useBackground({
     setSegment(seg);
     setBusynessTier(tier);
 
-    const relativePath = selectImage(
-      manifest as BackgroundManifest,
-      backgroundStyle,
-      seg,
-      tier,
-      shownRef.current
-    );
+    if (isAbstract) {
+      // Abstract mode: pick a gradient
+      const result = selectGradient(seg, tier, shownRef.current as number[]);
+      if (!result) return;
 
-    if (!relativePath || !baseUrl) return;
+      shownRef.current.push(result.index);
+      const gradientCss = result.gradient.background;
 
-    const fullUrl = buildUrl(relativePath);
-    shownRef.current.push(relativePath);
+      setNextGradient(gradientCss);
+      startCrossfade(() => {
+        setCurrentGradient(gradientCss);
+        setNextGradient(null);
+      });
+    } else {
+      // Photography mode: pick and preload an image
+      const relativePath = selectImage(
+        manifest as BackgroundManifest,
+        backgroundStyle,
+        seg,
+        tier,
+        shownRef.current as string[]
+      );
 
-    // Cancel any in-flight transition before starting a new one
-    if (transitionTimeoutRef.current) {
-      clearTimeout(transitionTimeoutRef.current);
-      transitionTimeoutRef.current = null;
+      if (!relativePath || !baseUrl) return;
+
+      const fullUrl = buildUrl(relativePath);
+      shownRef.current.push(relativePath);
+
+      cancelTransition();
+
+      const img = new Image();
+      img.onload = () => {
+        setNextImage(fullUrl);
+        startCrossfade(() => {
+          setCurrentImage(fullUrl);
+          setNextImage(null);
+        });
+      };
+      img.onerror = () => {
+        // Silently fail — stay on current, retry next rotation
+      };
+      img.src = fullUrl;
     }
+  }, [meetingCount, taskCount, backgroundStyle, isAbstract, baseUrl, buildUrl, cancelTransition, startCrossfade]);
 
-    const img = new Image();
-    img.onload = () => {
-      setNextImage(fullUrl);
-      setIsTransitioning(true);
-
-      transitionTimeoutRef.current = setTimeout(() => {
-        setCurrentImage(fullUrl);
-        setNextImage(null);
-        setIsTransitioning(false);
-        transitionTimeoutRef.current = null;
-      }, CROSSFADE_MS);
-    };
-    img.onerror = () => {
-      // Silently fail — stay on current image, retry next rotation
-    };
-    img.src = fullUrl;
-  }, [meetingCount, taskCount, backgroundStyle, baseUrl, buildUrl]);
-
-  // Initial image load when config becomes available
+  // Initial load
   useEffect(() => {
-    if (baseUrl) {
+    if (isAbstract) {
+      // Gradients don't need network — load immediately
+      rotateImage();
+    } else if (baseUrl) {
       rotateImage();
     }
-  }, [baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [baseUrl, isAbstract]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Rotation timer (10 min)
   useEffect(() => {
@@ -155,14 +199,25 @@ export function useBackground({
   // Immediately rotate when user switches background style
   const prevStyleRef = useRef(backgroundStyle);
   useEffect(() => {
-    if (prevStyleRef.current !== backgroundStyle && baseUrl) {
+    if (prevStyleRef.current !== backgroundStyle) {
       prevStyleRef.current = backgroundStyle;
+      // Clear opposite mode's state
+      if (backgroundStyle === "abstract") {
+        setCurrentImage(fallbackBg);
+        setNextImage(null);
+      } else {
+        setCurrentGradient(null);
+        setNextGradient(null);
+      }
+      shownRef.current = [];
       rotateImage();
     }
-  }, [backgroundStyle, baseUrl, rotateImage]);
+  }, [backgroundStyle, rotateImage]);
 
-  // Preload next segment's image 5 minutes before boundary
+  // Preload next segment's image 5 minutes before boundary (photography only)
   useEffect(() => {
+    if (isAbstract) return; // Gradients don't need preloading
+
     const preloadCheck = () => {
       const now = new Date();
       const currentHour = now.getHours();
@@ -175,7 +230,6 @@ export function useBackground({
       const nextBoundaryHour = segmentBoundaries[currentSeg];
       if (nextBoundaryHour === undefined) return;
 
-      // Handle wrap-around for night (e.g., hour 23 → boundary 5)
       const hoursUntil = nextBoundaryHour > currentHour
         ? nextBoundaryHour - currentHour
         : nextBoundaryHour + 24 - currentHour;
@@ -194,7 +248,7 @@ export function useBackground({
 
     const interval = setInterval(preloadCheck, SEGMENT_CHECK_MS);
     return () => clearInterval(interval);
-  }, [meetingCount, taskCount, backgroundStyle, baseUrl, buildUrl]);
+  }, [isAbstract, meetingCount, taskCount, backgroundStyle, baseUrl, buildUrl]);
 
   return {
     imageUrl: currentImage,
@@ -202,5 +256,7 @@ export function useBackground({
     isTransitioning,
     segment,
     busynessTier,
+    gradient: isAbstract ? currentGradient : null,
+    nextGradient: isAbstract ? nextGradient : null,
   };
 }
