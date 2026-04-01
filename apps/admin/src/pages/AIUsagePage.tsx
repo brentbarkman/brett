@@ -1,0 +1,84 @@
+import React from "react";
+import { useAIUsage, useAIUsageDaily, useAISessions } from "../api/ai-usage";
+import { StatCard } from "../components/StatCard";
+import { DataTable } from "../components/DataTable";
+
+export function AIUsagePage() {
+  const { data: usage, isLoading: usageLoading } = useAIUsage();
+  const { data: daily, isLoading: dailyLoading } = useAIUsageDaily();
+  const { data: sessions, isLoading: sessionsLoading } = useAISessions();
+
+  const totalCost = usage
+    ? Object.values(usage.byModel as Record<string, any>).reduce((sum: number, m: any) => sum + m.costUsd, 0)
+    : 0;
+  const totalCalls = usage
+    ? Object.values(usage.byModel as Record<string, any>).reduce((sum: number, m: any) => sum + m.count, 0)
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-lg font-semibold text-white">AI Usage</h1>
+
+      {usageLoading ? (
+        <div className="grid grid-cols-3 gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-20 animate-pulse rounded-xl bg-white/5" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="Total Spend (30d)" value={`$${totalCost.toFixed(2)}`} color="green" />
+          <StatCard label="API Calls (30d)" value={totalCalls.toLocaleString()} />
+          <StatCard label="Models Used" value={Object.keys(usage?.byModel ?? {}).length} />
+        </div>
+      )}
+
+      <div>
+        <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Spend by Model</h2>
+        <DataTable
+          loading={usageLoading}
+          data={Object.entries(usage?.byModel ?? {}).map(([model, data]: [string, any]) => ({ model, ...data }))}
+          emptyMessage="No usage data"
+          columns={[
+            { key: "model", header: "Model", render: (r: any) => <span className="text-white/90 font-mono text-xs">{r.model}</span> },
+            { key: "count", header: "Calls" },
+            { key: "inputTokens", header: "Input Tokens", render: (r: any) => r.inputTokens.toLocaleString() },
+            { key: "outputTokens", header: "Output Tokens", render: (r: any) => r.outputTokens.toLocaleString() },
+            { key: "costUsd", header: "Cost", render: (r: any) => <span className="text-green-400">${r.costUsd.toFixed(2)}</span> },
+          ]}
+        />
+      </div>
+
+      <div>
+        <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Daily Trend</h2>
+        <DataTable
+          loading={dailyLoading}
+          data={daily?.daily ?? []}
+          emptyMessage="No daily data"
+          columns={[
+            { key: "date", header: "Date" },
+            { key: "count", header: "Calls" },
+            { key: "tokens", header: "Tokens", render: (r: any) => r.tokens.toLocaleString() },
+            { key: "costUsd", header: "Cost", render: (r: any) => <span className="text-green-400">${r.costUsd.toFixed(2)}</span> },
+          ]}
+        />
+      </div>
+
+      <div>
+        <h2 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Recent Sessions</h2>
+        <DataTable
+          loading={sessionsLoading}
+          data={sessions?.sessions ?? []}
+          emptyMessage="No sessions"
+          columns={[
+            { key: "source", header: "Source" },
+            { key: "modelUsed", header: "Model", render: (r: any) => <span className="font-mono text-xs">{r.modelUsed ?? "—"}</span> },
+            { key: "user", header: "User", render: (r: any) => r.user?.email ?? "—" },
+            { key: "messages", header: "Messages", render: (r: any) => r._count?.messages ?? 0 },
+            { key: "createdAt", header: "When", render: (r: any) => new Date(r.createdAt).toLocaleString() },
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
