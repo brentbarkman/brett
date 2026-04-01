@@ -1,6 +1,7 @@
 // Per-model pricing in USD per 1M tokens (input / output)
 // Source: https://docs.anthropic.com/en/docs/about-claude/pricing
 // Last updated: 2026-04-01
+// Model IDs must match those in packages/ai/src/router.ts (MODEL_MAP).
 //
 // NOTE: AIUsageLog does not currently track batch vs non-batch.
 // All costs are calculated at standard (non-batch) rates.

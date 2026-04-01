@@ -1,5 +1,7 @@
 import type { AIProviderName, ModelTier } from "@brett/types";
 
+// When adding or changing models here, also update the pricing table
+// in apps/admin-api/src/lib/pricing.ts so admin dashboard costs stay accurate.
 export const MODEL_MAP: Record<AIProviderName, Record<ModelTier, string>> = {
   anthropic: {
     small: "claude-haiku-4-5-20251001",
