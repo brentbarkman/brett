@@ -16,3 +16,29 @@ export function getBusynessTier(meetingCount: number, taskCount: number): Busyne
   if (score <= 10) return "moderate";
   return "packed";
 }
+
+export type BackgroundStyle = "photography" | "abstract";
+
+export interface BackgroundManifest {
+  version: number;
+  sets: Record<string, Record<string, Record<string, string[]>>>;
+}
+
+export function selectImage(
+  manifest: BackgroundManifest,
+  style: BackgroundStyle,
+  segment: TimeSegment,
+  tier: BusynessTier,
+  excludeUrls: string[],
+): string | null {
+  const images = manifest.sets[style]?.[segment]?.[tier];
+  if (!images || images.length === 0) return null;
+
+  let available = images.filter((url) => !excludeUrls.includes(url));
+
+  if (available.length === 0) {
+    available = images;
+  }
+
+  return available[Math.floor(Math.random() * available.length)];
+}

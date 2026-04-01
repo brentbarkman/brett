@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getTimeSegment, getBusynessTier } from "../background";
+import { getTimeSegment, getBusynessTier, selectImage } from "../background";
 
 describe("getTimeSegment", () => {
   it("returns dawn for 5am-6:59am", () => {
@@ -61,5 +61,54 @@ describe("getBusynessTier", () => {
     expect(getBusynessTier(0, 6)).toBe("moderate");
     expect(getBusynessTier(4, 3)).toBe("packed");
     expect(getBusynessTier(0, 11)).toBe("packed");
+  });
+});
+
+describe("selectImage", () => {
+  const manifest = {
+    version: 1,
+    sets: {
+      photography: {
+        dawn: {
+          light: ["dawn/light-1.webp", "dawn/light-2.webp", "dawn/light-3.webp"],
+          moderate: ["dawn/moderate-1.webp"],
+          packed: ["dawn/packed-1.webp", "dawn/packed-2.webp"],
+        },
+      },
+      abstract: {
+        dawn: {
+          light: ["abstract/dawn/light-1.webp"],
+          moderate: ["abstract/dawn/moderate-1.webp"],
+          packed: ["abstract/dawn/packed-1.webp"],
+        },
+      },
+    },
+  };
+
+  it("returns a URL from the correct category", () => {
+    const result = selectImage(manifest, "photography", "dawn", "light", []);
+    expect(manifest.sets.photography.dawn.light).toContain(result);
+  });
+
+  it("excludes already-shown images", () => {
+    const exclude = ["dawn/light-1.webp", "dawn/light-2.webp"];
+    const result = selectImage(manifest, "photography", "dawn", "light", exclude);
+    expect(result).toBe("dawn/light-3.webp");
+  });
+
+  it("resets exclusion when all images have been shown", () => {
+    const exclude = ["dawn/light-1.webp", "dawn/light-2.webp", "dawn/light-3.webp"];
+    const result = selectImage(manifest, "photography", "dawn", "light", exclude);
+    expect(manifest.sets.photography.dawn.light).toContain(result);
+  });
+
+  it("works with abstract set", () => {
+    const result = selectImage(manifest, "abstract", "dawn", "light", []);
+    expect(result).toBe("abstract/dawn/light-1.webp");
+  });
+
+  it("returns null for missing category", () => {
+    const result = selectImage(manifest, "photography", "morning" as any, "light", []);
+    expect(result).toBeNull();
   });
 });

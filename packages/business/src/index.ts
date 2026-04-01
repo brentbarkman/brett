@@ -1056,4 +1056,12 @@ export function computeNextDueDate(
   }
 }
 
-export { getTimeSegment, getBusynessTier, type TimeSegment, type BusynessTier } from "./background";
+export {
+  getTimeSegment,
+  getBusynessTier,
+  selectImage,
+  type TimeSegment,
+  type BusynessTier,
+  type BackgroundStyle,
+  type BackgroundManifest,
+} from "./background";
