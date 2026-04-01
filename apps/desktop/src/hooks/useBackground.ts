@@ -52,6 +52,7 @@ export function useBackground({
 
   const shownRef = useRef<string[]>([]);
   const categoryRef = useRef({ segment, busynessTier, backgroundStyle });
+  const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buildUrl = useCallback(
     (relativePath: string) => `${baseUrl}/backgrounds/${relativePath}`,
@@ -84,15 +85,22 @@ export function useBackground({
     const fullUrl = buildUrl(relativePath);
     shownRef.current.push(relativePath);
 
+    // Cancel any in-flight transition before starting a new one
+    if (transitionTimeoutRef.current) {
+      clearTimeout(transitionTimeoutRef.current);
+      transitionTimeoutRef.current = null;
+    }
+
     const img = new Image();
     img.onload = () => {
       setNextImage(fullUrl);
       setIsTransitioning(true);
 
-      setTimeout(() => {
+      transitionTimeoutRef.current = setTimeout(() => {
         setCurrentImage(fullUrl);
         setNextImage(null);
         setIsTransitioning(false);
+        transitionTimeoutRef.current = null;
       }, CROSSFADE_MS);
     };
     img.onerror = () => {
@@ -167,10 +175,11 @@ export function useBackground({
       const nextBoundaryHour = segmentBoundaries[currentSeg];
       if (nextBoundaryHour === undefined) return;
 
-      const minutesUntilBoundary =
-        currentHour === nextBoundaryHour - 1
-          ? 60 - minutesIntoHour
-          : (nextBoundaryHour - currentHour - 1) * 60 + (60 - minutesIntoHour);
+      // Handle wrap-around for night (e.g., hour 23 → boundary 5)
+      const hoursUntil = nextBoundaryHour > currentHour
+        ? nextBoundaryHour - currentHour
+        : nextBoundaryHour + 24 - currentHour;
+      const minutesUntilBoundary = (hoursUntil - 1) * 60 + (60 - minutesIntoHour);
 
       if (minutesUntilBoundary <= 5 && minutesUntilBoundary > 0) {
         const nextSeg = getTimeSegment(nextBoundaryHour);

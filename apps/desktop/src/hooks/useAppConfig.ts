@@ -13,7 +13,7 @@ export function useAppConfig() {
       const res = await fetch(`${API_URL}/config`);
       const data = await res.json();
       return {
-        storageBaseUrl: data.videoBaseUrl ?? "",
+        storageBaseUrl: data.storageBaseUrl ?? "",
       };
     },
     staleTime: Infinity,

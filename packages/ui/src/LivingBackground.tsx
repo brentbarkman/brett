@@ -20,16 +20,14 @@ export function LivingBackground({
         draggable={false}
       />
 
-      {/* Image layer B — next (crossfade target) */}
-      {nextImageUrl && (
-        <img
-          src={nextImageUrl}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms]"
-          style={{ opacity: isTransitioning ? 1 : 0 }}
-          draggable={false}
-        />
-      )}
+      {/* Image layer B — next (always in DOM for smooth transitions) */}
+      <img
+        src={nextImageUrl ?? imageUrl}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms]"
+        style={{ opacity: isTransitioning ? 1 : 0 }}
+        draggable={false}
+      />
 
       {/* Vignette overlay for readability */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
