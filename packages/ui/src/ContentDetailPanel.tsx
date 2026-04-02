@@ -258,14 +258,14 @@ export function ContentDetailPanel({
 
           {/* Brett's Take */}
           {detail.brettObservation && (
-            <div className="bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
+            <div className="bg-brett-cerulean/10 border-l-2 border-brett-cerulean p-4 rounded-r-lg">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
+                <div className="w-1.5 h-1.5 rounded-full bg-brett-cerulean" />
+                <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-brett-cerulean">
                   Brett's Take
                 </span>
               </div>
-              <p className="text-sm italic text-blue-300/90 leading-relaxed">
+              <p className="text-sm italic text-brett-cerulean/85 leading-relaxed">
                 &ldquo;{detail.brettObservation}&rdquo;
               </p>
             </div>
