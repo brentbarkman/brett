@@ -13,12 +13,12 @@ export function InboxDragOverlay({ title, count }: InboxDragOverlayProps) {
       style={{ transform: "rotate(2deg)" }}
     >
       <div className="flex items-center gap-2">
-        <Zap size={14} className="text-blue-400" />
+        <Zap size={14} className="text-brett-gold" />
         <span className="text-sm text-white/90 truncate max-w-[200px]">
           {title}
         </span>
         {count > 1 && (
-          <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+          <span className="bg-brett-gold text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
             {count}
           </span>
         )}

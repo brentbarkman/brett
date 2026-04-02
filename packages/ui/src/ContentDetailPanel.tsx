@@ -170,7 +170,7 @@ export function ContentDetailPanel({
                   setEditingTitle(false);
                 }
               }}
-              className="w-full text-2xl font-semibold text-white bg-transparent border-b border-blue-500/30 outline-none pb-1"
+              className="w-full text-2xl font-semibold text-white bg-transparent border-b border-brett-gold/30 outline-none pb-1"
             />
           ) : (
             <h2
@@ -186,7 +186,7 @@ export function ContentDetailPanel({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => onNavigateToScout?.(detail.scoutId!)}
-                className="flex items-center gap-1.5 text-xs text-blue-400/60 hover:text-blue-400 cursor-pointer transition-colors"
+                className="flex items-center gap-1.5 text-xs text-brett-gold/60 hover:text-brett-gold cursor-pointer transition-colors"
               >
                 <Radar className="w-3 h-3" />
                 <span>from {detail.scoutName}</span>

@@ -32,7 +32,7 @@ function ToolbarButton({ icon, isActive, onClick, label }: ToolbarButtonProps) {
       title={label}
       className={`p-1.5 rounded transition-colors ${
         isActive
-          ? "text-blue-400 bg-blue-500/20"
+          ? "text-brett-gold bg-brett-gold/20"
           : "text-white/50 hover:text-white hover:bg-white/10"
       }`}
     >

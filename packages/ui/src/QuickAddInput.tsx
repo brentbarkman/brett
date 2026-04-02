@@ -53,7 +53,7 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
         className={`
           flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-3
           ${isFocused
-            ? "bg-white/5 border border-blue-500/20"
+            ? "bg-white/5 border border-brett-gold/20"
             : "border border-transparent hover:bg-white/5"
           }
         `}
@@ -61,7 +61,7 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
         {isUrlLike ? (
           <Link size={15} className="text-amber-400" />
         ) : (
-          <Plus size={15} className={isFocused ? "text-blue-400" : "text-white/20"} />
+          <Plus size={15} className={isFocused ? "text-brett-gold" : "text-white/20"} />
         )}
         <input
           ref={inputRef}

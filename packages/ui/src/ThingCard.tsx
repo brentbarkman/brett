@@ -66,7 +66,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
           return <Globe size={16} className="text-amber-400" />;
       }
     }
-    return <Zap size={16} className="text-blue-500" />;
+    return <Zap size={16} className="text-brett-gold" />;
   };
 
   const getUrgencyColor = () => {
@@ -93,7 +93,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
         ${completing
           ? "bg-green-500/[0.03] border-green-500/15"
           : isFocused
-            ? "bg-white/10 border-blue-500/30"
+            ? "bg-white/10 border-brett-gold/30"
             : "bg-white/5 hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg border-white/5 hover:border-white/10"
         }
         ${thing.isCompleted && !completing ? "opacity-60" : "opacity-100"}
@@ -172,7 +172,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
           </span>
         )}
         {thing.source === "scout" && thing.scoutName && (
-          <span className="text-[10px] text-blue-400/40">
+          <span className="text-[10px] text-brett-gold/40">
             from {thing.scoutName}
           </span>
         )}

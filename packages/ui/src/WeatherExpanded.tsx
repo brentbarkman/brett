@@ -174,11 +174,11 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
                 <div
                   ref={isDayBoundary ? (el) => { if (el) dayMarkerRefs.current.set(hourDay, el); } : undefined}
                   className={`flex flex-col items-center gap-1 px-2.5 py-2 rounded-lg min-w-[48px] ${
-                    isNow ? "bg-blue-500/10 border border-blue-500/20" : ""
+                    isNow ? "bg-brett-gold/10 border border-brett-gold/20" : ""
                   }`}
                 >
                   <span className={`text-[10px] ${
-                    isNow ? "text-blue-400 font-semibold"
+                    isNow ? "text-brett-gold font-semibold"
                       : isDayBoundary && i > 0 ? "text-white/60 font-medium"
                       : "text-white/40"
                   }`}>
@@ -210,12 +210,12 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
                 onClick={() => scrollToDay(d.date)}
                 className={`flex items-center py-1.5 px-2 rounded-md transition-colors text-left ${
                   isSelected
-                    ? "bg-blue-500/10"
+                    ? "bg-brett-gold/10"
                     : "hover:bg-white/5"
                 }`}
               >
                 <span className={`text-xs w-12 ${
-                  isSelected ? "text-blue-400 font-medium"
+                  isSelected ? "text-brett-gold font-medium"
                     : isDayToday ? "text-white/70 font-medium"
                     : "text-white/50"
                 }`}>

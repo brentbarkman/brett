@@ -69,7 +69,7 @@ function DropdownOption({
       onClick={onClick}
       className={`w-full text-left px-3 py-2 text-xs transition-colors ${
         isActive
-          ? "text-blue-400 bg-blue-500/10"
+          ? "text-brett-gold bg-brett-gold/10"
           : "text-white/70 hover:bg-white/10"
       }`}
     >

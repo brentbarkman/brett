@@ -60,7 +60,7 @@ export function ThingsEmptyState({
           <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
             {isContentFilter
               ? <BookOpen size={18} className="text-amber-400" />
-              : <Zap size={18} className="text-blue-400" />
+              : <Zap size={18} className="text-brett-gold" />
             }
           </div>
           <div>
@@ -87,8 +87,8 @@ export function ThingsEmptyState({
   return (
     <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8">
       <div className="flex flex-col items-center text-center gap-5">
-        <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-          <Sparkles size={22} className="text-blue-400" />
+        <div className="w-12 h-12 rounded-full bg-brett-gold/10 border border-brett-gold/20 flex items-center justify-center">
+          <Sparkles size={22} className="text-brett-gold" />
         </div>
         <div>
           <h3 className="text-white font-semibold text-base mb-2">
@@ -102,7 +102,7 @@ export function ThingsEmptyState({
 
         <div className="flex items-center gap-3">
           {[
-            { icon: <Zap size={14} />, label: "Tasks", color: "text-blue-400 bg-blue-500/10 border-blue-500/15" },
+            { icon: <Zap size={14} />, label: "Tasks", color: "text-brett-gold bg-brett-gold/10 border-brett-gold/15" },
             { icon: <BookOpen size={14} />, label: "Content", color: "text-amber-400 bg-amber-500/10 border-amber-500/15" },
           ].map(({ icon, label, color }) => (
             <div
@@ -162,7 +162,7 @@ function InlineTaskAdd({
       <button
         onClick={handleSubmit}
         disabled={!title.trim()}
-        className="px-2.5 py-0.5 rounded-md bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+        className="px-2.5 py-0.5 rounded-md bg-brett-gold text-white text-xs font-medium hover:bg-brett-gold-dark disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
       >
         Add
       </button>

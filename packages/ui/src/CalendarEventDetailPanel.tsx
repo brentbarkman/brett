@@ -254,7 +254,7 @@ export function CalendarEventDetailPanel({
                   href={detail.meetingLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400 hover:bg-blue-500/20 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-brett-gold/10 border border-brett-gold/20 text-xs text-brett-gold hover:bg-brett-gold/20 transition-colors"
                 >
                   <Video size={12} />
                   Join meeting
@@ -262,7 +262,7 @@ export function CalendarEventDetailPanel({
               )}
               {/* Recurrence badge */}
               {detail.recurrence && (
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/20">
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-brett-gold/20 text-brett-gold border border-brett-gold/20">
                   <RefreshCw size={10} />
                   {detail.recurrence}
                 </span>
@@ -337,7 +337,7 @@ export function CalendarEventDetailPanel({
               </span>
               {detail.description && (
                 <div
-                  className="text-sm text-white/80 leading-relaxed mb-3 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-blue-300"
+                  className="text-sm text-white/80 leading-relaxed mb-3 [&_a]:text-brett-gold [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-brett-gold/80"
                   dangerouslySetInnerHTML={{
                     __html: DOMPurify.sanitize(detail.description, {
                       ALLOWED_TAGS: ["p", "br", "b", "i", "em", "strong", "a", "ul", "ol", "li", "h1", "h2", "h3", "blockquote", "pre", "code"],
@@ -547,7 +547,7 @@ export function CalendarEventDetailPanel({
               {!showAllAttendees && hiddenCount > 0 && (
                 <button
                   onClick={() => setShowAllAttendees(true)}
-                  className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  className="mt-2 text-xs text-brett-gold hover:text-brett-gold/80 transition-colors"
                 >
                   +{hiddenCount} more
                 </button>
@@ -555,7 +555,7 @@ export function CalendarEventDetailPanel({
               {showAllAttendees && hiddenCount > 0 && (
                 <button
                   onClick={() => setShowAllAttendees(false)}
-                  className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  className="mt-2 text-xs text-brett-gold hover:text-brett-gold/80 transition-colors"
                 >
                   Show less
                 </button>

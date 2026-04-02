@@ -229,7 +229,7 @@ export function TriagePopup({
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
         <div
           className={`flex items-center gap-1.5 text-[11px] font-medium ${
-            currentStep === "list" ? "text-blue-400" : "text-white/40"
+            currentStep === "list" ? "text-brett-gold" : "text-white/40"
           }`}
         >
           <List size={12} />
@@ -238,7 +238,7 @@ export function TriagePopup({
         <span className="text-white/20 text-[10px]">+</span>
         <div
           className={`flex items-center gap-1.5 text-[11px] font-medium ${
-            currentStep === "date" ? "text-blue-400" : "text-white/40"
+            currentStep === "date" ? "text-brett-gold" : "text-white/40"
           }`}
         >
           <Calendar size={12} />
@@ -273,7 +273,7 @@ export function TriagePopup({
                 onClick={() => selectList(list.id)}
                 className={`
                   w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors
-                  ${i === focusedIndex ? "bg-blue-500/15 text-white" : "text-white/70 hover:bg-white/5"}
+                  ${i === focusedIndex ? "bg-brett-gold/15 text-white" : "text-white/70 hover:bg-white/5"}
                 `}
               >
                 <div className={`w-2 h-2 rounded-full ${list.colorClass}`} />
@@ -303,10 +303,10 @@ export function TriagePopup({
               onClick={() => selectDate(preset.preset)}
               className={`
                 w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors
-                ${i === focusedIndex ? "bg-blue-500/15 text-white" : "text-white/70 hover:bg-white/5"}
+                ${i === focusedIndex ? "bg-brett-gold/15 text-white" : "text-white/70 hover:bg-white/5"}
               `}
             >
-              <span className="w-4 text-center text-[11px] font-mono text-blue-400/70">
+              <span className="w-4 text-center text-[11px] font-mono text-brett-gold/70">
                 {preset.key}
               </span>
               <span className="text-sm">{preset.label}</span>

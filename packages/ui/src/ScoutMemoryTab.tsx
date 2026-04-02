@@ -32,9 +32,9 @@ const TYPE_CONFIG: Record<
     label: "Judgment",
     sectionTitle: "Judgment & Preferences",
     icon: <Scale size={14} />,
-    badgeBg: "bg-blue-500/15",
-    badgeText: "text-blue-400",
-    barColor: "bg-blue-400/40",
+    badgeBg: "bg-brett-gold/15",
+    badgeText: "text-brett-gold",
+    barColor: "bg-brett-gold/40",
   },
   pattern: {
     label: "Pattern",

@@ -16,7 +16,7 @@ export function WeatherPill({ current, isActive, onClick }: WeatherPillProps) {
       }}
       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-colors flex-shrink-0 ${
         isActive
-          ? "bg-blue-500/10 border border-blue-500/30"
+          ? "bg-brett-gold/10 border border-brett-gold/30"
           : "bg-white/5 border border-white/10 hover:bg-white/10"
       }`}
       title="Weather"

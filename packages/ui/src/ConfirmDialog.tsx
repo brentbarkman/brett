@@ -78,7 +78,7 @@ export function ConfirmDialog({
             className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               variant === "danger"
                 ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300 border border-red-500/20"
-                : "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 hover:text-blue-300 border border-blue-500/20"
+                : "bg-brett-gold/20 text-brett-gold hover:bg-brett-gold/30 hover:text-brett-gold/80 border border-brett-gold/20"
             }`}
           >
             {confirmLabel}

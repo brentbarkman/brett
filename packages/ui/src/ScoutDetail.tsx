@@ -216,7 +216,7 @@ export function ScoutDetail({
                     <StatusBadge status={scout.status} />
                   </div>
                   {scout.statusLine && (
-                    <p className="text-[13px] font-medium text-blue-400/70">
+                    <p className="text-[13px] font-medium text-brett-gold/70">
                       {scout.statusLine}
                     </p>
                   )}
@@ -328,7 +328,7 @@ export function ScoutDetail({
                   data-edit-goal
                   defaultValue={scout.goal}
                   rows={4}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white/90 placeholder-white/20 focus:outline-none focus:border-blue-500/30 resize-none leading-relaxed"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white/90 placeholder-white/20 focus:outline-none focus:border-brett-gold/30 resize-none leading-relaxed"
                   autoFocus
                 />
               ) : (
@@ -420,14 +420,14 @@ export function ScoutDetail({
                       placeholder="Name"
                       value={newSourceName}
                       onChange={(e) => setNewSourceName(e.target.value)}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-brett-gold/30"
                     />
                     <input
                       type="text"
                       placeholder="URL (e.g. https://pubmed.ncbi.nlm.nih.gov)"
                       value={newSourceUrl}
                       onChange={(e) => setNewSourceUrl(e.target.value)}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-blue-500/30"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-brett-gold/30"
                     />
                     <button
                       onClick={() => {
@@ -438,7 +438,7 @@ export function ScoutDetail({
                         }
                       }}
                       disabled={!newSourceName.trim() || !newSourceUrl.trim()}
-                      className="px-2 py-1 rounded-lg bg-blue-600/60 hover:bg-blue-500 text-white text-[10px] font-semibold transition-colors disabled:opacity-30"
+                      className="px-2 py-1 rounded-lg bg-brett-gold-dark/60 hover:bg-brett-gold text-white text-[10px] font-semibold transition-colors disabled:opacity-30"
                     >
                       <Plus size={12} />
                     </button>
@@ -453,7 +453,7 @@ export function ScoutDetail({
                           href={source.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-[11px] text-blue-400 hover:text-blue-300 hover:border-blue-500/20 transition-all"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-[11px] text-brett-gold hover:text-brett-gold/80 hover:border-brett-gold/20 transition-all"
                         >
                           {source.name}
                           <ExternalLink size={9} className="opacity-40" />
@@ -537,7 +537,7 @@ export function ScoutDetail({
                     {humanizeCadence(scout.cadenceCurrentIntervalHours)}
                   </p>
                   {scout.cadenceReason && scout.cadenceCurrentIntervalHours !== scout.cadenceIntervalHours && (
-                    <p className="text-xs text-blue-400/70">
+                    <p className="text-xs text-brett-gold/70">
                       Adjusted by Brett: {scout.cadenceReason}
                     </p>
                   )}
@@ -687,7 +687,7 @@ function EditableCard({
     <div
       className={`group rounded-xl border p-4 space-y-2.5 transition-all duration-200 ${
         isEditing
-          ? "bg-white/5 border-blue-500/20 shadow-[0_0_16px_rgba(59,130,246,0.05)]"
+          ? "bg-white/5 border-brett-gold/20 shadow-[0_0_16px_rgba(232,185,49,0.05)]"
           : "bg-white/5 border-white/10"
       }`}
     >
@@ -700,7 +700,7 @@ function EditableCard({
             {onSave && (
               <button
                 onClick={onSave}
-                className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600/80 hover:bg-blue-500 text-white text-[10px] font-semibold transition-colors"
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-brett-gold-dark/80 hover:bg-brett-gold text-white text-[10px] font-semibold transition-colors"
               >
                 <Check size={10} />
                 Save
@@ -750,16 +750,16 @@ function SensitivityPicker({
           onClick={() => onChange(opt.value)}
           className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-all duration-150 ${
             current === opt.value
-              ? "bg-blue-500/10 border border-blue-500/20"
+              ? "bg-brett-gold/10 border border-brett-gold/20"
               : "bg-white/5 border border-transparent hover:bg-white/10"
           }`}
         >
           <div
             className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-              current === opt.value ? "border-blue-400" : "border-white/20"
+              current === opt.value ? "border-brett-gold" : "border-white/20"
             }`}
           >
-            {current === opt.value && <div className="w-2 h-2 rounded-full bg-blue-400" />}
+            {current === opt.value && <div className="w-2 h-2 rounded-full bg-brett-gold" />}
           </div>
           <div>
             <div
@@ -797,16 +797,16 @@ function AnalysisTierPicker({
           onClick={() => onChange(opt.value)}
           className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-all duration-150 ${
             current === opt.value
-              ? "bg-blue-500/10 border border-blue-500/20"
+              ? "bg-brett-gold/10 border border-brett-gold/20"
               : "bg-white/5 border border-transparent hover:bg-white/10"
           }`}
         >
           <div
             className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-              current === opt.value ? "border-blue-400" : "border-white/20"
+              current === opt.value ? "border-brett-gold" : "border-white/20"
             }`}
           >
-            {current === opt.value && <div className="w-2 h-2 rounded-full bg-blue-400" />}
+            {current === opt.value && <div className="w-2 h-2 rounded-full bg-brett-gold" />}
           </div>
           <div className="flex-1">
             <div className={`text-[12px] font-semibold ${current === opt.value ? "text-white" : "text-white/50"}`}>
@@ -851,7 +851,7 @@ function CadencePicker({
             onClick={() => onChange(preset.hours)}
             className={`px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
               intervalHours === preset.hours
-                ? "bg-blue-500/15 text-blue-300 border border-blue-500/25"
+                ? "bg-brett-gold/15 text-brett-gold/80 border border-brett-gold/25"
                 : "bg-white/5 text-white/30 border border-transparent hover:bg-white/10"
             }`}
           >
@@ -910,7 +910,7 @@ function BudgetEditor({
             onClick={() => onChange(p)}
             className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
               total === p
-                ? "bg-blue-500/15 text-blue-300 border border-blue-500/25"
+                ? "bg-brett-gold/15 text-brett-gold/80 border border-brett-gold/25"
                 : "bg-white/5 text-white/30 border border-transparent hover:bg-white/10"
             }`}
           >
@@ -921,7 +921,7 @@ function BudgetEditor({
 
       <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
+          className="h-full rounded-full bg-gradient-to-r from-brett-gold to-brett-gold transition-all duration-300"
           style={{ width: `${Math.round((used / total) * 100)}%` }}
         />
       </div>
@@ -939,7 +939,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       ) : entry.status === "failed" ? (
         <XCircle size={14} className="text-red-400" />
       ) : entry.status === "running" ? (
-        <Loader2 size={14} className="text-blue-400 animate-spin" />
+        <Loader2 size={14} className="text-brett-gold animate-spin" />
       ) : (
         <SkipForward size={14} className="text-white/30" />
       );
@@ -1125,9 +1125,9 @@ function FindingCard({
     },
     article: {
       icon: <FileText size={14} />,
-      bg: "bg-blue-500/15",
-      color: "text-blue-400",
-      border: "border-blue-500/10",
+      bg: "bg-brett-gold/15",
+      color: "text-brett-gold",
+      border: "border-brett-gold/10",
     },
     task: {
       icon: <CircleCheck size={14} />,
@@ -1172,7 +1172,7 @@ function FindingCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors inline-flex items-center gap-0.5"
+              className="text-xs text-brett-gold/70 hover:text-brett-gold transition-colors inline-flex items-center gap-0.5"
             >
               {finding.sourceName}
               <ExternalLink size={9} className="opacity-60" />

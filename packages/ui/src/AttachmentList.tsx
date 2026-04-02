@@ -163,7 +163,7 @@ export function AttachmentList({
         onClick={() => fileInputRef.current?.click()}
         className={`w-full flex items-center justify-center gap-2 p-3 rounded-lg border border-dashed transition-colors text-xs ${
           isDragging
-            ? "border-blue-500/50 bg-blue-500/10 text-blue-400"
+            ? "border-brett-gold/50 bg-brett-gold/10 text-brett-gold"
             : "border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60"
         }`}
       >

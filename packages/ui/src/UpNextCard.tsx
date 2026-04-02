@@ -30,8 +30,8 @@ export function UpNextCard({ event, onClick }: UpNextCardProps) {
 
       {event.brettObservation && (
         <div className="flex items-start gap-2 mt-3">
-          <div className="w-1 h-full min-h-[20px] bg-blue-500/30 rounded-full" />
-          <p className="text-sm italic text-blue-400/80 leading-snug">
+          <div className="w-1 h-full min-h-[20px] bg-brett-gold/30 rounded-full" />
+          <p className="text-sm italic text-brett-gold/80 leading-snug">
             {event.brettObservation}
           </p>
         </div>

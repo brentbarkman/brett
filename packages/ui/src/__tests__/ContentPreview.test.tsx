@@ -62,7 +62,7 @@ describe("ContentPreview article typography", () => {
     expect(link!.getAttribute("target")).toBe("_blank");
     expect(link!.getAttribute("rel")).toBe("noopener noreferrer");
     const articleDiv = link!.parentElement!.parentElement!;
-    expect(articleDiv.className).toContain("[&_a]:text-blue-400");
+    expect(articleDiv.className).toContain("[&_a]:text-brett-gold");
   });
 
   it("strips video and source elements (no benefit from Readability content)", () => {

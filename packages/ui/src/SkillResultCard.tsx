@@ -49,7 +49,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
             >
               <div
                 className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  item.status === "done" ? "bg-green-400/60" : "bg-blue-400/40"
+                  item.status === "done" ? "bg-green-400/60" : "bg-brett-gold/40"
                 }`}
               />
               <span className={`text-sm truncate ${onItemClick ? "text-white/70 hover:text-white/90" : "text-white/70"}`}>
@@ -87,7 +87,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
                   i > 0 ? "border-t border-white/5" : ""
                 }`}
               >
-                <span className="text-[11px] font-mono text-blue-400/60 w-14 flex-shrink-0">
+                <span className="text-[11px] font-mono text-brett-gold/60 w-14 flex-shrink-0">
                   {time}
                 </span>
                 <span className="text-sm text-white/70 truncate">

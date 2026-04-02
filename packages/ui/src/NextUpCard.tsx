@@ -91,7 +91,7 @@ function CompactCard({
                 onClick={(e) => e.stopPropagation()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-400/70 hover:text-blue-400 transition-colors"
+                className="text-brett-gold/70 hover:text-brett-gold transition-colors"
               >
                 {isNow ? "Rejoin meeting" : "Join meeting link"}
               </a>
@@ -140,7 +140,7 @@ function ExpandedCard({
             onClick={(e) => e.stopPropagation()}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-400/80 hover:text-blue-400 transition-colors flex items-center gap-1"
+            className="text-xs text-brett-gold/80 hover:text-brett-gold transition-colors flex items-center gap-1"
           >
             Join Meeting
             <ExternalLink size={12} />

@@ -138,7 +138,7 @@ describe("SimpleMarkdown", () => {
 
   it("renders brett-item: as styled span without onItemClick", () => {
     const { container } = render(<SimpleMarkdown content="[Task](brett-item:abc123)" />);
-    const span = container.querySelector("span.text-blue-400");
+    const span = container.querySelector("span.text-brett-gold");
     expect(span).not.toBeNull();
     expect(span!.textContent).toBe("Task");
   });
@@ -163,7 +163,7 @@ describe("SimpleMarkdown", () => {
     const { container } = render(
       <SimpleMarkdown content="[Meeting](brett-event:abc123)" />
     );
-    const span = container.querySelector("span.text-blue-400");
+    const span = container.querySelector("span.text-brett-gold");
     expect(span).not.toBeNull();
     expect(span!.textContent).toBe("Meeting");
     // No raw markdown visible

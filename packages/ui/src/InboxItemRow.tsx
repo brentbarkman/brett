@@ -44,7 +44,7 @@ export function InboxItemRow({
   });
 
   const isTask = thing.type === "task";
-  const iconColor = isTask ? "text-blue-400" : "text-amber-400";
+  const iconColor = isTask ? "text-brett-gold" : "text-amber-400";
   const Icon = isTask ? Zap : (() => {
     switch (thing.contentType) {
       case "tweet": return MessageSquare;
@@ -95,7 +95,7 @@ export function InboxItemRow({
         transition-colors duration-200 outline-none
         ${isDragging ? "opacity-30" : ""}
         ${isFocused
-          ? "bg-blue-500/15 border border-blue-500/30"
+          ? "bg-brett-gold/15 border border-brett-gold/30"
           : isSelected
             ? "bg-white/10 border border-white/10"
             : "border border-transparent hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg"

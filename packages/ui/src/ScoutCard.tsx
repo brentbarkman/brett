@@ -20,7 +20,7 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
         className={`
           flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-200 text-left
           ${isSelected
-            ? "bg-white/10 border border-blue-500/25 shadow-[0_0_12px_rgba(59,130,246,0.06)]"
+            ? "bg-white/10 border border-brett-gold/25 shadow-[0_0_12px_rgba(232,185,49,0.06)]"
             : "bg-white/5 border border-transparent hover:bg-white/10"}
         `}
       >
@@ -85,7 +85,7 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
           <span className="text-[15px] font-semibold text-white truncate">{scout.name}</span>
           <StatusBadge status={scout.status} />
           {isNew && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-500/20 text-[10px] font-semibold text-blue-400 border border-blue-500/20 animate-pulse">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-brett-gold/20 text-[10px] font-semibold text-brett-gold border border-brett-gold/20 animate-pulse">
               NEW
             </span>
           )}
@@ -96,7 +96,7 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
           <span className="text-white/20">·</span>
           <span>{scout.findingsCount} findings</span>
           <span className="text-white/20">·</span>
-          <span className={scout.cadenceCurrentIntervalHours < scout.cadenceIntervalHours ? "text-blue-400/70" : ""}>
+          <span className={scout.cadenceCurrentIntervalHours < scout.cadenceIntervalHours ? "text-brett-gold/70" : ""}>
             {scout.cadenceCurrentIntervalHours < scout.cadenceIntervalHours
               ? `${humanizeCadence(scout.cadenceCurrentIntervalHours)} (elevated)`
               : humanizeCadence(scout.cadenceIntervalHours)}

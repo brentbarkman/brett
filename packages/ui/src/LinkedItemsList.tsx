@@ -11,7 +11,7 @@ interface LinkedItemsListProps {
 }
 
 function getTypeIcon(type: string) {
-  if (type === "task") return <Zap size={14} className="text-blue-400" />;
+  if (type === "task") return <Zap size={14} className="text-brett-gold" />;
   return <BookOpen size={14} className="text-amber-400" />;
 }
 
@@ -87,7 +87,7 @@ export function LinkedItemsList({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search items\u2026"
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-blue-500/20"
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-brett-gold/20"
           />
           {/* Results dropdown */}
           {(results.length > 0 || isSearching) && (

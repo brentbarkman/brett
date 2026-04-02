@@ -416,8 +416,8 @@ export function InboxView({
         {/* Empty state */}
         {isEmpty && (
           <div className="flex flex-col items-center justify-center py-16 gap-4">
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-              <Inbox size={22} className="text-blue-400" />
+            <div className="w-12 h-12 rounded-full bg-brett-gold/10 border border-brett-gold/20 flex items-center justify-center">
+              <Inbox size={22} className="text-brett-gold" />
             </div>
             <div className="text-center">
               <h3 className="text-white font-semibold text-base mb-1">Inbox zero</h3>

@@ -163,13 +163,13 @@ function renderInline(
           onItemClick ? (
             <button
               key={key++}
-              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              className="text-brett-gold hover:text-brett-gold/80 underline underline-offset-2 transition-colors"
               onClick={() => onItemClick(extra!)}
             >
               {content}
             </button>
           ) : (
-            <span key={key++} className="text-blue-400">{content}</span>
+            <span key={key++} className="text-brett-gold">{content}</span>
           )
         );
         break;
@@ -178,13 +178,13 @@ function renderInline(
           onEventClick ? (
             <button
               key={key++}
-              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              className="text-brett-gold hover:text-brett-gold/80 underline underline-offset-2 transition-colors"
               onClick={() => onEventClick(extra!)}
             >
               {content}
             </button>
           ) : (
-            <span key={key++} className="text-blue-400">{content}</span>
+            <span key={key++} className="text-brett-gold">{content}</span>
           )
         );
         break;
@@ -193,20 +193,20 @@ function renderInline(
           onNavigate ? (
             <button
               key={key++}
-              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              className="text-brett-gold hover:text-brett-gold/80 underline underline-offset-2 transition-colors"
               onClick={() => onNavigate(extra!)}
             >
               {content}
             </button>
           ) : (
-            <span key={key++} className="text-blue-400">{content}</span>
+            <span key={key++} className="text-brett-gold">{content}</span>
           )
         );
         break;
       case "link":
         // Generic link — strip markdown syntax, render text as styled span
         // Don't make arbitrary URLs clickable (security)
-        parts.push(<span key={key++} className="text-blue-400">{content}</span>);
+        parts.push(<span key={key++} className="text-brett-gold">{content}</span>);
         break;
     }
 
