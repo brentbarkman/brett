@@ -57,9 +57,9 @@ export function BrettMark({ size = 16, className = "", thinking = false }: Brett
         <circle cx="10" cy="14" r="9" fill="none" stroke="#E8B931" strokeWidth="1.5" opacity="0.25" />
       )}
       <line
-        x1="19"
+        x1="22"
         y1="14"
-        x2="44"
+        x2="46"
         y2="14"
         stroke="#4682C3"
         strokeWidth={strokeWidth}

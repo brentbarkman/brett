@@ -187,7 +187,7 @@ export function ContentDetailPanel({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => onNavigateToScout?.(detail.scoutId!)}
-                className="flex items-center gap-1.5 text-xs text-brett-gold/60 hover:text-brett-gold cursor-pointer transition-colors"
+                className="flex items-center gap-1.5 text-xs text-brett-cerulean/60 hover:text-brett-cerulean cursor-pointer transition-colors"
               >
                 <Radar className="w-3 h-3" />
                 <span>from {detail.scoutName}</span>
