@@ -170,7 +170,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
           (thing.source === "Granola" && thing.meetingNoteTitle) ||
           (thing.source === "scout" && thing.scoutName)
         ) && (
-          <span className="text-[10px] text-brett-cerulean/50 truncate block mt-0.5">
+          <span className="text-[10px] text-white/50 truncate block mt-0.5">
             from {thing.source === "scout" ? thing.scoutName : thing.meetingNoteTitle}
           </span>
         )}
