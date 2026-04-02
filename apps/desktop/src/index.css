@@ -1,3 +1,12 @@
+@import "@carrot-kpi/switzer-font/400.css";
+@import "@carrot-kpi/switzer-font/400-italic.css";
+@import "@carrot-kpi/switzer-font/500.css";
+@import "@carrot-kpi/switzer-font/500-italic.css";
+@import "@carrot-kpi/switzer-font/600.css";
+@import "@carrot-kpi/switzer-font/600-italic.css";
+@import "@carrot-kpi/switzer-font/700.css";
+@import "@carrot-kpi/switzer-font/700-italic.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

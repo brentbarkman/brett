@@ -49,6 +49,17 @@ module.exports = {
           DEFAULT: "var(--card)",
           foreground: "var(--card-foreground)",
         },
+        brett: {
+          gold: '#E8B931',
+          'gold-dark': '#D4A62B',
+          cerulean: '#4682C3',
+          teal: '#48BBA0',
+          red: '#E6554B',
+          bg: '#0C0F15',
+        },
+      },
+      fontFamily: {
+        sans: ['"Switzer"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",

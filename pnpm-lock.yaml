@@ -206,6 +206,9 @@ importers:
       '@brett/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      '@carrot-kpi/switzer-font':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@tanstack/react-query':
         specifier: ^5.60.0
         version: 5.90.21(react@18.2.0)
@@ -2774,7 +2777,7 @@ packages:
       '@better-fetch/fetch': 1.1.21
       '@simplewebauthn/browser': 13.3.0
       '@simplewebauthn/server': 13.3.0
-      better-auth: 1.5.4(@prisma/client@6.19.2)(drizzle-orm@0.45.1)(mongodb@7.1.0)(prisma@6.19.2)(react-dom@18.3.1)(react@18.2.0)
+      better-auth: 1.5.4(@prisma/client@6.19.2)(better-sqlite3@12.8.0)(drizzle-orm@0.45.1)(mongodb@7.1.0)(prisma@6.19.2)(react-dom@18.3.1)(react@18.2.0)(vitest@3.2.4)
       better-call: 1.3.2(zod@4.3.6)
       nanostores: 1.1.1
       zod: 4.3.6
@@ -2817,6 +2820,10 @@ packages:
     hasBin: true
     dependencies:
       css-tree: 3.2.1
+
+  /@carrot-kpi/switzer-font@0.1.0:
+    resolution: {integrity: sha512-BMDeIYgXPTRGYc67EnUJiZqRedHUvQkSFBt7yFx0LxgdDjcW/Xb//KB+4NS0KRM1iiWTaJarfIz3wfHrTcbrGQ==}
+    dev: false
 
   /@csstools/color-helpers@6.0.2:
     resolution: {integrity: sha512-LMGQLS9EuADloEFkcTBR3BwV/CGHV7zyDxVRtVDTwdI2Ca4it0CCVTT9wCkxSgokjE5Ho41hEPgb8OEUwoXr6Q==}
