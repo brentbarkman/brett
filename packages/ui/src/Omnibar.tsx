@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Send, Search, Plus, X, Square, Check, Radar } from "lucide-react";
+import { Send, Search, Plus, X, Square, Check, Radar, MessageSquare } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import { useClickOutside } from "./useClickOutside";
 import { SkillResultCard } from "./SkillResultCard";
@@ -221,7 +221,7 @@ export function Omnibar({
         suggestions.push({
           id: "ask",
           label: `Ask Brett: "${input}"`,
-          icon: <BrettMark size={14} />,
+          icon: <MessageSquare size={14} className="text-white/60" />,
           action: "ask",
         });
       }

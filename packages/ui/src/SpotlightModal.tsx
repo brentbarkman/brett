@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from "react";
-import { Send, Square, X, Search, Plus, Check, Radar } from "lucide-react";
+import { Send, Square, X, Search, Plus, Check, Radar, MessageSquare } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
@@ -195,7 +195,7 @@ export function SpotlightModal({
         suggestions.push({
           id: "ask",
           label: `Ask Brett: "${input}"`,
-          icon: <BrettMark size={14} />,
+          icon: <MessageSquare size={14} className="text-white/60" />,
           action: "ask",
         });
       }
