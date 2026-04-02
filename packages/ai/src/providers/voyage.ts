@@ -5,6 +5,14 @@ interface VoyageEmbedResponse {
   usage: { total_tokens: number };
 }
 
+// Shared embedding space: large for doc indexing (quality), lite for queries (cost)
+const MODEL_FOR_INPUT_TYPE = {
+  document: "voyage-4-large",
+  query: "voyage-4-lite",
+} as const;
+
+const DEFAULT_MODEL = "voyage-4-large";
+
 export class VoyageEmbeddingProvider implements EmbeddingProvider {
   readonly dimensions = 1024;
   private apiKey: string;
@@ -27,9 +35,12 @@ export class VoyageEmbeddingProvider implements EmbeddingProvider {
     input: string[],
     inputType?: "query" | "document",
   ): Promise<VoyageEmbedResponse> {
+    const model = inputType ? MODEL_FOR_INPUT_TYPE[inputType] : DEFAULT_MODEL;
+
     const body: Record<string, unknown> = {
-      model: "voyage-3-large",
+      model,
       input,
+      output_dimension: 1024,
     };
     if (inputType) body.input_type = inputType;
 

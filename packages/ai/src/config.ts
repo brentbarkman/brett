@@ -16,7 +16,8 @@ export const AI_CONFIG = {
   },
   embedding: {
     provider: "voyage" as const,
-    model: "voyage-3-large" as const,
+    documentModel: "voyage-4-large" as const,
+    queryModel: "voyage-4-lite" as const,
     dimensions: 1024,
     maxChunkTokens: 500,
     chunkOverlapTokens: 50,
