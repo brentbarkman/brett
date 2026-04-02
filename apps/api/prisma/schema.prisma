@@ -296,6 +296,7 @@ model CalendarEvent {
   rawGoogleEvent    Json?
   brettObservation      String?   @db.Text
   brettObservationAt    DateTime?
+  brettObservationHash  String?
   syncedAt          DateTime  @default(now())
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
