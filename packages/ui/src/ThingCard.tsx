@@ -72,7 +72,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
   const getUrgencyColor = () => {
     switch (thing.urgency) {
       case "overdue":
-        return "bg-red-500/20 text-red-400 border border-red-500/20";
+        return "bg-brett-red/20 text-brett-red border border-brett-red/20 font-semibold";
       case "today":
         return "bg-amber-500/20 text-amber-400 border border-amber-500/20";
       default:
