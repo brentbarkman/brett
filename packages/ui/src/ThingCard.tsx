@@ -148,34 +148,35 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
         )}
       </button>
 
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <h4
-          className={`text-sm font-medium truncate transition-all duration-300 ${
-            thing.isCompleted || completing
-              ? "line-through text-white/40"
-              : "text-white"
-          }`}
-        >
-          {thing.title}
-        </h4>
-        {thing.stalenessDays && !thing.isCompleted && !completing && (
-          <StaleTooltip days={thing.stalenessDays}>
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60 flex-shrink-0" />
-          </StaleTooltip>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <h4
+            className={`text-sm font-medium truncate transition-all duration-300 ${
+              thing.isCompleted || completing
+                ? "line-through text-white/40"
+                : "text-white"
+            }`}
+          >
+            {thing.title}
+          </h4>
+          {thing.stalenessDays && !thing.isCompleted && !completing && (
+            <StaleTooltip days={thing.stalenessDays}>
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60 flex-shrink-0" />
+            </StaleTooltip>
+          )}
+        </div>
+        {/* Provenance subtitle — shown below title when from a scout or meeting */}
+        {!thing.isCompleted && !completing && (
+          (thing.source === "Granola" && thing.meetingNoteTitle) ||
+          (thing.source === "scout" && thing.scoutName)
+        ) && (
+          <span className="text-[10px] text-brett-cerulean/50 truncate block mt-0.5">
+            from {thing.source === "scout" ? thing.scoutName : thing.meetingNoteTitle}
+          </span>
         )}
       </div>
 
       <div className="flex-shrink-0 flex items-center gap-2">
-        {thing.source === "Granola" && thing.meetingNoteTitle && (
-          <span className="text-[10px] text-white/50">
-            from {thing.meetingNoteTitle}
-          </span>
-        )}
-        {thing.source === "scout" && thing.scoutName && (
-          <span className="text-[10px] text-white/50">
-            from {thing.scoutName}
-          </span>
-        )}
         {thing.list && thing.list !== "Inbox" && (
           <span className="text-xs text-white/50 truncate max-w-[100px]">{thing.list}</span>
         )}
