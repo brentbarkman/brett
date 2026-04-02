@@ -4,7 +4,7 @@ import { decryptToken } from "./encryption.js";
 import { getSearchProvider, classifySourceType } from "./search-providers/index.js";
 import { runExtraction } from "./content-extractor.js";
 import type { SearchResult } from "./search-providers/types.js";
-import { getProvider, resolveModel, enqueueEmbed } from "@brett/ai";
+import { getProvider, resolveModel, enqueueEmbed, AI_CONFIG } from "@brett/ai";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, ScoutSource, FindingType } from "@brett/types";
 import { humanizeCadence, detectContentType } from "@brett/utils";
@@ -853,7 +853,7 @@ export async function runScout(scoutId: string): Promise<void> {
             LIMIT 1
           `;
 
-          if (!dupes.length || dupes[0].similarity < 0.88) {
+          if (!dupes.length || dupes[0].similarity < AI_CONFIG.embedding.scoutDedupThreshold) {
             semanticallyUnique.push(finding);
           } else {
             console.log(`[scout-runner] Semantic dedup: skipping "${finding.title}" (similarity: ${dupes[0].similarity.toFixed(3)})`);

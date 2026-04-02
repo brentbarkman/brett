@@ -25,7 +25,7 @@ export const recallMemorySkill: Skill = {
       ctx.userId,
       query,
       null, // Search all entity types
-      null, // No embedding provider from skill context — keyword search only
+      ctx.embeddingProvider ?? null,
       ctx.prisma,
       5,
     );

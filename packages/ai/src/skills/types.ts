@@ -1,11 +1,13 @@
 import type { ModelTier, DisplayHint } from "@brett/types";
 import type { PrismaClient } from "@prisma/client";
-import type { AIProvider } from "../providers/types.js";
+import type { AIProvider, EmbeddingProvider } from "../providers/types.js";
 
 export interface SkillContext {
   userId: string;
   prisma: PrismaClient;
   provider?: AIProvider;
+  /** Optional embedding provider for semantic search in skills */
+  embeddingProvider?: EmbeddingProvider | null;
   /** Fire-and-forget callback for content items that need extraction */
   onContentCreated?: (itemId: string, sourceUrl: string) => void;
 }

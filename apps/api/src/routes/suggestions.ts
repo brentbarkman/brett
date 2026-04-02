@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { findSimilarItems, classifyMatches, suggestLists } from "@brett/ai";
+import { findSimilarItems, classifyMatches, suggestLists, AI_CONFIG } from "@brett/ai";
 
 const suggestions = new Hono<AuthEnv>();
 suggestions.use("*", authMiddleware);
@@ -98,7 +98,7 @@ suggestions.get("/events/:id/related-items", async (c) => {
       targetEntityType: "item",
     });
 
-    const filtered = matches.filter((m) => m.similarity >= 0.70);
+    const filtered = matches.filter((m) => m.similarity >= AI_CONFIG.embedding.crossTypeThreshold);
 
     // Enrich with item details
     const entityIds = filtered.map((m) => m.entityId);
@@ -207,7 +207,7 @@ suggestions.get("/events/:id/meeting-history", async (c) => {
         targetEntityType: "item",
       });
 
-      const filtered = matches.filter((m) => m.similarity >= 0.70);
+      const filtered = matches.filter((m) => m.similarity >= AI_CONFIG.embedding.crossTypeThreshold);
       const entityIds = filtered.map((m) => m.entityId);
       const items = entityIds.length > 0
         ? await prisma.item.findMany({

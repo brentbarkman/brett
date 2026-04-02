@@ -167,6 +167,7 @@ brettChat.post(
     const { stream } = buildStream(
       {
         input, provider, providerName, prisma, registry, sessionId: session.id,
+        embeddingProvider,
         onContentCreated: (itemId, sourceUrl) => {
           runExtraction(itemId, sourceUrl, user.id).catch((err) =>
             console.error(`[brett-chat] Content extraction failed for ${itemId}:`, err));
@@ -274,6 +275,7 @@ brettChat.post(
     const { stream } = buildStream(
       {
         input, provider, providerName, prisma, registry, sessionId: session.id,
+        embeddingProvider,
         onContentCreated: (itemId, sourceUrl) => {
           runExtraction(itemId, sourceUrl, user.id).catch((err) =>
             console.error(`[brett-chat] Content extraction failed for ${itemId}:`, err));

@@ -142,5 +142,5 @@ export function assembleConversationText(messages: ConversationMessage[]): strin
     .map((m) => `${m.role}: ${m.content}`)
     .join("\n\n");
 
-  return [joined.slice(0, maxEmbeddingTextLength)];
+  return [joined.slice(-maxEmbeddingTextLength)];
 }

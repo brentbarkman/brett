@@ -243,26 +243,43 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
       `;
 
       const { autoLinks } = classifyMatches(matches);
-      for (const match of autoLinks) {
-        const existing = await prisma.itemLink.findFirst({
+      if (autoLinks.length > 0) {
+        const matchIds = autoLinks.map((m) => m.entityId);
+
+        // Batch: find all existing links involving these IDs
+        const existingLinks = await prisma.itemLink.findMany({
           where: {
             OR: [
-              { fromItemId: entityId, toItemId: match.entityId },
-              { fromItemId: match.entityId, toItemId: entityId },
+              { fromItemId: entityId, toItemId: { in: matchIds } },
+              { fromItemId: { in: matchIds }, toItemId: entityId },
             ],
           },
+          select: { fromItemId: true, toItemId: true },
         });
-        if (!existing) {
-          const target = await prisma.item.findFirst({
-            where: { id: match.entityId, userId },
-            select: { type: true },
-          });
-          if (target) {
+        const linkedIds = new Set<string>();
+        for (const link of existingLinks) {
+          linkedIds.add(link.fromItemId === entityId ? link.toItemId : link.fromItemId);
+        }
+
+        // Batch: load all target item types
+        const unlinkedIds = matchIds.filter((id) => !linkedIds.has(id));
+        const targets = unlinkedIds.length > 0
+          ? await prisma.item.findMany({
+              where: { id: { in: unlinkedIds }, userId },
+              select: { id: true, type: true },
+            })
+          : [];
+        const targetMap = new Map(targets.map((t: { id: string; type: string }) => [t.id, t.type]));
+
+        // Create missing links
+        for (const id of unlinkedIds) {
+          const itemType = targetMap.get(id);
+          if (itemType) {
             await prisma.itemLink.create({
               data: {
                 fromItemId: entityId,
-                toItemId: match.entityId,
-                toItemType: target.type,
+                toItemId: id,
+                toItemType: itemType,
                 source: "embedding",
                 userId,
               },

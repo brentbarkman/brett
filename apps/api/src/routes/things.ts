@@ -383,6 +383,11 @@ things.post("/", async (c) => {
               similarity: d.similarity,
             }));
         }
+
+        // Content items may have multiple chunks — queue full pipeline to embed remaining chunks
+        if (data.type === "content") {
+          enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id });
+        }
       }
     } else {
       // No embedding provider — fall back to async queue

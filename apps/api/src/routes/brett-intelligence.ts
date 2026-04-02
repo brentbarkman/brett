@@ -172,7 +172,7 @@ brettIntelligence.post(
     };
 
     const { stream } = buildStream(
-      { input, provider, providerName, prisma, registry, sessionId: session.id },
+      { input, provider, providerName, prisma, registry, sessionId: session.id, embeddingProvider },
       session.id,
     );
 
@@ -225,7 +225,7 @@ brettIntelligence.post(
     };
 
     const { stream } = buildStream(
-      { input, provider, providerName, prisma, registry, sessionId: session.id },
+      { input, provider, providerName, prisma, registry, sessionId: session.id, embeddingProvider },
       session.id,
       {
         onDone: (content) => {

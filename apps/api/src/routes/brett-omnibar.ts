@@ -115,6 +115,7 @@ brettOmnibar.post(
     const { stream } = buildStream(
       {
         input, provider, providerName, prisma, registry, sessionId: session.id,
+        embeddingProvider,
         onContentCreated: (itemId, sourceUrl) => {
           runExtraction(itemId, sourceUrl, user.id).catch((err) =>
             console.error(`[omnibar] Content extraction failed for ${itemId}:`, err));
