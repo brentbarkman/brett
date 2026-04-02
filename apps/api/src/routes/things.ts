@@ -5,7 +5,10 @@ import { getPresignedUrl } from "../lib/storage.js";
 import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem, computeNextDueDate } from "@brett/business";
 import { runExtraction } from "../lib/content-extractor.js";
 import { detectContentType } from "@brett/utils";
+import { enqueueEmbed, deleteEmbeddings, assembleItemText, assembleContentText, AI_CONFIG } from "@brett/ai";
+import type { ItemAssemblerInput, ContentAssemblerInput } from "@brett/ai";
 import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
+import { getEmbeddingProvider } from "../lib/embedding-provider.js";
 
 const things = new Hono<AuthEnv>();
 
@@ -87,6 +90,7 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
       toItemId: l.toItemId,
       toItemType: l.toItemType,
       toItemTitle: itemMap.get(l.toItemId)?.title,
+      source: l.source ?? "manual",
       createdAt: l.createdAt.toISOString(),
     })),
     // Reverse: B→A stored as fromItemId=B, shown on A as linking to B
@@ -95,6 +99,7 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
       toItemId: l.fromItemId,
       toItemType: itemMap.get(l.fromItemId)?.type ?? "task",
       toItemTitle: itemMap.get(l.fromItemId)?.title,
+      source: l.source ?? "manual",
       createdAt: l.createdAt.toISOString(),
     })),
   ];
@@ -301,14 +306,106 @@ things.post("/", async (c) => {
 
   const thing = itemToThing(item as any);
 
-  // Fire-and-forget extraction for content items
+  // Inline embedding + duplicate detection
+  let duplicateCandidates: Array<{ id: string; title: string; similarity: number }> | undefined;
+  try {
+    const embeddingProvider = getEmbeddingProvider();
+    if (embeddingProvider) {
+      // Assemble text for the new item
+      let chunks: string[];
+      if (data.type === "content") {
+        const input: ContentAssemblerInput = {
+          type: item.contentType ?? "web_page",
+          title: item.title,
+          contentTitle: null,
+          contentDescription: null,
+          contentBody: null,
+        };
+        chunks = assembleContentText(input);
+      } else {
+        const input: ItemAssemblerInput = {
+          title: item.title,
+          description: item.description ?? null,
+          notes: null,
+        };
+        chunks = assembleItemText(input);
+      }
+
+      if (chunks.length > 0) {
+        // Embed just the first chunk (fastest, good enough for dedup)
+        const [vector] = await embeddingProvider.embedBatch([chunks[0]], "document");
+        const vectorStr = `[${vector.join(",")}]`;
+
+        // Store in the Embedding table
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "createdAt", "updatedAt")
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::vector, NOW(), NOW())
+           ON CONFLICT ("entityType", "entityId", "chunkIndex")
+           DO UPDATE SET "chunkText" = $5, embedding = $6::vector, "updatedAt" = NOW()`,
+          user.id,
+          "item",
+          item.id,
+          0,
+          chunks[0],
+          vectorStr
+        );
+
+        // Query for near-duplicates above the threshold
+        const threshold = AI_CONFIG.embedding.dupThreshold;
+        const dupes = await prisma.$queryRaw<Array<{ entityId: string; similarity: number }>>`
+          SELECT e2."entityId", 1 - (e1.embedding <=> e2.embedding) AS similarity
+          FROM "Embedding" e1
+          JOIN "Embedding" e2
+            ON e2."userId" = ${user.id}
+            AND e2."entityType" = 'item'
+            AND e2."entityId" != ${item.id}
+            AND e2."chunkIndex" = 0
+          WHERE e1."entityType" = 'item'
+            AND e1."entityId" = ${item.id}
+            AND e1."chunkIndex" = 0
+            AND 1 - (e1.embedding <=> e2.embedding) >= ${threshold}
+          ORDER BY similarity DESC
+          LIMIT 5
+        `;
+
+        if (dupes.length > 0) {
+          // Enrich with titles
+          const dupeItems = await prisma.item.findMany({
+            where: { id: { in: dupes.map((d) => d.entityId) }, userId: user.id },
+            select: { id: true, title: true },
+          });
+          const titleMap = new Map(dupeItems.map((d) => [d.id, d.title]));
+          duplicateCandidates = dupes
+            .filter((d) => titleMap.has(d.entityId))
+            .map((d) => ({
+              id: d.entityId,
+              title: titleMap.get(d.entityId)!,
+              similarity: d.similarity,
+            }));
+        }
+
+        // Content items may have multiple chunks — queue full pipeline to embed remaining chunks
+        if (data.type === "content") {
+          enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id });
+        }
+      }
+    } else {
+      // No embedding provider — fall back to async queue
+      enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id });
+    }
+  } catch (err) {
+    console.error(`[things] Inline embed/dedup failed for ${item.id}:`, err);
+    // Dedup failure must NOT block item creation — fall through
+  }
+
+  // Fire-and-forget extraction for content items (re-embeds after content is fetched)
   if (data.type === "content" && data.sourceUrl) {
     runExtraction(item.id, data.sourceUrl, user.id).catch((err) =>
       console.error(`[things] Background extraction failed for ${item.id}:`, err)
     );
   }
 
-  return c.json(thing, 201);
+  return c.json({ ...thing, duplicateCandidates }, 201);
 });
 
 /** Spawn the next occurrence of a recurring task */
@@ -417,6 +514,11 @@ things.patch("/:id", async (c) => {
     include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } }, linksFrom: true },
   });
 
+  // Re-embed if text fields changed
+  if (data.title !== undefined || data.description !== undefined || data.notes !== undefined) {
+    enqueueEmbed({ entityType: "item", entityId: id, userId: user.id });
+  }
+
   // If recurrence was just set on an already-completed task, spawn next occurrence now
   const recurrenceJustSet = data.recurrence !== undefined && data.recurrence !== null;
   const wasAlreadyCompleted = existing.completedAt !== null;
@@ -463,6 +565,7 @@ things.delete("/:id", async (c) => {
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
 
+  await deleteEmbeddings("item", existing.id, prisma);
   await prisma.item.delete({ where: { id: existing.id } });
   return c.json({ ok: true });
 });

@@ -4,10 +4,11 @@ import { decryptToken } from "./encryption.js";
 import { getSearchProvider, classifySourceType } from "./search-providers/index.js";
 import { runExtraction } from "./content-extractor.js";
 import type { SearchResult } from "./search-providers/types.js";
-import { getProvider, resolveModel } from "@brett/ai";
+import { getProvider, resolveModel, enqueueEmbed, AI_CONFIG } from "@brett/ai";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, ScoutSource, FindingType } from "@brett/types";
 import { humanizeCadence, detectContentType } from "@brett/utils";
+import { getEmbeddingProvider } from "./embedding-provider.js";
 import type { Prisma } from "@prisma/client";
 import { getActiveMemories, formatMemoriesForPrompt, parseMemoryUpdates, applyMemoryUpdates, incrementAndCheckConsolidation, runConsolidation } from "./scout-memory.js";
 import { createRelinkTask } from "./connection-health.js";
@@ -832,11 +833,45 @@ export async function runScout(scoutId: string): Promise<void> {
       }
     }
 
+    // Semantic dedup: filter out findings that are too similar to existing ones
+    // Runs after URL dedup — catches near-duplicate content with different URLs
+    let dedupedFindings = judgment.findings;
+    const embProvider = getEmbeddingProvider();
+    if (embProvider && dedupedFindings.length > 0) {
+      const semanticallyUnique = [];
+      for (const finding of dedupedFindings) {
+        try {
+          const text = `[Scout Finding] ${finding.title}\n${finding.description}`;
+          const vector = await embProvider.embed(text, "document");
+          const vectorStr = `[${vector.join(",")}]`;
+
+          const dupes = await prisma.$queryRaw<Array<{ similarity: number }>>`
+            SELECT 1 - (embedding <=> ${vectorStr}::vector) as similarity
+            FROM "Embedding"
+            WHERE "userId" = ${scout.userId} AND "entityType" = 'scout_finding'
+            ORDER BY embedding <=> ${vectorStr}::vector
+            LIMIT 1
+          `;
+
+          if (!dupes.length || dupes[0].similarity < AI_CONFIG.embedding.scoutDedupThreshold) {
+            semanticallyUnique.push(finding);
+          } else {
+            console.log(`[scout-runner] Semantic dedup: skipping "${finding.title}" (similarity: ${dupes[0].similarity.toFixed(3)})`);
+          }
+        } catch (err) {
+          // Non-fatal — if semantic dedup fails, keep the finding
+          console.warn(`[scout-runner] Semantic dedup failed for finding "${finding.title}":`, err);
+          semanticallyUnique.push(finding);
+        }
+      }
+      dedupedFindings = semanticallyUnique;
+    }
+
     // Create findings and auto-promote to inbox
     let findingsCreated = 0;
     const dismissedCount = judgment.evaluatedCount - judgment.findings.length;
 
-    for (const finding of judgment.findings) {
+    for (const finding of dedupedFindings) {
       const hasUrl = !!(finding.sourceUrl);
 
       // Create inbox item (auto-promote as content)
@@ -877,6 +912,9 @@ export async function runScout(scoutId: string): Promise<void> {
           itemId: item.id,
         },
       });
+
+      // Enqueue embedding for new scout finding
+      enqueueEmbed({ entityType: "scout_finding", entityId: scoutFinding.id, userId: scout.userId });
 
       findingsCreated++;
 

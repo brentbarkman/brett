@@ -1,0 +1,177 @@
+- generic [ref=e2]:
+  - generic [ref=e9]:
+    - navigation [ref=e10]:
+      - generic [ref=e11]:
+        - img [ref=e13]
+        - generic [ref=e17]: Brett
+      - generic [ref=e18]:
+        - button "Inbox 10" [active] [ref=e19] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e24]: Inbox
+          - generic [ref=e25]: "10"
+        - button "Today 3" [ref=e26] [cursor=pointer]:
+          - img [ref=e28]
+          - generic [ref=e30]: Today
+          - generic [ref=e31]: "3"
+        - button "Upcoming" [ref=e32] [cursor=pointer]:
+          - img [ref=e34]
+          - generic [ref=e37]: Upcoming
+        - button "Calendar" [ref=e38] [cursor=pointer]:
+          - img [ref=e40]
+          - generic [ref=e42]: Calendar
+        - button "Scouts Beta" [ref=e43] [cursor=pointer]:
+          - img [ref=e45]
+          - generic [ref=e52]: Scouts
+          - generic [ref=e53]: Beta
+      - button "Search ⌘F" [ref=e55] [cursor=pointer]:
+        - img [ref=e56]
+        - generic [ref=e59]: Search
+        - generic [ref=e60]: ⌘F
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - heading "Lists" [level=3] [ref=e64]
+          - button [ref=e65] [cursor=pointer]:
+            - img [ref=e66]
+        - generic [ref=e67]:
+          - button "work2" [ref=e69] [cursor=pointer]:
+            - img [ref=e70]
+            - generic [ref=e72]: work2
+            - button [ref=e73]:
+              - img [ref=e74]
+          - button "work" [ref=e79] [cursor=pointer]:
+            - generic [ref=e82]: work
+            - button [ref=e83]:
+              - img [ref=e84]
+          - button "Personal" [ref=e89] [cursor=pointer]:
+            - generic [ref=e92]: Personal
+            - button [ref=e93]:
+              - img [ref=e94]
+          - button "Podcasts" [ref=e99] [cursor=pointer]:
+            - img [ref=e100]
+            - generic [ref=e102]: Podcasts
+            - button [ref=e103]:
+              - img [ref=e104]
+      - button "B Brent" [ref=e110] [cursor=pointer]:
+        - generic [ref=e112]: B
+        - generic [ref=e113]: Brent
+    - main [ref=e114]:
+      - generic [ref=e328]:
+        - generic [ref=e329]:
+          - generic [ref=e330]:
+            - generic [ref=e331]:
+              - img [ref=e332]
+              - heading "Inbox" [level=2] [ref=e335]
+            - generic [ref=e336]:
+              - button "All" [ref=e337] [cursor=pointer]
+              - button "Tasks" [ref=e338] [cursor=pointer]
+              - button "Content" [ref=e339] [cursor=pointer]
+          - generic [ref=e340]:
+            - img [ref=e341]
+            - textbox "Add to inbox..." [ref=e342]
+          - generic [ref=e343]:
+            - generic [ref=e345]: YESTERDAY
+            - generic [ref=e348] [cursor=pointer]:
+              - button [ref=e349]:
+                - img [ref=e351]
+              - generic [ref=e354]: Microsoft CFO Navigating AI Capex Bubble Fears — Previously Paused Data Center Development
+              - generic [ref=e355]: 13h ago
+            - generic [ref=e357] [cursor=pointer]:
+              - button [ref=e358]:
+                - img [ref=e360]
+              - generic [ref=e363]: DRAM Spot Prices Drop 6% Post-Earnings — Citi Cuts MU Price Target to $425
+              - generic [ref=e364]: 13h ago
+            - generic [ref=e366] [cursor=pointer]:
+              - button [ref=e367]:
+                - img [ref=e369]
+              - generic [ref=e372]: Early Allergen Introduction as Primary Prevention — Emerging Consensus Across PMC Literature
+              - generic [ref=e373]: 1d ago
+            - generic [ref=e375]: THIS WEEK
+            - generic [ref=e378] [cursor=pointer]:
+              - button [ref=e379]:
+                - img [ref=e381]
+              - generic [ref=e384]: Micron Continues Capex Expansion Despite TurboQuant Shock — Lam Research Beneficiary Signal
+              - generic [ref=e385]: 1d ago
+            - generic [ref=e387] [cursor=pointer]:
+              - button [ref=e388]:
+                - img [ref=e390]
+              - generic [ref=e393]: Samsung and SK Hynix Among Biggest Drags as Asian Stocks Erase 2026 Gains on War/Inflation Shock
+              - generic [ref=e394]: 1d ago
+            - generic [ref=e396] [cursor=pointer]:
+              - button [ref=e397]:
+                - img [ref=e399]
+              - generic [ref=e402]: Middle East Conflict Threatens South Korean Chip Supply Chain — Raw Material Disruption Risk
+              - generic [ref=e403]: 1d ago
+            - generic [ref=e405] [cursor=pointer]:
+              - button [ref=e406]:
+                - img [ref=e408]
+              - generic [ref=e411]: Micron Stock Down 30% Since Blowout Earnings — Post-Earnings Sell-Off Accelerates
+              - generic [ref=e412]: 1d ago
+            - generic [ref=e414] [cursor=pointer]:
+              - button [ref=e415]:
+                - img [ref=e417]
+              - generic [ref=e420]: Walnuts and Omega-3s Support Cognitive Development in Children
+              - generic [ref=e421]: 1d ago
+            - generic [ref=e423] [cursor=pointer]:
+              - button [ref=e424]:
+                - img [ref=e426]
+              - generic [ref=e429]: "Google TurboQuant: Structural Demand Risk or Noise? Memory Stocks Drop 6%"
+              - generic [ref=e430]: 2d ago
+            - generic [ref=e432] [cursor=pointer]:
+              - button [ref=e433]:
+                - img [ref=e435]
+              - generic [ref=e438]: "Micron Q2 Earnings: Blowout Results but Stock Down ~15% from Highs"
+              - generic [ref=e439]: 2d ago
+        - generic [ref=e440]:
+          - generic [ref=e441]:
+            - generic [ref=e442]: j/k
+            - generic [ref=e443]: navigate
+          - generic [ref=e444]:
+            - generic [ref=e445]: x
+            - generic [ref=e446]: select
+          - generic [ref=e447]:
+            - generic [ref=e448]: l
+            - generic [ref=e449]: list
+          - generic [ref=e450]:
+            - generic [ref=e451]: d
+            - generic [ref=e452]: date
+          - generic [ref=e453]:
+            - generic [ref=e454]: e
+            - generic [ref=e455]: done
+          - generic [ref=e456]:
+            - generic [ref=e457]: "#"
+            - generic [ref=e458]: archive
+    - generic [ref=e238]:
+      - generic [ref=e239]:
+        - heading "Thu, Apr 2" [level=2] [ref=e241]
+        - generic [ref=e242]:
+          - button [ref=e243] [cursor=pointer]:
+            - img [ref=e244]
+          - button [ref=e246] [cursor=pointer]:
+            - img [ref=e247]
+      - generic [ref=e250]:
+        - generic [ref=e252]: 12 AM
+        - generic [ref=e255]: 1 AM
+        - generic [ref=e258]: 2 AM
+        - generic [ref=e261]: 3 AM
+        - generic [ref=e264]: 4 AM
+        - generic [ref=e267]: 5 AM
+        - generic [ref=e270]: 6 AM
+        - generic [ref=e273]: 7 AM
+        - generic [ref=e276]: 8 AM
+        - generic [ref=e279]: 9 AM
+        - generic [ref=e282]: 10 AM
+        - generic [ref=e285]: 11 AM
+        - generic [ref=e288]: 12 PM
+        - generic [ref=e291]: 1 PM
+        - generic [ref=e294]: 2 PM
+        - generic [ref=e297]: 3 PM
+        - generic [ref=e300]: 4 PM
+        - generic [ref=e303]: 5 PM
+        - generic [ref=e306]: 6 PM
+        - generic [ref=e309]: 7 PM
+        - generic [ref=e312]: 8 PM
+        - generic [ref=e315]: 9 PM
+        - generic [ref=e318]: 10 PM
+        - generic [ref=e321]: 11 PM
+        - generic [ref=e324]: 12 AM
+  - status [ref=e327]

@@ -1,4 +1,3 @@
-// AI platform configuration constants
 export const AI_CONFIG = {
   orchestrator: {
     maxRounds: 5,
@@ -6,18 +5,35 @@ export const AI_CONFIG = {
     maxToolResultSize: 4096,
   },
   context: {
-    maxFacts: 20,           // was 50 — most users have <20 facts, saves ~1,500 tokens
-    maxPastSessions: 3,     // was 5 — older sessions rarely relevant, saves ~3,000 tokens
-    maxMessagesPerSession: 15, // was 20
+    maxFacts: 20,
+    maxPastSessions: 3,
+    maxMessagesPerSession: 15,
   },
   memory: {
     maxFactValueLength: 200,
     maxEmbeddingTextLength: 8000,
-    embeddingDimensions: 1536,
+    embeddingDimensions: 1024,
+  },
+  embedding: {
+    provider: "voyage" as const,
+    model: "voyage-3-large" as const,
+    dimensions: 1024,
+    maxChunkTokens: 500,
+    chunkOverlapTokens: 50,
+    maxTextLength: 8000,
+    autoLinkThreshold: 0.90,
+    suggestThreshold: 0.75,
+    dupThreshold: 0.85,
+    crossTypeThreshold: 0.70,
+    scoutDedupThreshold: 0.88,
+    searchResultLimit: 20,
+    batchSize: 50,
+    debounceMs: 500,
+    maxRetries: 3,
   },
   rateLimit: {
-    aiStreaming: 30, // per minute
-    aiConfig: 5, // per minute
-    nonStreaming: 100, // per minute
+    aiStreaming: 30,
+    aiConfig: 5,
+    nonStreaming: 100,
   },
 } as const;

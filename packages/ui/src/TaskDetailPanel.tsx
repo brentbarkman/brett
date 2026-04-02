@@ -15,6 +15,7 @@ import { ScheduleRow } from "./ScheduleRow";
 import { RichTextEditor } from "./RichTextEditor";
 import { AttachmentList } from "./AttachmentList";
 import { LinkedItemsList } from "./LinkedItemsList";
+import type { SuggestionItem } from "./LinkedItemsList";
 import { BrettThread } from "./BrettThread";
 import type { BrettThreadMessage } from "./BrettThread";
 
@@ -40,6 +41,9 @@ interface TaskDetailPanelProps {
   onAddLink?: (toItemId: string, toItemType: string) => void;
   onRemoveLink?: (linkId: string) => void;
   searchItems?: (query: string) => Promise<Thing[]>;
+  // Suggestions
+  suggestions?: SuggestionItem[];
+  onPromoteSuggestion?: (entityId: string, type: string) => void;
   // Brett thread
   brettMessages?: BrettThreadMessage[];
   brettHasMore?: boolean;
@@ -77,6 +81,8 @@ export function TaskDetailPanel({
   onAddLink,
   onRemoveLink,
   searchItems,
+  suggestions,
+  onPromoteSuggestion,
   brettMessages,
   brettHasMore,
   onSendBrettMessage,
@@ -294,6 +300,8 @@ export function TaskDetailPanel({
               onAddLink={onAddLink}
               onRemoveLink={onRemoveLink}
               searchItems={searchItems}
+              suggestions={suggestions}
+              onPromoteSuggestion={onPromoteSuggestion}
             />
           )}
 

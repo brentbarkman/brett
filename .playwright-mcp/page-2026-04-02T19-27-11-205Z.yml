@@ -1,0 +1,83 @@
+- generic [ref=e2]:
+  - generic [ref=e9]:
+    - navigation [ref=e10]:
+      - generic [ref=e11]:
+        - img [ref=e13]
+        - generic [ref=e17]: Brett
+      - generic [ref=e18]:
+        - button "Inbox 10" [ref=e19] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e24]: Inbox
+          - generic [ref=e25]: "10"
+        - button "Today 3" [ref=e26] [cursor=pointer]:
+          - img [ref=e28]
+          - generic [ref=e30]: Today
+          - generic [ref=e31]: "3"
+        - button "Upcoming" [ref=e32] [cursor=pointer]:
+          - img [ref=e34]
+          - generic [ref=e37]: Upcoming
+        - button "Calendar" [ref=e38] [cursor=pointer]:
+          - img [ref=e40]
+          - generic [ref=e42]: Calendar
+        - button "Scouts Beta" [ref=e43] [cursor=pointer]:
+          - img [ref=e45]
+          - generic [ref=e52]: Scouts
+          - generic [ref=e53]: Beta
+      - button "Search ⌘F" [ref=e55] [cursor=pointer]:
+        - img [ref=e56]
+        - generic [ref=e59]: Search
+        - generic [ref=e60]: ⌘F
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - heading "Lists" [level=3] [ref=e64]
+          - button [ref=e65] [cursor=pointer]:
+            - img [ref=e66]
+        - generic [ref=e67]:
+          - button "work2" [ref=e69] [cursor=pointer]:
+            - img [ref=e70]
+            - generic [ref=e72]: work2
+            - button [ref=e73]:
+              - img [ref=e74]
+          - button "work" [ref=e79] [cursor=pointer]:
+            - generic [ref=e82]: work
+            - button [ref=e83]:
+              - img [ref=e84]
+          - button "Personal" [ref=e89] [cursor=pointer]:
+            - generic [ref=e92]: Personal
+            - button [ref=e93]:
+              - img [ref=e94]
+          - button "Podcasts" [ref=e99] [cursor=pointer]:
+            - img [ref=e100]
+            - generic [ref=e102]: Podcasts
+            - button [ref=e103]:
+              - img [ref=e104]
+      - button "B Brent" [ref=e110] [cursor=pointer]:
+        - generic [ref=e112]: B
+        - generic [ref=e113]: Brent
+    - main [ref=e459]:
+      - generic [ref=e460]:
+        - generic [ref=e461]:
+          - heading "Settings" [level=1] [ref=e462]
+          - generic [ref=e463]:
+            - button "Profile" [ref=e464] [cursor=pointer]: Profile
+            - button "Security" [ref=e466] [cursor=pointer]
+            - button "Calendar" [ref=e467] [cursor=pointer]
+            - button "AI Providers" [ref=e468] [cursor=pointer]
+            - button "Personalize" [ref=e469] [cursor=pointer]
+            - button "Import" [ref=e470] [cursor=pointer]
+            - button "Account" [ref=e471] [cursor=pointer]
+        - generic [ref=e476]:
+          - heading "Profile" [level=3] [ref=e477]
+          - generic [ref=e478]:
+            - generic [ref=e480]: B
+            - generic [ref=e481]:
+              - generic [ref=e482]: Brent
+              - generic [ref=e483]: brentbarkman+test1@gmail.com
+          - generic [ref=e484]:
+            - generic [ref=e485]: Display name
+            - textbox "Display name" [ref=e486]: Brent
+          - generic [ref=e487]:
+            - generic [ref=e488]: Email
+            - textbox "Email" [ref=e489]: brentbarkman+test1@gmail.com
+          - button "Save changes" [disabled] [ref=e491]
+  - status [ref=e327]

@@ -7,6 +7,7 @@ import { findBestMatch, type MatchCandidate } from "./meeting-matcher.js";
 import { publishSSE } from "../lib/sse.js";
 import { processActionItems } from "./granola-action-items.js";
 import { createRelinkTask } from "../lib/connection-health.js";
+import { enqueueEmbed } from "@brett/ai";
 
 function isAuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
@@ -282,6 +283,9 @@ async function syncMeetings(
           rawData: (detail as any) ?? undefined,
         },
       });
+
+      // Enqueue embedding for newly synced meeting note
+      enqueueEmbed({ entityType: "meeting_note", entityId: meeting.id, userId });
 
       // Extract action items outside the transaction (AI calls can be slow)
       if (options.extractActions && summary) {

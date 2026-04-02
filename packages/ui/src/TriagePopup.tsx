@@ -1,7 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Calendar, List } from "lucide-react";
+import { Calendar, List, Sparkles } from "lucide-react";
 import type { NavList, DueDatePrecision } from "@brett/types";
 import { computeTriageResult, type TriageDatePreset } from "@brett/business";
+
+interface ListSuggestion {
+  listId: string;
+  listName: string;
+  similarity: number;
+}
 
 interface TriagePopupProps {
   mode: "list-first" | "date-first";
@@ -10,6 +16,8 @@ interface TriagePopupProps {
   currentListId?: string | null;
   currentDueDate?: string | null;
   currentDueDatePrecision?: DueDatePrecision | null;
+  /** AI-suggested lists based on semantic similarity */
+  suggestedLists?: ListSuggestion[];
   onConfirm: (updates: {
     listId?: string | null;
     dueDate?: string | null;
@@ -35,6 +43,7 @@ export function TriagePopup({
   currentListId,
   currentDueDate,
   currentDueDatePrecision,
+  suggestedLists,
   onConfirm,
   onCancel,
 }: TriagePopupProps) {
@@ -267,6 +276,32 @@ export function TriagePopup({
             />
           </div>
           <div className="max-h-48 overflow-y-auto py-1">
+            {/* Suggested lists */}
+            {suggestedLists && suggestedLists.length > 0 && !filterText && (
+              <>
+                <div className="flex items-center gap-1 px-3 py-1">
+                  <Sparkles size={9} className="text-amber-400/60" />
+                  <span className="text-[10px] text-white/30 font-medium uppercase tracking-wide">
+                    Suggested
+                  </span>
+                </div>
+                {suggestedLists.map((suggestion) => {
+                  const list = lists.find((l) => l.id === suggestion.listId);
+                  if (!list) return null;
+                  return (
+                    <button
+                      key={`suggested-${list.id}`}
+                      onClick={() => selectList(list.id)}
+                      className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors text-white/70 hover:bg-white/5"
+                    >
+                      <div className={`w-2 h-2 rounded-full ${list.colorClass}`} />
+                      <span className="text-sm flex-1 truncate">{list.name}</span>
+                    </button>
+                  );
+                })}
+                <div className="border-t border-white/5 mt-1 mb-1" />
+              </>
+            )}
             {filteredLists.map((list, i) => (
               <button
                 key={list.id}

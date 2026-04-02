@@ -3,6 +3,7 @@ import { Send, Square, X, Search, Plus, Check, Radar, MessageSquare } from "luci
 import { BrettMark } from "./BrettMark";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
+import { SearchResultRow } from "./Omnibar";
 import type { DisplayHint } from "@brett/types";
 
 export interface SpotlightMessage {
@@ -17,12 +18,13 @@ export interface SpotlightMessage {
 }
 
 export interface SpotlightSearchResult {
-  id: string;
+  entityType: string;
+  entityId: string;
   title: string;
-  status: string;
-  type?: string;
-  contentType?: string | null;
-  listName?: string | null;
+  snippet: string;
+  score: number;
+  matchType: "keyword" | "semantic" | "both";
+  metadata: Record<string, unknown>;
 }
 
 export interface SpotlightModalProps {
@@ -283,7 +285,14 @@ export function SpotlightModal({
         }
         if (e.key === "Enter" && selectedSearchIdx >= 0 && visibleResults[selectedSearchIdx]) {
           e.preventDefault();
-          onSearchResultClick?.(visibleResults[selectedSearchIdx].id);
+          const r = visibleResults[selectedSearchIdx];
+          if (r.entityType === "calendar_event" && onEventClick) {
+            onEventClick(r.entityId);
+          } else if (r.entityType === "item" && onItemClick) {
+            onItemClick(r.entityId);
+          } else {
+            onSearchResultClick?.(r.entityId);
+          }
           return;
         }
       }
@@ -488,25 +497,22 @@ export function SpotlightModal({
                   {searchResults!.length} result{searchResults!.length === 1 ? "" : "s"}
                 </div>
                 {visibleResults.map((item, i) => (
-                  <button
-                    key={item.id}
-                    className={`w-full flex items-center gap-3 px-5 py-2.5 text-sm text-left transition-colors ${
-                      i === selectedSearchIdx ? "bg-white/10 text-white" : "text-white/80 hover:bg-white/5"
-                    }`}
-                    onClick={() => onSearchResultClick?.(item.id)}
+                  <SearchResultRow
+                    key={`${item.entityType}:${item.entityId}`}
+                    item={item}
+                    isSelected={i === selectedSearchIdx}
+                    onClick={() => {
+                      if (item.entityType === "calendar_event" && onEventClick) {
+                        onEventClick(item.entityId);
+                      } else if (item.entityType === "item" && onItemClick) {
+                        onItemClick(item.entityId);
+                      } else {
+                        onSearchResultClick?.(item.entityId);
+                      }
+                    }}
                     onMouseEnter={() => setSelectedSearchIdx(i)}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                      item.status === "done" ? "bg-brett-teal" : item.status === "active" ? "bg-brett-cerulean" : "bg-white/30"
-                    }`} />
-                    <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
-                      {item.type === "content" ? (item.contentType || "content") : "task"}
-                    </span>
-                    <span className="truncate">{item.title}</span>
-                    <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
-                      {item.listName || "Inbox"}
-                    </span>
-                  </button>
+                    px="px-5"
+                  />
                 ))}
               </>
             )}

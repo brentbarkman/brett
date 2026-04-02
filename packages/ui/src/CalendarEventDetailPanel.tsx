@@ -6,10 +6,12 @@ import {
   Check,
   HelpCircle,
   X,
-  User,
   Paperclip,
   FileText,
   ExternalLink,
+  Link2,
+  Clock,
+  CheckSquare,
 } from "lucide-react";
 import { SimpleMarkdown } from "./SimpleMarkdown";
 import { BrettMark } from "./BrettMark";
@@ -48,6 +50,27 @@ function AttendeeAvatar({ photoUrl, name }: { photoUrl?: string | null; name: st
   );
 }
 
+export interface RelatedItem {
+  entityId: string;
+  title: string;
+  type: string;
+  status: string;
+  similarity: number;
+}
+
+export interface MeetingHistoryOccurrence {
+  eventId: string;
+  date: string;
+  meetingNote?: { title: string; summary: string };
+  actionItems: Array<{ id: string; title: string; status: string }>;
+}
+
+export interface MeetingHistory {
+  recurringEventId: string;
+  pastOccurrences: MeetingHistoryOccurrence[];
+  relatedItems: Array<{ entityId: string; title: string; similarity: number }>;
+}
+
 interface CalendarEventDetailPanelProps {
   detail: CalendarEventDetailResponse;
   onClose: () => void;
@@ -63,6 +86,8 @@ interface CalendarEventDetailPanelProps {
   isLoadingMoreBrettMessages: boolean;
   brettAiConfigured?: boolean;
   onOpenSettings?: () => void;
+  relatedItems?: RelatedItem[];
+  meetingHistory?: MeetingHistory | null;
   meetingNote?: {
     id: string;
     title: string;
@@ -164,6 +189,8 @@ export function CalendarEventDetailPanel({
   isLoadingMoreBrettMessages,
   brettAiConfigured,
   onOpenSettings,
+  relatedItems,
+  meetingHistory,
   meetingNote,
   onToggleActionItem,
   onSelectActionItem,
@@ -561,6 +588,110 @@ export function CalendarEventDetailPanel({
                   Show less
                 </button>
               )}
+            </div>
+          )}
+
+          {/* ── Related Tasks ── */}
+          {relatedItems && relatedItems.length > 0 && (
+            <div
+              className="pt-4"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3 block">
+                Related Tasks
+              </span>
+              <div className="flex flex-col gap-0.5">
+                {relatedItems.map((item) => {
+                  const isDone = item.status === "done";
+                  return (
+                    <div
+                      key={item.entityId}
+                      onClick={() => onItemClick?.(item.entityId)}
+                      className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors group cursor-pointer"
+                    >
+                      <Link2 size={13} className="text-white/30 flex-shrink-0" />
+                      <span
+                        className={`flex-1 text-sm truncate ${
+                          isDone
+                            ? "text-white/30 line-through"
+                            : "text-white/70 group-hover:text-white/90"
+                        }`}
+                      >
+                        {item.title}
+                      </span>
+                      {isDone && (
+                        <CheckSquare size={12} className="text-white/20 flex-shrink-0" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Meeting History ── */}
+          {meetingHistory &&
+            meetingHistory.recurringEventId &&
+            meetingHistory.pastOccurrences.length > 0 && (
+            <div
+              className="pt-4"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3 block">
+                Meeting History
+              </span>
+              <div className="flex flex-col gap-2">
+                {meetingHistory.pastOccurrences.map((occurrence) => {
+                  const openItems = occurrence.actionItems.filter(
+                    (a) => a.status !== "done",
+                  );
+                  const date = new Date(occurrence.date);
+                  const dateStr = date.toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: date.getFullYear() !== new Date().getFullYear()
+                      ? "numeric"
+                      : undefined,
+                  });
+                  return (
+                    <div
+                      key={occurrence.eventId}
+                      className="rounded-lg bg-white/5 border border-white/5 p-3"
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Clock size={12} className="text-white/30 flex-shrink-0" />
+                        <span className="text-xs text-white/50 font-medium">{dateStr}</span>
+                        {openItems.length > 0 && (
+                          <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                            {openItems.length} open
+                          </span>
+                        )}
+                      </div>
+                      {occurrence.meetingNote?.summary && (
+                        <p className="text-xs text-white/40 leading-relaxed line-clamp-2 mb-1.5">
+                          {occurrence.meetingNote.summary}
+                        </p>
+                      )}
+                      {openItems.length > 0 && (
+                        <div className="flex flex-col gap-0.5 mt-1">
+                          {openItems.map((item) => (
+                            <div
+                              key={item.id}
+                              onClick={() => onItemClick?.(item.id)}
+                              className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-white/5 transition-colors cursor-pointer group"
+                            >
+                              <div className="w-3 h-3 rounded border border-amber-500/40 flex-shrink-0" />
+                              <span className="text-xs text-amber-300/70 truncate group-hover:text-amber-300/90">
+                                {item.title}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

@@ -9,6 +9,7 @@ export type {
 } from "./providers/types.js";
 export { getProvider } from "./providers/factory.js";
 export { OpenAIEmbeddingProvider } from "./providers/embedding.js";
+export { VoyageEmbeddingProvider } from "./providers/voyage.js";
 export { resolveModel, MODEL_MAP } from "./router.js";
 
 // Skills
@@ -20,6 +21,48 @@ export { createRegistry } from "./skills/index.js";
 
 // Config
 export { AI_CONFIG } from "./config.js";
+
+// Embedding providers
+export { MockEmbeddingProvider, cosineSimilarity } from "./providers/mock-embedding.js";
+
+// Embedding pipeline
+export { embedEntity, deleteEmbeddings } from "./embedding/pipeline.js";
+export type { EmbedEntityParams } from "./embedding/pipeline.js";
+export { enqueueEmbed, setEmbedProcessor, flushEmbedQueue } from "./embedding/queue.js";
+export type { EmbedJob } from "./embedding/queue.js";
+export {
+  assembleItemText,
+  assembleContentText,
+  assembleEventText,
+  assembleMeetingNoteText,
+  assembleFindingText,
+  assembleConversationText,
+} from "./embedding/assembler.js";
+export type {
+  ItemAssemblerInput,
+  ContentAssemblerInput,
+  EventAssemblerInput,
+  MeetingNoteAssemblerInput,
+  FindingAssemblerInput,
+  ConversationMessage,
+  TranscriptEntry,
+} from "./embedding/assembler.js";
+export { chunkText, estimateTokens } from "./embedding/chunker.js";
+export {
+  hybridSearch,
+  keywordSearch,
+  vectorSearch,
+  fuseResults,
+  VALID_ENTITY_TYPES,
+} from "./embedding/search.js";
+export type { SearchResult, RankedResult } from "./embedding/search.js";
+export {
+  findSimilarItems,
+  findDuplicates,
+  classifyMatches,
+  suggestLists,
+} from "./embedding/similarity.js";
+export type { SimilarityMatch, ClassifiedMatches } from "./embedding/similarity.js";
 
 // Orchestrator
 export { orchestrate } from "./orchestrator.js";

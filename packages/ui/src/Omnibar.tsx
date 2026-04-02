@@ -20,12 +20,13 @@ export interface OmnibarMessage {
 }
 
 export interface SearchResultItem {
-  id: string;
+  entityType: string;
+  entityId: string;
   title: string;
-  status: string;
-  type?: string;
-  contentType?: string | null;
-  listName?: string | null;
+  snippet: string;
+  score: number;
+  matchType: "keyword" | "semantic" | "both";
+  metadata: Record<string, unknown>;
 }
 
 export interface OmnibarProps {
@@ -332,7 +333,14 @@ export function Omnibar({
         }
         if (e.key === "Enter" && selectedSearchIdx >= 0 && visibleResults[selectedSearchIdx]) {
           e.preventDefault();
-          onSearchResultClick?.(visibleResults[selectedSearchIdx].id);
+          const r = visibleResults[selectedSearchIdx];
+          if (r.entityType === "calendar_event" && onEventClick) {
+            onEventClick(r.entityId);
+          } else if (r.entityType === "item" && onItemClick) {
+            onItemClick(r.entityId);
+          } else {
+            onSearchResultClick?.(r.entityId);
+          }
           return;
         }
       }
@@ -456,27 +464,22 @@ export function Omnibar({
               ) : (
                 <div className="max-h-[320px] overflow-y-auto scrollbar-hide">
                   {visibleResults.map((item, i) => (
-                    <button
-                      key={item.id}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                        i === selectedSearchIdx
-                          ? "bg-white/10 text-white"
-                          : "text-white/80 hover:bg-white/5"
-                      }`}
-                      onClick={() => onSearchResultClick?.(item.id)}
+                    <SearchResultRow
+                      key={`${item.entityType}:${item.entityId}`}
+                      item={item}
+                      isSelected={i === selectedSearchIdx}
+                      onClick={() => {
+                        if (item.entityType === "calendar_event" && onEventClick) {
+                          onEventClick(item.entityId);
+                        } else if (item.entityType === "item" && onItemClick) {
+                          onItemClick(item.entityId);
+                        } else {
+                          onSearchResultClick?.(item.entityId);
+                        }
+                      }}
                       onMouseEnter={() => setSelectedSearchIdx(i)}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        item.status === "done" ? "bg-brett-teal" : item.status === "active" ? "bg-brett-cerulean" : "bg-white/30"
-                      }`} />
-                      <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
-                        {item.type === "content" ? (item.contentType || "content") : "task"}
-                      </span>
-                      <span className="truncate">{item.title}</span>
-                      <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
-                        {item.listName || "Inbox"}
-                      </span>
-                    </button>
+                      px="px-4"
+                    />
                   ))}
                 </div>
               )}
@@ -603,6 +606,90 @@ export function Omnibar({
       </div>
 
     </div>
+  );
+}
+
+// ─── SearchResultRow sub-component (shared with SpotlightModal) ───
+
+function getEntityTypeLabel(item: SearchResultItem): string {
+  if (item.entityType === "item") {
+    const meta = item.metadata;
+    if (meta.type === "content") return (meta.contentType as string) || "content";
+    return "task";
+  }
+  if (item.entityType === "calendar_event") return "event";
+  if (item.entityType === "meeting_note") return "meeting";
+  if (item.entityType === "scout_finding") return "finding";
+  return item.entityType;
+}
+
+function getStatusDot(item: SearchResultItem): string {
+  if (item.entityType === "item") {
+    const status = item.metadata.status as string | undefined;
+    if (status === "done") return "bg-green-400";
+    if (status === "active") return "bg-blue-400";
+    return "bg-white/30";
+  }
+  if (item.entityType === "calendar_event") return "bg-purple-400";
+  if (item.entityType === "meeting_note") return "bg-amber-400";
+  if (item.entityType === "scout_finding") return "bg-cyan-400";
+  return "bg-white/30";
+}
+
+function getMetaLabel(item: SearchResultItem): string {
+  const meta = item.metadata;
+  if (item.entityType === "item") {
+    return (meta.listName as string) || "Inbox";
+  }
+  if (item.entityType === "calendar_event" && meta.startTime) {
+    try {
+      return new Date(meta.startTime as string).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch { return ""; }
+  }
+  if (item.entityType === "meeting_note" && meta.meetingDate) {
+    try {
+      return new Date(meta.meetingDate as string).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch { return ""; }
+  }
+  if (item.entityType === "scout_finding") {
+    return (meta.scoutName as string) || "";
+  }
+  return "";
+}
+
+export function SearchResultRow({
+  item,
+  isSelected,
+  onClick,
+  onMouseEnter,
+  px = "px-4",
+}: {
+  item: SearchResultItem;
+  isSelected: boolean;
+  onClick: () => void;
+  onMouseEnter: () => void;
+  px?: string;
+}) {
+  const metaLabel = getMetaLabel(item);
+  return (
+    <button
+      className={`w-full flex items-center gap-3 ${px} py-2.5 text-sm text-left transition-colors ${
+        isSelected ? "bg-white/10 text-white" : "text-white/80 hover:bg-white/5"
+      }`}
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getStatusDot(item)}`} />
+      <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
+        {getEntityTypeLabel(item)}
+      </span>
+      <span className="truncate">{item.title}</span>
+      {metaLabel && (
+        <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
+          {metaLabel}
+        </span>
+      )}
+    </button>
   );
 }
 

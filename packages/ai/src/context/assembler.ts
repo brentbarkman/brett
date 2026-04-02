@@ -20,6 +20,8 @@ interface OmnibarContext {
   currentView?: string;
   selectedItemId?: string;
   intent?: string;
+  /** Pre-loaded embedding search results for context enrichment */
+  embeddingContext?: string;
 }
 
 interface BrettThreadContext {
@@ -28,12 +30,16 @@ interface BrettThreadContext {
   message: string;
   itemId?: string;
   calendarEventId?: string;
+  /** Pre-loaded embedding search results for context enrichment */
+  embeddingContext?: string;
 }
 
 interface BriefingContext {
   type: "briefing";
   userId: string;
   timezone: string;
+  /** Pre-loaded embedding search results for context enrichment */
+  embeddingContext?: string;
 }
 
 interface BrettsTakeContext {
@@ -41,6 +47,8 @@ interface BrettsTakeContext {
   userId: string;
   itemId?: string;
   calendarEventId?: string;
+  /** Pre-loaded embedding search results for context enrichment */
+  embeddingContext?: string;
 }
 
 export type AssemblerInput =
@@ -83,6 +91,11 @@ function formatFacts(
   if (facts.length === 0) return "";
   const lines = facts.map((f) => `- [${f.category}] ${f.key}: ${escapeUserContent(f.value)}`);
   return `\n\nKnown facts about the user:\n<user_data label="facts">\n${lines.join("\n")}\n</user_data>`;
+}
+
+function formatEmbeddingContext(embeddingContext?: string): string {
+  if (!embeddingContext) return "";
+  return `\n\nRelevant context from past conversations and stored content:\n${wrapUserData("embedding_context", embeddingContext)}`;
 }
 
 async function loadUserFacts(
@@ -192,7 +205,7 @@ async function assembleOmnibar(
   const facts = await loadUserFacts(prisma, input.userId);
 
   const system =
-    BRETT_SYSTEM_PROMPT + formatFacts(facts) + currentDateLine();
+    BRETT_SYSTEM_PROMPT + formatFacts(facts) + formatEmbeddingContext(input.embeddingContext) + currentDateLine();
 
   const messages: Message[] = [];
 
@@ -290,6 +303,7 @@ async function assembleBrettThread(
     BRETT_SYSTEM_PROMPT +
     formatFacts(facts) +
     itemContext +
+    formatEmbeddingContext(input.embeddingContext) +
     currentDateLine();
 
   // Item context + user facts provide sufficient memory for Brett threads.
@@ -325,6 +339,7 @@ async function assembleBriefing(
   const system =
     BRIEFING_SYSTEM_PROMPT +
     formatFacts(facts) +
+    formatEmbeddingContext(input.embeddingContext) +
     `\nCurrent date: ${currentDate}` +
     `\nCurrent timezone: ${safeTimezone}`;
 
@@ -577,6 +592,7 @@ async function assembleBrettsTake(
   const system =
     BRETTS_TAKE_SYSTEM_PROMPT +
     formatFacts(facts) +
+    formatEmbeddingContext(input.embeddingContext) +
     `\nCurrent date: ${currentDate}` +
     `\nCurrent time: ${currentTime}` +
     `\nTimezone: ${safeTimezone}`;

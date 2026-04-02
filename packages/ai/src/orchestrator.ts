@@ -1,4 +1,4 @@
-import type { AIProvider, Message } from "./providers/types.js";
+import type { AIProvider, EmbeddingProvider, Message } from "./providers/types.js";
 import type { AIProviderName, ModelTier, StreamChunk } from "@brett/types";
 import type { PrismaClient } from "@prisma/client";
 import { resolveModel } from "./router.js";
@@ -30,6 +30,8 @@ export interface OrchestratorParams {
   registry: SkillRegistry;
   sessionId?: string;
   logUsage?: boolean;
+  /** Optional embedding provider for semantic search in skills */
+  embeddingProvider?: EmbeddingProvider | null;
   /** Called when a content item is created and needs extraction */
   onContentCreated?: (itemId: string, sourceUrl: string) => void;
 }
@@ -238,6 +240,7 @@ export async function* orchestrate(
                   userId,
                   prisma,
                   provider,
+                  embeddingProvider: params.embeddingProvider,
                   onContentCreated: params.onContentCreated,
                 });
 

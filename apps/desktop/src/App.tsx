@@ -47,6 +47,7 @@ import {
   useUpdateThing,
   useRetryExtraction,
   useThings,
+  useListSuggestions,
 } from "./api/things";
 import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists, useArchiveList, useUnarchiveList, useArchivedLists } from "./api/lists";
 import { useUploadAttachment, useDeleteAttachment } from "./api/attachments";
@@ -57,6 +58,8 @@ import {
   useCalendarEventDetail,
   useUpdateRsvp,
   useUpdateCalendarEventNotes,
+  useRelatedItems,
+  useMeetingHistory,
 } from "./api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
 import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/granola";
@@ -194,6 +197,11 @@ export function App() {
     currentDueDate?: string | null;
     currentDueDatePrecision?: "day" | "week" | null;
   } | null>(null);
+
+  // Semantic list suggestions for the active triage item
+  const { data: listSuggestionsData } = useListSuggestions(
+    triageState?.ids[0] ?? null
+  );
 
   // Delete list confirmation state
   const [deleteListConfirm, setDeleteListConfirm] = useState<{
@@ -346,6 +354,12 @@ export function App() {
     isDetailOpen && isCalendarSelected ? selectedId : null,
   );
   const { data: meetingNote } = useGranolaMeetingForEvent(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const { data: calendarRelatedItemsData } = useRelatedItems(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const { data: calendarMeetingHistoryData } = useMeetingHistory(
     isDetailOpen && isCalendarSelected ? selectedId : null,
   );
   const reprocessMeeting = useReprocessMeetingActions();
@@ -529,23 +543,12 @@ export function App() {
         }
         omnibar.close();
       },
-      searchResults: omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null,
+      searchResults: omnibar.searchResults ?? null,
       isSearching: omnibar.isSearching,
       onSearchResultClick: (id: string) => {
-        const item = omnibar.searchResults?.find((t) => t.id === id);
-        if (item) {
-          // Navigate to the view where this item lives
-          if (item.listId && item.list) {
-            navigate(`/lists/${slugify(item.list)}`);
-          } else if (item.urgency === "overdue" || item.urgency === "today") {
-            navigate("/today");
-          } else {
-            navigate("/inbox");
-          }
-          // Open detail panel after a tick so the view renders first
-          setTimeout(() => handleItemClick(item), 50);
-          omnibar.close();
-        }
+        // Fallback click handler for entity types not handled by onItemClick/onEventClick
+        navigate("/inbox");
+        omnibar.close();
       },
       onClose: () => { omnibar.close(); setShowWeatherExpanded(false); },
       onOpen: () => { omnibar.open("bar"); setSelectedItem(null); setIsDetailOpen(false); },
@@ -1097,6 +1100,8 @@ export function App() {
           isCalendarBrettStreaming={calendarBrett.isStreaming}
           isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
           calendarBrettAiConfigured={calendarBrett.aiConfigured}
+          calendarRelatedItems={calendarRelatedItemsData?.relatedItems}
+          calendarMeetingHistory={calendarMeetingHistoryData ?? null}
           meetingNote={meetingNote ? {
             id: meetingNote.id,
             title: meetingNote.title,
@@ -1204,6 +1209,7 @@ export function App() {
               currentListId={triageState.currentListId}
               currentDueDate={triageState.currentDueDate}
               currentDueDatePrecision={triageState.currentDueDatePrecision}
+              suggestedLists={listSuggestionsData?.suggestions}
               onConfirm={handleTriageConfirm}
               onCancel={handleTriageCancel}
             />
@@ -1236,21 +1242,11 @@ export function App() {
           onSend={(text, intent) => omnibar.send(text, currentView, intent)}
           onCreateTask={(title: string) => omnibar.createTask(title, currentView)}
           onSearch={omnibar.searchThings}
-          searchResults={omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null}
+          searchResults={omnibar.searchResults ?? null}
           isSearching={omnibar.isSearching}
           onSearchResultClick={(id: string) => {
-            const item = omnibar.searchResults?.find((t) => t.id === id);
-            if (item) {
-              if (item.listId && item.list) {
-                navigate(`/lists/${slugify(item.list)}`);
-              } else if (item.urgency === "overdue" || item.urgency === "today") {
-                navigate("/today");
-              } else {
-                navigate("/inbox");
-              }
-              setTimeout(() => handleItemClick(item), 50);
-              omnibar.close();
-            }
+            navigate("/inbox");
+            omnibar.close();
           }}
           onClose={() => { setSpotlightInitialAction(null); omnibar.close(); }}
           onCancel={omnibar.cancel}

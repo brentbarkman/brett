@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { streamingFetch } from "./streaming";
 import { useAIConfigs } from "./ai-config";
 import { apiFetch } from "./client";
-import type { StreamChunk, DisplayHint, Thing } from "@brett/types";
+import type { StreamChunk, DisplayHint } from "@brett/types";
 
 export interface OmnibarMessage {
   role: "user" | "assistant";
@@ -15,6 +15,16 @@ export interface OmnibarMessage {
     result: unknown;
     displayHint?: DisplayHint;
   }>;
+}
+
+export interface SearchResult {
+  entityType: string;
+  entityId: string;
+  title: string;
+  snippet: string;
+  score: number;
+  matchType: "keyword" | "semantic" | "both";
+  metadata: Record<string, unknown>;
 }
 
 export type OmnibarMode = "bar" | "spotlight";
@@ -282,7 +292,7 @@ export function useOmnibar() {
 
   // Local action: search things directly (no AI needed)
   // Shows results as a one-shot display, not a conversation
-  const [searchResults, setSearchResults] = useState<Thing[] | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
   const searchThings = useCallback(async (query: string) => {
@@ -294,8 +304,8 @@ export function useOmnibar() {
     setSearchResults(null);
 
     try {
-      const results = await apiFetch<Thing[]>(`/things?search=${encodeURIComponent(trimmed)}`);
-      setSearchResults(results);
+      const resp = await apiFetch<{ results: SearchResult[] }>(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      setSearchResults(resp.results);
     } catch {
       setSearchResults([]);
     } finally {

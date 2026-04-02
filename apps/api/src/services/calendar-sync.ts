@@ -12,6 +12,7 @@ import { publishSSE } from "../lib/sse.js";
 import { generatePendingTakes } from "./brett-take-generator.js";
 import { createRelinkTask } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
+import { enqueueEmbed } from "@brett/ai";
 import { createHmac } from "crypto";
 import type { calendar_v3 } from "googleapis";
 
@@ -589,6 +590,9 @@ async function upsertEvents(
     } else {
       updated.push(result.id);
     }
+
+    // Enqueue embedding for created or updated events
+    enqueueEmbed({ entityType: "calendar_event", entityId: result.id, userId });
   }
 
   return { created, updated, deleted };

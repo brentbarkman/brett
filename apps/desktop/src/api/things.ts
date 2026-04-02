@@ -205,6 +205,17 @@ export function useRetryExtraction() {
   });
 }
 
+export function useListSuggestions(itemId: string | null) {
+  return useQuery({
+    queryKey: ["list-suggestions", itemId],
+    queryFn: () =>
+      apiFetch<{ suggestions: Array<{ listId: string; listName: string; similarity: number }> }>(
+        `/things/${itemId}/list-suggestions`
+      ),
+    enabled: !!itemId,
+  });
+}
+
 export function useDeleteThing() {
   const qc = useQueryClient();
 
