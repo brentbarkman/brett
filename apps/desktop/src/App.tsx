@@ -63,6 +63,7 @@ import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/gra
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useBackground } from "./hooks/useBackground";
+import { useFavicon } from "./hooks/useFavicon";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
 import { usePreference } from "./api/preferences";
@@ -859,6 +860,12 @@ export function App() {
   }, [createThing, uploadAttachment]);
 
   const inboxCount = inboxData?.visible.length ?? 0;
+
+  // Dynamic favicon: working (Brett streaming) > active (has today items) > default
+  const faviconState = omnibar.isStreaming ? "working" as const
+    : activeThingsForCount.length > 0 ? "active" as const
+    : "default" as const;
+  useFavicon(faviconState);
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
