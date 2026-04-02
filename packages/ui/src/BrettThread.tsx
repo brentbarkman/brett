@@ -205,7 +205,7 @@ export function BrettThread({
         className="flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <BrettMark size={14} thinking={isStreaming} />
+          <BrettMark size={16} thinking={isStreaming} />
           <span className="text-xs font-medium text-white/60">
             Brett
             {(totalCount ?? messages.length) > 0

@@ -595,7 +595,7 @@ function NavItem({
             </span>
           )}
           {badge !== undefined && badge > 0 && (
-            <span className="bg-brett-gold text-brett-bg text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+            <span className="bg-brett-gold text-brett-bg text-[11px] font-extrabold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-tight">
               {badge}
             </span>
           )}

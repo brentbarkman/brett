@@ -433,7 +433,7 @@ export function SpotlightModal({
         {/* Streaming indicator */}
         {hasConversation && isStreaming && (
           <div className="border-t border-white/10 px-5 py-3 flex items-center gap-2">
-            <BrettMark size={16} className="flex-shrink-0" />
+            <BrettMark size={20} className="flex-shrink-0" thinking />
             <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>
             {onCancel && (
               <button

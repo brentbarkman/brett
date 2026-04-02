@@ -16,60 +16,42 @@ interface BrettMarkProps {
  * Use this wherever Brett the AI character appears:
  * chat avatar, Brett's Take indicator, omnibar AI dot, thinking state.
  *
- * When `thinking` is true, the gold dot pulses with an organic rhythm.
+ * When `thinking` is true, the cerulean line animates left-to-right
+ * repeatedly — like a signal being transmitted from the gold dot.
  */
 export function BrettMark({ size = 16, className = "", thinking = false }: BrettMarkProps) {
   return (
     <svg
       width={size}
-      height={size * 0.5}
+      height={size * 0.55}
       viewBox="0 0 52 28"
       className={className}
     >
-      <style>
-        {`
-          @keyframes brettDotBreathe {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            40% { transform: scale(1.2); opacity: 0.85; }
-            70% { transform: scale(1.05); opacity: 0.95; }
-          }
-        `}
-      </style>
-      <circle
-        cx="10"
-        cy="14"
-        r="5"
-        fill="#E8B931"
-        style={thinking ? {
-          transformOrigin: "10px 14px",
-          animation: "brettDotBreathe 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite",
-        } : undefined}
-      />
       {thinking && (
-        <circle
-          cx="10"
-          cy="14"
-          r="8"
-          fill="none"
-          stroke="#E8B931"
-          strokeWidth="1"
-          opacity="0.2"
-          style={{
-            transformOrigin: "10px 14px",
-            animation: "brettDotBreathe 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite",
-            animationDelay: "0.3s",
-          }}
-        />
+        <style>
+          {`
+            @keyframes brettLineExtend {
+              0% { stroke-dashoffset: 25; }
+              50% { stroke-dashoffset: 0; }
+              100% { stroke-dashoffset: 25; }
+            }
+          `}
+        </style>
       )}
+      <circle cx="10" cy="14" r="5.5" fill="#E8B931" />
       <line
         x1="19"
         y1="14"
-        x2="42"
+        x2="44"
         y2="14"
         stroke="#4682C3"
         strokeWidth="3"
         strokeLinecap="round"
-        opacity="0.7"
+        opacity={thinking ? "0.9" : "0.85"}
+        style={thinking ? {
+          strokeDasharray: "25",
+          animation: "brettLineExtend 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+        } : undefined}
       />
     </svg>
   );

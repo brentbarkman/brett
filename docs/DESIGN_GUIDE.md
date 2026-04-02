@@ -273,7 +273,7 @@ Non-blocking, barely perceptible motion that makes the UI feel alive:
 
 - **Background image transitions:** cross-fade over ~1.5s when changing (time of day, manual switch)
 - **Omnibar gold glow:** subtle box-shadow warmth shift by time of day — crisper morning, softer evening. CSS custom property driven.
-- **Streaming cursor (Brett thinking):** organic, slightly irregular pulse rhythm — alive, not mechanical
+- **Streaming cursor (Brett thinking):** the cerulean line in Brett's mark animates left-to-right repeatedly (stroke-dashoffset, 1.8s loop) — like a signal being transmitted from the gold dot. The dot stays static; the line does the work.
 
 ### Easing Curves
 
@@ -411,7 +411,7 @@ The "single bullet" — one dot + one horizontal line. Represents the AI assista
 - **Dot:** Gold `#E8B931`
 - **Line:** Solid cerulean `#4682C3` at 70% opacity
 - **Used for:** Chat avatar, Brett's Take indicator, omnibar AI dot, tray icon (working state), favicon (working state)
-- **Behavior:** Animated. The gold dot pulses organically when Brett is thinking/working.
+- **Behavior:** Animated. When thinking/working, the cerulean line draws left-to-right repeatedly (stroke-dashoffset animation, 1.8s loop). The gold dot stays static — the line carries the motion.
 
 The single bullet is a component extracted from the product mark — they share the same geometry. When you see the stack, it's the app. When you see the single, Brett is talking.
 
@@ -430,7 +430,7 @@ The wordmark is the user's chosen assistant name (default "Brett") set in **Swit
 | **Tray — Brett working** | Brett (single) | Full color (gold + cerulean) | Gentle pulse via `Tray.setImage()` |
 | **Tray — notification** | Product (stacked) + badge | Monochrome + gold dot overlay | Static badge |
 | **LeftNav header** | Product (stacked) + wordmark | Gold | Static |
-| **Chat avatar** | Brett (single) | Gold dot + cerulean line | Static (pulse on thinking) |
+| **Chat avatar** | Brett (single) | Gold dot + cerulean line | Static (line draws on thinking) |
 | **Brett's Take label** | Brett (single, small) | Gold dot + cerulean line | Static |
 
 ### Asset Files
@@ -460,7 +460,7 @@ apps/desktop/
 ### Animation Notes
 
 - **Product mark in splash screen:** Lines stagger in one by one (30ms delay), each fading up from nothing — like a brief being composed in real time
-- **Brett's mark (thinking):** Gold dot pulses with organic rhythm (framer-motion, ~2.5s, irregular ease). The line stays static.
+- **Brett's mark (thinking):** Cerulean line draws left-to-right repeatedly (stroke-dashoffset, 1.8s loop, ease). The gold dot stays static — the line carries the motion, like a signal being transmitted.
 - **Tray state transitions:** Swap icon file instantly via `Tray.setImage()` — no animation on the icon itself, the state change IS the communication.
 
 ---
