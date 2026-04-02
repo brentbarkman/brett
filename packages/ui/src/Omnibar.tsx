@@ -374,7 +374,7 @@ export function Omnibar({
             onClick={() => !isOpen && onOpen()}
           >
             <BrettMark
-              size={22}
+              size={26}
               className={`flex-shrink-0 transition-opacity ${
                 isOpen ? "opacity-100" : "opacity-50"
               }`}
@@ -553,7 +553,7 @@ export function Omnibar({
 
             {/* Bottom Input — the ONLY input when conversation is active */}
             <div className="border-t border-white/10 px-4 py-2.5 flex items-center gap-3">
-              <BrettMark size={20} className="flex-shrink-0" thinking={isStreaming} />
+              <BrettMark size={22} className="flex-shrink-0" thinking={isStreaming} />
               {isStreaming ? (
                 <>
                   <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>

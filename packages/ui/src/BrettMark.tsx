@@ -13,18 +13,14 @@ interface BrettMarkProps {
 
 /**
  * Brett's AI mark: gold dot + solid cerulean line.
- * Use this wherever Brett the AI character appears:
- * chat avatar, Brett's Take indicator, omnibar AI dot, thinking state.
  *
- * When `thinking` is true, the cerulean line animates left-to-right
- * repeatedly — like a signal being transmitted from the gold dot.
- *
- * The line is deliberately thick and full-opacity to stay visible
- * at small sizes on glass surfaces over dynamic backgrounds.
+ * When `thinking` is true, the cerulean line shoots out from the dot
+ * and retracts repeatedly — a visible signal pulse.
  */
 export function BrettMark({ size = 16, className = "", thinking = false }: BrettMarkProps) {
-  // At small sizes (<16), bump stroke proportionally so the line reads
-  const strokeWidth = size <= 14 ? 4 : 3.5;
+  const strokeWidth = size <= 14 ? 4.5 : 4;
+  const lineLen = 25; // length of the line in viewBox units
+
   return (
     <svg
       width={size}
@@ -35,15 +31,31 @@ export function BrettMark({ size = 16, className = "", thinking = false }: Brett
       {thinking && (
         <style>
           {`
-            @keyframes brettLineExtend {
-              0% { stroke-dashoffset: 25; }
-              50% { stroke-dashoffset: 0; }
-              100% { stroke-dashoffset: 25; }
+            @keyframes brettSignalPulse {
+              0% {
+                stroke-dashoffset: ${lineLen};
+                opacity: 0.4;
+              }
+              40% {
+                stroke-dashoffset: 0;
+                opacity: 1;
+              }
+              70% {
+                stroke-dashoffset: 0;
+                opacity: 1;
+              }
+              100% {
+                stroke-dashoffset: ${lineLen};
+                opacity: 0.4;
+              }
             }
           `}
         </style>
       )}
       <circle cx="10" cy="14" r="6" fill="#E8B931" />
+      {thinking && (
+        <circle cx="10" cy="14" r="9" fill="none" stroke="#E8B931" strokeWidth="1.5" opacity="0.25" />
+      )}
       <line
         x1="19"
         y1="14"
@@ -53,8 +65,9 @@ export function BrettMark({ size = 16, className = "", thinking = false }: Brett
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         style={thinking ? {
-          strokeDasharray: "25",
-          animation: "brettLineExtend 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+          strokeDasharray: `${lineLen}`,
+          strokeDashoffset: `${lineLen}`,
+          animation: "brettSignalPulse 1.4s ease-in-out infinite",
         } : undefined}
       />
     </svg>
