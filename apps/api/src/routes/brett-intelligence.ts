@@ -203,6 +203,21 @@ brettIntelligence.post(
     const { stream } = buildStream(
       { input, provider, providerName, prisma, registry, sessionId: session.id },
       session.id,
+      {
+        onDone: (content) => {
+          prisma.calendarEvent
+            .update({
+              where: { id: eventId },
+              data: {
+                brettObservation: content,
+                brettObservationAt: new Date(),
+              },
+            })
+            .catch((err: unknown) =>
+              console.error("Failed to update event brettObservation:", err),
+            );
+        },
+      },
     );
 
     return sseResponse(stream);
