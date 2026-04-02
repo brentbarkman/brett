@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from "react";
-import { Send, Square, X, Sparkles, Search, Plus, Check, Radar } from "lucide-react";
+import { Send, Square, X, Search, Plus, Check, Radar } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
@@ -195,7 +195,7 @@ export function SpotlightModal({
         suggestions.push({
           id: "ask",
           label: `Ask Brett: "${input}"`,
-          icon: <Sparkles size={14} className="text-brett-cerulean" />,
+          icon: <BrettMark size={14} />,
           action: "ask",
         });
       }
@@ -518,7 +518,7 @@ export function SpotlightModal({
           <div className="px-5 py-6">
             {!hasAI ? (
               <div className="flex items-start gap-3 p-3 rounded-lg bg-brett-cerulean/5 border border-brett-cerulean/10">
-                <Sparkles size={16} className="text-brett-cerulean flex-shrink-0 mt-0.5" />
+                <BrettMark size={16} className="flex-shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <p className="text-sm text-white/70">
                     Add an AI provider to unlock Brett's full capabilities — ask questions, get briefings, and manage everything with natural language.
