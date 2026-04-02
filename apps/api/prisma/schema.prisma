@@ -52,6 +52,7 @@ model User {
   conversationSessions ConversationSession[]
   facts                UserFact[]
   conversationEmbeddings ConversationEmbedding[]
+  embeddings             Embedding[]
   usageLogs            AIUsageLog[]
   weatherCache         WeatherCache?
   granolaAccount         GranolaAccount?
@@ -201,6 +202,7 @@ model ItemLink {
   fromItem   Item     @relation("linksFrom", fields: [fromItemId], references: [id], onDelete: Cascade)
   toItemId   String   // polymorphic — no FK constraint
   toItemType String   // "task" | "content" | future types
+  source     String   @default("manual") // "manual" | "embedding"
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
@@ -454,6 +456,22 @@ model ConversationEmbedding {
   embedding Unsupported("vector(1536)")
   createdAt DateTime            @default(now())
 
+  @@index([userId])
+}
+
+model Embedding {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityType String   // "item" | "calendar_event" | "meeting_note" | "scout_finding" | "conversation"
+  entityId   String
+  chunkIndex Int      @default(0)
+  chunkText  String   @db.Text
+  embedding  Unsupported("vector(1024)")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([entityType, entityId, chunkIndex])
   @@index([userId])
 }
 
