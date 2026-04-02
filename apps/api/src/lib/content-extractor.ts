@@ -4,6 +4,7 @@ import { safeFetch, readBodyWithLimit, readBinaryWithLimit } from "./ssrf-guard.
 import { detectContentType } from "./url-detector.js";
 import { sanitizeFilename } from "./sanitize-filename.js";
 import { prisma } from "./prisma.js";
+import { enqueueEmbed } from "@brett/ai";
 import { publishSSE } from "./sse.js";
 import type { ContentType, ContentMetadata, ContentStatus } from "@brett/types";
 
@@ -366,6 +367,9 @@ export async function runExtraction(itemId: string, url: string, userId: string)
       where: { id: itemId },
       data: updateData,
     });
+
+    // Re-embed with extracted content (title, description, body may have changed)
+    enqueueEmbed({ entityType: "item", entityId: itemId, userId });
 
     publishSSE(userId, {
       type: "content.extracted",

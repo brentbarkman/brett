@@ -5,6 +5,7 @@ import { getPresignedUrl } from "../lib/storage.js";
 import { itemToThing, validateCreateItem, validateBulkUpdate, validateUpdateItem, computeNextDueDate } from "@brett/business";
 import { runExtraction } from "../lib/content-extractor.js";
 import { detectContentType } from "@brett/utils";
+import { enqueueEmbed, deleteEmbeddings } from "@brett/ai";
 import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
 
 const things = new Hono<AuthEnv>();
@@ -301,6 +302,8 @@ things.post("/", async (c) => {
 
   const thing = itemToThing(item as any);
 
+  enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id });
+
   // Fire-and-forget extraction for content items
   if (data.type === "content" && data.sourceUrl) {
     runExtraction(item.id, data.sourceUrl, user.id).catch((err) =>
@@ -417,6 +420,11 @@ things.patch("/:id", async (c) => {
     include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } }, linksFrom: true },
   });
 
+  // Re-embed if text fields changed
+  if (data.title !== undefined || data.description !== undefined || data.notes !== undefined) {
+    enqueueEmbed({ entityType: "item", entityId: id, userId: user.id });
+  }
+
   // If recurrence was just set on an already-completed task, spawn next occurrence now
   const recurrenceJustSet = data.recurrence !== undefined && data.recurrence !== null;
   const wasAlreadyCompleted = existing.completedAt !== null;
@@ -463,6 +471,7 @@ things.delete("/:id", async (c) => {
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
 
+  await deleteEmbeddings("item", existing.id, prisma);
   await prisma.item.delete({ where: { id: existing.id } });
   return c.json({ ok: true });
 });

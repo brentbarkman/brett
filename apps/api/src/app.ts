@@ -25,6 +25,9 @@ import { config } from "./routes/config.js";
 import { scouts } from "./routes/scouts.js";
 import { internalScoutsRouter } from "./routes/internal-scouts.js";
 import { startCronJobs } from "./jobs/cron.js";
+import { setEmbedProcessor } from "@brett/ai";
+import { getEmbeddingProvider } from "./lib/embedding-provider.js";
+import { prisma } from "./lib/prisma.js";
 
 export const app = new Hono();
 
@@ -77,5 +80,20 @@ app.route("/events", sse);
 app.route("/webhooks", webhooks);
 app.route("/granola/auth", granolaAuth);
 app.route("/scouts", scouts);
+
+// Initialize embedding pipeline (no-op if EMBEDDING_API_KEY is not set)
+const embeddingProvider = getEmbeddingProvider();
+if (embeddingProvider) {
+  setEmbedProcessor(async (job) => {
+    const { embedEntity } = await import("@brett/ai");
+    await embedEntity({
+      entityType: job.entityType,
+      entityId: job.entityId,
+      userId: job.userId,
+      provider: embeddingProvider,
+      prisma,
+    });
+  });
+}
 
 startCronJobs();

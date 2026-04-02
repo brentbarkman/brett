@@ -1,4 +1,4 @@
-import { orchestrate, extractFacts } from "@brett/ai";
+import { orchestrate, extractFacts, enqueueEmbed } from "@brett/ai";
 import { prisma } from "./prisma.js";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, StreamChunk } from "@brett/types";
@@ -80,6 +80,7 @@ export function buildStream(
             .then(() => {
               const memoryCtx = opts?.memoryCtx;
               if (memoryCtx) {
+                enqueueEmbed({ entityType: "conversation", entityId: sessionId, userId: memoryCtx.userId });
                 extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma)
                   .catch((err) => console.error("[fact-extraction] Failed:", err.message));
               }
