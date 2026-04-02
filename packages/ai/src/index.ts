@@ -55,6 +55,13 @@ export {
   fuseResults,
 } from "./embedding/search.js";
 export type { SearchResult, RankedResult } from "./embedding/search.js";
+export {
+  findSimilarItems,
+  findDuplicates,
+  classifyMatches,
+  suggestLists,
+} from "./embedding/similarity.js";
+export type { SimilarityMatch, ClassifiedMatches } from "./embedding/similarity.js";
 
 // Orchestrator
 export { orchestrate } from "./orchestrator.js";
