@@ -104,8 +104,15 @@ export function LeftNav({
       <div
         className={`flex items-center gap-2 mb-8 ${isCollapsed ? "justify-center" : "px-2"}`}
       >
-        <div className="w-6 h-6 rounded bg-blue-500 flex items-center justify-center flex-shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.5)]">
-          <span className="text-white font-bold text-xs">B</span>
+        <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+          <svg width="24" height="24" viewBox="0 0 48 48" className="drop-shadow-[0_0_8px_rgba(232,185,49,0.4)]">
+            <circle cx="11" cy="14" r="3" fill="#E8B931"/>
+            <line x1="19" y1="14" x2="40" y2="14" stroke="#E8B931" strokeWidth="2.5" strokeLinecap="round"/>
+            <circle cx="11" cy="24" r="3" fill="#E8B931" opacity="0.6"/>
+            <line x1="19" y1="24" x2="34" y2="24" stroke="#E8B931" strokeWidth="2.5" strokeLinecap="round" opacity="0.6"/>
+            <circle cx="11" cy="34" r="3" fill="#E8B931" opacity="0.3"/>
+            <line x1="19" y1="34" x2="28" y2="34" stroke="#E8B931" strokeWidth="2.5" strokeLinecap="round" opacity="0.3"/>
+          </svg>
         </div>
         {!isCollapsed && (
           <span className="text-white font-bold tracking-wide">Brett</span>
@@ -183,7 +190,7 @@ export function LeftNav({
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         {!isCollapsed && (
           <div className="flex items-center justify-between px-3 mb-3">
-            <h3 className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+            <h3 className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
               Lists
             </h3>
             {onCreateList && (
@@ -387,7 +394,7 @@ function SortableListItem({
               isOver
                 ? `${dropHighlight} border border-white/20 text-white`
                 : isActive
-                  ? "bg-white/10 text-white border border-transparent relative before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-blue-500 before:rounded-full"
+                  ? "bg-white/10 text-white border border-transparent relative before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-brett-gold before:rounded-full"
                   : "text-white/80 hover:bg-white/5 hover:text-white/90 border border-transparent"
             }
           `}
@@ -572,7 +579,7 @@ function NavItem({
       relative flex items-center w-full rounded-lg transition-colors duration-200 group
       ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-3"}
       ${isActive
-        ? "bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-blue-500 before:rounded-full"
+        ? "bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-brett-gold before:rounded-full"
         : "text-white/80 hover:bg-white/5 hover:text-white/90"
       }
     `}
@@ -594,7 +601,7 @@ function NavItem({
             </span>
           )}
           {badge !== undefined && badge > 0 && (
-            <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+            <span className="bg-brett-gold text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
               {badge}
             </span>
           )}
@@ -629,7 +636,7 @@ function ArchivedListsSection({
           size={12}
           className={`transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
         />
-        <span className="font-mono text-xs uppercase tracking-wider font-semibold">
+        <span className="text-[10px] uppercase tracking-[0.15em] font-semibold">
           Archived
         </span>
       </button>
