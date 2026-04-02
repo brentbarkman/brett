@@ -93,7 +93,7 @@ function renderBriefingLine(
           <button
             key={i}
             onClick={() => onItemClick(matched.id)}
-            className="font-semibold text-brett-cerulean/90 hover:text-brett-cerulean/80 transition-colors cursor-pointer"
+            className="font-semibold text-brett-gold hover:text-brett-gold/80 transition-colors cursor-pointer"
           >
             {inner}
           </button>
@@ -111,7 +111,7 @@ function renderBriefingLine(
           <button
             key={i}
             onClick={() => onItemClick(matched.id)}
-            className="text-brett-cerulean/90 hover:text-brett-cerulean/80 transition-colors cursor-pointer"
+            className="text-brett-gold hover:text-brett-gold/80 transition-colors cursor-pointer"
           >
             {inner}
           </button>
