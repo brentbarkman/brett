@@ -319,7 +319,10 @@ export async function hybridSearch(
 
   const [kwResults, vecResults] = await Promise.all([
     keywordSearch(userId, query, types, prisma, limit),
-    vectorSearch(userId, query, types, provider, prisma, limit),
+    vectorSearch(userId, query, types, provider, prisma, limit).catch((err) => {
+      console.error("[embedding] Vector search failed, falling back to keyword-only:", err.message);
+      return [] as RankedResult[];
+    }),
   ]);
 
   return fuseResults(kwResults, vecResults, limit);

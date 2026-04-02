@@ -377,9 +377,6 @@ importers:
       openai:
         specifier: ^6.32.0
         version: 6.32.0
-      voyageai:
-        specifier: ^0.2.1
-        version: 0.2.1
     devDependencies:
       typescript:
         specifier: ^5.3.0
@@ -15360,23 +15357,6 @@ packages:
 
   /vlq@1.0.1:
     resolution: {integrity: sha512-gQpnTgkubC6hQgdIcRdYGDSDc+SaujOdyesZQMv6JlfQee/9Mp0Qhnys6WxDWvQnL5WZdT7o2Ul187aSt0Rq+w==}
-    dev: false
-
-  /voyageai@0.2.1:
-    resolution: {integrity: sha512-ym7Dk6p8Si6lR9wDh58EzxwT0ziD/pqXjzzzceOSySO3Ic3uosHZLOTAsb3Gq+1OaKdEMnni/p8TohKUNvLTkg==}
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      '@huggingface/transformers': ^3.8.0
-      onnxruntime-node: '>=1.17.0'
-    peerDependenciesMeta:
-      '@huggingface/transformers':
-        optional: true
-      onnxruntime-node:
-        optional: true
-    dependencies:
-      node-fetch: 2.7.0
-    transitivePeerDependencies:
-      - encoding
     dev: false
 
   /w3c-keyname@2.2.8:
