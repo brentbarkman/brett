@@ -93,13 +93,26 @@ export function useBrettChat(opts: {
 
   const totalCount = historyQuery.data?.pages[0]?.totalCount ?? 0;
 
-  // Combine: history (newest first) + streaming messages
-  // streamingMessages are appended in send order (oldest to newest within streaming batch)
-  // We keep them separate: history is newest-first, streaming is in append order
-  // The component (BrettThread) reverses history for display; streaming messages go at the end
+  // Combine: history (newest first from API) + streaming messages (in send order).
+  // Streaming messages are prepended to the newest-first list so that when
+  // BrettThread reverses the array, they appear at the bottom (most recent).
+  // Deduplicate by filtering out history messages that match streaming temp IDs
+  // or have the same content+role (for the brief window after server persists but
+  // before streamingMessages are cleared).
   const messages = useMemo(() => {
     if (streamingMessages.length === 0) return historyMessages;
-    return [...historyMessages, ...streamingMessages];
+    // Streaming messages go at the START of the newest-first array
+    // (they're the newest messages), in reverse send order to match newest-first
+    const streamReversed = [...streamingMessages].reverse();
+    // Deduplicate: if history already contains a message matching streaming content,
+    // skip the history copy (server persisted it but we haven't cleared streaming yet)
+    const streamingContents = new Set(
+      streamingMessages.map((m) => `${m.role}:${m.content}`),
+    );
+    const dedupedHistory = historyMessages.filter(
+      (m) => !streamingContents.has(`${m.role}:${m.content}`),
+    );
+    return [...streamReversed, ...dedupedHistory];
   }, [historyMessages, streamingMessages]);
 
   // ─── Send message ───
