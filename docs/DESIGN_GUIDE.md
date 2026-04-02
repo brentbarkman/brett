@@ -436,6 +436,76 @@ Brett is an assistant, but the best kind — the kind that challenges you.
 
 **Error voice rule:** Errors are clinical and helpful, never cute. Being witty when something broke is annoying. State what happened, what to try, and where to escalate.
 
+### Brett AI Surfaces — Consistency Rules
+
+Brett appears in multiple surfaces. **All must feel like the same character.** The Omnibar is the reference implementation — when in doubt, match it.
+
+#### The Surfaces
+
+| Surface | Component | Role |
+|---------|-----------|------|
+| **Omnibar** | `Omnibar.tsx` | Primary input — always visible, top of main content |
+| **⌘K Spotlight** | `SpotlightModal.tsx` | Modal variant of omnibar — same hook, shared behavior |
+| **Brett Chat** | `BrettThread.tsx` | Contextual chat in detail panels (tasks + calendar events) |
+| **Brett's Take** | In `CalendarEventDetailPanel.tsx` | Pre-generated insight callout on calendar events |
+| **Daily Briefing** | `DailyBriefing.tsx` | Morning summary card |
+
+#### Visual Identity (Non-Negotiable)
+
+| Element | Standard | Notes |
+|---------|----------|-------|
+| **Icon** | `Bot` from lucide-react, `text-blue-400` | Every AI surface shows this icon. Never use dots as substitutes. |
+| **Streaming cursor** | `bg-amber-400` pulsing rectangle | Amber = "working on it." Never blue (conflicts with UI chrome). |
+| **"Thinking" text** | "Brett is thinking..." | Show in ALL surfaces during streaming. Anthropomorphizes, users like it. |
+| **Message cards** | `bg-white/5 rounded-lg px-3.5 py-3 border border-white/10` | Assistant messages always get glass cards. Never render flat. |
+| **Send button** | `bg-blue-500 text-white hover:bg-blue-600` | Solid blue. Never translucent — must look tappable. |
+| **Input placeholder** | "Ask Brett anything..." | Same text everywhere. Consistent voice. |
+| **Brett's brand color** | Blue (`blue-400/500`) | All Brett surfaces use blue. Never purple, never green. |
+
+#### Brett's Take Callout
+
+```jsx
+// Blue accent, left border, italic quoted text
+<div className="bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
+  <div className="flex items-center gap-2 mb-2">
+    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+    <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
+      Brett&apos;s Take
+    </span>
+  </div>
+  <p className="text-sm italic text-blue-300/90 leading-relaxed">
+    &ldquo;{observation}&rdquo;
+  </p>
+</div>
+```
+
+#### "AI Not Configured" State
+
+When the user hasn't set up an AI provider, show a warm amber callout — not an error, an invitation:
+
+```jsx
+<div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
+  <p className="text-xs text-amber-300/80">
+    Brett needs an AI provider to work his magic.
+    Set one up in <button>Settings</button>.
+  </p>
+</div>
+```
+
+Use the same copy and styling across ALL surfaces. Never show a 403 error or clinical "not configured" message.
+
+#### When Adding New Brett Surfaces
+
+1. Import and display the `Bot` icon in `text-blue-400`
+2. Use amber streaming cursor, never blue
+3. Show "Brett is thinking..." during streaming
+4. Wrap assistant responses in glass cards
+5. Use "Ask Brett anything..." as placeholder
+6. Follow the "not configured" amber callout pattern
+7. Read the Omnibar source as your reference
+
+---
+
 ### Data as Art / Environmental Design
 
 The app should feel alive and responsive to context — not a static dark shell.
