@@ -1,13 +1,23 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Plus, X, Zap, BookOpen, Link2, Loader2 } from "lucide-react";
+import { Plus, X, Zap, BookOpen, Link2, Loader2, Sparkles } from "lucide-react";
 import type { ItemLink, Thing } from "@brett/types";
 import { useClickOutside } from "./useClickOutside";
+
+export interface SuggestionItem {
+  entityId: string;
+  title: string;
+  type: string;
+  status: string;
+  similarity: number;
+}
 
 interface LinkedItemsListProps {
   links: ItemLink[];
   onAddLink: (toItemId: string, toItemType: string) => void;
   onRemoveLink: (linkId: string) => void;
   searchItems: (query: string) => Promise<Thing[]>;
+  suggestions?: SuggestionItem[];
+  onPromoteSuggestion?: (entityId: string, type: string) => void;
 }
 
 function getTypeIcon(type: string) {
@@ -20,6 +30,8 @@ export function LinkedItemsList({
   onAddLink,
   onRemoveLink,
   searchItems,
+  suggestions,
+  onPromoteSuggestion,
 }: LinkedItemsListProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -125,9 +137,14 @@ export function LinkedItemsList({
               <span className="flex-1 text-sm text-white/70 truncate">
                 {link.toItemTitle ?? "Untitled"}
               </span>
+              {link.source === "embedding" && (
+                <Sparkles size={10} className="text-amber-400/50 shrink-0" />
+              )}
               <button
                 onClick={() => onRemoveLink(link.id)}
-                className="p-0.5 text-white/30 hover:text-white hover:bg-white/10 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                className={`p-0.5 text-white/30 hover:text-white hover:bg-white/10 rounded-full transition-colors ${
+                  link.source === "embedding" ? "opacity-50 group-hover:opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
               >
                 <X size={12} />
               </button>
@@ -141,6 +158,34 @@ export function LinkedItemsList({
             <span className="text-xs">No linked items</span>
           </div>
         )
+      )}
+
+      {/* Suggestions */}
+      {suggestions && suggestions.length > 0 && onPromoteSuggestion && (
+        <div className="mt-3">
+          <span className="font-mono text-xs uppercase tracking-wider text-white/30 font-semibold mb-1.5 block">
+            Suggested
+          </span>
+          <div className="space-y-1">
+            {suggestions.map((s) => (
+              <div
+                key={s.entityId}
+                className="group flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                {getTypeIcon(s.type)}
+                <span className="flex-1 text-sm text-white/40 truncate">
+                  {s.title}
+                </span>
+                <button
+                  onClick={() => onPromoteSuggestion(s.entityId, s.type)}
+                  className="p-0.5 text-white/30 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

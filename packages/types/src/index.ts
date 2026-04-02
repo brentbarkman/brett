@@ -137,6 +137,7 @@ export interface ItemLink {
   toItemId: string;
   toItemType: string;
   toItemTitle?: string; // resolved on read
+  source?: string; // "manual" | "embedding"
   createdAt: string;
 }
 

@@ -25,6 +25,7 @@ import { config } from "./routes/config.js";
 import { scouts } from "./routes/scouts.js";
 import { internalScoutsRouter } from "./routes/internal-scouts.js";
 import searchRouter from "./routes/search.js";
+import suggestionsRouter from "./routes/suggestions.js";
 import { startCronJobs } from "./jobs/cron.js";
 import { setEmbedProcessor } from "@brett/ai";
 import { getEmbeddingProvider } from "./lib/embedding-provider.js";
@@ -82,6 +83,7 @@ app.route("/webhooks", webhooks);
 app.route("/granola/auth", granolaAuth);
 app.route("/scouts", scouts);
 app.route("/api", searchRouter);
+app.route("/api", suggestionsRouter);
 
 // Initialize embedding pipeline (no-op if EMBEDDING_API_KEY is not set)
 const embeddingProvider = getEmbeddingProvider();

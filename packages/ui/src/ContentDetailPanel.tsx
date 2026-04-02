@@ -13,6 +13,7 @@ import { ScheduleRow } from "./ScheduleRow";
 import { RichTextEditor } from "./RichTextEditor";
 import { AttachmentList } from "./AttachmentList";
 import { LinkedItemsList } from "./LinkedItemsList";
+import type { SuggestionItem } from "./LinkedItemsList";
 import { BrettThread } from "./BrettThread";
 import type { BrettThreadMessage } from "./BrettThread";
 import { ContentPreview } from "./ContentPreview";
@@ -39,6 +40,9 @@ interface ContentDetailPanelProps {
   onAddLink?: (toItemId: string, toItemType: string) => void;
   onRemoveLink?: (linkId: string) => void;
   searchItems?: (query: string) => Promise<Thing[]>;
+  // Suggestions
+  suggestions?: SuggestionItem[];
+  onPromoteSuggestion?: (entityId: string, type: string) => void;
   // Brett thread
   brettMessages?: BrettThreadMessage[];
   brettHasMore?: boolean;
@@ -77,6 +81,8 @@ export function ContentDetailPanel({
   onAddLink,
   onRemoveLink,
   searchItems,
+  suggestions,
+  onPromoteSuggestion,
   brettMessages,
   brettHasMore,
   onSendBrettMessage,
@@ -308,6 +314,8 @@ export function ContentDetailPanel({
               onAddLink={onAddLink}
               onRemoveLink={onRemoveLink}
               searchItems={searchItems}
+              suggestions={suggestions}
+              onPromoteSuggestion={onPromoteSuggestion}
             />
           )}
 

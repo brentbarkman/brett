@@ -44,7 +44,7 @@ links.post("/:itemId/links", async (c) => {
   if (existing) return c.json({ error: "Link already exists" }, 409);
 
   const link = await prisma.itemLink.create({
-    data: { fromItemId: itemId, toItemId: data.toItemId, toItemType: data.toItemType, userId: user.id },
+    data: { fromItemId: itemId, toItemId: data.toItemId, toItemType: data.toItemType, source: data.source ?? "manual", userId: user.id },
   });
 
   return c.json({

@@ -857,7 +857,7 @@ export function groupUpcomingThings(things: Thing[], now: Date = new Date()): Up
 
 export function validateCreateItemLink(
   input: unknown
-): { ok: true; data: { toItemId: string; toItemType: string } } | { ok: false; error: string } {
+): { ok: true; data: { toItemId: string; toItemType: string; source?: string } } | { ok: false; error: string } {
   if (!input || typeof input !== "object") {
     return { ok: false, error: "Request body is required" };
   }
@@ -872,7 +872,8 @@ export function validateCreateItemLink(
   if (!VALID_LINK_TYPES.has(obj.toItemType)) {
     return { ok: false, error: `toItemType must be one of: ${[...VALID_LINK_TYPES].join(", ")}` };
   }
-  return { ok: true, data: { toItemId: obj.toItemId, toItemType: obj.toItemType } };
+  const source = typeof obj.source === "string" ? obj.source : undefined;
+  return { ok: true, data: { toItemId: obj.toItemId, toItemType: obj.toItemType, source } };
 }
 
 export function validateCreateBrettMessage(

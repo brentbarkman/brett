@@ -16,6 +16,7 @@ import type {
   ConversationMessage,
 } from "./assembler.js";
 import { AI_CONFIG } from "../config.js";
+import { classifyMatches } from "./similarity.js";
 
 // --- Types ---
 
@@ -228,6 +229,51 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
     entityId,
     chunks.length
   );
+
+  // 5. Auto-link detection for items
+  if (entityType === "item") {
+    try {
+      const matches = await prisma.$queryRaw<Array<{ entityId: string; similarity: number }>>`
+        SELECT e2."entityId", 1 - (e1.embedding <=> e2.embedding) as similarity
+        FROM "Embedding" e1
+        JOIN "Embedding" e2 ON e2."userId" = ${userId} AND e2."entityType" = 'item' AND e2."entityId" != ${entityId} AND e2."chunkIndex" = 0
+        WHERE e1."entityType" = 'item' AND e1."entityId" = ${entityId} AND e1."chunkIndex" = 0
+        ORDER BY e1.embedding <=> e2.embedding
+        LIMIT 10
+      `;
+
+      const { autoLinks } = classifyMatches(matches);
+      for (const match of autoLinks) {
+        const existing = await prisma.itemLink.findFirst({
+          where: {
+            OR: [
+              { fromItemId: entityId, toItemId: match.entityId },
+              { fromItemId: match.entityId, toItemId: entityId },
+            ],
+          },
+        });
+        if (!existing) {
+          const target = await prisma.item.findFirst({
+            where: { id: match.entityId, userId },
+            select: { type: true },
+          });
+          if (target) {
+            await prisma.itemLink.create({
+              data: {
+                fromItemId: entityId,
+                toItemId: match.entityId,
+                toItemType: target.type,
+                source: "embedding",
+                userId,
+              },
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[embedding] Auto-link failed:", err);
+    }
+  }
 }
 
 /**

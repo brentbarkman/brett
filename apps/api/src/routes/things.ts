@@ -88,6 +88,7 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
       toItemId: l.toItemId,
       toItemType: l.toItemType,
       toItemTitle: itemMap.get(l.toItemId)?.title,
+      source: l.source ?? "manual",
       createdAt: l.createdAt.toISOString(),
     })),
     // Reverse: B→A stored as fromItemId=B, shown on A as linking to B
@@ -96,6 +97,7 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
       toItemId: l.fromItemId,
       toItemType: itemMap.get(l.fromItemId)?.type ?? "task",
       toItemTitle: itemMap.get(l.fromItemId)?.title,
+      source: l.source ?? "manual",
       createdAt: l.createdAt.toISOString(),
     })),
   ];
