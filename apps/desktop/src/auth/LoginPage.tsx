@@ -162,7 +162,7 @@ export function LoginPage() {
 
         <div className="flex items-center gap-3">
           <div className="h-px flex-1 border-t border-white/10" />
-          <span className="font-mono text-xs uppercase tracking-wider text-white/40">
+          <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
             or
           </span>
           <div className="h-px flex-1 border-t border-white/10" />
@@ -179,7 +179,7 @@ export function LoginPage() {
             <div>
               <label
                 htmlFor="name"
-                className="block font-mono text-xs uppercase tracking-wider text-white/40"
+                className="block text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40"
               >
                 Name
               </label>
@@ -189,7 +189,7 @@ export function LoginPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-blue-500/30 focus:outline-none"
+                className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-brett-gold/30 focus:outline-none"
                 placeholder="Your name"
                 tabIndex={isSignUp ? 0 : -1}
               />
@@ -209,7 +209,7 @@ export function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-blue-500/30 focus:outline-none"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-brett-gold/30 focus:outline-none"
               placeholder="you@example.com"
             />
           </div>
@@ -226,7 +226,7 @@ export function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-blue-500/30 focus:outline-none"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-brett-gold/30 focus:outline-none"
               placeholder="Min 8 characters"
             />
           </div>
@@ -242,7 +242,7 @@ export function LoginPage() {
                       setIsSignUp(true);
                       setError(null);
                     }}
-                    className="font-medium text-blue-400 hover:text-blue-300"
+                    className="font-medium text-brett-gold hover:text-brett-gold-dark"
                   >
                     Create one?
                   </button>
@@ -256,7 +256,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-full rounded-lg bg-brett-gold px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brett-gold-dark disabled:opacity-30 disabled:cursor-not-allowed"
           >
             {submitting
               ? "Loading..."
@@ -273,7 +273,7 @@ export function LoginPage() {
               setIsSignUp(!isSignUp);
               setError(null);
             }}
-            className="text-blue-400 hover:text-blue-300"
+            className="text-brett-gold hover:text-brett-gold-dark"
           >
             {isSignUp ? "Sign in" : "Sign up"}
           </button>

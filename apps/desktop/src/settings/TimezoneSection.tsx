@@ -113,7 +113,7 @@ export function TimezoneSection() {
             disabled={saving}
             className={`
               relative w-9 h-5 rounded-full transition-colors
-              ${isAuto ? "bg-blue-500" : "bg-white/10"}
+              ${isAuto ? "bg-brett-gold" : "bg-white/10"}
               ${saving ? "opacity-50" : ""}
             `}
           >
@@ -138,7 +138,7 @@ export function TimezoneSection() {
             onChange={handleTimezoneChange}
             disabled={saving}
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80
-              focus:outline-none focus:border-blue-500/50 disabled:opacity-50"
+              focus:outline-none focus:border-brett-gold/50 disabled:opacity-50"
           >
             {allTimezones.map((tz) => (
               <option key={tz} value={tz}>

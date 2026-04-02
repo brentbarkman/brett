@@ -103,7 +103,7 @@ export function CalendarMonthView({ month, events, onEventClick, onDayClick }: C
                     <span
                       className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full ${
                         isToday
-                          ? "bg-blue-500 text-white"
+                          ? "bg-brett-gold text-white"
                           : "text-white/60"
                       }`}
                     >

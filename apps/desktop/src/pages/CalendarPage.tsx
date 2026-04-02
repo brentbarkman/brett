@@ -153,7 +153,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
                   <div className={`text-[10px] font-medium uppercase tracking-wider ${isToday ? "text-white/60" : "text-white/30"}`}>
                     {day}
                   </div>
-                  <div className={`text-lg font-semibold mt-0.5 ${isToday ? "text-blue-400" : "text-white/20"}`}>
+                  <div className={`text-lg font-semibold mt-0.5 ${isToday ? "text-brett-gold" : "text-white/20"}`}>
                     {dayNum}
                   </div>
                 </div>
@@ -207,20 +207,20 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
                     {isToday && (
                       <button
                         onClick={() => connectCalendar.mutate()}
-                        className="absolute left-0 right-0 rounded-lg border border-blue-500/30 px-2.5 py-2 text-left cursor-pointer transition-all hover:brightness-125 hover:border-blue-500/50 group bg-blue-500/10 backdrop-blur-xl"
+                        className="absolute left-0 right-0 rounded-lg border border-brett-gold/30 px-2.5 py-2 text-left cursor-pointer transition-all hover:brightness-125 hover:border-brett-gold/50 group bg-brett-gold/10 backdrop-blur-xl"
                         style={{
                           top: `${ctaTop}px`,
                           height: `${1.5 * gh}px`,
                         }}
                       >
                         <div className="flex items-start gap-2">
-                          <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <CalendarDays size={12} className="text-blue-400" />
+                          <div className="w-6 h-6 rounded-full bg-brett-gold/20 border border-brett-gold/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <CalendarDays size={12} className="text-brett-gold" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="text-[10px] font-semibold text-blue-300 block">Connect your calendar</span>
+                            <span className="text-[10px] font-semibold text-brett-gold block">Connect your calendar</span>
                             <span className="text-[9px] text-white/40 block mt-0.5">Summaries, alerts & RSVP</span>
-                            <span className="text-[8px] text-blue-400/60 font-medium mt-1 block group-hover:text-blue-300 transition-colors">
+                            <span className="text-[8px] text-brett-gold/60 font-medium mt-1 block group-hover:text-brett-gold-dark transition-colors">
                               Click to connect →
                             </span>
                           </div>

@@ -133,7 +133,7 @@ export function LocationSection() {
             disabled={isSaving}
             className={`
               relative w-9 h-5 rounded-full transition-colors
-              ${weatherEnabled ? "bg-blue-500" : "bg-white/10"}
+              ${weatherEnabled ? "bg-brett-gold" : "bg-white/10"}
               ${isSaving ? "opacity-50" : ""}
             `}
           >
@@ -168,7 +168,7 @@ export function LocationSection() {
                   }}
                   placeholder={user?.city ?? "Search city…"}
                   className={`w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-sm
-                    focus:outline-none focus:border-blue-500/50
+                    focus:outline-none focus:border-brett-gold/50
                     ${query ? "text-white/80 placeholder:text-white/20" : user?.city ? "text-white/80 placeholder:text-white/70" : "text-white/80 placeholder:text-white/20"}`}
                 />
                 {isSearching && (
@@ -210,7 +210,7 @@ export function LocationSection() {
                 onChange={handleTempUnitChange}
                 disabled={isSaving}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80
-                  focus:outline-none focus:border-blue-500/50 disabled:opacity-50"
+                  focus:outline-none focus:border-brett-gold/50 disabled:opacity-50"
               >
                 <option value="auto">Auto (from locale)</option>
                 <option value="fahrenheit">Fahrenheit (°F)</option>

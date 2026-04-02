@@ -173,7 +173,7 @@ export function CalendarHeader({
                       {cal.name}
                     </span>
                     {cal.isVisible && (
-                      <span className="text-blue-400 text-xs">✓</span>
+                      <span className="text-brett-gold text-xs">✓</span>
                     )}
                   </button>
                 ))}

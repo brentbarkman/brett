@@ -22,7 +22,7 @@ export function BriefingSection() {
             onClick={() => setEnabled(!enabled)}
             className={`
               relative w-9 h-5 rounded-full transition-colors
-              ${enabled ? "bg-blue-500" : "bg-white/10"}
+              ${enabled ? "bg-brett-gold" : "bg-white/10"}
             `}
           >
             <span
@@ -45,7 +45,7 @@ export function BriefingSection() {
             </div>
             <button
               onClick={() => setDismissedDate(null)}
-              className="text-xs text-blue-400/90 hover:text-blue-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
+              className="text-xs text-brett-gold/90 hover:text-brett-gold-dark transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
             >
               Show now
             </button>

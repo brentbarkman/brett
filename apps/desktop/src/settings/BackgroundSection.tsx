@@ -72,7 +72,7 @@ export function BackgroundSection() {
 
   return (
     <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <h3 className="font-mono text-[11px] uppercase tracking-wider text-white/40 font-semibold mb-4">
+      <h3 className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-4">
         Background
       </h3>
 
@@ -90,7 +90,7 @@ export function BackgroundSection() {
             onClick={() => setViewingStyle(key)}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition-all duration-200 ${
               viewingStyle === key
-                ? "bg-blue-500/10 border-blue-500/30 text-white"
+                ? "bg-brett-gold/10 border-brett-gold/30 text-white"
                 : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"
             }`}
           >
@@ -134,7 +134,7 @@ function SmartOption({ style, activeStyle, pinned, onSmart }: { style: Style; ac
       onClick={onSmart}
       className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-200 mb-3 ${
         isActive
-          ? "bg-blue-500/10 border-blue-500/30 text-white"
+          ? "bg-brett-gold/10 border-brett-gold/30 text-white"
           : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"
       }`}
     >
@@ -154,7 +154,7 @@ function ImageGallery({ baseUrl, setName, pinned, activeStyle, onPin, onSmart }:
       <div className="space-y-4 max-h-[600px] overflow-y-auto scrollbar-hide">
         {SEGMENTS.map((seg) => (
           <div key={seg}>
-            <div className="font-mono text-[10px] uppercase tracking-wider text-white/30 mb-2">
+            <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/30 mb-2">
               {SEGMENT_LABELS[seg]}
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -167,7 +167,7 @@ function ImageGallery({ baseUrl, setName, pinned, activeStyle, onPin, onSmart }:
                       onClick={() => onPin(path)}
                       className={`relative group rounded-lg overflow-hidden border transition-all duration-200 aspect-video ${
                         isPinned
-                          ? "border-blue-500/50 ring-1 ring-blue-500/30"
+                          ? "border-brett-gold/50 ring-1 ring-brett-gold/30"
                           : "border-white/10 hover:border-white/20"
                       }`}
                     >
@@ -178,7 +178,7 @@ function ImageGallery({ baseUrl, setName, pinned, activeStyle, onPin, onSmart }:
                         loading="eager"
                       />
                       {isPinned && (
-                        <div className="absolute top-1 right-1 p-1 rounded-full bg-blue-500/80">
+                        <div className="absolute top-1 right-1 p-1 rounded-full bg-brett-gold/80">
                           <Pin size={10} className="text-white" />
                         </div>
                       )}
@@ -208,7 +208,7 @@ function SolidGallery({ pinned, activeStyle, onPin, onSmart }: GalleryProps) {
               onClick={() => onPin(id)}
               className={`relative flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all duration-200 ${
                 isPinned
-                  ? "border-blue-500/50 ring-1 ring-blue-500/30 bg-white/5"
+                  ? "border-brett-gold/50 ring-1 ring-brett-gold/30 bg-white/5"
                   : "border-white/10 hover:border-white/20 hover:bg-white/5"
               }`}
             >

@@ -48,7 +48,7 @@ function ConnectedRow({
           {config.maskedKey}
         </span>
         {config.isActive && (
-          <span className="text-xs text-blue-400 font-medium flex-shrink-0">
+          <span className="text-xs text-brett-gold font-medium flex-shrink-0">
             Active
           </span>
         )}
@@ -59,7 +59,7 @@ function ConnectedRow({
           <button
             onClick={onActivate}
             disabled={isActivating}
-            className="text-xs text-white/40 hover:text-blue-400 transition-colors disabled:opacity-40"
+            className="text-xs text-white/40 hover:text-brett-gold transition-colors disabled:opacity-40"
           >
             {isActivating ? "Activating..." : "Set active"}
           </button>
@@ -132,7 +132,7 @@ function UsageStats({ provider }: { provider: string }) {
     <div className="px-3 py-2 space-y-2">
       {filtered.map((period) => (
         <div key={period.label}>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/30 mb-1">
+          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/30 mb-1">
             {period.label}
           </div>
           {period.rows.length === 0 ? (
@@ -216,7 +216,7 @@ export function AISection() {
         <button
           onClick={() => setShowTokenUsage(!showTokenUsage)}
           className={`relative w-9 h-5 rounded-full transition-colors ${
-            showTokenUsage ? "bg-blue-500" : "bg-white/20"
+            showTokenUsage ? "bg-brett-gold" : "bg-white/20"
           }`}
         >
           <span
@@ -296,7 +296,7 @@ export function AISection() {
               onClick={() => setSelectedProvider(p.id)}
               className={`flex-1 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                 selectedProvider === p.id
-                  ? "bg-blue-500/20 border-blue-500/50 text-blue-300"
+                  ? "bg-brett-gold/20 border-brett-gold/50 text-brett-gold"
                   : "bg-white/5 border-white/10 text-white/40 hover:text-white/70 hover:border-white/20"
               }`}
             >
@@ -318,7 +318,7 @@ export function AISection() {
           <button
             onClick={handleSave}
             disabled={!apiKey.trim() || saveConfig.isPending}
-            className="flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 bg-brett-gold hover:bg-brett-gold-dark disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
           >
             {saveConfig.isPending ? (
               <Loader2 size={14} className="animate-spin" />

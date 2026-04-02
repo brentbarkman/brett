@@ -196,7 +196,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
               <div
                 className={`text-lg font-semibold mt-0.5 ${
                   isCurrentDay
-                    ? "text-blue-400 bg-blue-500/20 w-8 h-8 rounded-full flex items-center justify-center mx-auto"
+                    ? "text-brett-gold bg-brett-gold/20 w-8 h-8 rounded-full flex items-center justify-center mx-auto"
                     : "text-white/80"
                 }`}
               >

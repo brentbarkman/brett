@@ -112,7 +112,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
                   })
                 }
                 className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                  cal.isVisible ? "bg-blue-500" : "bg-white/15"
+                  cal.isVisible ? "bg-brett-gold" : "bg-white/15"
                 }`}
               >
                 <span
@@ -280,7 +280,7 @@ export function CalendarSection() {
                   aria-checked={granolaAccount.account.autoCreateMyTasks}
                   onClick={() => updatePrefs.mutate({ autoCreateMyTasks: !granolaAccount.account!.autoCreateMyTasks })}
                   className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                    granolaAccount.account.autoCreateMyTasks ? "bg-blue-500" : "bg-white/15"
+                    granolaAccount.account.autoCreateMyTasks ? "bg-brett-gold" : "bg-white/15"
                   }`}
                 >
                   <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
@@ -299,7 +299,7 @@ export function CalendarSection() {
                   aria-checked={granolaAccount.account.autoCreateFollowUps}
                   onClick={() => updatePrefs.mutate({ autoCreateFollowUps: !granolaAccount.account!.autoCreateFollowUps })}
                   className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                    granolaAccount.account.autoCreateFollowUps ? "bg-blue-500" : "bg-white/15"
+                    granolaAccount.account.autoCreateFollowUps ? "bg-brett-gold" : "bg-white/15"
                   }`}
                 >
                   <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${

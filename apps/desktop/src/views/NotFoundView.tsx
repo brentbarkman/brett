@@ -21,7 +21,7 @@ export function NotFoundView() {
         <p className="text-sm text-white/40 mb-6">{msg.subtitle}</p>
         <button
           onClick={() => navigate("/today")}
-          className="px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 hover:text-blue-300 border border-blue-500/20 text-sm font-medium transition-colors"
+          className="px-4 py-2 rounded-lg bg-brett-gold/20 text-brett-gold hover:bg-brett-gold/30 hover:text-brett-gold-dark border border-brett-gold/20 text-sm font-medium transition-colors"
         >
           Back to Today
         </button>

@@ -76,7 +76,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     return (
       <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8 text-center">
         <p className="text-white/60 text-sm mb-3">List not found</p>
-        <Link to="/today" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
+        <Link to="/today" className="text-brett-gold hover:text-brett-gold-dark text-sm font-medium">
           Back to Today
         </Link>
       </div>

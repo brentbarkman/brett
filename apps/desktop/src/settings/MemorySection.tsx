@@ -4,7 +4,7 @@ import { useUserFacts, useDeleteUserFact } from "../api/user-facts";
 import { useAIConfigs } from "../api/ai-config";
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
-  preference: { label: "Preference", color: "text-blue-400" },
+  preference: { label: "Preference", color: "text-brett-gold" },
   context: { label: "Context", color: "text-brett-teal" },
   relationship: { label: "Relationship", color: "text-purple-400" },
   habit: { label: "Habit", color: "text-amber-400" },
