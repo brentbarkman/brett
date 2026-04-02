@@ -6,6 +6,8 @@ import { prisma } from "../lib/prisma.js";
 import { registry } from "../lib/ai-registry.js";
 import { buildStream, sseResponse } from "../lib/ai-stream.js";
 import { getUserDayBounds } from "@brett/business";
+import { getEmbeddingProvider } from "../lib/embedding-provider.js";
+import { loadEmbeddingContext } from "../lib/embedding-context.js";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
@@ -143,6 +145,16 @@ brettIntelligence.post(
 
     const timezone = await getUserTimezone(user.id);
 
+    // Load embedding context for the briefing — search for recent activity patterns
+    const embeddingProvider = getEmbeddingProvider();
+    const embeddingContext = await loadEmbeddingContext(
+      user.id,
+      "daily briefing tasks calendar meetings priorities",
+      embeddingProvider,
+      prisma,
+      3,
+    );
+
     const session = await prisma.conversationSession.create({
       data: {
         userId: user.id,
@@ -156,6 +168,7 @@ brettIntelligence.post(
       type: "briefing" as const,
       userId: user.id,
       timezone,
+      embeddingContext: embeddingContext || undefined,
     };
 
     const { stream } = buildStream(
@@ -184,6 +197,16 @@ brettIntelligence.post(
     });
     if (!event) return c.json({ error: "Not found" }, 404);
 
+    // Load embedding context relevant to this event
+    const embeddingProvider = getEmbeddingProvider();
+    const embeddingContext = await loadEmbeddingContext(
+      user.id,
+      event.title,
+      embeddingProvider,
+      prisma,
+      3,
+    );
+
     const session = await prisma.conversationSession.create({
       data: {
         userId: user.id,
@@ -198,6 +221,7 @@ brettIntelligence.post(
       type: "bretts_take" as const,
       userId: user.id,
       calendarEventId: eventId,
+      embeddingContext: embeddingContext || undefined,
     };
 
     const { stream } = buildStream(

@@ -74,7 +74,7 @@ export function createRegistry(): SkillRegistry {
   // registry.register(dailyBriefingSkill);
   // registry.register(brettsTakeSkill);
   registry.register(upNextSkill);
-  // registry.register(recallMemorySkill);
+  registry.register(recallMemorySkill);
 
   // Meta / System (4)
   registry.register(changeSettingsSkill);

@@ -1,15 +1,16 @@
-import type { Skill } from "./types.js";
+import type { Skill, SkillContext } from "./types.js";
+import { hybridSearch } from "../embedding/search.js";
 
 export const recallMemorySkill: Skill = {
   name: "recall_memory",
   description:
-    "Search through stored memories and context using vector embeddings. Use when the user asks Brett to remember something, or asks 'what did I say about...?', 'do you remember...?'. Currently a placeholder — vector memory (Layer C) not yet built.",
+    "Search through past conversations and stored content using semantic search. Use when the user asks about past discussions, previous decisions, or 'what did we talk about'.",
   parameters: {
     type: "object",
     properties: {
       query: {
         type: "string",
-        description: "The memory search query",
+        description: "What to search for in memory",
       },
     },
     required: ["query"],
@@ -17,13 +18,34 @@ export const recallMemorySkill: Skill = {
   modelTier: "small",
   requiresAI: false,
 
-  async execute(_params, _ctx) {
+  async execute(params: unknown, ctx: SkillContext) {
+    const { query } = params as { query: string };
+
+    const results = await hybridSearch(
+      ctx.userId,
+      query,
+      null, // Search all entity types
+      null, // No embedding provider from skill context — keyword search only
+      ctx.prisma,
+      5,
+    );
+
+    if (results.length === 0) {
+      return {
+        success: true,
+        data: null,
+        message: "No relevant past conversations found.",
+      };
+    }
+
+    const formatted = results
+      .map((r, i) => `${i + 1}. ${r.snippet.slice(0, 300)}`)
+      .join("\n\n");
+
     return {
       success: true,
-      data: { placeholder: true, memories: [] },
-      displayHint: { type: "text" },
-      message:
-        "Memory recall coming soon. This will search through Brett's stored context and past conversations to find relevant information.",
+      data: { memories: results },
+      message: `Found ${results.length} relevant past conversations:\n\n${formatted}`,
     };
   },
 };

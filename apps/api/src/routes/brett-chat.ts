@@ -6,6 +6,8 @@ import { prisma } from "../lib/prisma.js";
 import { registry } from "../lib/ai-registry.js";
 import { buildStream, sseResponse } from "../lib/ai-stream.js";
 import { runExtraction } from "../lib/content-extractor.js";
+import { getEmbeddingProvider } from "../lib/embedding-provider.js";
+import { loadEmbeddingContext } from "../lib/embedding-context.js";
 
 const brettChat = new Hono<AIEnv>();
 
@@ -144,11 +146,22 @@ brettChat.post(
       },
     });
 
+    // Load embedding context relevant to this message + item
+    const embeddingProvider = getEmbeddingProvider();
+    const embeddingContext = await loadEmbeddingContext(
+      user.id,
+      `${item.title} ${message.trim()}`,
+      embeddingProvider,
+      prisma,
+      3,
+    );
+
     const input = {
       type: "brett_thread" as const,
       userId: user.id,
       message: message.trim(),
       itemId,
+      embeddingContext: embeddingContext || undefined,
     };
 
     const { stream } = buildStream(
@@ -240,11 +253,22 @@ brettChat.post(
       },
     });
 
+    // Load embedding context relevant to this message + event
+    const embeddingProvider = getEmbeddingProvider();
+    const embeddingContext = await loadEmbeddingContext(
+      user.id,
+      `${event.title} ${message.trim()}`,
+      embeddingProvider,
+      prisma,
+      3,
+    );
+
     const input = {
       type: "brett_thread" as const,
       userId: user.id,
       message: message.trim(),
       calendarEventId: eventId,
+      embeddingContext: embeddingContext || undefined,
     };
 
     const { stream } = buildStream(
