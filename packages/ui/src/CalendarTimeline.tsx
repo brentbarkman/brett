@@ -546,7 +546,7 @@ export function CalendarTimeline({
                         </button>
                       )}
                       {event.hasBrettContext && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_5px_rgba(96,165,250,0.8)] mt-1" />
+                        <span className="text-[10px] text-amber-400/60 leading-none mt-0.5" title="Brett's Take available">✦</span>
                       )}
                     </div>
                   </div>

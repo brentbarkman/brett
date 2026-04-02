@@ -48,6 +48,8 @@ interface ContentDetailPanelProps {
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
+  brettAiConfigured?: boolean;
+  onOpenSettings?: () => void;
   // Content extraction retry
   onRetryExtraction?: () => void;
   onItemClick?: (id: string) => void;
@@ -83,6 +85,8 @@ export function ContentDetailPanel({
   isBrettStreaming,
   isLoadingMoreBrettMessages,
   brettTotalCount,
+  brettAiConfigured,
+  onOpenSettings,
   onRetryExtraction,
   onItemClick,
   onEventClick,
@@ -326,6 +330,8 @@ export function ContentDetailPanel({
           onItemClick={onItemClick}
           onEventClick={onEventClick}
           onNavigate={onNavigate}
+          aiConfigured={brettAiConfigured}
+          onOpenSettings={onOpenSettings}
         />
       )}
     </>

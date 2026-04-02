@@ -42,6 +42,7 @@ export interface CalendarEventRecord {
   organizer: CalendarAttendee | null;
   attendees: CalendarAttendee[];
   attachments: CalendarAttachment[];
+  brettObservation: string | null;
   syncedAt: string;
   createdAt: string;
   updatedAt: string;

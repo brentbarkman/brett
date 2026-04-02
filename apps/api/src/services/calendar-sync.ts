@@ -9,6 +9,7 @@ import {
 } from "../lib/google-calendar.js";
 import { extractMeetingLink } from "./meeting-link.js";
 import { publishSSE } from "../lib/sse.js";
+import { generatePendingTakes } from "./brett-take-generator.js";
 import { createRelinkTask } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { createHmac } from "crypto";
@@ -152,6 +153,11 @@ export async function initialSync(googleAccountId: string): Promise<void> {
     type: "calendar.sync.complete",
     payload: { googleAccountId, changeset },
   });
+
+  // Fire-and-forget: generate Brett's Takes for qualifying upcoming events
+  generatePendingTakes(account.userId).catch((err) =>
+    console.error("[calendar-sync] Brett's Take generation failed:", err),
+  );
 }
 
 /**
@@ -285,6 +291,11 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
       type: "calendar.sync.complete",
       payload: { googleAccountId, changeset },
     });
+
+    // Fire-and-forget: generate Brett's Takes for qualifying upcoming events
+    generatePendingTakes(account.userId).catch((err) =>
+      console.error("[calendar-sync] Brett's Take generation failed:", err),
+    );
   } finally {
     inFlightSyncs.delete(googleAccountId);
     recordSyncCompleted(googleAccountId);

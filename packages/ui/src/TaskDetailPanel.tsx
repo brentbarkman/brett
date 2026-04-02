@@ -49,6 +49,8 @@ interface TaskDetailPanelProps {
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
+  brettAiConfigured?: boolean;
+  onOpenSettings?: () => void;
   onNavigateToCalendarEvent?: (calendarEventId: string) => void;
   onNavigateToScout?: (scoutId: string) => void;
   onScoutFeedback?: (scoutId: string, findingId: string, useful: boolean | null) => void;
@@ -83,6 +85,8 @@ export function TaskDetailPanel({
   isBrettStreaming,
   isLoadingMoreBrettMessages,
   brettTotalCount,
+  brettAiConfigured,
+  onOpenSettings,
   onNavigateToCalendarEvent,
   onNavigateToScout,
   onScoutFeedback,
@@ -253,21 +257,6 @@ export function TaskDetailPanel({
             />
           )}
 
-          {/* Brett's Take */}
-          {detail.brettObservation && (
-            <div className="bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
-                  Brett's Take
-                </span>
-              </div>
-              <p className="text-sm italic text-blue-300/90 leading-relaxed">
-                &ldquo;{detail.brettObservation}&rdquo;
-              </p>
-            </div>
-          )}
-
           {/* Rich Notes */}
           {onUpdateNotes && (
             <div>
@@ -327,6 +316,8 @@ export function TaskDetailPanel({
           onItemClick={onItemClick}
           onEventClick={onEventClick}
           onNavigate={onNavigate}
+          aiConfigured={brettAiConfigured}
+          onOpenSettings={onOpenSettings}
         />
       )}
     </>

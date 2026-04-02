@@ -106,6 +106,7 @@ calendar.get("/events", async (c) => {
       attendees: e.attendees,
       recurrence: e.recurrence,
       recurringEventId: e.recurringEventId,
+      brettObservation: e.brettObservation ?? null,
     })),
   });
 });
@@ -146,6 +147,8 @@ calendar.get("/events/:id", async (c) => {
     attachments: event.attachments,
     recurrence: event.recurrence,
     recurringEventId: event.recurringEventId,
+    brettObservation: event.brettObservation ?? null,
+    brettTakeGeneratedAt: event.brettObservationAt?.toISOString() ?? null,
     notes: event.notes[0]?.content ?? null,
     brettMessages: event.brettMessages
       .slice(0, 20)

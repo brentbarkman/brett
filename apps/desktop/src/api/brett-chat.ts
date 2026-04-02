@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import { streamingFetch } from "./streaming";
 import type { StreamChunk, DisplayHint } from "@brett/types";
+import { useAIConfigs } from "./ai-config";
 
 // ─── Types ───
 
@@ -45,6 +46,12 @@ export function useBrettChat(opts: {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Check if user has an active AI provider configured
+  const { data: aiConfigData } = useAIConfigs();
+  const aiConfigured = aiConfigData
+    ? aiConfigData.configs.some((c) => c.isActive && c.isValid)
+    : true; // Default true to avoid flash before data loads
 
   // Determine paths
   const entityId = itemId || calendarEventId;
@@ -271,5 +278,6 @@ export function useBrettChat(opts: {
     isLoadingMore: historyQuery.isFetchingNextPage,
     loadMore: historyQuery.fetchNextPage,
     sendMessage,
+    aiConfigured,
   };
 }

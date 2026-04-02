@@ -60,6 +60,8 @@ interface CalendarEventDetailPanelProps {
   isSendingBrettMessage: boolean;
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages: boolean;
+  brettAiConfigured?: boolean;
+  onOpenSettings?: () => void;
   meetingNote?: {
     id: string;
     title: string;
@@ -159,6 +161,8 @@ export function CalendarEventDetailPanel({
   isSendingBrettMessage,
   isBrettStreaming,
   isLoadingMoreBrettMessages,
+  brettAiConfigured,
+  onOpenSettings,
   meetingNote,
   onToggleActionItem,
   onSelectActionItem,
@@ -593,6 +597,8 @@ export function CalendarEventDetailPanel({
         onItemClick={onItemClick}
         onEventClick={onEventClick}
         onNavigate={onNavigate}
+        aiConfigured={brettAiConfigured}
+        onOpenSettings={onOpenSettings}
       />
     </>
   );

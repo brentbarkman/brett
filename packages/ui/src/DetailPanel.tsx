@@ -49,6 +49,8 @@ interface DetailPanelProps {
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
+  brettAiConfigured?: boolean;
+  onOpenSettings?: () => void;
   // Content extraction
   onRetryExtraction?: () => void;
   // Calendar event callbacks
@@ -64,6 +66,7 @@ interface DetailPanelProps {
   isSendingCalendarBrettMessage?: boolean;
   isCalendarBrettStreaming?: boolean;
   isLoadingMoreCalendarBrettMessages?: boolean;
+  calendarBrettAiConfigured?: boolean;
   // Meeting notes
   meetingNote?: {
     id: string;
@@ -117,6 +120,8 @@ export function DetailPanel({
   isBrettStreaming,
   isLoadingMoreBrettMessages,
   brettTotalCount,
+  brettAiConfigured,
+  onOpenSettings,
   onRetryExtraction,
   calendarEventDetail,
   isLoadingCalendarDetail,
@@ -130,6 +135,7 @@ export function DetailPanel({
   isSendingCalendarBrettMessage,
   isCalendarBrettStreaming,
   isLoadingMoreCalendarBrettMessages,
+  calendarBrettAiConfigured,
   meetingNote,
   onToggleActionItem,
   onSelectActionItem,
@@ -211,6 +217,8 @@ export function DetailPanel({
             isBrettStreaming={isBrettStreaming}
             isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
             brettTotalCount={brettTotalCount}
+            brettAiConfigured={brettAiConfigured}
+            onOpenSettings={onOpenSettings}
             onNavigateToCalendarEvent={onNavigateToCalendarEvent}
             onNavigateToScout={onNavigateToScout}
             onScoutFeedback={onScoutFeedback}
@@ -257,6 +265,8 @@ export function DetailPanel({
             isBrettStreaming={isBrettStreaming}
             isLoadingMoreBrettMessages={isLoadingMoreBrettMessages}
             brettTotalCount={brettTotalCount}
+            brettAiConfigured={brettAiConfigured}
+            onOpenSettings={onOpenSettings}
             onRetryExtraction={onRetryExtraction}
             onItemClick={onItemClick}
             onEventClick={onEventClick}
@@ -289,6 +299,8 @@ export function DetailPanel({
           isSendingBrettMessage={isSendingCalendarBrettMessage ?? false}
           isBrettStreaming={isCalendarBrettStreaming}
           isLoadingMoreBrettMessages={isLoadingMoreCalendarBrettMessages ?? false}
+          brettAiConfigured={calendarBrettAiConfigured}
+          onOpenSettings={onOpenSettings}
           meetingNote={meetingNote}
           onToggleActionItem={onToggleActionItem}
           onSelectActionItem={onSelectActionItem}

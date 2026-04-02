@@ -140,6 +140,7 @@ export async function* orchestrate(
         messages,
         tools: tools.length > 0 ? tools : undefined,
         system,
+        maxTokens: ctx.maxTokens,
       })) {
         switch (chunk.type) {
           case "text":
