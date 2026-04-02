@@ -2,20 +2,31 @@
 
 **Read this file before making any frontend/UI changes.**
 
-This is the design system reference for Brett's desktop application. It codifies the current visual language and provides rules for maintaining design consistency and quality.
+This is the design system reference for Brett's desktop application. It codifies the visual language and provides rules for maintaining design consistency and quality.
 
 ---
 
 ## Design Philosophy
 
-Brett is a **dark glass, editorial-premium desktop app**. Think: Linear meets Arc meets Apple Weather. Every surface is translucent. Every animation communicates meaning. Every pixel earns its place.
+Brett is a **warm, editorial-premium desktop app with an environmental soul.** Think: Apple Weather's lushness meets Monocle magazine's typographic confidence meets Things 3's interaction craft. Every surface is translucent. Every animation communicates meaning. Every pixel earns its place.
+
+**Identity formula:** Editorial elegance as the foundation, environmental atmosphere as the differentiator.
 
 **Core principles:**
 1. **Glass over chrome** — translucent surfaces with backdrop blur, never opaque panels
 2. **Motion for meaning** — every animation communicates a state change, never decorative
-3. **Color as category** — color encodes type/urgency, not decoration
+3. **Color as identity** — gold is the brand, cerulean is Brett, everything else is semantic
 4. **Whisper, don't shout** — use opacity to create hierarchy, not size or weight alone
 5. **Density with clarity** — show information-rich UI that still breathes
+6. **Ambient personality** — the UI has opinions through texture, timing, and environmental response, but never blocks interaction or demands acknowledgment
+
+**Reference triangle:**
+
+| Priority | Reference | What We Take |
+|----------|-----------|--------------|
+| Primary | Apple Weather | Environmental richness, data-as-art, backgrounds that *are* information |
+| Secondary | High-end editorial print (Monocle, Cereal, Kinfolk) | Typographic confidence, generous whitespace, warm photography + sharp type |
+| Tertiary | Things 3 | Interaction craft, completion animations that feel *good*, tactile satisfaction |
 
 ---
 
@@ -39,19 +50,50 @@ All containers use the glass morphism pattern. Never use solid opaque background
 - **`bg-black` standard stops:** `/20` (light dimming), `/30` (cards), `/40` (elevated cards), `/60` (overlays/modals), `/80` (tooltips/dropdowns). Never use in-between values like `/50`, `/55`, `/70`, `/85`.
 - **`bg-white` standard stops:** `/5` (subtle tint, resting surfaces), `/10` (hover surfaces), `/15` (strong hover), `/20` (active/pressed). Never use fractional values like `bg-white/[0.03]`, `[0.06]`, `[0.07]` — use the nearest standard stop.
 
+**Known issue:** Glass is too transparent on bright backgrounds (ocean, sky). Fix needed: bump `bg-black` opacity on cards and/or add a subtle vignette/scrim layer. Track this during implementation.
+
 ---
 
 ## Color System
 
+### Brand Accent — Electric Gold
+
+**`#E8B931`** — the signature color. Warm, metallic, energetic.
+
+| Usage | Example |
+|-------|---------|
+| Active nav states | Selected nav item background/text |
+| Task checkboxes | Toggle border color |
+| Time/date badges | Pill background + text |
+| Section header text | At `/50` opacity |
+| Omnibar border accent | Subtle gold border |
+| Completion pulse | Gold box-shadow animation |
+
+**Why gold:** Unique in the SaaS space, naturally warm, reads clearly against any nature photograph, signals premium/editorial.
+
+### Brett AI Color — Deep Cerulean (Reserved)
+
+**`#4682C3`** — exclusively for Brett AI surfaces. Appears **nowhere else** in the app.
+
+When users see this color, they know Brett is involved. This creates instant visual identification.
+
+| Usage | Example |
+|-------|---------|
+| Brett's Take callout | Border, label, indicator dot |
+| Chat messages from Brett | Message card border/background |
+| Omnibar AI indicator | Glowing dot |
+| "Brett is thinking..." | Text color |
+| Brett Chat headers | Section label color |
+| AI-related badges | Background tint |
+
 ### Semantic Colors
 
-| Role | Color | Usage |
-|------|-------|-------|
-| **Primary action** | `blue-500` | Active states, focus rings, primary buttons, task icons |
-| **Success/complete** | `green-500` | Completion animations, "done" states |
-| **Warning/upcoming** | `amber-500` | Content type, "today" urgency, upcoming events |
-| **Danger/overdue** | `red-500` | Overdue badges, errors, current-time indicator |
-| **Calendar accents** | `blue/green/purple/amber` | Event color coding (each at /20 bg, /50 border) |
+| Role | Color | Hex | Usage |
+|------|-------|-----|-------|
+| **Success/complete** | Teal | `#48BBA0` | Completion checkmarks, "done" states |
+| **Error/danger** | Warm red | `#E6554B` | Overdue badges, errors, destructive confirms |
+| **Warning** | Amber (lighter gold) | — | Approaching deadlines, caution states |
+| **Calendar accents** | Teal, violet, coral, blue | Various | Event color coding (each at /20 bg, /50 border) |
 
 ### Text Opacity Scale
 
@@ -74,7 +116,7 @@ This is the primary hierarchy tool. Master it.
 - Muted metadata uses `/40`, not `/60`
 - **Readability floor: `/20`.** Nothing the user needs to *read* (not just glance at) should be below `/30`. Ghost text (`/20`) is for decorative separators, disabled icons, and whisper-level hints only.
 - **Timestamps and relative ages always use `/40`** — they carry meaning and must remain readable on any background image
-- Only use standard opacity stops: `/20`, `/30`, `/40`, `/50`, `/60`, `/80`, `/90`, `white`. Avoid fractional or in-between values like `/15`, `/25`, `/35`, `/55`, `/75`.
+- Only use standard opacity stops: `/20`, `/30`, `/40`, `/50`, `/60`, `/80`, `/90`, `white`. Avoid fractional or in-between values.
 
 ### Border Opacity Scale
 
@@ -85,7 +127,7 @@ This is the primary hierarchy tool. Master it.
 | `border-{color}-500/20–/50` | Colored accent borders |
 
 **Rules:**
-- Only use `border-white/5`, `border-white/10`, `border-white/15`, or `border-white/20` — never fractional values like `border-white/[0.03]`, `[0.06]`, `[0.07]`
+- Only use `border-white/5`, `border-white/10`, `border-white/15`, or `border-white/20` — never fractional values
 - Divider lines (horizontal separators) always use `bg-white/10` for the 1px line
 
 ### Background Opacity for Color
@@ -102,8 +144,14 @@ This is the primary hierarchy tool. Master it.
 ## Typography
 
 ### Font Stack
-- Body: `font-sans` (system stack)
-- Labels/section headers: `font-mono text-xs uppercase tracking-wider`
+
+**Single typeface: Switzer** — a neo-grotesque sans-serif with subtle humanist warmth. Shares Inter's readability DNA (tall x-height, open apertures, screen-optimized) but with more personality.
+
+Weights loaded: 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold), 400 Italic.
+
+Bundled as a web font in the Electron app — no CDN dependency.
+
+**No monospace in the UI.** All text uses Switzer. The only exception is actual code display. The monospace section label pattern is retired.
 
 ### Scale
 
@@ -112,14 +160,16 @@ This is the primary hierarchy tool. Master it.
 | Page/detail title | `text-2xl font-semibold text-white` |
 | Card title | `text-xl font-bold text-white` or `text-base font-semibold` |
 | Body | `text-sm text-white/80` |
-| Section header | `font-mono text-xs uppercase tracking-wider text-white/40 font-semibold` |
+| Section header | `text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40` |
 | Badge text | `text-xs font-medium` or `text-[10px] font-bold` |
 | Metadata | `text-xs text-white/40` |
+| Brett's Take quote | `text-sm italic` in Brett's cerulean |
 
 **Rules:**
-- Section headers are ALWAYS `font-mono text-[11px] uppercase tracking-wider text-white/40 font-semibold` — this is a signature pattern. Never deviate from `/40` opacity (not `/25`, `/30`, or `/55`). The `SectionHeader` component enforces this for list views; inline section headers must match.
+- Section headers are ALWAYS `text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40` — this is a signature pattern. Never deviate from `/40` opacity.
 - Don't use `text-lg` — jump from `text-base` to `text-xl`
 - Avoid `font-light` — minimum weight is `font-normal`
+- No `font-mono` in UI text — Switzer for everything
 - Page subtitles (metadata below page headings like "2 active · 7 findings") use `/50`, not `/30`
 
 ---
@@ -164,48 +214,94 @@ Base unit: 4px (Tailwind's default scale).
 
 ## Animation
 
+### Engine
+
+**Framer-motion** is the primary animation engine. CSS transitions remain for hovers and simple color changes (no re-render overhead needed).
+
+Framer-motion enables: exit animations (`AnimatePresence`), layout reflow (`layout` prop), staggered children, and gesture interactions.
+
+### Task Completion (Things 3 Pattern)
+
+The completion interaction must feel satisfying while never blocking rapid task clearing.
+
+1. **Click complete** — checkbox animates immediately with gold pulse (instant feedback)
+2. **Row stays in place** — click targets don't move. User can keep completing other tasks.
+3. **Debounced batch exit** (~800ms-1s after last completion) — all completed tasks swoosh out together via `AnimatePresence`
+4. **Remaining tasks reflow** — `layout` prop animates remaining cards into new positions smoothly
+
+- Completion pulse: **gold** (brand color), not green
+- Total animation duration: under 400ms per item
+- **Never blocks the next click**
+
+### List Entrances (Staggered Reveal)
+
+- Stagger: 30ms delay between cards
+- Each card: fade in + translateY(8px), 300ms, ease-out
+- Only on initial load / view switch — not when scrolling reveals more items
+- Subtle wave effect, not a performance
+
+### Panel Transitions
+
+- **DetailPanel enter:** slide from right + scale(0.98→1) + fade, 250ms, spring with low bounce
+- **DetailPanel exit:** `AnimatePresence` reverse — no manual timeout chains
+- **Backdrop:** `bg-black/20` fades in behind panel, focuses attention and creates depth
+- **Spotlight/⌘K:** scale from 0.95 + fade, 200ms
+
+### View Transitions
+
+When switching between sibling views (Today, Inbox, Upcoming, custom lists):
+
+- `AnimatePresence` with `mode="wait"`
+- Old view: fade out + translateY(-4px), 150ms
+- New view: fade in + staggered cards + translateY(6px), 300ms
+- Total transition under 350ms
+- **No horizontal slide** — sibling views, not hierarchical navigation
+
+### Hover States (CSS Only)
+
+```
+Cards:          hover:translateY(-1px) + shadow increase, 150ms
+Buttons/actions: color shift only, no lift
+Nav items:      bg-white/10 fade in, no lift
+```
+
+Do not use framer-motion for hovers — CSS transitions avoid unnecessary re-renders.
+
+### Ambient Motion (Background Texture)
+
+Non-blocking, barely perceptible motion that makes the UI feel alive:
+
+- **Background image transitions:** cross-fade over ~1.5s when changing (time of day, manual switch)
+- **Omnibar gold glow:** subtle box-shadow warmth shift by time of day — crisper morning, softer evening. CSS custom property driven.
+- **Streaming cursor (Brett thinking):** organic, slightly irregular pulse rhythm — alive, not mechanical
+
 ### Easing Curves
 
 | Curve | Use |
 |-------|-----|
-| `cubic-bezier(0.16, 1, 0.3, 1)` | Primary — bouncy/elastic. Section enters, toggles, cross-fades. |
-| `cubic-bezier(0.4, 0, 1, 1)` | Exit animations (cross-fade out) |
-| `ease-in-out` | Default Tailwind transitions |
-| `ease-out` | Slide-in panels (DetailPanel) |
+| Framer-motion spring (stiffness: 300, damping: 30) | Panel entrances, layout reflow |
+| `cubic-bezier(0.16, 1, 0.3, 1)` | Section enters, toggles, cross-fades |
+| `ease-out` | Fade-ins, staggered children |
+| `ease-in-out` | Hover transitions (CSS) |
+| `cubic-bezier(0.4, 0, 1, 1)` | Exit animations |
 
 ### Duration Scale
 
 | Duration | Use |
 |----------|-----|
-| `150ms` | Micro-interactions (icon opacity) |
-| `200ms` | Color/hover transitions |
-| `300ms` | Panel slides, sidebar collapse, input expand |
-| `400–450ms` | Section enters, check-pop |
-| `600ms` | Completion pulse (togglePulse) |
-
-### Existing Animations
-
-| Name | Duration | Effect | Used in |
-|------|----------|--------|---------|
-| `togglePulse` | 600ms | Scale + green box-shadow ring | ThingCard completion |
-| `checkPop` | 400ms | Scale + rotate check icon | ThingCard completion |
-| `sectionEnter` | 450ms | Fade in + translateY(12px) | ThingsList new sections |
-| `crossFadeOut` | 180ms | Fade out + translateY(6px) + scale(0.985) | CrossFade exit |
-| `crossFadeIn` | 280ms | Fade in + translateY(10px) + scale(0.985) | CrossFade enter |
-
-### CSS Keyframes vs Framer Motion
-
-**Current approach:** CSS keyframes + Tailwind transitions. Zero bundle cost, native performance, sufficient for current animations.
-
-**When to adopt framer-motion:** When we need exit animations (`AnimatePresence`), list reorder animations (`layout`), staggered children, or gesture interactions (drag/swipe). The CrossFade component is already working around the lack of `AnimatePresence` with manual timeout chains — that's the inflection point. Adopt framer-motion when tackling animation improvements, don't retrofit existing working animations.
+| `150ms` | Micro-interactions (hover color shifts) |
+| `200ms` | Spotlight/overlay entrances |
+| `250ms` | Panel slides |
+| `300ms` | List card entrances, layout shifts |
+| `400ms` | Completion check animation |
+| `~1500ms` | Background cross-fade |
 
 ### Rules
-- **Current:** CSS keyframes (inline `<style>` blocks) + Tailwind transitions
-- **Future:** framer-motion is approved when exit/layout/stagger animations are needed
-- Transition defaults: `transition-all duration-200` for hover, `duration-300` for layout shifts
-- Pulsing indicators use `animate-pulse` (Tailwind built-in)
 - Every animation must communicate a state change — no decorative motion
-- Use `animation-fill-mode: forwards` for enter animations
+- Ambient motion is always non-blocking background texture
+- Use `AnimatePresence` for all exit animations — no manual timeout chains
+- Use `layout` prop for list reflow after item removal
+- Pulsing indicators use organic rhythm, not mechanical `animate-pulse`
 
 ---
 
@@ -213,23 +309,23 @@ Base unit: 4px (Tailwind's default scale).
 
 ### Hover States
 ```
-hover:bg-white/10          — subtle background lift (default)
-hover:bg-white/20          — stronger lift (buttons)
-hover:text-white           — text brighten
-hover:text-white/80        — subtle text brighten
-hover:brightness-125       — overall brighten (colored cards)
-group-hover:opacity-100    — reveal child on parent hover
+hover:bg-white/10 + translateY(-1px) + shadow  — cards (physical lift)
+hover:bg-white/20                               — buttons (stronger lift)
+hover:text-white                                — text brighten
+hover:text-white/80                             — subtle text brighten
+hover:brightness-125                            — overall brighten (colored cards)
+group-hover:opacity-100                         — reveal child on parent hover
 ```
 
 ### Focus States
 - **Global:** Browser default focus outlines are removed via `*:focus { outline: none }` in `index.css`. All focus indication is custom.
-- Inputs: `focus:border-blue-500/20` (subtle border shift, no rings)
-- Omnibar special: `border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]` (blue glow)
-- List items: focus tracked via `isFocused` prop → `bg-white/10 border-blue-500/30`
+- Inputs: `focus:border-[#E8B931]/20` (subtle gold border shift)
+- Omnibar special: `border-[#E8B931]/50 shadow-[0_0_20px_rgba(232,185,49,0.15)]` (gold glow)
+- List items: focus tracked via `isFocused` prop → `bg-white/10 border-[#E8B931]/30`
 - **Do not** add `outline-none` to individual elements — the global rule handles it
 
 ### Active States (Pills/Tabs)
-- Active: `bg-blue-500 text-white border-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.3)]`
+- Active: `bg-[#E8B931] text-white border-[#E8B931] shadow-[0_0_10px_rgba(232,185,49,0.3)]`
 - Inactive: `bg-white/5 text-white/50 border-white/10`
 
 ### Disabled States
@@ -251,7 +347,7 @@ className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded-full t
 
 ### Section Header
 ```jsx
-className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold"
+className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40"
 ```
 
 ### Glass Card
@@ -266,9 +362,9 @@ className="flex-1 bg-transparent border-none outline-none text-white placeholder
 
 ### Colored Accent Card (e.g., DailyBriefing)
 ```jsx
-className="bg-black/40 backdrop-blur-md rounded-xl border border-blue-500/30 p-4"
+className="bg-black/40 backdrop-blur-md rounded-xl border border-[#E8B931]/30 p-4"
 // With optional glow:
-<div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl" />
+<div className="absolute top-0 right-0 w-32 h-32 bg-[#E8B931]/5 rounded-full blur-2xl" />
 ```
 
 ---
@@ -283,135 +379,177 @@ className="bg-black/40 backdrop-blur-md rounded-xl border border-blue-500/30 p-4
 
 ---
 
+## Logo & Brand Marks
+
+Brett has a two-mark system built from the same visual language: dots + horizontal lines = a brief.
+
+### Product Mark (Gold)
+
+The "stacked brief" — three bullet items (dot + line) with cascade fade. Represents the product itself.
+
+```
+●━━━━━━━━━━   (100% opacity)
+●━━━━━━━       (60% opacity)
+●━━━━           (30% opacity)
+```
+
+- **Color:** All gold `#E8B931`
+- **Background:** Navy-black `#0C0F15`
+- **Used for:** App icon, dock icon, favicon (default), splash screen, marketing, wordmark lockup
+- **Behavior:** Static. Does not animate or change state.
+
+The stagger in line lengths and the opacity cascade create the "information being distilled" metaphor — your day, summarized.
+
+### Brett's Mark (Gold + Cerulean)
+
+The "single bullet" — one dot + one horizontal line. Represents the AI assistant.
+
+```
+●━━━━━━━
+```
+
+- **Dot:** Gold `#E8B931`
+- **Line:** Solid cerulean `#4682C3` at 70% opacity
+- **Used for:** Chat avatar, Brett's Take indicator, omnibar AI dot, tray icon (working state), favicon (working state)
+- **Behavior:** Animated. The gold dot pulses organically when Brett is thinking/working.
+
+The single bullet is a component extracted from the product mark — they share the same geometry. When you see the stack, it's the app. When you see the single, Brett is talking.
+
+### Wordmark
+
+The wordmark is the user's chosen assistant name (default "Brett") set in **Switzer SemiBold**. The name is dynamic — users can rename their assistant, so the wordmark renders whatever name they chose. Never hardcode "Brett" in the mark.
+
+### Icon System
+
+| Context | Mark | Color | State |
+|---------|------|-------|-------|
+| **App icon / Dock** | Product (stacked) | Gold on `#0C0F15` | Static |
+| **Favicon (default)** | Product (stacked) | Gold on `#0C0F15` | Static |
+| **Favicon (Brett active)** | Brett (single) | Gold dot + cerulean line | Swap dynamically, title → "Brett is thinking..." |
+| **Tray — idle** | Product (stacked) | Monochrome (macOS template) | Static, auto dark/light |
+| **Tray — Brett working** | Brett (single) | Full color (gold + cerulean) | Gentle pulse via `Tray.setImage()` |
+| **Tray — notification** | Product (stacked) + badge | Monochrome + gold dot overlay | Static badge |
+| **LeftNav header** | Product (stacked) + wordmark | Gold | Static |
+| **Chat avatar** | Brett (single) | Gold dot + cerulean line | Static (pulse on thinking) |
+| **Brett's Take label** | Brett (single, small) | Gold dot + cerulean line | Static |
+
+### Asset Files
+
+```
+apps/desktop/
+├── build/
+│   ├── icon.icns          # macOS app icon
+│   └── icon.png           # 512px app icon for electron-builder
+├── resources/
+│   ├── icon.svg           # Source SVG — product mark
+│   ├── icon-{16,32,64,128,256,512}.png
+│   ├── tray-idleTemplate.png      # 22px monochrome (macOS template)
+│   ├── tray-idleTemplate@2x.png   # 44px monochrome
+│   ├── tray-working.png           # 22px color (Brett's mark)
+│   ├── tray-working@2x.png        # 44px color
+│   ├── tray-notificationTemplate.png    # 22px monochrome + badge
+│   ├── tray-notificationTemplate@2x.png # 44px monochrome + badge
+│   ├── tray-idle.svg              # Source SVG
+│   ├── tray-working.svg           # Source SVG
+│   └── tray-notification.svg      # Source SVG
+└── public/
+    ├── favicon.svg                # Product mark (default)
+    └── favicon-working.svg        # Brett's mark (active state)
+```
+
+### Animation Notes
+
+- **Product mark in splash screen:** Lines stagger in one by one (30ms delay), each fading up from nothing — like a brief being composed in real time
+- **Brett's mark (thinking):** Gold dot pulses with organic rhythm (framer-motion, ~2.5s, irregular ease). The line stays static.
+- **Tray state transitions:** Swap icon file instantly via `Tray.setImage()` — no animation on the icon itself, the state change IS the communication.
+
+---
+
 ## Keyboard Interactions
 
 - **Escape** closes overlays (DetailPanel, Omnibar, focused inputs)
 - **Enter** submits inline forms
-- DetailPanel close has a 300ms delay before clearing selection (for exit animation)
+- DetailPanel close uses `AnimatePresence` exit — no manual delay before clearing selection
 
 ---
 
-## Improvement Opportunities
+## Brett AI Surfaces — Consistency Rules
 
-These are areas where the design can level up. Apply these when touching relevant components.
+Brett appears in multiple surfaces. **All must feel like the same character.** The Omnibar is the reference implementation — when in doubt, match it.
 
-### 1. Micro-interaction Polish
-**Current:** Hover states are basic (`bg-white/10`).
-**Upgrade:** Add subtle `translateY(-1px)` lift on card hover with `shadow` increase. Cards should feel like they physically respond to cursor proximity.
+### The Surfaces
+
+| Surface | Component | Role |
+|---------|-----------|------|
+| **Omnibar** | `Omnibar.tsx` | Primary input — always visible, top of main content |
+| **⌘K Spotlight** | `SpotlightModal.tsx` | Modal variant of omnibar — same hook, shared behavior |
+| **Brett Chat** | `BrettThread.tsx` | Contextual chat in detail panels (tasks + calendar events) |
+| **Brett's Take** | In `CalendarEventDetailPanel.tsx` | Pre-generated insight callout on calendar events |
+| **Daily Briefing** | `DailyBriefing.tsx` | Morning summary card |
+
+### Visual Identity (Non-Negotiable)
+
+| Element | Standard | Notes |
+|---------|----------|-------|
+| **Icon** | `Bot` from lucide-react, `text-[#4682C3]` | Every AI surface shows this icon. Never use dots as substitutes. |
+| **Streaming cursor** | `bg-[#E8B931]` pulsing rectangle | Gold = "working on it." Organic pulse rhythm, not mechanical. |
+| **"Thinking" text** | "Brett is thinking..." in `text-[#4682C3]` | Show in ALL surfaces during streaming. |
+| **Message cards** | `bg-white/5 rounded-lg px-3.5 py-3 border border-white/10` | Assistant messages always get glass cards. Never render flat. |
+| **Send button** | `bg-[#E8B931] text-white hover:bg-[#D4A62B]` | Solid gold. Must look tappable. |
+| **Input placeholder** | "Ask Brett anything..." | Same text everywhere. Consistent voice. |
+| **Brett's brand color** | Deep Cerulean `#4682C3` | All Brett surfaces use cerulean. **Reserved — appears nowhere else.** |
+
+### Brett's Take Callout
+
 ```jsx
-className="hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg transition-all duration-200"
-```
-
-### 2. Empty State Richness
-**Current:** ThingsEmptyState uses static icons.
-**Upgrade:** Add a subtle entrance animation (staggered fade-in for the pills/badges). Empty states are where personality lives — consider a gentle floating/breathing animation on the main icon.
-
-### 3. Skeleton Loading States ✅ IMPLEMENTED
-**Rule:** All loading states use skeleton loaders — never show "Loading..." text.
-
-**Components:**
-- `SkeletonBar` — single pulsing bar, accepts `className` for sizing
-- `SkeletonListView` — full list skeleton (header + add input + 3 item cards)
-
-**Pattern:**
-```jsx
-// Single bar
-<div className="bg-white/5 animate-pulse rounded-lg h-4 w-3/4" />
-
-// Thing card skeleton
-<div className="flex items-center gap-3 p-3 rounded-lg border border-white/5 bg-white/5">
-  <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse flex-shrink-0" />
-  <div className="flex-1 space-y-2">
-    <div className="bg-white/5 animate-pulse rounded-lg h-3.5 w-3/4" />
-    <div className="bg-white/5 animate-pulse rounded-lg h-2.5 w-1/2" />
+// Cerulean accent, left border, italic quoted text
+<div className="bg-[#4682C3]/10 border-l-2 border-[#4682C3] p-4 rounded-r-lg">
+  <div className="flex items-center gap-2 mb-2">
+    <div className="w-1.5 h-1.5 rounded-full bg-[#4682C3]" />
+    <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-[#4682C3]">
+      Brett&apos;s Take
+    </span>
   </div>
-  <div className="bg-white/5 animate-pulse rounded-lg h-6 w-16 rounded-full" />
+  <p className="text-sm italic text-[#4682C3]/85 leading-relaxed">
+    &ldquo;{observation}&rdquo;
+  </p>
 </div>
 ```
 
-**Rules:**
-- Skeletons must match the shape of the content they replace (cards look like cards, inputs look like inputs)
-- Use `bg-white/5` — not `bg-white/10` (too bright) or `bg-white/[0.03]` (invisible)
-- Use `animate-pulse` (Tailwind built-in) — not custom keyframes
-- Show 3 skeleton cards for list views (enough to indicate content, not so many it feels heavy)
-- Full-screen loading (auth init): use pulsing logo, not skeletons
+### "AI Not Configured" State
 
-### 4. Scroll Position Indicators
-**Current:** Lists in LeftNav use `scrollbar-hide` with no overflow indication.
-**Upgrade:** Add subtle gradient fade masks at top/bottom of scrollable areas to hint at overflow:
+When the user hasn't set up an AI provider, show a warm gold callout — not an error, an invitation:
+
 ```jsx
-// Top fade when scrolled
-className="bg-gradient-to-b from-black/40 to-transparent h-4 pointer-events-none"
+<div className="bg-[#E8B931]/10 border border-[#E8B931]/20 rounded-lg p-3 text-center">
+  <p className="text-xs text-[#E8B931]/80">
+    Brett needs an AI provider to work his magic.
+    Set one up in <button>Settings</button>.
+  </p>
+</div>
 ```
 
-### 5. Transition Choreography
-**Current:** All list items appear simultaneously.
-**Upgrade:** Stagger ThingCard entrance animations (each card delayed by 30–50ms) for a cascading reveal effect. This is an Apple-signature pattern.
+### When Adding New Brett Surfaces
 
-### 6. DetailPanel Backdrop
-**Current:** DetailPanel slides in over content with no backdrop dimming.
-**Upgrade:** Add a `bg-black/20` backdrop overlay behind the panel that fades in/out with the panel. This focuses attention and creates depth.
-
-### 7. Focus Ring Consistency
-**Current:** Some inputs have focus rings, others don't. Inconsistent across components.
-**Upgrade:** Standardize on: `focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:outline-none` for all interactive elements. Use `focus-visible` (not `focus`) so keyboard users get rings but mouse users don't.
-
-### 8. Toast/Notification System
-**Current:** No feedback for mutations (toggle, add, delete).
-**Upgrade:** Add a minimal toast system — small glass pill that slides up from bottom center, auto-dismisses in 2–3s. "Task completed", "Added to Inbox", etc.
-
-### 9. CalendarTimeline Current Hour Emphasis
-**Current:** Red dot + line marks current time.
-**Upgrade:** Add a subtle gradient glow around the current hour band. Make past hours slightly more faded (`opacity-60`) vs upcoming hours (`opacity-100`) to create a time-awareness gradient.
-
-### 10. LeftNav Active State
-**Current:** Active nav item uses `text-white` vs inactive `text-white/50`.
-**Upgrade:** Add a subtle left border accent (`border-l-2 border-blue-500`) or a glass highlight (`bg-white/10 rounded-lg`) on the active item for stronger spatial anchoring.
-
-### 11. Prism Logo — Dynamic Glow States
-**Current:** Static blue "B" square SVG in LeftNav header.
-**Upgrade:** Replace with programmable SVG prism mark (faceted crystal, amber/gold). The logo is built as an SVG with CSS-driven light effects, not a raster image. The prism's internal glow responds to app state:
-- **Idle:** Soft, warm amber glow — a quiet light source in the nav
-- **Brett AI active (chat/thinking):** Glow pulses gently, intensifies — the prism is "refracting" information
-- **Time-of-day:** Glow warms (morning/afternoon) or cools (evening/night) via CSS custom properties
-- **Busy day:** Slightly more saturated; light day: calmer
-- **Splash screen:** Full cinematic version with radial ambient light on dark background
-- **Favicon/tray:** Simplified to geometric silhouette, no glow effects
-**Implementation:** SVG facets with opacity fills for 3D depth. CSS custom properties (`--prism-glow-color`, `--prism-glow-intensity`) driven by app state. Glow via `filter: drop-shadow()` or layered pseudo-elements with `mix-blend-mode: screen`.
-
----
-
-## Anti-Patterns (Never Do These)
-
-1. **Solid opaque backgrounds** — always use transparency + blur
-2. **`text-gray-*` colors** — use `text-white/{opacity}` exclusively
-3. **Thick focus outlines** — use subtle 1px rings or glow shadows
-4. **Decorative animation** — every motion must communicate state
-5. **Inconsistent border radius** — cards are `rounded-xl`, inner elements `rounded-lg`, pills `rounded-full`
-6. **Raw color values** — use the semantic color system (blue=primary, amber=warning, etc.)
-7. **`font-light`** — minimum weight is `font-normal`
-8. **`text-lg`** — skip from `text-base` to `text-xl`
-9. **Component libraries (shadcn, Radix, etc.) for styled components** — this app uses custom glass components, not shadcn. `@brett/ui` is the component library.
-10. **Framer Motion** — use CSS keyframes and Tailwind transitions only
-11. **Toast notifications** — never use toasts. All feedback is inline, contextual, and integrated into the surface where the action happened.
-12. **Generic empty states** — every empty state must be crafted, contextual, and carry Brett's personality. Never "No items found."
+1. Import and display the `Bot` icon in `text-[#4682C3]`
+2. Use gold streaming cursor with organic pulse
+3. Show "Brett is thinking..." during streaming in cerulean
+4. Wrap assistant responses in glass cards
+5. Use "Ask Brett anything..." as placeholder
+6. Follow the "not configured" gold callout pattern
+7. Read the Omnibar source as your reference
 
 ---
 
 ## Design Persona & Judgment Heuristics
 
-This section covers the *taste and judgment layer* — how to make design decisions when the system tokens don't give you a clear answer.
-
 ### Product Identity
 
-**Apple Weather meets a witty assistant.** Brett's visual identity is lush, data-rich, and polished (Apple Weather's data-as-art philosophy), but cut with dry personality and editorial sharpness. The tension that makes Brett distinctive is: **premium polish with a voice that has opinions.**
+**Apple Weather meets editorial print meets a witty assistant.** Brett's visual identity is lush, warm, and polished (Apple Weather's data-as-art philosophy), with typographic confidence borrowed from magazine design, cut with dry personality and editorial sharpness.
 
-Think of it as: the UI is quiet and beautiful, but Brett (the character) is not quiet at all.
+The tension that makes Brett distinctive is: **premium polish with a voice that has opinions.**
 
-**Reference triangle:** Apple Weather (primary) > Linear (secondary) > Arc (tertiary)
-- From Apple Weather: data-as-art, backgrounds that *are* information, lush environmental shifts
-- From Linear: engineering precision, density with clarity, respect for power users
-- From Arc: willingness to be opinionated, break conventions when it serves the user
+The UI is quiet and beautiful, but Brett (the character) is not quiet at all.
 
 ### Brett as a Character
 
@@ -436,75 +574,23 @@ Brett is an assistant, but the best kind — the kind that challenges you.
 
 **Error voice rule:** Errors are clinical and helpful, never cute. Being witty when something broke is annoying. State what happened, what to try, and where to escalate.
 
-### Brett AI Surfaces — Consistency Rules
+### Ambient Visual Personality
 
-Brett appears in multiple surfaces. **All must feel like the same character.** The Omnibar is the reference implementation — when in doubt, match it.
+The UI has opinions 100% of the time at a whisper level. Personality lives in texture, timing, and environmental response — never in interruption or decoration.
 
-#### The Surfaces
+**Examples of ambient personality (safe zone):**
+- Stale task tooltip has a slightly warmer/amber tint, like it's *aging*
+- Clearing your last task subtly brightens the background — the environment responds
+- The omnibar gold accent pulses subtly differently by time of day — morning is crisper, evening is slower
+- When Brett is "thinking," the indicator has an organic, slightly irregular rhythm — alive, not mechanical
+- Section headers use heavier weight for "Overdue" than "Today" — the UI emphasizes like a person would
 
-| Surface | Component | Role |
-|---------|-----------|------|
-| **Omnibar** | `Omnibar.tsx` | Primary input — always visible, top of main content |
-| **⌘K Spotlight** | `SpotlightModal.tsx` | Modal variant of omnibar — same hook, shared behavior |
-| **Brett Chat** | `BrettThread.tsx` | Contextual chat in detail panels (tasks + calendar events) |
-| **Brett's Take** | In `CalendarEventDetailPanel.tsx` | Pre-generated insight callout on calendar events |
-| **Daily Briefing** | `DailyBriefing.tsx` | Morning summary card |
+**Hard rule:** If the personality *delays* an interaction or *demands* acknowledgment, it's too much. Cut it.
 
-#### Visual Identity (Non-Negotiable)
-
-| Element | Standard | Notes |
-|---------|----------|-------|
-| **Icon** | `Bot` from lucide-react, `text-blue-400` | Every AI surface shows this icon. Never use dots as substitutes. |
-| **Streaming cursor** | `bg-amber-400` pulsing rectangle | Amber = "working on it." Never blue (conflicts with UI chrome). |
-| **"Thinking" text** | "Brett is thinking..." | Show in ALL surfaces during streaming. Anthropomorphizes, users like it. |
-| **Message cards** | `bg-white/5 rounded-lg px-3.5 py-3 border border-white/10` | Assistant messages always get glass cards. Never render flat. |
-| **Send button** | `bg-blue-500 text-white hover:bg-blue-600` | Solid blue. Never translucent — must look tappable. |
-| **Input placeholder** | "Ask Brett anything..." | Same text everywhere. Consistent voice. |
-| **Brett's brand color** | Blue (`blue-400/500`) | All Brett surfaces use blue. Never purple, never green. |
-
-#### Brett's Take Callout
-
-```jsx
-// Blue accent, left border, italic quoted text
-<div className="bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
-  <div className="flex items-center gap-2 mb-2">
-    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-    <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
-      Brett&apos;s Take
-    </span>
-  </div>
-  <p className="text-sm italic text-blue-300/90 leading-relaxed">
-    &ldquo;{observation}&rdquo;
-  </p>
-</div>
-```
-
-#### "AI Not Configured" State
-
-When the user hasn't set up an AI provider, show a warm amber callout — not an error, an invitation:
-
-```jsx
-<div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
-  <p className="text-xs text-amber-300/80">
-    Brett needs an AI provider to work his magic.
-    Set one up in <button>Settings</button>.
-  </p>
-</div>
-```
-
-Use the same copy and styling across ALL surfaces. Never show a 403 error or clinical "not configured" message.
-
-#### When Adding New Brett Surfaces
-
-1. Import and display the `Bot` icon in `text-blue-400`
-2. Use amber streaming cursor, never blue
-3. Show "Brett is thinking..." during streaming
-4. Wrap assistant responses in glass cards
-5. Use "Ask Brett anything..." as placeholder
-6. Follow the "not configured" amber callout pattern
-7. Read the Omnibar source as your reference
-
----
+**Anti-patterns for personality:**
+- Task cards that physically droop when overdue (cute once, annoying forever)
+- Emoji or illustrations in the UI chrome (kills editorial tone)
+- Animations that delay workflow to be clever
 
 ### Data as Art / Environmental Design
 
@@ -513,76 +599,57 @@ The app should feel alive and responsive to context — not a static dark shell.
 **Background:**
 - The background is not sacred. It can shift, change images, respond to time of day and workload.
 - Source different background images. Factor in: time of day, season, how busy the user's day is.
-- A packed day might feel denser, more focused. A clear day might breathe more.
-- Evening should feel warmer. Morning should feel crisp.
-- **Readability contract:** Because the background image changes, ALL text must remain readable on any image — bright mountainscapes, dark nightscapes, high-contrast scenes. Glass surfaces (`bg-black/30 backdrop-blur-xl`) provide isolation, but text opacity must never rely on a dark background being behind it. This is why the readability floor exists (see Text Opacity Scale rules).
+- Background transitions use a ~1.5s cross-fade — the environment shifts, it doesn't cut.
+- **Readability contract:** Because the background image changes, ALL text must remain readable on any image. Glass surfaces provide isolation, but text opacity must never rely on a dark background being behind it.
 
 **Time-of-day evolution:**
-- This goes beyond cosmetic. Brett's personality should shift with the time:
-  - **Morning:** Energetic, forward-looking. "Here's what's ahead."
-  - **Afternoon:** Focused, supportive. Progress-aware.
-  - **Evening:** Chill, reflective. "You got through a lot today."
-  - **Late night:** Minimal, calm. Don't be loud.
-- Express time through: background imagery/tint, copy tone, greeting energy, subtle color temperature shifts.
+- **Morning:** Energetic, forward-looking. "Here's what's ahead." Crisper gold glow.
+- **Afternoon:** Focused, supportive. Progress-aware.
+- **Evening:** Chill, reflective. "You got through a lot today." Softer gold glow.
+- **Late night:** Minimal, calm. Don't be loud.
 
 ### Motion & Interaction Feel
 
 **Completion (Things 3 swoosh):**
-- Task completion should be efficient (you can rapid-fire through a list) but also *feel good* — like you accomplished something.
-- The gold standard is Things 3: checkmark animates, row compresses with a satisfying vertical slide, item disappears. It's about the *feel* of the row sliding away.
-- Don't block the next action. The animation happens, but the user can already be clicking the next item.
+- Task completion should be efficient (you can rapid-fire through a list) but also *feel good*.
+- Debounced batch exit — click targets stay put until you're done, then completed items swoosh out together.
+- Gold pulse on the checkbox, not green.
 - On mobile (future): explore tactile/haptic feedback combined with the swoosh.
 
 **Hover states:** Physical, not luminous. Cards lift (`translateY(-1px)`), shadows deepen. It should feel like touching a real surface, not highlighting a pixel region.
 
-**Panel transitions:** Snappy but organic. Fast enough to feel responsive (~200-250ms), but with a gentle ease curve that avoids feeling mechanical. Not bouncy — just alive.
+**Panel transitions:** Snappy but organic. Spring-based (framer-motion), fast enough to feel responsive (~250ms), with gentle ease that avoids feeling mechanical. Not bouncy — just alive.
 
 ### Density & Information Hierarchy
 
-**Default bias: less.** When in doubt, show less. But this is a power-user tool — density is a feature when it serves comprehension, not when it's just "more stuff."
+**Default bias: less.** When in doubt, show less. But this is a power-user tool — density is a feature when it serves comprehension.
 
 **Detail panel rules:**
-- Remove duplicative metadata. If the user clicked into this from a list, don't re-show list name or source as prominent badges.
-- Source/origin information lives in the content preview area as an "open original" link pattern (like Lenny's newsletter), not as a standalone badge.
-- All detail panel types (Task, Content, Calendar Event) should follow the same structural pattern. Enforce consistency unless there's a very strong reason to break.
-- Panel width is not sacred at 550px. Size it to what makes sense holistically.
-
-**Inbox list rows:** toggle button, title, relative age. Source pill is noise — remove it.
+- Remove duplicative metadata
+- Source/origin information lives in the content preview area as an "open original" link
+- All detail panel types should follow the same structural pattern
+- Panel width is not sacred at 550px — size it to what makes sense holistically
 
 ### Consistency as Default
 
-**Force consistency most of the time.** Every panel type, every list row, every section header should follow the same patterns unless there's a compelling reason to diverge. "Compelling" means the content genuinely demands a different treatment, not "this one felt like it should be different."
+**Force consistency most of the time.** Every panel type, every list row, every section header should follow the same patterns unless there's a compelling reason to diverge.
 
 **When to break consistency:**
 - The content type has fundamentally different affordances (calendar events have RSVP, tasks don't)
 - Consistency would actively mislead (making a read-only field look editable)
 - A one-off moment of delight that earns its keep
 
-### Typography Direction
-
-**Target feel:** Apple SF Pro neutrality — clean, invisible, gets out of the way. The content is the star, not the typeface.
-
-- Section labels (`font-mono uppercase`) are a signature pattern but not precious. Open to evolution — could explore sans-serif small caps, lighter tracking, or other treatments that feel less "developer tool."
-- Font size/density should be configurable as a user preference (not typeface switching — that's a design decision, not a setting).
-
-**Future direction — Zen Mode:**
-- A distinct visual mode: softer fonts, Japanese-inspired aesthetic, rounder edges, more pastel colors.
-- This is a *mode*, not a setting toggle — it's a holistic visual transformation.
-- Hold off on implementation, but design decisions should not preclude it.
-
 ### Destructive Actions & Friction
 
-**Inline transformation, never modals.** When the user hits delete, the row/button itself transforms into the confirmation state. The calendar disconnect pattern in Settings is the gold standard — replicate it everywhere.
+**Inline transformation, never modals.** When the user hits delete, the row/button itself transforms into the confirmation state.
 
 **Pattern:** Action button → transforms to "Are you sure? [Confirm] [Cancel]" in the same space → completes or reverts.
 
-**Errors:** Glass-style inline errors. Appear contextually where the action happened. Clinical tone (see voice rules above). Include escalation path ("ask Brett to report an error").
+**Errors:** Glass-style inline errors. Appear contextually where the action happened. Clinical tone. Include escalation path.
 
 ### Actionable Tooltips
 
-Tooltips should not just describe — they should *suggest action*. When hovering over a stale task, the tooltip doesn't say "Created 14 days ago." It says "This has been sitting for 2 weeks. Complete it or delete it."
-
-This extends Brett's personality into the smallest interactions.
+Tooltips should not just describe — they should *suggest action*. When hovering over a stale task, the tooltip says "This has been sitting for 2 weeks. Complete it or delete it."
 
 ### Empty States
 
@@ -592,7 +659,77 @@ Every empty state should be:
 3. **Smoothly integrated** — feels like a natural part of the view, not an error page
 4. **Actionable when appropriate** — if there's a next step, surface it naturally
 
-Empty states are where personality lives. They're the moments when the app has nothing to show, so it shows *character* instead.
+---
+
+## Improvement Opportunities
+
+These are areas where the design can level up. Apply these when touching relevant components.
+
+### 1. Micro-interaction Polish
+Cards should feel like they physically respond to cursor proximity:
+```jsx
+className="hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg transition-all duration-150"
+```
+
+### 2. Empty State Richness
+Add staggered entrance animations (framer-motion) for empty state elements. Empty states are where personality lives — consider a gentle breathing animation on the main icon.
+
+### 3. Skeleton Loading States (IMPLEMENTED)
+**Rule:** All loading states use skeleton loaders — never show "Loading..." text.
+
+**Components:**
+- `SkeletonBar` — single pulsing bar, accepts `className` for sizing
+- `SkeletonListView` — full list skeleton (header + add input + 3 item cards)
+
+**Rules:**
+- Skeletons must match the shape of the content they replace
+- Use `bg-white/5` — not `bg-white/10` (too bright) or `bg-white/[0.03]` (invisible)
+- Use `animate-pulse` (Tailwind built-in) — not custom keyframes
+- Show 3 skeleton cards for list views
+- Full-screen loading (auth init): use pulsing logo, not skeletons
+
+### 4. Scroll Position Indicators
+Add subtle gradient fade masks at top/bottom of scrollable areas to hint at overflow:
+```jsx
+className="bg-gradient-to-b from-black/40 to-transparent h-4 pointer-events-none"
+```
+
+### 5. Transition Choreography (READY TO IMPLEMENT)
+Stagger ThingCard entrance animations using framer-motion. Each card delayed by 30ms for a cascading reveal effect.
+
+### 6. DetailPanel Backdrop (READY TO IMPLEMENT)
+Add a `bg-black/20` backdrop overlay behind the panel that fades in/out with `AnimatePresence`.
+
+### 7. Focus Ring Consistency
+Standardize on: `focus-visible:ring-1 focus-visible:ring-[#E8B931]/30 focus-visible:outline-none` for all interactive elements. Use `focus-visible` (not `focus`) so keyboard users get rings but mouse users don't.
+
+### 8. CalendarTimeline Current Hour Emphasis
+Add a subtle gradient glow around the current hour band. Make past hours slightly more faded (`opacity-60`) vs upcoming hours (`opacity-100`).
+
+### 9. LeftNav Active State
+Add a subtle left border accent (`border-l-2 border-[#E8B931]`) or a glass highlight (`bg-white/10 rounded-lg`) on the active item for stronger spatial anchoring.
+
+---
+
+## Anti-Patterns (Never Do These)
+
+1. **Solid opaque backgrounds** — always use transparency + blur
+2. **`text-gray-*` colors** — use `text-white/{opacity}` exclusively
+3. **`blue-500` as brand/primary** — gold `#E8B931` is the brand, cerulean `#4682C3` is Brett-only
+4. **`font-mono` in UI text** — Switzer for everything, no monospace
+5. **Green for completion** — gold pulse, teal `#48BBA0` checkmark
+6. **Mechanical animation rhythms** — organic, slightly irregular for ambient motion
+7. **Blocking animations** — never delay the next user action
+8. **Personality that demands acknowledgment** — ambient only, never modal
+9. **`text-lg`** — skip from `text-base` to `text-xl`
+10. **`font-light`** — minimum weight is `font-normal`
+11. **CSS keyframes for complex sequences** — use framer-motion for exits, layout, stagger
+12. **Horizontal slide for sibling view transitions** — vertical fade only
+13. **Component libraries (shadcn, Radix, etc.) for styled components** — custom glass components only
+14. **Toast notifications** — all feedback is inline, contextual, integrated
+15. **Generic empty states** — every empty state must be crafted, contextual, and carry Brett's personality
+16. **Thick focus outlines** — use subtle 1px rings or glow shadows
+17. **Raw color values for brand/AI colors** — use the defined hex values consistently
 
 ---
 
@@ -602,18 +739,16 @@ All date boundary logic must be timezone-aware. The user's IANA timezone is stor
 
 ### The Rule
 
-**Never use date-only strings (e.g., `"2026-03-29"`) for database queries.** JavaScript's `new Date("2026-03-29")` interprets date-only strings as UTC midnight — not the user's local midnight. For users west of UTC, this shifts events near the end of day onto the wrong calendar date.
+**Never use date-only strings (e.g., `"2026-03-29"`) for database queries.** JavaScript's `new Date("2026-03-29")` interprets date-only strings as UTC midnight — not the user's local midnight.
 
 ### Client-side (Electron renderer)
-
-When querying the API for events in a date range:
 
 ```typescript
 // CORRECT — send full ISO timestamps computed from local midnight
 const start = new Date(someDate);
-start.setHours(0, 0, 0, 0);     // local midnight
+start.setHours(0, 0, 0, 0);
 const end = new Date(start);
-end.setDate(end.getDate() + 1);  // next local midnight
+end.setDate(end.getDate() + 1);
 fetch(`/calendar/events?startDate=${start.toISOString()}&endDate=${end.toISOString()}`);
 
 // WRONG — date-only strings are interpreted as UTC midnight on the API
@@ -622,19 +757,12 @@ fetch(`/calendar/events?startDate=2026-03-29&endDate=2026-03-30`);
 
 ### Server-side (API routes, AI skills)
 
-When computing day boundaries from a date string (e.g., from an AI model):
-
 ```typescript
 import { getCalendarDateBounds, getUserDayBounds } from "@brett/business";
 
-// For a specific calendar date + timezone → UTC bounds
 const { startOfDay, endOfDay } = getCalendarDateBounds("2026-03-29", userTimezone);
-
-// For "today" in the user's timezone → UTC bounds
 const { startOfDay, endOfDay } = getUserDayBounds(userTimezone);
 ```
-
-These helpers handle DST transitions correctly (spring-forward days are 23h, fall-back days are 25h).
 
 ### Anti-patterns
 

@@ -12,8 +12,15 @@
       "dist/electron/**/*",
       "dist/renderer/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "resources/tray-*.png",
+        "to": "resources"
+      }
+    ],
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "resources/icon.icns"
     },
     "publish": {
       "provider": "generic",
