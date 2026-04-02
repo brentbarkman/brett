@@ -50,13 +50,29 @@ Replace the single-purpose `ConversationEmbedding` table with a universal `Embed
 | **ScoutFinding** | `title + description + reasoning` | Single chunk (concatenated) | Scout run creates finding |
 | **Conversation** | User + assistant messages concatenated | Single chunk (truncated to 8000 chars, existing behavior) | Post-conversation (requires AI key — this is the one entity that only embeds when AI is active) |
 
-### Embedding Provider: Brett-Owned Key
+### Embedding Provider: Voyage AI (Brett-Owned Key)
 
-- Brett's API server holds a single OpenAI API key in `EMBEDDING_API_KEY` env var
-- This key is used for ALL embedding operations — users never need their own OpenAI key for embeddings
-- The `OpenAIEmbeddingProvider` is instantiated with this server key, not user keys
-- Model: `text-embedding-3-small` (1536 dimensions) — same as current
-- Cost absorbed by Brett as infrastructure
+- **Provider:** Voyage AI `voyage-3-large` (1024 dimensions)
+- **Why Voyage:** Best retrieval quality (MTEB leader), explicit asymmetric search support (`input_type: "query"` vs `"document"`), competitive cost ($0.06/1M tokens)
+- **Asymmetric embedding:** The `EmbeddingProvider` interface gains an `inputType` parameter. Entities are embedded as `"document"` at write time. Search queries and similarity lookups are embedded as `"query"` at read time. This improves quality on the 8 out of 12 vector operations that are asymmetric (short query → longer document).
+- Brett's API server holds a single Voyage API key in `EMBEDDING_API_KEY` env var
+- This key is used for ALL embedding operations — users never need their own key for embeddings
+- The `VoyageEmbeddingProvider` is instantiated once at server startup with this key
+- Cost absorbed by Brett as infrastructure (~$540/month at 10K users)
+
+### EmbeddingProvider Interface Change
+
+```typescript
+export interface EmbeddingProvider {
+  embed(text: string, inputType?: "query" | "document"): Promise<number[]>;
+  readonly dimensions: number;
+}
+```
+
+- `inputType: "document"` — used when embedding entities for storage (items, events, findings, etc.)
+- `inputType: "query"` — used when embedding search queries or similarity lookup inputs
+- Providers that don't support asymmetric modes (e.g., OpenAI) ignore the parameter
+- Default: `"document"` (safe default — most calls are entity embedding)
 
 ### Key Design Decisions
 
@@ -85,7 +101,7 @@ model Embedding {
   entityId   String   // FK to the source entity (not enforced — polymorphic)
   chunkIndex Int      @default(0)  // 0 for single-chunk entities, 0..N for chunked
   chunkText  String   @db.Text     // the text that was embedded
-  embedding  Unsupported("vector(1536)")
+  embedding  Unsupported("vector(1024)")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -117,8 +133,9 @@ The existing `ConversationEmbedding` table is superseded by the universal `Embed
 ```typescript
 // AI_CONFIG additions
 embedding: {
-  model: "text-embedding-3-small",
-  dimensions: 1536,
+  provider: "voyage",
+  model: "voyage-3-large",
+  dimensions: 1024,
   maxChunkTokens: 500,       // target chunk size
   chunkOverlapTokens: 50,    // overlap between chunks
   maxTextLength: 8000,        // absolute max per chunk (chars)
@@ -146,7 +163,8 @@ Entity Created/Updated
   Text Assembly            ◄── Concatenate relevant fields per entity type
         │                      Chunk if > maxChunkTokens
         ▼
-  OpenAI API               ◄── Brett-owned key (EMBEDDING_API_KEY)
+  Voyage AI API             ◄── Brett-owned key (EMBEDDING_API_KEY)
+        │                      inputType: "document" for entities, "query" for searches
         │                      Batch API: up to 50 texts per call
         ▼
   Upsert Embedding         ◄── INSERT ... ON CONFLICT (entityType, entityId, chunkIndex)
@@ -529,25 +547,25 @@ For items in the suggestion range (0.75-0.90), optionally pass them to the LLM t
 ### Environment Variable
 
 ```
-EMBEDDING_API_KEY=sk-...   # Brett-owned OpenAI API key for embeddings
+EMBEDDING_API_KEY=pa-...   # Brett-owned Voyage AI API key for embeddings
 ```
 
 - Set in Railway environment (production) and `.env` (development)
 - Added to `.env.example` with a placeholder
-- The embedding provider is instantiated once at server startup, not per-request
+- The `VoyageEmbeddingProvider` is instantiated once at server startup, not per-request
 - If `EMBEDDING_API_KEY` is not set, embedding features degrade gracefully (keyword-only search, no related items, no dedup)
 
 ### Cost Monitoring
 
 - Track embedding API usage via a lightweight counter (daily token count)
-- Log to `AIUsageLog` with `source = "embedding"`, `provider = "openai"`, `model = "text-embedding-3-small"`
+- Log to `AIUsageLog` with `source = "embedding"`, `provider = "voyage"`, `model = "voyage-3-large"`
 - The admin panel can display embedding costs alongside user AI costs
 - Alert threshold: configurable (e.g., warn if daily embedding cost exceeds $X)
 
 ### Rate Limiting
 
-- OpenAI `text-embedding-3-small` rate limits: 5,000 RPM, 5,000,000 TPM (Tier 3)
-- Batch embedding (50 texts per call) keeps RPM low
+- Voyage AI rate limits vary by plan — monitor via response headers
+- Batch embedding (up to 50 texts per call) keeps RPM low
 - Backfill uses a slower rate (10 RPM) to avoid competing with real-time embeddings
 - If rate limited, queue retries with exponential backoff
 
@@ -555,28 +573,33 @@ EMBEDDING_API_KEY=sk-...   # Brett-owned OpenAI API key for embeddings
 
 ## Migration Strategy
 
-### Phase 1: Schema + Infrastructure
+### Phase 1: Schema + Infrastructure + Test Foundation
 
-1. Create `Embedding` table with HNSW index via Prisma migration
+1. Create `Embedding` table (1024 dims) with HNSW index via Prisma migration
 2. Add `source` field to `ItemLink`
-3. Migrate existing `ConversationEmbedding` data → `Embedding` table
+3. Migrate existing `ConversationEmbedding` data → `Embedding` table (re-embed at 1024 dims)
 4. Drop `ConversationEmbedding` table
-5. Add `EMBEDDING_API_KEY` to environment
+5. Build `VoyageEmbeddingProvider` implementing updated `EmbeddingProvider` interface (with `inputType` param)
+6. Build `MockEmbeddingProvider` with semantic clusters (test foundation for all subsequent phases)
+7. Add `EMBEDDING_API_KEY` to environment
+8. Update `AI_CONFIG` with new embedding config block
 
 ### Phase 2: Embedding Pipeline
 
-1. Build text assemblers for each entity type
-2. Build chunking algorithm
-3. Build async embedding queue (in-process, debounced)
-4. Wire triggers (item create/update, content extraction, calendar sync, etc.)
+1. Build text assemblers for each entity type (with `[Task]`, `[Meeting]`, etc. prefix tags)
+2. Build chunking algorithm (paragraph → sentence splitting, overlap)
+3. Build async embedding queue (in-process, debounced, retry with backoff)
+4. Wire triggers (item create/update, content extraction, calendar sync, etc.) — all use `inputType: "document"`
 5. Build backfill job for existing data
 6. Update `embedConversation()` to use new `Embedding` table
+7. Unit tests for assemblers + chunking, integration tests for pipeline
 
 ### Phase 3: Search
 
-1. Build `GET /api/search` endpoint with hybrid search (keyword + vector + RRF)
+1. Build `GET /api/search` endpoint with hybrid search (keyword + vector + RRF) — vector queries use `inputType: "query"`
 2. Update Omnibar and Spotlight to use new search endpoint
 3. Render multi-type results in the UI
+4. Integration tests for hybrid search (keyword-only, vector-only, merged results)
 
 ### Phase 4: Related Items + Auto-Linking
 
@@ -610,20 +633,65 @@ EMBEDDING_API_KEY=sk-...   # Brett-owned OpenAI API key for embeddings
 
 ## Testing Strategy
 
-### Unit Tests
-- Text assemblers: correct concatenation, prefix tags, null handling
-- Chunking algorithm: boundary conditions, overlap correctness, empty input
-- RRF: score computation, tie-breaking, deduplication
-- Auto-link threshold logic: above/below/between thresholds
-- Centroid computation: averaging vectors, empty list handling
+### Layer 1: MockEmbeddingProvider (Unit Tests)
 
-### Integration Tests
-- Embedding pipeline: entity create → embedding stored → searchable
-- Hybrid search: keyword-only results, vector-only results, merged results
-- Auto-linking: create similar items → links auto-created
-- Duplicate detection: create near-duplicate → candidates returned
-- Deletion cascade: delete item → embeddings removed
-- Content chunking: large content body → multiple chunks → searchable
+A deterministic mock provider that returns predictable vectors for testing. Built as a **Phase 1 deliverable** — every subsequent phase writes tests using it.
+
+**Design:**
+```typescript
+class MockEmbeddingProvider implements EmbeddingProvider {
+  readonly dimensions = 1024;
+
+  // Semantic clusters: predefined vectors where similar texts
+  // have known, stable cosine similarities
+  private clusters: Map<string, number[]>;
+
+  // Fallback: hash-based deterministic vectors for unknown text
+  embed(text: string, inputType?: "query" | "document"): Promise<number[]>;
+}
+```
+
+**Semantic clusters for threshold testing:**
+- **Cluster A ("finance"):** "budget review", "Q3 financials", "revenue forecast" → pairwise similarity 0.88-0.95
+- **Cluster B ("hiring"):** "engineering hiring", "interview pipeline", "recruiter sync" → pairwise 0.85-0.92
+- **Cross-cluster A↔B:** similarity ~0.40-0.55 (related domains, different topics)
+- **Outlier:** "dentist appointment" → similarity < 0.30 to everything
+- **Near-duplicate pair:** "Review Q3 budget" / "Q3 budget review" → similarity 0.96 (above dedup threshold)
+- **Borderline pair:** "Prepare financial summary" / "Revenue dashboard update" → similarity ~0.82 (between auto-link and suggest thresholds)
+
+This gives stable, predictable fixtures that exercise every threshold boundary:
+- Auto-link threshold (0.90): within-cluster pairs cross it, cross-cluster pairs don't
+- Suggest threshold (0.75): borderline pairs land between suggest and auto-link
+- Dedup threshold (0.85): near-duplicate pair is above, related items are below
+- Discard: outlier is below all thresholds
+
+**Unit test coverage:**
+- Text assemblers: correct concatenation, prefix tags (`[Task]`, `[Meeting]`), null field handling, empty input
+- Chunking algorithm: boundary sizes, overlap correctness, paragraph/sentence splitting, empty input, single paragraph
+- RRF fusion: score computation, tie-breaking, deduplication across keyword + vector lists
+- Auto-link threshold logic: items in same cluster → auto-link, cross-cluster → suggest or discard, outlier → discard
+- Duplicate detection: near-duplicate pair flagged, related-but-different items not flagged
+- Centroid computation: averaging vectors, empty list edge case, single-item list
+- Graceful degradation: no API key → keyword-only, no errors
+
+### Layer 2: Integration Tests (Real DB, Mock Provider)
+
+Tests the full pipeline end-to-end with a real Postgres+pgvector instance (existing Docker test setup) and the `MockEmbeddingProvider`. No external API calls.
+
+**Test coverage:**
+- **Embedding pipeline:** create item → embedding stored in `Embedding` table → verify `entityType`, `entityId`, `chunkIndex`, `chunkText` correct
+- **Upsert semantics:** update item title → embedding updated (not duplicated) → verify `updatedAt` changed, same row
+- **Chunk lifecycle:** create content item with large body → N chunks stored → update with shorter body → orphan chunks deleted
+- **Hybrid search:** insert items from different clusters → search with query from cluster A → verify cluster A items rank highest, keyword matches boost via RRF
+- **Cross-type search:** insert item + event + finding about same topic → search returns all three with correct `entityType`
+- **Auto-linking:** create two items from same cluster → verify `ItemLink` created with `source = "embedding"` → verify bidirectional
+- **Auto-link threshold boundary:** create items at 0.89 similarity (mock) → verify NO auto-link, only suggestion
+- **Duplicate detection:** create near-duplicate item → verify `duplicateCandidates` in response
+- **Deletion cascade:** delete item → verify all embeddings for that entity removed
+- **List centroid:** add items to list → request list suggestions for new item → verify correct list suggested
+- **Calendar related items:** create event + related tasks → query related items → verify correct items returned above threshold
+- **Backfill:** create items without embeddings → run backfill → verify all items now have embeddings
+- **Concurrent writes:** parallel embedding upserts don't deadlock or duplicate (pgvector + unique constraint)
 
 ### Performance Tests
 - Search latency with 1K, 10K, 50K embeddings per user
@@ -654,12 +722,12 @@ The system should never block or error on embedding failures. Every embedding op
 
 | Scale | Items | Events/mo | Findings/mo | Embed Calls/mo | Cost/mo |
 |-------|-------|-----------|-------------|----------------|---------|
-| 1 user (light) | 200 | 100 | 50 | ~400 | $0.008 |
-| 1 user (heavy) | 2,000 | 500 | 500 | ~3,500 | $0.07 |
-| 1,000 users (avg) | 500K total | 200K | 100K | ~900K | $18 |
-| 10,000 users (avg) | 5M total | 2M | 1M | ~9M | $180 |
+| 1 user (light) | 200 | 100 | 50 | ~400 | $0.024 |
+| 1 user (heavy) | 2,000 | 500 | 500 | ~3,500 | $0.21 |
+| 1,000 users (avg) | 500K total | 200K | 100K | ~900K | $54 |
+| 10,000 users (avg) | 5M total | 2M | 1M | ~9M | $540 |
 
-These costs assume ~200 tokens average per embedding call and $0.02/1M tokens. Content body chunking adds ~3x for content-heavy users but the absolute cost remains negligible.
+These costs assume ~200 tokens average per embedding call and $0.06/1M tokens (Voyage `voyage-3-large`). Content body chunking adds ~3x for content-heavy users but the absolute cost remains negligible.
 
 ---
 
@@ -673,4 +741,4 @@ These costs assume ~200 tokens average per embedding call and $0.02/1M tokens. C
 
 4. **Pricing model?** → Free tier includes embeddings. Paid tier adds AI features that are enhanced by embeddings.
 
-5. **Embedding provider?** → OpenAI `text-embedding-3-small` on a Brett-owned key. Can migrate to another provider later by re-embedding (batch job).
+5. **Embedding provider?** → Voyage AI `voyage-3-large` on a Brett-owned key. Chosen for best-in-class retrieval quality and asymmetric search support (`input_type: "query"` vs `"document"`). 1024 dimensions. The `EmbeddingProvider` interface is provider-agnostic — can swap to another provider by adding a new class and running a re-embed backfill.
