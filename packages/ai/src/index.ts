@@ -22,6 +22,33 @@ export { createRegistry } from "./skills/index.js";
 // Config
 export { AI_CONFIG } from "./config.js";
 
+// Embedding providers
+export { MockEmbeddingProvider, cosineSimilarity } from "./providers/mock-embedding.js";
+
+// Embedding pipeline
+export { embedEntity, deleteEmbeddings } from "./embedding/pipeline.js";
+export type { EmbedEntityParams } from "./embedding/pipeline.js";
+export { enqueueEmbed, setEmbedProcessor, flushEmbedQueue } from "./embedding/queue.js";
+export type { EmbedJob } from "./embedding/queue.js";
+export {
+  assembleItemText,
+  assembleContentText,
+  assembleEventText,
+  assembleMeetingNoteText,
+  assembleFindingText,
+  assembleConversationText,
+} from "./embedding/assembler.js";
+export type {
+  ItemAssemblerInput,
+  ContentAssemblerInput,
+  EventAssemblerInput,
+  MeetingNoteAssemblerInput,
+  FindingAssemblerInput,
+  ConversationMessage,
+  TranscriptEntry,
+} from "./embedding/assembler.js";
+export { chunkText, estimateTokens } from "./embedding/chunker.js";
+
 // Orchestrator
 export { orchestrate } from "./orchestrator.js";
 export type { OrchestratorParams } from "./orchestrator.js";
