@@ -83,34 +83,36 @@ export async function findSimilarItems(
 
   if (targetEntityType != null) {
     rows = await prisma.$queryRaw<typeof rows>`
-      SELECT DISTINCT ON ("entityId")
-        "entityId",
-        1 - (embedding <=> ${vectorStr}::vector) AS similarity
-      FROM "Embedding"
-      WHERE "userId" = ${userId}
-        AND "entityType" = ${targetEntityType}
-        AND "entityId" != ALL(${allExcluded})
-      ORDER BY "entityId", similarity DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON ("entityId")
+          "entityId",
+          1 - (embedding <=> ${vectorStr}::vector) AS similarity
+        FROM "Embedding"
+        WHERE "userId" = ${userId}
+          AND "entityType" = ${targetEntityType}
+          AND "entityId" != ALL(${allExcluded})
+        ORDER BY "entityId", embedding <=> ${vectorStr}::vector ASC
+      ) sub
+      ORDER BY similarity DESC
       LIMIT ${limit}
     `;
   } else {
     rows = await prisma.$queryRaw<typeof rows>`
-      SELECT DISTINCT ON ("entityId")
-        "entityId",
-        1 - (embedding <=> ${vectorStr}::vector) AS similarity
-      FROM "Embedding"
-      WHERE "userId" = ${userId}
-        AND "entityId" != ALL(${allExcluded})
-      ORDER BY "entityId", similarity DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON ("entityId")
+          "entityId",
+          1 - (embedding <=> ${vectorStr}::vector) AS similarity
+        FROM "Embedding"
+        WHERE "userId" = ${userId}
+          AND "entityId" != ALL(${allExcluded})
+        ORDER BY "entityId", embedding <=> ${vectorStr}::vector ASC
+      ) sub
+      ORDER BY similarity DESC
       LIMIT ${limit}
     `;
   }
 
-  // Sort by similarity descending (DISTINCT ON ordering is by entityId, not similarity)
-  return rows
-    .map((r) => ({ entityId: r.entityId, similarity: Number(r.similarity) }))
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit);
+  return rows.map((r) => ({ entityId: r.entityId, similarity: Number(r.similarity) }));
 }
 
 /**
@@ -141,34 +143,16 @@ export async function findDuplicates(
   return matches.filter((m) => m.similarity >= dupThreshold);
 }
 
-// --- List Centroids ---
-
-/**
- * Computes the average embedding (centroid) of all active items in a list.
- * Returns the centroid as a vector string, or null if the list has no embeddings.
- */
-export async function getListCentroid(
-  listId: string,
-  userId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  prisma: any
-): Promise<string | null> {
-  const rows = await prisma.$queryRaw<Array<{ centroid: string | null }>>`
-    SELECT AVG(e.embedding)::text AS centroid
-    FROM "Embedding" e
-    INNER JOIN "ItemList" il ON il."itemId" = e."entityId"
-    WHERE il."listId" = ${listId}
-      AND e."userId" = ${userId}
-      AND e."entityType" = 'item'
-      AND e."chunkIndex" = 0
-  `;
-
-  return rows[0]?.centroid ?? null;
-}
+// --- List Suggestions ---
 
 /**
  * Suggests up to 3 lists that an item might belong to, based on cosine similarity
- * between the item's embedding and each list's centroid.
+ * between the item's embedding and each list's centroid (average embedding of active items).
+ *
+ * Executes a single SQL query that:
+ * 1. Loads the target item's embedding
+ * 2. Computes centroids for all lists with active items
+ * 3. Ranks lists by cosine similarity to the item
  */
 export async function suggestLists(
   userId: string,
@@ -176,45 +160,45 @@ export async function suggestLists(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prisma: any
 ): Promise<Array<{ listId: string; listName: string; similarity: number }>> {
-  // Load the item's embedding
-  const sourceRows = await prisma.$queryRaw<Array<{ embedding: string }>>`
-    SELECT embedding::text AS embedding
-    FROM "Embedding"
-    WHERE "userId" = ${userId}
-      AND "entityId" = ${entityId}
-      AND "chunkIndex" = 0
-    LIMIT 1
+  const rows = await prisma.$queryRaw<
+    Array<{ listId: string; listName: string; similarity: number }>
+  >`
+    WITH item_embedding AS (
+      SELECT embedding
+      FROM "Embedding"
+      WHERE "userId" = ${userId}
+        AND "entityType" = 'item'
+        AND "entityId" = ${entityId}
+        AND "chunkIndex" = 0
+      LIMIT 1
+    ),
+    list_centroids AS (
+      SELECT i."listId", AVG(e.embedding) AS centroid
+      FROM "Embedding" e
+      INNER JOIN "Item" i ON e."entityId" = i.id
+      WHERE e."userId" = ${userId}
+        AND e."entityType" = 'item'
+        AND e."chunkIndex" = 0
+        AND i.status = 'active'
+        AND i."listId" IS NOT NULL
+      GROUP BY i."listId"
+    )
+    SELECT
+      lc."listId" AS "listId",
+      l.name AS "listName",
+      1 - ((SELECT embedding FROM item_embedding) <=> lc.centroid) AS similarity
+    FROM list_centroids lc
+    INNER JOIN "List" l ON l.id = lc."listId"
+    CROSS JOIN item_embedding ie
+    WHERE l."archivedAt" IS NULL
+      AND 1 - (ie.embedding <=> lc.centroid) > 0.5
+    ORDER BY similarity DESC
+    LIMIT 3
   `;
 
-  if (sourceRows.length === 0) return [];
-
-  const vectorStr = sourceRows[0].embedding;
-
-  // Get all lists owned by this user
-  const lists = await prisma.list.findMany({
-    where: { userId },
-    select: { id: true, name: true },
-  });
-
-  if (lists.length === 0) return [];
-
-  // Compute similarity against each list's centroid
-  const suggestions: Array<{ listId: string; listName: string; similarity: number }> = [];
-
-  for (const list of lists) {
-    const centroid = await getListCentroid(list.id, userId, prisma);
-    if (centroid === null) continue;
-
-    const simRows = await prisma.$queryRaw<Array<{ similarity: number }>>`
-      SELECT 1 - (${vectorStr}::vector <=> ${centroid}::vector) AS similarity
-    `;
-
-    const similarity = Number(simRows[0]?.similarity ?? 0);
-    if (similarity >= 0.5) {
-      suggestions.push({ listId: list.id, listName: list.name, similarity });
-    }
-  }
-
-  // Return top 3 by similarity
-  return suggestions.sort((a, b) => b.similarity - a.similarity).slice(0, 3);
+  return rows.map((r: { listId: string; listName: string; similarity: number }) => ({
+    listId: r.listId,
+    listName: r.listName,
+    similarity: Number(r.similarity),
+  }));
 }
