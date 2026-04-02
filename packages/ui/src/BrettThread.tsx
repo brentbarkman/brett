@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { ChevronDown, ChevronUp, User, Bot, Send, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Bot, Send, Loader2 } from "lucide-react";
 import type { DisplayHint } from "@brett/types";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
@@ -47,70 +47,61 @@ function MessageBubble({
   onNavigate?: (path: string) => void;
 }) {
   const isUser = message.role === "user";
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end py-1.5">
+        <p className="text-sm text-white/90 bg-white/5 px-3 py-2 rounded-lg max-w-[85%]">
+          {message.content}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-start gap-2 py-2">
-      <div
-        className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-          isUser ? "bg-white/10" : "bg-blue-500/20"
-        }`}
-      >
-        {isUser ? (
-          <User size={12} className="text-white/60" />
-        ) : (
-          <Bot size={12} className="text-blue-400" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0 space-y-1.5">
-        {/* Tool result cards */}
-        {message.toolCalls?.map((tc, i) =>
-          tc.result != null && tc.displayHint ? (
-            <SkillResultCard
-              key={`tc-${i}`}
-              displayHint={tc.displayHint}
-              data={tc.result}
-              message={tc.name}
-            />
-          ) : tc.result == null && !isStreamingMsg ? null : tc.result == null ? (
-            <div
-              key={`tc-pending-${i}`}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10"
-            >
-              <Loader2 size={12} className="animate-spin text-white/30" />
-              <span className="text-xs text-white/40">{tc.name}...</span>
-            </div>
-          ) : null,
-        )}
-
-        {/* Text content */}
-        {message.content && (
-          <div className={`text-sm leading-relaxed break-words ${isUser ? "text-white/80" : "bg-white/5 rounded-lg px-3.5 py-3 border border-white/10 text-white/80"}`}>
-            <SimpleMarkdown
-              content={message.content}
-              onItemClick={onItemClick}
-              onEventClick={onEventClick}
-              onNavigate={onNavigate}
-            />
-            {isStreamingMsg && (
-              <span className="inline-block w-1.5 h-3.5 bg-amber-400 ml-0.5 animate-pulse rounded-sm" />
-            )}
+    <div className="py-1.5 space-y-1.5">
+      {/* Tool result cards */}
+      {message.toolCalls?.map((tc, i) =>
+        tc.result != null && tc.displayHint ? (
+          <SkillResultCard
+            key={`tc-${i}`}
+            displayHint={tc.displayHint}
+            data={tc.result}
+            message={tc.name}
+          />
+        ) : tc.result == null && !isStreamingMsg ? null : tc.result == null ? (
+          <div
+            key={`tc-pending-${i}`}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10"
+          >
+            <Loader2 size={12} className="animate-spin text-white/30" />
+            <span className="text-xs text-white/40">{tc.name}...</span>
           </div>
-        )}
+        ) : null,
+      )}
 
-        {/* Streaming cursor when no content yet */}
-        {!message.content && isStreamingMsg && !message.toolCalls?.length && (
-          <div className="flex items-center gap-1 py-1">
-            <Loader2 size={12} className="animate-spin text-blue-400/60" />
-            <span className="text-xs text-white/30">Brett is thinking...</span>
-          </div>
-        )}
+      {/* Text content */}
+      {message.content && (
+        <div className="text-sm leading-relaxed break-words bg-white/5 rounded-lg px-3.5 py-3 border border-white/10 text-white/90">
+          <SimpleMarkdown
+            content={message.content}
+            onItemClick={onItemClick}
+            onEventClick={onEventClick}
+            onNavigate={onNavigate}
+          />
+          {isStreamingMsg && (
+            <span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />
+          )}
+        </div>
+      )}
 
-        <span className="text-[10px] text-white/30 mt-0.5 block">
-          {new Date(message.createdAt).toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          })}
-        </span>
-      </div>
+      {/* Streaming cursor when no content yet */}
+      {!message.content && isStreamingMsg && !message.toolCalls?.length && (
+        <div className="flex items-center gap-1 py-1">
+          <Loader2 size={12} className="animate-spin text-blue-400/60" />
+          <span className="text-xs text-white/30">Brett is thinking...</span>
+        </div>
+      )}
     </div>
   );
 }
