@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { X, RefreshCw, Loader2, Settings } from "lucide-react";
-import { BrettMark } from "./BrettMark";
 
 interface OverdueItem {
   title: string;
@@ -193,8 +192,7 @@ export function DailyBriefing({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <BrettMark size={18} />
-          <span className="text-[11px] uppercase tracking-[0.15em] font-bold text-white/60">
+          <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
             Daily Briefing
           </span>
           {isGenerating && (
