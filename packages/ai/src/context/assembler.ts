@@ -61,6 +61,7 @@ export interface AssembledContext {
    *  - "none": pure text generation, no tools (briefing, bretts_take)
    */
   toolMode: ToolMode;
+  maxTokens?: number;
 }
 
 // ─── Constants ───
@@ -474,6 +475,13 @@ async function assembleBrettsTake(
 ): Promise<AssembledContext> {
   const facts = await loadUserFacts(prisma, input.userId);
 
+  const user = await prisma.user.findFirst({
+    where: { id: input.userId },
+    select: { timezone: true },
+  });
+  const timezone = user?.timezone ?? "UTC";
+  const safeTimezone = VALID_TIMEZONES.has(timezone) ? timezone : "UTC";
+
   let dataContext = "";
 
   if (input.itemId) {
@@ -557,10 +565,21 @@ async function assembleBrettsTake(
     }
   }
 
+  const now = new Date();
+  const currentTime = now.toLocaleString("en-US", {
+    timeZone: safeTimezone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const currentDate = now.toLocaleDateString("en-CA", { timeZone: safeTimezone });
+
   const system =
     BRETTS_TAKE_SYSTEM_PROMPT +
     formatFacts(facts) +
-    currentDateLine();
+    `\nCurrent date: ${currentDate}` +
+    `\nCurrent time: ${currentTime}` +
+    `\nTimezone: ${safeTimezone}`;
 
   const messages: Message[] = [
     {
@@ -571,7 +590,7 @@ async function assembleBrettsTake(
     },
   ];
 
-  return { system, messages, modelTier: "small", toolMode: "none" };
+  return { system, messages, modelTier: "small", toolMode: "none", maxTokens: 200 };
 }
 
 // ─── Main entry point ───
