@@ -221,7 +221,7 @@ export function Omnibar({
         suggestions.push({
           id: "ask",
           label: `Ask Brett: "${input}"`,
-          icon: <MessageSquare size={14} className="text-white/60" />,
+          icon: <MessageSquare size={14} className="text-brett-cerulean" />,
           action: "ask",
         });
       }

@@ -183,20 +183,20 @@ export function SpotlightModal({
         action: "create",
       });
     } else {
+      if (hasAI) {
+        suggestions.push({
+          id: "ask",
+          label: `Ask Brett: "${input}"`,
+          icon: <MessageSquare size={14} className="text-brett-cerulean" />,
+          action: "ask",
+        });
+      }
       if (showScoutAction && hasAI) {
         suggestions.push({
           id: "scout",
           label: `Scout: "${input}"`,
           icon: <Radar size={14} className="text-brett-cerulean" />,
           action: "scout",
-        });
-      }
-      if (hasAI) {
-        suggestions.push({
-          id: "ask",
-          label: `Ask Brett: "${input}"`,
-          icon: <MessageSquare size={14} className="text-white/60" />,
-          action: "ask",
         });
       }
       suggestions.push({
