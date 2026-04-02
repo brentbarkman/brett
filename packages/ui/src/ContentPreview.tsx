@@ -52,7 +52,7 @@ function LoadingSkeleton({ contentType }: { contentType?: ContentType }) {
           <div className="w-4 h-4 rounded-full bg-white/5 animate-pulse" />
           <div className="h-3 w-32 bg-white/5 animate-pulse rounded" />
         </div>
-        <span className="text-xs text-white/30 font-mono">Extracting content...</span>
+        <span className="text-xs text-white/30">Extracting content...</span>
       </div>
     );
   }
@@ -63,7 +63,7 @@ function LoadingSkeleton({ contentType }: { contentType?: ContentType }) {
       <div className="h-3 w-full bg-white/5 animate-pulse rounded" />
       <div className="h-3 w-5/6 bg-white/5 animate-pulse rounded" />
       <div className="h-3 w-2/3 bg-white/5 animate-pulse rounded" />
-      <span className="text-xs text-white/30 font-mono">Extracting content...</span>
+      <span className="text-xs text-white/30">Extracting content...</span>
     </div>
   );
 }
@@ -222,7 +222,7 @@ function PodcastPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; s
 
   return (
     <div className="bg-white/5 rounded-lg border border-white/10 p-4 space-y-2">
-      {showName && <span className="text-xs text-white/40 font-mono uppercase tracking-wider">{showName}</span>}
+      {showName && <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">{showName}</span>}
       {episodeName && <p className="text-sm text-white/80">{episodeName}</p>}
       {sourceUrl && isSafeHref(sourceUrl) && (
         <a

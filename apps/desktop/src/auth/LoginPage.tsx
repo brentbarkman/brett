@@ -199,7 +199,7 @@ export function LoginPage() {
           <div>
             <label
               htmlFor="email"
-              className="block font-mono text-xs uppercase tracking-wider text-white/40"
+              className="block text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40"
             >
               Email
             </label>
@@ -217,7 +217,7 @@ export function LoginPage() {
           <div>
             <label
               htmlFor="password"
-              className="block font-mono text-xs uppercase tracking-wider text-white/40"
+              className="block text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40"
             >
               Password
             </label>

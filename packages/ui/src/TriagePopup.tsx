@@ -245,7 +245,7 @@ export function TriagePopup({
           <span>Date</span>
         </div>
         <div className="flex-1" />
-        <span className="text-[10px] text-white/20 font-mono">
+        <span className="text-[10px] text-white/20">
           esc cancel
         </span>
       </div>
@@ -279,7 +279,7 @@ export function TriagePopup({
                 <div className={`w-2 h-2 rounded-full ${list.colorClass}`} />
                 <span className="text-sm flex-1 truncate">{list.name}</span>
                 {i < 9 && (
-                  <span className="text-[10px] text-white/20 font-mono">
+                  <span className="text-[10px] text-white/20">
                     {i + 1}
                   </span>
                 )}
@@ -306,7 +306,7 @@ export function TriagePopup({
                 ${i === focusedIndex ? "bg-brett-gold/15 text-white" : "text-white/70 hover:bg-white/5"}
               `}
             >
-              <span className="w-4 text-center text-[11px] font-mono text-brett-gold/70">
+              <span className="w-4 text-center text-[11px] text-brett-gold/70">
                 {preset.key}
               </span>
               <span className="text-sm">{preset.label}</span>
@@ -336,7 +336,7 @@ export function TriagePopup({
               onClick={clearDate}
               className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-white/40 hover:bg-white/5 transition-colors"
             >
-              <span className="w-4 text-center text-[11px] font-mono">
+              <span className="w-4 text-center text-[11px]">
                 ←
               </span>
               <span className="text-sm">Remove date</span>
@@ -346,7 +346,7 @@ export function TriagePopup({
       )}
 
       {/* Footer hint */}
-      <div className="px-3 py-1.5 border-t border-white/5 text-[10px] text-white/20 font-mono text-center">
+      <div className="px-3 py-1.5 border-t border-white/5 text-[10px] text-white/20 text-center">
         {focusedIndex === -1 ? "enter to skip" : "enter to select"}
       </div>
 

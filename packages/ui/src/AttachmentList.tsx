@@ -85,7 +85,7 @@ export function AttachmentList({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-2 block">
+      <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-2 block">
         Attachments
       </span>
 

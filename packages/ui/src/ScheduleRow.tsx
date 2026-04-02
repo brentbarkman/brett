@@ -35,7 +35,7 @@ function ScheduleCard({ icon, label, value, children }: ScheduleCardProps) {
         className="w-full flex flex-col items-center gap-1.5 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer min-h-[76px] justify-center"
       >
         <span className="text-white/40">{icon}</span>
-        <span className="text-[10px] font-mono uppercase tracking-wider text-white/40 font-semibold">
+        <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
           {label}
         </span>
         <span className="text-xs truncate max-w-full" style={{ minHeight: '1rem' }}>
@@ -125,7 +125,7 @@ export function ScheduleRow({
 }: ScheduleRowProps) {
   return (
     <div>
-      <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-2 block">
+      <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-2 block">
         Schedule
       </span>
       <div className="flex gap-2">

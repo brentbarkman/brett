@@ -16,7 +16,7 @@ export function UpNextCard({ event, onClick }: UpNextCardProps) {
       <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
 
       <div className="flex items-center gap-3 mb-2">
-        <span className="font-mono text-xs uppercase tracking-wider text-amber-500/90 font-semibold">
+        <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-amber-500/90">
           Up Next
         </span>
         <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs font-medium">

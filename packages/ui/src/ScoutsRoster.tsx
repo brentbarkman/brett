@@ -122,7 +122,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
             {/* Completed / Expired */}
             {!isLoading && inactiveScouts.length > 0 && (
               <div className={`space-y-2 ${activeScouts.length > 0 ? "mt-6" : ""}`}>
-                <h3 className="font-mono text-[11px] font-semibold tracking-wider text-white/40 uppercase px-1">
+                <h3 className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 px-1">
                   Completed
                 </h3>
                 {inactiveScouts.map((scout) => (

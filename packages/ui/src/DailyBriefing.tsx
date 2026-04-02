@@ -193,7 +193,7 @@ export function DailyBriefing({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Bot size={14} className="text-brett-cerulean" />
-          <span className="font-mono text-xs uppercase tracking-wider text-brett-cerulean/70 font-semibold">
+          <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-brett-cerulean/70">
             Daily Briefing
           </span>
           {isGenerating && (

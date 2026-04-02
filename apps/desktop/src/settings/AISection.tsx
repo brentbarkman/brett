@@ -44,7 +44,7 @@ function ConnectedRow({
           }`}
         />
         <span className="text-sm text-white truncate">{providerLabel}</span>
-        <span className="text-xs text-white/30 font-mono truncate">
+        <span className="text-xs text-white/30 truncate">
           {config.maskedKey}
         </span>
         {config.isActive && (
@@ -147,7 +147,7 @@ function UsageStats({ provider }: { provider: string }) {
                   const total = row.inputTokens + row.outputTokens;
                   const sourceLabel = row.source === "fact_extraction" ? "memory" : row.source.replace(/_/g, " ");
                   return (
-                    <div key={`${row.model}-${row.source}`} className="flex items-center gap-2 text-[10px] font-mono text-white/50 pl-2">
+                    <div key={`${row.model}-${row.source}`} className="flex items-center gap-2 text-[10px] text-white/50 pl-2">
                       <span className="text-white/30 flex-shrink-0 w-16">{sourceLabel}</span>
                       {showModel && <span className="text-white/20 truncate max-w-[100px]">{row.model.split("-").slice(-2).join("-")}</span>}
                       <span className="ml-auto tabular-nums">{row.calls} call{row.calls === 1 ? "" : "s"}</span>
@@ -155,7 +155,7 @@ function UsageStats({ provider }: { provider: string }) {
                     </div>
                   );
                 })}
-                <div className="flex items-center gap-2 text-[10px] font-mono pl-2 pt-0.5 border-t border-white/5">
+                <div className="flex items-center gap-2 text-[10px] pl-2 pt-0.5 border-t border-white/5">
                   <span className="text-white/40">total</span>
                   <span className="ml-auto tabular-nums text-white/60 w-16 text-right">{periodTotal.toLocaleString()}</span>
                 </div>

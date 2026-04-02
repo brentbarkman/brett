@@ -78,7 +78,7 @@ export const QuickAddInput = forwardRef<QuickAddInputHandle, QuickAddInputProps>
           className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/20 text-sm"
         />
         {isFocused && value.trim() && (
-          <span className="text-[10px] text-white/20 font-mono">enter</span>
+          <span className="text-[10px] text-white/20">enter</span>
         )}
       </div>
     );

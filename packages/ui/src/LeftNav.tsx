@@ -176,7 +176,7 @@ export function LeftNav({
             {!isCollapsed && (
               <>
                 <span className="text-sm flex-1 text-left">Search</span>
-                <kbd className="text-[10px] font-mono bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-white/30">⌘F</kbd>
+                <kbd className="text-[10px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-white/30">⌘F</kbd>
               </>
             )}
           </button>

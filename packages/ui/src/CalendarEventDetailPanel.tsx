@@ -279,7 +279,7 @@ export function CalendarEventDetailPanel({
               marginRight: 0,
             }}
           >
-            <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3 block">
+            <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-3 block">
               Your Response
             </span>
             <div className="flex gap-2 mb-2">
@@ -332,7 +332,7 @@ export function CalendarEventDetailPanel({
               className="pt-4"
               style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
             >
-              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3 block">
+              <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-3 block">
                 Agenda
               </span>
               {detail.description && (
@@ -380,7 +380,7 @@ export function CalendarEventDetailPanel({
               style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
             >
               <div className="flex items-center justify-between mb-3">
-                <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+                <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
                   Meeting Notes
                 </span>
                 {onReprocessActionItems && meetingNote.id && (
@@ -512,7 +512,7 @@ export function CalendarEventDetailPanel({
               className="pt-4"
               style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
             >
-              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-3 block">
+              <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-3 block">
                 Attendees &middot; {detail.attendees.length}
               </span>
               <div className="flex flex-col gap-1.5">
@@ -568,7 +568,7 @@ export function CalendarEventDetailPanel({
             className="pt-4"
             style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
           >
-            <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-2 block">
+            <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-2 block">
               Your Notes
             </span>
             <p className="text-[10px] text-white/20 mb-2">Not synced to Google</p>

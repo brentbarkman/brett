@@ -45,7 +45,7 @@ function CompactCard({
 
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className={`font-mono text-[10px] uppercase tracking-wider font-semibold ${isNow ? "text-emerald-500/90" : "text-amber-500/90"}`}>
+          <span className={`text-[10px] uppercase tracking-[0.15em] font-semibold ${isNow ? "text-emerald-500/90" : "text-amber-500/90"}`}>
             {isNow ? "Now" : "Up Next"}
           </span>
           {isNow && (
@@ -129,7 +129,7 @@ function ExpandedCard({
 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-amber-500/90 font-semibold">Up Next</span>
+          <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-amber-500/90">Up Next</span>
           <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs font-semibold animate-pulse">
             {timer.label}
           </span>
@@ -175,14 +175,14 @@ function ExpandedCard({
 
       {event.description && (
         <div className="mb-4">
-          <div className="font-mono text-[10px] uppercase tracking-wider text-white/30 mb-1.5 font-medium">From the invite</div>
+          <div className="text-[10px] uppercase tracking-[0.15em] font-medium text-white/30 mb-1.5">From the invite</div>
           <p className="text-[13px] text-white/60 leading-relaxed">{event.description}</p>
         </div>
       )}
 
       {event.attendees && event.attendees.length > 0 && (
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-wider text-white/30 mb-2 font-medium">Attendees</div>
+          <div className="text-[10px] uppercase tracking-[0.15em] font-medium text-white/30 mb-2">Attendees</div>
           <div className="flex gap-2">
             {event.attendees.map((attendee, i) => {
               const color = attendeeColors[i % attendeeColors.length];

@@ -437,7 +437,7 @@ export function InboxView({
               return (
                 <React.Fragment key={bucket}>
                   <div className="flex items-center gap-3 pt-2">
-                    <span className="font-mono text-[11px] uppercase tracking-wider text-white/40 font-semibold whitespace-nowrap">
+                    <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 whitespace-nowrap">
                       {bucket}
                     </span>
                     <div className="flex-1 h-px bg-white/10" />

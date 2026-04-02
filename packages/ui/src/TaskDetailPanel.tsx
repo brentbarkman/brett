@@ -123,7 +123,7 @@ export function TaskDetailPanel({
           {/* Header: label + recurrence badge + actions */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+              <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
                 Task
               </span>
               {detail.recurrence && (
@@ -260,7 +260,7 @@ export function TaskDetailPanel({
           {/* Rich Notes */}
           {onUpdateNotes && (
             <div>
-              <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold mb-2 block">
+              <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-2 block">
                 Notes
               </span>
               <RichTextEditor

@@ -380,7 +380,7 @@ export function SpotlightModal({
                 {suggestion.icon}
                 <span className="truncate">{suggestion.label}</span>
                 {suggestion.shortcut && (
-                  <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+                  <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30">
                     {suggestion.shortcut}
                   </kbd>
                 )}
@@ -425,7 +425,7 @@ export function SpotlightModal({
 
         {/* Token counter */}
         {showTokenUsage && sessionId && sessionUsage && hasConversation && (
-          <div className="px-5 py-1 text-[10px] font-mono text-white/20 text-right">
+          <div className="px-5 py-1 text-[10px] text-white/20 text-right">
             {sessionUsage.totalTokens.toLocaleString()} tokens
           </div>
         )}
@@ -484,7 +484,7 @@ export function SpotlightModal({
               <div className="px-5 py-3 text-sm text-white/40">No results found.</div>
             ) : (
               <>
-                <div className="px-5 py-2 text-[10px] font-mono uppercase tracking-wider text-white/30 border-b border-white/5">
+                <div className="px-5 py-2 text-[10px] uppercase tracking-[0.15em] font-semibold text-white/30 border-b border-white/5">
                   {searchResults!.length} result{searchResults!.length === 1 ? "" : "s"}
                 </div>
                 {visibleResults.map((item, i) => (

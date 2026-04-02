@@ -140,7 +140,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
           </div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-[11px] uppercase tracking-wider text-white/40">
+          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
             {weather.city}
           </div>
           {selectedDayData && (
@@ -153,7 +153,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
 
       {/* Hourly strip — continuous timeline */}
       <div className="mb-4">
-        <div className="font-mono text-[10px] uppercase tracking-wider text-white/40 mb-2">
+        <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-2">
           {getDayLabel(selectedDay)}
         </div>
         <div ref={hourlyRef} className="flex gap-0.5 overflow-x-auto pb-1 scrollbar-hide">
@@ -195,7 +195,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
 
       {/* 7-day forecast */}
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-wider text-white/40 mb-2">
+        <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-2">
           This Week
         </div>
         <div className="flex flex-col gap-px">

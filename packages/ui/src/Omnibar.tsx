@@ -403,7 +403,7 @@ export function Omnibar({
               <WeatherPillEmpty onClick={() => { onNavigateToSettings(); onClose(); }} />
             )}
             {!isOpen && (
-              <kbd className="hidden sm:inline-flex items-center gap-0.5 ml-1.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 ml-1.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30">
                 <span>&#8984;</span>K
               </kbd>
             )}
@@ -431,7 +431,7 @@ export function Omnibar({
                   {suggestion.icon}
                   <span className="truncate">{suggestion.label}</span>
                   {suggestion.shortcut && (
-                    <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30 font-mono">
+                    <kbd className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30">
                       {suggestion.shortcut}
                     </kbd>
                   )}
@@ -545,7 +545,7 @@ export function Omnibar({
 
             {/* Token counter */}
             {showTokenUsage && sessionId && sessionUsage && (
-              <div className="px-4 py-1 text-[10px] font-mono text-white/20 text-right">
+              <div className="px-4 py-1 text-[10px] text-white/20 text-right">
                 {sessionUsage.totalTokens.toLocaleString()} tokens
               </div>
             )}

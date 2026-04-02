@@ -68,7 +68,7 @@ export function LinkedItemsList({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <span className="font-mono text-xs uppercase tracking-wider text-white/40 font-semibold">
+        <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
           Linked Items
         </span>
         <button
