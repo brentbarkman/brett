@@ -162,6 +162,45 @@ export function useSendCalendarBrettMessage() {
   });
 }
 
+export interface RelatedItem {
+  entityId: string;
+  title: string;
+  type: string;
+  status: string;
+  similarity: number;
+}
+
+export interface MeetingHistoryOccurrence {
+  eventId: string;
+  date: string;
+  meetingNote?: { title: string; summary: string };
+  actionItems: Array<{ id: string; title: string; status: string }>;
+}
+
+export interface MeetingHistoryResponse {
+  recurringEventId: string;
+  pastOccurrences: MeetingHistoryOccurrence[];
+  relatedItems: Array<{ entityId: string; title: string; similarity: number }>;
+}
+
+export function useRelatedItems(eventId: string | null) {
+  return useQuery({
+    queryKey: ["event-related-items", eventId],
+    queryFn: () =>
+      apiFetch<{ relatedItems: RelatedItem[] }>(`/api/events/${eventId}/related-items`),
+    enabled: !!eventId,
+  });
+}
+
+export function useMeetingHistory(eventId: string | null) {
+  return useQuery({
+    queryKey: ["event-meeting-history", eventId],
+    queryFn: () =>
+      apiFetch<MeetingHistoryResponse>(`/api/events/${eventId}/meeting-history`),
+    enabled: !!eventId,
+  });
+}
+
 export function useFetchCalendarRange() {
   const qc = useQueryClient();
   return useMutation({

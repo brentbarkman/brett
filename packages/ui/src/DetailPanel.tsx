@@ -13,6 +13,7 @@ import type {
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { ContentDetailPanel } from "./ContentDetailPanel";
 import { CalendarEventDetailPanel } from "./CalendarEventDetailPanel";
+import type { RelatedItem, MeetingHistory } from "./CalendarEventDetailPanel";
 import type { BrettThreadMessage } from "./BrettThread";
 
 interface DetailPanelProps {
@@ -67,6 +68,9 @@ interface DetailPanelProps {
   isCalendarBrettStreaming?: boolean;
   isLoadingMoreCalendarBrettMessages?: boolean;
   calendarBrettAiConfigured?: boolean;
+  // Calendar event embedding data
+  calendarRelatedItems?: RelatedItem[];
+  calendarMeetingHistory?: MeetingHistory | null;
   // Meeting notes
   meetingNote?: {
     id: string;
@@ -136,6 +140,8 @@ export function DetailPanel({
   isCalendarBrettStreaming,
   isLoadingMoreCalendarBrettMessages,
   calendarBrettAiConfigured,
+  calendarRelatedItems,
+  calendarMeetingHistory,
   meetingNote,
   onToggleActionItem,
   onSelectActionItem,
@@ -301,6 +307,8 @@ export function DetailPanel({
           isLoadingMoreBrettMessages={isLoadingMoreCalendarBrettMessages ?? false}
           brettAiConfigured={calendarBrettAiConfigured}
           onOpenSettings={onOpenSettings}
+          relatedItems={calendarRelatedItems}
+          meetingHistory={calendarMeetingHistory}
           meetingNote={meetingNote}
           onToggleActionItem={onToggleActionItem}
           onSelectActionItem={onSelectActionItem}

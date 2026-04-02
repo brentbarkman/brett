@@ -57,6 +57,8 @@ import {
   useCalendarEventDetail,
   useUpdateRsvp,
   useUpdateCalendarEventNotes,
+  useRelatedItems,
+  useMeetingHistory,
 } from "./api/calendar";
 import { useCalendarAccounts, useConnectCalendar } from "./api/calendar-accounts";
 import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/granola";
@@ -345,6 +347,12 @@ export function App() {
     isDetailOpen && isCalendarSelected ? selectedId : null,
   );
   const { data: meetingNote } = useGranolaMeetingForEvent(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const { data: calendarRelatedItemsData } = useRelatedItems(
+    isDetailOpen && isCalendarSelected ? selectedId : null,
+  );
+  const { data: calendarMeetingHistoryData } = useMeetingHistory(
     isDetailOpen && isCalendarSelected ? selectedId : null,
   );
   const reprocessMeeting = useReprocessMeetingActions();
@@ -1079,6 +1087,8 @@ export function App() {
           isCalendarBrettStreaming={calendarBrett.isStreaming}
           isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
           calendarBrettAiConfigured={calendarBrett.aiConfigured}
+          calendarRelatedItems={calendarRelatedItemsData?.relatedItems}
+          calendarMeetingHistory={calendarMeetingHistoryData ?? null}
           meetingNote={meetingNote ? {
             id: meetingNote.id,
             title: meetingNote.title,
