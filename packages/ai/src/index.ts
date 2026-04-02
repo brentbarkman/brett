@@ -48,6 +48,13 @@ export type {
   TranscriptEntry,
 } from "./embedding/assembler.js";
 export { chunkText, estimateTokens } from "./embedding/chunker.js";
+export {
+  hybridSearch,
+  keywordSearch,
+  vectorSearch,
+  fuseResults,
+} from "./embedding/search.js";
+export type { SearchResult, RankedResult } from "./embedding/search.js";
 
 // Orchestrator
 export { orchestrate } from "./orchestrator.js";
