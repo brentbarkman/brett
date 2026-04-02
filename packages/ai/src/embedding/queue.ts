@@ -4,6 +4,8 @@ export interface EmbedJob {
   entityType: string;
   entityId: string;
   userId: string;
+  /** Skip auto-link detection (e.g., when inline dup detection already ran at creation time) */
+  skipAutoLink?: boolean;
 }
 
 type JobProcessor = (job: EmbedJob) => Promise<void>;

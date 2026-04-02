@@ -99,8 +99,8 @@ export async function* orchestrate(
 
     // Tool selection is driven by the assembler's toolMode:
     // - "none": pure text generation (briefing, bretts_take) — saves ~2,500 tokens
-    // - "contextual": filter tools by user message (omnibar) — saves ~1,000 tokens
-    // - "all": send all registered tools (brett_thread)
+    // - "contextual": filter tools by user message (omnibar, brett_thread) — saves ~1,000 tokens
+    // - "all": send all registered tools (fallback)
     const tools = ctx.toolMode === "none"
       ? []
       : ctx.toolMode === "contextual" && "message" in input
@@ -332,6 +332,7 @@ export async function* orchestrate(
               yield {
                 type: "done",
                 sessionId: sessionId ?? "",
+                model: lastModel,
                 usage: { input: totalInputTokens, output: totalOutputTokens, cacheCreation: totalCacheCreationTokens, cacheRead: totalCacheReadTokens },
               };
               return;

@@ -393,6 +393,9 @@ importers:
       '@brett/types':
         specifier: workspace:*
         version: link:../types
+      '@brett/utils':
+        specifier: workspace:*
+        version: link:../utils
       '@prisma/client':
         specifier: ^6.4.1
         version: 6.19.2(prisma@6.19.2)(typescript@5.9.3)

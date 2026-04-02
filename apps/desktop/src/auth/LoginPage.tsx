@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { validatePassword } from "@brett/utils";
 import { useAuth } from "./AuthContext";
 import { VideoBackground, VideoBackgroundHandle } from "./VideoBackground";
 
@@ -55,8 +56,10 @@ export function LoginPage() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return "Please enter a valid email address";
     if (!password) return "Password is required";
-    if (password.length < 8)
-      return "Password must be at least 8 characters";
+    if (isSignUp) {
+      const pwError = validatePassword(password);
+      if (pwError) return pwError;
+    }
     return null;
   }
 
@@ -227,7 +230,7 @@ export function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-brett-gold/30 focus:outline-none"
-              placeholder="Min 8 characters"
+              placeholder="Min 10 characters"
             />
           </div>
 

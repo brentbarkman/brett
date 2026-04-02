@@ -15,6 +15,27 @@ const SAFE_MIME_TYPES = new Set([
   "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
+// Magic byte signatures for file type validation
+const MAGIC_BYTES: Array<{ mime: string; bytes: number[]; offset?: number }> = [
+  { mime: "image/jpeg", bytes: [0xFF, 0xD8, 0xFF] },
+  { mime: "image/png", bytes: [0x89, 0x50, 0x4E, 0x47] },
+  { mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38] },
+  { mime: "image/webp", bytes: [0x57, 0x45, 0x42, 0x50], offset: 8 },
+  { mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46] },
+  { mime: "application/zip", bytes: [0x50, 0x4B, 0x03, 0x04] },
+  { mime: "application/gzip", bytes: [0x1F, 0x8B] },
+];
+
+function detectMimeFromBytes(buffer: ArrayBuffer): string | null {
+  const view = new Uint8Array(buffer);
+  for (const sig of MAGIC_BYTES) {
+    const offset = sig.offset ?? 0;
+    if (view.length < offset + sig.bytes.length) continue;
+    if (sig.bytes.every((b, i) => view[offset + i] === b)) return sig.mime;
+  }
+  return null;
+}
+
 function getSafeContentType(mimeType: string): string {
   return SAFE_MIME_TYPES.has(mimeType) ? mimeType : "application/octet-stream";
 }
@@ -48,12 +69,16 @@ attachments.post("/:itemId/attachments", async (c) => {
     return c.json({ error: "File too large (max 25MB)" }, 400);
   }
 
+  // Trust file magic bytes over client-claimed MIME type to prevent disguised uploads
+  const detectedMime = detectMimeFromBytes(body);
+  const effectiveMime = detectedMime && SAFE_MIME_TYPES.has(detectedMime) ? detectedMime : mimeType;
+
   const storageKey = `attachments/${user.id}/${itemId}/${randomUUID()}-${filename}`;
 
   // Create DB record first — if S3 fails we roll back the record.
   // This avoids orphaned S3 objects when the DB write fails.
   const attachment = await prisma.attachment.create({
-    data: { filename, mimeType, sizeBytes: body.byteLength, storageKey, itemId, userId: user.id },
+    data: { filename, mimeType: effectiveMime, sizeBytes: body.byteLength, storageKey, itemId, userId: user.id },
   });
 
   try {
@@ -62,7 +87,7 @@ attachments.post("/:itemId/attachments", async (c) => {
         Bucket: STORAGE_BUCKET,
         Key: storageKey,
         Body: Buffer.from(body),
-        ContentType: getSafeContentType(mimeType),
+        ContentType: getSafeContentType(effectiveMime),
         ContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
       })
     );

@@ -146,7 +146,7 @@ brettChat.post(
       },
     });
 
-    // Load embedding context relevant to this message + item
+    // Load embedding context relevant to this message + item (cached per session)
     const embeddingProvider = getEmbeddingProvider();
     const embeddingContext = await loadEmbeddingContext(
       user.id,
@@ -154,6 +154,7 @@ brettChat.post(
       embeddingProvider,
       prisma,
       3,
+      session.id,
     );
 
     const input = {
@@ -174,7 +175,7 @@ brettChat.post(
         },
       },
       session.id,
-      { memoryCtx: { userId: user.id, provider, providerName } },
+      { memoryCtx: { userId: user.id, provider, providerName, itemContext: `User was discussing task "${item.title}"` } },
     );
 
     return sseResponse(stream);
@@ -254,7 +255,7 @@ brettChat.post(
       },
     });
 
-    // Load embedding context relevant to this message + event
+    // Load embedding context relevant to this message + event (cached per session)
     const embeddingProvider = getEmbeddingProvider();
     const embeddingContext = await loadEmbeddingContext(
       user.id,
@@ -262,6 +263,7 @@ brettChat.post(
       embeddingProvider,
       prisma,
       3,
+      session.id,
     );
 
     const input = {
@@ -282,7 +284,7 @@ brettChat.post(
         },
       },
       session.id,
-      { memoryCtx: { userId: user.id, provider, providerName } },
+      { memoryCtx: { userId: user.id, provider, providerName, itemContext: `User was discussing calendar event "${event.title}"` } },
     );
 
     return sseResponse(stream);

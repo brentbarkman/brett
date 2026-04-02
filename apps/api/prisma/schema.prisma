@@ -445,16 +445,17 @@ model UserFact {
 }
 
 model Embedding {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entityType String   // "item" | "calendar_event" | "meeting_note" | "scout_finding" | "conversation"
-  entityId   String
-  chunkIndex Int      @default(0)
-  chunkText  String   @db.Text
-  embedding  Unsupported("vector(1024)")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityType  String   // "item" | "calendar_event" | "meeting_note" | "scout_finding" | "conversation"
+  entityId    String
+  chunkIndex  Int      @default(0)
+  chunkText   String   @db.Text
+  contentHash String?  // SHA-256 prefix of assembled text (chunk 0 only) — skip re-embedding if unchanged
+  embedding   Unsupported("vector(1024)")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([entityType, entityId, chunkIndex])
   @@index([userId])

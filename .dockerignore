@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Environment files (NEVER include secrets in Docker images)
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+
+# Dependencies (rebuilt in Docker)
+node_modules
+
+# Build artifacts
+dist
+build
+.turbo
+*.tsbuildinfo
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+
+# Dev tooling
+.claude
+.superpowers
+.worktrees
+
+# Large media (hosted on S3)
+backgrounds/
+apps/desktop/public/videos/*.mp4
+
+# Firebase keys
+*-firebase-adminsdk-*.json
+firebase-service-account.json
+
+# Documentation
+docs/
+*.md
+!package.json

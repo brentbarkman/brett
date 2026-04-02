@@ -12,7 +12,7 @@ import { initialSync } from "../services/calendar-sync.js";
 import { resolveRelinkTask } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { google } from "googleapis";
-import { randomBytes, createHmac, timingSafeEqual } from "crypto";
+import { signOAuthState, verifyOAuthState } from "../lib/oauth-state.js";
 import type { Context } from "hono";
 
 /** Return an HTML page for the OAuth callback (shown in the browser tab that opened Google) */
@@ -70,11 +70,7 @@ calendarAccounts.get("/", async (c) => {
 // POST /connect — Initiate OAuth (returns URL, state = base64url(userId).nonce.hmac)
 calendarAccounts.post("/connect", async (c) => {
   const user = c.get("user");
-  const nonce = randomBytes(16).toString("hex");
-  const hmac = createHmac("sha256", process.env.BETTER_AUTH_SECRET!)
-    .update(user.id + ":" + nonce)
-    .digest("hex");
-  const state = `${Buffer.from(user.id).toString("base64url")}.${nonce}.${hmac}`;
+  const { state } = signOAuthState("calendar", user.id);
   const url = getCalendarAuthUrl(state);
   return c.json({ url });
 });
@@ -100,32 +96,12 @@ calendarAccounts.get("/callback", async (c) => {
     return callbackHtml(c, { title: "Something went wrong", message: "Missing authorization data. Please try connecting again from Brett.", isError: true });
   }
 
-  // Verify signed state: base64url(userId).nonce.hmac
-  const parts = state.split(".");
-  if (parts.length !== 3) {
-    return callbackHtml(c, { title: "Invalid request", message: "The authorization state was malformed. Please try again.", isError: true });
+  const verified = verifyOAuthState("calendar", state);
+  if (!verified) {
+    return callbackHtml(c, { title: "Security check failed", message: "The authorization state was invalid or tampered with. Please try connecting again.", isError: true });
   }
 
-  let userId: string;
-  try {
-    userId = Buffer.from(parts[0], "base64url").toString("utf8");
-  } catch {
-    return callbackHtml(c, { title: "Invalid request", message: "The authorization state couldn't be read. Please try again.", isError: true });
-  }
-
-  const expectedHmac = createHmac("sha256", process.env.BETTER_AUTH_SECRET!)
-    .update(userId + ":" + parts[1])
-    .digest("hex");
-
-  if (
-    parts[2].length !== expectedHmac.length ||
-    !timingSafeEqual(
-      Buffer.from(expectedHmac, "hex"),
-      Buffer.from(parts[2], "hex"),
-    )
-  ) {
-    return callbackHtml(c, { title: "Security check failed", message: "The authorization signature didn't match. Please try connecting again.", isError: true });
-  }
+  const { userId } = verified;
 
   // Verify the state matches the authenticated user
   const user = c.get("user");

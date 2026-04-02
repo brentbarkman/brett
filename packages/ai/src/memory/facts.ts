@@ -26,6 +26,8 @@ export async function extractFacts(
   provider: AIProvider,
   providerName: AIProviderName,
   prisma: PrismaClient,
+  /** Optional context about the item being discussed (helps extract domain-specific facts) */
+  itemContext?: string,
 ): Promise<void> {
   // 1. Load conversation messages for this session
   const messages = await prisma.conversationMessage.findMany({
@@ -52,7 +54,8 @@ export async function extractFacts(
   const MIN_USER_TEXT_LENGTH = 300; // ~75 words — skip simple Q&A, only extract from substantial conversations
   if (userText.length < MIN_USER_TEXT_LENGTH) return;
 
-  const conversationText = relevant
+  const contextPrefix = itemContext ? `[Context: ${itemContext}]\n\n` : "";
+  const conversationText = contextPrefix + relevant
     .map((m) => `${m.role}: ${m.content}`)
     .join("\n\n");
 

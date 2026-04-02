@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { decryptToken } from "../lib/encryption.js";
-import { getProvider, resolveModel } from "@brett/ai";
+import { getProvider, resolveModel, logUsage } from "@brett/ai";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, ModelTier } from "@brett/types";
 import { validateCreateItem } from "@brett/business";
@@ -51,6 +51,7 @@ async function aiExtractActionItems(
   provider: AIProvider,
   providerName: AIProviderName,
   input: ExtractionInput,
+  userId?: string,
 ): Promise<ExtractedActionItem[]> {
   const attendeeList = input.attendees.length > 0
     ? input.attendees.map((a) => `${a.name} <${a.email}>`).join(", ")
@@ -100,25 +101,58 @@ If no action items exist, return an empty array [].`;
   for await (const chunk of provider.chat({
     model,
     messages: [{ role: "user", content: prompt }],
-    system: "You extract structured action items from meeting notes. Return only valid JSON arrays.",
+    system: "You extract structured action items from meeting notes. Return only valid JSON.",
     temperature: 0.1,
     maxTokens: 2048,
+    responseFormat: {
+      type: "json_schema",
+      name: "action_items",
+      schema: {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                assignee: { type: "string", enum: ["me", "other"] },
+                assigneeName: { type: "string" },
+                title: { type: "string" },
+                dueDate: { type: ["string", "null"] },
+              },
+              required: ["assignee", "title", "dueDate"],
+            },
+          },
+        },
+        required: ["items"],
+      },
+    },
   })) {
     if (chunk.type === "text") {
       result += chunk.content;
     }
+    if (chunk.type === "done" && userId) {
+      logUsage(prisma, {
+        userId,
+        provider: providerName,
+        model,
+        modelTier: "small",
+        source: "action_item_extraction",
+        inputTokens: chunk.usage.input,
+        outputTokens: chunk.usage.output,
+      }).catch(() => {});
+    }
   }
 
-  // Parse JSON — strip markdown fencing if present
-  const cleaned = result
-    .replace(/^```(?:json)?\s*\n?/m, "")
-    .replace(/\n?```\s*$/m, "")
-    .trim();
-
   try {
+    // Strip markdown fencing if model ignores structured output constraint
+    const cleaned = result
+      .replace(/^```(?:json)?\s*\n?/m, "")
+      .replace(/\n?```\s*$/m, "")
+      .trim();
     const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    const items: unknown[] = Array.isArray(parsed) ? parsed : parsed?.items ?? [];
+    return items.filter(
       (item: unknown): item is ExtractedActionItem =>
         typeof item === "object" &&
         item !== null &&
@@ -215,7 +249,7 @@ export async function processActionItems(
       meetingDate: meetingDate.toISOString().slice(0, 10),
       userName: user?.name ?? "the user",
       attendees,
-    });
+    }, userId);
   } else {
     extracted = regexExtractActionItems(summary);
   }

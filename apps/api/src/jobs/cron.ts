@@ -218,9 +218,23 @@ export function startCronJobs(): void {
     }
   });
 
+  // Clean up expired Verification records (PKCE verifiers, email tokens, etc.) — every hour
+  cron.schedule("0 * * * *", async () => {
+    try {
+      const { count } = await prisma.verification.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+      if (count > 0) {
+        console.log(`[cron] Cleaned up ${count} expired verification records`);
+      }
+    } catch (err) {
+      console.error("[cron] Verification cleanup failed:", err);
+    }
+  });
+
   console.log("[cron] Started: Scout tick (5m)");
 
   console.log(
-    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), granola post-meeting (5m), granola sweep (30m)",
+    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), granola post-meeting (5m), granola sweep (30m), verification cleanup (1h)",
   );
 }

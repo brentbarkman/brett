@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import type { EmbeddingProvider } from "../providers/types.js";
 import {
   assembleItemText,
@@ -18,6 +19,10 @@ import type {
 import { AI_CONFIG } from "../config.js";
 import { classifyMatches } from "./similarity.js";
 
+function contentHash(chunks: string[]): string {
+  return createHash("sha256").update(chunks.join("\n---\n")).digest("hex").slice(0, 16);
+}
+
 // --- Types ---
 
 export interface EmbedEntityParams {
@@ -28,6 +33,8 @@ export interface EmbedEntityParams {
   // Prisma client — typed loosely since @brett/ai doesn't depend on Prisma
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prisma: any;
+  /** Skip auto-link detection (e.g., when inline dup detection already ran) */
+  skipAutoLink?: boolean;
 }
 
 // --- Entity loaders + text assemblers ---
@@ -176,7 +183,7 @@ async function loadAndAssemble(
  * Uses raw SQL for vector operations since Prisma doesn't support the vector type natively.
  */
 export async function embedEntity(params: EmbedEntityParams): Promise<void> {
-  const { entityType, entityId, provider, prisma } = params;
+  const { entityType, entityId, provider, prisma, skipAutoLink } = params;
 
   // 1. Load entity and assemble text chunks
   const result = await loadAndAssemble(entityType, entityId, prisma);
@@ -195,7 +202,22 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
     return;
   }
 
-  // 2. Generate embeddings via provider (batch for efficiency)
+  // 2. Check if text has changed since last embed (skip Voyage API call if unchanged)
+  const hash = contentHash(chunks);
+  const existingHash = await prisma.$queryRaw<Array<{ contentHash: string | null }>>`
+    SELECT "contentHash"
+    FROM "Embedding"
+    WHERE "entityType" = ${entityType} AND "entityId" = ${entityId} AND "chunkIndex" = 0
+    LIMIT 1
+  `.then((rows: Array<{ contentHash: string | null }>) => rows[0]?.contentHash ?? null);
+
+  const isFirstEmbed = existingHash === null;
+
+  if (existingHash === hash) {
+    return; // Text unchanged — skip re-embedding
+  }
+
+  // 3. Generate embeddings via provider (batch for efficiency)
   const { batchSize } = AI_CONFIG.embedding;
   const allVectors: number[][] = [];
 
@@ -205,20 +227,22 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
     allVectors.push(...vectors);
   }
 
-  // 3. Upsert each chunk into the Embedding table
+  // 4. Upsert each chunk into the Embedding table (store contentHash on chunk 0 for change detection)
   for (let i = 0; i < chunks.length; i++) {
     const vectorStr = `[${allVectors[i].join(",")}]`;
+    const chunkHash = i === 0 ? hash : null;
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "createdAt", "updatedAt")
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::vector, NOW(), NOW())
+      `INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "contentHash", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::vector, $7, NOW(), NOW())
        ON CONFLICT ("entityType", "entityId", "chunkIndex")
-       DO UPDATE SET "chunkText" = $5, embedding = $6::vector, "updatedAt" = NOW()`,
+       DO UPDATE SET "chunkText" = $5, embedding = $6::vector, "contentHash" = $7, "updatedAt" = NOW()`,
       userId,
       entityType,
       entityId,
       i,
       chunks[i],
-      vectorStr
+      vectorStr,
+      chunkHash
     );
   }
 
@@ -230,8 +254,8 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
     chunks.length
   );
 
-  // 5. Auto-link detection for items
-  if (entityType === "item") {
+  // 6. Auto-link detection — only on first embed and when not explicitly skipped
+  if (entityType === "item" && isFirstEmbed && !skipAutoLink) {
     try {
       const matches = await prisma.$queryRaw<Array<{ entityId: string; similarity: number }>>`
         SELECT e2."entityId", 1 - (e1.embedding <=> e2.embedding) as similarity

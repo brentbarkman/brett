@@ -3,6 +3,8 @@ import { prisma } from "../lib/prisma.js";
 import { decryptToken } from "../lib/encryption.js";
 import { getProvider, orchestrate } from "@brett/ai";
 import { registry } from "../lib/ai-registry.js";
+import { getEmbeddingProvider } from "../lib/embedding-provider.js";
+import { loadEmbeddingContext } from "../lib/embedding-context.js";
 import type { AIProviderName } from "@brett/types";
 
 const MIN_DESCRIPTION_LENGTH = 50;
@@ -47,14 +49,19 @@ export function qualifiesForTake(
 /**
  * Compute a simple hash of the event fields that matter for Take generation.
  * If these haven't changed, the Take is still fresh.
+ * Includes hasPriorSummary so Takes regenerate when a new meeting summary appears.
  */
-export function contentHash(event: Pick<EventForQualification, "description" | "title" | "startTime" | "location" | "attendeesJson">): string {
+export function contentHash(
+  event: Pick<EventForQualification, "description" | "title" | "startTime" | "location" | "attendeesJson">,
+  hasPriorSummary = false,
+): string {
   const parts = [
     event.title ?? "",
     event.description ?? "",
     event.startTime?.toISOString() ?? "",
     event.location ?? "",
     event.attendeesJson ?? "",
+    hasPriorSummary ? "has_summary" : "",
   ];
   // Simple string hash — not crypto, just change detection
   let hash = 0;
@@ -69,11 +76,11 @@ export function contentHash(event: Pick<EventForQualification, "description" | "
  * Does this event need (re)generation of its Take?
  * Uses a content hash to avoid regenerating when only sync metadata changed.
  */
-export function needsGeneration(event: EventForQualification): boolean {
+export function needsGeneration(event: EventForQualification, hasPriorSummary = false): boolean {
   if (!event.brettObservation) return true;
   if (!event.brettObservationAt) return true;
   // Compare content hash to detect meaningful changes
-  const currentHash = contentHash(event);
+  const currentHash = contentHash(event, hasPriorSummary);
   return event.brettObservationHash !== currentHash;
 }
 
@@ -165,12 +172,16 @@ export async function generatePendingTakes(userId: string): Promise<void> {
     }
 
     // 4. Filter to qualifying events that need generation
-    const candidates = eventsForQualification.filter((e) => {
-      const hasPriorSummary = e.recurringEventId
-        ? recurringWithSummaries.has(e.recurringEventId)
-        : false;
-      return qualifiesForTake(e, hasPriorSummary) && needsGeneration(e);
-    });
+    const candidates = eventsForQualification
+      .map((e) => {
+        const hasPriorSummary = e.recurringEventId
+          ? recurringWithSummaries.has(e.recurringEventId)
+          : false;
+        return { event: e, hasPriorSummary };
+      })
+      .filter(({ event, hasPriorSummary }) =>
+        qualifiesForTake(event, hasPriorSummary) && needsGeneration(event, hasPriorSummary),
+      );
 
     // 5. Cap at budget
     const toGenerate = candidates.slice(0, MAX_EVENTS_PER_CYCLE);
@@ -188,10 +199,10 @@ export async function generatePendingTakes(userId: string): Promise<void> {
     const providerName = config.provider as AIProviderName;
 
     // 7. Generate Takes sequentially (avoid parallel to respect rate limits)
-    for (const event of toGenerate) {
+    for (const { event, hasPriorSummary } of toGenerate) {
       try {
-        const hash = contentHash(event);
-        await generateSingleTake(userId, event.id, hash, provider, providerName);
+        const hash = contentHash(event, hasPriorSummary);
+        await generateSingleTake(userId, event.id, event.title, hash, provider, providerName);
       } catch (err) {
         console.error(
           `[brett-take-generator] Failed for event ${event.id}:`,
@@ -208,6 +219,7 @@ export async function generatePendingTakes(userId: string): Promise<void> {
 async function generateSingleTake(
   userId: string,
   eventId: string,
+  eventTitle: string,
   hash: string,
   provider: ReturnType<typeof getProvider>,
   providerName: AIProviderName,
@@ -222,10 +234,17 @@ async function generateSingleTake(
     },
   });
 
+  // Load embedding context so Takes can reference related tasks, meetings, etc.
+  const embeddingProvider = getEmbeddingProvider();
+  const embeddingContext = await loadEmbeddingContext(
+    userId, eventTitle, embeddingProvider, prisma, 3,
+  ).catch(() => "");
+
   const input = {
     type: "bretts_take" as const,
     userId,
     calendarEventId: eventId,
+    embeddingContext: embeddingContext || undefined,
   };
 
   let content = "";

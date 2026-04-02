@@ -3,6 +3,9 @@ import { bearer } from "better-auth/plugins";
 import { passkey } from "@better-auth/passkey";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma.js";
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, validatePassword } from "@brett/utils";
+// Use better-auth's default scrypt hasher — import statically to avoid top-level await issues
+import { hashPassword as defaultHash, verifyPassword as defaultVerify } from "better-auth/crypto";
 
 export interface AuthOptions {
   trustedOrigins: string[] | ((request?: Request) => (string | null | undefined)[]);
@@ -16,6 +19,16 @@ export function createAuth(options: AuthOptions) {
     database: prismaAdapter(prisma, { provider: "postgresql" }),
     emailAndPassword: {
       enabled: options.enableEmailPassword ?? true,
+      minPasswordLength: PASSWORD_MIN_LENGTH,
+      maxPasswordLength: PASSWORD_MAX_LENGTH,
+      password: {
+        async hash(password: string): Promise<string> {
+          const error = validatePassword(password);
+          if (error) throw new Error(error);
+          return defaultHash(password);
+        },
+        verify: defaultVerify,
+      },
     },
     user: {
       additionalFields: {

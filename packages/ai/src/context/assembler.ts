@@ -3,6 +3,7 @@ import type { ModelTier } from "@brett/types";
 import type { Message } from "../providers/types.js";
 import {
   BRETT_SYSTEM_PROMPT,
+  SCOUT_CREATION_PROMPT,
   BRIEFING_SYSTEM_PROMPT,
   BRETTS_TAKE_SYSTEM_PROMPT,
 } from "./system-prompts.js";
@@ -74,7 +75,7 @@ export interface AssembledContext {
 
 // ─── Constants ───
 
-const VALID_VIEWS = ["today", "upcoming", "inbox", "settings", "calendar"];
+const VALID_VIEWS = ["today", "upcoming", "inbox", "settings", "calendar", "scouts"];
 const CUID_PATTERN = /^[a-z0-9]{20,30}$/;
 const MAX_FACTS = AI_CONFIG.context.maxFacts;
 const VALID_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
@@ -204,8 +205,13 @@ async function assembleOmnibar(
 ): Promise<AssembledContext> {
   const facts = await loadUserFacts(prisma, input.userId);
 
+  // Only inject scout creation guidance when the user is on the scouts page or explicitly
+  // intends to create one. Saves ~400 tokens on every other request.
+  const isScoutContext = input.currentView === "scouts" || input.intent === "create_scout";
+  const scoutBlock = isScoutContext ? SCOUT_CREATION_PROMPT : "";
+
   const system =
-    BRETT_SYSTEM_PROMPT + formatFacts(facts) + formatEmbeddingContext(input.embeddingContext) + currentDateLine();
+    BRETT_SYSTEM_PROMPT + scoutBlock + formatFacts(facts) + formatEmbeddingContext(input.embeddingContext) + currentDateLine();
 
   const messages: Message[] = [];
 
@@ -241,11 +247,14 @@ async function assembleOmnibar(
 
   messages.push({ role: "user", content: userContent });
 
-  // Complex requests (multi-action, long messages) start on medium model
-  // for better reasoning. Simple requests stay on small for speed/cost.
+  // Complex requests start on medium model for better reasoning.
+  // Simple requests stay on small for speed/cost.
+  // Multi-turn sessions escalate to medium — follow-up messages typically
+  // need more context reasoning than standalone queries.
   const lower = input.message.toLowerCase();
   const actionWords = lower.match(/\b(create|make|move|add|put|delete|remove|archive|update|change|snooze|complete|done|mark)\b/g);
-  const isComplex = lower.length > 80 || (actionWords && actionWords.length >= 2);
+  const hasSessionHistory = (input.sessionMessages?.length ?? 0) >= 2;
+  const isComplex = lower.length > 80 || (actionWords && actionWords.length >= 2) || hasSessionHistory;
   const tier = isComplex ? "medium" : "small";
 
   return { system, messages, modelTier: tier, toolMode: "contextual" };
@@ -312,7 +321,7 @@ async function assembleBrettThread(
     { role: "user", content: input.message },
   ];
 
-  return { system, messages, modelTier: "medium", toolMode: "all" };
+  return { system, messages, modelTier: "medium", toolMode: "contextual" };
 }
 
 async function assembleBriefing(

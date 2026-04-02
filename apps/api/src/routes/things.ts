@@ -336,19 +336,12 @@ things.post("/", async (c) => {
         const [vector] = await embeddingProvider.embedBatch([chunks[0]], "document");
         const vectorStr = `[${vector.join(",")}]`;
 
-        // Store in the Embedding table
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "createdAt", "updatedAt")
-           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::vector, NOW(), NOW())
-           ON CONFLICT ("entityType", "entityId", "chunkIndex")
-           DO UPDATE SET "chunkText" = $5, embedding = $6::vector, "updatedAt" = NOW()`,
-          user.id,
-          "item",
-          item.id,
-          0,
-          chunks[0],
-          vectorStr
-        );
+        // Store in the Embedding table (parameterized via tagged template to prevent injection)
+        await prisma.$executeRaw`
+          INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "createdAt", "updatedAt")
+          VALUES (gen_random_uuid(), ${user.id}, ${"item"}, ${item.id}, ${0}, ${chunks[0]}, ${vectorStr}::vector, NOW(), NOW())
+          ON CONFLICT ("entityType", "entityId", "chunkIndex")
+          DO UPDATE SET "chunkText" = EXCLUDED."chunkText", embedding = EXCLUDED.embedding, "updatedAt" = NOW()`;
 
         // Query for near-duplicates above the threshold
         const threshold = AI_CONFIG.embedding.dupThreshold;
@@ -384,9 +377,9 @@ things.post("/", async (c) => {
             }));
         }
 
-        // Queue full pipeline — handles remaining chunks for content items
-        // and runs auto-link post-hook for all item types
-        enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id });
+        // Queue full pipeline — handles remaining chunks for content items.
+        // Skip auto-link since inline dup detection already ran above.
+        enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id, skipAutoLink: true });
       }
     } else {
       // No embedding provider — fall back to async queue

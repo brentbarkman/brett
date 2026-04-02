@@ -4,16 +4,17 @@ import { prisma } from "../lib/prisma.js";
 import { encryptToken } from "../lib/encryption.js";
 import { resolveRelinkTask } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
-import { randomBytes, createHash, createHmac, timingSafeEqual } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import type { Context } from "hono";
+import { signOAuthState, verifyOAuthState } from "../lib/oauth-state.js";
 
 // Granola MCP OAuth endpoints — discovered from https://mcp.granola.ai/.well-known/oauth-authorization-server
 const GRANOLA_AUTH_URL = "https://mcp-auth.granola.ai/oauth2/authorize";
 const GRANOLA_TOKEN_URL = "https://mcp-auth.granola.ai/oauth2/token";
 const GRANOLA_REGISTER_URL = "https://mcp-auth.granola.ai/oauth2/register";
 
-// In-memory PKCE verifier store (keyed by state nonce, short-lived)
-const pkceStore = new Map<string, string>();
+// PKCE verifiers stored in the Verification table (survives restarts, works across instances)
+const PKCE_IDENTIFIER_PREFIX = "pkce:granola:";
 
 // Cached client credentials from Dynamic Client Registration (with TTL)
 let registeredClient: { client_id: string; client_secret?: string; registeredAt: number } | null = null;
@@ -140,18 +141,21 @@ granolaAuth.post("/connect", authMiddleware, async (c) => {
     console.error("[granola-auth] Client registration failed:", err);
     return c.json({ error: "Failed to connect to Granola. Please try again." }, 502);
   }
-  const nonce = randomBytes(16).toString("hex");
-  const hmac = createHmac("sha256", process.env.BETTER_AUTH_SECRET!)
-    .update(user.id + ":" + nonce)
-    .digest("hex");
-  const state = `${Buffer.from(user.id).toString("base64url")}.${nonce}.${hmac}`;
+  const { state, nonce } = signOAuthState("granola", user.id);
 
   // PKCE: generate code_verifier and code_challenge (S256)
   const codeVerifier = randomBytes(32).toString("base64url");
   const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
-  pkceStore.set(nonce, codeVerifier);
-  // Clean up after 10 minutes (flow should complete well before)
-  setTimeout(() => pkceStore.delete(nonce), 10 * 60 * 1000);
+
+  // Store PKCE verifier in Verification table (persistent, shared across instances)
+  await prisma.verification.create({
+    data: {
+      id: generateId(),
+      identifier: `${PKCE_IDENTIFIER_PREFIX}${nonce}`,
+      value: codeVerifier,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+    },
+  });
 
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
   const params = new URLSearchParams({
@@ -188,32 +192,13 @@ granolaAuth.get("/callback", async (c) => {
     });
   }
 
-  // Verify signed state: base64url(userId).nonce.hmac
-  const parts = state.split(".");
-  if (parts.length !== 3) {
-    return callbackHtml(c, { title: "Invalid request", message: "The authorization state was malformed. Please try again.", isError: true });
+  const verified = verifyOAuthState("granola", state);
+  if (!verified) {
+    return callbackHtml(c, { title: "Security check failed", message: "The authorization state was invalid or tampered with. Please try connecting again.", isError: true });
   }
-
-  let userId: string;
-  try {
-    userId = Buffer.from(parts[0], "base64url").toString("utf8");
-  } catch {
-    return callbackHtml(c, { title: "Invalid request", message: "The authorization state couldn't be read. Please try again.", isError: true });
-  }
-
-  const expectedHmac = createHmac("sha256", process.env.BETTER_AUTH_SECRET!)
-    .update(userId + ":" + parts[1])
-    .digest("hex");
-
-  if (
-    parts[2].length !== expectedHmac.length ||
-    !timingSafeEqual(Buffer.from(expectedHmac, "hex"), Buffer.from(parts[2], "hex"))
-  ) {
-    return callbackHtml(c, { title: "Security check failed", message: "The authorization signature didn't match. Please try connecting again.", isError: true });
-  }
+  const { userId } = verified;
 
   // userId is verified via HMAC — no session needed on callback
-  // Look up user email for the account record
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true },
@@ -222,17 +207,24 @@ granolaAuth.get("/callback", async (c) => {
     return callbackHtml(c, { title: "User not found", message: "The user account no longer exists. Please try again.", isError: true });
   }
 
-  // Retrieve PKCE code_verifier for this flow (keyed by nonce from state)
-  const stateNonce = parts[1];
-  const codeVerifier = pkceStore.get(stateNonce);
-  if (!codeVerifier) {
+  // Retrieve PKCE code_verifier from Verification table (keyed by nonce from state)
+  const pkceRecord = await prisma.verification.findFirst({
+    where: { identifier: `${PKCE_IDENTIFIER_PREFIX}${verified.nonce}` },
+  });
+  if (!pkceRecord || pkceRecord.expiresAt < new Date()) {
+    // Clean up expired record if it exists
+    if (pkceRecord) {
+      await prisma.verification.delete({ where: { id: pkceRecord.id } }).catch(() => {});
+    }
     return callbackHtml(c, {
       title: "Session expired",
       message: "The authorization session has expired. Please try connecting again from Brett.",
       isError: true,
     });
   }
-  pkceStore.delete(stateNonce);
+  const codeVerifier = pkceRecord.value;
+  // Delete immediately to prevent replay
+  await prisma.verification.delete({ where: { id: pkceRecord.id } }).catch(() => {});
 
   // Exchange code for tokens (with retry on 401 — re-register DCR client)
   let client = await ensureClientRegistered();

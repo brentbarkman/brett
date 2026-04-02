@@ -1,16 +1,25 @@
+import type { Context, Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { AuthEnv } from "./auth.js";
 
-const windows = new Map<string, { count: number; resetAt: number }>();
+type Window = { count: number; resetAt: number };
+const allMaps: Map<string, Window>[] = [];
 
-export function rateLimiter(maxRequests: number, windowMs: number = 60_000) {
-  return createMiddleware<AuthEnv>(async (c, next) => {
-    const userId = c.get("user").id;
+function createLimiter<E extends Env>(
+  extractKey: (c: Context<E>) => string,
+  maxRequests: number,
+  windowMs: number,
+) {
+  const windows = new Map<string, Window>();
+  allMaps.push(windows);
+
+  return createMiddleware<E>(async (c, next) => {
+    const key = extractKey(c as Context<E>);
     const now = Date.now();
-    let window = windows.get(userId);
+    let window = windows.get(key);
     if (!window || now > window.resetAt) {
       window = { count: 0, resetAt: now + windowMs };
-      windows.set(userId, window);
+      windows.set(key, window);
     }
     window.count++;
     if (window.count > maxRequests) {
@@ -22,10 +31,27 @@ export function rateLimiter(maxRequests: number, windowMs: number = 60_000) {
   });
 }
 
+/** Rate limiter keyed by authenticated user ID. */
+export function rateLimiter(maxRequests: number, windowMs: number = 60_000) {
+  return createLimiter<AuthEnv>((c) => c.get("user").id, maxRequests, windowMs);
+}
+
+/** Rate limiter keyed by client IP. Use for unauthenticated routes (login, sign-up). */
+export function ipRateLimiter(maxRequests: number, windowMs: number = 60_000) {
+  return createLimiter<Env>(
+    // x-forwarded-for from Railway's reverse proxy, fall back to remote address
+    (c) => c.req.header("x-forwarded-for")?.split(",")[0].trim() || "unknown",
+    maxRequests,
+    windowMs,
+  );
+}
+
 // Clean up stale entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [key, window] of windows) {
-    if (now > window.resetAt) windows.delete(key);
+  for (const map of allMaps) {
+    for (const [key, window] of map) {
+      if (now > window.resetAt) map.delete(key);
+    }
   }
 }, 5 * 60_000).unref();

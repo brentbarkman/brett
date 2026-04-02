@@ -2,8 +2,13 @@ import crypto from "crypto";
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import { auth } from "../lib/auth.js";
+import { ipRateLimiter } from "../middleware/rate-limit.js";
 
 const authRouter = new Hono();
+
+// Rate limit auth endpoints by IP: 10 attempts per 60s for sign-in, 5 for sign-up
+authRouter.post("/sign-in/*", ipRateLimiter(10, 60_000));
+authRouter.post("/sign-up/*", ipRateLimiter(5, 60_000));
 
 // Sign the desktop OAuth state to prevent forgery
 const AUTH_SECRET = process.env.BETTER_AUTH_SECRET || "";

@@ -98,8 +98,25 @@ if (embeddingProvider) {
       userId: job.userId,
       provider: embeddingProvider,
       prisma,
+      skipAutoLink: job.skipAutoLink,
     });
   });
 }
 
 startCronJobs();
+
+// Reconcile embeddings on startup — catches items missed during restarts.
+// Delayed 30s to let the server warm up and avoid competing with initial requests.
+if (embeddingProvider) {
+  setTimeout(async () => {
+    try {
+      const { runEmbeddingBackfill } = await import("./lib/embedding-backfill.js");
+      const result = await runEmbeddingBackfill();
+      if (result.processed > 0) {
+        console.log(`[startup] Embedding reconciliation: ${result.processed} entities backfilled`);
+      }
+    } catch (err) {
+      console.error("[startup] Embedding reconciliation failed:", err);
+    }
+  }, 30_000);
+}

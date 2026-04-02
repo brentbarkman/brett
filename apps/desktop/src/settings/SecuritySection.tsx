@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { validatePassword } from "@brett/utils";
 import { useAuth } from "../auth/AuthContext";
 import { authClient } from "../auth/auth-client";
 import { useAccountType } from "./useAccountType";
@@ -155,6 +156,11 @@ export function SecuritySection() {
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
+    const validationError = validatePassword(newPassword);
+    if (validationError) {
+      setMessage({ type: "error", text: validationError });
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {

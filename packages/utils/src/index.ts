@@ -164,3 +164,17 @@ export function humanizeCadence(hours: number): string {
 }
 
 export { resolveTempUnit, convertTemp } from "./weather.js";
+
+// ── Password validation ──
+
+export const PASSWORD_MIN_LENGTH = 10;
+export const PASSWORD_MAX_LENGTH = 128;
+
+/** Returns an error message if the password fails complexity requirements, or null if valid. */
+export function validatePassword(password: string): string | null {
+  if (password.length < PASSWORD_MIN_LENGTH) return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+  if (!/[a-z]/.test(password)) return "Password must contain a lowercase letter";
+  if (!/[A-Z]/.test(password)) return "Password must contain an uppercase letter";
+  if (!/\d/.test(password)) return "Password must contain a number";
+  return null;
+}

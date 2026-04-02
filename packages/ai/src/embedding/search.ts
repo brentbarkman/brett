@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { EmbeddingProvider } from "../providers/types.js";
 
 // --- Types ---
@@ -86,8 +87,38 @@ const KEYWORD_ENTITY_TYPES = ["item", "calendar_event", "meeting_note", "scout_f
 type KeywordEntityType = (typeof KEYWORD_ENTITY_TYPES)[number];
 
 /**
+ * Simple relevance score for keyword matches.
+ * Title matches score higher than body matches; exact word boundary matches score higher than substring.
+ */
+function keywordRelevance(title: string, snippet: string, query: string): number {
+  const lower = query.toLowerCase();
+  const titleLower = (title ?? "").toLowerCase();
+  const snippetLower = (snippet ?? "").toLowerCase();
+
+  let score = 0;
+  // Title contains query → strong signal
+  if (titleLower.includes(lower)) {
+    score += 10;
+    // Exact title match or starts-with → even stronger
+    if (titleLower === lower || titleLower.startsWith(lower + " ") || titleLower.startsWith(lower + ":")) {
+      score += 5;
+    }
+  }
+  // Body/snippet contains query
+  if (snippetLower.includes(lower)) {
+    score += 3;
+  }
+  // Bonus: shorter titles with match are more relevant (precision)
+  if (titleLower.includes(lower) && title.length < 80) {
+    score += 2;
+  }
+  return score;
+}
+
+/**
  * Runs ILIKE search across multiple entity tables.
  * Only searches entity types in the `types` array (or all if null).
+ * Results are ranked by relevance (title matches > body matches).
  */
 export async function keywordSearch(
   userId: string,
@@ -102,7 +133,7 @@ export async function keywordSearch(
       ? [...KEYWORD_ENTITY_TYPES]
       : (types.filter((t) => KEYWORD_ENTITY_TYPES.includes(t as KeywordEntityType)) as KeywordEntityType[]);
 
-  const allResults: RankedResult[] = [];
+  const allResults: Array<RankedResult & { relevance: number }> = [];
 
   if (activeTypes.includes("item")) {
     const items = await prisma.item.findMany({
@@ -120,12 +151,14 @@ export async function keywordSearch(
     });
 
     for (const item of items) {
+      const snippet = item.notes ?? item.description ?? "";
       allResults.push({
         entityType: "item",
         entityId: item.id,
         title: item.title ?? "",
-        snippet: item.notes ?? item.description ?? "",
-        rank: 0, // will be assigned below
+        snippet,
+        rank: 0,
+        relevance: keywordRelevance(item.title ?? "", snippet, query),
       });
     }
   }
@@ -150,6 +183,7 @@ export async function keywordSearch(
         title: event.title ?? "",
         snippet: event.description ?? "",
         rank: 0,
+        relevance: keywordRelevance(event.title ?? "", event.description ?? "", query),
       });
     }
   }
@@ -174,6 +208,7 @@ export async function keywordSearch(
         title: note.title ?? "",
         snippet: note.summary ?? "",
         rank: 0,
+        relevance: keywordRelevance(note.title ?? "", note.summary ?? "", query),
       });
     }
   }
@@ -198,12 +233,20 @@ export async function keywordSearch(
         title: finding.title ?? "",
         snippet: finding.description ?? "",
         rank: 0,
+        relevance: keywordRelevance(finding.title ?? "", finding.description ?? "", query),
       });
     }
   }
 
-  // Assign ranks (1-based)
-  return allResults.slice(0, limit).map((r, i) => ({ ...r, rank: i + 1 }));
+  // Sort by relevance (descending), then assign 1-based ranks for RRF fusion
+  allResults.sort((a, b) => b.relevance - a.relevance);
+  return allResults.slice(0, limit).map((r, i) => ({
+    entityType: r.entityType,
+    entityId: r.entityId,
+    title: r.title,
+    snippet: r.snippet,
+    rank: i + 1,
+  }));
 }
 
 // --- Vector Search ---
@@ -244,7 +287,9 @@ export async function vectorSearch(
   }>;
 
   if (safeTypes !== null && safeTypes.length > 0) {
-    const typeList = safeTypes.map((t) => `'${t}'`).join(", ");
+    // Use Prisma.join() so each type becomes a separate parameterized value in the IN clause.
+    // Plain string interpolation inside $queryRaw would be sent as a single parameter, breaking the query.
+    const typeParams = Prisma.join(safeTypes);
     rows = await prisma.$queryRaw<typeof rows>`
       SELECT * FROM (
         SELECT DISTINCT ON ("entityType", "entityId")
@@ -254,7 +299,7 @@ export async function vectorSearch(
           1 - (embedding <=> ${vectorStr}::vector) AS similarity
         FROM "Embedding"
         WHERE "userId" = ${userId}
-          AND "entityType" IN (${typeList})
+          AND "entityType" IN (${typeParams})
         ORDER BY "entityType", "entityId", embedding <=> ${vectorStr}::vector ASC
       ) sub
       ORDER BY similarity DESC
