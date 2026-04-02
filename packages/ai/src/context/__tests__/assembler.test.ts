@@ -33,8 +33,21 @@ function createMockPrisma() {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
     },
+    calendarList: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     conversationSession: {
       findMany: vi.fn().mockResolvedValue([]),
+    },
+    weatherCache: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    user: {
+      findFirst: vi.fn().mockResolvedValue({ timezone: "UTC" }),
+      findUnique: vi.fn().mockResolvedValue({ timezone: "UTC" }),
+    },
+    meetingNote: {
+      findFirst: vi.fn().mockResolvedValue(null),
     },
   } as any;
 }
