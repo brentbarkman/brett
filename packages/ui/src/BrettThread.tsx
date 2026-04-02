@@ -83,7 +83,7 @@ function MessageBubble({
 
         {/* Text content */}
         {message.content && (
-          <div className="text-sm text-white/80 leading-relaxed break-words">
+          <div className={`text-sm leading-relaxed break-words ${isUser ? "text-white/80" : "bg-white/5 rounded-lg px-3.5 py-3 border border-white/10 text-white/80"}`}>
             <SimpleMarkdown
               content={message.content}
               onItemClick={onItemClick}
@@ -91,7 +91,7 @@ function MessageBubble({
               onNavigate={onNavigate}
             />
             {isStreamingMsg && (
-              <span className="inline-block w-1.5 h-3.5 bg-blue-400/60 ml-0.5 animate-pulse rounded-sm" />
+              <span className="inline-block w-1.5 h-3.5 bg-amber-400 ml-0.5 animate-pulse rounded-sm" />
             )}
           </div>
         )}
@@ -100,7 +100,7 @@ function MessageBubble({
         {!message.content && isStreamingMsg && !message.toolCalls?.length && (
           <div className="flex items-center gap-1 py-1">
             <Loader2 size={12} className="animate-spin text-blue-400/60" />
-            <span className="text-xs text-white/30">Thinking...</span>
+            <span className="text-xs text-white/30">Brett is thinking...</span>
           </div>
         )}
 
@@ -215,7 +215,7 @@ export function BrettThread({
         <div className="flex items-center gap-2">
           <Bot size={14} className="text-blue-400" />
           <span className="text-xs font-medium text-white/60">
-            Brett Thread
+            Brett
             {(totalCount ?? messages.length) > 0
               ? ` (${totalCount ?? messages.length})`
               : ""}
@@ -235,7 +235,7 @@ export function BrettThread({
       {isExpanded && displayMessages.length > 0 && (
         <div
           ref={scrollRef}
-          className="max-h-64 overflow-y-auto px-4 scrollbar-hide overscroll-contain"
+          className="max-h-96 overflow-y-auto px-4 scrollbar-hide overscroll-contain"
         >
           {/* Sentinel + loading indicator at top */}
           <div ref={sentinelRef} className="h-1" />
@@ -264,14 +264,14 @@ export function BrettThread({
         <div className="px-4 pb-2">
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
             <p className="text-xs text-amber-300/80">
-              Connect an AI provider in{" "}
+              Brett needs an AI provider to work his magic. Set one up in{" "}
               <button
                 onClick={onOpenSettings}
                 className="text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors"
               >
                 Settings
               </button>
-              {" "}to chat with Brett.
+              .
             </p>
           </div>
         </div>
@@ -286,7 +286,7 @@ export function BrettThread({
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={aiConfigured === false ? "AI provider not configured" : "Ask Brett\u2026"}
+            placeholder={aiConfigured === false ? "Brett needs an AI provider..." : "Ask Brett anything..."}
             rows={1}
             disabled={aiConfigured === false}
             className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 resize-none focus:border-blue-500/20 min-h-[36px] max-h-[100px] disabled:opacity-40 disabled:cursor-not-allowed"
@@ -294,7 +294,7 @@ export function BrettThread({
           <button
             onClick={handleSend}
             disabled={!inputValue.trim() || isSending || isStreaming || aiConfigured === false}
-            className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Send size={14} />
           </button>

@@ -430,6 +430,23 @@ export function SpotlightModal({
           </div>
         )}
 
+        {/* Streaming indicator */}
+        {hasConversation && isStreaming && (
+          <div className="border-t border-white/10 px-5 py-3 flex items-center gap-2">
+            <Bot size={16} className="text-amber-400/70 flex-shrink-0" />
+            <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                title="Stop"
+              >
+                <Square size={14} className="text-white/50" />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Follow-up input when conversation exists */}
         {hasConversation && !isStreaming && (
           <div className="border-t border-white/10 px-5 py-3 flex items-center gap-2">

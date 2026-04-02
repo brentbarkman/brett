@@ -312,14 +312,14 @@ export function CalendarEventDetailPanel({
               className="pt-4"
               style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
             >
-              <div className="bg-purple-500/10 border-l-2 border-purple-500 p-4 rounded-r-lg">
+              <div className="bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                  <span className="text-xs font-mono uppercase text-purple-400 font-semibold">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
                     Brett&apos;s Take
                   </span>
                 </div>
-                <p className="text-sm italic text-purple-300/90 leading-relaxed">
+                <p className="text-sm italic text-blue-300/90 leading-relaxed">
                   &ldquo;{detail.brettObservation}&rdquo;
                 </p>
               </div>

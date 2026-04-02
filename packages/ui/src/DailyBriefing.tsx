@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { X, RefreshCw, Loader2, Settings } from "lucide-react";
+import { X, RefreshCw, Loader2, Settings, Bot } from "lucide-react";
 
 interface OverdueItem {
   title: string;
@@ -192,8 +192,8 @@ export function DailyBriefing({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-blue-500" />
-          <span className="font-mono text-xs uppercase tracking-wider text-blue-400/90 font-semibold">
+          <Bot size={14} className="text-blue-400" />
+          <span className="font-mono text-xs uppercase tracking-wider text-blue-400/70 font-semibold">
             Daily Briefing
           </span>
           {isGenerating && (
@@ -305,7 +305,7 @@ export function DailyBriefing({
           )}
           <p className="text-[11px] text-white/20 flex items-center gap-1">
             <Settings size={10} />
-            Add an AI provider in Settings for a personalized daily briefing
+            Brett needs an AI provider to work his magic. Set one up in Settings.
           </p>
         </div>
       )}
