@@ -519,13 +519,41 @@ async function assembleBrettsTake(
         myResponseStatus: true,
         attendees: true,
         meetingLink: true,
+        recurringEventId: true,
+        notes: {
+          where: { userId: input.userId },
+          take: 1,
+          select: { content: true },
+        },
       },
     });
     if (event) {
-      dataContext = wrapUserData(
-        "calendar_event",
-        formatCalendarEvent(event)
-      );
+      const contextParts = [formatCalendarEvent(event)];
+
+      // Include user's notes if present
+      if (event.notes[0]?.content) {
+        contextParts.push(`\nUser's notes:\n${event.notes[0].content}`);
+      }
+
+      // For recurring events, include most recent prior meeting summary
+      if (event.recurringEventId) {
+        const priorMeeting = await prisma.meetingNote.findFirst({
+          where: {
+            userId: input.userId,
+            calendarEvent: {
+              recurringEventId: event.recurringEventId,
+              startTime: { lt: event.startTime },
+            },
+          },
+          orderBy: { meetingStartedAt: "desc" },
+          select: { summary: true },
+        });
+        if (priorMeeting?.summary) {
+          contextParts.push(`\nPrevious meeting summary:\n${priorMeeting.summary}`);
+        }
+      }
+
+      dataContext = wrapUserData("calendar_event", contextParts.join("\n"));
     }
   }
 
