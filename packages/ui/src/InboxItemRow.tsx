@@ -95,9 +95,9 @@ export function InboxItemRow({
         transition-colors duration-200 outline-none
         ${isDragging ? "opacity-30" : ""}
         ${isFocused
-          ? "bg-brett-gold/15 border border-brett-gold/30"
+          ? "bg-white/10 border border-white/5"
           : isSelected
-            ? "bg-white/10 border border-white/10"
+            ? "bg-white/10 border border-white/5"
             : "border border-transparent hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg"
         }
       `}
@@ -109,7 +109,7 @@ export function InboxItemRow({
         onClick={handleToggle}
         onPointerDown={(e) => e.stopPropagation()}
         className={`
-          toggle-btn flex-shrink-0 w-6 h-6 rounded-full border flex items-center justify-center
+          toggle-btn flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center
           transition-all duration-150 relative outline-none
           ${completing
             ? "bg-brett-teal/20 border-brett-teal/40"
