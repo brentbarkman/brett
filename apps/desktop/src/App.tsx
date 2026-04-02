@@ -160,7 +160,7 @@ function recordToDisplay(r: CalendarEventRecord): CalendarEventDisplay {
         responseStatus: a.responseStatus,
       };
     }),
-    hasBrettContext: false,
+    hasBrettContext: !!r.brettObservation,
     meetingLink: r.meetingLink ?? undefined,
     isAllDay: r.isAllDay,
     myResponseStatus: r.myResponseStatus,
