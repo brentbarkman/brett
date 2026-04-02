@@ -45,6 +45,7 @@ export interface AIProvider {
 }
 
 export interface EmbeddingProvider {
-  embed(text: string): Promise<number[]>;
+  embed(text: string, inputType?: "query" | "document"): Promise<number[]>;
+  embedBatch(texts: string[], inputType?: "query" | "document"): Promise<number[][]>;
   readonly dimensions: number;
 }

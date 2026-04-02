@@ -9,6 +9,7 @@ export type {
 } from "./providers/types.js";
 export { getProvider } from "./providers/factory.js";
 export { OpenAIEmbeddingProvider } from "./providers/embedding.js";
+export { VoyageEmbeddingProvider } from "./providers/voyage.js";
 export { resolveModel, MODEL_MAP } from "./router.js";
 
 // Skills
