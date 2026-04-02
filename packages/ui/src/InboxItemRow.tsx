@@ -127,10 +127,18 @@ export function InboxItemRow({
         )}
       </button>
 
-      {/* Title */}
-      <span className="flex-1 min-w-0 text-sm text-white/90 truncate">
-        {thing.title}
-      </span>
+      {/* Title + provenance */}
+      <div className="flex-1 min-w-0">
+        <span className="text-sm text-white/90 truncate block">
+          {thing.title}
+        </span>
+        {((thing.source === "scout" && thing.scoutName) ||
+          (thing.source === "Granola" && thing.meetingNoteTitle)) && (
+          <span className="text-[10px] text-white/50 truncate block mt-0.5">
+            from {thing.source === "scout" ? thing.scoutName : thing.meetingNoteTitle}
+          </span>
+        )}
+      </div>
 
       {/* Source pill */}
       {!hideSource && thing.source && thing.source !== "Brett" && (
