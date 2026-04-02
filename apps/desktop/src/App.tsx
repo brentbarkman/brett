@@ -1068,6 +1068,8 @@ export function App() {
           isBrettStreaming={brett.isStreaming}
           isLoadingMoreBrettMessages={brett.isLoadingMore}
           brettTotalCount={brett.totalCount}
+          brettAiConfigured={brett.aiConfigured}
+          onOpenSettings={() => navigate("/settings#ai-settings")}
           onRetryExtraction={() => {
             if (selectedId) retryExtraction.mutate(selectedId);
           }}
@@ -1087,6 +1089,7 @@ export function App() {
           isSendingCalendarBrettMessage={false}
           isCalendarBrettStreaming={calendarBrett.isStreaming}
           isLoadingMoreCalendarBrettMessages={calendarBrett.isLoadingMore}
+          calendarBrettAiConfigured={calendarBrett.aiConfigured}
           meetingNote={meetingNote ? {
             id: meetingNote.id,
             title: meetingNote.title,

@@ -29,6 +29,8 @@ interface BrettThreadProps {
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
+  aiConfigured?: boolean;
+  onOpenSettings?: () => void;
 }
 
 function MessageBubble({
@@ -125,6 +127,8 @@ export function BrettThread({
   onItemClick,
   onEventClick,
   onNavigate,
+  aiConfigured,
+  onOpenSettings,
 }: BrettThreadProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -255,6 +259,24 @@ export function BrettThread({
         </div>
       )}
 
+      {/* AI not configured message */}
+      {aiConfigured === false && (
+        <div className="px-4 pb-2">
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
+            <p className="text-xs text-amber-300/80">
+              Connect an AI provider in{" "}
+              <button
+                onClick={onOpenSettings}
+                className="text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors"
+              >
+                Settings
+              </button>
+              {" "}to chat with Brett.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Input area */}
       <div className="relative px-4 pb-3 pt-1">
         <div className="absolute inset-x-0 -top-4 h-4 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
@@ -264,13 +286,14 @@ export function BrettThread({
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Brett&hellip;"
+            placeholder={aiConfigured === false ? "AI provider not configured" : "Ask Brett\u2026"}
             rows={1}
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 resize-none focus:border-blue-500/20 min-h-[36px] max-h-[100px]"
+            disabled={aiConfigured === false}
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 resize-none focus:border-blue-500/20 min-h-[36px] max-h-[100px] disabled:opacity-40 disabled:cursor-not-allowed"
           />
           <button
             onClick={handleSend}
-            disabled={!inputValue.trim() || isSending || isStreaming}
+            disabled={!inputValue.trim() || isSending || isStreaming || aiConfigured === false}
             className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Send size={14} />

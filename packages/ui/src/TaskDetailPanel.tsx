@@ -49,6 +49,8 @@ interface TaskDetailPanelProps {
   isBrettStreaming?: boolean;
   isLoadingMoreBrettMessages?: boolean;
   brettTotalCount?: number;
+  brettAiConfigured?: boolean;
+  onOpenSettings?: () => void;
   onNavigateToCalendarEvent?: (calendarEventId: string) => void;
   onNavigateToScout?: (scoutId: string) => void;
   onScoutFeedback?: (scoutId: string, findingId: string, useful: boolean | null) => void;
@@ -83,6 +85,8 @@ export function TaskDetailPanel({
   isBrettStreaming,
   isLoadingMoreBrettMessages,
   brettTotalCount,
+  brettAiConfigured,
+  onOpenSettings,
   onNavigateToCalendarEvent,
   onNavigateToScout,
   onScoutFeedback,
@@ -312,6 +316,8 @@ export function TaskDetailPanel({
           onItemClick={onItemClick}
           onEventClick={onEventClick}
           onNavigate={onNavigate}
+          aiConfigured={brettAiConfigured}
+          onOpenSettings={onOpenSettings}
         />
       )}
     </>
