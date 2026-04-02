@@ -105,7 +105,11 @@ export function buildStream(
         console.error("[ai-stream] Stream error:", err);
 
         // Mark session as failed with error reason
-        const reason = err instanceof Error ? err.message.slice(0, 100) : "unknown";
+        // Sanitize error to prevent API key leakage into the database
+        const rawReason = err instanceof Error ? err.message.slice(0, 100) : "unknown";
+        const reason = rawReason
+          .replace(/(?:sk-|key-|bearer\s+)[a-zA-Z0-9_-]{20,}/gi, "[REDACTED]")
+          .replace(/\b[a-zA-Z0-9_-]{40,}\b/g, "[REDACTED]");
         prisma.conversationSession
           .update({ where: { id: sessionId }, data: { modelUsed: `error:${reason}` } })
           .catch(() => {});
