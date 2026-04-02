@@ -47,6 +47,7 @@ import {
   useUpdateThing,
   useRetryExtraction,
   useThings,
+  useListSuggestions,
 } from "./api/things";
 import { useLists, useCreateList, useUpdateList, useDeleteList, useReorderLists, useArchiveList, useUnarchiveList, useArchivedLists } from "./api/lists";
 import { useUploadAttachment, useDeleteAttachment } from "./api/attachments";
@@ -195,6 +196,11 @@ export function App() {
     currentDueDate?: string | null;
     currentDueDatePrecision?: "day" | "week" | null;
   } | null>(null);
+
+  // Semantic list suggestions for the active triage item
+  const { data: listSuggestionsData } = useListSuggestions(
+    triageState?.ids[0] ?? null
+  );
 
   // Delete list confirmation state
   const [deleteListConfirm, setDeleteListConfirm] = useState<{
@@ -1196,6 +1202,7 @@ export function App() {
               currentListId={triageState.currentListId}
               currentDueDate={triageState.currentDueDate}
               currentDueDatePrecision={triageState.currentDueDatePrecision}
+              suggestedLists={listSuggestionsData?.suggestions}
               onConfirm={handleTriageConfirm}
               onCancel={handleTriageCancel}
             />
