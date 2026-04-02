@@ -92,7 +92,7 @@ function renderBriefingLine(
           <button
             key={i}
             onClick={() => onItemClick(matched.id)}
-            className="font-semibold text-blue-400/90 hover:text-blue-300 transition-colors cursor-pointer"
+            className="font-semibold text-brett-cerulean/90 hover:text-brett-cerulean/80 transition-colors cursor-pointer"
           >
             {inner}
           </button>
@@ -110,7 +110,7 @@ function renderBriefingLine(
           <button
             key={i}
             onClick={() => onItemClick(matched.id)}
-            className="text-blue-400/90 hover:text-blue-300 transition-colors cursor-pointer"
+            className="text-brett-cerulean/90 hover:text-brett-cerulean/80 transition-colors cursor-pointer"
           >
             {inner}
           </button>
@@ -184,7 +184,7 @@ export function DailyBriefing({
   return (
     <div
       className={`
-        relative w-full bg-black/40 backdrop-blur-md border border-blue-500/30 rounded-xl p-4
+        relative w-full bg-black/40 backdrop-blur-md border border-brett-cerulean/30 rounded-xl p-4
         transition-all duration-500 ease-out transform
         ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
       `}
@@ -192,12 +192,12 @@ export function DailyBriefing({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Bot size={14} className="text-blue-400" />
-          <span className="font-mono text-xs uppercase tracking-wider text-blue-400/70 font-semibold">
+          <Bot size={14} className="text-brett-cerulean" />
+          <span className="font-mono text-xs uppercase tracking-wider text-brett-cerulean/70 font-semibold">
             Daily Briefing
           </span>
           {isGenerating && (
-            <Loader2 size={12} className="animate-spin text-blue-400/60" />
+            <Loader2 size={12} className="animate-spin text-brett-cerulean/60" />
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -240,7 +240,7 @@ export function DailyBriefing({
                   key={idx}
                   className="flex items-start gap-2 text-sm text-white/80 leading-relaxed"
                 >
-                  <span className="text-blue-500/50 mt-1">•</span>
+                  <span className="text-brett-cerulean/50 mt-1">•</span>
                   <span>{renderLine(line)}</span>
                 </li>
               ))}

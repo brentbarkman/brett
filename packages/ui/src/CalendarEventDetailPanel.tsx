@@ -302,7 +302,7 @@ export function CalendarEventDetailPanel({
               onChange={(e) => setRsvpNote(e.target.value)}
               onBlur={handleRsvpNoteBlur}
               placeholder="Add a note (optional)"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-blue-500/20 outline-none"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-brett-cerulean/20 outline-none"
             />
           </div>
 
@@ -312,14 +312,14 @@ export function CalendarEventDetailPanel({
               className="pt-4"
               style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
             >
-              <div className="bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
+              <div className="bg-brett-cerulean/10 border-l-2 border-brett-cerulean p-4 rounded-r-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
+                  <div className="w-1.5 h-1.5 rounded-full bg-brett-cerulean" />
+                  <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-brett-cerulean">
                     Brett&apos;s Take
                   </span>
                 </div>
-                <p className="text-sm italic text-blue-300/90 leading-relaxed">
+                <p className="text-sm italic text-brett-cerulean/85 leading-relaxed">
                   &ldquo;{detail.brettObservation}&rdquo;
                 </p>
               </div>

@@ -186,7 +186,7 @@ export function SpotlightModal({
         suggestions.push({
           id: "scout",
           label: `Scout: "${input}"`,
-          icon: <Radar size={14} className="text-blue-400" />,
+          icon: <Radar size={14} className="text-brett-cerulean" />,
           action: "scout",
         });
       }
@@ -194,7 +194,7 @@ export function SpotlightModal({
         suggestions.push({
           id: "ask",
           label: `Ask Brett: "${input}"`,
-          icon: <Sparkles size={14} className="text-blue-400" />,
+          icon: <Sparkles size={14} className="text-brett-cerulean" />,
           action: "ask",
         });
       }
@@ -323,7 +323,7 @@ export function SpotlightModal({
           <Bot
             size={20}
             className={`flex-shrink-0 ${
-              isStreaming ? "text-blue-400 animate-pulse" : "text-blue-400"
+              isStreaming ? "text-brett-cerulean animate-pulse" : "text-brett-cerulean"
             }`}
           />
           {!hasConversation ? (
@@ -392,8 +392,8 @@ export function SpotlightModal({
         {/* Task Created — inline confirmation */}
         {confirmedTask && (
           <div className="border-b border-white/10">
-            <div className="flex items-center gap-3 px-5 py-3 border-l-2 border-green-400/40 ml-4">
-              <Check size={14} className="text-green-400 flex-shrink-0" />
+            <div className="flex items-center gap-3 px-5 py-3 border-l-2 border-brett-teal/40 ml-4">
+              <Check size={14} className="text-brett-teal flex-shrink-0" />
               <div className="min-w-0">
                 <div className="text-sm text-white/85 font-medium truncate">{confirmedTask}</div>
                 <div className="text-[11px] text-white/40">Added to Inbox</div>
@@ -465,7 +465,7 @@ export function SpotlightModal({
             <button
               onClick={() => input.trim() && onSend(input)}
               disabled={!input.trim()}
-              className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-30 disabled:hover:bg-blue-500"
+              className="p-2 rounded-lg bg-brett-gold text-white hover:bg-brett-gold-dark transition-colors disabled:opacity-30 disabled:hover:bg-brett-gold"
             >
               <Send size={14} />
             </button>
@@ -497,7 +497,7 @@ export function SpotlightModal({
                     onMouseEnter={() => setSelectedSearchIdx(i)}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                      item.status === "done" ? "bg-green-400" : item.status === "active" ? "bg-blue-400" : "bg-white/30"
+                      item.status === "done" ? "bg-brett-teal" : item.status === "active" ? "bg-brett-cerulean" : "bg-white/30"
                     }`} />
                     <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
                       {item.type === "content" ? (item.contentType || "content") : "task"}
@@ -517,8 +517,8 @@ export function SpotlightModal({
         {!hasConversation && !showSuggestions && !showSearchResults && !confirmedTask && (
           <div className="px-5 py-6">
             {!hasAI ? (
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-                <Sparkles size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-brett-cerulean/5 border border-brett-cerulean/10">
+                <Sparkles size={16} className="text-brett-cerulean flex-shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <p className="text-sm text-white/70">
                     Add an AI provider to unlock Brett's full capabilities — ask questions, get briefings, and manage everything with natural language.
@@ -526,7 +526,7 @@ export function SpotlightModal({
                   {onNavigateToSettings && (
                     <button
                       onClick={() => { onNavigateToSettings(); onClose(); }}
-                      className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      className="mt-2 text-xs text-brett-cerulean hover:text-brett-cerulean/80 transition-colors"
                     >
                       Configure AI in Settings →
                     </button>

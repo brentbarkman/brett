@@ -98,7 +98,7 @@ function MessageBubble({
       {/* Streaming cursor when no content yet */}
       {!message.content && isStreamingMsg && !message.toolCalls?.length && (
         <div className="flex items-center gap-1 py-1">
-          <Loader2 size={12} className="animate-spin text-blue-400/60" />
+          <Loader2 size={12} className="animate-spin text-brett-cerulean/60" />
           <span className="text-xs text-white/30">Brett is thinking...</span>
         </div>
       )}
@@ -204,7 +204,7 @@ export function BrettThread({
         className="flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Bot size={14} className="text-blue-400" />
+          <Bot size={14} className="text-brett-cerulean" />
           <span className="text-xs font-medium text-white/60">
             Brett
             {(totalCount ?? messages.length) > 0
@@ -212,7 +212,7 @@ export function BrettThread({
               : ""}
           </span>
           {isStreaming && (
-            <Loader2 size={10} className="animate-spin text-blue-400/60" />
+            <Loader2 size={10} className="animate-spin text-brett-cerulean/60" />
           )}
         </div>
         {isExpanded ? (
@@ -280,12 +280,12 @@ export function BrettThread({
             placeholder={aiConfigured === false ? "Brett needs an AI provider..." : "Ask Brett anything..."}
             rows={1}
             disabled={aiConfigured === false}
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 resize-none focus:border-blue-500/20 min-h-[36px] max-h-[100px] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 resize-none focus:border-brett-cerulean/20 min-h-[36px] max-h-[100px] disabled:opacity-40 disabled:cursor-not-allowed"
           />
           <button
             onClick={handleSend}
             disabled={!inputValue.trim() || isSending || isStreaming || aiConfigured === false}
-            className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="p-2 rounded-lg bg-brett-gold text-white hover:bg-brett-gold-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Send size={14} />
           </button>
