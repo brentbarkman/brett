@@ -38,7 +38,7 @@ search.get("/search", authMiddleware, async (c) => {
   const [items, events, meetings, findings] = await Promise.all([
     itemIds.length > 0
       ? prisma.item.findMany({
-          where: { id: { in: itemIds } },
+          where: { id: { in: itemIds }, userId: user.id },
           select: {
             id: true,
             title: true,
@@ -52,19 +52,19 @@ search.get("/search", authMiddleware, async (c) => {
       : [],
     eventIds.length > 0
       ? prisma.calendarEvent.findMany({
-          where: { id: { in: eventIds } },
+          where: { id: { in: eventIds }, userId: user.id },
           select: { id: true, title: true, startTime: true, endTime: true },
         })
       : [],
     meetingIds.length > 0
       ? prisma.meetingNote.findMany({
-          where: { id: { in: meetingIds } },
+          where: { id: { in: meetingIds }, userId: user.id },
           select: { id: true, title: true, meetingStartedAt: true },
         })
       : [],
     findingIds.length > 0
       ? prisma.scoutFinding.findMany({
-          where: { id: { in: findingIds } },
+          where: { id: { in: findingIds }, scout: { userId: user.id } },
           select: {
             id: true,
             title: true,

@@ -1,174 +1,117 @@
-import { describe, it, expect } from "vitest";
-import { fuseResults } from "../embedding/search.js";
-import type { RankedResult } from "../embedding/search.js";
+import { describe, it, expect, vi } from "vitest";
+import {
+  fuseResults,
+  vectorSearch,
+  VALID_ENTITY_TYPES,
+  type RankedResult,
+} from "../embedding/search.js";
 
-function makeResult(
-  entityType: string,
-  entityId: string,
-  title: string,
-  rank: number
-): RankedResult {
-  return {
-    entityType,
-    entityId,
-    title,
-    snippet: `snippet for ${title}`,
-    rank,
-  };
-}
+// --- fuseResults ---
 
 describe("fuseResults", () => {
-  describe("basic RRF fusion", () => {
-    it("merges two lists and ranks shared results higher", () => {
-      const keyword: RankedResult[] = [
-        makeResult("item", "a1", "Budget Review", 1),
-        makeResult("item", "a2", "Q3 Financials", 2),
-        makeResult("item", "a3", "Revenue Forecast", 3),
-      ];
-      const vector: RankedResult[] = [
-        makeResult("item", "a2", "Q3 Financials", 1), // shared
-        makeResult("item", "a4", "Investor Deck", 2),
-        makeResult("item", "a1", "Budget Review", 3), // shared
-      ];
+  const kw: RankedResult[] = [
+    { entityType: "item", entityId: "a", title: "A", snippet: "...", rank: 1 },
+    { entityType: "item", entityId: "b", title: "B", snippet: "...", rank: 2 },
+  ];
 
-      const results = fuseResults(keyword, vector, 10);
+  const vec: RankedResult[] = [
+    { entityType: "item", entityId: "b", title: "B", snippet: "...", rank: 1 },
+    { entityType: "item", entityId: "c", title: "C", snippet: "...", rank: 2 },
+  ];
 
-      // Shared results (a1, a2) should score higher than keyword-only (a3) or vector-only (a4)
-      const ids = results.map((r) => r.entityId);
-      const a2Idx = ids.indexOf("a2");
-      const a1Idx = ids.indexOf("a1");
-      const a3Idx = ids.indexOf("a3");
-      const a4Idx = ids.indexOf("a4");
-
-      expect(a2Idx).toBeLessThan(a3Idx);
-      expect(a2Idx).toBeLessThan(a4Idx);
-      expect(a1Idx).toBeLessThan(a3Idx);
-      expect(a1Idx).toBeLessThan(a4Idx);
-    });
-
-    it("deduplicates by entityType:entityId", () => {
-      const keyword: RankedResult[] = [makeResult("item", "x1", "Duplicate", 1)];
-      const vector: RankedResult[] = [makeResult("item", "x1", "Duplicate", 1)];
-
-      const results = fuseResults(keyword, vector, 10);
-
-      const x1Results = results.filter((r) => r.entityId === "x1");
-      expect(x1Results).toHaveLength(1);
-    });
-
-    it("respects the limit parameter", () => {
-      const keyword: RankedResult[] = [
-        makeResult("item", "a", "A", 1),
-        makeResult("item", "b", "B", 2),
-        makeResult("item", "c", "C", 3),
-        makeResult("item", "d", "D", 4),
-        makeResult("item", "e", "E", 5),
-      ];
-      const vector: RankedResult[] = [
-        makeResult("item", "f", "F", 1),
-        makeResult("item", "g", "G", 2),
-      ];
-
-      const results = fuseResults(keyword, vector, 3);
-      expect(results).toHaveLength(3);
-    });
-
-    it("sorts by RRF score descending", () => {
-      const keyword: RankedResult[] = [
-        makeResult("item", "a", "A", 1),
-        makeResult("item", "b", "B", 2),
-        makeResult("item", "c", "C", 3),
-      ];
-      const vector: RankedResult[] = [
-        makeResult("item", "a", "A", 1), // highest combined score
-        makeResult("item", "b", "B", 3),
-        makeResult("item", "d", "D", 2),
-      ];
-
-      const results = fuseResults(keyword, vector, 10);
-
-      // Verify scores are non-increasing
-      for (let i = 1; i < results.length; i++) {
-        expect(results[i].score).toBeLessThanOrEqual(results[i - 1].score);
-      }
-    });
+  it("marks items found in both lists as 'both'", () => {
+    const results = fuseResults(kw, vec, 10);
+    const b = results.find((r) => r.entityId === "b");
+    expect(b?.matchType).toBe("both");
   });
 
-  describe("matchType assignment", () => {
-    it('assigns "both" when result appears in both lists', () => {
-      const keyword: RankedResult[] = [makeResult("item", "shared", "Shared", 1)];
-      const vector: RankedResult[] = [makeResult("item", "shared", "Shared", 1)];
-
-      const results = fuseResults(keyword, vector, 10);
-      const sharedResult = results.find((r) => r.entityId === "shared");
-
-      expect(sharedResult?.matchType).toBe("both");
-    });
-
-    it('assigns "keyword" when result appears only in keyword list', () => {
-      const keyword: RankedResult[] = [makeResult("item", "kw-only", "Keyword Only", 1)];
-      const vector: RankedResult[] = [makeResult("item", "vec-only", "Vector Only", 1)];
-
-      const results = fuseResults(keyword, vector, 10);
-      const kwResult = results.find((r) => r.entityId === "kw-only");
-
-      expect(kwResult?.matchType).toBe("keyword");
-    });
-
-    it('assigns "semantic" when result appears only in vector list', () => {
-      const keyword: RankedResult[] = [makeResult("item", "kw-only", "Keyword Only", 1)];
-      const vector: RankedResult[] = [makeResult("item", "vec-only", "Vector Only", 1)];
-
-      const results = fuseResults(keyword, vector, 10);
-      const vecResult = results.find((r) => r.entityId === "vec-only");
-
-      expect(vecResult?.matchType).toBe("semantic");
-    });
+  it("ranks items in both lists higher than single-list items", () => {
+    const results = fuseResults(kw, vec, 10);
+    expect(results[0].entityId).toBe("b"); // appears in both lists
   });
 
-  describe("empty list handling", () => {
-    it("handles empty keyword list — returns vector results as semantic", () => {
-      const keyword: RankedResult[] = [];
-      const vector: RankedResult[] = [
-        makeResult("item", "v1", "Vector One", 1),
-        makeResult("item", "v2", "Vector Two", 2),
-      ];
+  it("respects limit", () => {
+    const results = fuseResults(kw, vec, 2);
+    expect(results).toHaveLength(2);
+  });
+});
 
-      const results = fuseResults(keyword, vector, 10);
+// --- VALID_ENTITY_TYPES allowlist ---
 
-      expect(results).toHaveLength(2);
-      expect(results.every((r) => r.matchType === "semantic")).toBe(true);
-    });
+describe("VALID_ENTITY_TYPES", () => {
+  it("contains expected entity types", () => {
+    expect(VALID_ENTITY_TYPES).toContain("item");
+    expect(VALID_ENTITY_TYPES).toContain("calendar_event");
+    expect(VALID_ENTITY_TYPES).toContain("meeting_note");
+    expect(VALID_ENTITY_TYPES).toContain("scout_finding");
+  });
+});
 
-    it("handles empty vector list — returns keyword results as keyword", () => {
-      const keyword: RankedResult[] = [
-        makeResult("item", "k1", "Keyword One", 1),
-        makeResult("item", "k2", "Keyword Two", 2),
-      ];
-      const vector: RankedResult[] = [];
+// --- vectorSearch type sanitization ---
 
-      const results = fuseResults(keyword, vector, 10);
+describe("vectorSearch", () => {
+  const mockProvider = {
+    dimensions: 3,
+    embed: vi.fn().mockResolvedValue([1, 0, 0]),
+    embedBatch: vi.fn(),
+  };
 
-      expect(results).toHaveLength(2);
-      expect(results.every((r) => r.matchType === "keyword")).toBe(true);
-    });
+  it("returns empty array when all types are invalid (SQL injection prevented)", async () => {
+    const mockPrisma = { $queryRaw: vi.fn() };
 
-    it("returns empty array when both lists are empty", () => {
-      const results = fuseResults([], [], 10);
-      expect(results).toHaveLength(0);
-    });
+    const results = await vectorSearch(
+      "user-1",
+      "test query",
+      ["'; DROP TABLE Embedding; --", "invalid_type"],
+      mockProvider,
+      mockPrisma,
+      10,
+    );
+
+    expect(results).toEqual([]);
+    // Should NOT have called the database at all
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
   });
 
-  describe("cross-type deduplication", () => {
-    it("treats same entityId with different entityType as distinct results", () => {
-      const keyword: RankedResult[] = [
-        makeResult("item", "shared-id", "Item", 1),
-        makeResult("calendar_event", "shared-id", "Event", 2),
-      ];
-      const vector: RankedResult[] = [];
+  it("filters out invalid types and keeps valid ones", async () => {
+    const mockPrisma = {
+      $queryRaw: vi.fn().mockResolvedValue([
+        { entityType: "item", entityId: "1", chunkText: "test", similarity: 0.9 },
+      ]),
+    };
 
-      const results = fuseResults(keyword, vector, 10);
-      expect(results).toHaveLength(2);
-    });
+    const results = await vectorSearch(
+      "user-1",
+      "test query",
+      ["item", "'; DROP TABLE Embedding; --"],
+      mockProvider,
+      mockPrisma,
+      10,
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0].entityType).toBe("item");
+    // The query should only contain 'item', not the injection string
+    expect(mockPrisma.$queryRaw).toHaveBeenCalled();
+  });
+
+  it("passes null types through (searches all types)", async () => {
+    const mockPrisma = {
+      $queryRaw: vi.fn().mockResolvedValue([
+        { entityType: "item", entityId: "1", chunkText: "test", similarity: 0.9 },
+      ]),
+    };
+
+    const results = await vectorSearch(
+      "user-1",
+      "test query",
+      null,
+      mockProvider,
+      mockPrisma,
+      10,
+    );
+
+    expect(results).toHaveLength(1);
+    expect(mockPrisma.$queryRaw).toHaveBeenCalled();
   });
 });

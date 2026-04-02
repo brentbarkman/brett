@@ -53,6 +53,7 @@ export {
   keywordSearch,
   vectorSearch,
   fuseResults,
+  VALID_ENTITY_TYPES,
 } from "./embedding/search.js";
 export type { SearchResult, RankedResult } from "./embedding/search.js";
 export {

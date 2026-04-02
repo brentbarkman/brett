@@ -212,6 +212,8 @@ export async function keywordSearch(
  * Embeds the query and finds similar entities via cosine similarity on the Embedding table.
  * Deduplicates by entityId — keeps the highest similarity chunk per entity.
  */
+export const VALID_ENTITY_TYPES = ["item", "calendar_event", "meeting_note", "scout_finding"] as const;
+
 export async function vectorSearch(
   userId: string,
   query: string,
@@ -221,6 +223,16 @@ export async function vectorSearch(
   prisma: any,
   limit = 30
 ): Promise<RankedResult[]> {
+  // Filter types to only valid values to prevent SQL injection
+  const safeTypes = types
+    ? types.filter((t): t is string => VALID_ENTITY_TYPES.includes(t as any))
+    : null;
+
+  // If types were provided but none survived validation, return empty
+  if (safeTypes !== null && safeTypes.length === 0) {
+    return [];
+  }
+
   const queryVector = await provider.embed(query, "query");
   const vectorStr = `[${queryVector.join(",")}]`;
 
@@ -231,37 +243,42 @@ export async function vectorSearch(
     similarity: number;
   }>;
 
-  if (types !== null && types.length > 0) {
-    // Entity types are a fixed set of known strings, safe to interpolate
-    const typeList = types.map((t) => `'${t}'`).join(", ");
+  if (safeTypes !== null && safeTypes.length > 0) {
+    const typeList = safeTypes.map((t) => `'${t}'`).join(", ");
     rows = await prisma.$queryRaw<typeof rows>`
-      SELECT DISTINCT ON ("entityType", "entityId")
-        "entityType",
-        "entityId",
-        "chunkText",
-        1 - (embedding <=> ${vectorStr}::vector) AS similarity
-      FROM "Embedding"
-      WHERE "userId" = ${userId}
-        AND "entityType" IN (${typeList})
-      ORDER BY "entityType", "entityId", similarity DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON ("entityType", "entityId")
+          "entityType",
+          "entityId",
+          "chunkText",
+          1 - (embedding <=> ${vectorStr}::vector) AS similarity
+        FROM "Embedding"
+        WHERE "userId" = ${userId}
+          AND "entityType" IN (${typeList})
+        ORDER BY "entityType", "entityId", embedding <=> ${vectorStr}::vector ASC
+      ) sub
+      ORDER BY similarity DESC
+      LIMIT ${limit}
     `;
   } else {
     rows = await prisma.$queryRaw<typeof rows>`
-      SELECT DISTINCT ON ("entityType", "entityId")
-        "entityType",
-        "entityId",
-        "chunkText",
-        1 - (embedding <=> ${vectorStr}::vector) AS similarity
-      FROM "Embedding"
-      WHERE "userId" = ${userId}
-      ORDER BY "entityType", "entityId", similarity DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON ("entityType", "entityId")
+          "entityType",
+          "entityId",
+          "chunkText",
+          1 - (embedding <=> ${vectorStr}::vector) AS similarity
+        FROM "Embedding"
+        WHERE "userId" = ${userId}
+        ORDER BY "entityType", "entityId", embedding <=> ${vectorStr}::vector ASC
+      ) sub
+      ORDER BY similarity DESC
+      LIMIT ${limit}
     `;
   }
 
-  // Sort by similarity descending and assign ranks
-  const sorted = rows
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit);
+  // Rows are already sorted by similarity DESC and limited by the query
+  const sorted = rows;
 
   return sorted.map((row, i) => ({
     entityType: row.entityType,
