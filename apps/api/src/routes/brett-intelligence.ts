@@ -167,64 +167,6 @@ brettIntelligence.post(
   },
 );
 
-// ─── POST /take/:itemId — Generate Brett's Take on item (streaming) ───
-
-brettIntelligence.post(
-  "/take/:itemId",
-  rateLimiter(20),
-  aiMiddleware,
-  async (c) => {
-    const user = c.get("user");
-    const provider = c.get("aiProvider");
-    const providerName = c.get("aiProviderName");
-    const itemId = c.req.param("itemId");
-
-    const item = await prisma.item.findFirst({
-      where: { id: itemId, userId: user.id },
-    });
-    if (!item) return c.json({ error: "Not found" }, 404);
-
-    const session = await prisma.conversationSession.create({
-      data: {
-        userId: user.id,
-        source: "bretts_take",
-        itemId,
-        modelTier: "medium",
-        modelUsed: "",
-      },
-    });
-
-    const input = {
-      type: "bretts_take" as const,
-      userId: user.id,
-      itemId,
-    };
-
-    const { stream } = buildStream(
-      { input, provider, providerName, prisma, registry, sessionId: session.id },
-      session.id,
-      {
-        onDone: (content) => {
-          // Store result in item.brettObservation
-          prisma.item
-            .update({
-              where: { id: itemId },
-              data: {
-                brettObservation: content,
-                brettTakeGeneratedAt: new Date(),
-              },
-            })
-            .catch((err: unknown) =>
-              console.error("Failed to update brettObservation:", err),
-            );
-        },
-      },
-    );
-
-    return sseResponse(stream);
-  },
-);
-
 // ─── POST /take/event/:eventId — Brett's Take on calendar event (streaming) ───
 
 brettIntelligence.post(
