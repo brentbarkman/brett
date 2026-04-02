@@ -18,8 +18,13 @@ interface BrettMarkProps {
  *
  * When `thinking` is true, the cerulean line animates left-to-right
  * repeatedly — like a signal being transmitted from the gold dot.
+ *
+ * The line is deliberately thick and full-opacity to stay visible
+ * at small sizes on glass surfaces over dynamic backgrounds.
  */
 export function BrettMark({ size = 16, className = "", thinking = false }: BrettMarkProps) {
+  // At small sizes (<16), bump stroke proportionally so the line reads
+  const strokeWidth = size <= 14 ? 4 : 3.5;
   return (
     <svg
       width={size}
@@ -38,16 +43,15 @@ export function BrettMark({ size = 16, className = "", thinking = false }: Brett
           `}
         </style>
       )}
-      <circle cx="10" cy="14" r="5.5" fill="#E8B931" />
+      <circle cx="10" cy="14" r="6" fill="#E8B931" />
       <line
         x1="19"
         y1="14"
         x2="44"
         y2="14"
         stroke="#4682C3"
-        strokeWidth="3"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
-        opacity={thinking ? "0.9" : "0.85"}
         style={thinking ? {
           strokeDasharray: "25",
           animation: "brettLineExtend 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite",

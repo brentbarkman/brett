@@ -194,7 +194,7 @@ export function DailyBriefing({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <BrettMark size={18} />
-          <span className="text-[11px] uppercase tracking-[0.15em] font-bold text-brett-cerulean">
+          <span className="text-[11px] uppercase tracking-[0.15em] font-bold text-white/60">
             Daily Briefing
           </span>
           {isGenerating && (
