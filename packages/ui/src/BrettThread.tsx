@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { ChevronDown, ChevronUp, Send, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Send } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import type { DisplayHint } from "@brett/types";
 import { SkillResultCard } from "./SkillResultCard";
@@ -75,8 +75,8 @@ function MessageBubble({
             key={`tc-pending-${i}`}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10"
           >
-            <Loader2 size={12} className="animate-spin text-white/30" />
-            <span className="text-xs text-white/40">{tc.name}...</span>
+            <BrettMark size={12} thinking />
+            <span className="text-xs text-white/40">Brett is working...</span>
           </div>
         ) : null,
       )}
@@ -98,8 +98,8 @@ function MessageBubble({
 
       {/* Streaming cursor when no content yet */}
       {!message.content && isStreamingMsg && !message.toolCalls?.length && (
-        <div className="flex items-center gap-1 py-1">
-          <Loader2 size={12} className="animate-spin text-brett-cerulean/60" />
+        <div className="flex items-center gap-2 py-1">
+          <BrettMark size={12} thinking />
           <span className="text-xs text-white/30">Brett is thinking...</span>
         </div>
       )}
@@ -212,9 +212,6 @@ export function BrettThread({
               ? ` (${totalCount ?? messages.length})`
               : ""}
           </span>
-          {isStreaming && (
-            <Loader2 size={10} className="animate-spin text-brett-cerulean/60" />
-          )}
         </div>
         {isExpanded ? (
           <ChevronDown size={14} className="text-white/40" />
@@ -233,7 +230,7 @@ export function BrettThread({
           <div ref={sentinelRef} className="h-1" />
           {isLoadingMore && (
             <div className="flex justify-center py-2">
-              <Loader2 size={14} className="animate-spin text-white/30" />
+              <span className="text-xs text-white/30">Loading...</span>
             </div>
           )}
           {displayMessages.map((msg, idx) => (
