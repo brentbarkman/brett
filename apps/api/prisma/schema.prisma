@@ -51,7 +51,6 @@ model User {
   aiConfigs            UserAIConfig[]
   conversationSessions ConversationSession[]
   facts                UserFact[]
-  conversationEmbeddings ConversationEmbedding[]
   embeddings             Embedding[]
   usageLogs            AIUsageLog[]
   weatherCache         WeatherCache?
@@ -408,7 +407,6 @@ model ConversationSession {
   modelUsed       String
   createdAt       DateTime  @default(now())
   messages        ConversationMessage[]
-  embeddings      ConversationEmbedding[]
   usageLogs       AIUsageLog[]
 
   @@index([userId, createdAt])
@@ -444,19 +442,6 @@ model UserFact {
 
   @@unique([userId, key])
   @@index([userId, category])
-}
-
-model ConversationEmbedding {
-  id        String              @id @default(cuid())
-  userId    String
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessionId String
-  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  chunkText String              @db.Text
-  embedding Unsupported("vector(1536)")
-  createdAt DateTime            @default(now())
-
-  @@index([userId])
 }
 
 model Embedding {
