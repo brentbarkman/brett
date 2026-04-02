@@ -12,6 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { SimpleMarkdown } from "./SimpleMarkdown";
+import { BrettMark } from "./BrettMark";
 import type {
   CalendarEventDetailResponse,
   CalendarRsvpStatus,
@@ -314,7 +315,7 @@ export function CalendarEventDetailPanel({
             >
               <div className="bg-brett-cerulean/10 border-l-2 border-brett-cerulean p-4 rounded-r-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-brett-cerulean" />
+                  <BrettMark size={12} />
                   <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-brett-cerulean">
                     Brett&apos;s Take
                   </span>

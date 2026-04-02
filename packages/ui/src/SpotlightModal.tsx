@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from "react";
-import { Bot, Send, Square, X, Sparkles, Search, Plus, Check, Radar } from "lucide-react";
+import { Send, Square, X, Sparkles, Search, Plus, Check, Radar } from "lucide-react";
+import { BrettMark } from "./BrettMark";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
 import type { DisplayHint } from "@brett/types";
@@ -320,11 +321,10 @@ export function SpotlightModal({
       <div className="relative w-[640px] max-h-[70vh] bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Input Row */}
         <div className="flex items-center h-14 px-5 border-b border-white/10">
-          <Bot
+          <BrettMark
             size={20}
-            className={`flex-shrink-0 ${
-              isStreaming ? "text-brett-cerulean animate-pulse" : "text-brett-cerulean"
-            }`}
+            className="flex-shrink-0"
+            thinking={isStreaming}
           />
           {!hasConversation ? (
             <input
@@ -433,7 +433,7 @@ export function SpotlightModal({
         {/* Streaming indicator */}
         {hasConversation && isStreaming && (
           <div className="border-t border-white/10 px-5 py-3 flex items-center gap-2">
-            <Bot size={16} className="text-amber-400/70 flex-shrink-0" />
+            <BrettMark size={16} className="flex-shrink-0" />
             <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>
             {onCancel && (
               <button

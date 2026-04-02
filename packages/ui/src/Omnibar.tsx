@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Bot, Send, Search, Plus, Sparkles, X, Square, Check, Radar } from "lucide-react";
+import { Send, Search, Plus, Sparkles, X, Square, Check, Radar } from "lucide-react";
+import { BrettMark } from "./BrettMark";
 import { useClickOutside } from "./useClickOutside";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
@@ -372,10 +373,10 @@ export function Omnibar({
             className="flex items-center h-12 px-4 cursor-text"
             onClick={() => !isOpen && onOpen()}
           >
-            <Bot
+            <BrettMark
               size={18}
-              className={`flex-shrink-0 transition-colors ${
-                isOpen ? "text-brett-cerulean" : "text-white/40"
+              className={`flex-shrink-0 transition-opacity ${
+                isOpen ? "opacity-100" : "opacity-40"
               }`}
             />
             <input
@@ -552,7 +553,7 @@ export function Omnibar({
 
             {/* Bottom Input — the ONLY input when conversation is active */}
             <div className="border-t border-white/10 px-4 py-2.5 flex items-center gap-3">
-              <Bot size={16} className="text-amber-400/70 flex-shrink-0" />
+              <BrettMark size={16} className="flex-shrink-0" thinking={isStreaming} />
               {isStreaming ? (
                 <>
                   <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>

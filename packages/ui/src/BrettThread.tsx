@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { ChevronDown, ChevronUp, Bot, Send, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Send, Loader2 } from "lucide-react";
+import { BrettMark } from "./BrettMark";
 import type { DisplayHint } from "@brett/types";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
@@ -204,7 +205,7 @@ export function BrettThread({
         className="flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Bot size={14} className="text-brett-cerulean" />
+          <BrettMark size={14} thinking={isStreaming} />
           <span className="text-xs font-medium text-white/60">
             Brett
             {(totalCount ?? messages.length) > 0

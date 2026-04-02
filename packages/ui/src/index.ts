@@ -1,6 +1,7 @@
 import "./animations.css";
 
 export { Button } from "./button";
+export { BrettMark, ProductMark } from "./BrettMark";
 export { LeftNav } from "./LeftNav";
 export { Omnibar } from "./Omnibar";
 export type { OmnibarProps, OmnibarMessage, SearchResultItem } from "./Omnibar";

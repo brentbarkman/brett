@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { getAvatarColor } from "./avatarColor";
+import { ProductMark } from "./BrettMark";
 import { Inbox, Calendar, CalendarDays, Clock, Search, Plus, MoreHorizontal, GripVertical, ChevronRight, Radar } from "lucide-react";
 import type { NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
@@ -105,14 +106,7 @@ export function LeftNav({
         className={`flex items-center gap-2 mb-8 ${isCollapsed ? "justify-center" : "px-2"}`}
       >
         <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-          <svg width="24" height="24" viewBox="0 0 48 48" className="drop-shadow-[0_0_8px_rgba(232,185,49,0.4)]">
-            <circle cx="11" cy="14" r="3" fill="#E8B931"/>
-            <line x1="19" y1="14" x2="40" y2="14" stroke="#E8B931" strokeWidth="2.5" strokeLinecap="round"/>
-            <circle cx="11" cy="24" r="3" fill="#E8B931" opacity="0.6"/>
-            <line x1="19" y1="24" x2="34" y2="24" stroke="#E8B931" strokeWidth="2.5" strokeLinecap="round" opacity="0.6"/>
-            <circle cx="11" cy="34" r="3" fill="#E8B931" opacity="0.3"/>
-            <line x1="19" y1="34" x2="28" y2="34" stroke="#E8B931" strokeWidth="2.5" strokeLinecap="round" opacity="0.3"/>
-          </svg>
+          <ProductMark size={24} className="drop-shadow-[0_0_8px_rgba(232,185,49,0.4)]" />
         </div>
         {!isCollapsed && (
           <span className="text-white font-bold tracking-wide">Brett</span>
