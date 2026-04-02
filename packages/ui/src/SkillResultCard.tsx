@@ -21,7 +21,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
     case "confirmation":
       return (
         <div className="flex items-start gap-2 py-1">
-          <Check size={14} className="text-green-400/70 flex-shrink-0 mt-0.5" />
+          <Check size={14} className="text-brett-teal/70 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-white/60 min-w-0">
             <SimpleMarkdown
               content={displayHint.type === "confirmation" ? (displayHint.message ?? message ?? "Done.") : (message ?? "Done.")}
@@ -49,7 +49,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
             >
               <div
                 className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  item.status === "done" ? "bg-green-400/60" : "bg-brett-gold/40"
+                  item.status === "done" ? "bg-brett-teal/60" : "bg-brett-gold/40"
                 }`}
               />
               <span className={`text-sm truncate ${onItemClick ? "text-white/70 hover:text-white/90" : "text-white/70"}`}>

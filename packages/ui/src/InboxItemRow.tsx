@@ -112,17 +112,17 @@ export function InboxItemRow({
           toggle-btn flex-shrink-0 w-6 h-6 rounded-full border flex items-center justify-center
           transition-all duration-150 relative outline-none
           ${completing
-            ? "bg-green-500/20 border-green-500/40"
-            : `border-white/20 hover:border-green-500/40 hover:bg-green-500/10`
+            ? "bg-brett-teal/20 border-brett-teal/40"
+            : `border-white/20 hover:border-brett-teal/40 hover:bg-brett-teal/10`
           }
         `}
       >
         {completing ? (
-          <Check size={13} className="text-green-400 check-pop" />
+          <Check size={13} className="text-brett-teal check-pop" />
         ) : (
           <>
             <span className="toggle-icon"><Icon size={12} className={iconColor} /></span>
-            <span className="toggle-check"><Check size={13} className="text-green-400" /></span>
+            <span className="toggle-check"><Check size={13} className="text-brett-teal" /></span>
           </>
         )}
       </button>

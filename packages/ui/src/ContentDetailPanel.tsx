@@ -132,7 +132,7 @@ export function ContentDetailPanel({
                 onClick={() => onToggle(detail.id)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
                   detail.isCompleted
-                    ? "bg-green-500/20 text-green-400 border-green-500/20 hover:bg-green-500/30"
+                    ? "bg-brett-teal/20 text-brett-teal border-brett-teal/20 hover:bg-brett-teal/30"
                     : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
                 }`}
               >

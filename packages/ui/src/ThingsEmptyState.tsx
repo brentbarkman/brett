@@ -29,8 +29,8 @@ export function ThingsEmptyState({
   if (allCompleted) {
     const content = (
       <div className="flex flex-col items-center text-center gap-4">
-        <div className="w-12 h-12 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
-          <CheckCircle size={22} className="text-green-400" />
+        <div className="w-12 h-12 rounded-full bg-brett-teal/10 border border-brett-teal/20 flex items-center justify-center">
+          <CheckCircle size={22} className="text-brett-teal" />
         </div>
         <div>
           <h3 className="text-white font-semibold text-base mb-1">

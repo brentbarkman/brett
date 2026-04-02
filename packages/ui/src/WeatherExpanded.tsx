@@ -7,7 +7,7 @@ interface WeatherExpandedProps {
 }
 
 function aqiBadgeStyle(aqi: number): { bg: string; text: string; border: string } {
-  if (aqi <= 50) return { bg: "bg-green-500/20", text: "text-green-400", border: "border-green-500/20" };
+  if (aqi <= 50) return { bg: "bg-brett-teal/20", text: "text-brett-teal", border: "border-brett-teal/20" };
   if (aqi <= 100) return { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/20" };
   return { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/20" };
 }

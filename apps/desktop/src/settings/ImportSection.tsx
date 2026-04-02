@@ -143,7 +143,7 @@ export function ImportSection({ userId }: { userId: string }) {
       )}
 
       {state.step === "done" && (
-        <div className="flex items-center gap-2 text-green-400/80 text-sm">
+        <div className="flex items-center gap-2 text-brett-teal/80 text-sm">
           <Check size={16} />
           Imported {state.result.lists} list{state.result.lists !== 1 ? "s" : ""} and{" "}
           {state.result.tasks} task{state.result.tasks !== 1 ? "s" : ""} from Things 3 on{" "}

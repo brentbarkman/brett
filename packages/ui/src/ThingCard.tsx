@@ -91,7 +91,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
         group relative flex items-center gap-3 p-3 rounded-lg cursor-pointer
         border transition-all duration-200 outline-none
         ${completing
-          ? "bg-green-500/[0.03] border-green-500/15"
+          ? "bg-brett-teal/[0.03] border-brett-teal/15"
           : isFocused
             ? "bg-white/10 border-brett-gold/30"
             : "bg-white/5 hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg border-white/5 hover:border-white/10"
@@ -108,10 +108,10 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
           toggle-icon relative flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
           transition-all duration-200 outline-none
           ${completing
-            ? "bg-green-500/20 border-2 border-green-500/50"
+            ? "bg-brett-teal/20 border-2 border-brett-teal/50"
             : thing.isCompleted
               ? "bg-black/20 border border-white/10 hover:border-white/30 hover:bg-white/10"
-              : "bg-black/20 border border-white/10 hover:border-green-500/40 hover:bg-green-500/10"
+              : "bg-black/20 border border-white/10 hover:border-brett-teal/40 hover:bg-brett-teal/10"
           }
         `}
         style={completing ? {
@@ -127,7 +127,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
         {!completing && !thing.isCompleted && (
           <Check
             size={16}
-            className="check-overlay absolute text-green-400 transition-all duration-150"
+            className="check-overlay absolute text-brett-teal transition-all duration-150"
           />
         )}
         {!completing && thing.isCompleted && (
@@ -142,7 +142,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
           <Check
             size={18}
             strokeWidth={2.5}
-            className="absolute text-green-400"
+            className="absolute text-brett-teal"
             style={{ animation: "checkPop 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
           />
         )}

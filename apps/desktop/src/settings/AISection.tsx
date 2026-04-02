@@ -40,7 +40,7 @@ function ConnectedRow({
       <div className="flex items-center gap-2.5 min-w-0">
         <span
           className={`w-2 h-2 rounded-full flex-shrink-0 ${
-            config.isValid ? "bg-green-500" : "bg-red-500"
+            config.isValid ? "bg-brett-teal" : "bg-red-500"
           }`}
         />
         <span className="text-sm text-white truncate">{providerLabel}</span>
@@ -339,7 +339,7 @@ export function AISection() {
           </div>
         )}
         {saveSuccess && (
-          <div className="flex items-center gap-1.5 text-xs text-green-400">
+          <div className="flex items-center gap-1.5 text-xs text-brett-teal">
             <Check size={12} />
             API key saved successfully
           </div>

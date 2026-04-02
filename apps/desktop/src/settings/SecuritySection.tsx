@@ -125,7 +125,7 @@ function PasskeyManager() {
 
       {message && (
         <p
-          className={`text-xs ${message.type === "success" ? "text-green-400" : "text-red-400"}`}
+          className={`text-xs ${message.type === "success" ? "text-brett-teal" : "text-red-400"}`}
         >
           {message.text}
         </p>
@@ -258,7 +258,7 @@ export function SecuritySection() {
 
           {message && (
             <p
-              className={`text-xs mb-3 ${message.type === "success" ? "text-green-400" : "text-red-400"}`}
+              className={`text-xs mb-3 ${message.type === "success" ? "text-brett-teal" : "text-red-400"}`}
             >
               {message.text}
             </p>

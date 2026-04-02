@@ -3,7 +3,7 @@ import { DEFAULT_LIST_NAME } from "@brett/business";
 
 export const mockLists: NavList[] = [
   { id: "l1", name: "Work", count: 14, completedCount: 6, colorClass: "bg-blue-500", sortOrder: 0 },
-  { id: "l2", name: "Personal", count: 5, completedCount: 3, colorClass: "bg-green-500", sortOrder: 1 },
+  { id: "l2", name: "Personal", count: 5, completedCount: 3, colorClass: "bg-brett-teal", sortOrder: 1 },
   { id: "l3", name: "Reading", count: 22, completedCount: 0, colorClass: "bg-purple-500", sortOrder: 2 },
   { id: "l4", name: "Brett app", count: 8, completedCount: 8, colorClass: "bg-amber-500", sortOrder: 3 },
 ];

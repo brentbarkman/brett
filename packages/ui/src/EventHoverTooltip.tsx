@@ -13,7 +13,7 @@ function RsvpBadge({ status }: { status: CalendarRsvpStatus }) {
   switch (status) {
     case "accepted":
       return (
-        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-500/20 text-green-400">
+        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-brett-teal/20 text-brett-teal">
           <Check size={10} /> Accepted
         </span>
       );

@@ -103,7 +103,7 @@ function formatEventTime(start: string, end: string, isAllDay: boolean): string 
 function ResponseStatusIcon({ status }: { status?: string }) {
   switch (status) {
     case "accepted":
-      return <Check size={12} className="text-green-400" />;
+      return <Check size={12} className="text-brett-teal" />;
     case "tentative":
       return <HelpCircle size={12} className="text-yellow-400" />;
     case "declined":
@@ -138,7 +138,7 @@ function rsvpButtonClasses(
   }
   switch (option) {
     case "accepted":
-      return `${base} bg-green-500/20 text-green-400 border-green-500/20`;
+      return `${base} bg-brett-teal/20 text-brett-teal border-brett-teal/20`;
     case "tentative":
       return `${base} bg-yellow-500/20 text-yellow-400 border-yellow-500/20`;
     case "declined":
