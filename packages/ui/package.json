@@ -19,6 +19,7 @@
     "@tiptap/react": "^3.20.4",
     "@tiptap/starter-kit": "^3.20.4",
     "dompurify": "^3.3.3",
+    "framer-motion": "^12.38.0",
     "lucide-react": "^0.522.0",
     "react": "^18.2.0",
     "tiptap-markdown": "^0.9.0"
