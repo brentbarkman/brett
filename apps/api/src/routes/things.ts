@@ -384,10 +384,9 @@ things.post("/", async (c) => {
             }));
         }
 
-        // Content items may have multiple chunks — queue full pipeline to embed remaining chunks
-        if (data.type === "content") {
-          enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id });
-        }
+        // Queue full pipeline — handles remaining chunks for content items
+        // and runs auto-link post-hook for all item types
+        enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id });
       }
     } else {
       // No embedding provider — fall back to async queue
