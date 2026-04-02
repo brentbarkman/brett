@@ -528,23 +528,12 @@ export function App() {
         }
         omnibar.close();
       },
-      searchResults: omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null,
+      searchResults: omnibar.searchResults ?? null,
       isSearching: omnibar.isSearching,
       onSearchResultClick: (id: string) => {
-        const item = omnibar.searchResults?.find((t) => t.id === id);
-        if (item) {
-          // Navigate to the view where this item lives
-          if (item.listId && item.list) {
-            navigate(`/lists/${slugify(item.list)}`);
-          } else if (item.urgency === "overdue" || item.urgency === "today") {
-            navigate("/today");
-          } else {
-            navigate("/inbox");
-          }
-          // Open detail panel after a tick so the view renders first
-          setTimeout(() => handleItemClick(item), 50);
-          omnibar.close();
-        }
+        // Fallback click handler for entity types not handled by onItemClick/onEventClick
+        navigate("/inbox");
+        omnibar.close();
       },
       onClose: () => { omnibar.close(); setShowWeatherExpanded(false); },
       onOpen: () => { omnibar.open("bar"); setSelectedItem(null); setIsDetailOpen(false); },
@@ -1229,21 +1218,11 @@ export function App() {
           onSend={(text, intent) => omnibar.send(text, currentView, intent)}
           onCreateTask={(title: string) => omnibar.createTask(title, currentView)}
           onSearch={omnibar.searchThings}
-          searchResults={omnibar.searchResults?.map((t) => ({ id: t.id, title: t.title, status: t.status, type: t.type, contentType: t.contentType, listName: t.list || null })) ?? null}
+          searchResults={omnibar.searchResults ?? null}
           isSearching={omnibar.isSearching}
           onSearchResultClick={(id: string) => {
-            const item = omnibar.searchResults?.find((t) => t.id === id);
-            if (item) {
-              if (item.listId && item.list) {
-                navigate(`/lists/${slugify(item.list)}`);
-              } else if (item.urgency === "overdue" || item.urgency === "today") {
-                navigate("/today");
-              } else {
-                navigate("/inbox");
-              }
-              setTimeout(() => handleItemClick(item), 50);
-              omnibar.close();
-            }
+            navigate("/inbox");
+            omnibar.close();
           }}
           onClose={() => { setSpotlightInitialAction(null); omnibar.close(); }}
           onCancel={omnibar.cancel}
