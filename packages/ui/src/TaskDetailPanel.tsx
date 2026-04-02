@@ -253,21 +253,6 @@ export function TaskDetailPanel({
             />
           )}
 
-          {/* Brett's Take */}
-          {detail.brettObservation && (
-            <div className="bg-blue-500/10 border-l-2 border-blue-500 p-4 rounded-r-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <span className="text-xs font-mono uppercase text-blue-400 font-semibold">
-                  Brett's Take
-                </span>
-              </div>
-              <p className="text-sm italic text-blue-300/90 leading-relaxed">
-                &ldquo;{detail.brettObservation}&rdquo;
-              </p>
-            </div>
-          )}
-
           {/* Rich Notes */}
           {onUpdateNotes && (
             <div>
