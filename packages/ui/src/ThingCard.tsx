@@ -167,17 +167,17 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
 
       <div className="flex-shrink-0 flex items-center gap-2">
         {thing.source === "Granola" && thing.meetingNoteTitle && (
-          <span className="text-[10px] text-amber-400/40">
+          <span className="text-[10px] text-white/40">
             from {thing.meetingNoteTitle}
           </span>
         )}
         {thing.source === "scout" && thing.scoutName && (
-          <span className="text-[10px] text-brett-gold/40">
+          <span className="text-[10px] text-white/40">
             from {thing.scoutName}
           </span>
         )}
         {thing.list && thing.list !== "Inbox" && (
-          <span className="text-xs text-white/30 truncate max-w-[100px]">{thing.list}</span>
+          <span className="text-xs text-white/40 truncate max-w-[100px]">{thing.list}</span>
         )}
         {thing.dueDateLabel ? (
           <div
