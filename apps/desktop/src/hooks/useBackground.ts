@@ -58,9 +58,20 @@ export function useBackground({
   const isAbstract = backgroundStyle === "abstract";
   const isSolid = backgroundStyle === "solid";
 
-  const [segment, setSegment] = useState<TimeSegment>(() =>
-    getTimeSegment(new Date().getHours())
-  );
+  // Awakening effect: on launch, briefly show the PREVIOUS time segment's
+  // image, then crossfade to the current one — like the app is waking up.
+  const currentSegment = getTimeSegment(new Date().getHours());
+  const lastSegmentKey = "brett-last-segment";
+  const [segment, setSegment] = useState<TimeSegment>(() => {
+    try {
+      const stored = localStorage.getItem(lastSegmentKey);
+      if (stored && SEGMENTS.includes(stored as TimeSegment) && stored !== currentSegment) {
+        return stored as TimeSegment;
+      }
+    } catch { /* localStorage unavailable */ }
+    return currentSegment;
+  });
+  const hasAwokenRef = useRef(false);
   const [busynessTier, setBusynessTier] = useState<BusynessTier>(() =>
     getBusynessTier(meetingCount, taskCount, avgBusynessScore)
   );
@@ -147,11 +158,33 @@ export function useBackground({
   }, [meetingCount, taskCount, backgroundStyle, isAbstract, baseUrl, buildUrl, cancelTransition, startCrossfade]);
 
   // Initial load when config becomes available
+  // If awakening (previous segment differs), load that first, then
+  // after a short delay crossfade to the current segment.
   useEffect(() => {
     if (baseUrl) {
       rotateImage();
+
+      // Awakening: if we started with the previous segment, schedule
+      // a second rotation to the current segment after 1.5s
+      if (!hasAwokenRef.current && segment !== currentSegment) {
+        hasAwokenRef.current = true;
+        const awakeTimer = setTimeout(() => {
+          // Force segment to current and rotate
+          setSegment(currentSegment);
+          categoryRef.current.segment = currentSegment;
+          shownRef.current = [];
+          rotateImage();
+        }, 1500);
+        return () => clearTimeout(awakeTimer);
+      }
+      hasAwokenRef.current = true;
     }
   }, [baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist the current segment so next launch can do the awakening effect
+  useEffect(() => {
+    try { localStorage.setItem(lastSegmentKey, segment); } catch { /* noop */ }
+  }, [segment]);
 
   // Rotation timer (10 min)
   useEffect(() => {

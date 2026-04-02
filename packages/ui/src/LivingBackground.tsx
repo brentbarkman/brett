@@ -40,20 +40,26 @@ export function LivingBackground({
         </>
       ) : (
         <>
-          {/* Image layer A — current */}
+          {/*
+           * Two-layer crossfade: layer B sits ABOVE layer A.
+           * When transitioning, B fades in over A (which stays at full opacity).
+           * This prevents the dark flash caused by both layers at partial opacity.
+           * After the transition completes, A updates to the new image and B hides.
+           */}
+
+          {/* Image layer A — current (always visible) */}
           <img
             src={imageUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms]"
-            style={{ opacity: isTransitioning ? 0 : 1 }}
+            className="absolute inset-0 w-full h-full object-cover"
             draggable={false}
           />
 
-          {/* Image layer B — next (always in DOM for smooth transitions) */}
+          {/* Image layer B — next (fades in on top) */}
           <img
             src={nextImageUrl ?? imageUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms]"
+            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms] ease-in-out"
             style={{ opacity: isTransitioning ? 1 : 0 }}
             draggable={false}
           />
