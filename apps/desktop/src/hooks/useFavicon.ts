@@ -43,20 +43,20 @@ export function useFavicon(mode: FaviconMode, count: number) {
       ctx.clearRect(0, 0, size, size);
       ctx.drawImage(img, 0, 0, size, size);
 
-      // Badge config
+      // Badge config — oversized so it's legible at 16px tab favicon
       const label = count > 99 ? "99+" : String(count);
-      const fontSize = label.length >= 3 ? 18 : label.length === 2 ? 22 : 26;
+      const fontSize = label.length >= 3 ? 22 : label.length === 2 ? 28 : 32;
       ctx.font = `bold ${fontSize}px -apple-system, "Helvetica Neue", sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
       const textMetrics = ctx.measureText(label);
       const textWidth = textMetrics.width;
-      const badgeHeight = 24;
-      const badgePadding = 6;
+      const badgeHeight = 30;
+      const badgePadding = 7;
       const badgeWidth = Math.max(badgeHeight, textWidth + badgePadding * 2);
-      const badgeX = size - badgeWidth / 2 - 2;
-      const badgeY = badgeHeight / 2 + 2;
+      const badgeX = size - badgeWidth / 2 - 1;
+      const badgeY = badgeHeight / 2 + 1;
 
       // Badge background — cerulean blue
       ctx.beginPath();
