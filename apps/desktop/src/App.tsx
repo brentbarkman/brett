@@ -864,11 +864,9 @@ export function App() {
 
   const inboxCount = inboxData?.visible.length ?? 0;
 
-  // Dynamic favicon: working (Brett streaming) > active (has today items) > default
-  const faviconState = omnibar.isStreaming ? "working" as const
-    : activeThingsForCount.length > 0 ? "active" as const
-    : "default" as const;
-  useFavicon(faviconState);
+  // Dynamic favicon: working (Brett streaming) > count badge > default
+  const faviconMode = omnibar.isStreaming ? "working" as const : "default" as const;
+  useFavicon(faviconMode, todayTaskCount);
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
