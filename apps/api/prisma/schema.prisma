@@ -359,7 +359,7 @@ model MeetingNote {
   userId              String
   user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   granolaAccountId    String?
-  granolaAccount      GranolaAccount? @relation(fields: [granolaAccountId], references: [id], onDelete: Cascade)
+  granolaAccount      GranolaAccount? @relation(fields: [granolaAccountId], references: [id], onDelete: SetNull)
   calendarEventId     String?
   calendarEvent       CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
   title               String

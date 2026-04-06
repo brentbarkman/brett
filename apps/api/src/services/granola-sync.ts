@@ -33,7 +33,7 @@ function startOfDayInTimezone(timezone: string): Date {
   }
 }
 
-function isWithinWorkingHours(timezone: string): boolean {
+export function isWithinWorkingHours(timezone: string): boolean {
   try {
     const now = new Date();
     const formatter = new Intl.DateTimeFormat("en-US", {

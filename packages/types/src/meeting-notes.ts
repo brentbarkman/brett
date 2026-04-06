@@ -28,7 +28,7 @@ export interface MeetingNoteSourceRecord {
 
 export interface MeetingNoteRecord {
   id: string;
-  granolaDocumentId: string;
+  granolaDocumentId?: string | null;
   calendarEventId: string | null;
   title: string;
   summary: string | null;

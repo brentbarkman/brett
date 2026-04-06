@@ -200,8 +200,6 @@ async function mergeProviderData(
       where: { userId_calendarEventId: { userId, calendarEventId } },
     });
 
-    const isFirstSource = !existing;
-
     // Build merge input from existing note (or empty)
     const existingInput: MergeInput = existing
       ? {
@@ -239,7 +237,8 @@ async function mergeProviderData(
         : {};
 
     // Upsert MeetingNote + create MeetingNoteSource in a transaction
-    const meetingNote = await prisma.$transaction(async (tx) => {
+    // Determine isFirstSource inside the transaction to avoid race conditions
+    const { meetingNote, isFirstSource } = await prisma.$transaction(async (tx) => {
       const note = await tx.meetingNote.upsert({
         where: { userId_calendarEventId: { userId, calendarEventId } },
         create: {
@@ -284,7 +283,11 @@ async function mergeProviderData(
         },
       });
 
-      return note;
+      // Determine if this is the first source by checking if createdAt === updatedAt
+      // (equal means the upsert just created the record)
+      const firstSource = note.createdAt.getTime() === note.updatedAt.getTime();
+
+      return { meetingNote: note, isFirstSource: firstSource };
     });
 
     log(`Merged ${data.provider} into MeetingNote ${meetingNote.id} (first=${isFirstSource})`);

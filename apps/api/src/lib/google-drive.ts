@@ -1,39 +1,64 @@
 import { google, type drive_v3, type docs_v1 } from "googleapis";
-import { decryptToken } from "./encryption.js";
+import { decryptToken, encryptToken } from "./encryption.js";
+import { prisma } from "./prisma.js";
 import type { MeetingTranscriptTurn } from "@brett/types";
 
-interface GoogleAccountTokens {
+interface GoogleAccountInfo {
+  id: string;
   accessToken: string;
   refreshToken: string;
 }
 
-export function getDriveClient(tokens: GoogleAccountTokens): drive_v3.Drive {
+/** Create a shared OAuth2 client with automatic token refresh persistence. */
+function getAuthenticatedOAuth2Client(account: GoogleAccountInfo) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
   );
   oauth2Client.setCredentials({
-    access_token: decryptToken(tokens.accessToken),
-    refresh_token: decryptToken(tokens.refreshToken),
+    access_token: decryptToken(account.accessToken),
+    refresh_token: decryptToken(account.refreshToken),
   });
-  return google.drive({ version: "v3", auth: oauth2Client });
+
+  // Persist refreshed tokens (same pattern as google-calendar.ts)
+  oauth2Client.on("tokens", async (tokens) => {
+    const updateData: Record<string, unknown> = {};
+    if (tokens.access_token) {
+      updateData.accessToken = encryptToken(tokens.access_token);
+    }
+    if (tokens.refresh_token) {
+      console.log(`[google-drive] Refresh token rotated for account ${account.id}`);
+      updateData.refreshToken = encryptToken(tokens.refresh_token);
+    }
+    if (tokens.expiry_date) {
+      updateData.tokenExpiresAt = new Date(tokens.expiry_date);
+    }
+    if (Object.keys(updateData).length > 0) {
+      await prisma.googleAccount.update({
+        where: { id: account.id },
+        data: updateData,
+      }).catch((err) => {
+        console.error(`[google-drive] Failed to persist refreshed tokens for ${account.id}:`, err);
+      });
+    }
+  });
+
+  return oauth2Client;
 }
 
-export function getDocsClient(tokens: GoogleAccountTokens): docs_v1.Docs {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-  );
-  oauth2Client.setCredentials({
-    access_token: decryptToken(tokens.accessToken),
-    refresh_token: decryptToken(tokens.refreshToken),
-  });
-  return google.docs({ version: "v1", auth: oauth2Client });
+export function getDriveClient(account: GoogleAccountInfo): drive_v3.Drive {
+  return google.drive({ version: "v3", auth: getAuthenticatedOAuth2Client(account) });
+}
+
+export function getDocsClient(account: GoogleAccountInfo): docs_v1.Docs {
+  return google.docs({ version: "v1", auth: getAuthenticatedOAuth2Client(account) });
 }
 
 export function escapeDriveQuery(input: string): string {
-  return input.replace(/'/g, "\\'");
+  return input.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
+
+const DRIVE_FILE_ID_RE = /^[a-zA-Z0-9_\-]{10,60}$/;
 
 export interface DocParagraph {
   type: string;
@@ -53,7 +78,7 @@ export async function findMeetArtifacts(
   if (attachments) {
     for (const att of attachments) {
       if (att.mimeType !== "application/vnd.google-apps.document") continue;
-      if (!att.fileId) continue;
+      if (!att.fileId || !DRIVE_FILE_ID_RE.test(att.fileId)) continue;
       const title = (att.title ?? "").toLowerCase();
       if (title.startsWith("transcript")) {
         transcriptFileId = att.fileId;
@@ -70,7 +95,7 @@ export async function findMeetArtifacts(
 
     try {
       const res = await driveClient.files.list({
-        q: `mimeType='application/vnd.google-apps.document' and name contains '${escaped}' and createdTime > '${searchStart.toISOString()}' and createdTime < '${searchEnd.toISOString()}'`,
+        q: `mimeType='application/vnd.google-apps.document' and name contains '${escaped}' and (name contains 'Transcript' or name contains 'Meeting notes') and createdTime > '${searchStart.toISOString()}' and createdTime < '${searchEnd.toISOString()}'`,
         fields: "files(id,name,createdTime)",
         pageSize: 10,
       });
@@ -100,6 +125,9 @@ export async function findMeetArtifacts(
 }
 
 export async function readDocContent(docsClient: docs_v1.Docs, fileId: string): Promise<DocParagraph[]> {
+  if (!DRIVE_FILE_ID_RE.test(fileId)) {
+    throw new Error(`Invalid Google Drive file ID: ${fileId}`);
+  }
   const doc = await docsClient.documents.get({ documentId: fileId });
   const content = doc.data.body?.content ?? [];
   const paragraphs: DocParagraph[] = [];

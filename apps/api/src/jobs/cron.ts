@@ -167,6 +167,7 @@ export function startCronJobs(): void {
     granolaSweepRunning = true;
     try {
       const { meetingCoordinator } = await import("../services/meeting-providers/registry.js");
+      const { isWithinWorkingHours } = await import("../services/granola-sync.js");
 
       const [granolaUsers, googleUsers] = await Promise.all([
         prisma.granolaAccount.findMany({ select: { userId: true } }),
@@ -180,6 +181,15 @@ export function startCronJobs(): void {
 
       for (const userId of userIds) {
         try {
+          // Skip users outside working hours (8am-7pm in their timezone)
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { timezone: true },
+          });
+          if (user?.timezone && !isWithinWorkingHours(user.timezone)) {
+            continue;
+          }
+
           const now = new Date();
           const startOfDay = new Date(now);
           startOfDay.setHours(0, 0, 0, 0);

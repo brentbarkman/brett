@@ -13,6 +13,14 @@ describe("escapeDriveQuery", () => {
   it("passes through clean strings", () => {
     expect(escapeDriveQuery("Weekly Standup")).toBe("Weekly Standup");
   });
+
+  it("escapes backslashes", () => {
+    expect(escapeDriveQuery("path\\to\\file")).toBe("path\\\\to\\\\file");
+  });
+
+  it("escapes both backslashes and single quotes", () => {
+    expect(escapeDriveQuery("Alice\\'s file")).toBe("Alice\\\\\\'s file");
+  });
 });
 
 describe("parseTranscriptDoc", () => {

@@ -95,6 +95,8 @@ export interface CalendarAttachment {
   title: string;
   url: string;
   mimeType?: string;
+  fileId?: string;
+  fileUrl?: string;
 }
 
 // ── RSVP ──

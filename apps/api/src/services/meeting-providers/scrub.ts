@@ -24,6 +24,6 @@ function scrubGranolaRawData(data: Record<string, unknown>): Record<string, unkn
 }
 
 function scrubGoogleMeetRawData(data: Record<string, unknown>): Record<string, unknown> {
-  const { suggestionsViewMode, namedStyles, suggestedInsertions, suggestedDeletions, ...safe } = data;
-  return safe;
+  const { transcriptFileId, notesFileId } = data as { transcriptFileId?: string; notesFileId?: string };
+  return { transcriptFileId, notesFileId };
 }
