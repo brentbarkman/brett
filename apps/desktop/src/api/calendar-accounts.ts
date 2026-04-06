@@ -56,6 +56,24 @@ export function useDisconnectCalendar() {
   });
 }
 
+export function useReauthCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (accountId: string) => {
+      const { url } = await apiFetch<{ url: string }>(
+        `/calendar/accounts/${accountId}/reauth`,
+        { method: "POST" },
+      );
+      window.open(url, "_blank");
+
+      const poll = setInterval(() => {
+        qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
+      }, 2000);
+      setTimeout(() => clearInterval(poll), 120_000);
+    },
+  });
+}
+
 export function useToggleCalendarVisibility() {
   const qc = useQueryClient();
   return useMutation({

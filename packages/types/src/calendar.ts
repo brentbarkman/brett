@@ -121,6 +121,7 @@ export interface ConnectedCalendarAccount {
   id: string;
   googleEmail: string;
   connectedAt: string;
+  hasDriveScope: boolean;
   calendars: CalendarListRecord[];
 }
 

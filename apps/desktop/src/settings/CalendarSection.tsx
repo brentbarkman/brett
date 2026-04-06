@@ -5,6 +5,7 @@ import {
   useConnectCalendar,
   useDisconnectCalendar,
   useToggleCalendarVisibility,
+  useReauthCalendar,
 } from "../api/calendar-accounts";
 import { useFetchCalendarRange } from "../api/calendar";
 import { useGranolaAccount, useConnectGranola, useDisconnectGranola, useUpdateGranolaPreferences } from "../api/granola";
@@ -43,6 +44,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const disconnectCalendar = useDisconnectCalendar();
   const toggleVisibility = useToggleCalendarVisibility();
+  const reauthCalendar = useReauthCalendar();
 
   function handleDisconnect() {
     disconnectCalendar.mutate(account.id, {
@@ -125,6 +127,34 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
           ))}
         </div>
       )}
+
+      {/* Google Meet Notes status */}
+      <div className="px-3 py-2.5 border-t border-white/5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {account.hasDriveScope ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-green-400" />
+                <span className="text-xs text-white/50">Meeting notes enabled</span>
+              </>
+            ) : (
+              <>
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span className="text-xs text-white/50">Meeting notes require additional permissions</span>
+              </>
+            )}
+          </div>
+          {!account.hasDriveScope && (
+            <button
+              onClick={() => reauthCalendar.mutate(account.id)}
+              disabled={reauthCalendar.isPending}
+              className="text-xs text-brett-gold hover:text-brett-gold/80 font-medium transition-colors disabled:opacity-40"
+            >
+              {reauthCalendar.isPending ? "Opening..." : "Enable"}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
