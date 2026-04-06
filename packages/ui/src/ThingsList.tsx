@@ -22,9 +22,10 @@ interface ThingsListProps {
   bare?: boolean;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
+  onInstallUpdate?: () => void;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare, onReconnect, reconnectPendingSourceId }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare, onReconnect, reconnectPendingSourceId, onInstallUpdate }: ThingsListProps) {
   // ── Deferred toggle: batch mutations so the list stays stable during rapid-fire ──
   const pendingToggles = useRef<Set<string>>(new Set());
   const freezeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,13 +126,13 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           )}
 
           {grouped.overdue.length > 0 && (
-            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
+            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
           )}
           {grouped.today.length > 0 && (
-            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
+            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
           )}
           {grouped.this_week.length > 0 && (
-            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
+            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
           )}
 
           {hasUncompleted && (
@@ -146,7 +147,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
                 opacity: 0,
               } : undefined}
             >
-              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
+              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
             </div>
           )}
         </div>
@@ -183,6 +184,7 @@ function Section({
   indexOffset,
   onReconnect,
   reconnectPendingSourceId,
+  onInstallUpdate,
 }: {
   title: string;
   things: Thing[];
@@ -192,6 +194,7 @@ function Section({
   indexOffset: number;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
+  onInstallUpdate?: () => void;
 }) {
   return (
     <div>
@@ -208,6 +211,7 @@ function Section({
               ? () => onReconnect(item.sourceId!)
               : undefined}
             reconnectPending={item.sourceId === reconnectPendingSourceId}
+            onInstallUpdate={item.sourceId === "system:update" ? onInstallUpdate : undefined}
           />
         ))}
       </div>

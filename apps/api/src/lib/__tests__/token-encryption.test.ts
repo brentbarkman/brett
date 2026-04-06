@@ -3,7 +3,7 @@ import { encryptToken, decryptToken } from "../encryption";
 
 describe("token-encryption", () => {
   beforeAll(() => {
-    process.env.CALENDAR_TOKEN_ENCRYPTION_KEY =
+    process.env.TOKEN_ENCRYPTION_KEY =
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   });
 
@@ -31,9 +31,9 @@ describe("token-encryption", () => {
   });
 
   it("throws if key is missing", () => {
-    const origKey = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
-    delete process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
-    expect(() => encryptToken("test")).toThrow("CALENDAR_TOKEN_ENCRYPTION_KEY");
-    process.env.CALENDAR_TOKEN_ENCRYPTION_KEY = origKey;
+    const origKey = process.env.TOKEN_ENCRYPTION_KEY;
+    delete process.env.TOKEN_ENCRYPTION_KEY;
+    expect(() => encryptToken("test")).toThrow("TOKEN_ENCRYPTION_KEY");
+    process.env.TOKEN_ENCRYPTION_KEY = origKey;
   });
 });

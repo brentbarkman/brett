@@ -1,12 +1,16 @@
 import { autoUpdater } from "electron-updater";
 import { BrowserWindow } from "electron";
+import Store from "electron-store";
 import path from "path";
+
+// Main-process source of truth for update state
+let updateReady = false;
+let downloadedVersion: string | null = null;
 
 function getUpdateFeedUrl(): string | null {
   let endpoint = "";
   let bucket = "brett";
 
-  // In production, read from build-time config (same as API URL pattern)
   try {
     const fs = require("fs");
     const configPath = path.join(__dirname, "api-config.json");
@@ -17,14 +21,13 @@ function getUpdateFeedUrl(): string | null {
     // Fall through to env vars (dev mode)
   }
 
-  // Dev fallback
   if (!endpoint) endpoint = process.env.STORAGE_ENDPOINT || "";
   if (!endpoint) return null;
 
   return `${endpoint}/${bucket}/releases`;
 }
 
-export function initAutoUpdater(): void {
+export function initAutoUpdater(store: Store): void {
   const feedUrl = getUpdateFeedUrl();
 
   if (!feedUrl) {
@@ -43,7 +46,7 @@ export function initAutoUpdater(): void {
   });
 
   autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoInstallOnAppQuit = store.get("autoInstallOnQuit", true) as boolean;
 
   autoUpdater.on("update-available", (info) => {
     console.log(`[Updater] Update available: v${info.version}`);
@@ -56,6 +59,10 @@ export function initAutoUpdater(): void {
 
   autoUpdater.on("update-downloaded", (info) => {
     console.log(`[Updater] Update downloaded: v${info.version}`);
+    updateReady = true;
+    downloadedVersion = info.version;
+    store.set("pendingUpdateVersion", info.version);
+
     const win = BrowserWindow.getAllWindows()[0];
     if (win) {
       win.webContents.send("update-downloaded", info.version);
@@ -66,7 +73,6 @@ export function initAutoUpdater(): void {
     console.error("[Updater] Error:", err.message);
   });
 
-  // Check after a short delay to not block startup
   setTimeout(() => {
     console.log("[Updater] Checking for updates...");
     autoUpdater.checkForUpdates().catch((err) => {
@@ -75,10 +81,25 @@ export function initAutoUpdater(): void {
   }, 5000);
 }
 
+export function isUpdateReady(): boolean {
+  return updateReady;
+}
+
+export function getDownloadedVersion(): string | null {
+  return downloadedVersion;
+}
+
+export function setAutoInstallOnQuit(enabled: boolean): void {
+  autoUpdater.autoInstallOnAppQuit = enabled;
+}
+
 let installTriggered = false;
 
 export function quitAndInstall(): void {
   if (installTriggered) return;
+  if (!updateReady) {
+    throw new Error("No update downloaded — cannot install");
+  }
   installTriggered = true;
   autoUpdater.quitAndInstall();
 }

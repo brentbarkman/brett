@@ -5,7 +5,7 @@ import path from "path";
 import { pathToFileURL } from "url";
 import Store from "electron-store";
 import { scanThings3, readThings3 } from "./things3";
-import { initAutoUpdater, quitAndInstall } from "./updater";
+import { initAutoUpdater, quitAndInstall, isUpdateReady, getDownloadedVersion, setAutoInstallOnQuit } from "./updater";
 
 // #3: Load API URL from main process config — never accept from renderer
 // Reads from api-config.json generated at build time, falls back to env var
@@ -31,7 +31,12 @@ if (isDev) {
   app.setPath("userData", path.join(app.getPath("userData"), `dev-${cwdHash}`));
 }
 
-const store = new Store<{ encryptedToken?: string }>();
+const store = new Store<{
+  encryptedToken?: string;
+  pendingUpdateVersion?: string;
+  pendingUpdateTaskId?: string;
+  autoInstallOnQuit?: boolean;
+}>();
 
 /** Read and decrypt the stored auth token. Returns null if not available. */
 function readStoredToken(): string | null {
@@ -76,7 +81,53 @@ ipcMain.handle("clear-token", () => {
 });
 
 ipcMain.handle("install-update", () => {
+  if (!isUpdateReady()) {
+    throw new Error("No update downloaded");
+  }
   quitAndInstall();
+});
+
+ipcMain.handle("get-update-version", () => {
+  // Only return a version if the main process confirms an update is actually downloaded.
+  // Do NOT fall back to store — stale pendingUpdateVersion would drive UI state without
+  // a real update being ready, causing confusing failures when user clicks Install.
+  return getDownloadedVersion() || null;
+});
+
+ipcMain.handle("get-update-task-id", () => {
+  return store.get("pendingUpdateTaskId") || null;
+});
+
+// Validate task ID format to prevent renderer from injecting arbitrary path segments
+// into API calls like DELETE /things/${taskId}
+const TASK_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+
+ipcMain.handle("set-update-task-id", (_event, taskId: string | null) => {
+  if (taskId) {
+    if (!TASK_ID_PATTERN.test(taskId)) {
+      throw new Error("Invalid task ID format");
+    }
+    store.set("pendingUpdateTaskId", taskId);
+  } else {
+    store.delete("pendingUpdateTaskId");
+  }
+});
+
+ipcMain.handle("clear-pending-update", () => {
+  store.delete("pendingUpdateVersion");
+  store.delete("pendingUpdateTaskId");
+});
+
+ipcMain.handle("get-auto-install-on-quit", () => {
+  return store.get("autoInstallOnQuit", true);
+});
+
+ipcMain.handle("set-auto-install-on-quit", (_event, enabled: boolean) => {
+  if (typeof enabled !== "boolean") {
+    throw new Error("Invalid value — expected boolean");
+  }
+  store.set("autoInstallOnQuit", enabled);
+  setAutoInstallOnQuit(enabled);
 });
 
 ipcMain.handle("things3:scan", () => {
@@ -283,7 +334,7 @@ app.whenReady().then(() => {
   });
 
   createWindow();
-  initAutoUpdater();
+  initAutoUpdater(store);
 });
 
 app.on("window-all-closed", () => {

@@ -7,6 +7,7 @@ import { App } from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { AuthGuard } from "./auth/AuthGuard";
 import { LoginPage } from "./auth/LoginPage";
+import { AutoUpdateProvider } from "./hooks/useAutoUpdate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,7 +24,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <AuthGuard fallback={<LoginPage />}>
         <QueryClientProvider client={queryClient}>
           <HashRouter>
-            <App />
+            <AutoUpdateProvider>
+              <App />
+            </AutoUpdateProvider>
           </HashRouter>
         </QueryClientProvider>
       </AuthGuard>

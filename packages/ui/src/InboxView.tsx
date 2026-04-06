@@ -23,6 +23,7 @@ interface InboxViewProps {
   onFocusChange?: (thing: Thing) => void;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
+  onInstallUpdate?: () => void;
   assistantName?: string;
 }
 
@@ -39,6 +40,7 @@ export function InboxView({
   onFocusChange,
   onReconnect,
   reconnectPendingSourceId,
+  onInstallUpdate,
   assistantName = "Brett",
 }: InboxViewProps) {
   const [typeFilter, setTypeFilter] = useState<FilterType>("All");
@@ -516,6 +518,7 @@ export function InboxView({
                             ? () => onReconnect(thing.sourceId!)
                             : undefined}
                           reconnectPending={thing.sourceId === reconnectPendingSourceId}
+                          onInstallUpdate={thing.sourceId === "system:update" ? onInstallUpdate : undefined}
                         />
                       </div>
                     );

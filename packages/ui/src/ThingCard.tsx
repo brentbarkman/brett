@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { StaleTooltip } from "./StaleTooltip";
-import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw } from "lucide-react";
+import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Thing } from "@brett/types";
 
@@ -12,9 +12,10 @@ interface ThingCardProps {
   isFocused?: boolean;
   onReconnect?: () => void;
   reconnectPending?: boolean;
+  onInstallUpdate?: () => void;
 }
 
-export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending }: ThingCardProps) {
+export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending, onInstallUpdate }: ThingCardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
     data: {
@@ -179,6 +180,17 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       </div>
 
       <div className="flex-shrink-0 flex items-center gap-2">
+        {/* Install update button for system update tasks */}
+        {onInstallUpdate && thing.sourceId === "system:update" && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onInstallUpdate(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-brett-gold/15 text-brett-gold hover:bg-brett-gold/25 transition-colors"
+          >
+            <Download size={11} />
+            Install &amp; Restart
+          </button>
+        )}
         {/* Reconnect button for broken integrations */}
         {onReconnect && thing.sourceId?.startsWith("relink:") && (
           <button

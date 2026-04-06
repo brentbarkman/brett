@@ -11,7 +11,7 @@ describe("Auth routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: `test-${Date.now()}@example.com`,
-        password: "password123",
+        password: "Password123",
         name: "Test User",
       }),
     });
@@ -33,7 +33,7 @@ describe("Auth routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email,
-        password: "password123",
+        password: "Password123",
         name: "Sign In User",
       }),
     });
@@ -42,7 +42,7 @@ describe("Auth routes", () => {
     const res = await app.request("/api/auth/sign-in/email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: "password123" }),
+      body: JSON.stringify({ email, password: "Password123" }),
     });
 
     expect(res.status).toBe(200);
@@ -62,7 +62,7 @@ describe("Auth routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email,
-        password: "password123",
+        password: "Password123",
         name: "Wrong PW User",
       }),
     });
@@ -91,7 +91,7 @@ describe("Auth routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email,
-        password: "password123",
+        password: "Password123",
         name: "Me User",
       }),
     });

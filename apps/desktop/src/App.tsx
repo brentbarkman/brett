@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { slugify, getEventGlassColor } from "@brett/utils";
+import { useAutoUpdate } from "./hooks/useAutoUpdate";
 import { getEndOfWeekUTC } from "@brett/business";
 import type { BackgroundStyle } from "@brett/business";
 import {
@@ -185,6 +186,7 @@ export function App() {
   // Initialize SSE for real-time updates
   useEventStream();
   useTimezoneSync();
+  const { install: installUpdate } = useAutoUpdate();
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEventDisplay | null
   >(null);
@@ -1039,6 +1041,7 @@ export function App() {
                   onFocusChange={handleFocusChange}
                   onReconnect={handleReconnect}
                   reconnectPendingSourceId={reconnectPendingSourceId}
+                  onInstallUpdate={installUpdate}
                   assistantName={assistantName}
                 />
               </MainLayout>

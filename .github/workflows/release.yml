@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Prevent concurrent releases
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: brett
+          POSTGRES_PASSWORD: brett_dev
+          POSTGRES_DB: brett_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Version bump — happens first so the build uses the new version
+      - name: Bump version
+        run: |
+          cd apps/desktop
+          CURRENT=$(node -p "require('./package.json').version")
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
+            pkg.version = '$NEW_VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          cd ../..
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/package.json
+          git commit -m "chore: bump desktop version to $NEW_VERSION [skip ci]"
+          git push
+
+      - name: Generate Prisma client
+        run: pnpm --filter @brett/api exec prisma generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run migrations on test DB
+        run: pnpm --filter @brett/api exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://brett:brett_dev@localhost:5432/brett_test
+
+      - name: Run integration tests
+        run: pnpm test:ci
+        env:
+          DATABASE_URL: postgresql://brett:brett_dev@localhost:5432/brett_test
+          BETTER_AUTH_SECRET: test-secret-at-least-32-characters-long
+          BETTER_AUTH_URL: http://localhost:3001
+          GOOGLE_CLIENT_ID: test-google-client-id
+          GOOGLE_CLIENT_SECRET: test-google-client-secret
+
+      - name: Deploy API to Railway
+        run: npx @railway/cli up --service api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Build desktop
+        run: pnpm --filter @brett/desktop electron:build
+        env:
+          VITE_API_URL: https://api.brett.brentbarkman.com
+          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
+          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+
+      - name: Upload release artifacts to S3
+        run: npx tsx scripts/upload-release.ts
+        env:
+          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
+          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
+          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
