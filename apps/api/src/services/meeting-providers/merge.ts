@@ -36,7 +36,9 @@ export function mergeMeetingNoteFields(existing: MergeInput, source: SourceInput
     if (!existing.summary) {
       summary = source.summary;
     } else {
-      const existingPriority = Math.max(...existing.sources.map((s) => SUMMARY_PRIORITY[s] ?? 0));
+      const existingPriority = existing.sources.length > 0
+        ? Math.max(...existing.sources.map((s) => SUMMARY_PRIORITY[s] ?? 0))
+        : 0;
       const sourcePriority = SUMMARY_PRIORITY[source.provider] ?? 0;
       if (sourcePriority > existingPriority) {
         summary = source.summary;
