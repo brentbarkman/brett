@@ -574,8 +574,9 @@ export function App() {
       weatherLoading,
       showWeatherExpanded,
       onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
+      assistantName,
     }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded]
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded, assistantName]
   );
 
   const scoutsOmnibarProps = useMemo(
@@ -1293,6 +1294,7 @@ export function App() {
           sessionUsage={sessionUsageData ?? null}
           initialForcedAction={spotlightInitialAction}
           showScoutAction={true}
+          assistantName={assistantName}
         />
 
         {/* Calendar connect interstitial — meeting notes opt-in */}
