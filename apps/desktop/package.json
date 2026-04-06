@@ -33,7 +33,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"tsc -p tsconfig.electron.json -w\" \"electron .\"",
-    "electron:build": "vite build && tsc -p tsconfig.electron.json && node -e \"require('fs').writeFileSync('dist/electron/api-config.json', JSON.stringify({apiURL: process.env.VITE_API_URL || 'http://localhost:3001', storageEndpoint: process.env.STORAGE_ENDPOINT || '', storageBucket: process.env.STORAGE_BUCKET || 'brett'}))\" && electron-builder",
+    "electron:build": "vite build && tsc -p tsconfig.electron.json && node -e \"require('fs').writeFileSync('dist/electron/api-config.json', JSON.stringify({apiURL: process.env.VITE_API_URL || 'http://localhost:3001', storageEndpoint: process.env.STORAGE_ENDPOINT || '', storageBucket: process.env.STORAGE_BUCKET || 'brett', releaseStorageEndpoint: process.env.RELEASE_STORAGE_ENDPOINT || '', releaseStorageBucket: process.env.RELEASE_STORAGE_BUCKET || 'brett-releases'}))\" && electron-builder",
     "test": "vitest run",
     "test:watch": "vitest"
   },

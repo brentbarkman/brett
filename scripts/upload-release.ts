@@ -1,13 +1,13 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
-import { s3, BUCKET } from "./s3";
+import { releaseS3, RELEASE_BUCKET } from "./s3";
 
 const DESKTOP_DIR = path.resolve(__dirname, "../apps/desktop");
 
 async function uploadRelease() {
-  if (!process.env.STORAGE_ENDPOINT) {
-    throw new Error("STORAGE_ENDPOINT not set");
+  if (!process.env.RELEASE_STORAGE_ENDPOINT && !process.env.STORAGE_ENDPOINT) {
+    throw new Error("RELEASE_STORAGE_ENDPOINT (or STORAGE_ENDPOINT) not set");
   }
 
   // Read version from package.json
@@ -37,9 +37,9 @@ async function uploadRelease() {
   const dmgKey = `releases/Brett-${version}.dmg`;
   const dmgBody = fs.readFileSync(dmgPath);
   console.log(`Uploading ${dmgFile} (${(dmgBody.length / 1024 / 1024).toFixed(1)} MB) → ${dmgKey}`);
-  await s3.send(
+  await releaseS3.send(
     new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: RELEASE_BUCKET,
       Key: dmgKey,
       Body: dmgBody,
       ContentType: "application/octet-stream",
@@ -52,9 +52,9 @@ async function uploadRelease() {
   const ymlKey = "releases/latest-mac.yml";
   const ymlBody = fs.readFileSync(ymlPath);
   console.log(`Uploading latest-mac.yml → ${ymlKey}`);
-  await s3.send(
+  await releaseS3.send(
     new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: RELEASE_BUCKET,
       Key: ymlKey,
       Body: ymlBody,
       ContentType: "text/yaml",
@@ -67,9 +67,9 @@ async function uploadRelease() {
   const latestKey = "releases/latest.json";
   const latestBody = JSON.stringify({ version, dmg: dmgKey });
   console.log(`Uploading latest.json → ${latestKey}`);
-  await s3.send(
+  await releaseS3.send(
     new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: RELEASE_BUCKET,
       Key: latestKey,
       Body: latestBody,
       ContentType: "application/json",
@@ -78,9 +78,9 @@ async function uploadRelease() {
   );
   console.log("  ✓ latest.json uploaded");
 
-  const endpoint = process.env.STORAGE_ENDPOINT;
+  const endpoint = process.env.RELEASE_STORAGE_ENDPOINT || process.env.STORAGE_ENDPOINT;
   console.log(`\n✓ Release v${version} uploaded!`);
-  console.log(`  Download: ${endpoint}/${BUCKET}/${dmgKey}`);
+  console.log(`  Download: ${endpoint}/${RELEASE_BUCKET}/${dmgKey}`);
 }
 
 uploadRelease().catch((err) => {

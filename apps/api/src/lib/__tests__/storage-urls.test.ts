@@ -19,21 +19,33 @@ describe("getStorageUrls", () => {
     const { getStorageUrls } = await import("../storage-urls.js");
     const urls = getStorageUrls();
 
-    expect(urls.releasesUrl).toBe("https://storage.example.com/mybucket/releases");
+    // Releases use separate bucket (defaults to brett-releases)
+    expect(urls.releasesUrl).toBe("https://storage.example.com/brett-releases/releases");
     expect(urls.videoBaseUrl).toBe("https://storage.example.com/mybucket/public/videos");
     expect(urls.videoFiles).toHaveLength(9);
     expect(urls.videoFiles[0]).toBe("https://storage.example.com/mybucket/public/videos/login-bg-1.mp4");
     expect(urls.videoFiles[8]).toBe("https://storage.example.com/mybucket/public/videos/login-bg-9.mp4");
   });
 
-  it("uses default bucket name when STORAGE_BUCKET is not set", async () => {
+  it("uses release-specific bucket when RELEASE_STORAGE_* vars are set", async () => {
+    process.env.STORAGE_ENDPOINT = "https://storage.example.com";
+    process.env.RELEASE_STORAGE_ENDPOINT = "https://releases.example.com";
+    process.env.RELEASE_STORAGE_BUCKET = "my-releases";
+
+    const { getStorageUrls } = await import("../storage-urls.js");
+    const urls = getStorageUrls();
+
+    expect(urls.releasesUrl).toBe("https://releases.example.com/my-releases/releases");
+  });
+
+  it("uses default bucket names when STORAGE_BUCKET is not set", async () => {
     process.env.STORAGE_ENDPOINT = "https://storage.example.com";
     delete process.env.STORAGE_BUCKET;
 
     const { getStorageUrls } = await import("../storage-urls.js");
     const urls = getStorageUrls();
 
-    expect(urls.releasesUrl).toBe("https://storage.example.com/brett/releases");
+    expect(urls.releasesUrl).toBe("https://storage.example.com/brett-releases/releases");
   });
 
   it("returns empty strings when STORAGE_ENDPOINT is not set", async () => {
@@ -86,7 +98,7 @@ describe("getLatestVersion", () => {
 
     expect(result.version).toBe("2.0.0");
     expect(result.dmg).toBe("releases/Brett-2.0.0.dmg");
-    expect(mockFetch).toHaveBeenCalledWith("https://storage.example.com/brett/releases/latest.json");
+    expect(mockFetch).toHaveBeenCalledWith("https://storage.example.com/brett-releases/releases/latest.json");
   });
 
   it("returns default version when S3 fetch fails", async () => {

@@ -97,11 +97,13 @@ jobs:
           VITE_API_URL: https://api.brett.brentbarkman.com
           STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
           STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+          RELEASE_STORAGE_ENDPOINT: ${{ secrets.RELEASE_STORAGE_ENDPOINT }}
+          RELEASE_STORAGE_BUCKET: ${{ secrets.RELEASE_STORAGE_BUCKET }}
 
       - name: Upload release artifacts to S3
         run: npx tsx scripts/upload-release.ts
         env:
-          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
-          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
-          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
-          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+          RELEASE_STORAGE_ENDPOINT: ${{ secrets.RELEASE_STORAGE_ENDPOINT }}
+          RELEASE_STORAGE_ACCESS_KEY: ${{ secrets.RELEASE_STORAGE_ACCESS_KEY }}
+          RELEASE_STORAGE_SECRET_KEY: ${{ secrets.RELEASE_STORAGE_SECRET_KEY }}
+          RELEASE_STORAGE_BUCKET: ${{ secrets.RELEASE_STORAGE_BUCKET }}

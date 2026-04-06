@@ -2,7 +2,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { s3, BUCKET } from "./s3";
+import { releaseS3 as s3, RELEASE_BUCKET as BUCKET } from "./s3";
 
 const DESKTOP_DIR = path.resolve(__dirname, "../apps/desktop");
 
