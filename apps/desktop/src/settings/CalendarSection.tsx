@@ -12,6 +12,7 @@ import {
 import { useFetchCalendarRange } from "../api/calendar";
 import { useGranolaAccount, useConnectGranola, useDisconnectGranola, useUpdateGranolaPreferences } from "../api/granola";
 import type { ConnectedCalendarAccount } from "@brett/types";
+import { useAssistantName } from "../api/assistant-name";
 
 const isDev = import.meta.env.DEV;
 
@@ -173,6 +174,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
 }
 
 export function CalendarSection() {
+  const assistantName = useAssistantName();
   const { data: accounts = [], isLoading, error } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
   const fetchRange = useFetchCalendarRange();
@@ -353,7 +355,7 @@ export function CalendarSection() {
               </label>
 
               <p className="text-[10px] text-white/20 leading-relaxed">
-                Brett uses AI to determine which action items are relevant and rewrites them as clear, actionable tasks with due dates when mentioned.
+                {`${assistantName} uses AI to determine which action items are relevant and rewrites them as clear, actionable tasks with due dates when mentioned.`}
               </p>
             </div>
           </div>

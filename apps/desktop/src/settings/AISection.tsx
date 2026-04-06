@@ -9,6 +9,7 @@ import {
 import { useUsageSummary } from "../api/ai-usage";
 import { usePreference } from "../api/preferences";
 import type { AIProviderName, UserAIConfigRecord } from "@brett/types";
+import { useAssistantName } from "../api/assistant-name";
 
 const PROVIDERS: { id: AIProviderName; label: string; hint: string }[] = [
   { id: "anthropic", label: "Anthropic", hint: "sk-ant-..." },
@@ -169,6 +170,7 @@ function UsageStats({ provider }: { provider: string }) {
 }
 
 export function AISection() {
+  const assistantName = useAssistantName();
   const { data, isLoading, error } = useAIConfigs();
   const saveConfig = useSaveAIConfig();
   const activateConfig = useActivateAIConfig();
@@ -281,7 +283,7 @@ export function AISection() {
         <div className="flex flex-col items-center gap-2 py-4 text-center mb-5">
           <Bot size={24} className="text-white/20" />
           <p className="text-xs text-white/30">
-            Configure an AI provider to enable Brett's AI features
+            {`Configure an AI provider to enable ${assistantName}'s AI features`}
           </p>
         </div>
       )}
