@@ -129,3 +129,55 @@ export function ProductMark({ size = 24, className = "" }: BrettMarkProps) {
     </svg>
   );
 }
+
+/**
+ * Styled wordmark: assistant name in Plus Jakarta Sans ExtraBold,
+ * metallic gold gradient, with cerulean underline bar.
+ * Bar breathes when isWorking=true (1.4s cycle, matches BrettMark pulse).
+ */
+interface WordmarkProps {
+  name: string;
+  isWorking?: boolean;
+  size?: number;
+}
+
+export function Wordmark({ name, isWorking = false, size = 19 }: WordmarkProps) {
+  return (
+    <div className="flex flex-col">
+      <style>
+        {`
+          @keyframes wordmarkBreathe {
+            0%, 100% { opacity: 0.45; }
+            50% { opacity: 0.9; }
+          }
+        `}
+      </style>
+      <span
+        className="font-extrabold truncate"
+        style={{
+          fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+          fontSize: `${size}px`,
+          letterSpacing: "0.03em",
+          lineHeight: 1,
+          background: "linear-gradient(180deg, #F5D96B, #D4A020)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          backgroundClip: "text",
+          maxWidth: "140px",
+        }}
+      >
+        {name}
+      </span>
+      <div
+        className="rounded-full mt-[3px]"
+        style={{
+          height: "2.5px",
+          width: "65%",
+          background: "linear-gradient(90deg, #4682C3, #5A9AD6 70%, transparent 100%)",
+          opacity: isWorking ? undefined : 0.55,
+          animation: isWorking ? "wordmarkBreathe 1.4s ease-in-out infinite" : "none",
+        }}
+      />
+    </div>
+  );
+}
