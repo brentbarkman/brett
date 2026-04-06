@@ -16,6 +16,10 @@
     },
     "prisma-generate": {
       "cache": false
+    },
+    "test": {
+      "dependsOn": [],
+      "cache": false
     }
   }
 }
