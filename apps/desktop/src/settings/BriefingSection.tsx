@@ -1,5 +1,6 @@
 import React from "react";
 import { usePreference } from "../api/preferences";
+import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 
 export function BriefingSection() {
   const [enabled, setEnabled] = usePreference("briefingEnabled");
@@ -9,29 +10,17 @@ export function BriefingSection() {
   const isDismissedToday = dismissedDate === today;
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
-        Daily Briefing
-      </h3>
+    <SettingsCard>
+      <SettingsHeader>Daily Briefing</SettingsHeader>
 
       <div className="space-y-4">
         {/* Enable/disable toggle */}
         <label className="flex items-center justify-between cursor-pointer">
           <span className="text-sm text-white/70">Show daily briefing</span>
-          <button
-            onClick={() => setEnabled(!enabled)}
-            className={`
-              relative w-9 h-5 rounded-full transition-colors
-              ${enabled ? "bg-brett-gold" : "bg-white/10"}
-            `}
-          >
-            <span
-              className={`
-                absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform
-                ${enabled ? "translate-x-4" : "translate-x-0"}
-              `}
-            />
-          </button>
+          <SettingsToggle
+            checked={enabled}
+            onChange={() => setEnabled(!enabled)}
+          />
         </label>
 
         {/* Dismissed status (only relevant when enabled) */}
@@ -52,6 +41,6 @@ export function BriefingSection() {
           </div>
         )}
       </div>
-    </div>
+    </SettingsCard>
   );
 }

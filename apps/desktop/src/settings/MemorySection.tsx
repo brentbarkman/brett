@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Brain, Trash2 } from "lucide-react";
+import { SettingsCard, SettingsHeader } from "./SettingsComponents";
 import { useUserFacts, useDeleteUserFact } from "../api/user-facts";
 import { useAIConfigs } from "../api/ai-config";
 import { useAssistantName } from "../api/assistant-name";
@@ -78,12 +79,10 @@ export function MemorySection() {
   const facts = data?.facts ?? [];
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+    <SettingsCard>
       {/* Header */}
       <div className="mb-4">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-          Memory
-        </h3>
+        <SettingsHeader className="mb-0">Memory</SettingsHeader>
       </div>
 
       {/* Loading */}
@@ -128,6 +127,6 @@ export function MemorySection() {
           </p>
         </div>
       )}
-    </div>
+    </SettingsCard>
   );
 }

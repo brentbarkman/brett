@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { authClient } from "../auth/auth-client";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
+import { SettingsCard, SettingsHeader } from "./SettingsComponents";
 
 export function DangerZoneSection() {
   const { signOut } = useAuth();
@@ -17,8 +18,8 @@ export function DangerZoneSection() {
 
   return (
     <>
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-red-500/30 p-6">
-        <h3 className="text-xs uppercase tracking-wider text-red-400/60 font-semibold mb-4">Danger Zone</h3>
+      <SettingsCard danger>
+        <SettingsHeader danger>Danger Zone</SettingsHeader>
         <div className="flex items-center justify-between">
           <p className="text-sm text-white/60">
             Permanently delete your account and all data
@@ -30,7 +31,7 @@ export function DangerZoneSection() {
             Delete account
           </button>
         </div>
-      </div>
+      </SettingsCard>
 
       <DeleteAccountDialog
         isOpen={dialogOpen}

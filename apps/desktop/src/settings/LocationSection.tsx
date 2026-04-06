@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import { createPortal } from "react-dom";
 import { Brain, Check, MapPin, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -293,10 +294,8 @@ export function LocationSection() {
       {error && <p className="text-xs text-red-400/80">{error}</p>}
 
       {/* ═══ Assistant ═══ */}
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
-          Assistant
-        </h3>
+      <SettingsCard>
+        <SettingsHeader>Assistant</SettingsHeader>
 
         <div className="space-y-5">
           {/* Name */}
@@ -337,12 +336,10 @@ export function LocationSection() {
           <div className="space-y-3">
             <label className="flex items-center justify-between cursor-pointer">
               <span className="text-sm text-white/70">Daily briefing</span>
-              <button
-                onClick={() => setBriefingEnabled(!briefingEnabled)}
-                className={`relative w-9 h-5 rounded-full transition-colors ${briefingEnabled ? "bg-brett-gold" : "bg-white/10"}`}
-              >
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${briefingEnabled ? "translate-x-4" : "translate-x-0"}`} />
-              </button>
+              <SettingsToggle
+                checked={briefingEnabled}
+                onChange={() => setBriefingEnabled(!briefingEnabled)}
+              />
             </label>
 
             {briefingEnabled && isDismissedToday && (
@@ -406,13 +403,11 @@ export function LocationSection() {
             )}
           </div>
         </div>
-      </div>
+      </SettingsCard>
 
       {/* ═══ Location, Timezone & Weather ═══ */}
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
-          Location &amp; Weather
-        </h3>
+      <SettingsCard>
+        <SettingsHeader>Location &amp; Weather</SettingsHeader>
 
         <div className="space-y-4">
           {/* Timezone */}
@@ -428,13 +423,11 @@ export function LocationSection() {
 
             <label className="flex items-center justify-between cursor-pointer">
               <span className="text-sm text-white/70">Use device timezone</span>
-              <button
-                onClick={handleToggleAuto}
+              <SettingsToggle
+                checked={isAuto}
+                onChange={handleToggleAuto}
                 disabled={tzSaving}
-                className={`relative w-9 h-5 rounded-full transition-colors ${isAuto ? "bg-brett-gold" : "bg-white/10"} ${tzSaving ? "opacity-50" : ""}`}
-              >
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${isAuto ? "translate-x-4" : "translate-x-0"}`} />
-              </button>
+              />
             </label>
 
             {isAuto && (
@@ -461,13 +454,11 @@ export function LocationSection() {
           {/* Weather */}
           <label className="flex items-center justify-between cursor-pointer">
             <span className="text-sm text-white/70">Show weather</span>
-            <button
-              onClick={handleWeatherToggle}
+            <SettingsToggle
+              checked={weatherEnabled}
+              onChange={handleWeatherToggle}
               disabled={isSaving}
-              className={`relative w-9 h-5 rounded-full transition-colors ${weatherEnabled ? "bg-brett-gold" : "bg-white/10"} ${isSaving ? "opacity-50" : ""}`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${weatherEnabled ? "translate-x-4" : "translate-x-0"}`} />
-            </button>
+            />
           </label>
 
           {weatherEnabled && (
@@ -536,7 +527,7 @@ export function LocationSection() {
             </>
           )}
         </div>
-      </div>
+      </SettingsCard>
     </div>
   );
 }

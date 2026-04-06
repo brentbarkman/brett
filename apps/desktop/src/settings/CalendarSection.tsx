@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Calendar, Plus, Trash2, RefreshCw } from "lucide-react";
+import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import { CalendarConnectModal } from "../components/CalendarConnectModal";
 import {
   useCalendarAccounts,
@@ -107,26 +108,16 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
               />
               <span className="flex-1 text-sm text-white/70 truncate">{cal.name}</span>
               {/* Visibility toggle */}
-              <button
-                role="switch"
-                aria-checked={cal.isVisible}
-                onClick={() =>
+              <SettingsToggle
+                checked={cal.isVisible}
+                onChange={() =>
                   toggleVisibility.mutate({
                     accountId: account.id,
                     calendarId: cal.id,
                     isVisible: !cal.isVisible,
                   })
                 }
-                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
-                  cal.isVisible ? "bg-brett-gold" : "bg-white/10"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-                    cal.isVisible ? "translate-x-4" : "translate-x-0"
-                  }`}
-                />
-              </button>
+              />
             </div>
           ))}
         </div>
@@ -141,10 +132,9 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
               <span className="text-[10px] text-brett-gold/60">Requires permissions</span>
             )}
           </div>
-          <button
-            role="switch"
-            aria-checked={account.hasDriveScope && account.meetingNotesEnabled}
-            onClick={() => {
+          <SettingsToggle
+            checked={account.hasDriveScope && account.meetingNotesEnabled}
+            onChange={() => {
               if (!account.hasDriveScope) {
                 // No Drive scope — trigger reauth to get it
                 reauthCalendar.mutate(account.id);
@@ -157,16 +147,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
               }
             }}
             disabled={reauthCalendar.isPending || toggleMeetingNotes.isPending}
-            className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-40 ${
-              account.hasDriveScope && account.meetingNotesEnabled ? "bg-brett-gold" : "bg-white/10"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-                account.hasDriveScope && account.meetingNotesEnabled ? "translate-x-4" : "translate-x-0"
-              }`}
-            />
-          </button>
+          />
         </div>
       </div>
     </div>
@@ -187,11 +168,9 @@ export function CalendarSection() {
 
   return (
     <>
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+      <SettingsCard>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-            Connected Calendars
-          </h3>
+          <SettingsHeader className="mb-0">Connected Calendars</SettingsHeader>
           <button
             onClick={() => setShowConnectModal(true)}
             disabled={connectCalendar.isPending}
@@ -255,14 +234,12 @@ export function CalendarSection() {
             </button>
           </div>
         )}
-      </div>
+      </SettingsCard>
 
       {/* ── Meeting Notes (Granola) ── */}
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+      <SettingsCard>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-            Meeting Notes
-          </h3>
+          <SettingsHeader className="mb-0">Meeting Notes</SettingsHeader>
           {!(granolaAccount?.connected && granolaAccount.account) && (
             <button
               onClick={() => connectGranola.mutate()}
@@ -331,18 +308,10 @@ export function CalendarSection() {
                   <span className="text-sm text-white/70">Create tasks for me</span>
                   <p className="text-[10px] text-white/30 mt-0.5">Auto-create tasks assigned to you from meeting action items</p>
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={granolaAccount.account.autoCreateMyTasks}
-                  onClick={() => updatePrefs.mutate({ autoCreateMyTasks: !granolaAccount.account!.autoCreateMyTasks })}
-                  className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
-                    granolaAccount.account.autoCreateMyTasks ? "bg-brett-gold" : "bg-white/10"
-                  }`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-                    granolaAccount.account.autoCreateMyTasks ? "translate-x-4" : "translate-x-0"
-                  }`} />
-                </button>
+                <SettingsToggle
+                  checked={granolaAccount.account.autoCreateMyTasks}
+                  onChange={() => updatePrefs.mutate({ autoCreateMyTasks: !granolaAccount.account!.autoCreateMyTasks })}
+                />
               </label>
 
               <label className="flex items-center justify-between cursor-pointer">
@@ -350,18 +319,10 @@ export function CalendarSection() {
                   <span className="text-sm text-white/70">Create follow-ups</span>
                   <p className="text-[10px] text-white/30 mt-0.5">Auto-create follow-up tasks for action items assigned to others</p>
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={granolaAccount.account.autoCreateFollowUps}
-                  onClick={() => updatePrefs.mutate({ autoCreateFollowUps: !granolaAccount.account!.autoCreateFollowUps })}
-                  className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
-                    granolaAccount.account.autoCreateFollowUps ? "bg-brett-gold" : "bg-white/10"
-                  }`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-                    granolaAccount.account.autoCreateFollowUps ? "translate-x-4" : "translate-x-0"
-                  }`} />
-                </button>
+                <SettingsToggle
+                  checked={granolaAccount.account.autoCreateFollowUps}
+                  onChange={() => updatePrefs.mutate({ autoCreateFollowUps: !granolaAccount.account!.autoCreateFollowUps })}
+                />
               </label>
 
               <p className="text-[10px] text-white/20 leading-relaxed">
@@ -387,7 +348,7 @@ export function CalendarSection() {
             )}
           </div>
         )}
-      </div>
+      </SettingsCard>
 
       {/* Connect Google Calendar interstitial */}
       {showConnectModal && (

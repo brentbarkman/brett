@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { SettingsCard, SettingsHeader } from "./SettingsComponents";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useAppConfig } from "../hooks/useAppConfig";
@@ -71,10 +72,8 @@ export function BackgroundSection() {
   }
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
-        Background
-      </h3>
+    <SettingsCard>
+      <SettingsHeader>Background</SettingsHeader>
 
       {error && <p className="text-xs text-red-400/80 mb-3">{error}</p>}
 
@@ -116,7 +115,7 @@ export function BackgroundSection() {
       {viewingStyle === "solid" && (
         <SolidGallery pinned={pinned} activeStyle={activeStyle} onPin={handlePin} onSmart={() => handleSmart("solid")} />
       )}
-    </div>
+    </SettingsCard>
   );
 }
 

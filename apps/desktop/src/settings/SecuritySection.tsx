@@ -3,6 +3,7 @@ import { validatePassword } from "@brett/utils";
 import { useAuth } from "../auth/AuthContext";
 import { authClient } from "../auth/auth-client";
 import { useAccountType } from "./useAccountType";
+import { SettingsCard, SettingsHeader } from "./SettingsComponents";
 
 function GoogleIcon() {
   return (
@@ -186,34 +187,28 @@ export function SecuritySection() {
 
   if (loading) {
     return (
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
-          Security
-        </h3>
+      <SettingsCard>
+        <SettingsHeader>Security</SettingsHeader>
         <div className="space-y-3">
           <div className="bg-white/5 animate-pulse rounded-lg h-10 w-full" />
           <div className="bg-white/5 animate-pulse rounded-lg h-10 w-3/4" />
         </div>
-      </div>
+      </SettingsCard>
     );
   }
 
   if (accountError) {
     return (
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
-          Security
-        </h3>
+      <SettingsCard>
+        <SettingsHeader>Security</SettingsHeader>
         <div className="text-sm text-red-400">{accountError}</div>
-      </div>
+      </SettingsCard>
     );
   }
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
-        Security
-      </h3>
+    <SettingsCard>
+      <SettingsHeader>Security</SettingsHeader>
 
       {/* Google badge */}
       {isGoogle && (
@@ -293,6 +288,6 @@ export function SecuritySection() {
         <h4 className="text-xs text-white/50 mb-3">Passkeys</h4>
         <PasskeyManager />
       </div>
-    </div>
+    </SettingsCard>
   );
 }

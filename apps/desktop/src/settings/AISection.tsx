@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Bot, Check, ChevronDown, ChevronRight, Loader2, Trash2, X } from "lucide-react";
+import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import {
   useAIConfigs,
   useSaveAIConfig,
@@ -206,29 +207,19 @@ export function AISection() {
     PROVIDERS.find((p) => p.id === selectedProvider)?.hint ?? "";
 
   return (
-    <div id="ai-settings" className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+    <SettingsCard>
       {/* Header */}
-      <div className="mb-4">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-          AI Providers
-        </h3>
+      <div id="ai-settings" className="mb-4">
+        <SettingsHeader className="mb-0">AI Providers</SettingsHeader>
       </div>
 
       {/* Show token usage toggle */}
       <div className="flex items-center justify-between px-3 py-2.5 bg-white/5 rounded-lg mb-4">
         <span className="text-sm text-white/70">Show token usage in conversations</span>
-        <button
-          onClick={() => setShowTokenUsage(!showTokenUsage)}
-          className={`relative w-9 h-5 rounded-full transition-colors ${
-            showTokenUsage ? "bg-brett-gold" : "bg-white/10"
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-              showTokenUsage ? "translate-x-4" : "translate-x-0"
-            }`}
-          />
-        </button>
+        <SettingsToggle
+          checked={showTokenUsage}
+          onChange={() => setShowTokenUsage(!showTokenUsage)}
+        />
       </div>
 
       {/* Loading */}
@@ -349,6 +340,6 @@ export function AISection() {
           </div>
         )}
       </div>
-    </div>
+    </SettingsCard>
   );
 }
