@@ -1,14 +1,16 @@
 const VIDEO_COUNT = 9;
 
 export function getStorageUrls() {
-  const endpoint = process.env.STORAGE_ENDPOINT || "";
+  // Each bucket has its own endpoint in Railway. Fall back to generic STORAGE_ENDPOINT for local dev.
+  const fallbackEndpoint = process.env.STORAGE_ENDPOINT || "";
 
   // Public assets (videos, backgrounds) — anonymous read access
+  const publicEndpoint = process.env.PUBLIC_STORAGE_ENDPOINT || fallbackEndpoint;
   const publicBucket = process.env.PUBLIC_STORAGE_BUCKET || "brett-public";
-  const publicBase = endpoint ? `${endpoint}/${publicBucket}` : "";
+  const publicBase = publicEndpoint ? `${publicEndpoint}/${publicBucket}` : "";
 
   // Release artifacts — separate bucket, separate credentials
-  const releaseEndpoint = process.env.RELEASE_STORAGE_ENDPOINT || endpoint;
+  const releaseEndpoint = process.env.RELEASE_STORAGE_ENDPOINT || fallbackEndpoint;
   const releaseBucket = process.env.RELEASE_STORAGE_BUCKET || "brett-releases";
   const releaseBase = releaseEndpoint ? `${releaseEndpoint}/${releaseBucket}` : "";
 

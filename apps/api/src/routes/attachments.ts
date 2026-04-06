@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { s3, PRIVATE_STORAGE_BUCKET } from "../lib/storage.js";
+import { privateS3, PRIVATE_STORAGE_BUCKET } from "../lib/storage.js";
 import { sanitizeFilename } from "../lib/sanitize-filename.js";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
@@ -82,7 +82,7 @@ attachments.post("/:itemId/attachments", async (c) => {
   });
 
   try {
-    await s3.send(
+    await privateS3.send(
       new PutObjectCommand({
         Bucket: PRIVATE_STORAGE_BUCKET,
         Key: storageKey,
@@ -119,7 +119,7 @@ attachments.delete("/:itemId/attachments/:attachmentId", async (c) => {
   if (!attachment) return c.json({ error: "Not found" }, 404);
 
   try {
-    await s3.send(new DeleteObjectCommand({ Bucket: PRIVATE_STORAGE_BUCKET, Key: attachment.storageKey }));
+    await privateS3.send(new DeleteObjectCommand({ Bucket: PRIVATE_STORAGE_BUCKET, Key: attachment.storageKey }));
   } catch {
     // Log but continue — DB record must be deleted regardless
   }
