@@ -4,6 +4,8 @@ import { MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useLocationSettings, useCitySearch } from "../api/location";
+import { useAssistantName, useUpdateAssistantName } from "../api/assistant-name";
+import { Wordmark } from "@brett/ui";
 
 export function LocationSection() {
   const { data: user } = useQuery({
@@ -114,13 +116,60 @@ export function LocationSection() {
     await handleSave(patch as Parameters<typeof updateLocation>[0]);
   }
 
+  const currentAssistantName = useAssistantName();
+  const [assistantNameInput, setAssistantNameInput] = useState(currentAssistantName);
+  const updateAssistantName = useUpdateAssistantName();
+
+  async function handleAssistantNameSave() {
+    const trimmed = assistantNameInput.trim();
+    if (!trimmed || trimmed === currentAssistantName) return;
+    try {
+      await updateAssistantName.mutateAsync(trimmed);
+    } catch (err) {
+      console.error("Failed to save assistant name:", err);
+      setError("Failed to update assistant name.");
+      setTimeout(() => setError(null), 4000);
+    }
+  }
+
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-          Weather &amp; Location
+    <div className="space-y-4">
+      {/* Assistant name */}
+      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
+          Assistant
         </h3>
+        <div className="space-y-2">
+          <label htmlFor="settings-assistant-name" className="text-sm text-white/70">
+            Name your assistant
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              id="settings-assistant-name"
+              type="text"
+              value={assistantNameInput}
+              onChange={(e) => {
+                if (e.target.value.length <= 10) setAssistantNameInput(e.target.value);
+              }}
+              onBlur={handleAssistantNameSave}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAssistantNameSave(); }}
+              maxLength={10}
+              placeholder="Brett"
+              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-brett-gold/50 focus:ring-1 focus:ring-brett-gold/50 focus:outline-none"
+            />
+            <Wordmark name={assistantNameInput.trim() || "Brett"} size={16} />
+          </div>
+          <p className="text-[10px] text-white/30">{assistantNameInput.length}/10</p>
+        </div>
       </div>
+
+      {/* Weather & Location */}
+      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
+            Weather &amp; Location
+          </h3>
+        </div>
 
       {error && <p className="text-xs text-red-400/80 mb-3">{error}</p>}
 
@@ -220,6 +269,7 @@ export function LocationSection() {
           </>
         )}
       </div>
+    </div>
     </div>
   );
 }
