@@ -878,6 +878,11 @@ export function App() {
 
   const inboxCount = inboxData?.visible.length ?? 0;
 
+  // Dynamic window title: "(3) Jarvis" or just "Jarvis"
+  useEffect(() => {
+    document.title = inboxCount > 0 ? `(${inboxCount}) ${assistantName}` : assistantName;
+  }, [inboxCount, assistantName]);
+
   // Dynamic favicon: working (Brett streaming) > count badge > default
   const faviconMode = omnibar.isStreaming ? "working" as const : "default" as const;
   useFavicon(faviconMode, todayTaskCount);
