@@ -22,6 +22,7 @@ import {
 } from "../api/things";
 import { useBriefing, useBriefingSummary } from "../api/briefing";
 import { usePreference } from "../api/preferences";
+import { useAutoUpdate } from "../hooks/useAutoUpdate";
 
 interface TodayViewProps {
   lists: NavList[];
@@ -36,6 +37,7 @@ interface TodayViewProps {
 }
 
 export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps, nextUpEvent, nextUpTimer, onReconnect, reconnectPendingSourceId }: TodayViewProps) {
+  const { install: installUpdate } = useAutoUpdate();
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [briefingEnabled] = usePreference("briefingEnabled");
   const [briefingDismissedDate, setBriefingDismissedDate] = usePreference("briefingDismissedDate");
@@ -145,10 +147,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
       bare
       onReconnect={onReconnect}
       reconnectPendingSourceId={reconnectPendingSourceId}
+      onInstallUpdate={installUpdate}
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
     />
   ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} bare onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
+    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} bare onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={installUpdate} />
   );
 
   return (
