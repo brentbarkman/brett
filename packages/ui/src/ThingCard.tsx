@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { StaleTooltip } from "./StaleTooltip";
-import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe } from "lucide-react";
+import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Thing } from "@brett/types";
 
@@ -10,9 +10,11 @@ interface ThingCardProps {
   onToggle?: (id: string) => void;
   onFocus?: () => void;
   isFocused?: boolean;
+  onReconnect?: () => void;
+  reconnectPending?: boolean;
 }
 
-export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: ThingCardProps) {
+export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending }: ThingCardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
     data: {
@@ -177,6 +179,18 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused }: Thin
       </div>
 
       <div className="flex-shrink-0 flex items-center gap-2">
+        {/* Reconnect button for broken integrations */}
+        {onReconnect && thing.sourceId?.startsWith("relink:") && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onReconnect(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            disabled={reconnectPending}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-brett-gold/15 text-brett-gold hover:bg-brett-gold/25 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={11} className={reconnectPending ? "animate-spin" : ""} />
+            {reconnectPending ? "Connecting..." : "Reconnect"}
+          </button>
+        )}
         {thing.list && thing.list !== "Inbox" && (
           <span className="text-xs text-white/50 truncate max-w-[100px]">{thing.list}</span>
         )}

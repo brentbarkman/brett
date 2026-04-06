@@ -9,9 +9,11 @@ interface UpcomingViewProps {
   onItemClick: (item: Thing) => void;
   onTriageOpen: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   onFocusChange?: (thing: Thing) => void;
+  onReconnect?: (sourceId: string) => void;
+  reconnectPendingSourceId?: string;
 }
 
-export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange }: UpcomingViewProps) {
+export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onReconnect, reconnectPendingSourceId }: UpcomingViewProps) {
   const [typeFilter, setTypeFilter] = useState<FilterType>("All");
   const { data: things = [], isLoading } = useUpcomingThings();
   const toggleThing = useToggleThing();
@@ -103,6 +105,10 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange }: Upcom
                   onToggle={handleToggle}
                   onFocus={() => setFocusedIndex(offset + i)}
                   isFocused={focusedIndex === offset + i}
+                  onReconnect={thing.sourceId?.startsWith("relink:") && onReconnect
+                    ? () => onReconnect(thing.sourceId!)
+                    : undefined}
+                  reconnectPending={thing.sourceId === reconnectPendingSourceId}
                 />
               ))}
             </div>

@@ -184,6 +184,22 @@ things.get("/", async (c) => {
   return c.json(thingsList);
 });
 
+// GET /things/broken-connections — count of active re-link tasks by type
+things.get("/broken-connections", async (c) => {
+  const user = c.get("user");
+  const items = await prisma.item.findMany({
+    where: {
+      userId: user.id,
+      source: "system",
+      sourceId: { startsWith: "relink:" },
+      status: { in: ["active", "snoozed"] },
+    },
+    select: { sourceId: true },
+  });
+  const types = [...new Set(items.map((i) => i.sourceId!.split(":")[1]))];
+  return c.json({ count: items.length, types });
+});
+
 // PATCH /things/bulk — bulk update
 things.patch("/bulk", async (c) => {
   const user = c.get("user");

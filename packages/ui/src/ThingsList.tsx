@@ -20,9 +20,11 @@ interface ThingsListProps {
   activeFilter?: string;
   /** When true, skip the glass card wrapper (parent provides it) */
   bare?: boolean;
+  onReconnect?: (sourceId: string) => void;
+  reconnectPendingSourceId?: string;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare, onReconnect, reconnectPendingSourceId }: ThingsListProps) {
   // ── Deferred toggle: batch mutations so the list stays stable during rapid-fire ──
   const pendingToggles = useRef<Set<string>>(new Set());
   const freezeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -123,13 +125,13 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           )}
 
           {grouped.overdue.length > 0 && (
-            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} />
+            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
           )}
           {grouped.today.length > 0 && (
-            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} />
+            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
           )}
           {grouped.this_week.length > 0 && (
-            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} />
+            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
           )}
 
           {hasUncompleted && (
@@ -144,7 +146,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
                 opacity: 0,
               } : undefined}
             >
-              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} />
+              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
             </div>
           )}
         </div>
@@ -179,6 +181,8 @@ function Section({
   onToggle,
   focusedIndex,
   indexOffset,
+  onReconnect,
+  reconnectPendingSourceId,
 }: {
   title: string;
   things: Thing[];
@@ -186,6 +190,8 @@ function Section({
   onToggle?: (id: string) => void;
   focusedIndex: number;
   indexOffset: number;
+  onReconnect?: (sourceId: string) => void;
+  reconnectPendingSourceId?: string;
 }) {
   return (
     <div>
@@ -198,6 +204,10 @@ function Section({
             onClick={() => onItemClick(item)}
             onToggle={onToggle}
             isFocused={focusedIndex === indexOffset + i}
+            onReconnect={item.sourceId?.startsWith("relink:") && onReconnect
+              ? () => onReconnect(item.sourceId!)
+              : undefined}
+            reconnectPending={item.sourceId === reconnectPendingSourceId}
           />
         ))}
       </div>

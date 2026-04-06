@@ -13,6 +13,7 @@ import { ImportSection } from "./ImportSection";
 import { SignOutSection } from "./SignOutSection";
 import { DangerZoneSection } from "./DangerZoneSection";
 import { useAuth } from "../auth/AuthContext";
+import { useBrokenConnections } from "../api/connection-health";
 
 type SettingsTab =
   | "profile"
@@ -44,6 +45,9 @@ function tabFromHash(hash: string): SettingsTab | null {
 export function SettingsLayout() {
   const location = useLocation();
   const { user } = useAuth();
+
+  const { data: brokenConnections } = useBrokenConnections();
+  const brokenTypes = brokenConnections?.types ?? [];
 
   const initialTab = tabFromHash(location.hash) || "profile";
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
@@ -137,22 +141,30 @@ export function SettingsLayout() {
 
         {/* Tab bar */}
         <div className="flex items-center gap-0 border-b border-white/10">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabSelect(tab.id)}
-              className={`px-4 py-2.5 text-xs font-medium transition-colors relative ${
-                activeTab === tab.id
-                  ? "text-white"
-                  : "text-white/40 hover:text-white/60"
-              }`}
-            >
-              {tab.label}
-              {activeTab === tab.id && (
-                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-brett-gold" />
-              )}
-            </button>
-          ))}
+          {TABS.map((tab) => {
+            const hasBrokenDot =
+              (tab.id === "calendar" && brokenTypes.some((t) => t === "google-calendar" || t === "granola")) ||
+              (tab.id === "ai-providers" && brokenTypes.includes("ai"));
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabSelect(tab.id)}
+                className={`px-4 py-2.5 text-xs font-medium transition-colors relative flex items-center gap-1.5 ${
+                  activeTab === tab.id
+                    ? "text-white"
+                    : "text-white/40 hover:text-white/60"
+                }`}
+              >
+                {tab.label}
+                {hasBrokenDot && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                )}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-brett-gold" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 

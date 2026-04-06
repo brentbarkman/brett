@@ -121,6 +121,7 @@ export interface Thing {
   meetingNoteCalendarEventId?: string;
   scoutName?: string;
   scoutId?: string;
+  sourceId?: string;
 }
 
 export interface Attachment {

@@ -261,6 +261,9 @@ export function itemToThing(
       scoutId: item.sourceId,
       scoutName: item.scoutName ?? undefined,
     }),
+    ...(item.source === "system" && item.sourceId?.startsWith("relink:") && {
+      sourceId: item.sourceId,
+    }),
     ...(item.type === "content" && {
       contentType: (item.contentType as ContentType) ?? undefined,
       contentStatus: (item.contentStatus as ContentStatus) ?? undefined,

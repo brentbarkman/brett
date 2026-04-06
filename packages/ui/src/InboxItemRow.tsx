@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Zap, BookOpen, Check, MessageSquare, FileText, Play, File, Headphones, Globe } from "lucide-react";
+import { Zap, BookOpen, Check, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw } from "lucide-react";
 import type { Thing } from "@brett/types";
 import { useDraggable } from "@dnd-kit/core";
 
@@ -17,6 +17,8 @@ interface InboxItemRowProps {
   onFocus?: () => void;
   onToggle?: (id: string) => void;
   onSelect: () => void;
+  onReconnect?: () => void;
+  reconnectPending?: boolean;
 }
 
 export function InboxItemRow({
@@ -32,6 +34,8 @@ export function InboxItemRow({
   onFocus,
   onToggle,
   onSelect,
+  onReconnect,
+  reconnectPending,
 }: InboxItemRowProps) {
   const [completing, setCompleting] = useState(false);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -145,6 +149,19 @@ export function InboxItemRow({
         <span className="flex-shrink-0 text-[11px] text-white/40 px-1.5 py-0.5 rounded bg-white/5">
           {thing.source}
         </span>
+      )}
+
+      {/* Reconnect button for broken integrations */}
+      {onReconnect && thing.sourceId?.startsWith("relink:") && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onReconnect(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          disabled={reconnectPending}
+          className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-brett-gold/15 text-brett-gold hover:bg-brett-gold/25 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw size={11} className={reconnectPending ? "animate-spin" : ""} />
+          {reconnectPending ? "Connecting..." : "Reconnect"}
+        </button>
       )}
 
       {/* Relative age */}

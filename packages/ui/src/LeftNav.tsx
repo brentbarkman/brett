@@ -42,6 +42,8 @@ interface LeftNavProps {
   archivedLists?: NavList[];
   /** Opens the Spotlight modal (⌘K) */
   onOpenSpotlight?: () => void;
+  /** Show amber dot on settings when integrations are broken */
+  hasBrokenConnections?: boolean;
 }
 
 export function LeftNav({
@@ -61,6 +63,7 @@ export function LeftNav({
   onUnarchiveList,
   archivedLists,
   onOpenSpotlight,
+  hasBrokenConnections,
 }: LeftNavProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -256,20 +259,25 @@ export function LeftNav({
               ${isCollapsed ? "justify-center p-2" : "px-2 py-1.5"}
             `}
             >
-              {user.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt=""
-                  className="w-6 h-6 rounded-full flex-shrink-0"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${getAvatarColor(user.name || user.email)}`}>
-                  <span className="text-[10px] font-bold">
-                    {(user.name || user.email)[0].toUpperCase()}
-                  </span>
-                </div>
-              )}
+              <div className="relative flex-shrink-0">
+                {user.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt=""
+                    className="w-6 h-6 rounded-full"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${getAvatarColor(user.name || user.email)}`}>
+                    <span className="text-[10px] font-bold">
+                      {(user.name || user.email)[0].toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                {hasBrokenConnections && (
+                  <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-black/50" />
+                )}
+              </div>
               {!isCollapsed && (
                 <span className="text-xs text-white/80 truncate">
                   {user.name || user.email}

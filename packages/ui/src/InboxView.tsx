@@ -21,6 +21,8 @@ interface InboxViewProps {
   ) => void;
   onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   onFocusChange?: (thing: Thing) => void;
+  onReconnect?: (sourceId: string) => void;
+  reconnectPendingSourceId?: string;
 }
 
 export function InboxView({
@@ -34,6 +36,8 @@ export function InboxView({
   onTriage,
   onTriageOpen,
   onFocusChange,
+  onReconnect,
+  reconnectPendingSourceId,
 }: InboxViewProps) {
   const [typeFilter, setTypeFilter] = useState<FilterType>("All");
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -506,6 +510,10 @@ export function InboxView({
                               return next;
                             });
                           }}
+                          onReconnect={thing.sourceId?.startsWith("relink:") && onReconnect
+                            ? () => onReconnect(thing.sourceId!)
+                            : undefined}
+                          reconnectPending={thing.sourceId === reconnectPendingSourceId}
                         />
                       </div>
                     );

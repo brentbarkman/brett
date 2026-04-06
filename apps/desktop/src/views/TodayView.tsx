@@ -31,9 +31,11 @@ interface TodayViewProps {
   omnibarProps: OmnibarProps;
   nextUpEvent?: CalendarEventDisplay | null;
   nextUpTimer?: NextUpTimerState | null;
+  onReconnect?: (sourceId: string) => void;
+  reconnectPendingSourceId?: string;
 }
 
-export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps, nextUpEvent, nextUpTimer }: TodayViewProps) {
+export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps, nextUpEvent, nextUpTimer, onReconnect, reconnectPendingSourceId }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [briefingEnabled] = usePreference("briefingEnabled");
   const [briefingDismissedDate, setBriefingDismissedDate] = usePreference("briefingDismissedDate");
@@ -141,10 +143,12 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
       onFocusChange={onFocusChange}
       activeFilter={activeFilter}
       bare
+      onReconnect={onReconnect}
+      reconnectPendingSourceId={reconnectPendingSourceId}
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
     />
   ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} bare />
+    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} bare onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
   );
 
   return (

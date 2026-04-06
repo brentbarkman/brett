@@ -17,9 +17,11 @@ interface ListViewProps {
   onArchiveList?: (id: string, incompleteCount: number) => void;
   onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   onFocusChange?: (thing: Thing) => void;
+  onReconnect?: (sourceId: string) => void;
+  reconnectPendingSourceId?: string;
 }
 
-export function ListView({ lists, archivedLists, listsFetching, onItemClick, onArchiveList, onTriageOpen, onFocusChange }: ListViewProps) {
+export function ListView({ lists, archivedLists, listsFetching, onItemClick, onArchiveList, onTriageOpen, onFocusChange, onReconnect, reconnectPendingSourceId }: ListViewProps) {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
 
@@ -301,6 +303,10 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
                   onToggle={handleToggle}
                   onFocus={() => setFocusedIndex(i)}
                   isFocused={focusedIndex === i}
+                  onReconnect={thing.sourceId?.startsWith("relink:") && onReconnect
+                    ? () => onReconnect(thing.sourceId!)
+                    : undefined}
+                  reconnectPending={thing.sourceId === reconnectPendingSourceId}
                 />
               ))}
             </div>
@@ -320,6 +326,10 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
                   onToggle={handleToggle}
                   onFocus={() => setFocusedIndex(activeThings.length + i)}
                   isFocused={focusedIndex === activeThings.length + i}
+                  onReconnect={thing.sourceId?.startsWith("relink:") && onReconnect
+                    ? () => onReconnect(thing.sourceId!)
+                    : undefined}
+                  reconnectPending={thing.sourceId === reconnectPendingSourceId}
                 />
               ))}
             </div>
