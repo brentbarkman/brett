@@ -23,14 +23,16 @@ COPY packages/utils packages/utils
 COPY packages/business packages/business
 COPY packages/api-core packages/api-core
 COPY packages/ai packages/ai
-# Build shared packages first — API imports their dist/ outputs
+COPY apps/api/prisma apps/api/prisma
+# Generate Prisma client first — @brett/ai imports from @prisma/client
+RUN pnpm --filter @brett/api exec prisma generate
+# Build shared packages — API imports their dist/ outputs
 RUN pnpm --filter @brett/types run build && \
     pnpm --filter @brett/utils run build && \
     pnpm --filter @brett/business run build && \
     pnpm --filter @brett/api-core run build && \
     pnpm --filter @brett/ai run build
 COPY apps/api apps/api
-RUN pnpm --filter @brett/api exec prisma generate
 RUN pnpm --filter @brett/api run build
 
 # Run
