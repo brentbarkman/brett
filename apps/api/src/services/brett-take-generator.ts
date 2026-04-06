@@ -102,11 +102,19 @@ export async function generatePendingTakes(userId: string): Promise<void> {
   lastGenerationTime.set(userId, Date.now());
 
   try {
-    // 1. Check user has active AI config
-    const config = await prisma.userAIConfig.findFirst({
-      where: { userId, isActive: true, isValid: true },
-    });
+    // 1. Check user has active AI config and fetch user settings
+    const [config, userRecord] = await Promise.all([
+      prisma.userAIConfig.findFirst({
+        where: { userId, isActive: true, isValid: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { assistantName: true },
+      }),
+    ]);
     if (!config) return; // No AI provider — skip silently
+
+    const assistantName = userRecord?.assistantName ?? "Brett";
 
     // 2. Fetch upcoming events in next 48 hours
     const now = new Date();
@@ -202,7 +210,7 @@ export async function generatePendingTakes(userId: string): Promise<void> {
     for (const { event, hasPriorSummary } of toGenerate) {
       try {
         const hash = contentHash(event, hasPriorSummary);
-        await generateSingleTake(userId, event.id, event.title, hash, provider, providerName);
+        await generateSingleTake(userId, event.id, event.title, hash, provider, providerName, assistantName);
       } catch (err) {
         console.error(
           `[brett-take-generator] Failed for event ${event.id}:`,
@@ -223,6 +231,7 @@ async function generateSingleTake(
   hash: string,
   provider: ReturnType<typeof getProvider>,
   providerName: AIProviderName,
+  assistantName: string,
 ): Promise<void> {
   const session = await prisma.conversationSession.create({
     data: {
@@ -243,6 +252,7 @@ async function generateSingleTake(
   const input = {
     type: "bretts_take" as const,
     userId,
+    assistantName,
     calendarEventId: eventId,
     embeddingContext: embeddingContext || undefined,
   };

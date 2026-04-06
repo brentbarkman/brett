@@ -89,20 +89,27 @@ brettOmnibar.post(
       },
     });
 
-    // Load embedding context relevant to this message
+    // Load user settings (assistantName) and embedding context in parallel
     const embeddingProvider = getEmbeddingProvider();
-    const embeddingContext = await loadEmbeddingContext(
-      user.id,
-      message.trim(),
-      embeddingProvider,
-      prisma,
-      3,
-    );
+    const [userSettings, embeddingContext] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { assistantName: true },
+      }),
+      loadEmbeddingContext(
+        user.id,
+        message.trim(),
+        embeddingProvider,
+        prisma,
+        3,
+      ),
+    ]);
 
     // Prepare orchestrator input
     const input = {
       type: "omnibar" as const,
       userId: user.id,
+      assistantName: userSettings?.assistantName ?? "Brett",
       message: message.trim(),
       sessionMessages,
       currentView: context?.currentView,
@@ -122,7 +129,7 @@ brettOmnibar.post(
         },
       },
       session.id,
-      { memoryCtx: { userId: user.id, provider, providerName } },
+      { memoryCtx: { userId: user.id, provider, providerName, assistantName: input.assistantName } },
     );
 
     return sseResponse(stream);
