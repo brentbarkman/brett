@@ -22,6 +22,9 @@ async function uploadRelease() {
     throw new Error("No .dmg found in dist/. Build may have failed.");
   }
   const dmgFile = dmgFiles[0];
+  if (!dmgFile.includes(version)) {
+    throw new Error(`DMG filename "${dmgFile}" does not contain expected version "${version}". Stale build artifact?`);
+  }
   const dmgPath = path.join(distDir, dmgFile);
 
   // Find latest-mac.yml (contains SHA512 hash — do not modify)

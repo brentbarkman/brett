@@ -88,15 +88,25 @@ ipcMain.handle("install-update", () => {
 });
 
 ipcMain.handle("get-update-version", () => {
-  return getDownloadedVersion() || store.get("pendingUpdateVersion") || null;
+  // Only return a version if the main process confirms an update is actually downloaded.
+  // Do NOT fall back to store — stale pendingUpdateVersion would drive UI state without
+  // a real update being ready, causing confusing failures when user clicks Install.
+  return getDownloadedVersion() || null;
 });
 
 ipcMain.handle("get-update-task-id", () => {
   return store.get("pendingUpdateTaskId") || null;
 });
 
+// Validate task ID format to prevent renderer from injecting arbitrary path segments
+// into API calls like DELETE /things/${taskId}
+const TASK_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+
 ipcMain.handle("set-update-task-id", (_event, taskId: string | null) => {
   if (taskId) {
+    if (!TASK_ID_PATTERN.test(taskId)) {
+      throw new Error("Invalid task ID format");
+    }
     store.set("pendingUpdateTaskId", taskId);
   } else {
     store.delete("pendingUpdateTaskId");
@@ -113,6 +123,9 @@ ipcMain.handle("get-auto-install-on-quit", () => {
 });
 
 ipcMain.handle("set-auto-install-on-quit", (_event, enabled: boolean) => {
+  if (typeof enabled !== "boolean") {
+    throw new Error("Invalid value — expected boolean");
+  }
   store.set("autoInstallOnQuit", enabled);
   setAutoInstallOnQuit(enabled);
 });
