@@ -151,8 +151,6 @@ export function LocationSection() {
               onChange={(e) => {
                 if (e.target.value.length <= 10) setAssistantNameInput(e.target.value);
               }}
-              onBlur={handleAssistantNameSave}
-              onKeyDown={(e) => { if (e.key === "Enter") handleAssistantNameSave(); }}
               maxLength={10}
               placeholder="Brett"
               className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-brett-gold/50 focus:ring-1 focus:ring-brett-gold/50 focus:outline-none"
@@ -160,6 +158,15 @@ export function LocationSection() {
             <Wordmark name={assistantNameInput.trim() || "Brett"} size={16} />
           </div>
           <p className="text-[10px] text-white/30">{assistantNameInput.length}/10</p>
+        </div>
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={handleAssistantNameSave}
+            disabled={assistantNameInput.trim() === currentAssistantName || updateAssistantName.isPending}
+            className="bg-brett-gold text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-brett-gold-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {updateAssistantName.isPending ? "Saving..." : "Save"}
+          </button>
         </div>
       </div>
 
