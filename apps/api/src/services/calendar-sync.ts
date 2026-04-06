@@ -511,8 +511,9 @@ async function upsertEvents(
     const myResponseStatus = selfAttendee?.responseStatus
       ?? (isOrganizer ? "accepted" : "observer");
 
-    // Extract meeting link
+    // Extract meeting link and conference ID
     const meetingLink = extractMeetingLink(event);
+    const conferenceId = (event as any).conferenceData?.conferenceId ?? null;
 
     // Build organizer JSON (Prisma requires DbNull for nullable Json fields)
     const organizer: Prisma.InputJsonValue | typeof Prisma.DbNull = event.organizer
@@ -559,6 +560,7 @@ async function upsertEvents(
       recurrence: event.recurrence?.join("\n") ?? null,
       recurringEventId: event.recurringEventId ?? null,
       meetingLink,
+      conferenceId,
       googleColorId: event.colorId ?? null,
       organizer,
       attendees,
