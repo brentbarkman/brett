@@ -1,6 +1,3 @@
--- DropIndex
-DROP INDEX "embedding_vector_idx";
-
 -- AlterTable
 ALTER TABLE "CalendarEvent" ADD COLUMN     "conferenceId" TEXT;
 
@@ -49,6 +46,18 @@ CREATE INDEX "MeetingNoteSource_userId_provider_idx" ON "MeetingNoteSource"("use
 -- CreateIndex
 CREATE UNIQUE INDEX "MeetingNoteSource_provider_externalId_key" ON "MeetingNoteSource"("provider", "externalId");
 
+-- Deduplicate: keep the most recently synced meeting note per (userId, calendarEventId)
+DELETE FROM "GranolaMeeting" WHERE id IN (
+  SELECT id FROM (
+    SELECT id, ROW_NUMBER() OVER (
+      PARTITION BY "userId", "calendarEventId"
+      ORDER BY "syncedAt" DESC
+    ) as rn
+    FROM "GranolaMeeting"
+    WHERE "calendarEventId" IS NOT NULL
+  ) t WHERE rn > 1
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "GranolaMeeting_userId_calendarEventId_key" ON "GranolaMeeting"("userId", "calendarEventId");
 
@@ -71,4 +80,7 @@ FROM "GranolaMeeting"
 WHERE "granolaDocumentId" IS NOT NULL;
 
 -- Backfill: Mark existing meetings as having granola source
-UPDATE "GranolaMeeting" SET sources = ARRAY['granola'];
+UPDATE "GranolaMeeting" SET sources = ARRAY['granola'] WHERE "granolaDocumentId" IS NOT NULL;
+
+-- Recreate vector search index (managed outside Prisma schema)
+CREATE INDEX IF NOT EXISTS "embedding_vector_idx" ON "Embedding" USING hnsw (embedding vector_cosine_ops);
