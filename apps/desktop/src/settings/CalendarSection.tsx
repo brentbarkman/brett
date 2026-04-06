@@ -263,6 +263,16 @@ export function CalendarSection() {
           <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
             Meeting Notes
           </h3>
+          {!(granolaAccount?.connected && granolaAccount.account) && (
+            <button
+              onClick={() => connectGranola.mutate()}
+              disabled={connectGranola.isPending}
+              className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus size={12} />
+              {connectGranola.isPending ? "Connecting..." : "Connect Granola"}
+            </button>
+          )}
         </div>
 
         {granolaAccount?.connected && granolaAccount.account ? (
@@ -368,14 +378,6 @@ export function CalendarSection() {
                 Connect Granola to sync meeting notes, summaries, and action items
               </p>
             </div>
-            <button
-              onClick={() => connectGranola.mutate()}
-              disabled={connectGranola.isPending}
-              className="flex items-center gap-1.5 text-xs text-amber-400/60 hover:text-amber-400 border border-amber-400/20 hover:border-amber-400/40 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-1"
-            >
-              <Plus size={12} />
-              {connectGranola.isPending ? "Connecting..." : "Connect Granola"}
-            </button>
             {connectGranola.isError && (
               <p className="text-xs text-red-400/80 mt-1">
                 {connectGranola.error instanceof Error
