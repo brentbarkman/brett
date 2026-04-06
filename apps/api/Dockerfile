@@ -10,6 +10,7 @@ COPY packages/types/package.json packages/types/
 COPY packages/utils/package.json packages/utils/
 COPY packages/business/package.json packages/business/
 COPY packages/api-core/package.json packages/api-core/
+COPY packages/ai/package.json packages/ai/
 COPY .npmrc ./
 RUN pnpm install --frozen-lockfile --filter @brett/api...
 
@@ -21,6 +22,13 @@ COPY packages/types packages/types
 COPY packages/utils packages/utils
 COPY packages/business packages/business
 COPY packages/api-core packages/api-core
+COPY packages/ai packages/ai
+# Build shared packages first — API imports their dist/ outputs
+RUN pnpm --filter @brett/types run build && \
+    pnpm --filter @brett/utils run build && \
+    pnpm --filter @brett/business run build && \
+    pnpm --filter @brett/api-core run build && \
+    pnpm --filter @brett/ai run build
 COPY apps/api apps/api
 RUN pnpm --filter @brett/api exec prisma generate
 RUN pnpm --filter @brett/api run build
@@ -33,6 +41,7 @@ COPY --from=build /app/packages/types packages/types
 COPY --from=build /app/packages/utils packages/utils
 COPY --from=build /app/packages/business packages/business
 COPY --from=build /app/packages/api-core packages/api-core
+COPY --from=build /app/packages/ai packages/ai
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/api/node_modules apps/api/node_modules
 COPY --from=build /app/apps/api/prisma apps/api/prisma
