@@ -6,16 +6,19 @@ import { googleThrottle } from "./google-throttle.js";
 /** Per-account mutex to prevent concurrent token refreshes */
 const clientCache = new Map<string, Promise<calendar_v3.Calendar>>();
 
-const SCOPES = [
+const BASE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/contacts.other.readonly",
-  "https://www.googleapis.com/auth/drive.metadata.readonly",
-  "https://www.googleapis.com/auth/documents.readonly",
   "openid",
   "email",
   "profile",
+];
+
+const MEETING_NOTES_SCOPES = [
+  "https://www.googleapis.com/auth/drive.metadata.readonly",
+  "https://www.googleapis.com/auth/documents.readonly",
 ];
 
 function getOAuthClient() {
@@ -27,11 +30,14 @@ function getOAuthClient() {
 }
 
 /** Generate OAuth URL for calendar connection */
-export function getCalendarAuthUrl(state: string): string {
+export function getCalendarAuthUrl(state: string, includeMeetingNotes = true): string {
   const oauth2Client = getOAuthClient();
+  const scopes = includeMeetingNotes
+    ? [...BASE_SCOPES, ...MEETING_NOTES_SCOPES]
+    : BASE_SCOPES;
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
-    scope: SCOPES,
+    scope: scopes,
     state,
     prompt: "consent",
   });
@@ -42,7 +48,7 @@ export function getCalendarReauthUrl(state: string, loginHint: string): string {
   const oauth2Client = getOAuthClient();
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
-    scope: SCOPES,
+    scope: [...BASE_SCOPES, ...MEETING_NOTES_SCOPES],
     state,
     prompt: "consent",
     include_granted_scopes: true,

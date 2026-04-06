@@ -3,6 +3,7 @@ import { CalendarDays } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { useCalendarEvents } from "../api/calendar";
 import { useCalendarAccounts, useConnectCalendar, useToggleCalendarVisibility } from "../api/calendar-accounts";
+import { CalendarConnectModal } from "../components/CalendarConnectModal";
 import { CalendarHeader, getSunday, type CalendarView, type CalendarInfo } from "../components/calendar/CalendarHeader";
 import { CalendarDayView } from "../components/calendar/CalendarDayView";
 import { CalendarWeekView } from "../components/calendar/CalendarWeekView";
@@ -23,6 +24,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   const { data: accounts = [], isLoading: isLoadingAccounts } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
   const toggleVisibility = useToggleCalendarVisibility();
+  const [showConnectModal, setShowConnectModal] = useState(false);
 
   // Flatten all calendars from all accounts for the header dropdown
   const allCalendars: CalendarInfo[] = useMemo(
@@ -206,7 +208,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
                     {/* Live CTA on today's column */}
                     {isToday && (
                       <button
-                        onClick={() => connectCalendar.mutate()}
+                        onClick={() => setShowConnectModal(true)}
                         className="absolute left-0 right-0 rounded-lg border border-brett-gold/30 px-2.5 py-2 text-left cursor-pointer transition-all hover:brightness-125 hover:border-brett-gold/50 group bg-brett-gold/10 backdrop-blur-xl"
                         style={{
                           top: `${ctaTop}px`,
@@ -276,6 +278,17 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
           />
         )}
       </div>
+
+      {showConnectModal && (
+        <CalendarConnectModal
+          onConnect={(meetingNotes) => {
+            setShowConnectModal(false);
+            connectCalendar.mutate(meetingNotes);
+          }}
+          onCancel={() => setShowConnectModal(false)}
+          isPending={connectCalendar.isPending}
+        />
+      )}
     </div>
   );
 }

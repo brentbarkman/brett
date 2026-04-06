@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { Calendar, Plus, Trash2, RefreshCw } from "lucide-react";
+import { CalendarConnectModal } from "../components/CalendarConnectModal";
 import {
   useCalendarAccounts,
   useConnectCalendar,
   useDisconnectCalendar,
   useToggleCalendarVisibility,
+  useToggleMeetingNotes,
   useReauthCalendar,
 } from "../api/calendar-accounts";
 import { useFetchCalendarRange } from "../api/calendar";
@@ -44,6 +46,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const disconnectCalendar = useDisconnectCalendar();
   const toggleVisibility = useToggleCalendarVisibility();
+  const toggleMeetingNotes = useToggleMeetingNotes();
   const reauthCalendar = useReauthCalendar();
 
   function handleDisconnect() {
@@ -128,31 +131,41 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
         </div>
       )}
 
-      {/* Google Meet Notes status */}
+      {/* Google Meet Notes toggle */}
       <div className="px-3 py-2.5 border-t border-white/5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {account.hasDriveScope ? (
-              <>
-                <span className="w-2 h-2 rounded-full bg-green-400" />
-                <span className="text-xs text-white/50">Meeting notes enabled</span>
-              </>
-            ) : (
-              <>
-                <span className="w-2 h-2 rounded-full bg-amber-400" />
-                <span className="text-xs text-white/50">Meeting notes require additional permissions</span>
-              </>
+            <span className="text-xs text-white/60">Meeting notes</span>
+            {!account.hasDriveScope && (
+              <span className="text-[10px] text-brett-gold/60">Requires permissions</span>
             )}
           </div>
-          {!account.hasDriveScope && (
-            <button
-              onClick={() => reauthCalendar.mutate(account.id)}
-              disabled={reauthCalendar.isPending}
-              className="text-xs text-brett-gold hover:text-brett-gold/80 font-medium transition-colors disabled:opacity-40"
-            >
-              {reauthCalendar.isPending ? "Opening..." : "Enable"}
-            </button>
-          )}
+          <button
+            role="switch"
+            aria-checked={account.hasDriveScope && account.meetingNotesEnabled}
+            onClick={() => {
+              if (!account.hasDriveScope) {
+                // No Drive scope — trigger reauth to get it
+                reauthCalendar.mutate(account.id);
+              } else {
+                // Has scope — toggle locally
+                toggleMeetingNotes.mutate({
+                  accountId: account.id,
+                  enabled: !account.meetingNotesEnabled,
+                });
+              }
+            }}
+            disabled={reauthCalendar.isPending || toggleMeetingNotes.isPending}
+            className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-40 ${
+              account.hasDriveScope && account.meetingNotesEnabled ? "bg-brett-gold" : "bg-white/15"
+            }`}
+          >
+            <span
+              className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
+                account.hasDriveScope && account.meetingNotesEnabled ? "translate-x-[16px]" : "translate-x-[2px]"
+              }`}
+            />
+          </button>
         </div>
       </div>
     </div>
@@ -168,6 +181,7 @@ export function CalendarSection() {
   const disconnectGranola = useDisconnectGranola();
   const updatePrefs = useUpdateGranolaPreferences();
   const [confirmGranolaDisconnect, setConfirmGranolaDisconnect] = useState(false);
+  const [showConnectModal, setShowConnectModal] = useState(false);
 
   return (
     <>
@@ -177,7 +191,7 @@ export function CalendarSection() {
             Connected Calendars
           </h3>
           <button
-            onClick={() => connectCalendar.mutate()}
+            onClick={() => setShowConnectModal(true)}
             disabled={connectCalendar.isPending}
             className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -370,6 +384,18 @@ export function CalendarSection() {
           </div>
         )}
       </div>
+
+      {/* Connect Google Calendar interstitial */}
+      {showConnectModal && (
+        <CalendarConnectModal
+          onConnect={(meetingNotes) => {
+            setShowConnectModal(false);
+            connectCalendar.mutate(meetingNotes);
+          }}
+          onCancel={() => setShowConnectModal(false)}
+          isPending={connectCalendar.isPending}
+        />
+      )}
     </>
   );
 }

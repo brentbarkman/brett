@@ -12,8 +12,9 @@ export function useCalendarAccounts() {
 export function useConnectCalendar() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      const { url } = await apiFetch<{ url: string }>("/calendar/accounts/connect", {
+    mutationFn: async (meetingNotes: boolean) => {
+      const qs = meetingNotes ? "" : "?meetingNotes=false";
+      const { url } = await apiFetch<{ url: string }>(`/calendar/accounts/connect${qs}`, {
         method: "POST",
       });
       // Validate the OAuth URL points to Google before opening
@@ -75,6 +76,23 @@ export function useReauthCalendar() {
         qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
       }, 2000);
       setTimeout(() => clearInterval(poll), 120_000);
+    },
+  });
+}
+
+export function useToggleMeetingNotes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ accountId, enabled }: { accountId: string; enabled: boolean }) =>
+      apiFetch<{ meetingNotesEnabled: boolean }>(
+        `/calendar/accounts/${accountId}/meeting-notes`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ enabled }),
+        },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
     },
   });
 }

@@ -57,6 +57,7 @@ calendarAccounts.get("/", async (c) => {
       googleEmail: a.googleEmail,
       connectedAt: a.connectedAt.toISOString(),
       hasDriveScope: a.hasDriveScope,
+      meetingNotesEnabled: a.meetingNotesEnabled,
       calendars: a.calendars.map((cal) => ({
         id: cal.id,
         googleCalendarId: cal.googleCalendarId,
@@ -70,10 +71,12 @@ calendarAccounts.get("/", async (c) => {
 });
 
 // POST /connect — Initiate OAuth (returns URL, state = base64url(userId).nonce.hmac)
+// ?meetingNotes=false to omit Drive/Docs scopes
 calendarAccounts.post("/connect", async (c) => {
   const user = c.get("user");
+  const meetingNotes = c.req.query("meetingNotes") !== "false";
   const { state } = signOAuthState("calendar", user.id);
-  const url = getCalendarAuthUrl(state);
+  const url = getCalendarAuthUrl(state, meetingNotes);
   return c.json({ url });
 });
 
@@ -173,6 +176,7 @@ calendarAccounts.get("/callback", async (c) => {
         ? new Date(tokens.expiry_date)
         : new Date(Date.now() + 3600 * 1000),
       hasDriveScope,
+      meetingNotesEnabled: hasDriveScope,
     },
     update: {
       googleEmail,
@@ -182,6 +186,7 @@ calendarAccounts.get("/callback", async (c) => {
         ? new Date(tokens.expiry_date)
         : new Date(Date.now() + 3600 * 1000),
       hasDriveScope,
+      // Don't override meetingNotesEnabled on reauth — preserve user's choice
     },
   });
 
@@ -227,6 +232,34 @@ calendarAccounts.post("/:accountId/reauth", async (c) => {
   const url = getCalendarReauthUrl(state, account.googleEmail);
 
   return c.json({ url });
+});
+
+// PATCH /:accountId/meeting-notes — Toggle meetingNotesEnabled
+calendarAccounts.patch("/:accountId/meeting-notes", async (c) => {
+  const user = c.get("user");
+  const accountId = c.req.param("accountId");
+
+  const account = await prisma.googleAccount.findFirst({
+    where: { id: accountId, userId: user.id },
+  });
+  if (!account) return c.json({ error: "Not found" }, 404);
+
+  const body = await c.req.json<{ enabled: boolean }>();
+  if (typeof body.enabled !== "boolean") {
+    return c.json({ error: "enabled must be a boolean" }, 400);
+  }
+
+  // Can't enable meeting notes without Drive scopes — client should trigger reauth
+  if (body.enabled && !account.hasDriveScope) {
+    return c.json({ error: "Drive scopes not granted. Re-authenticate to enable meeting notes." }, 409);
+  }
+
+  const updated = await prisma.googleAccount.update({
+    where: { id: account.id },
+    data: { meetingNotesEnabled: body.enabled },
+  });
+
+  return c.json({ meetingNotesEnabled: updated.meetingNotesEnabled });
 });
 
 // DELETE /:id — Disconnect: stop watches, cascade delete

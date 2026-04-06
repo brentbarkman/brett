@@ -71,6 +71,8 @@ import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
 import { usePreference } from "./api/preferences";
 import { useWeather } from "./api/weather";
+import { useBrokenConnections, useReconnect } from "./api/connection-health";
+import { CalendarConnectModal } from "./components/CalendarConnectModal";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
 import { ListView } from "./views/ListView";
@@ -267,9 +269,11 @@ export function App() {
   );
   const showCalendarSidebar = hasCalendarAccounts || !sidebarDismissed;
 
+  const [showCalendarConnectModal, setShowCalendarConnectModal] = useState(false);
+
   const handleConnectCalendar = useCallback(() => {
-    connectCalendar.mutate();
-  }, [connectCalendar]);
+    setShowCalendarConnectModal(true);
+  }, []);
 
   const handleDismissSidebar = useCallback(() => {
     setSidebarDismissed(true);
@@ -422,6 +426,10 @@ export function App() {
   // Weather state for omnibar pill
   const { weather, now: weatherNow, isLoading: weatherLoading } = useWeather();
   const [showWeatherExpanded, setShowWeatherExpanded] = useState(false);
+
+  // Connection health — broken integration badges + reconnect action
+  const { data: brokenConnections } = useBrokenConnections();
+  const { reconnect: handleReconnect, isPending: reconnectPending, pendingSourceId: reconnectPendingSourceId } = useReconnect();
 
   // Token usage tracking — reactive to Settings toggle
   const [showTokenUsage] = usePreference("showTokenUsage");
@@ -913,6 +921,7 @@ export function App() {
             archivedLists={archivedLists}
             onArchiveList={handleArchiveList}
             onUnarchiveList={(id) => unarchiveList.mutate(id)}
+            hasBrokenConnections={(brokenConnections?.count ?? 0) > 0}
             onOpenSpotlight={() => {
               setSpotlightInitialAction("search");
               omnibar.open("spotlight");
@@ -990,12 +999,14 @@ export function App() {
                   omnibarProps={omnibarProps}
                   nextUpEvent={nextUpEvent}
                   nextUpTimer={nextUpTimer}
+                  onReconnect={handleReconnect}
+                  reconnectPendingSourceId={reconnectPendingSourceId}
                 />
               </MainLayout>
             } />
             <Route path="/upcoming" element={
               <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer}>
-                <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
+                <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} onReconnect={handleReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
               </MainLayout>
             } />
             <Route path="/inbox" element={
@@ -1011,12 +1022,14 @@ export function App() {
                   onTriage={handleInboxTriage}
                   onTriageOpen={handleTriageOpen}
                   onFocusChange={handleFocusChange}
+                  onReconnect={handleReconnect}
+                  reconnectPendingSourceId={reconnectPendingSourceId}
                 />
               </MainLayout>
             } />
             <Route path="/lists/:slug" element={
               <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer}>
-                <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} />
+                <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} onReconnect={handleReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
               </MainLayout>
             } />
             <Route path="/" element={<Navigate to="/today" replace />} />
@@ -1275,6 +1288,18 @@ export function App() {
           initialForcedAction={spotlightInitialAction}
           showScoutAction={true}
         />
+
+        {/* Calendar connect interstitial — meeting notes opt-in */}
+        {showCalendarConnectModal && (
+          <CalendarConnectModal
+            onConnect={(meetingNotes) => {
+              setShowCalendarConnectModal(false);
+              connectCalendar.mutate(meetingNotes);
+            }}
+            onCancel={() => setShowCalendarConnectModal(false)}
+            isPending={connectCalendar.isPending}
+          />
+        )}
 
         {/* Archive list confirmation */}
         {archiveListConfirm && (

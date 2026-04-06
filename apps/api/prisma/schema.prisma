@@ -242,7 +242,8 @@ model GoogleAccount {
   tokenExpiresAt  DateTime
   connectedAt     DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  hasDriveScope   Boolean   @default(false)
+  hasDriveScope       Boolean   @default(false)
+  meetingNotesEnabled Boolean   @default(true)
 
   calendars       CalendarList[]
   events          CalendarEvent[]

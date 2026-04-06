@@ -124,6 +124,7 @@ export interface ConnectedCalendarAccount {
   googleEmail: string;
   connectedAt: string;
   hasDriveScope: boolean;
+  meetingNotesEnabled: boolean;
   calendars: CalendarListRecord[];
 }
 

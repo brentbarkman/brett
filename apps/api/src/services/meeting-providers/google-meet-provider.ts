@@ -16,7 +16,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
 
   async isAvailable(userId: string): Promise<boolean> {
     const account = await prisma.googleAccount.findFirst({
-      where: { userId, hasDriveScope: true },
+      where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
       select: { id: true },
     });
     return !!account;
@@ -28,7 +28,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
   ): Promise<ProviderMeetingData | null> {
     // Security: always include userId in account lookup
     const account = await prisma.googleAccount.findFirst({
-      where: { userId, hasDriveScope: true },
+      where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
     });
     if (!account) return null;
 
@@ -112,7 +112,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
     until: Date,
   ): Promise<ProviderMeetingData[]> {
     const account = await prisma.googleAccount.findFirst({
-      where: { userId, hasDriveScope: true },
+      where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
     });
     if (!account) return [];
 
