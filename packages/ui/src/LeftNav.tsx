@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { getAvatarColor } from "./avatarColor";
-import { ProductMark } from "./BrettMark";
+import { ProductMark, Wordmark } from "./BrettMark";
 import { Inbox, Calendar, CalendarDays, Clock, Search, Plus, MoreHorizontal, GripVertical, ChevronRight, Radar } from "lucide-react";
 import type { NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
@@ -44,6 +44,8 @@ interface LeftNavProps {
   onOpenSpotlight?: () => void;
   /** Show amber dot on settings when integrations are broken */
   hasBrokenConnections?: boolean;
+  assistantName?: string;
+  isAIWorking?: boolean;
 }
 
 export function LeftNav({
@@ -64,6 +66,8 @@ export function LeftNav({
   archivedLists,
   onOpenSpotlight,
   hasBrokenConnections,
+  assistantName,
+  isAIWorking,
 }: LeftNavProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -112,7 +116,7 @@ export function LeftNav({
           <ProductMark size={24} className="drop-shadow-[0_0_8px_rgba(232,185,49,0.4)]" />
         </div>
         {!isCollapsed && (
-          <span className="text-white font-bold tracking-wide">Brett</span>
+          <Wordmark name={assistantName ?? "Brett"} isWorking={isAIWorking} />
         )}
       </div>
 

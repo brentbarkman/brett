@@ -72,6 +72,7 @@ import { useSessionUsage } from "./api/ai-usage";
 import { usePreference } from "./api/preferences";
 import { useWeather } from "./api/weather";
 import { useBrokenConnections, useReconnect } from "./api/connection-health";
+import { useAssistantName } from "./api/assistant-name";
 import { CalendarConnectModal } from "./components/CalendarConnectModal";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
@@ -422,6 +423,7 @@ export function App() {
 
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
+  const assistantName = useAssistantName();
 
   // Weather state for omnibar pill
   const { weather, now: weatherNow, isLoading: weatherLoading } = useWeather();
@@ -928,6 +930,8 @@ export function App() {
               setSpotlightInitialAction("search");
               omnibar.open("spotlight");
             }}
+            assistantName={assistantName}
+            isAIWorking={omnibar.isStreaming}
           />
 
           <Routes>
