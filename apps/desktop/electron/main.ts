@@ -5,7 +5,7 @@ import path from "path";
 import { pathToFileURL } from "url";
 import Store from "electron-store";
 import { scanThings3, readThings3 } from "./things3";
-import { initAutoUpdater, quitAndInstall, isUpdateReady, getDownloadedVersion } from "./updater";
+import { initAutoUpdater, quitAndInstall, isUpdateReady, getDownloadedVersion, setAutoInstallOnQuit } from "./updater";
 
 // #3: Load API URL from main process config — never accept from renderer
 // Reads from api-config.json generated at build time, falls back to env var
@@ -114,6 +114,7 @@ ipcMain.handle("get-auto-install-on-quit", () => {
 
 ipcMain.handle("set-auto-install-on-quit", (_event, enabled: boolean) => {
   store.set("autoInstallOnQuit", enabled);
+  setAutoInstallOnQuit(enabled);
 });
 
 ipcMain.handle("things3:scan", () => {

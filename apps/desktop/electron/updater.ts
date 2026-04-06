@@ -89,6 +89,10 @@ export function getDownloadedVersion(): string | null {
   return downloadedVersion;
 }
 
+export function setAutoInstallOnQuit(enabled: boolean): void {
+  autoUpdater.autoInstallOnAppQuit = enabled;
+}
+
 let installTriggered = false;
 
 export function quitAndInstall(): void {
