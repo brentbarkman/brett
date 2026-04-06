@@ -51,7 +51,7 @@ export function BackgroundSection() {
     }).catch(() => {
       if (saveVersionRef.current === version) {
         setError("Failed to save.");
-        setTimeout(() => setError(null), 4000);
+        setTimeout(() => setError(null), 3000);
       }
     });
   }
@@ -72,7 +72,7 @@ export function BackgroundSection() {
 
   return (
     <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <h3 className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 mb-4">
+      <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
         Background
       </h3>
 

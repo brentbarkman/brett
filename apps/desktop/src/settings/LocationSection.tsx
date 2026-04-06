@@ -203,7 +203,7 @@ export function LocationSection() {
     } catch (err) {
       console.error("Failed to save location settings:", err);
       setError("Failed to save. Try again.");
-      setTimeout(() => setError(null), 4000);
+      setTimeout(() => setError(null), 3000);
     }
   }
 
@@ -256,7 +256,7 @@ export function LocationSection() {
     } catch (err) {
       console.error("Failed to update timezone:", err);
       setError("Failed to save. Try again.");
-      setTimeout(() => setError(null), 4000);
+      setTimeout(() => setError(null), 3000);
     } finally {
       setTzSaving(false);
     }
@@ -282,7 +282,7 @@ export function LocationSection() {
     } catch (err) {
       console.error("Failed to save assistant name:", err);
       setError("Failed to update assistant name.");
-      setTimeout(() => setError(null), 4000);
+      setTimeout(() => setError(null), 3000);
     }
   }
 

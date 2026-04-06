@@ -59,7 +59,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
   return (
     <div className="bg-white/5 rounded-lg overflow-hidden">
       {/* Account header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/5">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10">
         <div className="flex items-center gap-2 min-w-0">
           <GoogleIcon />
           <span className="text-sm text-white truncate">{account.googleEmail}</span>
@@ -94,7 +94,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
 
       {/* Calendar list */}
       {account.calendars.length > 0 && (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-white/10">
           {account.calendars.map((cal) => (
             <div
               key={cal.id}
@@ -117,13 +117,13 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
                     isVisible: !cal.isVisible,
                   })
                 }
-                className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                  cal.isVisible ? "bg-brett-gold" : "bg-white/15"
+                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                  cal.isVisible ? "bg-brett-gold" : "bg-white/10"
                 }`}
               >
                 <span
-                  className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                    cal.isVisible ? "translate-x-[16px]" : "translate-x-[2px]"
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                    cal.isVisible ? "translate-x-4" : "translate-x-0"
                   }`}
                 />
               </button>
@@ -133,7 +133,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
       )}
 
       {/* Google Meet Notes toggle */}
-      <div className="px-3 py-2.5 border-t border-white/5">
+      <div className="px-3 py-2.5 border-t border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs text-white/60">Meeting notes</span>
@@ -157,13 +157,13 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
               }
             }}
             disabled={reauthCalendar.isPending || toggleMeetingNotes.isPending}
-            className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-40 ${
-              account.hasDriveScope && account.meetingNotesEnabled ? "bg-brett-gold" : "bg-white/15"
+            className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-40 ${
+              account.hasDriveScope && account.meetingNotesEnabled ? "bg-brett-gold" : "bg-white/10"
             }`}
           >
             <span
-              className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                account.hasDriveScope && account.meetingNotesEnabled ? "translate-x-[16px]" : "translate-x-[2px]"
+              className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                account.hasDriveScope && account.meetingNotesEnabled ? "translate-x-4" : "translate-x-0"
               }`}
             />
           </button>
@@ -217,7 +217,7 @@ export function CalendarSection() {
 
         {!isLoading && !error && accounts.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <Calendar size={28} className="text-white/20" />
+            <Calendar size={24} className="text-white/20" />
             <div>
               <p className="text-sm text-white/50">No calendars connected yet</p>
               <p className="text-xs text-white/30 mt-1">
@@ -236,7 +236,7 @@ export function CalendarSection() {
         )}
 
         {isDev && !isLoading && accounts.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/5">
+          <div className="mt-4 pt-4 border-t border-white/10">
             <button
               onClick={() => {
                 const now = new Date();
@@ -315,7 +315,7 @@ export function CalendarSection() {
             </div>
 
             {/* Auto-create settings */}
-            <div className="px-3 py-3 border-t border-white/5 space-y-3">
+            <div className="px-3 py-3 border-t border-white/10 space-y-3">
               <label className="flex items-center justify-between cursor-pointer">
                 <div className="flex-1 mr-3">
                   <span className="text-sm text-white/70">Create tasks for me</span>
@@ -325,12 +325,12 @@ export function CalendarSection() {
                   role="switch"
                   aria-checked={granolaAccount.account.autoCreateMyTasks}
                   onClick={() => updatePrefs.mutate({ autoCreateMyTasks: !granolaAccount.account!.autoCreateMyTasks })}
-                  className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                    granolaAccount.account.autoCreateMyTasks ? "bg-brett-gold" : "bg-white/15"
+                  className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                    granolaAccount.account.autoCreateMyTasks ? "bg-brett-gold" : "bg-white/10"
                   }`}
                 >
-                  <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                    granolaAccount.account.autoCreateMyTasks ? "translate-x-[16px]" : "translate-x-[2px]"
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                    granolaAccount.account.autoCreateMyTasks ? "translate-x-4" : "translate-x-0"
                   }`} />
                 </button>
               </label>
@@ -344,12 +344,12 @@ export function CalendarSection() {
                   role="switch"
                   aria-checked={granolaAccount.account.autoCreateFollowUps}
                   onClick={() => updatePrefs.mutate({ autoCreateFollowUps: !granolaAccount.account!.autoCreateFollowUps })}
-                  className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                    granolaAccount.account.autoCreateFollowUps ? "bg-brett-gold" : "bg-white/15"
+                  className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                    granolaAccount.account.autoCreateFollowUps ? "bg-brett-gold" : "bg-white/10"
                   }`}
                 >
-                  <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                    granolaAccount.account.autoCreateFollowUps ? "translate-x-[16px]" : "translate-x-[2px]"
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                    granolaAccount.account.autoCreateFollowUps ? "translate-x-4" : "translate-x-0"
                   }`} />
                 </button>
               </label>
@@ -361,7 +361,7 @@ export function CalendarSection() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <Calendar size={28} className="text-white/20" />
+            <Calendar size={24} className="text-white/20" />
             <div>
               <p className="text-sm text-white/50">No meeting notes connected</p>
               <p className="text-xs text-white/30 mt-1">

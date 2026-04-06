@@ -37,59 +37,61 @@ function ConnectedRow({
     PROVIDERS.find((p) => p.id === config.provider)?.label ?? config.provider;
 
   return (
-    <div className="flex items-center justify-between px-3 py-2.5 bg-white/5 rounded-lg">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span
-          className={`w-2 h-2 rounded-full flex-shrink-0 ${
-            config.isValid ? "bg-brett-teal" : "bg-red-500"
-          }`}
-        />
-        <span className="text-sm text-white truncate">{providerLabel}</span>
-        <span className="text-xs text-white/30 truncate">
-          {config.maskedKey}
-        </span>
-        {config.isActive && (
-          <span className="text-xs text-brett-gold font-medium flex-shrink-0">
-            Active
+    <div className="bg-white/5 rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+              config.isValid ? "bg-brett-teal" : "bg-red-500"
+            }`}
+          />
+          <span className="text-sm text-white truncate">{providerLabel}</span>
+          <span className="text-xs text-white/30 truncate">
+            {config.maskedKey}
           </span>
-        )}
-      </div>
+          {config.isActive && (
+            <span className="text-xs text-brett-gold font-medium flex-shrink-0">
+              Active
+            </span>
+          )}
+        </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-        {!config.isActive && (
-          <button
-            onClick={onActivate}
-            disabled={isActivating}
-            className="text-xs text-white/40 hover:text-brett-gold transition-colors disabled:opacity-40"
-          >
-            {isActivating ? "Activating..." : "Set active"}
-          </button>
-        )}
-        {confirmDelete ? (
-          <>
-            <span className="text-xs text-white/40">Remove?</span>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+          {!config.isActive && (
             <button
-              onClick={onDelete}
-              disabled={isDeleting}
-              className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-40"
+              onClick={onActivate}
+              disabled={isActivating}
+              className="text-xs text-white/40 hover:text-brett-gold transition-colors disabled:opacity-40"
             >
-              {isDeleting ? "Removing..." : "Yes"}
+              {isActivating ? "Activating..." : "Set active"}
             </button>
+          )}
+          {confirmDelete ? (
+            <>
+              <span className="text-xs text-white/40">Remove?</span>
+              <button
+                onClick={onDelete}
+                disabled={isDeleting}
+                className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-40"
+              >
+                {isDeleting ? "Removing..." : "Yes"}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs text-white/40 hover:text-white/60 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
             <button
-              onClick={() => setConfirmDelete(false)}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors"
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-1 text-xs text-white/30 hover:text-red-400 transition-colors"
             >
-              Cancel
+              <Trash2 size={12} />
             </button>
-          </>
-        ) : (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="flex items-center gap-1 text-xs text-white/30 hover:text-red-400 transition-colors"
-          >
-            <Trash2 size={12} />
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -218,7 +220,7 @@ export function AISection() {
         <button
           onClick={() => setShowTokenUsage(!showTokenUsage)}
           className={`relative w-9 h-5 rounded-full transition-colors ${
-            showTokenUsage ? "bg-brett-gold" : "bg-white/20"
+            showTokenUsage ? "bg-brett-gold" : "bg-white/10"
           }`}
         >
           <span
@@ -320,7 +322,7 @@ export function AISection() {
           <button
             onClick={handleSave}
             disabled={!apiKey.trim() || saveConfig.isPending}
-            className="flex items-center gap-1.5 bg-brett-gold hover:bg-brett-gold-dark disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 bg-brett-gold hover:bg-brett-gold-dark disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             {saveConfig.isPending ? (
               <Loader2 size={14} className="animate-spin" />

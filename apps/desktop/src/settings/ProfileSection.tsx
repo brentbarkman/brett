@@ -24,6 +24,7 @@ export function ProfileSection() {
       }
       refetchUser();
       setMessage({ type: "success", text: "Profile updated" });
+      setTimeout(() => setMessage(null), 3000);
     } catch (err: unknown) {
       setMessage({
         type: "error",
