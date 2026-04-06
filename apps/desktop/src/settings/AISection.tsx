@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Bot, Check, ChevronDown, ChevronRight, Loader2, Trash2, X } from "lucide-react";
+import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import {
   useAIConfigs,
   useSaveAIConfig,
@@ -9,6 +10,7 @@ import {
 import { useUsageSummary } from "../api/ai-usage";
 import { usePreference } from "../api/preferences";
 import type { AIProviderName, UserAIConfigRecord } from "@brett/types";
+import { useAssistantName } from "../api/assistant-name";
 
 const PROVIDERS: { id: AIProviderName; label: string; hint: string }[] = [
   { id: "anthropic", label: "Anthropic", hint: "sk-ant-..." },
@@ -36,59 +38,61 @@ function ConnectedRow({
     PROVIDERS.find((p) => p.id === config.provider)?.label ?? config.provider;
 
   return (
-    <div className="flex items-center justify-between px-3 py-2.5 bg-white/5 rounded-lg">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span
-          className={`w-2 h-2 rounded-full flex-shrink-0 ${
-            config.isValid ? "bg-brett-teal" : "bg-red-500"
-          }`}
-        />
-        <span className="text-sm text-white truncate">{providerLabel}</span>
-        <span className="text-xs text-white/30 truncate">
-          {config.maskedKey}
-        </span>
-        {config.isActive && (
-          <span className="text-xs text-brett-gold font-medium flex-shrink-0">
-            Active
+    <div className="bg-white/5 rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+              config.isValid ? "bg-brett-teal" : "bg-red-500"
+            }`}
+          />
+          <span className="text-sm text-white truncate">{providerLabel}</span>
+          <span className="text-xs text-white/30 truncate">
+            {config.maskedKey}
           </span>
-        )}
-      </div>
+          {config.isActive && (
+            <span className="text-xs text-brett-gold font-medium flex-shrink-0">
+              Active
+            </span>
+          )}
+        </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-        {!config.isActive && (
-          <button
-            onClick={onActivate}
-            disabled={isActivating}
-            className="text-xs text-white/40 hover:text-brett-gold transition-colors disabled:opacity-40"
-          >
-            {isActivating ? "Activating..." : "Set active"}
-          </button>
-        )}
-        {confirmDelete ? (
-          <>
-            <span className="text-xs text-white/40">Remove?</span>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+          {!config.isActive && (
             <button
-              onClick={onDelete}
-              disabled={isDeleting}
-              className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-40"
+              onClick={onActivate}
+              disabled={isActivating}
+              className="text-xs text-white/40 hover:text-brett-gold transition-colors disabled:opacity-40"
             >
-              {isDeleting ? "Removing..." : "Yes"}
+              {isActivating ? "Activating..." : "Set active"}
             </button>
+          )}
+          {confirmDelete ? (
+            <>
+              <span className="text-xs text-white/40">Remove?</span>
+              <button
+                onClick={onDelete}
+                disabled={isDeleting}
+                className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-40"
+              >
+                {isDeleting ? "Removing..." : "Yes"}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs text-white/40 hover:text-white/60 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
             <button
-              onClick={() => setConfirmDelete(false)}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors"
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-1 text-xs text-white/30 hover:text-red-400 transition-colors"
             >
-              Cancel
+              <Trash2 size={12} />
             </button>
-          </>
-        ) : (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="flex items-center gap-1 text-xs text-white/30 hover:text-red-400 transition-colors"
-          >
-            <Trash2 size={12} />
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -169,6 +173,7 @@ function UsageStats({ provider }: { provider: string }) {
 }
 
 export function AISection() {
+  const assistantName = useAssistantName();
   const { data, isLoading, error } = useAIConfigs();
   const saveConfig = useSaveAIConfig();
   const activateConfig = useActivateAIConfig();
@@ -202,29 +207,19 @@ export function AISection() {
     PROVIDERS.find((p) => p.id === selectedProvider)?.hint ?? "";
 
   return (
-    <div id="ai-settings" className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+    <SettingsCard>
       {/* Header */}
-      <div className="mb-4">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-          AI Providers
-        </h3>
+      <div id="ai-settings" className="mb-4">
+        <SettingsHeader className="mb-0">AI Providers</SettingsHeader>
       </div>
 
       {/* Show token usage toggle */}
       <div className="flex items-center justify-between px-3 py-2.5 bg-white/5 rounded-lg mb-4">
         <span className="text-sm text-white/70">Show token usage in conversations</span>
-        <button
-          onClick={() => setShowTokenUsage(!showTokenUsage)}
-          className={`relative w-9 h-5 rounded-full transition-colors ${
-            showTokenUsage ? "bg-brett-gold" : "bg-white/20"
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-              showTokenUsage ? "translate-x-4" : "translate-x-0"
-            }`}
-          />
-        </button>
+        <SettingsToggle
+          checked={showTokenUsage}
+          onChange={() => setShowTokenUsage(!showTokenUsage)}
+        />
       </div>
 
       {/* Loading */}
@@ -281,7 +276,7 @@ export function AISection() {
         <div className="flex flex-col items-center gap-2 py-4 text-center mb-5">
           <Bot size={24} className="text-white/20" />
           <p className="text-xs text-white/30">
-            Configure an AI provider to enable Brett's AI features
+            {`Configure an AI provider to enable ${assistantName}'s AI features`}
           </p>
         </div>
       )}
@@ -318,7 +313,7 @@ export function AISection() {
           <button
             onClick={handleSave}
             disabled={!apiKey.trim() || saveConfig.isPending}
-            className="flex items-center gap-1.5 bg-brett-gold hover:bg-brett-gold-dark disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 bg-brett-gold hover:bg-brett-gold-dark disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             {saveConfig.isPending ? (
               <Loader2 size={14} className="animate-spin" />
@@ -345,6 +340,6 @@ export function AISection() {
           </div>
         )}
       </div>
-    </div>
+    </SettingsCard>
   );
 }

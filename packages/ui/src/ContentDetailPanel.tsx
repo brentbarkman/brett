@@ -62,6 +62,7 @@ interface ContentDetailPanelProps {
   onNavigateToScout?: (scoutId: string) => void;
   onScoutFeedback?: (scoutId: string, findingId: string, useful: boolean | null) => void;
   onNavigate?: (path: string) => void;
+  assistantName?: string;
 }
 
 export function ContentDetailPanel({
@@ -100,6 +101,7 @@ export function ContentDetailPanel({
   onNavigateToScout,
   onScoutFeedback,
   onNavigate,
+  assistantName = "Brett",
 }: ContentDetailPanelProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(detail.title);
@@ -261,6 +263,7 @@ export function ContentDetailPanel({
                 : undefined
             }
             onRetry={onRetryExtraction}
+            assistantName={assistantName}
           />
 
           {/* Brett's Take */}
@@ -269,7 +272,7 @@ export function ContentDetailPanel({
               <div className="flex items-center gap-2 mb-2">
                 <BrettMark size={12} />
                 <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-brett-cerulean">
-                  Brett's Take
+                  {assistantName}&apos;s Take
                 </span>
               </div>
               <p className="text-sm italic text-brett-cerulean/85 leading-relaxed">
@@ -341,6 +344,7 @@ export function ContentDetailPanel({
           onNavigate={onNavigate}
           aiConfigured={brettAiConfigured}
           onOpenSettings={onOpenSettings}
+          assistantName={assistantName}
         />
       )}
     </>

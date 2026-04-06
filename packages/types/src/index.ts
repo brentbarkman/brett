@@ -12,6 +12,7 @@ export interface AuthUser {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  assistantName: string;
   role?: string;
 }
 

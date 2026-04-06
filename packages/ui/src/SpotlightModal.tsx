@@ -52,6 +52,7 @@ export interface SpotlightModalProps {
   sessionUsage?: { totalTokens: number } | null;
   initialForcedAction?: "search" | "create" | null;
   showScoutAction?: boolean;
+  assistantName?: string;
 }
 
 export function SpotlightModal({
@@ -79,6 +80,7 @@ export function SpotlightModal({
   sessionUsage,
   initialForcedAction,
   showScoutAction,
+  assistantName = "Brett",
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -188,7 +190,7 @@ export function SpotlightModal({
       if (hasAI) {
         suggestions.push({
           id: "ask",
-          label: `Ask Brett: "${input}"`,
+          label: `Ask ${assistantName}: "${input}"`,
           icon: <MessageSquare size={14} className="text-brett-cerulean" />,
           action: "ask",
         });
@@ -339,7 +341,7 @@ export function SpotlightModal({
             <input
               ref={inputRef}
               type="text"
-              placeholder={forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? "Ask Brett anything..." : "Create a task or search..."}
+              placeholder={forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? `Ask ${assistantName} anything...` : "Create a task or search..."}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
@@ -349,7 +351,7 @@ export function SpotlightModal({
               autoComplete="off"
             />
           ) : (
-            <span className="flex-1 text-sm text-white/40 px-3">Chat with Brett</span>
+            <span className="flex-1 text-sm text-white/40 px-3">Chat with {assistantName}</span>
           )}
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {isStreaming && onCancel ? (
@@ -443,7 +445,7 @@ export function SpotlightModal({
         {hasConversation && isStreaming && (
           <div className="border-t border-white/10 px-5 py-3 flex items-center gap-2">
             <BrettMark size={20} className="flex-shrink-0" thinking />
-            <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>
+            <span className="flex-1 text-sm text-white/30">{assistantName} is thinking...</span>
             {onCancel && (
               <button
                 onClick={onCancel}
@@ -527,7 +529,7 @@ export function SpotlightModal({
                 <BrettMark size={16} className="flex-shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <p className="text-sm text-white/70">
-                    Add an AI provider to unlock Brett's full capabilities — ask questions, get briefings, and manage everything with natural language.
+                    Add an AI provider to unlock {assistantName}'s full capabilities — ask questions, get briefings, and manage everything with natural language.
                   </p>
                   {onNavigateToSettings && (
                     <button

@@ -73,6 +73,7 @@ import { useSessionUsage } from "./api/ai-usage";
 import { usePreference } from "./api/preferences";
 import { useWeather } from "./api/weather";
 import { useBrokenConnections, useReconnect } from "./api/connection-health";
+import { useAssistantName } from "./api/assistant-name";
 import { CalendarConnectModal } from "./components/CalendarConnectModal";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TodayView } from "./views/TodayView";
@@ -101,7 +102,7 @@ import type { RecentFindingItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
-function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer }: {
+function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer, assistantName }: {
   children: React.ReactNode;
   onEventClick: (e: any) => void;
   calendarEvents: CalendarEventDisplay[];
@@ -115,6 +116,7 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar,
   onToday?: () => void;
   nextUpEvent?: CalendarEventDisplay | null;
   nextUpTimer?: import("@brett/ui").NextUpTimerState | null;
+  assistantName?: string;
 }) {
   // Show compact card in sidebar when not urgent (>10 min) or happening now
   const showCompactInSidebar = nextUpTimer && !nextUpTimer.isExpired && !(nextUpTimer.isUrgent && !nextUpTimer.isHappening);
@@ -139,7 +141,7 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar,
             </div>
           )}
           <div className="flex-1 min-h-0">
-            <CalendarTimeline events={calendarEvents} onEventClick={onEventClick} isLoading={isLoadingCalendar} onConnect={onConnectCalendar} onDismiss={onDismissSidebar} date={sidebarDate} onPrevDay={onPrevDay} onNextDay={onNextDay} onToday={onToday} />
+            <CalendarTimeline events={calendarEvents} onEventClick={onEventClick} isLoading={isLoadingCalendar} onConnect={onConnectCalendar} onDismiss={onDismissSidebar} date={sidebarDate} onPrevDay={onPrevDay} onNextDay={onNextDay} onToday={onToday} assistantName={assistantName} />
           </div>
         </div>
       )}
@@ -424,6 +426,7 @@ export function App() {
 
   // Omnibar state (shared between bar and spotlight)
   const omnibar = useOmnibar();
+  const assistantName = useAssistantName();
 
   // Weather state for omnibar pill
   const { weather, now: weatherNow, isLoading: weatherLoading } = useWeather();
@@ -574,8 +577,9 @@ export function App() {
       weatherLoading,
       showWeatherExpanded,
       onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
+      assistantName,
     }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded]
+    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded, assistantName]
   );
 
   const scoutsOmnibarProps = useMemo(
@@ -876,6 +880,11 @@ export function App() {
 
   const inboxCount = inboxData?.visible.length ?? 0;
 
+  // Dynamic window title: "(3) Jarvis" or just "Jarvis"
+  useEffect(() => {
+    document.title = inboxCount > 0 ? `(${inboxCount}) ${assistantName}` : assistantName;
+  }, [inboxCount, assistantName]);
+
   // Dynamic favicon: working (Brett streaming) > count badge > default
   const faviconMode = omnibar.isStreaming ? "working" as const : "default" as const;
   useFavicon(faviconMode, todayTaskCount);
@@ -930,6 +939,8 @@ export function App() {
               setSpotlightInitialAction("search");
               omnibar.open("spotlight");
             }}
+            assistantName={assistantName}
+            isAIWorking={omnibar.isStreaming}
           />
 
           <Routes>
@@ -968,6 +979,7 @@ export function App() {
                   memories={scoutMemories}
                   isLoadingMemories={isLoadingMemories}
                   onDeleteMemory={(memoryId) => deleteMemory.mutate({ scoutId: selectedScoutId!, memoryId })}
+                  assistantName={assistantName}
                 />
               ) : (
                 <ScoutsRoster
@@ -994,7 +1006,7 @@ export function App() {
               )
             } />
             <Route path="/today" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer} assistantName={assistantName}>
                 <TodayView
                   lists={lists}
                   onItemClick={handleItemClick}
@@ -1005,16 +1017,17 @@ export function App() {
                   nextUpTimer={nextUpTimer}
                   onReconnect={handleReconnect}
                   reconnectPendingSourceId={reconnectPendingSourceId}
+                  assistantName={assistantName}
                 />
               </MainLayout>
             } />
             <Route path="/upcoming" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer} assistantName={assistantName}>
                 <UpcomingView onItemClick={handleItemClick} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} onReconnect={handleReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
               </MainLayout>
             } />
             <Route path="/inbox" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer} assistantName={assistantName}>
                 <InboxView
                   things={inboxData?.visible ?? []}
                   lists={lists}
@@ -1029,18 +1042,19 @@ export function App() {
                   onReconnect={handleReconnect}
                   reconnectPendingSourceId={reconnectPendingSourceId}
                   onInstallUpdate={installUpdate}
+                  assistantName={assistantName}
                 />
               </MainLayout>
             } />
             <Route path="/lists/:slug" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer}>
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer} assistantName={assistantName}>
                 <ListView lists={lists} archivedLists={archivedLists} listsFetching={listsFetching} onItemClick={handleItemClick} onArchiveList={handleArchiveList} onTriageOpen={handleTriageOpen} onFocusChange={handleFocusChange} onReconnect={handleReconnect} reconnectPendingSourceId={reconnectPendingSourceId} />
               </MainLayout>
             } />
             <Route path="/" element={<Navigate to="/today" replace />} />
             <Route path="*" element={
-              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer}>
-                <NotFoundView />
+              <MainLayout onEventClick={handleItemClick} calendarEvents={sidebarCalendarEvents} isLoadingCalendar={isLoadingSidebarCalendar} showSidebar={showCalendarSidebar} onConnectCalendar={hasCalendarAccounts ? undefined : handleConnectCalendar} onDismissSidebar={hasCalendarAccounts ? undefined : handleDismissSidebar} sidebarDate={sidebarDate} onPrevDay={handleSidebarPrevDay} onNextDay={handleSidebarNextDay} onToday={handleSidebarToday} nextUpEvent={nextUpEvent} nextUpTimer={nextUpTimer} assistantName={assistantName}>
+                <NotFoundView assistantName={assistantName} />
               </MainLayout>
             } />
           </Routes>
@@ -1054,6 +1068,7 @@ export function App() {
           onBack={handleDetailBack}
           canGoBack={detailHistory.length > 0}
           onToggle={handleToggle}
+          assistantName={assistantName}
           detail={thingDetail ?? null}
           isLoadingDetail={isLoadingDetail}
           onUpdate={handleUpdateThing}
@@ -1292,6 +1307,7 @@ export function App() {
           sessionUsage={sessionUsageData ?? null}
           initialForcedAction={spotlightInitialAction}
           showScoutAction={true}
+          assistantName={assistantName}
         />
 
         {/* Calendar connect interstitial — meeting notes opt-in */}

@@ -7,6 +7,9 @@
 @import "@carrot-kpi/switzer-font/700.css";
 @import "@carrot-kpi/switzer-font/700-italic.css";
 
+/* Plus Jakarta Sans — wordmark only */
+@import "@fontsource-variable/plus-jakarta-sans";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -73,6 +76,12 @@
   *:focus {
     outline: none;
   }
+}
+
+/* Wordmark breathing animation */
+@keyframes wordmarkBreathe {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
 }
 
 /* Hide scrollbar utility */

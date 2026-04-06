@@ -24,6 +24,7 @@ interface InboxViewProps {
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
   onInstallUpdate?: () => void;
+  assistantName?: string;
 }
 
 export function InboxView({
@@ -40,6 +41,7 @@ export function InboxView({
   onReconnect,
   reconnectPendingSourceId,
   onInstallUpdate,
+  assistantName = "Brett",
 }: InboxViewProps) {
   const [typeFilter, setTypeFilter] = useState<FilterType>("All");
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -428,7 +430,7 @@ export function InboxView({
             <div className="text-center">
               <h3 className="text-white font-semibold text-base mb-1">Inbox zero</h3>
               <p className="text-white/40 text-sm leading-relaxed max-w-xs">
-                Nothing to triage. Add something or let Brett find things for you.
+                Nothing to triage. Add something or let {assistantName} find things for you.
               </p>
             </div>
           </div>

@@ -18,7 +18,7 @@ export function buildStream(
   params: Parameters<typeof orchestrate>[0],
   sessionId: string,
   opts?: {
-    memoryCtx?: { userId: string; provider: AIProvider; providerName: AIProviderName; itemContext?: string };
+    memoryCtx?: { userId: string; provider: AIProvider; providerName: AIProviderName; itemContext?: string; assistantName?: string };
     onDone?: (content: string) => void;
   },
 ): { stream: ReadableStream; assistantContentRef: { value: string } } {
@@ -81,7 +81,7 @@ export function buildStream(
               const memoryCtx = opts?.memoryCtx;
               if (memoryCtx) {
                 enqueueEmbed({ entityType: "conversation", entityId: sessionId, userId: memoryCtx.userId });
-                extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma, memoryCtx.itemContext)
+                extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma, memoryCtx.itemContext, memoryCtx.assistantName)
                   .catch((err) => console.error("[fact-extraction] Failed:", err.message));
               }
 

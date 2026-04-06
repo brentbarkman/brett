@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import { Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
@@ -88,9 +89,9 @@ export function TimezoneSection() {
   }
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+    <SettingsCard>
       <div className="flex items-center gap-2 mb-4">
-        <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">Timezone</h3>
+        <SettingsHeader className="mb-0">Timezone</SettingsHeader>
         {saved && (
           <Check size={14} className="text-emerald-400 ml-auto" />
         )}
@@ -108,22 +109,11 @@ export function TimezoneSection() {
 
         <label className="flex items-center justify-between cursor-pointer">
           <span className="text-sm text-white/70">Use device timezone</span>
-          <button
-            onClick={handleToggleAuto}
+          <SettingsToggle
+            checked={isAuto}
+            onChange={handleToggleAuto}
             disabled={saving}
-            className={`
-              relative w-9 h-5 rounded-full transition-colors
-              ${isAuto ? "bg-brett-gold" : "bg-white/10"}
-              ${saving ? "opacity-50" : ""}
-            `}
-          >
-            <span
-              className={`
-                absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform
-                ${isAuto ? "translate-x-4" : "translate-x-0"}
-              `}
-            />
-          </button>
+          />
         </label>
 
         {isAuto && (
@@ -148,6 +138,6 @@ export function TimezoneSection() {
           </select>
         )}
       </div>
-    </div>
+    </SettingsCard>
   );
 }

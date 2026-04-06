@@ -93,6 +93,7 @@ interface DetailPanelProps {
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
+  assistantName?: string;
 }
 
 export function DetailPanel({
@@ -155,6 +156,7 @@ export function DetailPanel({
   onItemClick,
   onEventClick,
   onNavigate,
+  assistantName,
 }: DetailPanelProps) {
   if (!item) return null;
   const isCalendarEvent = "googleEventId" in item;
@@ -231,6 +233,7 @@ export function DetailPanel({
             onItemClick={onItemClick}
             onEventClick={onEventClick}
             onNavigate={onNavigate}
+            assistantName={assistantName}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
@@ -279,6 +282,7 @@ export function DetailPanel({
             onNavigateToScout={onNavigateToScout}
             onScoutFeedback={onScoutFeedback}
             onNavigate={onNavigate}
+            assistantName={assistantName}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
@@ -316,6 +320,7 @@ export function DetailPanel({
           isReprocessing={isReprocessing}
           onItemClick={onItemClick}
           onNavigate={onNavigate}
+          assistantName={assistantName}
         />
       ) : (
         <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">

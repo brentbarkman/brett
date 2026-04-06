@@ -104,6 +104,7 @@ interface CalendarEventDetailPanelProps {
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
+  assistantName?: string;
 }
 
 function formatEventTime(start: string, end: string, isAllDay: boolean): string {
@@ -199,6 +200,7 @@ export function CalendarEventDetailPanel({
   onItemClick,
   onEventClick,
   onNavigate,
+  assistantName = "Brett",
 }: CalendarEventDetailPanelProps) {
   const [showAllAttendees, setShowAllAttendees] = useState(false);
   const [rsvpNote, setRsvpNote] = useState("");
@@ -344,7 +346,7 @@ export function CalendarEventDetailPanel({
                 <div className="flex items-center gap-2 mb-2">
                   <BrettMark size={12} />
                   <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-brett-cerulean">
-                    Brett&apos;s Take
+                    {assistantName}&apos;s Take
                   </span>
                 </div>
                 <p className="text-sm italic text-brett-cerulean/85 leading-relaxed">
@@ -731,6 +733,7 @@ export function CalendarEventDetailPanel({
         onNavigate={onNavigate}
         aiConfigured={brettAiConfigured}
         onOpenSettings={onOpenSettings}
+        assistantName={assistantName}
       />
     </>
   );

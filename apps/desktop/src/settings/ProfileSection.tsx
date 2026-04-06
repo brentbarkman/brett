@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { authClient } from "../auth/auth-client";
 import { getAvatarColor } from "@brett/ui";
+import { SettingsCard, SettingsHeader } from "./SettingsComponents";
 
 export function ProfileSection() {
   const { user, refetchUser } = useAuth();
@@ -24,6 +25,7 @@ export function ProfileSection() {
       }
       refetchUser();
       setMessage({ type: "success", text: "Profile updated" });
+      setTimeout(() => setMessage(null), 3000);
     } catch (err: unknown) {
       setMessage({
         type: "error",
@@ -35,10 +37,8 @@ export function ProfileSection() {
   }
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-4">
-        Profile
-      </h3>
+    <SettingsCard>
+      <SettingsHeader>Profile</SettingsHeader>
 
       {/* Avatar */}
       <div className="flex items-center gap-4 mb-5">
@@ -119,6 +119,6 @@ export function ProfileSection() {
           {saving ? "Saving..." : "Save changes"}
         </button>
       </div>
-    </div>
+    </SettingsCard>
   );
 }

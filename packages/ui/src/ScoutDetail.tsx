@@ -60,6 +60,7 @@ interface ScoutDetailProps {
   memories: ScoutMemory[];
   isLoadingMemories: boolean;
   onDeleteMemory: (memoryId: string) => void;
+  assistantName?: string;
 }
 
 export function ScoutDetail({
@@ -85,6 +86,7 @@ export function ScoutDetail({
   memories,
   isLoadingMemories,
   onDeleteMemory,
+  assistantName = "Brett",
 }: ScoutDetailProps) {
   const [activeTab, setActiveTab] = useState<"findings" | "log" | "memory">("findings");
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -538,7 +540,7 @@ export function ScoutDetail({
                   </p>
                   {scout.cadenceReason && scout.cadenceCurrentIntervalHours !== scout.cadenceIntervalHours && (
                     <p className="text-xs text-brett-gold/70">
-                      Adjusted by Brett: {scout.cadenceReason}
+                      Adjusted by {assistantName}: {scout.cadenceReason}
                     </p>
                   )}
                 </div>

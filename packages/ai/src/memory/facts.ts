@@ -2,7 +2,7 @@ import type { AIProvider } from "../providers/types.js";
 import type { AIProviderName } from "@brett/types";
 import type { PrismaClient } from "@prisma/client";
 import { resolveModel } from "../router.js";
-import { FACT_EXTRACTION_PROMPT } from "../context/system-prompts.js";
+import { getFactExtractionPrompt } from "../context/system-prompts.js";
 import { AI_CONFIG } from "../config.js";
 import { logUsage } from "./usage.js";
 
@@ -28,6 +28,7 @@ export async function extractFacts(
   prisma: PrismaClient,
   /** Optional context about the item being discussed (helps extract domain-specific facts) */
   itemContext?: string,
+  assistantName?: string,
 ): Promise<void> {
   // 1. Load conversation messages for this session
   const messages = await prisma.conversationMessage.findMany({
@@ -66,7 +67,7 @@ export async function extractFacts(
   for await (const chunk of provider.chat({
     model,
     messages: [{ role: "user", content: conversationText }],
-    system: FACT_EXTRACTION_PROMPT,
+    system: getFactExtractionPrompt(assistantName ?? "Brett"),
     temperature: 0.1,
     maxTokens: 1024,
   })) {

@@ -11,12 +11,15 @@ import { loadEmbeddingContext } from "../lib/embedding-context.js";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
-async function getUserTimezone(userId: string): Promise<string> {
+async function getUserSettings(userId: string): Promise<{ timezone: string; assistantName: string }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { timezone: true },
+    select: { timezone: true, assistantName: true },
   });
-  return user?.timezone ?? DEFAULT_TIMEZONE;
+  return {
+    timezone: user?.timezone ?? DEFAULT_TIMEZONE,
+    assistantName: user?.assistantName ?? "Brett",
+  };
 }
 
 const brettIntelligence = new Hono<AIEnv>();
@@ -29,7 +32,7 @@ brettIntelligence.use("*", authMiddleware);
 brettIntelligence.get("/briefing", rateLimiter(60), async (c) => {
   const user = c.get("user");
 
-  const timezone = await getUserTimezone(user.id);
+  const { timezone } = await getUserSettings(user.id);
   const { startOfDay, endOfDay } = getUserDayBounds(timezone);
 
   const session = await prisma.conversationSession.findFirst({
@@ -72,7 +75,7 @@ brettIntelligence.get("/briefing", rateLimiter(60), async (c) => {
 brettIntelligence.get("/briefing/summary", rateLimiter(30), async (c) => {
   const user = c.get("user");
 
-  const timezone = await getUserTimezone(user.id);
+  const { timezone } = await getUserSettings(user.id);
   const { startOfDay, endOfDay } = getUserDayBounds(timezone);
 
   // Only count events from visible calendars
@@ -143,7 +146,7 @@ brettIntelligence.post(
     const provider = c.get("aiProvider");
     const providerName = c.get("aiProviderName");
 
-    const timezone = await getUserTimezone(user.id);
+    const { timezone, assistantName } = await getUserSettings(user.id);
 
     // Load embedding context for the briefing — search for recent activity patterns
     const embeddingProvider = getEmbeddingProvider();
@@ -167,6 +170,7 @@ brettIntelligence.post(
     const input = {
       type: "briefing" as const,
       userId: user.id,
+      assistantName,
       timezone,
       embeddingContext: embeddingContext || undefined,
     };
@@ -197,15 +201,18 @@ brettIntelligence.post(
     });
     if (!event) return c.json({ error: "Not found" }, 404);
 
-    // Load embedding context relevant to this event
+    // Load user settings and embedding context in parallel
     const embeddingProvider = getEmbeddingProvider();
-    const embeddingContext = await loadEmbeddingContext(
-      user.id,
-      event.title,
-      embeddingProvider,
-      prisma,
-      3,
-    );
+    const [userSettings, embeddingContext] = await Promise.all([
+      getUserSettings(user.id),
+      loadEmbeddingContext(
+        user.id,
+        event.title,
+        embeddingProvider,
+        prisma,
+        3,
+      ),
+    ]);
 
     const session = await prisma.conversationSession.create({
       data: {
@@ -220,6 +227,7 @@ brettIntelligence.post(
     const input = {
       type: "bretts_take" as const,
       userId: user.id,
+      assistantName: userSettings.assistantName,
       calendarEventId: eventId,
       embeddingContext: embeddingContext || undefined,
     };

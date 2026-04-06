@@ -61,6 +61,7 @@ export interface OmnibarProps {
   showWeatherExpanded?: boolean;
   placeholder?: string;
   showScoutAction?: boolean;
+  assistantName?: string;
 }
 
 type Suggestion = {
@@ -103,6 +104,7 @@ export function Omnibar({
   showWeatherExpanded,
   placeholder: placeholderOverride,
   showScoutAction,
+  assistantName = "Brett",
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -223,7 +225,7 @@ export function Omnibar({
       if (hasAI) {
         suggestions.push({
           id: "ask",
-          label: `Ask Brett: "${input}"`,
+          label: `Ask ${assistantName}: "${input}"`,
           icon: <MessageSquare size={14} className="text-brett-cerulean" />,
           action: "ask",
         });
@@ -392,7 +394,7 @@ export function Omnibar({
             <input
               ref={!hasConversation ? inputRef : undefined}
               type="text"
-              placeholder={placeholderOverride ?? (forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? "Ask Brett anything..." : "Create a task or search...")}
+              placeholder={placeholderOverride ?? (forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? `Ask ${assistantName} anything...` : "Create a task or search...")}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
@@ -515,7 +517,7 @@ export function Omnibar({
               <BrettMark size={16} className="flex-shrink-0 mt-0.5" />
               <div className="min-w-0">
                 <p className="text-sm text-white/70">
-                  Add an AI provider to unlock Brett's full capabilities — ask questions, get briefings, and manage everything with natural language.
+                  Add an AI provider to unlock {assistantName}'s full capabilities — ask questions, get briefings, and manage everything with natural language.
                 </p>
                 {onNavigateToSettings && (
                   <button
@@ -561,7 +563,7 @@ export function Omnibar({
               <BrettMark size={22} className="flex-shrink-0" thinking={isStreaming} />
               {isStreaming ? (
                 <>
-                  <span className="flex-1 text-sm text-white/30">Brett is thinking...</span>
+                  <span className="flex-1 text-sm text-white/30">{assistantName} is thinking...</span>
                   {onCancel && (
                     <button
                       onClick={onCancel}

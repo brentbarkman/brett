@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Calendar, Plus, Trash2, RefreshCw } from "lucide-react";
+import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import { CalendarConnectModal } from "../components/CalendarConnectModal";
 import {
   useCalendarAccounts,
@@ -12,6 +13,7 @@ import {
 import { useFetchCalendarRange } from "../api/calendar";
 import { useGranolaAccount, useConnectGranola, useDisconnectGranola, useUpdateGranolaPreferences } from "../api/granola";
 import type { ConnectedCalendarAccount } from "@brett/types";
+import { useAssistantName } from "../api/assistant-name";
 
 const isDev = import.meta.env.DEV;
 
@@ -58,7 +60,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
   return (
     <div className="bg-white/5 rounded-lg overflow-hidden">
       {/* Account header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/5">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10">
         <div className="flex items-center gap-2 min-w-0">
           <GoogleIcon />
           <span className="text-sm text-white truncate">{account.googleEmail}</span>
@@ -93,7 +95,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
 
       {/* Calendar list */}
       {account.calendars.length > 0 && (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-white/10">
           {account.calendars.map((cal) => (
             <div
               key={cal.id}
@@ -106,33 +108,23 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
               />
               <span className="flex-1 text-sm text-white/70 truncate">{cal.name}</span>
               {/* Visibility toggle */}
-              <button
-                role="switch"
-                aria-checked={cal.isVisible}
-                onClick={() =>
+              <SettingsToggle
+                checked={cal.isVisible}
+                onChange={() =>
                   toggleVisibility.mutate({
                     accountId: account.id,
                     calendarId: cal.id,
                     isVisible: !cal.isVisible,
                   })
                 }
-                className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                  cal.isVisible ? "bg-brett-gold" : "bg-white/15"
-                }`}
-              >
-                <span
-                  className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                    cal.isVisible ? "translate-x-[16px]" : "translate-x-[2px]"
-                  }`}
-                />
-              </button>
+              />
             </div>
           ))}
         </div>
       )}
 
       {/* Google Meet Notes toggle */}
-      <div className="px-3 py-2.5 border-t border-white/5">
+      <div className="px-3 py-2.5 border-t border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs text-white/60">Meeting notes</span>
@@ -140,10 +132,9 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
               <span className="text-[10px] text-brett-gold/60">Requires permissions</span>
             )}
           </div>
-          <button
-            role="switch"
-            aria-checked={account.hasDriveScope && account.meetingNotesEnabled}
-            onClick={() => {
+          <SettingsToggle
+            checked={account.hasDriveScope && account.meetingNotesEnabled}
+            onChange={() => {
               if (!account.hasDriveScope) {
                 // No Drive scope — trigger reauth to get it
                 reauthCalendar.mutate(account.id);
@@ -156,16 +147,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
               }
             }}
             disabled={reauthCalendar.isPending || toggleMeetingNotes.isPending}
-            className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-40 ${
-              account.hasDriveScope && account.meetingNotesEnabled ? "bg-brett-gold" : "bg-white/15"
-            }`}
-          >
-            <span
-              className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                account.hasDriveScope && account.meetingNotesEnabled ? "translate-x-[16px]" : "translate-x-[2px]"
-              }`}
-            />
-          </button>
+          />
         </div>
       </div>
     </div>
@@ -173,6 +155,7 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
 }
 
 export function CalendarSection() {
+  const assistantName = useAssistantName();
   const { data: accounts = [], isLoading, error } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
   const fetchRange = useFetchCalendarRange();
@@ -185,11 +168,9 @@ export function CalendarSection() {
 
   return (
     <>
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+      <SettingsCard>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-            Connected Calendars
-          </h3>
+          <SettingsHeader className="mb-0">Connected Calendars</SettingsHeader>
           <button
             onClick={() => setShowConnectModal(true)}
             disabled={connectCalendar.isPending}
@@ -215,7 +196,7 @@ export function CalendarSection() {
 
         {!isLoading && !error && accounts.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <Calendar size={28} className="text-white/20" />
+            <Calendar size={24} className="text-white/20" />
             <div>
               <p className="text-sm text-white/50">No calendars connected yet</p>
               <p className="text-xs text-white/30 mt-1">
@@ -234,7 +215,7 @@ export function CalendarSection() {
         )}
 
         {isDev && !isLoading && accounts.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/5">
+          <div className="mt-4 pt-4 border-t border-white/10">
             <button
               onClick={() => {
                 const now = new Date();
@@ -253,14 +234,22 @@ export function CalendarSection() {
             </button>
           </div>
         )}
-      </div>
+      </SettingsCard>
 
       {/* ── Meeting Notes (Granola) ── */}
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+      <SettingsCard>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">
-            Meeting Notes
-          </h3>
+          <SettingsHeader className="mb-0">Meeting Notes</SettingsHeader>
+          {!(granolaAccount?.connected && granolaAccount.account) && (
+            <button
+              onClick={() => connectGranola.mutate()}
+              disabled={connectGranola.isPending}
+              className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus size={12} />
+              {connectGranola.isPending ? "Connecting..." : "Connect Granola"}
+            </button>
+          )}
         </div>
 
         {granolaAccount?.connected && granolaAccount.account ? (
@@ -313,24 +302,16 @@ export function CalendarSection() {
             </div>
 
             {/* Auto-create settings */}
-            <div className="px-3 py-3 border-t border-white/5 space-y-3">
+            <div className="px-3 py-3 border-t border-white/10 space-y-3">
               <label className="flex items-center justify-between cursor-pointer">
                 <div className="flex-1 mr-3">
                   <span className="text-sm text-white/70">Create tasks for me</span>
                   <p className="text-[10px] text-white/30 mt-0.5">Auto-create tasks assigned to you from meeting action items</p>
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={granolaAccount.account.autoCreateMyTasks}
-                  onClick={() => updatePrefs.mutate({ autoCreateMyTasks: !granolaAccount.account!.autoCreateMyTasks })}
-                  className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                    granolaAccount.account.autoCreateMyTasks ? "bg-brett-gold" : "bg-white/15"
-                  }`}
-                >
-                  <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                    granolaAccount.account.autoCreateMyTasks ? "translate-x-[16px]" : "translate-x-[2px]"
-                  }`} />
-                </button>
+                <SettingsToggle
+                  checked={granolaAccount.account.autoCreateMyTasks}
+                  onChange={() => updatePrefs.mutate({ autoCreateMyTasks: !granolaAccount.account!.autoCreateMyTasks })}
+                />
               </label>
 
               <label className="flex items-center justify-between cursor-pointer">
@@ -338,42 +319,26 @@ export function CalendarSection() {
                   <span className="text-sm text-white/70">Create follow-ups</span>
                   <p className="text-[10px] text-white/30 mt-0.5">Auto-create follow-up tasks for action items assigned to others</p>
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={granolaAccount.account.autoCreateFollowUps}
-                  onClick={() => updatePrefs.mutate({ autoCreateFollowUps: !granolaAccount.account!.autoCreateFollowUps })}
-                  className={`relative inline-flex h-[18px] w-[32px] items-center rounded-full transition-colors flex-shrink-0 ${
-                    granolaAccount.account.autoCreateFollowUps ? "bg-brett-gold" : "bg-white/15"
-                  }`}
-                >
-                  <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                    granolaAccount.account.autoCreateFollowUps ? "translate-x-[16px]" : "translate-x-[2px]"
-                  }`} />
-                </button>
+                <SettingsToggle
+                  checked={granolaAccount.account.autoCreateFollowUps}
+                  onChange={() => updatePrefs.mutate({ autoCreateFollowUps: !granolaAccount.account!.autoCreateFollowUps })}
+                />
               </label>
 
               <p className="text-[10px] text-white/20 leading-relaxed">
-                Brett uses AI to determine which action items are relevant and rewrites them as clear, actionable tasks with due dates when mentioned.
+                {`${assistantName} uses AI to determine which action items are relevant and rewrites them as clear, actionable tasks with due dates when mentioned.`}
               </p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <Calendar size={28} className="text-white/20" />
+            <Calendar size={24} className="text-white/20" />
             <div>
               <p className="text-sm text-white/50">No meeting notes connected</p>
               <p className="text-xs text-white/30 mt-1">
                 Connect Granola to sync meeting notes, summaries, and action items
               </p>
             </div>
-            <button
-              onClick={() => connectGranola.mutate()}
-              disabled={connectGranola.isPending}
-              className="flex items-center gap-1.5 text-xs text-amber-400/60 hover:text-amber-400 border border-amber-400/20 hover:border-amber-400/40 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-1"
-            >
-              <Plus size={12} />
-              {connectGranola.isPending ? "Connecting..." : "Connect Granola"}
-            </button>
             {connectGranola.isError && (
               <p className="text-xs text-red-400/80 mt-1">
                 {connectGranola.error instanceof Error
@@ -383,7 +348,7 @@ export function CalendarSection() {
             )}
           </div>
         )}
-      </div>
+      </SettingsCard>
 
       {/* Connect Google Calendar interstitial */}
       {showConnectModal && (

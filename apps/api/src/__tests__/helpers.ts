@@ -9,7 +9,7 @@ export async function createTestUser(
   const res = await app.request("/api/auth/sign-up/email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password: "password123", name }),
+    body: JSON.stringify({ email, password: "Password123", name }),
   });
 
   const body = (await res.json()) as any;

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Download, Check, Loader2, AlertCircle } from "lucide-react";
+import { SettingsCard, SettingsHeader } from "./SettingsComponents";
 import type { Things3ScanResult, Things3ImportResult } from "@brett/types";
 
 const electronAPI = (window as any).electronAPI as
@@ -81,8 +82,8 @@ export function ImportSection({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-      <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-1">Import</h3>
+    <SettingsCard>
+      <SettingsHeader className="mb-1">Import</SettingsHeader>
       <p className="text-sm text-white/50 mb-4">Import your tasks from other apps</p>
 
       {state.step === "idle" && (
@@ -165,6 +166,6 @@ export function ImportSection({ userId }: { userId: string }) {
           </button>
         </div>
       )}
-    </div>
+    </SettingsCard>
   );
 }

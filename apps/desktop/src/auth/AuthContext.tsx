@@ -32,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: sessionData.user.email,
         name: sessionData.user.name,
         avatarUrl: sessionData.user.image ?? null,
+        assistantName: (sessionData.user as any).assistantName ?? "Brett",
       }
     : null;
 

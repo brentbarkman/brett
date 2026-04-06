@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Calendar } from "lucide-react";
+import { useAssistantName } from "../api/assistant-name";
 
 interface CalendarConnectModalProps {
   onConnect: (meetingNotes: boolean) => void;
@@ -8,6 +9,7 @@ interface CalendarConnectModalProps {
 }
 
 export function CalendarConnectModal({ onConnect, onCancel, isPending }: CalendarConnectModalProps) {
+  const assistantName = useAssistantName();
   const [includeMeetingNotes, setIncludeMeetingNotes] = useState(true);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +52,7 @@ export function CalendarConnectModal({ onConnect, onCancel, isPending }: Calenda
               <Calendar size={20} className="text-white/60" />
             </div>
             <h3 className="text-sm font-semibold text-white">Connect your Google Calendar</h3>
-            <p className="text-xs text-white/40 mt-1">Brett will sync your events and keep them up to date</p>
+            <p className="text-xs text-white/40 mt-1">{assistantName} will sync your events and keep them up to date</p>
           </div>
 
           {/* Meeting notes toggle */}
@@ -59,7 +61,7 @@ export function CalendarConnectModal({ onConnect, onCancel, isPending }: Calenda
               <div className="flex-1 mr-4">
                 <div className="text-[13px] font-medium text-white/90">Include meeting notes</div>
                 <div className="text-[11px] text-white/40 mt-1 leading-relaxed">
-                  Brett reads your Meet transcripts to extract action items and build a richer picture of your work. Less note-taking, fewer dropped balls.
+                  {`${assistantName} reads your Meet transcripts to extract action items and build a richer picture of your work. Less note-taking, fewer dropped balls.`}
                 </div>
               </div>
               <button

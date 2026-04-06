@@ -146,20 +146,27 @@ brettChat.post(
       },
     });
 
-    // Load embedding context relevant to this message + item (cached per session)
+    // Load user settings and embedding context in parallel
     const embeddingProvider = getEmbeddingProvider();
-    const embeddingContext = await loadEmbeddingContext(
-      user.id,
-      `${item.title} ${message.trim()}`,
-      embeddingProvider,
-      prisma,
-      3,
-      session.id,
-    );
+    const [userSettings, embeddingContext] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { assistantName: true },
+      }),
+      loadEmbeddingContext(
+        user.id,
+        `${item.title} ${message.trim()}`,
+        embeddingProvider,
+        prisma,
+        3,
+        session.id,
+      ),
+    ]);
 
     const input = {
       type: "brett_thread" as const,
       userId: user.id,
+      assistantName: userSettings?.assistantName ?? "Brett",
       message: message.trim(),
       itemId,
       embeddingContext: embeddingContext || undefined,
@@ -175,7 +182,7 @@ brettChat.post(
         },
       },
       session.id,
-      { memoryCtx: { userId: user.id, provider, providerName, itemContext: `User was discussing task "${item.title}"` } },
+      { memoryCtx: { userId: user.id, provider, providerName, itemContext: `User was discussing task "${item.title}"`, assistantName: input.assistantName } },
     );
 
     return sseResponse(stream);
@@ -255,20 +262,27 @@ brettChat.post(
       },
     });
 
-    // Load embedding context relevant to this message + event (cached per session)
+    // Load user settings and embedding context in parallel
     const embeddingProvider = getEmbeddingProvider();
-    const embeddingContext = await loadEmbeddingContext(
-      user.id,
-      `${event.title} ${message.trim()}`,
-      embeddingProvider,
-      prisma,
-      3,
-      session.id,
-    );
+    const [userSettings, embeddingContext] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { assistantName: true },
+      }),
+      loadEmbeddingContext(
+        user.id,
+        `${event.title} ${message.trim()}`,
+        embeddingProvider,
+        prisma,
+        3,
+        session.id,
+      ),
+    ]);
 
     const input = {
       type: "brett_thread" as const,
       userId: user.id,
+      assistantName: userSettings?.assistantName ?? "Brett",
       message: message.trim(),
       calendarEventId: eventId,
       embeddingContext: embeddingContext || undefined,
@@ -284,7 +298,7 @@ brettChat.post(
         },
       },
       session.id,
-      { memoryCtx: { userId: user.id, provider, providerName, itemContext: `User was discussing calendar event "${event.title}"` } },
+      { memoryCtx: { userId: user.id, provider, providerName, itemContext: `User was discussing calendar event "${event.title}"`, assistantName: input.assistantName } },
     );
 
     return sseResponse(stream);
