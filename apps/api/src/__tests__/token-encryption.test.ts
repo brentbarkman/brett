@@ -65,8 +65,9 @@ describe("token-encryption", () => {
   it("rejects tampered ciphertext", () => {
     const encrypted = encryptToken("secret");
     const parts = encrypted.split(":");
-    // Flip a byte in the encrypted data
-    const tampered = parts[0] + ":" + "ff" + parts[1].slice(2) + ":" + parts[2];
+    // Completely replace the ciphertext — AES-GCM auth tag will reject
+    const tamperedCiphertext = "a".repeat(parts[1].length);
+    const tampered = parts[0] + ":" + tamperedCiphertext + ":" + parts[2];
     expect(() => decryptToken(tampered)).toThrow();
   });
 
