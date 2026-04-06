@@ -17,6 +17,15 @@ export interface GranolaAccountStatus {
 
 // ── Meeting note types (provider-agnostic) ──
 
+export interface MeetingNoteSourceRecord {
+  id: string;
+  provider: string;
+  externalId: string;
+  title: string;
+  summary: string | null;
+  syncedAt: string;
+}
+
 export interface MeetingNoteRecord {
   id: string;
   granolaDocumentId: string;
@@ -28,11 +37,14 @@ export interface MeetingNoteRecord {
   meetingStartedAt: string;
   meetingEndedAt: string;
   syncedAt: string;
+  sources: string[];
 }
 
 export interface MeetingNoteDetail extends MeetingNoteRecord {
   transcript: MeetingTranscriptTurn[] | null;
   items?: MeetingLinkedItem[];
+  sources: string[];
+  meetingNoteSources?: MeetingNoteSourceRecord[];
 }
 
 export interface MeetingLinkedItem {

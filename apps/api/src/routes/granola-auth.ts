@@ -351,7 +351,7 @@ granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
     where: { calendarEventId: eventId, userId: user.id },
     select: {
       id: true,
-      granolaDocumentId: true,
+      sources: true,
       calendarEventId: true,
       title: true,
       summary: true,
@@ -362,7 +362,7 @@ granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
       meetingEndedAt: true,
       syncedAt: true,
       items: {
-        where: { source: "Granola" },
+        where: { meetingNoteId: { not: null } },
         select: { id: true, title: true, status: true, dueDate: true },
         orderBy: { createdAt: "asc" },
       },
