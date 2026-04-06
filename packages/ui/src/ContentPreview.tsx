@@ -40,6 +40,7 @@ interface ContentPreviewProps {
   contentMetadata?: ContentMetadata;
   attachmentUrl?: string; // presigned S3 URL for drag-dropped PDFs
   onRetry?: () => void;
+  assistantName?: string;
 }
 
 function LoadingSkeleton({ contentType }: { contentType?: ContentType }) {
@@ -68,7 +69,7 @@ function LoadingSkeleton({ contentType }: { contentType?: ContentType }) {
   );
 }
 
-function ErrorState({ sourceUrl, onRetry }: { sourceUrl?: string; onRetry?: () => void }) {
+function ErrorState({ sourceUrl, onRetry, assistantName = "Brett" }: { sourceUrl?: string; onRetry?: () => void; assistantName?: string }) {
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -96,7 +97,7 @@ function ErrorState({ sourceUrl, onRetry }: { sourceUrl?: string; onRetry?: () =
           </button>
         )}
         <span className="text-[10px] text-white/20">
-          If this persists, ask Brett to report it.
+          If this persists, ask {assistantName} to report it.
         </span>
       </div>
     </div>
@@ -398,6 +399,7 @@ export function ContentPreview({
   contentMetadata,
   attachmentUrl,
   onRetry,
+  assistantName = "Brett",
 }: ContentPreviewProps) {
   // Loading state
   if (contentStatus === "pending") {
@@ -406,7 +408,7 @@ export function ContentPreview({
 
   // Error state
   if (contentStatus === "failed") {
-    return <ErrorState sourceUrl={sourceUrl} onRetry={onRetry} />;
+    return <ErrorState sourceUrl={sourceUrl} onRetry={onRetry} assistantName={assistantName} />;
   }
 
   // Render based on content type

@@ -1,14 +1,21 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 
-const messages = [
-  { title: "Nothing here", subtitle: "This page doesn't exist. Probably never did." },
-  { title: "Dead end", subtitle: "Brett doesn't know this place either." },
-  { title: "Page not found", subtitle: "Check the URL or head back to something real." },
-];
+function getMessages(assistantName: string) {
+  return [
+    { title: "Nothing here", subtitle: "This page doesn't exist. Probably never did." },
+    { title: "Dead end", subtitle: `${assistantName} doesn't know this place either.` },
+    { title: "Page not found", subtitle: "Check the URL or head back to something real." },
+  ];
+}
 
-export function NotFoundView() {
+interface NotFoundViewProps {
+  assistantName?: string;
+}
+
+export function NotFoundView({ assistantName = "Brett" }: NotFoundViewProps) {
   const navigate = useNavigate();
+  const messages = getMessages(assistantName);
   const msg = messages[Math.floor(Math.random() * messages.length)];
 
   return (

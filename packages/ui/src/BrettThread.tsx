@@ -32,6 +32,7 @@ interface BrettThreadProps {
   onNavigate?: (path: string) => void;
   aiConfigured?: boolean;
   onOpenSettings?: () => void;
+  assistantName?: string;
 }
 
 function MessageBubble({
@@ -40,12 +41,14 @@ function MessageBubble({
   onItemClick,
   onEventClick,
   onNavigate,
+  assistantName = "Brett",
 }: {
   message: BrettThreadMessage;
   isStreamingMsg?: boolean;
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
+  assistantName?: string;
 }) {
   const isUser = message.role === "user";
 
@@ -76,7 +79,7 @@ function MessageBubble({
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10"
           >
             <BrettMark size={12} thinking />
-            <span className="text-xs text-white/40">Brett is working...</span>
+            <span className="text-xs text-white/40">{assistantName} is working...</span>
           </div>
         ) : null,
       )}
@@ -100,7 +103,7 @@ function MessageBubble({
       {!message.content && isStreamingMsg && !message.toolCalls?.length && (
         <div className="flex items-center gap-2 py-1">
           <BrettMark size={12} thinking />
-          <span className="text-xs text-white/30">Brett is thinking...</span>
+          <span className="text-xs text-white/30">{assistantName} is thinking...</span>
         </div>
       )}
     </div>
@@ -121,6 +124,7 @@ export function BrettThread({
   onNavigate,
   aiConfigured,
   onOpenSettings,
+  assistantName = "Brett",
 }: BrettThreadProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -207,7 +211,7 @@ export function BrettThread({
         <div className="flex items-center gap-2">
           <BrettMark size={16} thinking={isStreaming} />
           <span className="text-xs font-medium text-white/60">
-            Brett
+            {assistantName}
             {(totalCount ?? messages.length) > 0
               ? ` (${totalCount ?? messages.length})`
               : ""}
@@ -243,6 +247,7 @@ export function BrettThread({
               onItemClick={onItemClick}
               onEventClick={onEventClick}
               onNavigate={onNavigate}
+              assistantName={assistantName}
             />
           ))}
         </div>
@@ -253,7 +258,7 @@ export function BrettThread({
         <div className="px-4 pb-2">
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
             <p className="text-xs text-amber-300/80">
-              Brett needs an AI provider to work his magic. Set one up in{" "}
+              {assistantName} needs an AI provider. Set one up in{" "}
               <button
                 onClick={onOpenSettings}
                 className="text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors"
@@ -275,7 +280,7 @@ export function BrettThread({
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={aiConfigured === false ? "Brett needs an AI provider..." : "Ask Brett anything..."}
+            placeholder={aiConfigured === false ? `${assistantName} needs an AI provider...` : `Ask ${assistantName} anything...`}
             rows={1}
             disabled={aiConfigured === false}
             className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 resize-none focus:border-brett-cerulean/20 min-h-[36px] max-h-[100px] disabled:opacity-40 disabled:cursor-not-allowed"

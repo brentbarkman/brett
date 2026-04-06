@@ -19,6 +19,7 @@ interface CalendarTimelineProps {
   onPrevDay?: () => void;
   onNextDay?: () => void;
   onToday?: () => void;
+  assistantName?: string;
 }
 
 interface ContextMenuState {
@@ -155,6 +156,7 @@ export function CalendarTimeline({
   onPrevDay,
   onNextDay,
   onToday,
+  assistantName = "Brett",
 }: CalendarTimelineProps) {
   // Empty state: clean timeline grid + connect CTA — no fake events
   if (!isLoading && events.length === 0 && onConnect && onDismiss) {
@@ -510,7 +512,7 @@ export function CalendarTimeline({
                         </button>
                       )}
                       {event.hasBrettContext && (
-                        <span className="text-[10px] text-amber-400/60 leading-none mt-0.5" title="Brett's Take available">✦</span>
+                        <span className="text-[10px] text-amber-400/60 leading-none mt-0.5" title={`${assistantName}'s Take available`}>✦</span>
                       )}
                     </div>
                   </div>

@@ -33,9 +33,10 @@ interface TodayViewProps {
   nextUpTimer?: NextUpTimerState | null;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
+  assistantName?: string;
 }
 
-export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps, nextUpEvent, nextUpTimer, onReconnect, reconnectPendingSourceId }: TodayViewProps) {
+export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps, nextUpEvent, nextUpTimer, onReconnect, reconnectPendingSourceId, assistantName }: TodayViewProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [briefingEnabled] = usePreference("briefingEnabled");
   const [briefingDismissedDate, setBriefingDismissedDate] = usePreference("briefingDismissedDate");
@@ -170,6 +171,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
             const item = things.find((t) => t.id === id);
             if (item) onItemClick(item);
           }}
+          assistantName={assistantName}
         />
       )}
 

@@ -29,6 +29,7 @@ interface DailyBriefingProps {
   onDismiss: () => void;
   onRegenerate?: () => void;
   onItemClick?: (id: string) => void;
+  assistantName?: string;
 }
 
 /**
@@ -148,6 +149,7 @@ export function DailyBriefing({
   onDismiss,
   onRegenerate,
   onItemClick,
+  assistantName = "Brett",
 }: DailyBriefingProps) {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -304,7 +306,7 @@ export function DailyBriefing({
           )}
           <p className="text-[11px] text-white/20 flex items-center gap-1">
             <Settings size={10} />
-            Brett needs an AI provider to work his magic. Set one up in Settings.
+            {assistantName} needs an AI provider. Set one up in Settings.
           </p>
         </div>
       )}

@@ -61,6 +61,7 @@ interface TaskDetailPanelProps {
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
+  assistantName?: string;
 }
 
 export function TaskDetailPanel({
@@ -99,6 +100,7 @@ export function TaskDetailPanel({
   onItemClick,
   onEventClick,
   onNavigate,
+  assistantName,
 }: TaskDetailPanelProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(detail.title);
@@ -326,6 +328,7 @@ export function TaskDetailPanel({
           onNavigate={onNavigate}
           aiConfigured={brettAiConfigured}
           onOpenSettings={onOpenSettings}
+          assistantName={assistantName}
         />
       )}
     </>
