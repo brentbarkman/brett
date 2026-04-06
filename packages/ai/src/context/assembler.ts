@@ -2,10 +2,10 @@ import type { PrismaClient } from "@prisma/client";
 import type { ModelTier } from "@brett/types";
 import type { Message } from "../providers/types.js";
 import {
-  BRETT_SYSTEM_PROMPT,
+  getSystemPrompt,
+  getBriefingPrompt,
+  getBrettsTakePrompt,
   SCOUT_CREATION_PROMPT,
-  BRIEFING_SYSTEM_PROMPT,
-  BRETTS_TAKE_SYSTEM_PROMPT,
 } from "./system-prompts.js";
 import { AI_CONFIG } from "../config.js";
 import { getUserDayBounds } from "@brett/business";
@@ -23,6 +23,7 @@ interface OmnibarContext {
   intent?: string;
   /** Pre-loaded embedding search results for context enrichment */
   embeddingContext?: string;
+  assistantName?: string;
 }
 
 interface BrettThreadContext {
@@ -33,6 +34,7 @@ interface BrettThreadContext {
   calendarEventId?: string;
   /** Pre-loaded embedding search results for context enrichment */
   embeddingContext?: string;
+  assistantName?: string;
 }
 
 interface BriefingContext {
@@ -41,6 +43,7 @@ interface BriefingContext {
   timezone: string;
   /** Pre-loaded embedding search results for context enrichment */
   embeddingContext?: string;
+  assistantName?: string;
 }
 
 interface BrettsTakeContext {
@@ -50,6 +53,7 @@ interface BrettsTakeContext {
   calendarEventId?: string;
   /** Pre-loaded embedding search results for context enrichment */
   embeddingContext?: string;
+  assistantName?: string;
 }
 
 export type AssemblerInput =
@@ -211,7 +215,7 @@ async function assembleOmnibar(
   const scoutBlock = isScoutContext ? SCOUT_CREATION_PROMPT : "";
 
   const system =
-    BRETT_SYSTEM_PROMPT + scoutBlock + formatFacts(facts) + formatEmbeddingContext(input.embeddingContext) + currentDateLine();
+    getSystemPrompt(input.assistantName ?? "Brett") + scoutBlock + formatFacts(facts) + formatEmbeddingContext(input.embeddingContext) + currentDateLine();
 
   const messages: Message[] = [];
 
@@ -309,7 +313,7 @@ async function assembleBrettThread(
   }
 
   const system =
-    BRETT_SYSTEM_PROMPT +
+    getSystemPrompt(input.assistantName ?? "Brett") +
     formatFacts(facts) +
     itemContext +
     formatEmbeddingContext(input.embeddingContext) +
@@ -346,7 +350,7 @@ async function assembleBriefing(
   const safeTimezone = VALID_TIMEZONES.has(timezone) ? timezone : "UTC";
 
   const system =
-    BRIEFING_SYSTEM_PROMPT +
+    getBriefingPrompt(input.assistantName ?? "Brett") +
     formatFacts(facts) +
     formatEmbeddingContext(input.embeddingContext) +
     `\nCurrent date: ${currentDate}` +
@@ -599,7 +603,7 @@ async function assembleBrettsTake(
   const currentDate = now.toLocaleDateString("en-CA", { timeZone: safeTimezone });
 
   const system =
-    BRETTS_TAKE_SYSTEM_PROMPT +
+    getBrettsTakePrompt(input.assistantName ?? "Brett") +
     formatFacts(facts) +
     formatEmbeddingContext(input.embeddingContext) +
     `\nCurrent date: ${currentDate}` +

@@ -80,10 +80,11 @@ export { createGranolaClient } from "./mcp/granola.js";
 
 // Context
 export {
-  BRETT_SYSTEM_PROMPT,
-  BRIEFING_SYSTEM_PROMPT,
-  BRETTS_TAKE_SYSTEM_PROMPT,
-  FACT_EXTRACTION_PROMPT,
+  getSystemPrompt,
+  getBriefingPrompt,
+  getBrettsTakePrompt,
+  getFactExtractionPrompt,
+  SCOUT_CREATION_PROMPT,
 } from "./context/system-prompts.js";
 export { assembleContext } from "./context/assembler.js";
 export type { AssemblerInput, AssembledContext } from "./context/assembler.js";
