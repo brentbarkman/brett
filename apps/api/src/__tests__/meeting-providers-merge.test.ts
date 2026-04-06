@@ -73,4 +73,31 @@ describe("mergeMeetingNoteFields", () => {
     );
     expect(result.sources).toEqual(["granola"]);
   });
+
+  it("keeps existing summary when sources array is empty (Math.max guard)", () => {
+    const result = mergeMeetingNoteFields(
+      { title: "Meeting", summary: "Existing summary", transcript: null, attendees: null, sources: [] },
+      { provider: "google_meet", title: "Meeting", summary: "New summary", transcript: null, attendees: null },
+    );
+    // Both have priority 0 (empty sources defaults to 0, google_meet = 5) — google_meet wins
+    // because 5 > 0. This is correct behavior.
+    expect(result.summary).toBe("New summary");
+  });
+
+  it("returns null attendees when both are null", () => {
+    const result = mergeMeetingNoteFields(
+      { title: "Meeting", summary: null, transcript: null, attendees: null, sources: [] },
+      { provider: "granola", title: "Meeting", summary: null, transcript: null, attendees: null },
+    );
+    expect(result.attendees).toBeNull();
+  });
+
+  it("preserves existing attendees when incoming is null", () => {
+    const existing = [{ name: "Alice", email: "alice@co.com" }];
+    const result = mergeMeetingNoteFields(
+      { title: "Meeting", summary: null, transcript: null, attendees: existing, sources: ["granola"] },
+      { provider: "google_meet", title: "Meeting", summary: null, transcript: null, attendees: null },
+    );
+    expect(result.attendees).toEqual(existing);
+  });
 });

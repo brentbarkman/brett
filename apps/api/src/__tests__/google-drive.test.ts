@@ -71,3 +71,35 @@ describe("parseMeetingNotesDoc", () => {
     expect(parseMeetingNotesDoc([])).toBe("");
   });
 });
+
+describe("escapeDriveQuery (extended)", () => {
+  it("escapes backslashes before single quotes", () => {
+    expect(escapeDriveQuery("path\\to\\'file")).toBe("path\\\\to\\\\\\'file");
+  });
+});
+
+describe("parseTranscriptDoc (edge cases)", () => {
+  it("ignores consecutive speaker headers with no text between them", () => {
+    const content = [
+      { type: "paragraph", text: "[10:00:05] Alice" },
+      { type: "paragraph", text: "[10:00:10] Bob" },
+      { type: "paragraph", text: "Hello" },
+    ];
+    const result = parseTranscriptDoc(content);
+    // Alice has no text lines — should be skipped
+    expect(result).toHaveLength(1);
+    expect(result[0]!.speaker).toBe("Bob");
+  });
+
+  it("ignores text lines before the first speaker header", () => {
+    const content = [
+      { type: "paragraph", text: "This is a preamble" },
+      { type: "paragraph", text: "[10:00:05] Alice" },
+      { type: "paragraph", text: "Hello" },
+    ];
+    const result = parseTranscriptDoc(content);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.speaker).toBe("Alice");
+    expect(result[0]!.text).toBe("Hello");
+  });
+});
