@@ -97,9 +97,9 @@ export function SettingsLayout() {
       case "timezone-location":
         return (
           <div className="space-y-5">
+            <LocationSection />
             <BriefingSection />
             <TimezoneSection />
-            <LocationSection />
             <MemorySection />
             <BackgroundSection />
           </div>
