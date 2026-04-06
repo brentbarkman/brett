@@ -26,6 +26,7 @@ users.get("/me", authMiddleware, async (c) => {
       backgroundStyle: true,
       pinnedBackground: true,
       avgBusynessScore: true,
+      assistantName: true,
     },
   });
 
@@ -45,6 +46,7 @@ users.get("/me", authMiddleware, async (c) => {
     backgroundStyle: fullUser?.backgroundStyle ?? "photography",
     pinnedBackground: fullUser?.pinnedBackground ?? null,
     avgBusynessScore: fullUser?.avgBusynessScore ?? 0,
+    assistantName: fullUser?.assistantName ?? "Brett",
   });
 });
 
@@ -254,6 +256,36 @@ users.patch("/location", authMiddleware, rateLimiter(20), async (c) => {
   });
 
   return c.json(updated);
+});
+
+// PATCH /users/me — update user profile fields (e.g. assistantName)
+const ASSISTANT_NAME_REGEX = /^[a-zA-Z0-9 '\-]{1,10}$/;
+
+users.patch("/me", authMiddleware, async (c) => {
+  const userId = c.get("user").id;
+  const body = await c.req.json();
+
+  const updates: Record<string, unknown> = {};
+
+  if (body.assistantName !== undefined) {
+    const trimmed = String(body.assistantName).trim();
+    if (!trimmed || !ASSISTANT_NAME_REGEX.test(trimmed)) {
+      return c.json({ error: "Assistant name must be 1-10 characters (letters, numbers, spaces, hyphens, apostrophes)" }, 400);
+    }
+    updates.assistantName = trimmed;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return c.json({ error: "No valid fields to update" }, 400);
+  }
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: updates,
+    select: { assistantName: true },
+  });
+
+  return c.json(user);
 });
 
 export { users };
