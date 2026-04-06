@@ -91,7 +91,7 @@ export async function syncRecent(
 
 /**
  * Initial sync for a newly connected provider.
- * Fetches recent data (last 14 days) from a single provider.
+ * Fetches recent data (last 30 days) from a single provider.
  */
 export async function initialSync(
   userId: string,
@@ -110,7 +110,7 @@ export async function initialSync(
     return;
   }
 
-  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const until = new Date();
   const data = await provider.fetchRecent(userId, since, until);
 
