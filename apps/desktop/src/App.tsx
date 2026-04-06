@@ -562,7 +562,8 @@ export function App() {
       onOpen: () => { omnibar.open("bar"); setSelectedItem(null); setIsDetailOpen(false); },
       onCancel: omnibar.cancel,
       onReset: omnibar.reset,
-      onNavigateToSettings: () => navigate("/settings#ai-settings"),
+      onNavigateToSettings: () => navigate("/settings#ai-providers"),
+      onNavigateToLocationSettings: () => navigate("/settings#timezone-location"),
       sessionId: omnibar.sessionId,
       showTokenUsage,
       sessionUsage: sessionUsageData ?? null,
@@ -587,6 +588,7 @@ export function App() {
       showWeatherExpanded: false,
       onWeatherClick: undefined,
       onNavigateToSettings: undefined,
+      onNavigateToLocationSettings: undefined,
     }),
     [omnibarProps, omnibar.isOpen, omnibar.mode, omnibar.send, omnibar.open],
   );
@@ -1090,7 +1092,7 @@ export function App() {
           isLoadingMoreBrettMessages={brett.isLoadingMore}
           brettTotalCount={brett.totalCount}
           brettAiConfigured={brett.aiConfigured}
-          onOpenSettings={() => navigate("/settings#ai-settings")}
+          onOpenSettings={() => navigate("/settings#ai-providers")}
           onRetryExtraction={() => {
             if (selectedId) retryExtraction.mutate(selectedId);
           }}
@@ -1262,7 +1264,7 @@ export function App() {
           onClose={() => { setSpotlightInitialAction(null); omnibar.close(); }}
           onCancel={omnibar.cancel}
           onReset={omnibar.reset}
-          onNavigateToSettings={() => navigate("/settings#ai-settings")}
+          onNavigateToSettings={() => navigate("/settings#ai-providers")}
           onItemClick={(id: string) => {
             setSelectedItem({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
             setIsDetailOpen(true);

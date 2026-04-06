@@ -77,7 +77,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
     return () => container.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Click a day → scroll the hourly strip to that day
+  // Click a day → scroll the hourly strip to that day (if hourly data exists)
   const scrollToDay = useCallback((day: string) => {
     setSelectedDay(day);
     const el = dayMarkerRefs.current.get(day);
@@ -87,8 +87,10 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
       const elLeft = el.getBoundingClientRect().left;
       const scrollLeft = hourlyRef.current.scrollLeft + (elLeft - containerLeft);
       hourlyRef.current.scrollTo({ left: scrollLeft, behavior: "smooth" });
-      // Release scroll lock after animation
       setTimeout(() => { scrollingToDay.current = false; }, 400);
+    } else if (hourlyRef.current) {
+      // Day has no hourly data — scroll to the end of the strip
+      hourlyRef.current.scrollTo({ left: hourlyRef.current.scrollWidth, behavior: "smooth" });
     }
   }, []);
 

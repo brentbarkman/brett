@@ -1,9 +1,95 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#0C0F15"/>
-  <circle cx="163" cy="163" r="30" fill="#E8B931"/>
-  <line x1="213" y1="163" x2="390" y2="163" stroke="#E8B931" stroke-width="24" stroke-linecap="round"/>
-  <circle cx="163" cy="256" r="30" fill="#E8B931" opacity="0.6"/>
-  <line x1="213" y1="256" x2="340" y2="256" stroke="#E8B931" stroke-width="24" stroke-linecap="round" opacity="0.6"/>
-  <circle cx="163" cy="349" r="30" fill="#E8B931" opacity="0.3"/>
-  <line x1="213" y1="349" x2="290" y2="349" stroke="#E8B931" stroke-width="24" stroke-linecap="round" opacity="0.3"/>
+  <defs>
+    <!-- Gold metallic gradient for bars -->
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F5D96B"/>
+      <stop offset="40%" stop-color="#E8B931"/>
+      <stop offset="100%" stop-color="#B8891A"/>
+    </linearGradient>
+
+    <!-- Bar highlight: bright edge along top -->
+    <linearGradient id="barHighlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FBE88A" stop-opacity="0.6"/>
+      <stop offset="35%" stop-color="#F5D96B" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Sphere gradients — radial highlight for 3D -->
+    <radialGradient id="sphere1" cx="38%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#FBE88A"/>
+      <stop offset="40%" stop-color="#E8B931"/>
+      <stop offset="100%" stop-color="#A67B10"/>
+    </radialGradient>
+    <radialGradient id="sphere2" cx="38%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#D4B060"/>
+      <stop offset="40%" stop-color="#BF9A28"/>
+      <stop offset="100%" stop-color="#8A6A10"/>
+    </radialGradient>
+    <radialGradient id="sphere3" cx="38%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#A89050"/>
+      <stop offset="40%" stop-color="#917A20"/>
+      <stop offset="100%" stop-color="#6B5510"/>
+    </radialGradient>
+
+    <!-- Background -->
+    <radialGradient id="bg" cx="50%" cy="44%" r="60%">
+      <stop offset="0%" stop-color="#181C2A"/>
+      <stop offset="100%" stop-color="#0C0F15"/>
+    </radialGradient>
+
+    <!-- Vignette -->
+    <radialGradient id="vignette" cx="50%" cy="46%" r="58%">
+      <stop offset="0%" stop-color="black" stop-opacity="0"/>
+      <stop offset="75%" stop-color="black" stop-opacity="0"/>
+      <stop offset="100%" stop-color="black" stop-opacity="0.35"/>
+    </radialGradient>
+
+    <!-- Ambient glow — outer -->
+    <radialGradient id="warmth" cx="52%" cy="50%" r="38%">
+      <stop offset="0%" stop-color="#E8B931" stop-opacity="0.14"/>
+      <stop offset="60%" stop-color="#E8B931" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#E8B931" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Ambient glow — inner -->
+    <radialGradient id="innerGlow" cx="48%" cy="50%" r="25%">
+      <stop offset="0%" stop-color="#E8B931" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#E8B931" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Gold border -->
+    <linearGradient id="borderGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5D96B" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#C49A1A" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#F2D04A" stop-opacity="0.4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Base -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#vignette)"/>
+  <rect width="512" height="512" rx="112" fill="url(#warmth)"/>
+  <rect width="512" height="512" rx="112" fill="url(#innerGlow)"/>
+  <ellipse cx="256" cy="45" rx="140" ry="35" fill="white" opacity="0.012"/>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="111" fill="none" stroke="url(#borderGold)" stroke-width="2"/>
+
+  <!-- MARK — scaled up: dots r=28, bars h=22, wider reach -->
+
+  <!-- Row 1: full strength -->
+  <circle cx="135" cy="170" r="28" fill="url(#sphere1)"/>
+  <rect x="191" y="159" width="196" height="22" rx="11" fill="url(#gold)"/>
+  <rect x="191" y="159" width="196" height="10" rx="5" fill="url(#barHighlight)"/>
+
+  <!-- Row 2: 75% -->
+  <g opacity="0.75">
+    <circle cx="135" cy="256" r="28" fill="url(#sphere2)"/>
+    <rect x="191" y="245" width="155" height="22" rx="11" fill="url(#gold)"/>
+    <rect x="191" y="245" width="155" height="10" rx="5" fill="url(#barHighlight)"/>
+  </g>
+
+  <!-- Row 3: 45% -->
+  <g opacity="0.45">
+    <circle cx="135" cy="342" r="28" fill="url(#sphere3)"/>
+    <rect x="191" y="331" width="108" height="22" rx="11" fill="url(#gold)"/>
+    <rect x="191" y="331" width="108" height="10" rx="5" fill="url(#barHighlight)"/>
+  </g>
 </svg>

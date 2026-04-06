@@ -163,7 +163,7 @@ export async function fetchForecast(
   // Fetch weather (current, hourly, daily) + AQI in parallel
   const [currentRes, hourlyRes, dailyRes, airQuality] = await Promise.all([
     fetch(`${GOOGLE_WEATHER_BASE}/currentConditions:lookup?key=${key}&${loc}`),
-    fetch(`${GOOGLE_WEATHER_BASE}/forecast/hours:lookup?key=${key}&${loc}&hours=48`),
+    fetch(`${GOOGLE_WEATHER_BASE}/forecast/hours:lookup?key=${key}&${loc}&hours=168`),
     fetch(`${GOOGLE_WEATHER_BASE}/forecast/days:lookup?key=${key}&${loc}&days=7&pageSize=7`),
     fetchAirQuality(latitude, longitude, key),
   ]);

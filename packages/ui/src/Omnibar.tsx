@@ -44,6 +44,7 @@ export interface OmnibarProps {
   onCancel?: () => void;
   onReset?: () => void;
   onNavigateToSettings?: () => void;
+  onNavigateToLocationSettings?: () => void;
   onItemClick?: (id: string) => void;
   onEventClick?: (id: string) => void;
   onNavigate?: (path: string) => void;
@@ -85,6 +86,7 @@ export function Omnibar({
   onCancel,
   onReset,
   onNavigateToSettings,
+  onNavigateToLocationSettings,
   onItemClick,
   onEventClick,
   onNavigate,
@@ -408,8 +410,8 @@ export function Omnibar({
                 onClick={onWeatherClick}
               />
             )}
-            {!weatherLoading && !weather && onNavigateToSettings && (
-              <WeatherPillEmpty onClick={() => { onNavigateToSettings(); onClose(); }} />
+            {!weatherLoading && !weather && (onNavigateToLocationSettings || onNavigateToSettings) && (
+              <WeatherPillEmpty onClick={() => { (onNavigateToLocationSettings ?? onNavigateToSettings)!(); onClose(); }} />
             )}
             {!isOpen && (
               <kbd className="hidden sm:inline-flex items-center gap-0.5 ml-1.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/30">

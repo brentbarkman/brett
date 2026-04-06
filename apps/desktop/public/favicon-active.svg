@@ -1,10 +1,56 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#0C0F15"/>
-  <circle cx="8.5" cy="9.5" r="2.2" fill="#E8B931"/>
-  <line x1="12.5" y1="9.5" x2="26" y2="9.5" stroke="#E8B931" stroke-width="2.8" stroke-linecap="round"/>
-  <circle cx="8.5" cy="16" r="2.2" fill="#E8B931" opacity="0.6"/>
-  <line x1="12.5" y1="16" x2="22" y2="16" stroke="#E8B931" stroke-width="2.8" stroke-linecap="round" opacity="0.6"/>
-  <circle cx="8.5" cy="22.5" r="2.2" fill="#E8B931" opacity="0.3"/>
-  <line x1="12.5" y1="22.5" x2="18.5" y2="22.5" stroke="#E8B931" stroke-width="2.8" stroke-linecap="round" opacity="0.3"/>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="44%" r="60%">
+      <stop offset="0%" stop-color="#181C2A"/>
+      <stop offset="100%" stop-color="#0C0F15"/>
+    </radialGradient>
+    <radialGradient id="sphere1" cx="38%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#FBE88A"/>
+      <stop offset="40%" stop-color="#E8B931"/>
+      <stop offset="100%" stop-color="#A67B10"/>
+    </radialGradient>
+    <radialGradient id="sphere2" cx="38%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#D4B060"/>
+      <stop offset="40%" stop-color="#BF9A28"/>
+      <stop offset="100%" stop-color="#8A6A10"/>
+    </radialGradient>
+    <radialGradient id="sphere3" cx="38%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#A89050"/>
+      <stop offset="40%" stop-color="#917A20"/>
+      <stop offset="100%" stop-color="#6B5510"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F5D96B"/>
+      <stop offset="40%" stop-color="#E8B931"/>
+      <stop offset="100%" stop-color="#B8891A"/>
+    </linearGradient>
+    <linearGradient id="borderGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5D96B" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#C49A1A" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#F2D04A" stop-opacity="0.4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Base squircle -->
+  <rect width="32" height="32" rx="7" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="url(#borderGold)" stroke-width="0.5"/>
+
+  <!-- Row 1: full -->
+  <circle cx="8.5" cy="9.5" r="2.5" fill="url(#sphere1)"/>
+  <rect x="12.5" y="8.25" width="13" height="2.5" rx="1.25" fill="url(#gold)"/>
+
+  <!-- Row 2: 75% -->
+  <g opacity="0.75">
+    <circle cx="8.5" cy="16" r="2.5" fill="url(#sphere2)"/>
+    <rect x="12.5" y="14.75" width="10" height="2.5" rx="1.25" fill="url(#gold)"/>
+  </g>
+
+  <!-- Row 3: 45% -->
+  <g opacity="0.45">
+    <circle cx="8.5" cy="22.5" r="2.5" fill="url(#sphere3)"/>
+    <rect x="12.5" y="21.25" width="7" height="2.5" rx="1.25" fill="url(#gold)"/>
+  </g>
+
+  <!-- Cerulean notification badge -->
   <circle cx="26" cy="6" r="5" fill="#4682C3"/>
 </svg>

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
-import { Sparkles, CheckCircle, Plus, Zap, BookOpen, Link } from "lucide-react";
+import { CheckCircle, Plus, Zap, BookOpen, Link } from "lucide-react";
+import { ProductMark } from "./BrettMark";
 import type { NavList } from "@brett/types";
 
 interface ThingsEmptyStateProps {
@@ -85,38 +86,17 @@ export function ThingsEmptyState({
 
   // Brand new user — no things ever created
   return (
-    <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8">
-      <div className="flex flex-col items-center text-center gap-5">
-        <div className="w-12 h-12 rounded-full bg-brett-gold/10 border border-brett-gold/20 flex items-center justify-center">
-          <Sparkles size={22} className="text-brett-gold" />
-        </div>
-        <div>
-          <h3 className="text-white font-semibold text-base mb-2">
-            Start here
-          </h3>
-          <p className="text-white/40 text-sm leading-relaxed max-w-md">
-            Tasks, links, articles — everything goes in one place.
-            Add your first one below.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {[
-            { icon: <Zap size={14} />, label: "Tasks", color: "text-brett-gold bg-brett-gold/10 border-brett-gold/15" },
-            { icon: <BookOpen size={14} />, label: "Content", color: "text-amber-400 bg-amber-500/10 border-amber-500/15" },
-          ].map(({ icon, label, color }) => (
-            <div
-              key={label}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${color}`}
-            >
-              {icon}
-              {label}
-            </div>
-          ))}
-        </div>
-
-        <InlineTaskAdd lists={lists} onAdd={onAddTask} placeholder="Add your first thing..." />
+    <div className="flex flex-col items-center text-center gap-5 py-6">
+      <ProductMark size={36} className="drop-shadow-[0_0_12px_rgba(232,185,49,0.3)]" />
+      <div>
+        <h3 className="text-white/90 font-semibold text-base mb-1.5">
+          Your inbox
+        </h3>
+        <p className="text-white/40 text-sm leading-relaxed max-w-xs">
+          Tasks, links, anything worth tracking — toss it in.
+        </p>
       </div>
+      <InlineTaskAdd lists={lists} onAdd={onAddTask} placeholder="Add something..." />
     </div>
   );
 }
