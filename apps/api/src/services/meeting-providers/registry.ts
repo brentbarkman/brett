@@ -1,4 +1,7 @@
 import type { MeetingNoteProvider } from "./types.js";
+import { GranolaProvider } from "./granola-provider.js";
+import { GoogleMeetProvider } from "./google-meet-provider.js";
+import { syncForEvent, syncRecent, initialSync } from "./coordinator.js";
 
 class MeetingProviderRegistry {
   private providers: MeetingNoteProvider[] = [];
@@ -20,3 +23,10 @@ class MeetingProviderRegistry {
 }
 
 export const providerRegistry = new MeetingProviderRegistry();
+
+// Register providers
+providerRegistry.register(new GranolaProvider());
+providerRegistry.register(new GoogleMeetProvider());
+
+// Coordinator singleton — wraps the standalone coordinator functions
+export const meetingCoordinator = { syncForEvent, syncRecent, initialSync };
