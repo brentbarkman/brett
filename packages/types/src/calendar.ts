@@ -137,7 +137,8 @@ export type SSEEventType =
   | "granola.account.disconnected"
   | "scout.finding.created"
   | "scout.run.completed"
-  | "scout.status.changed";
+  | "scout.status.changed"
+  | "meeting.note.synced";
 
 export interface SSEEvent {
   type: SSEEventType;
