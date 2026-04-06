@@ -93,10 +93,10 @@ export function ThingsEmptyState({
           Your inbox
         </h3>
         <p className="text-white/40 text-sm leading-relaxed max-w-xs">
-          Tasks, links, anything worth tracking — toss it in.
+          Everything worth doing starts here.
         </p>
       </div>
-      <InlineTaskAdd lists={lists} onAdd={onAddTask} placeholder="Add something..." />
+      <InlineTaskAdd lists={lists} onAdd={onAddTask} placeholder="Add a task or paste a link..." />
     </div>
   );
 }

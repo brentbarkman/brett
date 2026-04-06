@@ -220,7 +220,7 @@ export function CalendarTimeline({
                   </div>
                   <div>
                     <span className="text-xs font-semibold text-white/90 block">Connect Google Calendar</span>
-                    <span className="text-[10px] text-white/40 block mt-1">Schedule, meeting prep & alerts</span>
+                    <span className="text-[10px] text-white/40 block mt-1">Your day, at a glance.</span>
                   </div>
                   <span className="text-[10px] font-medium text-[#E8B931]/60 group-hover:text-[#E8B931]/80 transition-colors">
                     Connect →
