@@ -11,6 +11,8 @@ const SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/contacts.other.readonly",
+  "https://www.googleapis.com/auth/drive.metadata.readonly",
+  "https://www.googleapis.com/auth/documents.readonly",
   "openid",
   "email",
   "profile",
@@ -32,6 +34,19 @@ export function getCalendarAuthUrl(state: string): string {
     scope: SCOPES,
     state,
     prompt: "consent",
+  });
+}
+
+/** Generate OAuth URL for re-auth (incremental scope upgrade) */
+export function getCalendarReauthUrl(state: string, loginHint: string): string {
+  const oauth2Client = getOAuthClient();
+  return oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: SCOPES,
+    state,
+    prompt: "consent",
+    include_granted_scopes: true,
+    login_hint: loginHint,
   });
 }
 

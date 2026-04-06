@@ -56,6 +56,7 @@ model User {
   weatherCache         WeatherCache?
   granolaAccount         GranolaAccount?
   meetingNotes           MeetingNote[]
+  meetingNoteSources     MeetingNoteSource[]
   scouts                 Scout[]
   passkeys               Passkey[]
 }
@@ -241,9 +242,11 @@ model GoogleAccount {
   tokenExpiresAt  DateTime
   connectedAt     DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  hasDriveScope   Boolean   @default(false)
 
   calendars       CalendarList[]
   events          CalendarEvent[]
+  meetingNoteSources MeetingNoteSource[]
 
   @@unique([userId, googleUserId])
   @@index([userId])
@@ -290,6 +293,7 @@ model CalendarEvent {
   recurrence        String?
   recurringEventId  String?
   meetingLink       String?
+  conferenceId      String?
   googleColorId     String?
   organizer         Json?
   attendees         Json?
@@ -343,6 +347,7 @@ model GranolaAccount {
   updatedAt               DateTime  @updatedAt
 
   meetingNotes    MeetingNote[]
+  meetingNoteSources MeetingNoteSource[]
 
   @@index([userId])
 }
@@ -350,11 +355,11 @@ model GranolaAccount {
 model MeetingNote {
   id                  String    @id @default(uuid())
   provider            String    @default("granola")
-  granolaDocumentId   String    @unique  // Granola's not_-prefixed ID
+  granolaDocumentId   String?   @unique  // Granola's not_-prefixed ID
   userId              String
   user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  granolaAccountId    String
-  granolaAccount      GranolaAccount @relation(fields: [granolaAccountId], references: [id], onDelete: Cascade)
+  granolaAccountId    String?
+  granolaAccount      GranolaAccount? @relation(fields: [granolaAccountId], references: [id], onDelete: SetNull)
   calendarEventId     String?
   calendarEvent       CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
   title               String
@@ -370,11 +375,39 @@ model MeetingNote {
   updatedAt           DateTime  @updatedAt
 
   items               Item[]    // Action items created from this meeting
+  sources             String[]         @default([])
+  meetingNoteSources  MeetingNoteSource[]
 
+  @@unique([userId, calendarEventId])
   @@map("GranolaMeeting")
   @@index([userId, meetingStartedAt])
   @@index([granolaAccountId])
   @@index([calendarEventId])
+}
+
+model MeetingNoteSource {
+  id               String          @id @default(uuid())
+  meetingNoteId    String
+  meetingNote      MeetingNote     @relation(fields: [meetingNoteId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider         String          // "granola" | "google_meet"
+  externalId       String          // Provider-specific ID
+  granolaAccountId String?
+  granolaAccount   GranolaAccount? @relation(fields: [granolaAccountId], references: [id], onDelete: SetNull)
+  googleAccountId  String?
+  googleAccount    GoogleAccount?  @relation(fields: [googleAccountId], references: [id], onDelete: SetNull)
+  title            String
+  summary          String?         @db.Text
+  transcript       Json?
+  attendees        Json?
+  rawData          Json?
+  syncedAt         DateTime        @default(now())
+  createdAt        DateTime        @default(now())
+
+  @@unique([provider, externalId])
+  @@index([meetingNoteId])
+  @@index([userId, provider])
 }
 
 // ── AI tables ──

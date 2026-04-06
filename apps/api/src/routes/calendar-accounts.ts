@@ -3,6 +3,7 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import {
   getCalendarAuthUrl,
+  getCalendarReauthUrl,
   exchangeCalendarCode,
   getCalendarClient,
   stopWatch,
@@ -55,6 +56,7 @@ calendarAccounts.get("/", async (c) => {
       id: a.id,
       googleEmail: a.googleEmail,
       connectedAt: a.connectedAt.toISOString(),
+      hasDriveScope: a.hasDriveScope,
       calendars: a.calendars.map((cal) => ({
         id: cal.id,
         googleCalendarId: cal.googleCalendarId,
@@ -135,6 +137,10 @@ calendarAccounts.get("/callback", async (c) => {
     });
   }
 
+  const hasDriveScope =
+    grantedScopes.includes("https://www.googleapis.com/auth/drive.metadata.readonly") &&
+    grantedScopes.includes("https://www.googleapis.com/auth/documents.readonly");
+
   // Get Google user info
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({ access_token: tokens.access_token });
@@ -166,6 +172,7 @@ calendarAccounts.get("/callback", async (c) => {
       tokenExpiresAt: tokens.expiry_date
         ? new Date(tokens.expiry_date)
         : new Date(Date.now() + 3600 * 1000),
+      hasDriveScope,
     },
     update: {
       googleEmail,
@@ -174,6 +181,7 @@ calendarAccounts.get("/callback", async (c) => {
       tokenExpiresAt: tokens.expiry_date
         ? new Date(tokens.expiry_date)
         : new Date(Date.now() + 3600 * 1000),
+      hasDriveScope,
     },
   });
 
@@ -187,10 +195,38 @@ calendarAccounts.get("/callback", async (c) => {
     console.error(`[calendar-accounts] Initial sync failed for account ${account.id}:`, err);
   });
 
+  // If Drive/Docs scopes were granted, trigger Google Meet initial sync
+  if (hasDriveScope) {
+    import("../services/meeting-providers/registry.js").then(({ meetingCoordinator }) => {
+      meetingCoordinator.initialSync(user.id, "google_meet").catch((err) =>
+        console.error("[calendar-accounts] Google Meet initial sync failed:", err),
+      );
+    });
+  }
+
   return callbackHtml(c, {
     title: "Calendar connected!",
     message: `${account.googleEmail} is now syncing. Head back to Brett — your events will appear shortly.`,
   });
+});
+
+// POST /:accountId/reauth — Re-authenticate to upgrade scopes (e.g., Drive/Docs)
+calendarAccounts.post("/:accountId/reauth", async (c) => {
+  const user = c.get("user");
+  const accountId = c.req.param("accountId");
+
+  // SECURITY: Ownership check — only the account owner can trigger re-auth
+  const account = await prisma.googleAccount.findFirst({
+    where: { id: accountId, userId: user.id },
+  });
+  if (!account) return c.json({ error: "Not found" }, 404);
+
+  // Generate OAuth URL with HMAC-signed state (same pattern as connect)
+  const { state } = signOAuthState("calendar", user.id);
+  // Use login_hint to prevent account switching + include_granted_scopes for incremental auth
+  const url = getCalendarReauthUrl(state, account.googleEmail);
+
+  return c.json({ url });
 });
 
 // DELETE /:id — Disconnect: stop watches, cascade delete

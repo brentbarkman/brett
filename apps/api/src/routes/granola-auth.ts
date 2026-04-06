@@ -351,7 +351,7 @@ granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
     where: { calendarEventId: eventId, userId: user.id },
     select: {
       id: true,
-      granolaDocumentId: true,
+      sources: true,
       calendarEventId: true,
       title: true,
       summary: true,
@@ -362,7 +362,7 @@ granolaAuth.get("/meetings/by-event/:eventId", authMiddleware, async (c) => {
       meetingEndedAt: true,
       syncedAt: true,
       items: {
-        where: { source: "Granola" },
+        where: { meetingNoteId: { not: null } },
         select: { id: true, title: true, status: true, dueDate: true },
         orderBy: { createdAt: "asc" },
       },
@@ -389,8 +389,8 @@ granolaAuth.post("/meetings/:meetingId/reprocess", authMiddleware, async (c) => 
 granolaAuth.post("/sync", authMiddleware, async (c) => {
   const user = c.get("user");
   try {
-    const { initialGranolaSync } = await import("../services/granola-sync.js");
-    await initialGranolaSync(user.id);
+    const { meetingCoordinator } = await import("../services/meeting-providers/registry.js");
+    await meetingCoordinator.initialSync(user.id, "granola");
     const count = await prisma.meetingNote.count({ where: { userId: user.id } });
     return c.json({ ok: true, meetingsSynced: count });
   } catch (err: any) {

@@ -229,7 +229,7 @@ users.delete("/:id", async (c) => {
     prisma.scoutFinding.deleteMany({ where: { scout: { userId } } }),
     prisma.scoutRun.deleteMany({ where: { scout: { userId } } }),
     prisma.scout.deleteMany({ where: { userId } }),
-    prisma.conversationEmbedding.deleteMany({ where: { userId } }),
+    prisma.embedding.deleteMany({ where: { userId } }),
     prisma.userFact.deleteMany({ where: { userId } }),
     prisma.conversationMessage.deleteMany({ where: { session: { userId } } }),
     prisma.conversationSession.deleteMany({ where: { userId } }),

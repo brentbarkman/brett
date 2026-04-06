@@ -95,6 +95,8 @@ export interface CalendarAttachment {
   title: string;
   url: string;
   mimeType?: string;
+  fileId?: string;
+  fileUrl?: string;
 }
 
 // ── RSVP ──
@@ -121,6 +123,7 @@ export interface ConnectedCalendarAccount {
   id: string;
   googleEmail: string;
   connectedAt: string;
+  hasDriveScope: boolean;
   calendars: CalendarListRecord[];
 }
 
@@ -137,7 +140,8 @@ export type SSEEventType =
   | "granola.account.disconnected"
   | "scout.finding.created"
   | "scout.run.completed"
-  | "scout.status.changed";
+  | "scout.status.changed"
+  | "meeting.note.synced";
 
 export interface SSEEvent {
   type: SSEEventType;

@@ -129,73 +129,78 @@ export function startCronJobs(): void {
     }
   });
 
-  // Granola: calendar-event-driven sync — every 5 minutes
-  // Checks for recently ended calendar events and syncs Granola notes
+  // Meeting notes: calendar-event-driven sync — every 5 minutes
   cron.schedule("*/5 * * * *", async () => {
     if (granolaSyncRunning) return;
     granolaSyncRunning = true;
     try {
-      const { syncAfterMeeting } = await import("../services/granola-sync.js");
+      const { meetingCoordinator } = await import("../services/meeting-providers/registry.js");
 
-      // Find users with connected Granola accounts
-      const granolaAccounts = await prisma.granolaAccount.findMany({
-        select: { userId: true },
+      const now = new Date();
+      const windowEnd = new Date(now.getTime() - 5 * 60 * 1000);
+      const windowStart = new Date(now.getTime() - 15 * 60 * 1000);
+
+      const recentlyEnded = await prisma.calendarEvent.findMany({
+        where: {
+          endTime: { gte: windowStart, lte: windowEnd },
+          isAllDay: false,
+        },
       });
 
-      for (const account of granolaAccounts) {
+      for (const event of recentlyEnded) {
         try {
-          // Find calendar events that ended 5-15 minutes ago (window allows Granola processing time)
-          const now = new Date();
-          const windowEnd = new Date(now.getTime() - 5 * 60 * 1000);   // 5 min ago
-          const windowStart = new Date(now.getTime() - 15 * 60 * 1000); // 15 min ago
-
-          const recentlyEnded = await prisma.calendarEvent.findMany({
-            where: {
-              userId: account.userId,
-              endTime: { gte: windowStart, lte: windowEnd },
-              isAllDay: false,
-            },
-            select: { startTime: true, endTime: true },
-          });
-
-          for (const event of recentlyEnded) {
-            await syncAfterMeeting(account.userId, event.startTime, event.endTime);
-          }
+          await meetingCoordinator.syncForEvent(event.userId, event);
         } catch (err) {
-          console.error(`[cron] Granola post-meeting sync failed for ${account.userId}:`, err);
+          console.error(`[cron] Meeting sync failed for event ${event.id}:`, err);
         }
       }
     } catch (err) {
-      console.error("[cron] Granola post-meeting sync failed:", err);
+      console.error("[cron] Post-meeting sync failed:", err);
     } finally {
       granolaSyncRunning = false;
     }
   });
 
-  // Granola: periodic sweep — every 30 minutes
-  // Safety net that catches any meetings missed by the event-driven trigger
+  // Meeting notes: periodic sweep — every 30 minutes
   cron.schedule("*/30 * * * *", async () => {
-    if (granolaSweepRunning) {
-      console.log("[cron] Granola sweep already running, skipping");
-      return;
-    }
+    if (granolaSweepRunning) return;
     granolaSweepRunning = true;
     try {
-      const { incrementalGranolaSync } = await import("../services/granola-sync.js");
+      const { meetingCoordinator } = await import("../services/meeting-providers/registry.js");
+      const { isWithinWorkingHours } = await import("../services/granola-sync.js");
 
-      const granolaAccounts = await prisma.granolaAccount.findMany({
-        select: { userId: true },
-      });
+      const [granolaUsers, googleUsers] = await Promise.all([
+        prisma.granolaAccount.findMany({ select: { userId: true } }),
+        prisma.googleAccount.findMany({ where: { hasDriveScope: true }, select: { userId: true } }),
+      ]);
 
-      for (const account of granolaAccounts) {
+      const userIds = [...new Set([
+        ...granolaUsers.map((a) => a.userId),
+        ...googleUsers.map((a) => a.userId),
+      ])];
+
+      for (const userId of userIds) {
         try {
-          await incrementalGranolaSync(account.userId);
+          // Skip users outside working hours (8am-7pm in their timezone)
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { timezone: true },
+          });
+          if (user?.timezone && !isWithinWorkingHours(user.timezone)) {
+            continue;
+          }
+
+          const now = new Date();
+          const startOfDay = new Date(now);
+          startOfDay.setHours(0, 0, 0, 0);
+
+          await meetingCoordinator.syncRecent(userId, startOfDay, now);
         } catch (err) {
-          console.error(`[cron] Granola sweep sync failed for ${account.userId}:`, err);
+          console.error(`[cron] Meeting sweep failed for ${userId}:`, err);
         }
       }
     } catch (err) {
-      console.error("[cron] Granola sweep sync failed:", err);
+      console.error("[cron] Meeting sweep failed:", err);
     } finally {
       granolaSweepRunning = false;
     }
@@ -235,6 +240,6 @@ export function startCronJobs(): void {
   console.log("[cron] Started: Scout tick (5m)");
 
   console.log(
-    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), granola post-meeting (5m), granola sweep (30m), verification cleanup (1h)",
+    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), meeting post-event (5m), meeting sweep (30m), verification cleanup (1h)",
   );
 }
