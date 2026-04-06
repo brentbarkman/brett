@@ -1,7 +1,7 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
-import { s3, BUCKET } from "./s3";
+import { s3, PUBLIC_BUCKET as BUCKET } from "./s3";
 
 const BG_DIR = path.resolve(__dirname, "../backgrounds");
 

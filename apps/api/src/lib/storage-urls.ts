@@ -2,20 +2,22 @@ const VIDEO_COUNT = 9;
 
 export function getStorageUrls() {
   const endpoint = process.env.STORAGE_ENDPOINT || "";
-  const bucket = process.env.STORAGE_BUCKET || "brett";
-  const base = endpoint ? `${endpoint}/${bucket}` : "";
 
-  // Release artifacts live in a separate bucket for credential isolation
+  // Public assets (videos, backgrounds) — anonymous read access
+  const publicBucket = process.env.PUBLIC_STORAGE_BUCKET || "brett-public";
+  const publicBase = endpoint ? `${endpoint}/${publicBucket}` : "";
+
+  // Release artifacts — separate bucket, separate credentials
   const releaseEndpoint = process.env.RELEASE_STORAGE_ENDPOINT || endpoint;
   const releaseBucket = process.env.RELEASE_STORAGE_BUCKET || "brett-releases";
   const releaseBase = releaseEndpoint ? `${releaseEndpoint}/${releaseBucket}` : "";
 
   return {
-    base,
+    base: publicBase,
     releasesUrl: releaseBase ? `${releaseBase}/releases` : "",
-    videoBaseUrl: base ? `${base}/public/videos` : "",
-    videoFiles: base
-      ? Array.from({ length: VIDEO_COUNT }, (_, i) => `${base}/public/videos/login-bg-${i + 1}.mp4`)
+    videoBaseUrl: publicBase ? `${publicBase}/videos` : "",
+    videoFiles: publicBase
+      ? Array.from({ length: VIDEO_COUNT }, (_, i) => `${publicBase}/videos/login-bg-${i + 1}.mp4`)
       : [],
   };
 }

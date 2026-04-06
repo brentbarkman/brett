@@ -11,7 +11,11 @@ export const s3 = new S3Client({
   forcePathStyle: true,
 });
 
-export const STORAGE_BUCKET = process.env.STORAGE_BUCKET || "brett";
+/** Private bucket — user attachments, presigned URLs only. Never public. */
+export const PRIVATE_STORAGE_BUCKET = process.env.PRIVATE_STORAGE_BUCKET || "brett-private";
+
+/** @deprecated Use PRIVATE_STORAGE_BUCKET or PUBLIC_STORAGE_BUCKET instead */
+export const STORAGE_BUCKET = PRIVATE_STORAGE_BUCKET;
 
 if (!process.env.STORAGE_ENDPOINT) {
   console.warn("[Storage] STORAGE_ENDPOINT not set — file uploads will fail. Set it in .env (see .env.example)");
@@ -20,7 +24,7 @@ if (!process.env.STORAGE_ENDPOINT) {
 export async function uploadToStorage(storageKey: string, body: Buffer, contentType: string): Promise<void> {
   await s3.send(
     new PutObjectCommand({
-      Bucket: STORAGE_BUCKET,
+      Bucket: PRIVATE_STORAGE_BUCKET,
       Key: storageKey,
       Body: body,
       ContentType: contentType,

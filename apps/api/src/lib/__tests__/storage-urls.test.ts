@@ -12,19 +12,19 @@ describe("getStorageUrls", () => {
     process.env = originalEnv;
   });
 
-  it("returns correct URLs when STORAGE_ENDPOINT and STORAGE_BUCKET are set", async () => {
+  it("returns correct URLs with PUBLIC_STORAGE_BUCKET set", async () => {
     process.env.STORAGE_ENDPOINT = "https://storage.example.com";
-    process.env.STORAGE_BUCKET = "mybucket";
+    process.env.PUBLIC_STORAGE_BUCKET = "my-public";
 
     const { getStorageUrls } = await import("../storage-urls.js");
     const urls = getStorageUrls();
 
-    // Releases use separate bucket (defaults to brett-releases)
-    expect(urls.releasesUrl).toBe("https://storage.example.com/brett-releases/releases");
-    expect(urls.videoBaseUrl).toBe("https://storage.example.com/mybucket/public/videos");
+    expect(urls.videoBaseUrl).toBe("https://storage.example.com/my-public/videos");
     expect(urls.videoFiles).toHaveLength(9);
-    expect(urls.videoFiles[0]).toBe("https://storage.example.com/mybucket/public/videos/login-bg-1.mp4");
-    expect(urls.videoFiles[8]).toBe("https://storage.example.com/mybucket/public/videos/login-bg-9.mp4");
+    expect(urls.videoFiles[0]).toBe("https://storage.example.com/my-public/videos/login-bg-1.mp4");
+    expect(urls.videoFiles[8]).toBe("https://storage.example.com/my-public/videos/login-bg-9.mp4");
+    // Releases use separate bucket
+    expect(urls.releasesUrl).toBe("https://storage.example.com/brett-releases/releases");
   });
 
   it("uses release-specific bucket when RELEASE_STORAGE_* vars are set", async () => {
@@ -38,13 +38,14 @@ describe("getStorageUrls", () => {
     expect(urls.releasesUrl).toBe("https://releases.example.com/my-releases/releases");
   });
 
-  it("uses default bucket names when STORAGE_BUCKET is not set", async () => {
+  it("uses default bucket names when env vars are not set", async () => {
     process.env.STORAGE_ENDPOINT = "https://storage.example.com";
-    delete process.env.STORAGE_BUCKET;
+    delete process.env.PUBLIC_STORAGE_BUCKET;
 
     const { getStorageUrls } = await import("../storage-urls.js");
     const urls = getStorageUrls();
 
+    expect(urls.videoBaseUrl).toBe("https://storage.example.com/brett-public/videos");
     expect(urls.releasesUrl).toBe("https://storage.example.com/brett-releases/releases");
   });
 
@@ -83,9 +84,8 @@ describe("getLatestVersion", () => {
     expect(result.dmg).toBe("");
   });
 
-  it("fetches and returns version from S3 when available", async () => {
+  it("fetches from release bucket", async () => {
     process.env.STORAGE_ENDPOINT = "https://storage.example.com";
-    process.env.STORAGE_BUCKET = "brett";
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

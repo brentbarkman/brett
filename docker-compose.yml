@@ -30,10 +30,11 @@ services:
       /bin/sh -c "
       sleep 2;
       mc alias set local http://minio:9000 minioadmin minioadmin;
-      mc mb --ignore-existing local/brett;
-      mc anonymous set download local/brett/public;
+      mc mb --ignore-existing local/brett-private;
+      mc mb --ignore-existing local/brett-public;
+      mc anonymous set download local/brett-public;
       mc mb --ignore-existing local/brett-releases;
-      mc anonymous set download local/brett-releases/releases;
+      mc anonymous set download local/brett-releases;
       exit 0;
       "
 

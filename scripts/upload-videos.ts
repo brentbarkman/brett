@@ -1,7 +1,7 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
-import { s3, BUCKET } from "./s3";
+import { s3, PUBLIC_BUCKET as BUCKET } from "./s3";
 
 const VIDEO_DIR = path.resolve(__dirname, "../apps/desktop/public/videos");
 
@@ -12,7 +12,7 @@ async function uploadVideos() {
   for (const file of files) {
     const filePath = path.join(VIDEO_DIR, file);
     const body = fs.readFileSync(filePath);
-    const key = `public/videos/${file}`;
+    const key = `videos/${file}`;
 
     console.log(`Uploading ${file} (${(body.length / 1024 / 1024).toFixed(1)} MB)...`);
 

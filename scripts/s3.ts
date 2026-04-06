@@ -11,7 +11,11 @@ export const s3 = new S3Client({
   forcePathStyle: true,
 });
 
-export const BUCKET = process.env.STORAGE_BUCKET || "brett";
+/** @deprecated Use PUBLIC_BUCKET or PRIVATE_BUCKET */
+export const BUCKET = process.env.PUBLIC_STORAGE_BUCKET || "brett-public";
+
+export const PUBLIC_BUCKET = process.env.PUBLIC_STORAGE_BUCKET || "brett-public";
+export const PRIVATE_BUCKET = process.env.PRIVATE_STORAGE_BUCKET || "brett-private";
 
 // Release storage (DMGs, latest-mac.yml) — separate bucket/credentials for isolation.
 // Falls back to app storage vars for local dev (MinIO uses one set of credentials).
