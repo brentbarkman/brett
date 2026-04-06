@@ -13,7 +13,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  release:
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -33,8 +33,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for git-based versioning
 
       - uses: pnpm/action-setup@v4
         with:
@@ -47,23 +45,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      # Compute version from base version + commit count (e.g. 0.1.47)
-      # Never committed — no push back to main, no divergence
-      - name: Compute version
-        run: |
-          BASE=$(node -p "require('./apps/desktop/package.json').version.split('.').slice(0,2).join('.')")
-          PATCH=$(git rev-list --count HEAD)
-          VERSION="${BASE}.${PATCH}"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Desktop version: $VERSION"
-          # Patch package.json in-place for electron-builder + vite (not committed)
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('apps/desktop/package.json', 'utf-8'));
-            pkg.version = '$VERSION';
-            fs.writeFileSync('apps/desktop/package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
 
       - name: Generate Prisma client
         run: pnpm --filter @brett/api exec prisma generate
@@ -85,13 +66,63 @@ jobs:
           GOOGLE_CLIENT_ID: test-google-client-id
           GOOGLE_CLIENT_SECRET: test-google-client-secret
 
+  deploy:
+    needs: test
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git-based versioning
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Compute version from base version + commit count (e.g. 0.1.812)
+      # Never committed — no push back to main
+      - name: Compute version
+        run: |
+          BASE=$(node -p "require('./apps/desktop/package.json').version.split('.').slice(0,2).join('.')")
+          PATCH=$(git rev-list --count HEAD)
+          VERSION="${BASE}.${PATCH}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Desktop version: $VERSION"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('apps/desktop/package.json', 'utf-8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('apps/desktop/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
       - name: Deploy API to Railway
         run: npx @railway/cli up --service 885a5f01-827b-4b29-a15f-3e9fee4fcb4e --environment 628d3da3-9677-4c8c-a151-52e8e9992f94
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Build desktop
-        run: pnpm --filter @brett/desktop electron:build -- --mac --publish never
+        run: |
+          cd apps/desktop
+          pnpm run build
+          node -e "
+            const fs = require('fs');
+            fs.writeFileSync('dist/electron/api-config.json', JSON.stringify({
+              apiURL: process.env.VITE_API_URL || 'http://localhost:3001',
+              storageEndpoint: process.env.STORAGE_ENDPOINT || '',
+              storageBucket: process.env.STORAGE_BUCKET || 'brett',
+              releaseStorageEndpoint: process.env.RELEASE_STORAGE_ENDPOINT || '',
+              releaseStorageBucket: process.env.RELEASE_STORAGE_BUCKET || 'brett-releases'
+            }));
+          "
+          npx electron-builder --mac --publish never
         env:
           VITE_API_URL: https://api.brett.brentbarkman.com
           STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
