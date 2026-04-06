@@ -46,6 +46,11 @@ export function ipRateLimiter(maxRequests: number, windowMs: number = 60_000) {
   );
 }
 
+/** Clear all rate limit windows. Used by tests to prevent cross-test rate limiting. */
+export function clearAllRateLimits(): void {
+  for (const map of allMaps) map.clear();
+}
+
 // Clean up stale entries every 5 minutes
 setInterval(() => {
   const now = Date.now();

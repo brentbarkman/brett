@@ -8,15 +8,15 @@ describe("token-encryption", () => {
   let originalKey: string | undefined;
 
   beforeEach(() => {
-    originalKey = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
-    process.env.CALENDAR_TOKEN_ENCRYPTION_KEY = TEST_KEY;
+    originalKey = process.env.TOKEN_ENCRYPTION_KEY;
+    process.env.TOKEN_ENCRYPTION_KEY = TEST_KEY;
   });
 
   afterEach(() => {
     if (originalKey !== undefined) {
-      process.env.CALENDAR_TOKEN_ENCRYPTION_KEY = originalKey;
+      process.env.TOKEN_ENCRYPTION_KEY = originalKey;
     } else {
-      delete process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+      delete process.env.TOKEN_ENCRYPTION_KEY;
     }
   });
 
@@ -78,7 +78,7 @@ describe("token-encryption", () => {
   });
 
   it("throws when encryption key is missing", () => {
-    delete process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
-    expect(() => encryptToken("test")).toThrow("CALENDAR_TOKEN_ENCRYPTION_KEY");
+    delete process.env.TOKEN_ENCRYPTION_KEY;
+    expect(() => encryptToken("test")).toThrow("TOKEN_ENCRYPTION_KEY");
   });
 });

@@ -12,6 +12,9 @@ import { app } from "../app.js";
 import { createTestUser, authRequest } from "./helpers.js";
 import { prisma } from "../lib/prisma.js";
 
+const hasWeatherKey = !!process.env.GOOGLE_WEATHER_API_KEY;
+const itWithWeather = hasWeatherKey ? it : it.skip;
+
 // ── GET /weather ──
 
 describe("GET /weather", () => {
@@ -51,7 +54,7 @@ describe("GET /weather", () => {
     });
   });
 
-  it("returns weather data when location is set", async () => {
+  itWithWeather("returns weather data when location is set", async () => {
     // Set location directly via prisma (San Francisco)
     await prisma.user.update({
       where: { id: userId },
@@ -79,7 +82,7 @@ describe("GET /weather", () => {
     expect(body.weather.isStale).toBe(false);
   });
 
-  it("returns cached data on subsequent requests (fetchedAt should match)", async () => {
+  itWithWeather("returns cached data on subsequent requests (fetchedAt should match)", async () => {
     // First request (cache should already be populated from previous test)
     const res1 = await authRequest("/weather", token);
     const body1 = (await res1.json()) as any;
@@ -164,7 +167,7 @@ describe("PATCH /users/location", () => {
     expect(body.tempUnit).toBe("fahrenheit");
   });
 
-  it("invalidates weather cache on location change", async () => {
+  itWithWeather("invalidates weather cache on location change", async () => {
     // Set location and fetch weather to populate cache
     await prisma.user.update({
       where: { id: userId },
