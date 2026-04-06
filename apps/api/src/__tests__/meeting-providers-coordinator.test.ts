@@ -43,8 +43,9 @@ vi.mock("../services/meeting-providers/registry.js", () => ({
 import { prisma } from "../lib/prisma.js";
 import { publishSSE } from "../lib/sse.js";
 import { enqueueEmbed } from "@brett/ai";
-import { syncForEvent } from "../services/meeting-providers/coordinator.js";
+import { syncForEvent, syncRecent } from "../services/meeting-providers/coordinator.js";
 import { providerRegistry } from "../services/meeting-providers/registry.js";
+import { processActionItems } from "../services/granola-action-items.js";
 
 // ── Test helpers ───────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ const mockPrisma = prisma as unknown as {
 const mockPublishSSE = publishSSE as ReturnType<typeof vi.fn>;
 const mockEnqueueEmbed = enqueueEmbed as ReturnType<typeof vi.fn>;
 const mockGetAvailable = providerRegistry.getAvailable as ReturnType<typeof vi.fn>;
+const mockProcessActionItems = processActionItems as ReturnType<typeof vi.fn>;
 
 function makeCalendarEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
   return {
@@ -232,5 +234,115 @@ describe("syncForEvent (coordinator)", () => {
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
     expect(mockEnqueueEmbed).toHaveBeenCalledTimes(1);
     expect(mockPublishSSE).toHaveBeenCalledTimes(1);
+  });
+
+  it("P2002 unique constraint error is caught gracefully — no SSE or embed", async () => {
+    const providerData = makeProviderData();
+    const provider = makeMockProvider("granola", providerData);
+    mockGetAvailable.mockResolvedValue([provider]);
+
+    // Simulate a P2002 unique constraint violation from $transaction
+    const p2002 = new Error("unique constraint") as any;
+    p2002.code = "P2002";
+    p2002.name = "PrismaClientKnownRequestError";
+    // Make it look like a PrismaClientKnownRequestError by matching the instanceof check
+    Object.setPrototypeOf(p2002, {
+      constructor: { name: "PrismaClientKnownRequestError" },
+    });
+
+    // The coordinator catches Prisma.PrismaClientKnownRequestError — import it directly
+    const { Prisma } = await import("@prisma/client");
+    const prismaError = new Prisma.PrismaClientKnownRequestError("unique constraint", {
+      code: "P2002",
+      clientVersion: "5.0.0",
+    });
+    mockPrisma.$transaction.mockRejectedValue(prismaError);
+
+    // Should resolve without throwing
+    await expect(syncForEvent(userId, calendarEvent)).resolves.toBeUndefined();
+
+    // SSE and embed must NOT be called
+    expect(mockPublishSSE).not.toHaveBeenCalled();
+    expect(mockEnqueueEmbed).not.toHaveBeenCalled();
+  });
+
+  it("non-P2002 errors propagate out of syncForEvent", async () => {
+    const providerData = makeProviderData();
+    const provider = makeMockProvider("granola", providerData);
+    mockGetAvailable.mockResolvedValue([provider]);
+
+    mockPrisma.$transaction.mockRejectedValue(new Error("database is on fire"));
+
+    await expect(syncForEvent(userId, calendarEvent)).rejects.toThrow("database is on fire");
+  });
+
+  it("provider returning null data skips transaction, SSE, and embed", async () => {
+    // fetchForEvent returns null — coordinator should skip entirely
+    const provider = makeMockProvider("granola", null);
+    mockGetAvailable.mockResolvedValue([provider]);
+
+    await syncForEvent(userId, calendarEvent);
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(mockEnqueueEmbed).not.toHaveBeenCalled();
+    expect(mockPublishSSE).not.toHaveBeenCalled();
+  });
+
+  it("isFirstSource=false on update path — processActionItems is NOT called", async () => {
+    const providerData = makeProviderData();
+    const provider = makeMockProvider("granola", providerData);
+    mockGetAvailable.mockResolvedValue([provider]);
+
+    // Return a note where createdAt !== updatedAt, meaning this is an update not a create
+    const createdAt = new Date("2026-03-27T14:00:00Z");
+    const updatedAt = new Date("2026-03-27T15:00:00Z"); // different — update path
+    const updatedNote = { ...MOCK_NOTE, createdAt, updatedAt };
+
+    mockPrisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        meetingNote: {
+          upsert: vi.fn().mockResolvedValue(updatedNote),
+        },
+        meetingNoteSource: {
+          create: vi.fn().mockResolvedValue({}),
+        },
+      };
+      return fn(tx);
+    });
+
+    await syncForEvent(userId, calendarEvent);
+
+    // isFirstSource=false — processActionItems must NOT be called
+    expect(mockProcessActionItems).not.toHaveBeenCalled();
+
+    // Embed and SSE still fire (they always run regardless of isFirstSource)
+    expect(mockEnqueueEmbed).toHaveBeenCalledTimes(1);
+    expect(mockPublishSSE).toHaveBeenCalledWith(
+      userId,
+      expect.objectContaining({
+        type: "meeting.note.synced",
+        payload: expect.objectContaining({ isFirstSource: false }),
+      }),
+    );
+  });
+});
+
+describe("syncRecent (coordinator)", () => {
+  const userId = "user-1";
+  const since = new Date("2026-03-01T00:00:00Z");
+  const until = new Date("2026-03-31T23:59:59Z");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("syncRecent with no providers makes no DB calls", async () => {
+    mockGetAvailable.mockResolvedValue([]);
+
+    await syncRecent(userId, since, until);
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(mockEnqueueEmbed).not.toHaveBeenCalled();
+    expect(mockPublishSSE).not.toHaveBeenCalled();
   });
 });
