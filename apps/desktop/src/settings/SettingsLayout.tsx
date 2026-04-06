@@ -3,12 +3,9 @@ import { useLocation } from "react-router-dom";
 import { ProfileSection } from "./ProfileSection";
 import { SecuritySection } from "./SecuritySection";
 import { CalendarSection } from "./CalendarSection";
-import { TimezoneSection } from "./TimezoneSection";
 import { LocationSection } from "./LocationSection";
 import { BackgroundSection } from "./BackgroundSection";
-import { BriefingSection } from "./BriefingSection";
 import { AISection } from "./AISection";
-import { MemorySection } from "./MemorySection";
 import { ImportSection } from "./ImportSection";
 import { SignOutSection } from "./SignOutSection";
 import { DangerZoneSection } from "./DangerZoneSection";
@@ -98,9 +95,6 @@ export function SettingsLayout() {
         return (
           <div className="space-y-5">
             <LocationSection />
-            <BriefingSection />
-            <TimezoneSection />
-            <MemorySection />
             <BackgroundSection />
           </div>
         );
