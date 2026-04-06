@@ -66,11 +66,11 @@ jobs:
           git commit -m "chore: bump desktop version to $NEW_VERSION [skip ci]"
           git push
 
-      - name: Typecheck
-        run: pnpm typecheck
-
       - name: Generate Prisma client
         run: pnpm --filter @brett/api exec prisma generate
+
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Run migrations on test DB
         run: pnpm --filter @brett/api exec prisma migrate deploy
@@ -87,7 +87,7 @@ jobs:
           GOOGLE_CLIENT_SECRET: test-google-client-secret
 
       - name: Deploy API to Railway
-        run: npx @railway/cli deploy --service api
+        run: npx @railway/cli up --service api
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 

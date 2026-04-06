@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Zap, BookOpen, Check, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw } from "lucide-react";
+import { Zap, BookOpen, Check, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
 import type { Thing } from "@brett/types";
 import { useDraggable } from "@dnd-kit/core";
 
@@ -19,6 +19,7 @@ interface InboxItemRowProps {
   onSelect: () => void;
   onReconnect?: () => void;
   reconnectPending?: boolean;
+  onInstallUpdate?: () => void;
 }
 
 export function InboxItemRow({
@@ -36,6 +37,7 @@ export function InboxItemRow({
   onSelect,
   onReconnect,
   reconnectPending,
+  onInstallUpdate,
 }: InboxItemRowProps) {
   const [completing, setCompleting] = useState(false);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -149,6 +151,18 @@ export function InboxItemRow({
         <span className="flex-shrink-0 text-[11px] text-white/40 px-1.5 py-0.5 rounded bg-white/5">
           {thing.source}
         </span>
+      )}
+
+      {/* Install update button for system update tasks */}
+      {onInstallUpdate && thing.sourceId === "system:update" && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onInstallUpdate(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-brett-gold/15 text-brett-gold hover:bg-brett-gold/25 transition-colors"
+        >
+          <Download size={11} />
+          Install &amp; Restart
+        </button>
       )}
 
       {/* Reconnect button for broken integrations */}

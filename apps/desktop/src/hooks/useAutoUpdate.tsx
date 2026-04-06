@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import type { ReactNode } from "react";
 import { apiFetch } from "../api/client";
 
 declare global {
@@ -16,13 +17,23 @@ declare global {
   }
 }
 
-interface UseAutoUpdateReturn {
+interface AutoUpdateState {
   updateReady: boolean;
   version: string | null;
   install: () => void;
 }
 
-export function useAutoUpdate(): UseAutoUpdateReturn {
+const AutoUpdateContext = createContext<AutoUpdateState>({
+  updateReady: false,
+  version: null,
+  install: () => {},
+});
+
+/**
+ * Provider — mount ONCE at the app root. Manages the full auto-update lifecycle:
+ * IPC subscription, system task creation/cleanup, and install trigger.
+ */
+export function AutoUpdateProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState<string | null>(null);
   const api = window.electronAPI;
 
@@ -53,8 +64,12 @@ export function useAutoUpdate(): UseAutoUpdateReturn {
     return unsubscribe;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Guard against concurrent ensureUpdateTask calls
+  let ensureInFlight = false;
+
   async function ensureUpdateTask(newVersion: string) {
-    if (!api) return;
+    if (!api || ensureInFlight) return;
+    ensureInFlight = true;
 
     try {
       const existingTaskId = await api.getUpdateTaskId();
@@ -88,6 +103,8 @@ export function useAutoUpdate(): UseAutoUpdateReturn {
       await api.setUpdateTaskId(task.id);
     } catch (err) {
       console.error("[AutoUpdate] Failed to create update task:", err);
+    } finally {
+      ensureInFlight = false;
     }
   }
 
@@ -99,8 +116,11 @@ export function useAutoUpdate(): UseAutoUpdateReturn {
       if (taskId) {
         await apiFetch(`/things/${taskId}`, { method: "DELETE" }).catch(() => {});
         await api.setUpdateTaskId(null);
-        await api.clearPendingUpdate();
       }
+      // Always clear pending update state on cleanup — handles the case where
+      // the app restarted after a successful install but pendingUpdateVersion
+      // was never cleared (e.g. quitAndInstall bypassed the cleanup path)
+      await api.clearPendingUpdate();
     } catch {
       // Cleanup is best-effort
     }
@@ -113,9 +133,16 @@ export function useAutoUpdate(): UseAutoUpdateReturn {
     });
   }, [api]);
 
-  return {
-    updateReady: version !== null,
-    version,
-    install,
-  };
+  return (
+    <AutoUpdateContext.Provider value={{ updateReady: version !== null, version, install }}>
+      {children}
+    </AutoUpdateContext.Provider>
+  );
+}
+
+/**
+ * Consumer hook — safe to call from multiple components without duplication.
+ */
+export function useAutoUpdate(): AutoUpdateState {
+  return useContext(AutoUpdateContext);
 }

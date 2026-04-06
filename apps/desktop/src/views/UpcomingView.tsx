@@ -4,6 +4,7 @@ import { ThingCard, ItemListShell, useListKeyboardNav, SkeletonListView, Section
 import type { Thing, FilterType } from "@brett/types";
 import { groupUpcomingThings } from "@brett/business";
 import { useUpcomingThings, useToggleThing } from "../api/things";
+import { useAutoUpdate } from "../hooks/useAutoUpdate";
 
 interface UpcomingViewProps {
   onItemClick: (item: Thing) => void;
@@ -14,6 +15,7 @@ interface UpcomingViewProps {
 }
 
 export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onReconnect, reconnectPendingSourceId }: UpcomingViewProps) {
+  const { install: installUpdate } = useAutoUpdate();
   const [typeFilter, setTypeFilter] = useState<FilterType>("All");
   const { data: things = [], isLoading } = useUpcomingThings();
   const toggleThing = useToggleThing();
@@ -109,6 +111,7 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
                     ? () => onReconnect(thing.sourceId!)
                     : undefined}
                   reconnectPending={thing.sourceId === reconnectPendingSourceId}
+                  onInstallUpdate={thing.sourceId === "system:update" ? installUpdate : undefined}
                 />
               ))}
             </div>
