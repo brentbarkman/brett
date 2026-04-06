@@ -156,8 +156,13 @@ export function ProfileSection() {
       <div className="flex justify-end">
         <button
           onClick={async () => {
-            if (isDirty) await handleSave();
-            if (isAssistantNameDirty) await handleAssistantNameSave();
+            let failed = false;
+            if (isDirty) {
+              try { await handleSave(); } catch { failed = true; }
+            }
+            if (!failed && isAssistantNameDirty) {
+              await handleAssistantNameSave();
+            }
           }}
           disabled={(!isDirty && !isAssistantNameDirty) || saving || updateAssistantName.isPending}
           className="bg-brett-gold text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-brett-gold-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"

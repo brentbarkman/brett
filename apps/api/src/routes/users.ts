@@ -263,7 +263,10 @@ const ASSISTANT_NAME_REGEX = /^[a-zA-Z0-9 '\-]{1,10}$/;
 
 users.patch("/me", authMiddleware, async (c) => {
   const userId = c.get("user").id;
-  const body = await c.req.json();
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
 
   const updates: Record<string, unknown> = {};
 

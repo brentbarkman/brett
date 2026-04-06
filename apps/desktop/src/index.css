@@ -78,6 +78,12 @@
   }
 }
 
+/* Wordmark breathing animation */
+@keyframes wordmarkBreathe {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+
 /* Hide scrollbar utility */
 .scrollbar-hide {
   -ms-overflow-style: none;

@@ -144,14 +144,6 @@ interface WordmarkProps {
 export function Wordmark({ name, isWorking = false, size = 19 }: WordmarkProps) {
   return (
     <div className="flex flex-col">
-      <style>
-        {`
-          @keyframes wordmarkBreathe {
-            0%, 100% { opacity: 0.45; }
-            50% { opacity: 0.9; }
-          }
-        `}
-      </style>
       <span
         className="font-extrabold truncate"
         style={{

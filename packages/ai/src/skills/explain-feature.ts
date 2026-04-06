@@ -1,4 +1,4 @@
-import type { Skill } from "./types.js";
+import type { Skill, SkillContext } from "./types.js";
 
 function getFeatureExplanations(assistantName: string): Record<string, string> {
   return {
@@ -38,10 +38,12 @@ export const explainFeatureSkill: Skill = {
   modelTier: "small",
   requiresAI: false,
 
-  async execute(params, _ctx) {
+  async execute(params, ctx) {
     const p = params as { feature: string };
     const key = p.feature.toLowerCase().trim();
-    const explanations = getFeatureExplanations("Brett");
+    // TODO: thread assistantName through SkillContext so this is user-specific
+    const assistantName = (ctx as SkillContext & { assistantName?: string }).assistantName ?? "Brett";
+    const explanations = getFeatureExplanations(assistantName);
     const explanation = explanations[key];
 
     if (!explanation) {
