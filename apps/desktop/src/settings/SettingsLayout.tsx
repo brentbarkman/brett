@@ -10,10 +10,12 @@ import { BriefingSection } from "./BriefingSection";
 import { AISection } from "./AISection";
 import { MemorySection } from "./MemorySection";
 import { ImportSection } from "./ImportSection";
+import { UpdatesSection } from "./UpdatesSection";
 import { SignOutSection } from "./SignOutSection";
 import { DangerZoneSection } from "./DangerZoneSection";
 import { useAuth } from "../auth/AuthContext";
 import { useBrokenConnections } from "../api/connection-health";
+import { useAutoUpdate } from "../hooks/useAutoUpdate";
 
 type SettingsTab =
   | "profile"
@@ -22,6 +24,7 @@ type SettingsTab =
   | "ai-providers"
   | "timezone-location"
   | "import"
+  | "updates"
   | "account";
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -31,6 +34,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "ai-providers", label: "AI Providers" },
   { id: "timezone-location", label: "Personalize" },
   { id: "import", label: "Import" },
+  { id: "updates", label: "Updates" },
   { id: "account", label: "Account" },
 ];
 
@@ -48,6 +52,7 @@ export function SettingsLayout() {
 
   const { data: brokenConnections } = useBrokenConnections();
   const brokenTypes = brokenConnections?.types ?? [];
+  const { updateReady } = useAutoUpdate();
 
   const initialTab = tabFromHash(location.hash) || "profile";
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
@@ -106,6 +111,8 @@ export function SettingsLayout() {
         );
       case "import":
         return <ImportSection userId={user?.id ?? ""} />;
+      case "updates":
+        return <UpdatesSection />;
       case "account":
         return (
           <div className="space-y-5">
@@ -144,7 +151,8 @@ export function SettingsLayout() {
           {TABS.map((tab) => {
             const hasBrokenDot =
               (tab.id === "calendar" && brokenTypes.some((t) => t === "google-calendar" || t === "granola")) ||
-              (tab.id === "ai-providers" && brokenTypes.includes("ai"));
+              (tab.id === "ai-providers" && brokenTypes.includes("ai")) ||
+              (tab.id === "updates" && updateReady);
             return (
               <button
                 key={tab.id}
