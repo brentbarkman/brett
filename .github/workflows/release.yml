@@ -90,7 +90,7 @@ jobs:
           GOOGLE_CLIENT_SECRET: test-google-client-secret
 
       - name: Deploy API to Railway
-        run: npx @railway/cli up --service api
+        run: npx @railway/cli up --service 885a5f01-827b-4b29-a15f-3e9fee4fcb4e --environment 628d3da3-9677-4c8c-a151-52e8e9992f94
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
