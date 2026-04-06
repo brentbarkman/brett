@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { authClient } from "../auth/auth-client";
-import { getAvatarColor } from "@brett/ui";
+import { getAvatarColor, Wordmark } from "@brett/ui";
+import { useAssistantName, useUpdateAssistantName } from "../api/assistant-name";
 
 export function ProfileSection() {
   const { user, refetchUser } = useAuth();
@@ -13,6 +14,23 @@ export function ProfileSection() {
   } | null>(null);
 
   const isDirty = name !== (user?.name || "");
+
+  const currentAssistantName = useAssistantName();
+  const [assistantNameInput, setAssistantNameInput] = useState(currentAssistantName);
+  const updateAssistantName = useUpdateAssistantName();
+  const isAssistantNameDirty = assistantNameInput.trim() !== currentAssistantName;
+
+  async function handleAssistantNameSave() {
+    try {
+      await updateAssistantName.mutateAsync(assistantNameInput);
+      setMessage({ type: "success", text: "Assistant name updated" });
+    } catch (err: unknown) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to update",
+      });
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -100,6 +118,31 @@ export function ProfileSection() {
         />
       </div>
 
+      {/* Assistant name */}
+      <div className="mb-4">
+        <label
+          htmlFor="settings-assistant-name"
+          className="block text-xs text-white/50 mb-1.5"
+        >
+          Assistant name
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            id="settings-assistant-name"
+            type="text"
+            value={assistantNameInput}
+            onChange={(e) => {
+              if (e.target.value.length <= 10) setAssistantNameInput(e.target.value);
+            }}
+            maxLength={10}
+            placeholder="Brett"
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-brett-gold/50 focus:ring-1 focus:ring-brett-gold/50 focus:outline-none"
+          />
+          <Wordmark name={assistantNameInput.trim() || "Brett"} size={16} />
+        </div>
+        <p className="text-[10px] text-white/30 mt-1">{assistantNameInput.length}/10</p>
+      </div>
+
       {/* Message */}
       {message && (
         <p
@@ -112,11 +155,14 @@ export function ProfileSection() {
       {/* Save */}
       <div className="flex justify-end">
         <button
-          onClick={handleSave}
-          disabled={!isDirty || saving}
+          onClick={async () => {
+            if (isDirty) await handleSave();
+            if (isAssistantNameDirty) await handleAssistantNameSave();
+          }}
+          disabled={(!isDirty && !isAssistantNameDirty) || saving || updateAssistantName.isPending}
           className="bg-brett-gold text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-brett-gold-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {saving ? "Saving..." : "Save changes"}
+          {(saving || updateAssistantName.isPending) ? "Saving..." : "Save changes"}
         </button>
       </div>
     </div>
