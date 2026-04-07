@@ -139,7 +139,8 @@ jobs:
               releaseStorageBucket: process.env.RELEASE_STORAGE_BUCKET || 'brett-releases'
             }));
           "
-          npx electron-builder --mac --publish never
+          cd ../..
+          npx electron-builder --mac --publish never --project apps/desktop
         env:
           VITE_API_URL: https://api.brett.brentbarkman.com
           STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
