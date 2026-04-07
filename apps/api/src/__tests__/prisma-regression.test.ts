@@ -13,9 +13,11 @@
  * 6. Upsert behavior
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma } from "@brett/api-core";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const prisma = new PrismaClient({ adapter });
 
 let testUserId: string;
 let testListId: string;
@@ -778,5 +780,98 @@ describe("Prisma error types", () => {
       expect(err).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
       expect((err as Prisma.PrismaClientKnownRequestError).code).toBe("P2025");
     }
+  });
+});
+
+// ─── 9. Driver Adapter Behavior (Prisma 7) ─────────────────────────────────
+
+describe("Driver adapter behavior", () => {
+  it("PrismaClient with PrismaPg adapter connects and queries", async () => {
+    // Verify the adapter-based client works for basic operations
+    const user = await prisma.user.findUnique({
+      where: { id: testUserId },
+    });
+    expect(user).not.toBeNull();
+    expect(user!.id).toBe(testUserId);
+  });
+
+  it("adapter handles concurrent queries", async () => {
+    // Run multiple queries in parallel to verify connection pooling works
+    const results = await Promise.all([
+      prisma.user.findUnique({ where: { id: testUserId } }),
+      prisma.list.findMany({ where: { userId: testUserId } }),
+      prisma.item.count({ where: { userId: testUserId } }),
+    ]);
+
+    expect(results[0]).not.toBeNull();
+    expect(Array.isArray(results[1])).toBe(true);
+    expect(typeof results[2]).toBe("number");
+  });
+
+  it("adapter handles $queryRaw with tagged templates", async () => {
+    const rows = await prisma.$queryRaw<
+      Array<{ id: string }>
+    >`SELECT id FROM "User" WHERE id = ${testUserId}`;
+
+    expect(rows).toHaveLength(1);
+  });
+
+  it("adapter handles $executeRaw with tagged templates", async () => {
+    const count = await prisma.$executeRaw`
+      UPDATE "User" SET name = name WHERE id = ${testUserId}
+    `;
+    expect(count).toBe(1);
+  });
+});
+
+// ─── 10. Generated Client Type Aliases ─────────────────────────────────────
+
+describe("Generated client type aliases", () => {
+  it("model types resolve to correct shapes", async () => {
+    // Verify that Prisma 7 type aliases match expected field names
+    const user = await prisma.user.findUnique({
+      where: { id: testUserId },
+    });
+    expect(user).toHaveProperty("id");
+    expect(user).toHaveProperty("email");
+    expect(user).toHaveProperty("name");
+    expect(user).toHaveProperty("role");
+    expect(user).toHaveProperty("createdAt");
+    expect(user).toHaveProperty("updatedAt");
+  });
+
+  it("Prisma.InputJsonValue accepts objects", async () => {
+    // Verify JSON input typing still works through the adapter
+    const item = await prisma.item.create({
+      data: {
+        type: "content",
+        title: "JSON Type Test",
+        status: "active",
+        userId: testUserId,
+        contentMetadata: { test: true, nested: { value: 42 } } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    const read = await prisma.item.findUnique({ where: { id: item.id } });
+    expect(read!.contentMetadata).toEqual({ test: true, nested: { value: 42 } });
+
+    await prisma.item.delete({ where: { id: item.id } });
+  });
+
+  it("Prisma.DbNull works for nullable Json fields", async () => {
+    const item = await prisma.item.create({
+      data: {
+        type: "task",
+        title: "DbNull Test",
+        status: "active",
+        userId: testUserId,
+        contentMetadata: Prisma.DbNull,
+      },
+    });
+
+    const read = await prisma.item.findUnique({ where: { id: item.id } });
+    expect(read!.contentMetadata).toBeNull();
+
+    await prisma.item.delete({ where: { id: item.id } });
   });
 });

@@ -5,7 +5,7 @@ import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { resolveTempUnit, convertTemp } from "@brett/utils";
 import type { WeatherCurrent, WeatherHourly, WeatherDaily, WeatherData } from "@brett/types";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@brett/api-core";
 import { fetchForecast, searchCities, geolocateIp } from "../services/weather.js";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour

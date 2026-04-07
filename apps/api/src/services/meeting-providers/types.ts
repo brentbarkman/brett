@@ -1,4 +1,4 @@
-import type { CalendarEvent } from "@prisma/client";
+import type { CalendarEvent } from "@brett/api-core";
 import type { MeetingTranscriptTurn, MeetingNoteAttendee } from "@brett/types";
 
 export interface MeetingNoteProvider {

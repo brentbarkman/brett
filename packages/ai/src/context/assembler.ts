@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@brett/api-core";
 import type { ModelTier } from "@brett/types";
 import type { Message } from "../providers/types.js";
 import {

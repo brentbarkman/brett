@@ -1,4 +1,4 @@
-import type { CalendarEvent } from "@prisma/client";
+import type { CalendarEvent } from "@brett/api-core";
 import type { MeetingNoteProvider, ProviderMeetingData } from "./types.js";
 import type { MeetingNoteAttendee } from "@brett/types";
 import { prisma } from "../../lib/prisma.js";

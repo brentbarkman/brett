@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@brett/api-core";
 import type { EmbeddingProvider } from "../providers/types.js";
 
 // --- Types ---

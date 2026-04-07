@@ -166,7 +166,7 @@ interface ActionItem {
 type MeetingRecord = { id: string; calendarEventId: string | null; title: string; actionItems: unknown; meetingStartedAt: Date };
 
 async function findMeetings(
-  ctx: { prisma: import("@prisma/client").PrismaClient; userId: string },
+  ctx: { prisma: import("@brett/api-core").PrismaClient; userId: string },
   p: { calendarEventId?: string; meetingTitle?: string }
 ): Promise<{ meeting: MeetingRecord | null; otherMatches: MeetingRecord[] }> {
   if (p.calendarEventId) {

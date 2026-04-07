@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@brett/api-core";
 
 export interface UsageEntry {
   userId: string;

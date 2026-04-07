@@ -16,11 +16,17 @@ download.get("/", async (c) => {
   const { releasesUrl, videoFiles } = getStorageUrls();
   const latest = await getLatestVersion();
   const version = latest.version;
-  const artifactKey = latest.artifact || latest.dmg || `Brett-${version}.zip`;
+  // artifact key from latest.json includes "releases/" prefix — strip it for the proxy URL
+  const rawKey = latest.artifact || latest.dmg || `releases/Brett-${version}.zip`;
+  let filename = rawKey.replace(/^releases\//, "");
+  // Validate filename to prevent open redirect via poisoned latest.json
+  if (!/^Brett-[\d.]+\.(zip|dmg)$/.test(filename)) {
+    filename = `Brett-${version}.zip`;
+  }
 
   // Escape all interpolated values for safe HTML embedding
   const safeVersion = escapeHtml(version);
-  const safeDownloadHref = escapeHtml(`${releasesUrl}/${artifactKey}`);
+  const safeDownloadHref = escapeHtml(`${releasesUrl}/${filename}`);
   // Escape </script> in JSON to prevent early script tag termination
   const safeVideoJson = JSON.stringify(videoFiles).replace(/<\//g, "<\\/");
 

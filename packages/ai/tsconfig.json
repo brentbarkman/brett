@@ -8,6 +8,7 @@
   "references": [
     { "path": "../types" },
     { "path": "../utils" },
-    { "path": "../business" }
+    { "path": "../business" },
+    { "path": "../api-core" }
   ]
 }

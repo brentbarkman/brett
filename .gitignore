@@ -12,6 +12,9 @@ ios
 .DS_STORE
 .superpowers/
 
+# Prisma generated client (regenerated on build)
+packages/api-core/src/generated/
+
 # Login background videos (hosted on S3, not bundled)
 apps/desktop/public/videos/*.mp4
 

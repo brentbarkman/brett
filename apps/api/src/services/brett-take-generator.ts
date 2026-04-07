@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@brett/api-core";
 import { prisma } from "../lib/prisma.js";
 import { decryptToken } from "../lib/encryption.js";
 import { getProvider, orchestrate } from "@brett/ai";

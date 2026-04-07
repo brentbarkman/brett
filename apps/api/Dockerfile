@@ -24,8 +24,8 @@ COPY packages/business packages/business
 COPY packages/api-core packages/api-core
 COPY packages/ai packages/ai
 COPY apps/api/prisma apps/api/prisma
-COPY apps/api/prisma apps/api/prisma
-# Generate Prisma client — @brett/ai imports from @prisma/client
+COPY apps/api/prisma.config.ts apps/api/prisma.config.ts
+# Generate Prisma client — outputs to packages/api-core/src/generated/client
 RUN pnpm --filter @brett/api exec prisma generate
 # Build shared packages — API's tsc needs their .d.ts outputs
 RUN pnpm --filter @brett/types run build && \
@@ -48,6 +48,7 @@ COPY --from=build /app/packages/ai packages/ai
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/api/node_modules apps/api/node_modules
 COPY --from=build /app/apps/api/prisma apps/api/prisma
+COPY --from=build /app/apps/api/prisma.config.ts apps/api/prisma.config.ts
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 WORKDIR /app/apps/api
 # tsx handles .ts imports from shared packages (main: ./src/index.ts)

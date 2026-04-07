@@ -8,25 +8,23 @@ let updateReady = false;
 let downloadedVersion: string | null = null;
 
 function getUpdateFeedUrl(): string | null {
-  let endpoint = "";
-  let bucket = "brett-releases";
+  // The API proxies release artifacts at /releases/* since Railway
+  // Object Storage doesn't support public buckets.
+  let apiUrl = "";
 
   try {
     const fs = require("fs");
     const configPath = path.join(__dirname, "api-config.json");
     const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    if (config.releaseStorageEndpoint) endpoint = config.releaseStorageEndpoint;
-    else if (config.storageEndpoint) endpoint = config.storageEndpoint;
-    if (config.releaseStorageBucket) bucket = config.releaseStorageBucket;
-    else if (config.storageBucket) bucket = config.storageBucket;
+    if (config.apiURL) apiUrl = config.apiURL;
   } catch {
     // Fall through to env vars (dev mode)
   }
 
-  if (!endpoint) endpoint = process.env.RELEASE_STORAGE_ENDPOINT || process.env.STORAGE_ENDPOINT || "";
-  if (!endpoint) return null;
+  if (!apiUrl) apiUrl = process.env.VITE_API_URL || "";
+  if (!apiUrl) return null;
 
-  return `${endpoint}/${bucket}/releases`;
+  return `${apiUrl}/releases`;
 }
 
 export function initAutoUpdater(store: Store): void {

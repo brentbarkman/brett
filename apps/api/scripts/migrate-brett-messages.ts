@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@brett/api-core";
 
 const prisma = new PrismaClient();
 

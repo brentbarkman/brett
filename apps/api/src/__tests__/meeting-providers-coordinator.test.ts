@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { CalendarEvent } from "@prisma/client";
+import type { CalendarEvent } from "@brett/api-core";
 import type { MeetingNoteProvider, ProviderMeetingData } from "../services/meeting-providers/types.js";
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ describe("syncForEvent (coordinator)", () => {
     });
 
     // The coordinator catches Prisma.PrismaClientKnownRequestError — import it directly
-    const { Prisma } = await import("@prisma/client");
+    const { Prisma } = await import("@brett/api-core");
     const prismaError = new Prisma.PrismaClientKnownRequestError("unique constraint", {
       code: "P2002",
       clientVersion: "5.0.0",

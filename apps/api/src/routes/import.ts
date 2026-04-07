@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@brett/api-core";
 import { validateThings3Import } from "@brett/business";
 
 const importRoutes = new Hono<AuthEnv>();

@@ -1,6 +1,6 @@
 import type { AIProvider } from "../providers/types.js";
 import type { AIProviderName } from "@brett/types";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@brett/api-core";
 import { resolveModel } from "../router.js";
 import { getFactExtractionPrompt } from "../context/system-prompts.js";
 import { AI_CONFIG } from "../config.js";
