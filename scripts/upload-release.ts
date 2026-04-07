@@ -15,17 +15,20 @@ async function uploadRelease() {
   const version = pkg.version;
   console.log(`Uploading Brett v${version} release artifacts...\n`);
 
-  // Find the .dmg
+  // Find the build artifact (.zip or .dmg)
   const distDir = path.join(DESKTOP_DIR, "dist");
-  const dmgFiles = fs.readdirSync(distDir).filter((f) => f.endsWith(".dmg"));
-  if (dmgFiles.length === 0) {
-    throw new Error("No .dmg found in dist/. Build may have failed.");
+  const artifacts = fs.readdirSync(distDir).filter((f) =>
+    (f.endsWith(".zip") || f.endsWith(".dmg")) && f.startsWith("Brett")
+  );
+  if (artifacts.length === 0) {
+    throw new Error("No .zip or .dmg found in dist/. Build may have failed.");
   }
-  const dmgFile = dmgFiles[0];
-  if (!dmgFile.includes(version)) {
-    throw new Error(`DMG filename "${dmgFile}" does not contain expected version "${version}". Stale build artifact?`);
+  const artifactFile = artifacts[0];
+  if (!artifactFile.includes(version)) {
+    throw new Error(`Artifact "${artifactFile}" does not contain expected version "${version}". Stale build artifact?`);
   }
-  const dmgPath = path.join(distDir, dmgFile);
+  const artifactPath = path.join(distDir, artifactFile);
+  const ext = path.extname(artifactFile);
 
   // Find latest-mac.yml (contains SHA512 hash — do not modify)
   const ymlPath = path.join(distDir, "latest-mac.yml");
@@ -33,20 +36,20 @@ async function uploadRelease() {
     throw new Error("latest-mac.yml not found in dist/.");
   }
 
-  // Upload .dmg
-  const dmgKey = `releases/Brett-${version}.dmg`;
-  const dmgBody = fs.readFileSync(dmgPath);
-  console.log(`Uploading ${dmgFile} (${(dmgBody.length / 1024 / 1024).toFixed(1)} MB) → ${dmgKey}`);
+  // Upload artifact
+  const artifactKey = `releases/Brett-${version}${ext}`;
+  const artifactBody = fs.readFileSync(artifactPath);
+  console.log(`Uploading ${artifactFile} (${(artifactBody.length / 1024 / 1024).toFixed(1)} MB) → ${artifactKey}`);
   await releaseS3.send(
     new PutObjectCommand({
       Bucket: RELEASE_BUCKET,
-      Key: dmgKey,
-      Body: dmgBody,
+      Key: artifactKey,
+      Body: artifactBody,
       ContentType: "application/octet-stream",
       ACL: "public-read",
     })
   );
-  console.log("  ✓ DMG uploaded");
+  console.log(`  ✓ ${ext.slice(1).toUpperCase()} uploaded`);
 
   // Upload latest-mac.yml
   const ymlKey = "releases/latest-mac.yml";
@@ -65,7 +68,7 @@ async function uploadRelease() {
 
   // Upload latest.json
   const latestKey = "releases/latest.json";
-  const latestBody = JSON.stringify({ version, dmg: dmgKey });
+  const latestBody = JSON.stringify({ version, artifact: artifactKey });
   console.log(`Uploading latest.json → ${latestKey}`);
   await releaseS3.send(
     new PutObjectCommand({
@@ -80,7 +83,7 @@ async function uploadRelease() {
 
   const endpoint = process.env.RELEASE_STORAGE_ENDPOINT || process.env.STORAGE_ENDPOINT;
   console.log(`\n✓ Release v${version} uploaded!`);
-  console.log(`  Download: ${endpoint}/${RELEASE_BUCKET}/${dmgKey}`);
+  console.log(`  Download: ${endpoint}/${RELEASE_BUCKET}/${artifactKey}`);
 }
 
 uploadRelease().catch((err) => {

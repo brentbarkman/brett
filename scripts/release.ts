@@ -23,13 +23,13 @@ async function release() {
     cwd: path.resolve(__dirname, ".."),
   });
 
-  // 3. Find the .dmg and latest-mac.yml
+  // 3. Find the build artifact (.zip or .dmg) and latest-mac.yml
   const distDir = path.join(DESKTOP_DIR, "dist");
-  const dmgFiles = fs.readdirSync(distDir).filter((f) => f.startsWith(`Brett-${version}`) && f.endsWith(".dmg"));
-  if (dmgFiles.length === 0) {
-    throw new Error(`No Brett-${version}*.dmg found in dist/. Build may have failed.`);
+  const artifacts = fs.readdirSync(distDir).filter((f) => f.startsWith("Brett") && (f.endsWith(".zip") || f.endsWith(".dmg")));
+  if (artifacts.length === 0) {
+    throw new Error(`No Brett artifact found in dist/. Build may have failed.`);
   }
-  const dmgFile = dmgFiles[0];
+  const dmgFile = artifacts[0];
   const dmgPath = path.join(distDir, dmgFile);
 
   const ymlPath = path.join(distDir, "latest-mac.yml");
