@@ -4,8 +4,9 @@ import { app } from "../app.js";
 import { prisma } from "../lib/prisma.js";
 import { encryptToken } from "../lib/encryption.js";
 import { clearAllRateLimits } from "../middleware/rate-limit.js";
-import { SYNC_TABLES } from "@brett/types";
+import { SYNC_TABLES, MUTABLE_FIELDS } from "@brett/types";
 import { generateId } from "@brett/utils";
+import type { SyncPushRequest, SyncPushResponse } from "@brett/types";
 
 // Required for encryptToken used when creating GoogleAccount fixtures
 process.env.CALENDAR_TOKEN_ENCRYPTION_KEY =
@@ -312,5 +313,414 @@ describe("POST /sync/pull", () => {
     expect(eventIds).not.toContain(oldEventId);
     // The recent event must be included
     expect(eventIds).toContain(recentEventId);
+  });
+});
+
+describe("Sync Push", () => {
+  let token: string;
+  let userId: string;
+  let otherToken: string;
+  let otherUserId: string;
+  const nonce = Date.now().toString(36);
+
+  beforeAll(async () => {
+    const user = await createTestUser("Push User");
+    token = user.token;
+    userId = user.userId;
+
+    const other = await createTestUser("Other Push User");
+    otherToken = other.token;
+    otherUserId = other.userId;
+  });
+
+  function pushRequest(mutations: SyncPushRequest["mutations"], bearerToken = token) {
+    return authRequest("/sync/push", bearerToken, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, mutations }),
+    });
+  }
+
+  it("CREATE: creates a new item via sync push, returns 'applied' + record", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+    const idempotencyKey = `create-item-${nonce}-${entityId}`;
+
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "item",
+      entityId,
+      action: "CREATE",
+      payload: { type: "task", title: "Sync Created Item", status: "active" },
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results).toHaveLength(1);
+    expect(body.results[0].status).toBe("applied");
+    expect(body.results[0].record).toBeDefined();
+    expect(body.results[0].record!.id).toBe(entityId);
+    expect(body.results[0].record!.title).toBe("Sync Created Item");
+    // R7: userId must come from auth context, not payload
+    expect(body.results[0].record!.userId).toBe(userId);
+    expect(body.serverTime).toBeDefined();
+  });
+
+  it("CREATE: idempotency key prevents duplicate creates", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+    const idempotencyKey = `idem-create-${nonce}-${entityId}`;
+
+    const mutation = {
+      idempotencyKey,
+      entityType: "item" as const,
+      entityId,
+      action: "CREATE" as const,
+      payload: { type: "task", title: "Idempotent Item", status: "active" },
+    };
+
+    // First push
+    const res1 = await pushRequest([mutation]);
+    expect(res1.status).toBe(200);
+    const body1 = (await res1.json()) as SyncPushResponse;
+    expect(body1.results[0].status).toBe("applied");
+
+    clearAllRateLimits();
+
+    // Second push with same idempotency key — should return cached result
+    const res2 = await pushRequest([mutation]);
+    expect(res2.status).toBe(200);
+    const body2 = (await res2.json()) as SyncPushResponse;
+    expect(body2.results[0].status).toBe("applied");
+    expect(body2.results[0].record!.id).toBe(entityId);
+
+    // Only one record should exist in DB
+    const count = await prisma.item.count({ where: { id: entityId } });
+    expect(count).toBe(1);
+  });
+
+  it("UPDATE (no conflict): field-level merge with non-overlapping fields", async () => {
+    clearAllRateLimits();
+
+    // Create an item first via API
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Merge Test", description: "original desc", status: "active" }),
+    });
+    const created = (await createRes.json()) as any;
+
+    clearAllRateLimits();
+
+    // Push update changing title only — previousValues match server state
+    const idempotencyKey = `update-no-conflict-${nonce}-${created.id}`;
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "item",
+      entityId: created.id,
+      action: "UPDATE",
+      payload: { title: "Updated Title" },
+      changedFields: ["title"],
+      previousValues: { title: "Merge Test" },
+      baseUpdatedAt: created.updatedAt,
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("applied");
+    expect(body.results[0].record!.title).toBe("Updated Title");
+    // description unchanged
+    expect(body.results[0].record!.description).toBe("original desc");
+  });
+
+  it("UPDATE (conflict): overlapping field, server wins", async () => {
+    clearAllRateLimits();
+
+    // Create an item
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Conflict Test", status: "active" }),
+    });
+    const created = (await createRes.json()) as any;
+
+    // Server-side update to change title directly
+    await prisma.item.update({
+      where: { id: created.id },
+      data: { title: "Server Changed Title" },
+    });
+
+    clearAllRateLimits();
+
+    // Client tries to update title but previousValues has stale title
+    const idempotencyKey = `update-conflict-${nonce}-${created.id}`;
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "item",
+      entityId: created.id,
+      action: "UPDATE",
+      payload: { title: "Client Title" },
+      changedFields: ["title"],
+      previousValues: { title: "Conflict Test" }, // stale — server changed it
+      baseUpdatedAt: created.updatedAt,
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("conflict");
+    expect(body.results[0].conflictedFields).toContain("title");
+    // Server wins — record should have server's title
+    expect(body.results[0].record!.title).toBe("Server Changed Title");
+  });
+
+  it("UPDATE (partial merge): some fields merge, some conflict", async () => {
+    clearAllRateLimits();
+
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Partial Merge", description: "orig desc", status: "active" }),
+    });
+    const created = (await createRes.json()) as any;
+
+    // Server changes only description
+    await prisma.item.update({
+      where: { id: created.id },
+      data: { description: "Server desc" },
+    });
+
+    clearAllRateLimits();
+
+    // Client changes both title (clean merge) and description (conflict)
+    const idempotencyKey = `update-partial-${nonce}-${created.id}`;
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "item",
+      entityId: created.id,
+      action: "UPDATE",
+      payload: { title: "Client Title", description: "Client desc" },
+      changedFields: ["title", "description"],
+      previousValues: { title: "Partial Merge", description: "orig desc" },
+      baseUpdatedAt: created.updatedAt,
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("merged");
+    // Title should be client's (no conflict), description should remain server's (conflict)
+    expect(body.results[0].record!.title).toBe("Client Title");
+    expect(body.results[0].conflictedFields).toContain("description");
+    expect(body.results[0].conflictedFields).not.toContain("title");
+  });
+
+  it("DELETE: soft-deletes the record", async () => {
+    clearAllRateLimits();
+
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "To Delete Via Sync", status: "active" }),
+    });
+    const created = (await createRes.json()) as any;
+
+    clearAllRateLimits();
+
+    const idempotencyKey = `delete-${nonce}-${created.id}`;
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "item",
+      entityId: created.id,
+      action: "DELETE",
+      payload: {},
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("applied");
+
+    // Item should be soft-deleted (not found via normal query)
+    const found = await prisma.item.findUnique({ where: { id: created.id } });
+    expect(found).toBeNull();
+
+    // But still exists when querying with deletedAt bypass
+    const tombstone = await prisma.item.findFirst({
+      where: { id: created.id, deletedAt: { not: null } },
+    });
+    expect(tombstone).not.toBeNull();
+  });
+
+  it("IDOR: mutation targeting another user's item returns 'not_found'", async () => {
+    clearAllRateLimits();
+
+    // Create item as other user
+    const createRes = await authRequest("/things", otherToken, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Other User Item", status: "active" }),
+    });
+    const otherItem = (await createRes.json()) as any;
+
+    clearAllRateLimits();
+
+    // Try to update as our user
+    const idempotencyKey = `idor-update-${nonce}-${otherItem.id}`;
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "item",
+      entityId: otherItem.id,
+      action: "UPDATE",
+      payload: { title: "Hacked Title" },
+      changedFields: ["title"],
+      previousValues: { title: "Other User Item" },
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("not_found");
+
+    // Verify original item is unchanged
+    const original = await prisma.item.findUnique({ where: { id: otherItem.id } });
+    expect(original!.title).toBe("Other User Item");
+  });
+
+  it("IDOR: delete targeting another user's item returns 'not_found'", async () => {
+    clearAllRateLimits();
+
+    const createRes = await authRequest("/things", otherToken, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Other Delete Target", status: "active" }),
+    });
+    const otherItem = (await createRes.json()) as any;
+
+    clearAllRateLimits();
+
+    const idempotencyKey = `idor-delete-${nonce}-${otherItem.id}`;
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "item",
+      entityId: otherItem.id,
+      action: "DELETE",
+      payload: {},
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("not_found");
+  });
+
+  it("disallowed entity type returns 'error'", async () => {
+    clearAllRateLimits();
+    const idempotencyKey = `bad-entity-${nonce}`;
+
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "scout",
+      entityId: generateId(),
+      action: "CREATE",
+      payload: {},
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("error");
+    expect(body.results[0].error).toContain("not pushable");
+  });
+
+  it("invalid changedFields (e.g. 'userId') returns 'error'", async () => {
+    clearAllRateLimits();
+
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Field Escalation Test", status: "active" }),
+    });
+    const created = (await createRes.json()) as any;
+
+    clearAllRateLimits();
+
+    const idempotencyKey = `bad-fields-${nonce}-${created.id}`;
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "item",
+      entityId: created.id,
+      action: "UPDATE",
+      payload: { userId: "hacker-id" },
+      changedFields: ["userId"],
+      previousValues: { userId },
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("error");
+    expect(body.results[0].error).toContain("Fields not mutable");
+    expect(body.results[0].error).toContain("userId");
+  });
+
+  it("max mutations exceeded returns 400", async () => {
+    clearAllRateLimits();
+
+    const mutations = Array.from({ length: 51 }, (_, i) => ({
+      idempotencyKey: `overflow-${nonce}-${i}`,
+      entityType: "item",
+      entityId: generateId(),
+      action: "CREATE" as const,
+      payload: { type: "task", title: `Overflow ${i}`, status: "active" },
+    }));
+
+    const res = await authRequest("/sync/push", token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, mutations }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as any;
+    expect(body.error).toContain("Too many mutations");
+  });
+
+  it("body size limit returns 413", async () => {
+    clearAllRateLimits();
+
+    const res = await authRequest("/sync/push", token, {
+      method: "POST",
+      headers: { "Content-Length": "2000000" }, // 2MB
+      body: JSON.stringify({ protocolVersion: 1, mutations: [] }),
+    });
+
+    expect(res.status).toBe(413);
+  });
+
+  it("invalid protocol version returns 400", async () => {
+    clearAllRateLimits();
+
+    const res = await authRequest("/sync/push", token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 99, mutations: [] }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as any;
+    expect(body.error).toContain("protocol version");
+  });
+
+  it("unauthenticated request returns 401", async () => {
+    const res = await app.request("/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ protocolVersion: 1, mutations: [] }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("CREATE: list entity type works", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+    const idempotencyKey = `create-list-${nonce}-${entityId}`;
+
+    const res = await pushRequest([{
+      idempotencyKey,
+      entityType: "list",
+      entityId,
+      action: "CREATE",
+      payload: { name: "Sync List", colorClass: "bg-green-500", sortOrder: 0 },
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("applied");
+    expect(body.results[0].record!.name).toBe("Sync List");
+    expect(body.results[0].record!.userId).toBe(userId);
   });
 });
