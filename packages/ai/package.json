@@ -17,10 +17,8 @@
     "@brett/utils": "workspace:*",
     "@google/generative-ai": "^0.24.1",
     "ajv": "^8.18.0",
+    "@brett/api-core": "workspace:*",
     "openai": "^6.32.0"
-  },
-  "peerDependencies": {
-    "@prisma/client": "*"
   },
   "devDependencies": {
     "typescript": "^5.3.0",

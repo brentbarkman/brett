@@ -1,5 +1,5 @@
-import type { CalendarEvent } from "@prisma/client";
-import { Prisma } from "@prisma/client";
+import type { CalendarEvent } from "@brett/api-core";
+import { Prisma } from "@brett/api-core";
 import { prisma } from "../../lib/prisma.js";
 import { publishSSE } from "../../lib/sse.js";
 import { enqueueEmbed } from "@brett/ai";

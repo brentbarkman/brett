@@ -20,6 +20,7 @@ COPY packages/types packages/types
 COPY packages/utils packages/utils
 COPY packages/api-core packages/api-core
 COPY apps/api/prisma apps/api/prisma
+COPY apps/api/prisma.config.ts apps/api/prisma.config.ts
 COPY apps/admin-api apps/admin-api
 RUN pnpm --filter @brett/api exec prisma generate
 RUN pnpm --filter @brett/admin-api run build

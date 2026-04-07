@@ -1,5 +1,5 @@
 import type { Skill } from "./types.js";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@brett/api-core";
 
 export const updateScoutSkill: Skill = {
   name: "update_scout",

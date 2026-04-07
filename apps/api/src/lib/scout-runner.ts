@@ -9,7 +9,7 @@ import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, ScoutSource, FindingType } from "@brett/types";
 import { humanizeCadence, detectContentType } from "@brett/utils";
 import { getEmbeddingProvider } from "./embedding-provider.js";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@brett/api-core";
 import { getActiveMemories, formatMemoriesForPrompt, parseMemoryUpdates, applyMemoryUpdates, incrementAndCheckConsolidation, runConsolidation } from "./scout-memory.js";
 import { createRelinkTask } from "./connection-health.js";
 

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@brett/api-core";
 
 const FILLER_WORDS = /\b(meeting|call|chat|sync|standup|check-in|catch-?up|session|with|my|the|from|about)\b/gi;
 

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@brett/api-core";
 import { publishSSE } from "../lib/sse.js";
 import type { Scout, ScoutSource, CreateScoutInput, ScoutFinding, ActivityEntry, ScoutBudgetSummary, ScoutRunStatus, ScoutActivityType } from "@brett/types";
 

@@ -1,6 +1,6 @@
 import { hybridSearch } from "@brett/ai";
 import type { EmbeddingProvider } from "@brett/ai";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@brett/api-core";
 
 // Per-session cache — avoids redundant hybrid searches in multi-turn conversations.
 // Key: "userId:sessionId", Value: { context, cachedAt }

@@ -1,5 +1,5 @@
 import type { ModelTier, DisplayHint } from "@brett/types";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@brett/api-core";
 import type { AIProvider, EmbeddingProvider } from "../providers/types.js";
 
 export interface SkillContext {
