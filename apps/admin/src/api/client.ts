@@ -1,6 +1,6 @@
 import { getToken, clearStoredToken } from "../auth/auth-client";
 
-const API_URL = import.meta.env.VITE_ADMIN_API_URL || "http://localhost:3002";
+const API_URL = import.meta.env.VITE_ADMIN_API_URL ?? "http://localhost:3002";
 
 export async function adminFetch<T = unknown>(
   path: string,

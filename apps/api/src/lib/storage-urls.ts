@@ -1,56 +1,71 @@
 const VIDEO_COUNT = 9;
 
 export function getStorageUrls() {
-  // Each bucket has its own endpoint in Railway. Fall back to generic STORAGE_ENDPOINT for local dev.
-  const fallbackEndpoint = process.env.STORAGE_ENDPOINT || "";
-
-  // Public assets (videos, backgrounds) — anonymous read access
-  const publicEndpoint = process.env.PUBLIC_STORAGE_ENDPOINT || fallbackEndpoint;
-  const publicBucket = process.env.PUBLIC_STORAGE_BUCKET || "brett-public";
-  const publicBase = publicEndpoint ? `${publicEndpoint}/${publicBucket}` : "";
-
-  // Release artifacts — separate bucket, separate credentials
-  const releaseEndpoint = process.env.RELEASE_STORAGE_ENDPOINT || fallbackEndpoint;
-  const releaseBucket = process.env.RELEASE_STORAGE_BUCKET || "brett-releases";
-  const releaseBase = releaseEndpoint ? `${releaseEndpoint}/${releaseBucket}` : "";
+  // Public assets and releases are served via the API's proxy routes
+  // (/public/* and /releases/*) since Railway Object Storage doesn't
+  // support public buckets. The proxy authenticates with S3 server-side.
+  const apiBase = process.env.BETTER_AUTH_URL || "http://localhost:3001";
 
   return {
-    base: publicBase,
-    releasesUrl: releaseBase ? `${releaseBase}/releases` : "",
-    videoBaseUrl: publicBase ? `${publicBase}/videos` : "",
-    videoFiles: publicBase
-      ? Array.from({ length: VIDEO_COUNT }, (_, i) => `${publicBase}/videos/login-bg-${i + 1}.mp4`)
-      : [],
+    base: apiBase,
+    releaseBaseUrl: apiBase,
+    releasesUrl: `${apiBase}/releases`,
+    videoBaseUrl: `${apiBase}/public/videos`,
+    videoFiles: Array.from(
+      { length: VIDEO_COUNT },
+      (_, i) => `${apiBase}/public/videos/login-bg-${i + 1}.mp4`
+    ),
   };
 }
 
-// Cached latest version from S3
-let cachedVersion: { version: string; dmg: string } | null = null;
+// Cached latest version — fetched directly from S3 (not through the proxy)
+let cachedVersion: { version: string; dmg?: string; artifact?: string } | null = null;
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-export async function getLatestVersion(): Promise<{ version: string; dmg: string }> {
+// Memoized S3 client for release bucket reads
+let _releaseClientPromise: Promise<{ s3: any; bucket: string }> | null = null;
+
+function getReleaseClient() {
+  if (!_releaseClientPromise) {
+    _releaseClientPromise = (async () => {
+      const { S3Client } = await import("@aws-sdk/client-s3");
+      const s3 = new S3Client({
+        endpoint: process.env.RELEASE_STORAGE_ENDPOINT || process.env.STORAGE_ENDPOINT,
+        region: process.env.STORAGE_REGION || "us-east-1",
+        credentials: {
+          accessKeyId: process.env.RELEASE_STORAGE_ACCESS_KEY || process.env.STORAGE_ACCESS_KEY || "",
+          secretAccessKey: process.env.RELEASE_STORAGE_SECRET_KEY || process.env.STORAGE_SECRET_KEY || "",
+        },
+        forcePathStyle: true,
+      });
+      return { s3, bucket: process.env.RELEASE_STORAGE_BUCKET || "brett-releases" };
+    })();
+  }
+  return _releaseClientPromise;
+}
+
+export async function getLatestVersion(): Promise<{ version: string; dmg?: string; artifact?: string }> {
   const now = Date.now();
   if (cachedVersion && now - lastFetchTime < CACHE_TTL_MS) {
     return cachedVersion;
   }
 
-  const { releasesUrl } = getStorageUrls();
-  if (!releasesUrl) {
-    return { version: "0.0.1", dmg: "" };
-  }
-
   try {
-    const res = await fetch(`${releasesUrl}/latest.json`);
-    if (res.ok) {
-      const data = await res.json() as { version: string; dmg: string };
+    const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+    const { s3, bucket } = await getReleaseClient();
+    const result = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: "releases/latest.json" }));
+
+    if (result.Body) {
+      const text = await result.Body.transformToString();
+      const data = JSON.parse(text) as { version: string; dmg?: string; artifact?: string };
       cachedVersion = data;
       lastFetchTime = now;
       return data;
     }
-  } catch {
-    // Fall through to cached or default
+  } catch (err: any) {
+    console.warn("[storage-urls] getLatestVersion failed:", err.message ?? err);
   }
 
-  return cachedVersion || { version: "0.0.1", dmg: "" };
+  return cachedVersion || { version: "0.0.1" };
 }

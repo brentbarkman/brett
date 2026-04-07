@@ -1,7 +1,7 @@
 import path from "path";
 import os from "os";
 import fs from "fs";
-import Database from "better-sqlite3";
+import initSqlJs, { type Database } from "sql.js";
 import type {
   Things3ImportPayload,
   Things3ScanResult,
@@ -56,11 +56,33 @@ interface ThingsChecklist {
   index: number;
 }
 
-function openDatabase(): Database.Database {
+async function openDatabase(): Promise<Database> {
   if (!fs.existsSync(THINGS_DB_PATH)) {
     throw new Error("Things 3 database not found. Is Things 3 installed?");
   }
-  return new Database(THINGS_DB_PATH, { readonly: true, fileMustExist: true });
+  const SQL = await initSqlJs();
+  const buffer = fs.readFileSync(THINGS_DB_PATH);
+  return new SQL.Database(buffer);
+}
+
+/** Run a query and return rows as typed objects */
+function query<T>(db: Database, sql: string): T[] {
+  const result = db.exec(sql);
+  if (result.length === 0) return [];
+  const { columns, values } = result[0];
+  return values.map((row) => {
+    const obj: any = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj as T;
+  });
+}
+
+/** Run a query and return a single row */
+function queryOne<T>(db: Database, sql: string): T {
+  const rows = query<T>(db, sql);
+  return rows[0];
 }
 
 /** Build markdown checklist string from checklist items */
@@ -74,18 +96,18 @@ function buildChecklistMarkdown(items: ThingsChecklist[]): string {
     .join("\n");
 }
 
-export function scanThings3(): Things3ScanResult {
-  const db = openDatabase();
+export async function scanThings3(): Promise<Things3ScanResult> {
+  const db = await openDatabase();
   try {
-    const projects = db
-      .prepare("SELECT COUNT(*) as count FROM TMTask WHERE type = 1 AND trashed = 0")
-      .get() as { count: number };
-    const activeTasks = db
-      .prepare("SELECT COUNT(*) as count FROM TMTask WHERE type = 0 AND trashed = 0 AND status = 0")
-      .get() as { count: number };
-    const completedTasks = db
-      .prepare("SELECT COUNT(*) as count FROM TMTask WHERE type = 0 AND trashed = 0 AND status IN (2, 3)")
-      .get() as { count: number };
+    const projects = queryOne<{ count: number }>(
+      db, "SELECT COUNT(*) as count FROM TMTask WHERE type = 1 AND trashed = 0"
+    );
+    const activeTasks = queryOne<{ count: number }>(
+      db, "SELECT COUNT(*) as count FROM TMTask WHERE type = 0 AND trashed = 0 AND status = 0"
+    );
+    const completedTasks = queryOne<{ count: number }>(
+      db, "SELECT COUNT(*) as count FROM TMTask WHERE type = 0 AND trashed = 0 AND status IN (2, 3)"
+    );
 
     return {
       projects: projects.count,
@@ -96,32 +118,29 @@ export function scanThings3(): Things3ScanResult {
   }
 }
 
-export function readThings3(): Things3ImportPayload {
-  const db = openDatabase();
+export async function readThings3(): Promise<Things3ImportPayload> {
+  const db = await openDatabase();
   try {
-    const projects = db
-      .prepare(
-        "SELECT uuid, title FROM TMTask WHERE type = 1 AND trashed = 0 ORDER BY \"index\""
-      )
-      .all() as { uuid: string; title: string }[];
+    const projects = query<{ uuid: string; title: string }>(
+      db,
+      'SELECT uuid, title FROM TMTask WHERE type = 1 AND trashed = 0 ORDER BY "index"'
+    );
 
-    const tasks = db
-      .prepare(
-        `SELECT uuid, title, notes, status, creationDate, stopDate, deadline, project
-         FROM TMTask WHERE type = 0 AND trashed = 0
-         ORDER BY "index"`
-      )
-      .all() as ThingsTask[];
+    const tasks = query<ThingsTask>(
+      db,
+      `SELECT uuid, title, notes, status, creationDate, stopDate, deadline, project
+       FROM TMTask WHERE type = 0 AND trashed = 0
+       ORDER BY "index"`
+    );
 
-    const checklists = db
-      .prepare(
-        `SELECT ci.uuid, ci.title, ci.status, ci.task, ci."index"
-         FROM TMChecklistItem ci
-         INNER JOIN TMTask t ON ci.task = t.uuid
-         WHERE t.type = 0 AND t.trashed = 0
-         ORDER BY ci."index"`
-      )
-      .all() as ThingsChecklist[];
+    const checklists = query<ThingsChecklist>(
+      db,
+      `SELECT ci.uuid, ci.title, ci.status, ci.task, ci."index"
+       FROM TMChecklistItem ci
+       INNER JOIN TMTask t ON ci.task = t.uuid
+       WHERE t.type = 0 AND t.trashed = 0
+       ORDER BY ci."index"`
+    );
 
     const checklistsByTask = new Map<string, ThingsChecklist[]>();
     for (const item of checklists) {

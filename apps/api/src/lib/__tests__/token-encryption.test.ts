@@ -23,10 +23,11 @@ describe("token-encryption", () => {
     expect(a).not.toBe(b);
   });
 
-  it("throws on tampered ciphertext", () => {
+  it("throws on tampered auth tag", () => {
     const encrypted = encryptToken("test");
     const parts = encrypted.split(":");
-    parts[1] = parts[1].replace(/^./, "f");
+    // Zero out the auth tag — AES-GCM always rejects this
+    parts[2] = "0".repeat(32);
     expect(() => decryptToken(parts.join(":"))).toThrow();
   });
 

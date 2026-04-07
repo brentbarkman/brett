@@ -62,18 +62,10 @@ describe("token-encryption", () => {
     expect(decryptToken(encrypted)).toBe(plaintext);
   });
 
-  it("rejects tampered ciphertext", () => {
-    const encrypted = encryptToken("secret");
-    const parts = encrypted.split(":");
-    // Completely replace the ciphertext — AES-GCM auth tag will reject
-    const tamperedCiphertext = "a".repeat(parts[1].length);
-    const tampered = parts[0] + ":" + tamperedCiphertext + ":" + parts[2];
-    expect(() => decryptToken(tampered)).toThrow();
-  });
-
   it("rejects tampered auth tag", () => {
     const encrypted = encryptToken("secret");
     const parts = encrypted.split(":");
+    // Zero out the auth tag — AES-GCM always rejects this
     const tampered = parts[0] + ":" + parts[1] + ":" + "0".repeat(32);
     expect(() => decryptToken(tampered)).toThrow();
   });

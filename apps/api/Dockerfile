@@ -25,9 +25,9 @@ COPY packages/api-core packages/api-core
 COPY packages/ai packages/ai
 COPY apps/api/prisma apps/api/prisma
 COPY apps/api/prisma.config.ts apps/api/prisma.config.ts
-# Generate Prisma client first — outputs to packages/api-core/src/generated/client
+# Generate Prisma client — outputs to packages/api-core/src/generated/client
 RUN pnpm --filter @brett/api exec prisma generate
-# Build shared packages — API imports their dist/ outputs
+# Build shared packages — API's tsc needs their .d.ts outputs
 RUN pnpm --filter @brett/types run build && \
     pnpm --filter @brett/utils run build && \
     pnpm --filter @brett/business run build && \
@@ -51,4 +51,6 @@ COPY --from=build /app/apps/api/prisma apps/api/prisma
 COPY --from=build /app/apps/api/prisma.config.ts apps/api/prisma.config.ts
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 WORKDIR /app/apps/api
-CMD ["sh", "-c", "/app/node_modules/.bin/prisma migrate deploy && node dist/index.js"]
+# tsx handles .ts imports from shared packages (main: ./src/index.ts)
+# and missing .js extensions in ESM output (moduleResolution: bundler)
+CMD ["sh", "-c", "/app/node_modules/.bin/prisma migrate deploy && /app/node_modules/.bin/tsx dist/index.js"]

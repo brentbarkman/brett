@@ -8,9 +8,88 @@
   "build": {
     "appId": "com.brett.app",
     "productName": "Brett",
+    "npmRebuild": false,
     "files": [
       "dist/electron/**/*",
-      "dist/renderer/**/*"
+      "dist/renderer/**/*",
+      "!dist/renderer/videos/**",
+      "!node_modules",
+      {
+        "from": "../../node_modules/electron-store",
+        "to": "node_modules/electron-store"
+      },
+      {
+        "from": "../../node_modules/electron-updater",
+        "to": "node_modules/electron-updater"
+      },
+      {
+        "from": "../../node_modules/sql.js",
+        "to": "node_modules/sql.js"
+      },
+      {
+        "from": "../../node_modules/conf",
+        "to": "node_modules/conf"
+      },
+      {
+        "from": "../../node_modules/pkg-up",
+        "to": "node_modules/pkg-up"
+      },
+      {
+        "from": "../../node_modules/find-up",
+        "to": "node_modules/find-up"
+      },
+      {
+        "from": "../../node_modules/locate-path",
+        "to": "node_modules/locate-path"
+      },
+      {
+        "from": "../../node_modules/p-locate",
+        "to": "node_modules/p-locate"
+      },
+      {
+        "from": "../../node_modules/p-limit",
+        "to": "node_modules/p-limit"
+      },
+      {
+        "from": "../../node_modules/p-try",
+        "to": "node_modules/p-try"
+      },
+      {
+        "from": "../../node_modules/path-exists",
+        "to": "node_modules/path-exists"
+      },
+      {
+        "from": "../../node_modules/env-paths",
+        "to": "node_modules/env-paths"
+      },
+      {
+        "from": "../../node_modules/atomically",
+        "to": "node_modules/atomically"
+      },
+      {
+        "from": "../../node_modules/json-schema-typed",
+        "to": "node_modules/json-schema-typed"
+      },
+      {
+        "from": "../../node_modules/semver",
+        "to": "node_modules/semver"
+      },
+      {
+        "from": "../../node_modules/builder-util-runtime",
+        "to": "node_modules/builder-util-runtime"
+      },
+      {
+        "from": "../../node_modules/sax",
+        "to": "node_modules/sax"
+      },
+      {
+        "from": "../../node_modules/lazy-val",
+        "to": "node_modules/lazy-val"
+      },
+      {
+        "from": "../../node_modules/lodash.isequal",
+        "to": "node_modules/lodash.isequal"
+      }
     ],
     "extraResources": [
       {
@@ -47,20 +126,20 @@
     "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
     "@tanstack/react-query": "^5.60.0",
     "better-auth": "^1.2.7",
-    "better-sqlite3": "^12.8.0",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^7.13.1"
+    "react-router-dom": "^7.13.1",
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.20",
     "concurrently": "^8.2.0",

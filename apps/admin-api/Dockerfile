@@ -1,16 +1,17 @@
 FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@8.15.6 --activate
 
-# Install deps
+# Install deps — include admin frontend for the static build
 FROM base AS deps
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/admin-api/package.json apps/admin-api/
+COPY apps/admin/package.json apps/admin/
 COPY apps/api/package.json apps/api/
 COPY packages/types/package.json packages/types/
 COPY packages/utils/package.json packages/utils/
 COPY packages/api-core/package.json packages/api-core/
-RUN pnpm install --frozen-lockfile --filter @brett/admin-api... --filter @brett/api
+RUN pnpm install --frozen-lockfile --filter @brett/admin-api... --filter @brett/admin... --filter @brett/api
 
 # Build
 FROM deps AS build
@@ -22,8 +23,15 @@ COPY packages/api-core packages/api-core
 COPY apps/api/prisma apps/api/prisma
 COPY apps/api/prisma.config.ts apps/api/prisma.config.ts
 COPY apps/admin-api apps/admin-api
+COPY apps/admin apps/admin
 RUN pnpm --filter @brett/api exec prisma generate
+# Build shared packages first — admin-api's tsc needs their .d.ts outputs
+RUN pnpm --filter @brett/types run build && \
+    pnpm --filter @brett/utils run build && \
+    pnpm --filter @brett/api-core run build
 RUN pnpm --filter @brett/admin-api run build
+# Empty VITE_ADMIN_API_URL = same-origin requests (frontend served by admin-api)
+RUN VITE_ADMIN_API_URL="" pnpm --filter @brett/admin run build
 
 # Run — no migrations (owned by apps/api)
 FROM base AS runner
@@ -35,5 +43,7 @@ COPY --from=build /app/packages/api-core packages/api-core
 COPY --from=build /app/apps/admin-api/dist apps/admin-api/dist
 COPY --from=build /app/apps/admin-api/node_modules apps/admin-api/node_modules
 COPY --from=build /app/apps/admin-api/package.json apps/admin-api/package.json
+# Admin frontend static files
+COPY --from=build /app/apps/admin/dist apps/admin-api/public
 WORKDIR /app/apps/admin-api
-CMD ["node", "dist/index.js"]
+CMD ["/app/node_modules/.bin/tsx", "dist/index.js"]

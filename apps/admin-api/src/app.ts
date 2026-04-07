@@ -44,4 +44,16 @@ adminRoutes.route("/ai", aiUsage);
 
 app.route("/admin", adminRoutes);
 
+// Serve admin frontend static files in production
+// In dev, the Vite dev server at :5174 handles this
+if (!isLocal) {
+  const { serveStatic } = await import("@hono/node-server/serve-static");
+
+  // Serve static assets (JS, CSS, images)
+  app.use("/*", serveStatic({ root: "./public" }));
+
+  // SPA fallback — serve index.html for all non-API routes
+  app.get("/*", serveStatic({ root: "./public", path: "index.html" }));
+}
+
 export { app };

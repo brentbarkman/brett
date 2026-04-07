@@ -27,6 +27,8 @@ import { internalScoutsRouter } from "./routes/internal-scouts.js";
 import searchRouter from "./routes/search.js";
 import suggestionsRouter from "./routes/suggestions.js";
 import adminEmbeddings from "./routes/admin-embeddings.js";
+import { storageProxy } from "./routes/storage-proxy.js";
+import { releaseProxy } from "./routes/release-proxy.js";
 import { startCronJobs } from "./jobs/cron.js";
 import { setEmbedProcessor } from "@brett/ai";
 import { getEmbeddingProvider } from "./lib/embedding-provider.js";
@@ -60,6 +62,8 @@ app.route("/internal/scouts", internalScoutsRouter);
 // Public routes (no auth)
 app.route("/download", download);
 app.route("/config", config);
+app.route("/public", storageProxy);
+app.route("/releases", releaseProxy);
 
 // Routes
 app.route("/api/auth", authRouter);
