@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { createTestUser, authRequest } from "./helpers.js";
+import { prisma } from "../lib/prisma.js";
 
 describe("Soft delete", () => {
   let token: string;
@@ -142,6 +143,23 @@ describe("Soft delete", () => {
     const inboxRes = await authRequest("/things/inbox", token);
     const inbox = (await inboxRes.json()) as any;
     expect(inbox.visible.find((t: any) => t.id === id)).toBeUndefined();
+  });
+
+  it("soft-deleted items have deletedAt set in database", async () => {
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Check Tombstone" }),
+    });
+    const itemId = ((await createRes.json()) as any).id;
+
+    await authRequest(`/things/${itemId}`, token, { method: "DELETE" });
+
+    // Verify the record still exists in the DB with deletedAt set.
+    // Use $queryRaw to bypass the soft-delete extension which filters out deleted records.
+    const tombstone = await prisma.$queryRaw`
+      SELECT id, "deletedAt" FROM "Item" WHERE id = ${itemId}
+    `;
+    expect((tombstone as any[])[0].deletedAt).toBeTruthy();
   });
 
   it("deleting a thing twice returns 404 on second attempt", async () => {

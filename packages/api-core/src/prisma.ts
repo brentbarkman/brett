@@ -61,9 +61,12 @@ function withSoftDelete(basePrisma: PrismaClient) {
           // Convert findUnique → findFirst so we can add the deletedAt filter.
           // findUnique only accepts unique fields in `where`, but findFirst
           // accepts arbitrary filters.
-          if (hasBypassFilter(args.where as Record<string, unknown>)) {
-            return query(args);
-          }
+          //
+          // Note: there is no bypass path here. A bypass would call query(args)
+          // with deletedAt in the where clause, which Prisma rejects because
+          // deletedAt is not a unique field. If you need to find a soft-deleted
+          // record by ID, use findFirst with { deletedAt: { not: null } } directly.
+          //
           // Decompose compound unique keys (e.g. { userId_name: { userId, name } })
           // into top-level fields for findFirst compatibility.
           const where = args.where as Record<string, unknown>;

@@ -480,10 +480,14 @@ scouts.delete("/:id/history", async (c) => {
   const scout = await prisma.scout.findFirst({ where: { id, userId: user.id } });
   if (!scout) return c.json({ error: "Not found" }, 404);
 
-  // Delete in order: memories/consolidations, findings (FK to runs), runs, activity
+  // Delete in order: memories/consolidations, findings (FK to runs), runs, activity.
+  // ScoutMemory, ScoutConsolidation, ScoutRun, and ScoutActivity are not soft-delete
+  // models so deleteMany is a true hard delete. ScoutFinding IS a soft-delete model,
+  // so we bypass the extension with raw SQL to hard-delete — otherwise soft-deleted
+  // findings would be left with dangling scoutRunId FK references after runs are removed.
   await prisma.scoutMemory.deleteMany({ where: { scoutId: id } });
   await prisma.scoutConsolidation.deleteMany({ where: { scoutId: id } });
-  await prisma.scoutFinding.deleteMany({ where: { scoutId: id } });
+  await prisma.$executeRaw(Prisma.sql`DELETE FROM "ScoutFinding" WHERE "scoutId" = ${id}`);
   await prisma.scoutRun.deleteMany({ where: { scoutId: id } });
   await prisma.scoutActivity.deleteMany({ where: { scoutId: id } });
 
