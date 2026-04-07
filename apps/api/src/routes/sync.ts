@@ -113,6 +113,8 @@ export const sync = new Hono<AuthEnv>()
       const tombstones = await model.findMany({
         where: tombstoneWhere,
         select: { id: true },
+        take: limit,
+        orderBy: { updatedAt: "asc" },
       });
       const deleted = tombstones.map((r: any) => r.id);
 

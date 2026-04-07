@@ -2,8 +2,14 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { createTestUser, authRequest } from "./helpers.js";
 import { app } from "../app.js";
 import { prisma } from "../lib/prisma.js";
+import { encryptToken } from "../lib/encryption.js";
 import { clearAllRateLimits } from "../middleware/rate-limit.js";
 import { SYNC_TABLES } from "@brett/types";
+import { generateId } from "@brett/utils";
+
+// Required for encryptToken used when creating GoogleAccount fixtures
+process.env.CALENDAR_TOKEN_ENCRYPTION_KEY =
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 describe("POST /sync/pull", () => {
   let token: string;
@@ -226,5 +232,85 @@ describe("POST /sync/pull", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.fullSyncRequired).toBe(true);
+  });
+
+  it("excludes calendar events older than 90 days from sync results", async () => {
+    clearAllRateLimits();
+
+    const calUser = await createTestUser("Cal Scope User");
+
+    // Create Google account + calendar list fixtures required by CalendarEvent FK constraints
+    const googleAccountId = generateId();
+    await prisma.googleAccount.create({
+      data: {
+        id: googleAccountId,
+        userId: calUser.userId,
+        googleEmail: "scope-test@gmail.com",
+        googleUserId: `google-scope-${googleAccountId}`,
+        accessToken: encryptToken("fake-access-token"),
+        refreshToken: encryptToken("fake-refresh-token"),
+        tokenExpiresAt: new Date(Date.now() + 3600 * 1000),
+      },
+    });
+
+    const calendarListId = generateId();
+    await prisma.calendarList.create({
+      data: {
+        id: calendarListId,
+        googleAccountId,
+        googleCalendarId: "scope-primary",
+        name: "Scope Test Calendar",
+        color: "#4285f4",
+        isVisible: true,
+        isPrimary: true,
+      },
+    });
+
+    // Create an event that is 91 days in the past (outside the 90-day window)
+    const oldEventId = generateId();
+    const ninetyOneDaysAgo = new Date();
+    ninetyOneDaysAgo.setDate(ninetyOneDaysAgo.getDate() - 91);
+    await prisma.calendarEvent.create({
+      data: {
+        id: oldEventId,
+        userId: calUser.userId,
+        googleAccountId,
+        calendarListId,
+        googleEventId: `old-event-${oldEventId}`,
+        title: "Old Event Outside Window",
+        startTime: ninetyOneDaysAgo,
+        endTime: new Date(ninetyOneDaysAgo.getTime() + 3600 * 1000),
+      },
+    });
+
+    // Create a recent event (within the 90-day window) for contrast
+    const recentEventId = generateId();
+    await prisma.calendarEvent.create({
+      data: {
+        id: recentEventId,
+        userId: calUser.userId,
+        googleAccountId,
+        calendarListId,
+        googleEventId: `recent-event-${recentEventId}`,
+        title: "Recent Event Inside Window",
+        startTime: new Date(),
+        endTime: new Date(Date.now() + 3600 * 1000),
+      },
+    });
+
+    clearAllRateLimits();
+
+    const res = await authRequest("/sync/pull", calUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+
+    const eventIds = body.changes.calendar_events.upserted.map((e: any) => e.id);
+    // The old event must be excluded by the 90-day scope filter
+    expect(eventIds).not.toContain(oldEventId);
+    // The recent event must be included
+    expect(eventIds).toContain(recentEventId);
   });
 });
