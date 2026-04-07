@@ -111,6 +111,20 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
+      - name: Wait for API to be healthy
+        run: |
+          echo "Waiting for API to become healthy..."
+          for i in $(seq 1 30); do
+            if curl -sf https://api.brett.brentbarkman.com/health > /dev/null 2>&1; then
+              echo "API is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i/30 — not ready yet, waiting 10s..."
+            sleep 10
+          done
+          echo "API failed to become healthy after 5 minutes"
+          exit 1
+
       - name: Build desktop
         run: |
           pnpm build
