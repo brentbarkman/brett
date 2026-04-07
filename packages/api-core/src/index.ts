@@ -16,6 +16,7 @@ export type {
   UserAIConfig, ConversationSession, ConversationMessage,
   UserFact, Embedding, AIUsageLog, WeatherCache,
   Scout, ScoutRun, ScoutFinding, ScoutActivity, ScoutMemory, ScoutConsolidation,
+  IdempotencyKey, DeviceToken,
 } from "./generated/client/client.js";
 // Re-export enums
 export {

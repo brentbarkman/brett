@@ -60,6 +60,7 @@ model User {
   meetingNoteSources     MeetingNoteSource[]
   scouts                 Scout[]
   passkeys               Passkey[]
+  deviceTokens           DeviceToken[]
 }
 
 model Session {
@@ -750,4 +751,29 @@ model ScoutConsolidation {
 
   @@index([scoutId, createdAt])
   @@index([status])
+}
+
+// ── Mobile sync tables ──
+
+model IdempotencyKey {
+  key        String   @id
+  response   Json
+  statusCode Int
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model DeviceToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String
+  appVersion String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
