@@ -20,4 +20,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update-downloaded", handler);
     return () => ipcRenderer.removeListener("update-downloaded", handler);
   },
+  captureScreenshot: () => ipcRenderer.invoke("capture-screenshot"),
 });
