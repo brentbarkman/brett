@@ -68,7 +68,7 @@ jobs:
 
   deploy:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
