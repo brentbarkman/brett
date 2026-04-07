@@ -25,11 +25,11 @@ export function getStorageUrls() {
 }
 
 // Cached latest version from S3
-let cachedVersion: { version: string; dmg: string } | null = null;
+let cachedVersion: { version: string; dmg?: string; artifact?: string } | null = null;
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-export async function getLatestVersion(): Promise<{ version: string; dmg: string }> {
+export async function getLatestVersion(): Promise<{ version: string; dmg?: string; artifact?: string }> {
   const now = Date.now();
   if (cachedVersion && now - lastFetchTime < CACHE_TTL_MS) {
     return cachedVersion;
@@ -43,7 +43,7 @@ export async function getLatestVersion(): Promise<{ version: string; dmg: string
   try {
     const res = await fetch(`${releasesUrl}/latest.json`);
     if (res.ok) {
-      const data = await res.json() as { version: string; dmg: string };
+      const data = await res.json() as { version: string; dmg?: string; artifact?: string };
       cachedVersion = data;
       lastFetchTime = now;
       return data;

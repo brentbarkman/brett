@@ -16,10 +16,11 @@ download.get("/", async (c) => {
   const { releasesUrl, videoFiles } = getStorageUrls();
   const latest = await getLatestVersion();
   const version = latest.version;
+  const artifactKey = latest.artifact || latest.dmg || `Brett-${version}.zip`;
 
   // Escape all interpolated values for safe HTML embedding
   const safeVersion = escapeHtml(version);
-  const safeDownloadHref = escapeHtml(`${releasesUrl}/Brett-${version}.dmg`);
+  const safeDownloadHref = escapeHtml(`${releasesUrl}/${artifactKey}`);
   // Escape </script> in JSON to prevent early script tag termination
   const safeVideoJson = JSON.stringify(videoFiles).replace(/<\//g, "<\\/");
 
