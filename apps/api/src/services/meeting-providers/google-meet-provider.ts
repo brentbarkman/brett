@@ -17,6 +17,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
   async isAvailable(userId: string): Promise<boolean> {
     const account = await prisma.googleAccount.findFirst({
       where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
+      orderBy: { connectedAt: "desc" },
       select: { id: true },
     });
     return !!account;
@@ -29,6 +30,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
     // Security: always include userId in account lookup
     const account = await prisma.googleAccount.findFirst({
       where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
+      orderBy: { connectedAt: "desc" },
     });
     if (!account) return null;
 
@@ -38,12 +40,10 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
     const driveClient = getDriveClient(account);
     const docsClient = getDocsClient(account);
 
-    // CalendarEvent.attachments is Json? -- cast safely
-    const attachments = calendarEvent.attachments as Array<{
-      fileId?: string;
-      title?: string;
-      mimeType?: string;
-    }> | null;
+    // CalendarEvent.attachments is Json? — validate before casting
+    const attachments = Array.isArray(calendarEvent.attachments)
+      ? calendarEvent.attachments as unknown as Array<{ fileId?: string; title?: string; mimeType?: string }>
+      : null;
 
     const { transcriptFileId, notesFileId } = await findMeetArtifacts(
       driveClient,
@@ -97,9 +97,9 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
       title: calendarEvent.title,
       summary,
       transcript,
-      attendees:
-        (calendarEvent.attendees as unknown as MeetingNoteAttendee[] | null) ??
-        null,
+      attendees: Array.isArray(calendarEvent.attendees)
+        ? calendarEvent.attendees as unknown as MeetingNoteAttendee[]
+        : null,
       meetingStartedAt: calendarEvent.startTime,
       meetingEndedAt: calendarEvent.endTime,
       rawData,
@@ -113,6 +113,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
   ): Promise<ProviderMeetingData[]> {
     const account = await prisma.googleAccount.findFirst({
       where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
+      orderBy: { connectedAt: "desc" },
     });
     if (!account) return [];
 

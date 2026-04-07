@@ -7,6 +7,25 @@ import type { Scout, ScoutSource, CreateScoutInput, ScoutFinding, ActivityEntry,
 
 const scouts = new Hono<AuthEnv>();
 
+const VALID_RUN_STATUSES = new Set(["running", "success", "failed", "skipped"]);
+const VALID_ACTIVITY_TYPES = new Set(["created", "paused", "resumed", "completed", "expired", "config_changed", "cadence_adapted", "budget_alert"]);
+
+function asRunStatus(value: string): ScoutRunStatus {
+  if (!VALID_RUN_STATUSES.has(value)) {
+    console.warn(`[scouts] Unknown ScoutRunStatus: ${value}, defaulting to "failed"`);
+    return "failed" as ScoutRunStatus;
+  }
+  return value as ScoutRunStatus;
+}
+
+function asActivityType(value: string): ScoutActivityType {
+  if (!VALID_ACTIVITY_TYPES.has(value)) {
+    console.warn(`[scouts] Unknown ScoutActivityType: ${value}, defaulting to "config_changed"`);
+    return "config_changed" as ScoutActivityType;
+  }
+  return value as ScoutActivityType;
+}
+
 // All routes require auth
 scouts.use("*", authMiddleware);
 
@@ -303,7 +322,12 @@ scouts.put("/:id", async (c) => {
   if (body.name !== undefined) scoutUpdateData.name = body.name;
   if (body.goal !== undefined) scoutUpdateData.goal = body.goal;
   if (body.context !== undefined) scoutUpdateData.context = body.context;
-  if (body.sources !== undefined) scoutUpdateData.sources = body.sources as unknown as Prisma.InputJsonValue;
+  if (body.sources !== undefined) {
+    if (!Array.isArray(body.sources)) {
+      return c.json({ error: "sources must be an array" }, 400);
+    }
+    scoutUpdateData.sources = body.sources as unknown as Prisma.InputJsonValue;
+  }
   if (body.sensitivity !== undefined) scoutUpdateData.sensitivity = body.sensitivity;
   if (body.analysisTier !== undefined) {
     if (!["standard", "deep"].includes(body.analysisTier)) {
@@ -667,7 +691,7 @@ scouts.get("/:id/activity", async (c) => {
     entryType: "run" as const,
     id: run.id,
     createdAt: run.createdAt.toISOString(),
-    status: run.status as ScoutRunStatus,
+    status: asRunStatus(run.status),
     resultCount: run.resultCount,
     findingsCount: run.findingsCount,
     dismissedCount: run.dismissedCount,
@@ -681,7 +705,7 @@ scouts.get("/:id/activity", async (c) => {
     entryType: "activity" as const,
     id: act.id,
     createdAt: act.createdAt.toISOString(),
-    type: act.type as ScoutActivityType,
+    type: asActivityType(act.type),
     description: act.description,
     metadata: act.metadata,
   }));

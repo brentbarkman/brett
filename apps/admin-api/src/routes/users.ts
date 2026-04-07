@@ -219,39 +219,45 @@ users.delete("/:id", async (c) => {
   if (!target) return c.json({ error: "User not found" }, 404);
   if (target.role === "admin") return c.json({ error: "Cannot delete an admin account — demote first" }, 400);
 
-  // Delete in order: dependent data first, then user
+  // Delete in order: dependent data first, then user.
   // Passkeys cascade automatically. Sessions, Accounts, Verification handled by better-auth.
   // We need to clean up application data explicitly.
-  await prisma.$transaction([
-    prisma.scoutActivity.deleteMany({ where: { scout: { userId } } }),
-    prisma.scoutMemory.deleteMany({ where: { scout: { userId } } }),
-    prisma.scoutConsolidation.deleteMany({ where: { scout: { userId } } }),
-    prisma.scoutFinding.deleteMany({ where: { scout: { userId } } }),
-    prisma.scoutRun.deleteMany({ where: { scout: { userId } } }),
-    prisma.scout.deleteMany({ where: { userId } }),
-    prisma.embedding.deleteMany({ where: { userId } }),
-    prisma.userFact.deleteMany({ where: { userId } }),
-    prisma.conversationMessage.deleteMany({ where: { session: { userId } } }),
-    prisma.conversationSession.deleteMany({ where: { userId } }),
-    prisma.aIUsageLog.deleteMany({ where: { userId } }),
-    prisma.userAIConfig.deleteMany({ where: { userId } }),
-    prisma.brettMessage.deleteMany({ where: { userId } }),
-    prisma.calendarEventNote.deleteMany({ where: { userId } }),
-    prisma.calendarEvent.deleteMany({ where: { userId } }),
-    prisma.calendarList.deleteMany({ where: { googleAccount: { userId } } }),
-    prisma.googleAccount.deleteMany({ where: { userId } }),
-    prisma.weatherCache.deleteMany({ where: { userId } }),
-    prisma.meetingNote.deleteMany({ where: { userId } }),
-    prisma.granolaAccount.deleteMany({ where: { userId } }),
-    prisma.attachment.deleteMany({ where: { userId } }),
-    prisma.itemLink.deleteMany({ where: { userId } }),
-    prisma.item.deleteMany({ where: { userId } }),
-    prisma.list.deleteMany({ where: { userId } }),
-    prisma.passkey.deleteMany({ where: { userId } }),
-    prisma.session.deleteMany({ where: { userId } }),
-    prisma.account.deleteMany({ where: { userId } }),
-    prisma.user.delete({ where: { id: userId } }),
-  ]);
+  // This runs as a single transaction — all-or-nothing to prevent orphaned data.
+  try {
+    await prisma.$transaction([
+      prisma.scoutActivity.deleteMany({ where: { scout: { userId } } }),
+      prisma.scoutMemory.deleteMany({ where: { scout: { userId } } }),
+      prisma.scoutConsolidation.deleteMany({ where: { scout: { userId } } }),
+      prisma.scoutFinding.deleteMany({ where: { scout: { userId } } }),
+      prisma.scoutRun.deleteMany({ where: { scout: { userId } } }),
+      prisma.scout.deleteMany({ where: { userId } }),
+      prisma.embedding.deleteMany({ where: { userId } }),
+      prisma.userFact.deleteMany({ where: { userId } }),
+      prisma.conversationMessage.deleteMany({ where: { session: { userId } } }),
+      prisma.conversationSession.deleteMany({ where: { userId } }),
+      prisma.aIUsageLog.deleteMany({ where: { userId } }),
+      prisma.userAIConfig.deleteMany({ where: { userId } }),
+      prisma.brettMessage.deleteMany({ where: { userId } }),
+      prisma.calendarEventNote.deleteMany({ where: { userId } }),
+      prisma.calendarEvent.deleteMany({ where: { userId } }),
+      prisma.calendarList.deleteMany({ where: { googleAccount: { userId } } }),
+      prisma.googleAccount.deleteMany({ where: { userId } }),
+      prisma.weatherCache.deleteMany({ where: { userId } }),
+      prisma.meetingNote.deleteMany({ where: { userId } }),
+      prisma.granolaAccount.deleteMany({ where: { userId } }),
+      prisma.attachment.deleteMany({ where: { userId } }),
+      prisma.itemLink.deleteMany({ where: { userId } }),
+      prisma.item.deleteMany({ where: { userId } }),
+      prisma.list.deleteMany({ where: { userId } }),
+      prisma.passkey.deleteMany({ where: { userId } }),
+      prisma.session.deleteMany({ where: { userId } }),
+      prisma.account.deleteMany({ where: { userId } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
+  } catch (err) {
+    console.error(`[admin] Failed to delete user ${userId}:`, err);
+    return c.json({ error: "User deletion failed — no data was removed. Check server logs." }, 500);
+  }
 
   return c.json({ ok: true });
 });

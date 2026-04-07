@@ -124,17 +124,21 @@ weather.get("/", rateLimiter(60), async (c) => {
   });
 
   if (cached && new Date() < cached.expiresAt) {
-    return c.json(
-      formatWeatherResponse(
-        cached.current as unknown as WeatherCurrent,
-        cached.hourly as unknown as WeatherHourly[],
-        cached.daily as unknown as WeatherDaily[],
-        displayCity,
-        cached.fetchedAt,
-        unit,
-        false,
-      ),
-    );
+    if (!cached.current || !cached.hourly || !cached.daily) {
+      // Cache corrupted — fall through to fetch fresh data
+    } else {
+      return c.json(
+        formatWeatherResponse(
+          cached.current as unknown as WeatherCurrent,
+          cached.hourly as unknown as WeatherHourly[],
+          cached.daily as unknown as WeatherDaily[],
+          displayCity,
+          cached.fetchedAt,
+          unit,
+          false,
+        ),
+      );
+    }
   }
 
   // Fetch fresh data
@@ -142,9 +146,9 @@ weather.get("/", rateLimiter(60), async (c) => {
     const forecast = await fetchForecast(latitude, longitude, timezone);
     const now = new Date();
 
-    const currentJson = forecast.current as unknown as Prisma.InputJsonValue;
-    const hourlyJson = forecast.hourly as unknown as Prisma.InputJsonValue;
-    const dailyJson = forecast.daily as unknown as Prisma.InputJsonValue;
+    const currentJson = JSON.parse(JSON.stringify(forecast.current)) as Prisma.InputJsonValue;
+    const hourlyJson = JSON.parse(JSON.stringify(forecast.hourly)) as Prisma.InputJsonValue;
+    const dailyJson = JSON.parse(JSON.stringify(forecast.daily)) as Prisma.InputJsonValue;
 
     await prisma.weatherCache.upsert({
       where: { userId },
@@ -179,8 +183,8 @@ weather.get("/", rateLimiter(60), async (c) => {
   } catch (err) {
     console.error("Weather fetch failed:", err);
 
-    // Serve stale cache if available
-    if (cached) {
+    // Serve stale cache if available and not corrupted
+    if (cached && cached.current && cached.hourly && cached.daily) {
       return c.json(
         formatWeatherResponse(
           cached.current as unknown as WeatherCurrent,

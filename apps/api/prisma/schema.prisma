@@ -488,6 +488,8 @@ model Embedding {
   chunkIndex  Int      @default(0)
   chunkText   String   @db.Text
   contentHash String?  // SHA-256 prefix of assembled text (chunk 0 only) — skip re-embedding if unchanged
+  /// pgvector column — Prisma cannot read/write this field via the ORM.
+  /// All access MUST use raw SQL ($queryRaw / $executeRaw). See packages/ai/src/embedding/.
   embedding   Unsupported("vector(1024)")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

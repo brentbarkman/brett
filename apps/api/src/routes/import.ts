@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 import { validateThings3Import } from "@brett/business";
 
 const importRoutes = new Hono<AuthEnv>();
@@ -86,9 +87,9 @@ importRoutes.post("/things3", bodyLimit({ maxSize: 50 * 1024 * 1024 }), async (c
       }
 
       return { lists: lists.length, tasks: taskData.length };
-    });
-  } catch (err: any) {
-    if (err?.code === "P2002") {
+    }, { timeout: 30000 });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return c.json({ error: "A list name conflict occurred. Please try again." }, 409);
     }
     throw err;

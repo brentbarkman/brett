@@ -12,10 +12,14 @@ import { providerRegistry } from "./registry.js";
 
 const log = (...args: unknown[]) => console.log("[meeting-coordinator]", ...args);
 
-/** Cast an array/object to Prisma's InputJsonValue, or DbNull if null. */
+/** Safely serialize a value to Prisma's InputJsonValue, or DbNull if null/unserializable. */
 function jsonOrNull(value: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
   if (value == null) return Prisma.DbNull;
-  return value as Prisma.InputJsonValue;
+  try {
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+  } catch {
+    return Prisma.DbNull;
+  }
 }
 
 // ── Public API ──
@@ -205,8 +209,8 @@ async function mergeProviderData(
       ? {
           title: existing.title,
           summary: existing.summary,
-          transcript: existing.transcript as MeetingTranscriptTurn[] | null,
-          attendees: existing.attendees as MeetingNoteAttendee[] | null,
+          transcript: Array.isArray(existing.transcript) ? existing.transcript as unknown as MeetingTranscriptTurn[] : null,
+          attendees: Array.isArray(existing.attendees) ? existing.attendees as unknown as MeetingNoteAttendee[] : null,
           sources: existing.sources,
         }
       : {
@@ -283,11 +287,13 @@ async function mergeProviderData(
         },
       });
 
-      // Determine if this is the first source by checking if createdAt === updatedAt
-      // (equal means the upsert just created the record)
-      const firstSource = note.createdAt.getTime() === note.updatedAt.getTime();
+      // Determine if this is the first source by counting sources for this note.
+      // A count of 1 means we just created the only source (the one above).
+      const sourceCount = await tx.meetingNoteSource.count({
+        where: { meetingNoteId: note.id },
+      });
 
-      return { meetingNote: note, isFirstSource: firstSource };
+      return { meetingNote: note, isFirstSource: sourceCount === 1 };
     });
 
     log(`Merged ${data.provider} into MeetingNote ${meetingNote.id} (first=${isFirstSource})`);

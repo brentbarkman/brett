@@ -231,28 +231,18 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
   for (let i = 0; i < chunks.length; i++) {
     const vectorStr = `[${allVectors[i].join(",")}]`;
     const chunkHash = i === 0 ? hash : null;
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "contentHash", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::vector, $7, NOW(), NOW())
-       ON CONFLICT ("entityType", "entityId", "chunkIndex")
-       DO UPDATE SET "chunkText" = $5, embedding = $6::vector, "contentHash" = $7, "updatedAt" = NOW()`,
-      userId,
-      entityType,
-      entityId,
-      i,
-      chunks[i],
-      vectorStr,
-      chunkHash
-    );
+    await prisma.$executeRaw`
+      INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "contentHash", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid(), ${userId}, ${entityType}, ${entityId}, ${i}, ${chunks[i]}, ${vectorStr}::vector, ${chunkHash}, NOW(), NOW())
+      ON CONFLICT ("entityType", "entityId", "chunkIndex")
+      DO UPDATE SET "chunkText" = EXCLUDED."chunkText", embedding = EXCLUDED.embedding, "contentHash" = EXCLUDED."contentHash", "updatedAt" = NOW()
+    `;
   }
 
   // 4. Clean up orphaned chunks (if entity was re-chunked with fewer chunks)
-  await prisma.$executeRawUnsafe(
-    `DELETE FROM "Embedding" WHERE "entityType" = $1 AND "entityId" = $2 AND "chunkIndex" >= $3`,
-    entityType,
-    entityId,
-    chunks.length
-  );
+  await prisma.$executeRaw`
+    DELETE FROM "Embedding" WHERE "entityType" = ${entityType} AND "entityId" = ${entityId} AND "chunkIndex" >= ${chunks.length}
+  `;
 
   // 6. Auto-link detection — only on first embed and when not explicitly skipped
   if (entityType === "item" && isFirstEmbed && !skipAutoLink) {
@@ -326,9 +316,7 @@ export async function deleteEmbeddings(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prisma: any
 ): Promise<void> {
-  await prisma.$executeRawUnsafe(
-    `DELETE FROM "Embedding" WHERE "entityType" = $1 AND "entityId" = $2`,
-    entityType,
-    entityId
-  );
+  await prisma.$executeRaw`
+    DELETE FROM "Embedding" WHERE "entityType" = ${entityType} AND "entityId" = ${entityId}
+  `;
 }

@@ -9,6 +9,7 @@ vi.mock("../lib/prisma.js", () => ({
     meetingNoteSource: {
       findUnique: vi.fn(),
       create: vi.fn(),
+      count: vi.fn(),
     },
     meetingNote: {
       findUnique: vi.fn(),
@@ -163,6 +164,7 @@ describe("syncForEvent (coordinator)", () => {
         },
         meetingNoteSource: {
           create: vi.fn().mockResolvedValue({}),
+          count: vi.fn().mockResolvedValue(1), // first source
         },
       };
       return fn(tx);
@@ -293,18 +295,15 @@ describe("syncForEvent (coordinator)", () => {
     const provider = makeMockProvider("granola", providerData);
     mockGetAvailable.mockResolvedValue([provider]);
 
-    // Return a note where createdAt !== updatedAt, meaning this is an update not a create
-    const createdAt = new Date("2026-03-27T14:00:00Z");
-    const updatedAt = new Date("2026-03-27T15:00:00Z"); // different — update path
-    const updatedNote = { ...MOCK_NOTE, createdAt, updatedAt };
-
+    // Return a note that already has sources — isFirstSource should be false
     mockPrisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         meetingNote: {
-          upsert: vi.fn().mockResolvedValue(updatedNote),
+          upsert: vi.fn().mockResolvedValue(MOCK_NOTE),
         },
         meetingNoteSource: {
           create: vi.fn().mockResolvedValue({}),
+          count: vi.fn().mockResolvedValue(2), // not the first source
         },
       };
       return fn(tx);

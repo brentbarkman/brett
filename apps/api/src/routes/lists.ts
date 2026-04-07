@@ -5,7 +5,22 @@ import { validateCreateList, validateUpdateList } from "@brett/business";
 
 const lists = new Hono<AuthEnv>();
 
-/** Map a Prisma list with counts to the NavList API response shape */
+/** Include pattern for list queries that need total + completed counts */
+const listWithCounts = {
+  _count: {
+    select: {
+      items: true,
+    },
+  },
+  items: {
+    where: { status: "done" as const },
+    select: { id: true },
+  },
+} as const;
+
+/** Map a Prisma list with counts to the NavList API response shape.
+ *  _count.items = total items (unfiltered), items[] = done items only (filtered).
+ *  These are intentionally different — count is total, completedCount is done. */
 function toNavList(l: {
   id: string;
   name: string;
@@ -43,17 +58,7 @@ lists.get("/", async (c) => {
 
   const userLists = await prisma.list.findMany({
     where,
-    include: {
-      _count: {
-        select: {
-          items: true,
-        },
-      },
-      items: {
-        where: { status: "done" },
-        select: { id: true },
-      },
-    },
+    include: listWithCounts,
     orderBy: { sortOrder: "asc" },
   });
 
@@ -150,10 +155,10 @@ lists.put("/reorder", async (c) => {
 // PATCH /lists/:id/archive — archive a list and mark incomplete items as done
 lists.patch("/:id/archive", async (c) => {
   const user = c.get("user");
-  const existing = await prisma.list.findFirst({
-    where: { id: c.req.param("id"), userId: user.id },
+  const existing = await prisma.list.findUnique({
+    where: { id: c.req.param("id") },
   });
-  if (!existing) return c.json({ error: "Not found" }, 404);
+  if (!existing || existing.userId !== user.id) return c.json({ error: "Not found" }, 404);
 
   const now = new Date();
 
@@ -177,18 +182,15 @@ lists.patch("/:id/archive", async (c) => {
 // PATCH /lists/:id/unarchive — unarchive a list
 lists.patch("/:id/unarchive", async (c) => {
   const user = c.get("user");
-  const existing = await prisma.list.findFirst({
-    where: { id: c.req.param("id"), userId: user.id },
+  const existing = await prisma.list.findUnique({
+    where: { id: c.req.param("id") },
   });
-  if (!existing) return c.json({ error: "Not found" }, 404);
+  if (!existing || existing.userId !== user.id) return c.json({ error: "Not found" }, 404);
 
   const list = await prisma.list.update({
     where: { id: existing.id },
     data: { archivedAt: null },
-    include: {
-      _count: { select: { items: true } },
-      items: { where: { status: "done" }, select: { id: true } },
-    },
+    include: listWithCounts,
   });
 
   return c.json(toNavList(list));
@@ -204,10 +206,10 @@ lists.patch("/:id", async (c) => {
     return c.json({ error: validation.error }, 400);
   }
 
-  const existing = await prisma.list.findFirst({
-    where: { id: c.req.param("id"), userId: user.id },
+  const existing = await prisma.list.findUnique({
+    where: { id: c.req.param("id") },
   });
-  if (!existing) return c.json({ error: "Not found" }, 404);
+  if (!existing || existing.userId !== user.id) return c.json({ error: "Not found" }, 404);
 
   const updateData: Record<string, unknown> = {};
   if (validation.data.name !== undefined) updateData.name = validation.data.name;
@@ -216,10 +218,7 @@ lists.patch("/:id", async (c) => {
   const list = await prisma.list.update({
     where: { id: existing.id },
     data: updateData,
-    include: {
-      _count: { select: { items: true } },
-      items: { where: { status: "done" }, select: { id: true } },
-    },
+    include: listWithCounts,
   });
 
   return c.json(toNavList({ ...list, archivedAt: existing.archivedAt }));
@@ -228,10 +227,10 @@ lists.patch("/:id", async (c) => {
 // DELETE /lists/:id — deletes list and all its items
 lists.delete("/:id", async (c) => {
   const user = c.get("user");
-  const existing = await prisma.list.findFirst({
-    where: { id: c.req.param("id"), userId: user.id },
+  const existing = await prisma.list.findUnique({
+    where: { id: c.req.param("id") },
   });
-  if (!existing) return c.json({ error: "Not found" }, 404);
+  if (!existing || existing.userId !== user.id) return c.json({ error: "Not found" }, 404);
 
   await prisma.$transaction([
     prisma.item.deleteMany({ where: { listId: existing.id } }),
