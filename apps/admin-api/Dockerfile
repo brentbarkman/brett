@@ -35,4 +35,4 @@ COPY --from=build /app/apps/admin-api/dist apps/admin-api/dist
 COPY --from=build /app/apps/admin-api/node_modules apps/admin-api/node_modules
 COPY --from=build /app/apps/admin-api/package.json apps/admin-api/package.json
 WORKDIR /app/apps/admin-api
-CMD ["node", "dist/index.js"]
+CMD ["/app/node_modules/.bin/tsx", "dist/index.js"]
