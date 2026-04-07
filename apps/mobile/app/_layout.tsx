@@ -1,9 +1,5 @@
-import { Stack } from "expo-router";
+import { Slot } from "expo-router";
 
 export default function RootLayout() {
-  return (
-    <Stack>
-      <Stack.Screen name="index" options={{ title: "Brett Productivity" }} />
-    </Stack>
-  );
+  return <Slot />;
 }
