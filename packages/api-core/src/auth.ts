@@ -55,11 +55,20 @@ export function createAuth(options: AuthOptions) {
         enabled: options.enableDeleteUser ?? true,
       },
     },
+    // SECURITY WARNING: Mobile OAuth callbacks MUST use Universal Links
+    // (https://brett.app/auth/callback) with PKCE, NOT custom URL schemes
+    // (brett://). See spec Addendum B, finding B3.
     socialProviders: {
       google: {
         clientId: process.env.GOOGLE_CLIENT_ID!,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       },
+      ...(process.env.APPLE_CLIENT_ID ? {
+        apple: {
+          clientId: process.env.APPLE_CLIENT_ID,
+          clientSecret: process.env.APPLE_CLIENT_SECRET!,
+        },
+      } : {}),
     },
     plugins: [
       bearer(),
