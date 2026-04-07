@@ -551,3 +551,5 @@ export interface Things3ScanResult {
   projects: number;
   tasks: { active: number; completed: number };
 }
+
+export * from "./sync.js";
