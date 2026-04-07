@@ -140,7 +140,9 @@ jobs:
             }));
           "
           cd ../..
-          npx electron-builder --mac --publish never --project apps/desktop
+          # Run electron-builder from workspace root — it reads build config
+          # from apps/desktop/package.json and finds hoisted deps in ./node_modules
+          npx electron-builder --mac --publish never --pd apps/desktop
         env:
           VITE_API_URL: https://api.brett.brentbarkman.com
           STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
