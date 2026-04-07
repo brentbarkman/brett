@@ -67,6 +67,8 @@ import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/gra
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useBackground } from "./hooks/useBackground";
+import { initDiagnostics, collectDiagnostics, type DiagnosticSnapshot } from "./lib/diagnostics";
+import { FeedbackModal } from "./components/FeedbackModal";
 import { useFavicon } from "./hooks/useFavicon";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
@@ -187,6 +189,17 @@ export function App() {
   useEventStream();
   useTimezoneSync();
   const { install: installUpdate } = useAutoUpdate();
+
+  // Initialize diagnostics ring buffers for feedback
+  useEffect(() => {
+    initDiagnostics();
+  }, []);
+
+  // Feedback modal state
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackDiagnostics, setFeedbackDiagnostics] = useState<DiagnosticSnapshot | null>(null);
+  const [feedbackScreenshot, setFeedbackScreenshot] = useState<string | null>(null);
+
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEventDisplay | null
   >(null);
@@ -512,6 +525,36 @@ export function App() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [omnibar.isOpen, omnibar.mode, omnibar.close, omnibar.open]);
+
+  // Cmd+Shift+F opens feedback modal
+  useEffect(() => {
+    const handleFeedbackShortcut = async (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
+        e.preventDefault();
+        if (feedbackOpen) return;
+
+        // Capture screenshot BEFORE opening modal
+        let screenshot: string | null = null;
+        try {
+          const electronAPI = (window as any).electronAPI;
+          if (electronAPI?.captureScreenshot) {
+            screenshot = await electronAPI.captureScreenshot();
+          }
+        } catch (err) {
+          console.error("[feedback] Screenshot capture failed:", err);
+        }
+
+        // Snapshot diagnostics
+        const diag = collectDiagnostics();
+
+        setFeedbackScreenshot(screenshot);
+        setFeedbackDiagnostics(diag);
+        setFeedbackOpen(true);
+      }
+    };
+    document.addEventListener("keydown", handleFeedbackShortcut);
+    return () => document.removeEventListener("keydown", handleFeedbackShortcut);
+  }, [feedbackOpen]);
 
   // Build omnibar props for the bar component
   const currentView = useMemo(() => {
@@ -1337,6 +1380,15 @@ export function App() {
             onCancel={() => setArchiveListConfirm(null)}
           />
         )}
+
+        {/* Feedback modal */}
+        <FeedbackModal
+          isOpen={feedbackOpen}
+          onClose={() => setFeedbackOpen(false)}
+          diagnostics={feedbackDiagnostics}
+          screenshot={feedbackScreenshot}
+          userId={user?.id || "unknown"}
+        />
       </div>
       </AppDropZone>
     </DndContext>
