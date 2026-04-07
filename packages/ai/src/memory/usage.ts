@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@brett/api-core";
+import type { ExtendedPrismaClient } from "@brett/api-core";
 
 export interface UsageEntry {
   userId: string;
@@ -13,7 +13,7 @@ export interface UsageEntry {
   cacheReadTokens?: number;
 }
 
-export async function logUsage(prisma: PrismaClient, entry: UsageEntry): Promise<void> {
+export async function logUsage(prisma: ExtendedPrismaClient, entry: UsageEntry): Promise<void> {
   await prisma.aIUsageLog.create({
     data: {
       userId: entry.userId,

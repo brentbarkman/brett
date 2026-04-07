@@ -1,6 +1,6 @@
 import type { AIProvider } from "../providers/types.js";
 import type { AIProviderName } from "@brett/types";
-import type { PrismaClient } from "@brett/api-core";
+import type { ExtendedPrismaClient } from "@brett/api-core";
 import { resolveModel } from "../router.js";
 import { getFactExtractionPrompt } from "../context/system-prompts.js";
 import { AI_CONFIG } from "../config.js";
@@ -25,7 +25,7 @@ export async function extractFacts(
   userId: string,
   provider: AIProvider,
   providerName: AIProviderName,
-  prisma: PrismaClient,
+  prisma: ExtendedPrismaClient,
   /** Optional context about the item being discussed (helps extract domain-specific facts) */
   itemContext?: string,
   assistantName?: string,

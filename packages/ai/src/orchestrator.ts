@@ -1,6 +1,6 @@
 import type { AIProvider, EmbeddingProvider, Message } from "./providers/types.js";
 import type { AIProviderName, ModelTier, StreamChunk } from "@brett/types";
-import type { PrismaClient } from "@brett/api-core";
+import type { ExtendedPrismaClient } from "@brett/api-core";
 import { resolveModel } from "./router.js";
 import { SkillRegistry } from "./skills/registry.js";
 import { validateSkillArgs } from "./skills/validate-args.js";
@@ -26,7 +26,7 @@ export interface OrchestratorParams {
   input: AssemblerInput;
   provider: AIProvider;
   providerName: AIProviderName;
-  prisma: PrismaClient;
+  prisma: ExtendedPrismaClient;
   registry: SkillRegistry;
   sessionId?: string;
   logUsage?: boolean;
