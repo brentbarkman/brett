@@ -13,14 +13,15 @@ function escapeHtml(str: string): string {
 }
 
 download.get("/", async (c) => {
-  const { releasesUrl, videoFiles } = getStorageUrls();
+  const { releaseBaseUrl, videoFiles } = getStorageUrls();
   const latest = await getLatestVersion();
   const version = latest.version;
-  const artifactKey = latest.artifact || latest.dmg || `Brett-${version}.zip`;
+  // artifact key includes the path prefix (e.g. "releases/Brett-0.1.812.zip")
+  const artifactKey = latest.artifact || latest.dmg || `releases/Brett-${version}.zip`;
 
   // Escape all interpolated values for safe HTML embedding
   const safeVersion = escapeHtml(version);
-  const safeDownloadHref = escapeHtml(`${releasesUrl}/${artifactKey}`);
+  const safeDownloadHref = escapeHtml(`${releaseBaseUrl}/${artifactKey}`);
   // Escape </script> in JSON to prevent early script tag termination
   const safeVideoJson = JSON.stringify(videoFiles).replace(/<\//g, "<\\/");
 

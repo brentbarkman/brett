@@ -16,6 +16,7 @@ export function getStorageUrls() {
 
   return {
     base: publicBase,
+    releaseBaseUrl: releaseBase,
     releasesUrl: releaseBase ? `${releaseBase}/releases` : "",
     videoBaseUrl: publicBase ? `${publicBase}/videos` : "",
     videoFiles: publicBase
