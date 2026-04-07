@@ -1,4 +1,5 @@
 import { authClient, getToken } from "../auth/auth-client";
+import { recordFailedApiCall } from "../lib/diagnostics";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
@@ -37,6 +38,11 @@ export async function apiFetch<T = unknown>(
   });
 
   if (!res.ok) {
+    recordFailedApiCall(
+      `${API_URL}${path}`,
+      init?.method || "GET",
+      res.status,
+    );
     const body = await res.json().catch(() => ({}));
     throw new Error((body as any).message || (body as any).error || `API error ${res.status}`);
   }
