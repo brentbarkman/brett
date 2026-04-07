@@ -24,6 +24,10 @@ COPY apps/api/prisma apps/api/prisma
 COPY apps/admin-api apps/admin-api
 COPY apps/admin apps/admin
 RUN pnpm --filter @brett/api exec prisma generate
+# Build shared packages first — admin-api's tsc needs their .d.ts outputs
+RUN pnpm --filter @brett/types run build && \
+    pnpm --filter @brett/utils run build && \
+    pnpm --filter @brett/api-core run build
 RUN pnpm --filter @brett/admin-api run build
 # Empty VITE_ADMIN_API_URL = same-origin requests (frontend served by admin-api)
 RUN VITE_ADMIN_API_URL="" pnpm --filter @brett/admin run build
