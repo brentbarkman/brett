@@ -46,7 +46,7 @@ app.route("/admin", adminRoutes);
 
 // Serve admin frontend static files in production
 // In dev, the Vite dev server at :5174 handles this
-if (process.env.NODE_ENV === "production") {
+if (!isLocal) {
   const { serveStatic } = await import("@hono/node-server/serve-static");
 
   // Serve static assets (JS, CSS, images)
