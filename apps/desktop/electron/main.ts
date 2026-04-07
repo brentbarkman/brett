@@ -130,9 +130,9 @@ ipcMain.handle("set-auto-install-on-quit", (_event, enabled: boolean) => {
   setAutoInstallOnQuit(enabled);
 });
 
-ipcMain.handle("things3:scan", () => {
+ipcMain.handle("things3:scan", async () => {
   try {
-    return scanThings3();
+    return await scanThings3();
   } catch (err: any) {
     return { error: err.message };
   }
@@ -140,7 +140,7 @@ ipcMain.handle("things3:scan", () => {
 
 ipcMain.handle("things3:import", async () => {
   try {
-    const payload = readThings3();
+    const payload = await readThings3();
 
     const authToken = readStoredToken();
     if (!authToken) throw new Error("Not authenticated. Please sign in again.");
