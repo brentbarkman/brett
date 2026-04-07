@@ -19,10 +19,10 @@ describe("getStorageUrls", () => {
     const { getStorageUrls } = await import("../storage-urls.js");
     const urls = getStorageUrls();
 
-    expect(urls.videoBaseUrl).toBe("https://storage.example.com/my-public/videos");
+    expect(urls.videoBaseUrl).toBe("https://storage.example.com/my-public/public/videos");
     expect(urls.videoFiles).toHaveLength(9);
-    expect(urls.videoFiles[0]).toBe("https://storage.example.com/my-public/videos/login-bg-1.mp4");
-    expect(urls.videoFiles[8]).toBe("https://storage.example.com/my-public/videos/login-bg-9.mp4");
+    expect(urls.videoFiles[0]).toBe("https://storage.example.com/my-public/public/videos/login-bg-1.mp4");
+    expect(urls.videoFiles[8]).toBe("https://storage.example.com/my-public/public/videos/login-bg-9.mp4");
     // Releases use separate bucket
     expect(urls.releasesUrl).toBe("https://storage.example.com/brett-releases/releases");
   });
@@ -45,7 +45,7 @@ describe("getStorageUrls", () => {
     const { getStorageUrls } = await import("../storage-urls.js");
     const urls = getStorageUrls();
 
-    expect(urls.videoBaseUrl).toBe("https://storage.example.com/brett-public/videos");
+    expect(urls.videoBaseUrl).toBe("https://storage.example.com/brett-public/public/videos");
     expect(urls.releasesUrl).toBe("https://storage.example.com/brett-releases/releases");
   });
 

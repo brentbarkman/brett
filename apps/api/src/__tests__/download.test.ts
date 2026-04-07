@@ -7,10 +7,10 @@ vi.mock("../lib/storage-urls.js", () => ({
     base: "https://storage.example.com/brett-public",
     releaseBaseUrl: "https://storage.example.com/brett-releases",
     releasesUrl: "https://storage.example.com/brett-releases/releases",
-    videoBaseUrl: "https://storage.example.com/brett-public/videos",
+    videoBaseUrl: "https://storage.example.com/brett-public/public/videos",
     videoFiles: [
-      "https://storage.example.com/brett-public/videos/login-bg-1.mp4",
-      "https://storage.example.com/brett-public/videos/login-bg-2.mp4",
+      "https://storage.example.com/brett-public/public/videos/login-bg-1.mp4",
+      "https://storage.example.com/brett-public/public/videos/login-bg-2.mp4",
     ],
   }),
   getLatestVersion: vi.fn().mockResolvedValue({ version: "1.2.3", artifact: "releases/Brett-1.2.3.zip" }),
@@ -82,7 +82,7 @@ describe("GET /config", () => {
     const res = await app.request("/config");
     const body = await res.json();
     expect(body).toHaveProperty("videoBaseUrl");
-    expect(body.videoBaseUrl).toBe("https://storage.example.com/brett-public/videos");
+    expect(body.videoBaseUrl).toBe("https://storage.example.com/brett-public/public/videos");
   });
 
   it("does not require authentication", async () => {

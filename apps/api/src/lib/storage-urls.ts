@@ -18,9 +18,9 @@ export function getStorageUrls() {
     base: publicBase,
     releaseBaseUrl: releaseBase,
     releasesUrl: releaseBase ? `${releaseBase}/releases` : "",
-    videoBaseUrl: publicBase ? `${publicBase}/videos` : "",
+    videoBaseUrl: publicBase ? `${publicBase}/public/videos` : "",
     videoFiles: publicBase
-      ? Array.from({ length: VIDEO_COUNT }, (_, i) => `${publicBase}/videos/login-bg-${i + 1}.mp4`)
+      ? Array.from({ length: VIDEO_COUNT }, (_, i) => `${publicBase}/public/videos/login-bg-${i + 1}.mp4`)
       : [],
   };
 }
