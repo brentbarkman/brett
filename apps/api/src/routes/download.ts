@@ -13,15 +13,20 @@ function escapeHtml(str: string): string {
 }
 
 download.get("/", async (c) => {
-  const { releaseBaseUrl, videoFiles } = getStorageUrls();
+  const { releasesUrl, videoFiles } = getStorageUrls();
   const latest = await getLatestVersion();
   const version = latest.version;
-  // artifact key includes the path prefix (e.g. "releases/Brett-0.1.812.zip")
-  const artifactKey = latest.artifact || latest.dmg || `releases/Brett-${version}.zip`;
+  // artifact key from latest.json includes "releases/" prefix — strip it for the proxy URL
+  const rawKey = latest.artifact || latest.dmg || `releases/Brett-${version}.zip`;
+  let filename = rawKey.replace(/^releases\//, "");
+  // Validate filename to prevent open redirect via poisoned latest.json
+  if (!/^Brett-[\d.]+\.(zip|dmg)$/.test(filename)) {
+    filename = `Brett-${version}.zip`;
+  }
 
   // Escape all interpolated values for safe HTML embedding
   const safeVersion = escapeHtml(version);
-  const safeDownloadHref = escapeHtml(`${releaseBaseUrl}/${artifactKey}`);
+  const safeDownloadHref = escapeHtml(`${releasesUrl}/${filename}`);
   // Escape </script> in JSON to prevent early script tag termination
   const safeVideoJson = JSON.stringify(videoFiles).replace(/<\//g, "<\\/");
 

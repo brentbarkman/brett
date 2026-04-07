@@ -12,7 +12,7 @@ async function uploadVideos() {
   for (const file of files) {
     const filePath = path.join(VIDEO_DIR, file);
     const body = fs.readFileSync(filePath);
-    const key = `public/videos/${file}`;
+    const key = `videos/${file}`;
 
     console.log(`Uploading ${file} (${(body.length / 1024 / 1024).toFixed(1)} MB)...`);
 

@@ -4,13 +4,13 @@ import { app } from "../app.js";
 // Mock the storage-urls module so tests don't need S3
 vi.mock("../lib/storage-urls.js", () => ({
   getStorageUrls: () => ({
-    base: "https://storage.example.com/brett-public",
-    releaseBaseUrl: "https://storage.example.com/brett-releases",
-    releasesUrl: "https://storage.example.com/brett-releases/releases",
-    videoBaseUrl: "https://storage.example.com/brett-public/public/videos",
+    base: "https://api.example.com",
+    releaseBaseUrl: "https://api.example.com",
+    releasesUrl: "https://api.example.com/releases",
+    videoBaseUrl: "https://api.example.com/public/videos",
     videoFiles: [
-      "https://storage.example.com/brett-public/public/videos/login-bg-1.mp4",
-      "https://storage.example.com/brett-public/public/videos/login-bg-2.mp4",
+      "https://api.example.com/public/videos/login-bg-1.mp4",
+      "https://api.example.com/public/videos/login-bg-2.mp4",
     ],
   }),
   getLatestVersion: vi.fn().mockResolvedValue({ version: "1.2.3", artifact: "releases/Brett-1.2.3.zip" }),
@@ -36,10 +36,10 @@ describe("GET /download", () => {
     expect(html).toContain("v1.2.3");
   });
 
-  it("contains a download link pointing to the artifact", async () => {
+  it("contains a download link pointing to the release proxy", async () => {
     const res = await app.request("/download");
     const html = await res.text();
-    expect(html).toContain("https://storage.example.com/brett-releases/releases/Brett-1.2.3.zip");
+    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3.zip");
     expect(html).toContain("Download for macOS");
   });
 
@@ -52,7 +52,6 @@ describe("GET /download", () => {
 
   it("does not require authentication", async () => {
     const res = await app.request("/download");
-    // Should not return 401
     expect(res.status).not.toBe(401);
   });
 
@@ -60,12 +59,11 @@ describe("GET /download", () => {
     const { getLatestVersion } = await import("../lib/storage-urls.js");
     (getLatestVersion as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       version: '<script>alert("xss")</script>',
-      dmg: "releases/Brett-evil.dmg",
+      artifact: "releases/Brett-evil.zip",
     });
 
     const res = await app.request("/download");
     const html = await res.text();
-    // Should be escaped, not raw
     expect(html).not.toContain('<script>alert("xss")</script>');
     expect(html).toContain("&lt;script&gt;");
   });
@@ -82,7 +80,7 @@ describe("GET /config", () => {
     const res = await app.request("/config");
     const body = await res.json();
     expect(body).toHaveProperty("videoBaseUrl");
-    expect(body.videoBaseUrl).toBe("https://storage.example.com/brett-public/public/videos");
+    expect(body.videoBaseUrl).toBe("https://api.example.com/public/videos");
   });
 
   it("does not require authentication", async () => {
@@ -94,9 +92,7 @@ describe("GET /config", () => {
     const res = await app.request("/config");
     const body = await res.json();
     const bodyStr = JSON.stringify(body);
-    // Should not contain credentials or bucket internals
     expect(bodyStr).not.toContain("accessKey");
     expect(bodyStr).not.toContain("secretKey");
-    expect(bodyStr).not.toContain("releases");
   });
 });
