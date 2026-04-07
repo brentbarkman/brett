@@ -33,7 +33,8 @@ function getContentType(key: string): string {
  * is prevented by rejecting keys with ".." or leading slashes.
  */
 storageProxy.get("/*", async (c) => {
-  const key = c.req.param("*") || "";
+  // c.req.path is the full path (e.g. /public/videos/foo.mp4)
+  const key = c.req.path.slice("/public/".length);
 
   // Reject empty keys, path traversal, encoded characters, and disallowed prefixes
   if (!key || key.includes("..") || key.startsWith("/") || key.includes("%")) {

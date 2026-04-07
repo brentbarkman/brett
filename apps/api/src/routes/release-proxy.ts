@@ -40,7 +40,8 @@ const ALLOWED_RELEASE_PATTERNS = [
  * release file patterns are served.
  */
 releaseProxy.get("/*", async (c) => {
-  const subPath = c.req.param("*") || "";
+  // c.req.path is the full path (e.g. /releases/latest-mac.yml)
+  const subPath = c.req.path.slice("/releases/".length);
   const key = subPath ? `releases/${subPath}` : "";
 
   // Reject empty, traversal, encoded characters, and disallowed patterns
