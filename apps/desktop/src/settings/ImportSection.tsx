@@ -51,8 +51,18 @@ export function ImportSection({ userId }: { userId: string }) {
       : { step: "idle" };
   });
 
-  // Only show on macOS in Electron
-  if (!electronAPI || electronAPI.platform !== "darwin") return null;
+  const isThings3Available = electronAPI?.platform === "darwin";
+
+  if (!isThings3Available) {
+    return (
+      <SettingsCard>
+        <SettingsHeader className="mb-1">Import</SettingsHeader>
+        <p className="text-sm text-white/40">
+          Task import from Things 3 is available on macOS in the desktop app.
+        </p>
+      </SettingsCard>
+    );
+  }
 
   async function handleScan() {
     if (state.step !== "idle") return;
