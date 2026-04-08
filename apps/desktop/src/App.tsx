@@ -526,7 +526,7 @@ export function App() {
         }
       }
       // Cmd+F / Ctrl+F opens spotlight with search pre-selected
-      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "f") {
         e.preventDefault();
         if (omnibar.isOpen && omnibar.mode === "spotlight") {
           omnibar.close();
@@ -542,10 +542,10 @@ export function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [omnibar.isOpen, omnibar.mode, omnibar.close, omnibar.open]);
 
-  // Cmd+Shift+F opens feedback modal
+  // Cmd+Shift+. opens feedback modal
   useEffect(() => {
     const handleFeedbackShortcut = async (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === ".") {
         e.preventDefault();
         if (feedbackOpen) return;
 
