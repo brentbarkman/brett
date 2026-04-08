@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -8,6 +9,8 @@ import { NextUpCard } from '../../../src/components/NextUpCard';
 import { SectionHeader } from '../../../src/components/SectionHeader';
 import { TaskRow } from '../../../src/components/TaskRow';
 import { Omnibar } from '../../../src/components/Omnibar';
+import { MultiSelectToolbar } from '../../../src/components/MultiSelectToolbar';
+import { useBatchCompletion } from '../../../src/hooks/use-batch-completion';
 import {
   useMockItems,
   useMockCalendarEvents,
@@ -45,6 +48,28 @@ export default function TodayScreen() {
     useMockBriefing();
   const { totalToday, doneToday, meetingCount, meetingDuration } = useTodayStats();
 
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const handleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleDoneSelecting = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // Batch completion: prevents list reflow while rapidly toggling multiple items
+  const { batchToggle } = useBatchCompletion(toggleItem);
+
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -57,6 +82,8 @@ export default function TodayScreen() {
   const todayActive = todayItems.filter(i => i.urgency === 'today' && i.status === 'active');
   const thisWeek = todayItems.filter(i => i.urgency === 'this_week' && i.status === 'active');
   const doneToday2 = todayItems.filter(i => i.status === 'done');
+
+  const isSelecting = selectedIds.size > 0;
 
   return (
     <View style={{ flex: 1 }}>
@@ -102,8 +129,10 @@ export default function TodayScreen() {
                   isOverdue
                   dueLabel={formatDueLabel(item)}
                   listName={getListForItem(item)?.name}
-                  onToggle={() => toggleItem(item.id)}
+                  isSelected={selectedIds.has(item.id)}
+                  onToggle={() => batchToggle(item.id)}
                   onPress={() => router.push(`/task/${item.id}`)}
+                  onSelect={() => handleSelect(item.id)}
                 />
               ))}
             </>
@@ -120,8 +149,10 @@ export default function TodayScreen() {
                   isDone={false}
                   dueLabel={formatDueLabel(item)}
                   listName={getListForItem(item)?.name}
-                  onToggle={() => toggleItem(item.id)}
+                  isSelected={selectedIds.has(item.id)}
+                  onToggle={() => batchToggle(item.id)}
                   onPress={() => router.push(`/task/${item.id}`)}
+                  onSelect={() => handleSelect(item.id)}
                 />
               ))}
             </>
@@ -138,8 +169,10 @@ export default function TodayScreen() {
                   isDone={false}
                   dueLabel={formatDueLabel(item)}
                   listName={getListForItem(item)?.name}
-                  onToggle={() => toggleItem(item.id)}
+                  isSelected={selectedIds.has(item.id)}
+                  onToggle={() => batchToggle(item.id)}
                   onPress={() => router.push(`/task/${item.id}`)}
+                  onSelect={() => handleSelect(item.id)}
                 />
               ))}
             </>
@@ -156,8 +189,10 @@ export default function TodayScreen() {
                   isDone
                   dueLabel={formatDueLabel(item)}
                   listName={getListForItem(item)?.name}
-                  onToggle={() => toggleItem(item.id)}
+                  isSelected={selectedIds.has(item.id)}
+                  onToggle={() => batchToggle(item.id)}
                   onPress={() => router.push(`/task/${item.id}`)}
+                  onSelect={() => handleSelect(item.id)}
                 />
               ))}
             </>
@@ -170,6 +205,24 @@ export default function TodayScreen() {
           />
         </View>
       </SafeAreaView>
+
+      <MultiSelectToolbar
+        selectedCount={selectedIds.size}
+        visible={isSelecting}
+        onSchedule={() => {
+          // TODO: open schedule picker for selected items
+          handleDoneSelecting();
+        }}
+        onMoveToList={() => {
+          // TODO: open list picker for selected items
+          handleDoneSelecting();
+        }}
+        onDelete={() => {
+          // TODO: delete selected items
+          handleDoneSelecting();
+        }}
+        onDone={handleDoneSelecting}
+      />
     </View>
   );
 }

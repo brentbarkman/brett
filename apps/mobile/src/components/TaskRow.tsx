@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   interpolateColor,
@@ -6,6 +6,8 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { Swipeable } from 'react-native-gesture-handler';
+import { CalendarDays, CheckSquare } from 'lucide-react-native';
 import { colors, radii, spacing, touchTargetMin, typography } from '../theme/tokens';
 import { haptics } from '../theme/haptics';
 
@@ -19,14 +21,37 @@ interface TaskRowProps {
   listColor?: string;
   contentType?: string | null;
   contentDomain?: string | null;
+  isSelected?: boolean;
   onToggle: () => void;
   onPress: () => void;
+  onSchedule?: () => void;
+  onSelect?: () => void;
 }
 
 const CHECKBOX_SIZE = 20;
 const GOLD = colors.gold;
 const GOLD_BORDER = 'rgba(232, 185, 49, 0.4)';
 const TRANSPARENT = 'transparent';
+
+const SCHEDULE_BG = 'rgba(232, 185, 49, 0.15)';
+const SELECT_BG = 'rgba(70, 130, 195, 0.12)';
+const ACTION_WIDTH = 80;
+
+function ScheduleAction() {
+  return (
+    <View style={styles.scheduleAction}>
+      <CalendarDays size={22} color={colors.gold} />
+    </View>
+  );
+}
+
+function SelectAction() {
+  return (
+    <View style={styles.selectAction}>
+      <CheckSquare size={22} color={colors.cerulean} />
+    </View>
+  );
+}
 
 export function TaskRow({
   id,
@@ -38,11 +63,17 @@ export function TaskRow({
   listColor,
   contentType,
   contentDomain,
+  isSelected,
   onToggle,
   onPress,
+  onSchedule,
+  onSelect,
 }: TaskRowProps) {
   const isContent = Boolean(contentType);
   const fillProgress = useSharedValue(isDone ? 1 : 0);
+  const swipeableRef = useRef<Swipeable>(null);
+  const scheduledHapticFired = useRef(false);
+  const selectHapticFired = useRef(false);
 
   useEffect(() => {
     fillProgress.value = withTiming(isDone ? 1 : 0, { duration: 150 });
@@ -56,9 +87,36 @@ export function TaskRow({
     ),
   }));
 
+  // Selection indicator animation
+  const selectedScale = useSharedValue(isSelected ? 1 : 0);
+  useEffect(() => {
+    selectedScale.value = withTiming(isSelected ? 1 : 0, { duration: 150 });
+  }, [isSelected]);
+
+  const animatedSelectionStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: selectedScale.value }],
+    opacity: selectedScale.value,
+  }));
+
   const handleToggle = () => {
     haptics.completion();
     onToggle();
+  };
+
+  const handleSwipeOpen = (direction: 'left' | 'right') => {
+    if (direction === 'right') {
+      // Swiped right — schedule action revealed
+      haptics.medium();
+      swipeableRef.current?.close();
+      onSchedule?.();
+    } else {
+      // Swiped left — select action revealed
+      haptics.medium();
+      swipeableRef.current?.close();
+      onSelect?.();
+    }
+    scheduledHapticFired.current = false;
+    selectHapticFired.current = false;
   };
 
   const metadataParts: string[] = [];
@@ -76,41 +134,57 @@ export function TaskRow({
     styles.row,
     isOverdue && !isContent && styles.rowOverdue,
     isContent && styles.rowContent,
+    isSelected && styles.rowSelected,
   ];
 
   return (
-    <Pressable style={rowStyle} onPress={onPress}>
-      {/* Checkbox or content indicator */}
-      {isContent ? (
-        <View style={styles.contentIndicator} />
-      ) : (
-        <Pressable
-          style={styles.checkboxTapArea}
-          onPress={handleToggle}
-          hitSlop={0}
-        >
-          <Animated.View style={[styles.checkbox, animatedCheckboxStyle]} />
-        </Pressable>
-      )}
+    <Swipeable
+      ref={swipeableRef}
+      renderLeftActions={() => <ScheduleAction />}
+      renderRightActions={() => <SelectAction />}
+      onSwipeableOpen={handleSwipeOpen}
+      friction={2}
+      leftThreshold={ACTION_WIDTH * 0.6}
+      rightThreshold={ACTION_WIDTH * 0.6}
+      overshootLeft={false}
+      overshootRight={false}
+    >
+      <Pressable style={rowStyle} onPress={onPress}>
+        {/* Selection indicator dot */}
+        <Animated.View style={[styles.selectionDot, animatedSelectionStyle]} />
 
-      {/* Text content */}
-      <View style={styles.textContainer}>
-        <Text
-          style={[
-            styles.title,
-            isDone && styles.titleDone,
-          ]}
-          numberOfLines={2}
-        >
-          {title}
-        </Text>
-        {metadataText.length > 0 && (
-          <Text style={styles.metadata} numberOfLines={1}>
-            {metadataText}
-          </Text>
+        {/* Checkbox or content indicator */}
+        {isContent ? (
+          <View style={styles.contentIndicator} />
+        ) : (
+          <Pressable
+            style={styles.checkboxTapArea}
+            onPress={handleToggle}
+            hitSlop={0}
+          >
+            <Animated.View style={[styles.checkbox, animatedCheckboxStyle]} />
+          </Pressable>
         )}
-      </View>
-    </Pressable>
+
+        {/* Text content */}
+        <View style={styles.textContainer}>
+          <Text
+            style={[
+              styles.title,
+              isDone && styles.titleDone,
+            ]}
+            numberOfLines={2}
+          >
+            {title}
+          </Text>
+          {metadataText.length > 0 && (
+            <Text style={styles.metadata} numberOfLines={1}>
+              {metadataText}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    </Swipeable>
   );
 }
 
@@ -131,6 +205,17 @@ const styles = StyleSheet.create({
   rowContent: {
     borderLeftWidth: 2,
     borderLeftColor: colors.cerulean,
+  },
+  rowSelected: {
+    backgroundColor: 'rgba(70, 130, 195, 0.10)',
+  },
+  selectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.cerulean,
+    marginRight: 6,
+    marginLeft: -2,
   },
   checkboxTapArea: {
     width: touchTargetMin,
@@ -166,5 +251,21 @@ const styles = StyleSheet.create({
   metadata: {
     ...typography.metadata,
     color: 'rgba(232, 185, 49, 0.5)',
+  },
+  scheduleAction: {
+    width: ACTION_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: SCHEDULE_BG,
+    borderRadius: radii.taskRow,
+    marginBottom: 5,
+  },
+  selectAction: {
+    width: ACTION_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: SELECT_BG,
+    borderRadius: radii.taskRow,
+    marginBottom: 5,
   },
 });
