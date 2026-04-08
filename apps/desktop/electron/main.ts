@@ -142,8 +142,8 @@ ipcMain.handle("get-system-info", () => {
 });
 
 ipcMain.handle("capture-screenshot", async () => {
-  const win = BrowserWindow.getFocusedWindow();
-  if (!win) throw new Error("No focused window");
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  if (!win) throw new Error("No available window");
   const image = await win.webContents.capturePage();
   // Resize to max 1280px wide to limit payload size
   const size = image.getSize();
