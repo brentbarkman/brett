@@ -6,7 +6,8 @@ const config = new Hono();
 // Public — no auth middleware
 config.get("/", (c) => {
   const { base, videoBaseUrl } = getStorageUrls();
-  return c.json({ videoBaseUrl, storageBaseUrl: base });
+  // storageBaseUrl points to the /public proxy so backgrounds resolve correctly
+  return c.json({ videoBaseUrl, storageBaseUrl: `${base}/public` });
 });
 
 export { config };
