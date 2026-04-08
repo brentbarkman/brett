@@ -1,9 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  interpolate,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -75,6 +77,9 @@ export function TaskRow({
   const scheduledHapticFired = useRef(false);
   const selectHapticFired = useRef(false);
 
+  // Lift animation for long-press drag hint
+  const isLifted = useSharedValue(0);
+
   useEffect(() => {
     fillProgress.value = withTiming(isDone ? 1 : 0, { duration: 150 });
   }, [isDone]);
@@ -98,9 +103,31 @@ export function TaskRow({
     opacity: selectedScale.value,
   }));
 
+  // Lift style for long-press
+  const animatedLiftStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(isLifted.value, [0, 1], [1, 1.03]) }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: interpolate(isLifted.value, [0, 1], [0, 8]) },
+    shadowOpacity: interpolate(isLifted.value, [0, 1], [0, 0.3]),
+    shadowRadius: interpolate(isLifted.value, [0, 1], [0, 12]),
+    elevation: interpolate(isLifted.value, [0, 1], [0, 8]),
+    zIndex: isLifted.value > 0.5 ? 10 : 0,
+  }));
+
   const handleToggle = () => {
     haptics.completion();
     onToggle();
+  };
+
+  const handleLongPress = () => {
+    haptics.rigid();
+    isLifted.value = withTiming(1, { duration: 100 });
+  };
+
+  const handlePressOut = () => {
+    if (isLifted.value > 0) {
+      isLifted.value = withSpring(0);
+    }
   };
 
   const handleSwipeOpen = (direction: 'left' | 'right') => {
@@ -149,41 +176,49 @@ export function TaskRow({
       overshootLeft={false}
       overshootRight={false}
     >
-      <Pressable style={rowStyle} onPress={onPress}>
-        {/* Selection indicator dot */}
-        <Animated.View style={[styles.selectionDot, animatedSelectionStyle]} />
+      <Animated.View style={animatedLiftStyle}>
+        <Pressable
+          style={rowStyle}
+          onPress={onPress}
+          onLongPress={handleLongPress}
+          onPressOut={handlePressOut}
+          delayLongPress={500}
+        >
+          {/* Selection indicator dot */}
+          <Animated.View style={[styles.selectionDot, animatedSelectionStyle]} />
 
-        {/* Checkbox or content indicator */}
-        {isContent ? (
-          <View style={styles.contentIndicator} />
-        ) : (
-          <Pressable
-            style={styles.checkboxTapArea}
-            onPress={handleToggle}
-            hitSlop={0}
-          >
-            <Animated.View style={[styles.checkbox, animatedCheckboxStyle]} />
-          </Pressable>
-        )}
-
-        {/* Text content */}
-        <View style={styles.textContainer}>
-          <Text
-            style={[
-              styles.title,
-              isDone && styles.titleDone,
-            ]}
-            numberOfLines={2}
-          >
-            {title}
-          </Text>
-          {metadataText.length > 0 && (
-            <Text style={styles.metadata} numberOfLines={1}>
-              {metadataText}
-            </Text>
+          {/* Checkbox or content indicator */}
+          {isContent ? (
+            <View style={styles.contentIndicator} />
+          ) : (
+            <Pressable
+              style={styles.checkboxTapArea}
+              onPress={handleToggle}
+              hitSlop={0}
+            >
+              <Animated.View style={[styles.checkbox, animatedCheckboxStyle]} />
+            </Pressable>
           )}
-        </View>
-      </Pressable>
+
+          {/* Text content */}
+          <View style={styles.textContainer}>
+            <Text
+              style={[
+                styles.title,
+                isDone && styles.titleDone,
+              ]}
+              numberOfLines={2}
+            >
+              {title}
+            </Text>
+            {metadataText.length > 0 && (
+              <Text style={styles.metadata} numberOfLines={1}>
+                {metadataText}
+              </Text>
+            )}
+          </View>
+        </Pressable>
+      </Animated.View>
     </Swipeable>
   );
 }
