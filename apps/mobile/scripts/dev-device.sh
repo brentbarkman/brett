@@ -55,14 +55,18 @@ fi
 
 # 4. Start ngrok tunnel in background
 echo "▸ Starting ngrok tunnel..."
+# Kill any leftover ngrok from a previous run (port 4040 conflict)
+pkill -9 -f "ngrok" 2>/dev/null || true
+lsof -ti:4040 | xargs kill -9 2>/dev/null || true
+sleep 2
 ngrok http 3001 --log=stdout --log-format=json >/tmp/ngrok.log 2>&1 &
 NGROK_PID=$!
 
 # Wait for ngrok to establish tunnel
 echo -n "  Waiting for tunnel"
 NGROK_URL=""
-for i in $(seq 1 15); do
-  NGROK_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | python3 -c "import sys,json; t=json.load(sys.stdin)['tunnels']; print(next(x['public_url'] for x in t if x['public_url'].startswith('https')))" 2>/dev/null)
+for i in $(seq 1 30); do
+  NGROK_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | python3 -c "import sys,json; t=json.load(sys.stdin)['tunnels']; print(next(x['public_url'] for x in t if x['public_url'].startswith('https')))" 2>/dev/null || true)
   if [ -n "$NGROK_URL" ]; then
     echo " ✓"
     break

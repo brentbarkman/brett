@@ -7,6 +7,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: "1.0.0",
   orientation: "portrait",
   scheme: "brett",
+  icon: "./assets/icon.png",
   platforms: ["ios"],
   ios: {
     bundleIdentifier: "com.brett.app",

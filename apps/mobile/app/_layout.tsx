@@ -15,7 +15,7 @@ function AuthGate() {
     if (!isAuthenticated && !inAuthGroup) {
       router.replace("/(auth)/sign-in");
     } else if (isAuthenticated && inAuthGroup) {
-      router.replace("/(app)/today");
+      router.replace("/(app)/(tabs)/today");
     }
   }, [isLoading, isAuthenticated, segments]);
 
