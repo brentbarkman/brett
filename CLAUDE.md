@@ -68,6 +68,8 @@ Copy `.env.example` files (`apps/api/`, `apps/desktop/`) to `.env` and fill in:
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth (optional for dev)
 - `STORAGE_*` — S3-compatible object storage (MinIO locally via Docker, Railway in prod). Required for file attachments.
 - `VITE_API_URL` — API server URL for desktop (defaults to `http://localhost:3001`)
+- `NEWSLETTER_INGEST_SECRET` — Random secret for webhook URL path (generate with `openssl rand -hex 32`)
+- `NEWSLETTER_INGEST_USER_ID` — User ID for newsletter ingestion (v1 single-user)
 
 Do NOT commit `.env` files.
 
@@ -116,7 +118,7 @@ It contains the full design system: surface patterns, color system, typography, 
 - When modifying the Docker build, mentally trace the full layer chain — what's copied, what's missing, what symlinks expect
 - **List behavior consistency:** When changing how any list view works (Inbox, Today, Upcoming, custom lists), the same behavior MUST apply to ALL list views. There are three list components: `InboxView` (uses `InboxItemRow`), `ThingsList` (uses `ThingCard`, powers Today + custom lists), and `UpcomingView` (uses `ThingCard`). If you're not sure whether a change makes sense across all views, ask before implementing.
 - **Omnibar + ⌘K Spotlight consistency:** The Omnibar (`packages/ui/src/Omnibar.tsx`) and ⌘K Spotlight (`packages/ui/src/SpotlightModal.tsx`) are two surfaces for the same feature. When editing either one, you MUST apply the same change to the other. If you're not sure whether a change makes sense in both, ask before implementing. They share the same hook (`apps/desktop/src/api/omnibar.ts`) but have separate rendering — keep them in sync.
-- **Settings deep-links:** Any UI element that sends the user to Settings MUST deep-link to the correct settings tab using the hash fragment (e.g., `/settings#ai-providers`, `/settings#calendar`, `/settings#timezone-location`). Never link to bare `/settings` when the intent is a specific section. Valid tab hashes: `#profile`, `#security`, `#calendar`, `#ai-providers`, `#timezone-location`, `#import`, `#account`.
+- **Settings deep-links:** Any UI element that sends the user to Settings MUST deep-link to the correct settings tab using the hash fragment (e.g., `/settings#ai-providers`, `/settings#calendar`, `/settings#timezone-location`). Never link to bare `/settings` when the intent is a specific section. Valid tab hashes: `#profile`, `#security`, `#calendar`, `#ai-providers`, `#newsletters`, `#timezone-location`, `#import`, `#updates`, `#account`.
 
 ## Process: Exploratory / Infra Work
 
