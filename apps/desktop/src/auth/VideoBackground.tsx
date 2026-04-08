@@ -1,5 +1,4 @@
-import {
-  forwardRef,
+import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -9,6 +8,7 @@ import {
 
 interface VideoBackgroundProps {
   videos: string[];
+  ref?: React.Ref<VideoBackgroundHandle>;
 }
 
 export interface VideoBackgroundHandle {
@@ -17,17 +17,14 @@ export interface VideoBackgroundHandle {
 
 const FADE_MS = 1200;
 
-export const VideoBackground = forwardRef<
-  VideoBackgroundHandle,
-  VideoBackgroundProps
->(function VideoBackground({ videos }, ref) {
+export function VideoBackground({ videos, ref }: VideoBackgroundProps) {
   const [startIndex] = useState(() =>
     Math.floor(Math.random() * videos.length)
   );
   const activeSlotRef = useRef<0 | 1>(0);
   const currentIndex = useRef(startIndex);
   const lastAdvance = useRef(0);
-  const preloadTimer = useRef<ReturnType<typeof setTimeout>>();
+  const preloadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Track what each slot should have next (may differ from current src during transitions)
   const pendingSrc = useRef<(string | null)[]>([null, null]);
   const [, forceRender] = useState(0);
@@ -144,4 +141,4 @@ export const VideoBackground = forwardRef<
       ))}
     </div>
   );
-});
+}

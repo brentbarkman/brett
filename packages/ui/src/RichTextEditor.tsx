@@ -88,7 +88,7 @@ export function RichTextEditor({
   onChange,
   placeholder = "Add notes\u2026",
 }: RichTextEditorProps) {
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const debouncedSave = useCallback((ed: any) => {
     clearTimeout(debounceRef.current);

@@ -158,19 +158,19 @@ describe("useOmnibar", () => {
 
   describe("searchThings", () => {
     it("calls API with search query", async () => {
-      mockApiFetch.mockResolvedValue([{ id: "1", title: "NVDA Research", status: "active" }]);
+      mockApiFetch.mockResolvedValue({ results: [{ id: "1", title: "NVDA Research", status: "active" }] });
       const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
 
       await act(async () => {
         await result.current.searchThings("NVDA");
       });
 
-      expect(mockApiFetch).toHaveBeenCalledWith("/things?search=NVDA");
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/search?q=NVDA");
     });
 
     it("sets searchResults with API response", async () => {
       const items = [{ id: "1", title: "NVDA Research", status: "active", type: "task" }];
-      mockApiFetch.mockResolvedValue(items);
+      mockApiFetch.mockResolvedValue({ results: items });
       const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
 
       await act(async () => {
@@ -210,7 +210,7 @@ describe("useOmnibar", () => {
         await result.current.searchThings("test & query");
       });
 
-      expect(mockApiFetch).toHaveBeenCalledWith("/things?search=test%20%26%20query");
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/search?q=test%20%26%20query");
     });
 
     it("does not enter conversation mode", async () => {

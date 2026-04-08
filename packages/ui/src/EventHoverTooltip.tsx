@@ -61,7 +61,7 @@ export function EventHoverTooltip({
   const [isVisible, setIsVisible] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
   const updatePosition = useCallback(() => {

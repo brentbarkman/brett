@@ -28,7 +28,7 @@ export function CrossFade({
   }>({ key: stateKey, content: children });
 
   const prevKeyRef = useRef(stateKey);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Increment to force a fresh animation on each transition
   const genRef = useRef(0);
 
