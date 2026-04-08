@@ -4,6 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 interface AppConfig {
   storageBaseUrl: string;
+  newsletterIngestEmail: string | null;
 }
 
 export function useAppConfig() {
@@ -14,6 +15,7 @@ export function useAppConfig() {
       const data = await res.json();
       return {
         storageBaseUrl: data.storageBaseUrl ?? "",
+        newsletterIngestEmail: data.newsletterIngestEmail ?? null,
       };
     },
     staleTime: Infinity,

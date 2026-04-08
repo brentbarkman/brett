@@ -58,12 +58,17 @@ webhookRouter.post("/email/ingest/:secret", async (c) => {
     return c.json({ ok: true, skipped: "body too large" }, 200);
   }
 
-  // 5. Resolve user
-  const userId = process.env.NEWSLETTER_INGEST_USER_ID;
-  if (!userId) {
-    console.error("[newsletter-webhook] NEWSLETTER_INGEST_USER_ID not set");
+  // 5. Resolve user — single-user: find the one active user in the system
+  const user = await prisma.user.findFirst({
+    where: { banned: false },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!user) {
+    console.error("[newsletter-webhook] No active user found");
     return c.json({ error: "Server misconfigured" }, 500);
   }
+  const userId = user.id;
 
   try {
     // 6. Dedup by MessageID

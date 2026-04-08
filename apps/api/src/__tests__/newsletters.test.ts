@@ -11,7 +11,6 @@ import {
 } from "../lib/newsletter-ingest.js";
 
 process.env.NEWSLETTER_INGEST_SECRET = "test-secret-abc123";
-process.env.NEWSLETTER_INGEST_USER_ID = ""; // set in beforeAll after creating user
 
 const WEBHOOK_URL = "http://localhost/webhooks/email/ingest/test-secret-abc123";
 const WRONG_SECRET_URL = "http://localhost/webhooks/email/ingest/wrong-secret";
@@ -42,7 +41,6 @@ describe("newsletter webhook + sender management", () => {
       },
     });
     userId = user.id;
-    process.env.NEWSLETTER_INGEST_USER_ID = userId;
   });
 
   // ── Webhook: Secret Validation ──

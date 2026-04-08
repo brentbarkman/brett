@@ -10,15 +10,22 @@ import {
   useBlockPendingSender,
 } from "../api/newsletters";
 import type { NewsletterSender, PendingNewsletterSummary } from "@brett/types";
+import { useAppConfig } from "../hooks/useAppConfig";
 
-// TODO: make configurable per user — fetch from API or user settings
-const INGEST_EMAIL = "ingest@yourdomain.com";
-
-function ForwardingAddressCard() {
+function ForwardingAddressCard({ email }: { email: string | null }) {
   const [copied, setCopied] = useState(false);
 
+  if (!email) {
+    return (
+      <SettingsCard>
+        <SettingsHeader>Forwarding Address</SettingsHeader>
+        <p className="text-xs text-white/40">Newsletter ingestion is not configured on this server.</p>
+      </SettingsCard>
+    );
+  }
+
   function handleCopy() {
-    navigator.clipboard.writeText(INGEST_EMAIL).then(() => {
+    navigator.clipboard.writeText(email!).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -33,7 +40,7 @@ function ForwardingAddressCard() {
       </p>
       <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
         <Mail size={14} className="text-white/30 flex-shrink-0" />
-        <span className="flex-1 text-sm text-white font-mono select-all">{INGEST_EMAIL}</span>
+        <span className="flex-1 text-sm text-white font-mono select-all">{email}</span>
         <button
           onClick={handleCopy}
           className="flex items-center gap-1 text-xs text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
@@ -158,12 +165,13 @@ function SenderRow({ sender }: SenderRowProps) {
 }
 
 export function NewsletterSection() {
+  const { data: config } = useAppConfig();
   const { data: senders = [], isLoading: sendersLoading, error: sendersError } = useNewsletterSenders();
   const { data: pending = [], isLoading: pendingLoading } = useNewsletterPending();
 
   return (
     <>
-      <ForwardingAddressCard />
+      <ForwardingAddressCard email={config?.newsletterIngestEmail ?? null} />
 
       {/* Pending senders */}
       {(pendingLoading || pending.length > 0) && (

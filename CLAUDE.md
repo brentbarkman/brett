@@ -72,7 +72,7 @@ Copy `.env.example` files (`apps/api/`, `apps/desktop/`) to `.env` and fill in:
 - `STORAGE_*` — S3-compatible object storage (MinIO locally via Docker, Railway in prod). Required for file attachments.
 - `VITE_API_URL` — API server URL for desktop (defaults to `http://localhost:3001`)
 - `NEWSLETTER_INGEST_SECRET` — Random secret for webhook URL path (generate with `openssl rand -hex 32`)
-- `NEWSLETTER_INGEST_USER_ID` — User ID for newsletter ingestion (v1 single-user)
+- `NEWSLETTER_INGEST_EMAIL` — Forwarding address shown in Settings (e.g., `ingest@yourdomain.com`)
 
 Do NOT commit `.env` files.
 
