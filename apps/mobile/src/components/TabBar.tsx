@@ -1,0 +1,350 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Platform,
+} from 'react-native';
+import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withRepeat,
+  withTiming,
+  useAnimatedReaction,
+  type SharedValue,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Sun,
+  Inbox,
+  Mic,
+  CalendarDays,
+  Calendar,
+} from 'lucide-react-native';
+import { haptics } from '../theme/haptics';
+import { colors, typography, spacing } from '../theme/tokens';
+
+// Tab config — order must match Tabs.Screen order in _layout
+const TABS = [
+  { name: 'today', label: 'Today', Icon: Sun },
+  { name: 'inbox', label: 'Inbox', Icon: Inbox },
+  { name: 'voice', label: 'Voice', Icon: Mic },
+  { name: 'upcoming', label: 'Upcoming', Icon: CalendarDays },
+  { name: 'calendar', label: 'Calendar', Icon: Calendar },
+] as const;
+
+const TAB_COUNT = TABS.length;
+const VOICE_INDEX = 2;
+
+// Approximate width per tab — the sliding dot uses this to compute translateX.
+// We use a percentage-based approach driven by a shared value.
+const VOICE_BUTTON_SIZE = 48;
+
+export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const activeIndex = useSharedValue(state.index);
+
+  // Sync shared value with React state
+  useAnimatedReaction(
+    () => state.index,
+    (current) => {
+      activeIndex.value = withSpring(current, {
+        damping: 18,
+        stiffness: 200,
+        mass: 0.6,
+      });
+    },
+  );
+
+  // Ambient glow pulse for voice button
+  const glowOpacity = useSharedValue(0.05);
+  React.useEffect(() => {
+    glowOpacity.value = withRepeat(
+      withTiming(0.15, { duration: 4500 }),
+      -1,
+      true,
+    );
+  }, []);
+
+  // Inbox badge breathing
+  const badgeOpacity = useSharedValue(0.8);
+  React.useEffect(() => {
+    badgeOpacity.value = withRepeat(
+      withTiming(1.0, { duration: 2000 }),
+      -1,
+      true,
+    );
+  }, []);
+
+  const inboxCount = 0; // TODO: hook up to store
+
+  return (
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      {/* Glass background */}
+      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, styles.overlay]} />
+
+      {/* Top border */}
+      <View style={styles.topBorder} />
+
+      {/* Tab row */}
+      <View style={styles.row}>
+        {TABS.map((tab, index) => {
+          const isFocused = state.index === index;
+          const isVoice = index === VOICE_INDEX;
+          const descriptor = descriptors[state.routes[index]?.key ?? ''];
+          const label = descriptor?.options?.title ?? tab.label;
+          const { Icon } = tab;
+
+          const iconColor = isFocused
+            ? colors.gold
+            : 'rgba(255,255,255,0.35)';
+          const labelColor = isFocused
+            ? colors.gold
+            : 'rgba(255,255,255,0.35)';
+
+          const onPress = () => {
+            if (isVoice) {
+              haptics.heavy();
+              return;
+            }
+            const route = state.routes[index];
+            if (!route) return;
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          const onLongPress = () => {
+            if (isVoice) return;
+            const route = state.routes[index];
+            if (!route) return;
+            navigation.emit({
+              type: 'tabLongPress',
+              target: route.key,
+            });
+          };
+
+          if (isVoice) {
+            return (
+              <View key={tab.name} style={styles.voiceWrapper}>
+                <VoiceButton
+                  glowOpacity={glowOpacity}
+                  onPress={onPress}
+                />
+              </View>
+            );
+          }
+
+          // Effective index for dot positioning (skips voice slot)
+          const dotIndex = index < VOICE_INDEX ? index : index - 1;
+
+          return (
+            <Pressable
+              key={tab.name}
+              style={styles.tab}
+              onPress={onPress}
+              onLongPress={onLongPress}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityState={{ selected: isFocused }}
+            >
+              <View style={styles.iconWrapper}>
+                <Icon size={22} color={iconColor} strokeWidth={isFocused ? 2.2 : 1.8} />
+                {/* Inbox badge */}
+                {tab.name === 'inbox' && inboxCount > 0 && (
+                  <InboxBadge count={inboxCount} badgeOpacity={badgeOpacity} />
+                )}
+              </View>
+              <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
+              {/* Sliding gold dot */}
+              <SlidingDot activeIndex={activeIndex} myIndex={index} />
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ── Voice Button ─────────────────────────────────────────────────────────────
+
+interface VoiceButtonProps {
+  glowOpacity: SharedValue<number>;
+  onPress: () => void;
+}
+
+function VoiceButton({ glowOpacity, onPress }: VoiceButtonProps) {
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
+  return (
+    <Pressable
+      style={styles.voiceButton}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Voice"
+    >
+      {/* Ambient glow */}
+      <Animated.View style={[styles.voiceGlow, glowStyle]} />
+      {/* Gold gradient background */}
+      <LinearGradient
+        colors={['#f5d060', colors.gold, '#c8971a']}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={styles.voiceGradient}
+      />
+      <Mic size={22} color="#000" strokeWidth={2.2} />
+    </Pressable>
+  );
+}
+
+// ── Inbox Badge ───────────────────────────────────────────────────────────────
+
+interface InboxBadgeProps {
+  count: number;
+  badgeOpacity: SharedValue<number>;
+}
+
+function InboxBadge({ count, badgeOpacity }: InboxBadgeProps) {
+  const badgeStyle = useAnimatedStyle(() => ({
+    opacity: badgeOpacity.value,
+  }));
+
+  return (
+    <Animated.View style={[styles.badge, badgeStyle]}>
+      <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+    </Animated.View>
+  );
+}
+
+// ── Sliding Dot ───────────────────────────────────────────────────────────────
+// Each non-voice tab renders this. When it's the active tab, it shows; others hide.
+
+interface SlidingDotProps {
+  activeIndex: SharedValue<number>;
+  myIndex: number;
+}
+
+function SlidingDot({ activeIndex, myIndex }: SlidingDotProps) {
+  const dotStyle = useAnimatedStyle(() => {
+    // Convert floating activeIndex to opacity: 1 when close, 0 otherwise
+    const diff = Math.abs(activeIndex.value - myIndex);
+    const opacity = Math.max(0, 1 - diff * 2);
+    return { opacity };
+  });
+
+  return <Animated.View style={[styles.dot, dotStyle]} />;
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
+  },
+  overlay: {
+    backgroundColor: 'rgba(0,0,0,0.50)',
+  },
+  topBorder: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingTop: spacing.sm,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingBottom: spacing.xs,
+    minHeight: 54,
+    justifyContent: 'flex-start',
+  },
+  iconWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 3,
+  },
+  label: {
+    ...typography.tabLabel,
+    marginBottom: 6,
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gold,
+  },
+  // Voice button
+  voiceWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    paddingBottom: spacing.xs + 2,
+    justifyContent: 'flex-end',
+  },
+  voiceButton: {
+    width: VOICE_BUTTON_SIZE,
+    height: VOICE_BUTTON_SIZE,
+    borderRadius: VOICE_BUTTON_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    // Elevation for iOS
+    shadowColor: colors.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    // Android
+    elevation: 8,
+  },
+  voiceGlow: {
+    position: 'absolute',
+    width: VOICE_BUTTON_SIZE + 24,
+    height: VOICE_BUTTON_SIZE + 24,
+    borderRadius: (VOICE_BUTTON_SIZE + 24) / 2,
+    backgroundColor: colors.gold,
+    top: -(12),
+    left: -(12),
+  },
+  voiceGradient: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: VOICE_BUTTON_SIZE / 2,
+  },
+  // Inbox badge
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 12,
+  },
+});

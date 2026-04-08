@@ -1,10 +1,15 @@
-import { useEffect } from "react";
-import { Stack } from "expo-router";
-import { registerForPushNotifications } from "../../src/notifications/registration";
+import { Stack } from 'expo-router';
 
 export default function AppLayout() {
-  useEffect(() => {
-    registerForPushNotifications();
-  }, []);
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="task/[id]" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="list/[id]" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="scouts/index" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="scouts/[id]" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="content/[id]" options={{ animation: 'slide_from_right' }} />
+    </Stack>
+  );
 }
