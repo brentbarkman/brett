@@ -18,6 +18,11 @@ function scrub(text: string): string {
   return result;
 }
 
+/** Check if the current route or text content relates to auth flows */
+function isAuthRelated(text: string): boolean {
+  return AUTH_ROUTE_PATTERNS.some((p) => p.test(text));
+}
+
 // --- Ring buffer ---
 
 class RingBuffer<T> {
@@ -62,33 +67,57 @@ const breadcrumbs = new RingBuffer<{
 
 let initialized = false;
 
+function shouldCaptureLog(text: string): boolean {
+  // Skip logs related to auth routes (may contain tokens/session data)
+  if (isAuthRelated(text)) return false;
+  // Skip the diagnostics module's own logs to avoid noise
+  if (text.startsWith("[feedback]")) return false;
+  return true;
+}
+
 function initConsoleCapture() {
   const originalError = console.error;
   const originalWarn = console.warn;
   const originalLog = console.log;
+  const originalInfo = console.info;
 
   console.error = (...args: unknown[]) => {
     const text = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
-    consoleErrors.push(scrub(text));
+    if (shouldCaptureLog(text)) {
+      consoleErrors.push(scrub(text));
+    }
     originalError.apply(console, args);
   };
 
   console.warn = (...args: unknown[]) => {
     const text = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
-    consoleLogs.push(`[warn] ${scrub(text)}`);
+    if (shouldCaptureLog(text)) {
+      consoleLogs.push(`[warn] ${scrub(text)}`);
+    }
     originalWarn.apply(console, args);
   };
 
   console.log = (...args: unknown[]) => {
     const text = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
-    consoleLogs.push(scrub(text));
+    if (shouldCaptureLog(text)) {
+      consoleLogs.push(scrub(text));
+    }
     originalLog.apply(console, args);
+  };
+
+  console.info = (...args: unknown[]) => {
+    const text = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+    if (shouldCaptureLog(text)) {
+      consoleLogs.push(`[info] ${scrub(text)}`);
+    }
+    originalInfo.apply(console, args);
   };
 }
 
 // --- Breadcrumb tracking ---
 
 function initBreadcrumbs() {
+  // Click breadcrumbs only — route changes tracked via recordRouteChange()
   document.addEventListener(
     "click",
     (e) => {
@@ -108,20 +137,20 @@ function initBreadcrumbs() {
     },
     { capture: true },
   );
+}
 
-  let lastRoute = window.location.pathname + window.location.hash;
-  const observer = new MutationObserver(() => {
-    const currentRoute = window.location.pathname + window.location.hash;
-    if (currentRoute !== lastRoute) {
-      lastRoute = currentRoute;
-      breadcrumbs.push({
-        selector: "navigation",
-        route: currentRoute,
-        timestamp: new Date().toISOString(),
-      });
-    }
+// --- Route change recording (called from App.tsx via React Router location) ---
+
+let lastRoute = "";
+
+export function recordRouteChange(route: string) {
+  if (route === lastRoute) return;
+  lastRoute = route;
+  breadcrumbs.push({
+    selector: "navigation",
+    route,
+    timestamp: new Date().toISOString(),
   });
-  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 // --- Failed API call recording ---
@@ -160,17 +189,19 @@ export interface DiagnosticSnapshot {
     timestamp: string;
   }[];
   appVersion: string;
+  electronVersion: string;
   os: string;
   currentRoute: string;
 }
 
-export function collectDiagnostics(): DiagnosticSnapshot {
+export function collectDiagnostics(electronVersion?: string): DiagnosticSnapshot {
   return {
     consoleErrors: consoleErrors.snapshot(),
     consoleLogs: consoleLogs.snapshot(),
     failedApiCalls: failedApiCalls.snapshot(),
     breadcrumbs: breadcrumbs.snapshot(),
     appVersion: import.meta.env.VITE_APP_VERSION || "unknown",
+    electronVersion: electronVersion || "unknown",
     os: navigator.userAgent,
     currentRoute: window.location.pathname + window.location.hash,
   };

@@ -86,6 +86,7 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
       diagnostics: {
         ...(includeScreenshot && screenshot ? { screenshot } : {}),
         appVersion: diagnostics.appVersion,
+        electronVersion: diagnostics.electronVersion,
         os: diagnostics.os,
         currentRoute: diagnostics.currentRoute,
         ...(includeDiagnostics
@@ -247,6 +248,7 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
               {showDiagnostics && includeDiagnostics && (
                 <div className="bg-white/5 rounded-lg p-3 text-xs text-white/40 font-mono space-y-1 max-h-40 overflow-y-auto">
                   <div>App: {diagnostics.appVersion}</div>
+                  <div>Electron: {diagnostics.electronVersion}</div>
                   <div>Route: {diagnostics.currentRoute}</div>
                   <div>Console Errors: {diagnostics.consoleErrors.length}</div>
                   <div>Console Logs: {diagnostics.consoleLogs.length}</div>

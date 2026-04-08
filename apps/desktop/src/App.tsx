@@ -67,7 +67,7 @@ import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/gra
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useBackground } from "./hooks/useBackground";
-import { initDiagnostics, collectDiagnostics, type DiagnosticSnapshot } from "./lib/diagnostics";
+import { initDiagnostics, collectDiagnostics, recordRouteChange, type DiagnosticSnapshot } from "./lib/diagnostics";
 import { FeedbackModal } from "./components/FeedbackModal";
 import { useFavicon } from "./hooks/useFavicon";
 import { useOmnibar } from "./api/omnibar";
@@ -193,6 +193,22 @@ export function App() {
   // Initialize diagnostics ring buffers for feedback
   useEffect(() => {
     initDiagnostics();
+  }, []);
+
+  // Track route changes for diagnostics breadcrumbs
+  useEffect(() => {
+    recordRouteChange(location.pathname + location.hash);
+  }, [location.pathname, location.hash]);
+
+  // Cache electron version for diagnostics (fetched once at startup)
+  const [electronVersion, setElectronVersion] = useState<string>("unknown");
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.getSystemInfo) {
+      electronAPI.getSystemInfo().then((info: { electronVersion: string }) => {
+        setElectronVersion(info.electronVersion);
+      }).catch(() => {});
+    }
   }, []);
 
   // Feedback modal state
@@ -545,7 +561,7 @@ export function App() {
         }
 
         // Snapshot diagnostics
-        const diag = collectDiagnostics();
+        const diag = collectDiagnostics(electronVersion);
 
         setFeedbackScreenshot(screenshot);
         setFeedbackDiagnostics(diag);

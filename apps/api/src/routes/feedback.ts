@@ -1,6 +1,7 @@
 // apps/api/src/routes/feedback.ts
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import crypto from "crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
@@ -12,7 +13,11 @@ const MAX_CONSOLE_ERRORS = 50;
 const MAX_CONSOLE_LOGS = 100;
 const MAX_FAILED_CALLS = 20;
 const MAX_BREADCRUMBS = 20;
+const MAX_ENTRY_LENGTH = 2000;
 const MAX_ISSUE_BODY = 65_000;
+const MAX_SCREENSHOT_BASE64 = 4_000_000; // ~3MB decoded
+
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const GITHUB_REPO = process.env.GITHUB_FEEDBACK_REPO || "";
 const GITHUB_PAT = process.env.GITHUB_FEEDBACK_PAT || "";
@@ -30,12 +35,23 @@ const TYPE_LABELS: Record<string, { prefix: string; label: string }> = {
 };
 
 function escapeMarkdown(text: string): string {
-  return text.replace(/```/g, "` ` `");
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/```/g, "` ` `");
 }
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   return text.slice(0, max) + "\n\n[truncated]";
+}
+
+/** Cap each string entry in an array to MAX_ENTRY_LENGTH, coerce non-strings */
+function sanitizeStringArray(arr: unknown[], max: number): string[] {
+  return arr.slice(0, max).map((e) =>
+    (typeof e === "string" ? e : String(e)).slice(0, MAX_ENTRY_LENGTH),
+  );
 }
 
 export const feedback = new Hono<AuthEnv>();
@@ -84,9 +100,9 @@ feedback.post(
     const description = body.description.slice(0, MAX_DESCRIPTION);
     const diag = body.diagnostics;
 
-    // Enforce array length limits
-    const consoleErrors = diag?.consoleErrors?.slice(0, MAX_CONSOLE_ERRORS) || [];
-    const consoleLogs = diag?.consoleLogs?.slice(0, MAX_CONSOLE_LOGS) || [];
+    // Enforce array length limits and per-entry string length caps
+    const consoleErrors = sanitizeStringArray(diag?.consoleErrors || [], MAX_CONSOLE_ERRORS);
+    const consoleLogs = sanitizeStringArray(diag?.consoleLogs || [], MAX_CONSOLE_LOGS);
     const failedApiCalls = diag?.failedApiCalls?.slice(0, MAX_FAILED_CALLS) || [];
     const breadcrumbs = diag?.breadcrumbs?.slice(0, MAX_BREADCRUMBS) || [];
 
@@ -94,19 +110,31 @@ feedback.post(
     let screenshotUrl: string | null = null;
     if (diag?.screenshot) {
       try {
-        const key = `feedback/${Date.now()}-${user.id.slice(0, 8)}.png`;
-        const imageBuffer = Buffer.from(diag.screenshot, "base64");
-        await publicS3.send(
-          new PutObjectCommand({
-            Bucket: PUBLIC_STORAGE_BUCKET,
-            Key: key,
-            Body: imageBuffer,
-            ContentType: "image/png",
-          }),
-        );
-        screenshotUrl = `${storageBaseUrl}/${key}`;
+        // Validate size before decoding
+        if (diag.screenshot.length > MAX_SCREENSHOT_BASE64) {
+          console.error("[feedback] Screenshot too large, skipping");
+        } else {
+          const imageBuffer = Buffer.from(diag.screenshot, "base64");
+
+          // Validate PNG magic bytes
+          if (imageBuffer.length < 8 || !imageBuffer.subarray(0, 8).equals(PNG_MAGIC)) {
+            console.error("[feedback] Screenshot rejected: not a valid PNG");
+          } else {
+            const key = `feedback/${crypto.randomBytes(16).toString("hex")}.png`;
+            await publicS3.send(
+              new PutObjectCommand({
+                Bucket: PUBLIC_STORAGE_BUCKET,
+                Key: key,
+                Body: imageBuffer,
+                ContentType: "image/png",
+              }),
+            );
+            screenshotUrl = `${storageBaseUrl}/${key}`;
+          }
+        }
       } catch (err) {
         console.error("[feedback] Screenshot upload failed:", err);
+        // Continue without screenshot — don't fail the whole submission
       }
     }
 
@@ -178,7 +206,9 @@ feedback.post(
 
     if (!ghResponse.ok) {
       const ghError = await ghResponse.json().catch(() => ({}));
-      console.error("[feedback] GitHub API error:", ghResponse.status, ghError);
+      // Log only the message field, not the full error object (may contain token-adjacent info)
+      const ghMessage = typeof ghError === "object" && ghError !== null ? (ghError as Record<string, unknown>).message : "";
+      console.error("[feedback] GitHub API error:", ghResponse.status, ghMessage);
       return c.json(
         { error: `Failed to create issue: GitHub API returned ${ghResponse.status}` },
         502,

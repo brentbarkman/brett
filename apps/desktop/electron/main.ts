@@ -130,6 +130,17 @@ ipcMain.handle("set-auto-install-on-quit", (_event, enabled: boolean) => {
   setAutoInstallOnQuit(enabled);
 });
 
+ipcMain.handle("get-system-info", () => {
+  return {
+    electronVersion: process.versions.electron,
+    chromeVersion: process.versions.chrome,
+    nodeVersion: process.versions.node,
+    platform: process.platform,
+    arch: process.arch,
+    osVersion: require("os").release(),
+  };
+});
+
 ipcMain.handle("capture-screenshot", async () => {
   const win = BrowserWindow.getFocusedWindow();
   if (!win) throw new Error("No focused window");
