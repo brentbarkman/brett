@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LivingBackground } from '../../../src/components/LivingBackground';
+import { GlassCard } from '../../../src/components/GlassCard';
 import { HeaderStats } from '../../../src/components/HeaderStats';
 import { DailyBriefing } from '../../../src/components/DailyBriefing';
 import { NextUpCard } from '../../../src/components/NextUpCard';
@@ -143,129 +144,131 @@ export default function TodayScreen() {
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
             keyboardShouldPersistTaps="handled"
           >
-            {(overdue.length > 0 || overdoneInOverdue.length > 0) && (
-              <>
-                <SectionHeader label="Overdue" variant="overdue" />
-                {overdue.map(item => (
-                  <TaskRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    isDone={false}
-                    isOverdue
-                    dueLabel={formatDueLabel(item)}
-                    listName={getListForItem(item)?.name}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggle={() => batchToggle(item.id)}
-                    onPress={() => router.push(`/task/${item.id}`)}
-                    onSelect={() => handleSelect(item.id)}
-                  />
-                ))}
-                {overdoneInOverdue.map(item => (
-                  <TaskRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    isDone
-                    isOverdue
-                    dueLabel={formatDueLabel(item)}
-                    listName={getListForItem(item)?.name}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggle={() => batchToggle(item.id)}
-                    onPress={() => router.push(`/task/${item.id}`)}
-                    onSelect={() => handleSelect(item.id)}
-                  />
-                ))}
-              </>
-            )}
+            <GlassCard variant="primary" style={{ padding: 8 }}>
+              {(overdue.length > 0 || overdoneInOverdue.length > 0) && (
+                <>
+                  <SectionHeader label="Overdue" variant="overdue" />
+                  {overdue.map(item => (
+                    <TaskRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.title}
+                      isDone={false}
+                      isOverdue
+                      dueLabel={formatDueLabel(item)}
+                      listName={getListForItem(item)?.name}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggle={() => batchToggle(item.id)}
+                      onPress={() => router.push(`/task/${item.id}`)}
+                      onSelect={() => handleSelect(item.id)}
+                    />
+                  ))}
+                  {overdoneInOverdue.map(item => (
+                    <TaskRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.title}
+                      isDone
+                      isOverdue
+                      dueLabel={formatDueLabel(item)}
+                      listName={getListForItem(item)?.name}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggle={() => batchToggle(item.id)}
+                      onPress={() => router.push(`/task/${item.id}`)}
+                      onSelect={() => handleSelect(item.id)}
+                    />
+                  ))}
+                </>
+              )}
 
-            {(todayActive.length > 0 || todayDoneInSection.length > 0) && (
-              <>
-                <SectionHeader label="Today" />
-                {todayActive.map(item => (
-                  <TaskRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    isDone={false}
-                    dueLabel={formatDueLabel(item)}
-                    listName={getListForItem(item)?.name}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggle={() => batchToggle(item.id)}
-                    onPress={() => router.push(`/task/${item.id}`)}
-                    onSelect={() => handleSelect(item.id)}
-                  />
-                ))}
-                {todayDoneInSection.map(item => (
-                  <TaskRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    isDone
-                    dueLabel={formatDueLabel(item)}
-                    listName={getListForItem(item)?.name}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggle={() => batchToggle(item.id)}
-                    onPress={() => router.push(`/task/${item.id}`)}
-                    onSelect={() => handleSelect(item.id)}
-                  />
-                ))}
-              </>
-            )}
+              {(todayActive.length > 0 || todayDoneInSection.length > 0) && (
+                <>
+                  <SectionHeader label="Today" />
+                  {todayActive.map(item => (
+                    <TaskRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.title}
+                      isDone={false}
+                      dueLabel={formatDueLabel(item)}
+                      listName={getListForItem(item)?.name}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggle={() => batchToggle(item.id)}
+                      onPress={() => router.push(`/task/${item.id}`)}
+                      onSelect={() => handleSelect(item.id)}
+                    />
+                  ))}
+                  {todayDoneInSection.map(item => (
+                    <TaskRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.title}
+                      isDone
+                      dueLabel={formatDueLabel(item)}
+                      listName={getListForItem(item)?.name}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggle={() => batchToggle(item.id)}
+                      onPress={() => router.push(`/task/${item.id}`)}
+                      onSelect={() => handleSelect(item.id)}
+                    />
+                  ))}
+                </>
+              )}
 
-            {(thisWeek.length > 0 || thisWeekDoneInSection.length > 0) && (
-              <>
-                <SectionHeader label="This Week" />
-                {thisWeek.map(item => (
-                  <TaskRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    isDone={false}
-                    dueLabel={formatDueLabel(item)}
-                    listName={getListForItem(item)?.name}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggle={() => batchToggle(item.id)}
-                    onPress={() => router.push(`/task/${item.id}`)}
-                    onSelect={() => handleSelect(item.id)}
-                  />
-                ))}
-                {thisWeekDoneInSection.map(item => (
-                  <TaskRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    isDone
-                    dueLabel={formatDueLabel(item)}
-                    listName={getListForItem(item)?.name}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggle={() => batchToggle(item.id)}
-                    onPress={() => router.push(`/task/${item.id}`)}
-                    onSelect={() => handleSelect(item.id)}
-                  />
-                ))}
-              </>
-            )}
+              {(thisWeek.length > 0 || thisWeekDoneInSection.length > 0) && (
+                <>
+                  <SectionHeader label="This Week" />
+                  {thisWeek.map(item => (
+                    <TaskRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.title}
+                      isDone={false}
+                      dueLabel={formatDueLabel(item)}
+                      listName={getListForItem(item)?.name}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggle={() => batchToggle(item.id)}
+                      onPress={() => router.push(`/task/${item.id}`)}
+                      onSelect={() => handleSelect(item.id)}
+                    />
+                  ))}
+                  {thisWeekDoneInSection.map(item => (
+                    <TaskRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.title}
+                      isDone
+                      dueLabel={formatDueLabel(item)}
+                      listName={getListForItem(item)?.name}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggle={() => batchToggle(item.id)}
+                      onPress={() => router.push(`/task/${item.id}`)}
+                      onSelect={() => handleSelect(item.id)}
+                    />
+                  ))}
+                </>
+              )}
 
-            {doneToday2.length > 0 && (
-              <>
-                <SectionHeader label="Done Today" variant="done" />
-                {doneToday2.map(item => (
-                  <TaskRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    isDone
-                    dueLabel={formatDueLabel(item)}
-                    listName={getListForItem(item)?.name}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggle={() => batchToggle(item.id)}
-                    onPress={() => router.push(`/task/${item.id}`)}
-                    onSelect={() => handleSelect(item.id)}
-                  />
-                ))}
-              </>
-            )}
+              {doneToday2.length > 0 && (
+                <>
+                  <SectionHeader label="Done Today" variant="done" />
+                  {doneToday2.map(item => (
+                    <TaskRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.title}
+                      isDone
+                      dueLabel={formatDueLabel(item)}
+                      listName={getListForItem(item)?.name}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggle={() => batchToggle(item.id)}
+                      onPress={() => router.push(`/task/${item.id}`)}
+                      onSelect={() => handleSelect(item.id)}
+                    />
+                  ))}
+                </>
+              )}
+            </GlassCard>
           </ScrollView>
 
           <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>

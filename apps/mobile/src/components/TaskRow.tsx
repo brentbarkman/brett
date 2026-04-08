@@ -5,6 +5,7 @@ import Animated, {
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -79,8 +80,23 @@ export function TaskRow({
 
   // Lift animation for long-press drag hint
   const isLifted = useSharedValue(0);
+  // Checkbox scale pulse for completion animation
+  const checkboxScale = useSharedValue(1);
+  // Gold shadow glow intensity
+  const checkboxGlow = useSharedValue(0);
 
   useEffect(() => {
+    if (isDone) {
+      // togglePulse: scale 1 → 1.15 → 1 with spring, glow expands then fades
+      checkboxScale.value = withSequence(
+        withSpring(1.15, { damping: 8, stiffness: 200 }),
+        withSpring(1, { damping: 12, stiffness: 180 }),
+      );
+      checkboxGlow.value = withSequence(
+        withTiming(1, { duration: 150 }),
+        withTiming(0, { duration: 450 }),
+      );
+    }
     fillProgress.value = withTiming(isDone ? 1 : 0, { duration: 150 });
   }, [isDone]);
 
@@ -90,6 +106,11 @@ export function TaskRow({
       [0, 1],
       [TRANSPARENT, GOLD],
     ),
+    transform: [{ scale: checkboxScale.value }],
+    shadowColor: GOLD,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: interpolate(checkboxGlow.value, [0, 1], [0, 0.7]),
+    shadowRadius: interpolate(checkboxGlow.value, [0, 1], [0, 8]),
   }));
 
   // Selection indicator animation
@@ -232,7 +253,9 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: radii.taskRow,
     paddingVertical: 11,
     paddingHorizontal: 13,

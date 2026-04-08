@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LivingBackground } from '../../../src/components/LivingBackground';
+import { GlassCard } from '../../../src/components/GlassCard';
 import { SectionHeader } from '../../../src/components/SectionHeader';
 import { TaskRow } from '../../../src/components/TaskRow';
 import { EmptyState } from '../../../src/components/EmptyState';
@@ -96,22 +97,24 @@ export default function UpcomingScreen() {
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
           >
-            {groups.map((group) => (
-              <View key={group.dateKey}>
-                <SectionHeader label={group.label} />
-                {group.items.map((item) => (
-                  <TaskRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    isDone={false}
-                    listName={getListForItem(item)?.name}
-                    onToggle={() => toggleItem(item.id)}
-                    onPress={() => router.push(`/task/${item.id}` as never)}
-                  />
-                ))}
-              </View>
-            ))}
+            <GlassCard variant="primary" style={{ padding: 8 }}>
+              {groups.map((group) => (
+                <View key={group.dateKey}>
+                  <SectionHeader label={group.label} />
+                  {group.items.map((item) => (
+                    <TaskRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.title}
+                      isDone={false}
+                      listName={getListForItem(item)?.name}
+                      onToggle={() => toggleItem(item.id)}
+                      onPress={() => router.push(`/task/${item.id}` as never)}
+                    />
+                  ))}
+                </View>
+              ))}
+            </GlassCard>
           </ScrollView>
         )}
 

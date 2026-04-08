@@ -2,7 +2,6 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/tokens';
 
-const GOLD = '#E8B931';
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 /** Map JS day-of-week (0=Sun) to Mon-first index (0=Mon…6=Sun). */
@@ -77,7 +76,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   dayCircleToday: {
-    backgroundColor: GOLD,
+    backgroundColor: colors.gold,
   },
   dayNumber: {
     fontSize: 13,
@@ -92,7 +91,7 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: GOLD,
+    backgroundColor: colors.gold,
   },
   dotPlaceholder: {
     width: 3,

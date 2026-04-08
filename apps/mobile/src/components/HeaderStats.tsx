@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   stats: {
-    ...typography.body,
+    ...typography.metadata,
     color: TEXT_SECONDARY,
     marginTop: 2,
   },

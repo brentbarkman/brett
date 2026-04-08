@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LivingBackground } from '../../../src/components/LivingBackground';
+import { GlassCard } from '../../../src/components/GlassCard';
 import { TaskRow } from '../../../src/components/TaskRow';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Omnibar } from '../../../src/components/Omnibar';
@@ -63,25 +64,27 @@ export default function InboxScreen() {
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
           >
-            {inboxItems.map((item: MockItem) => (
-              <TaskRow
-                key={item.id}
-                id={item.id}
-                title={item.title}
-                isDone={false}
-                dueLabel={formatCapturedLabel(item.createdAt)}
-                contentType={item.type === 'content' ? item.contentType : null}
-                contentDomain={item.type === 'content' ? item.contentDomain : null}
-                onToggle={() => toggleItem(item.id)}
-                onPress={() => {
-                  if (item.type === 'content') {
-                    router.push(`/content/${item.id}` as never);
-                  } else {
-                    router.push(`/task/${item.id}` as never);
-                  }
-                }}
-              />
-            ))}
+            <GlassCard variant="primary" style={{ padding: 8 }}>
+              {inboxItems.map((item: MockItem) => (
+                <TaskRow
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  isDone={false}
+                  dueLabel={formatCapturedLabel(item.createdAt)}
+                  contentType={item.type === 'content' ? item.contentType : null}
+                  contentDomain={item.type === 'content' ? item.contentDomain : null}
+                  onToggle={() => toggleItem(item.id)}
+                  onPress={() => {
+                    if (item.type === 'content') {
+                      router.push(`/content/${item.id}` as never);
+                    } else {
+                      router.push(`/task/${item.id}` as never);
+                    }
+                  }}
+                />
+              ))}
+            </GlassCard>
           </ScrollView>
         )}
 

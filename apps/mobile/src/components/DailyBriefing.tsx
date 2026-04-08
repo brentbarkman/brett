@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { radii } from '../theme/tokens';
 
 interface DailyBriefingProps {
@@ -47,49 +48,59 @@ export function DailyBriefing({
 
   return (
     <View style={styles.wrapper}>
-      {/* Header row */}
-      <Pressable
-        style={styles.header}
-        onPress={toggleCollapse}
-        accessibilityLabel={isCollapsed ? 'Expand daily briefing' : 'Collapse daily briefing'}
-      >
-        <Text style={styles.label}>
-          Daily Briefing{isCollapsed ? ' ▸' : ''}
-        </Text>
+      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, styles.overlay]} />
+      <View style={styles.content}>
+        {/* Header row */}
         <Pressable
-          onPress={dismiss}
-          hitSlop={8}
-          style={styles.dismissButton}
-          accessibilityLabel="Dismiss daily briefing"
+          style={styles.header}
+          onPress={toggleCollapse}
+          accessibilityLabel={isCollapsed ? 'Expand daily briefing' : 'Collapse daily briefing'}
         >
-          <Text style={styles.dismissIcon}>✕</Text>
+          <Text style={styles.label}>
+            Daily Briefing{isCollapsed ? ' ▸' : ''}
+          </Text>
+          <Pressable
+            onPress={dismiss}
+            hitSlop={8}
+            style={styles.dismissButton}
+            accessibilityLabel="Dismiss daily briefing"
+          >
+            <Text style={styles.dismissIcon}>✕</Text>
+          </Pressable>
         </Pressable>
-      </Pressable>
 
-      {/* Collapsible content */}
-      {!isCollapsed && (
-        <>
-          <Text style={styles.body}>
-            {parseBoldContent(content)}
-          </Text>
-          <Text style={styles.timestamp}>
-            Generated at {formatTime(generatedAt)}
-          </Text>
-        </>
-      )}
+        {/* Collapsible content */}
+        {!isCollapsed && (
+          <>
+            <Text style={styles.body}>
+              {parseBoldContent(content)}
+            </Text>
+            <Text style={styles.timestamp}>
+              Generated at {formatTime(generatedAt)}
+            </Text>
+          </>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: 'rgba(70, 130, 195, 0.06)',
-    borderColor: 'rgba(70, 130, 195, 0.12)',
+    overflow: 'hidden',
+    borderColor: 'rgba(70, 130, 195, 0.30)',
     borderWidth: 1,
     borderRadius: radii.omnibar,
+    marginBottom: 10,
+  },
+  overlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.40)',
+    borderRadius: radii.omnibar,
+  },
+  content: {
     paddingVertical: 11,
     paddingHorizontal: 13,
-    marginBottom: 10,
   },
   header: {
     flexDirection: 'row',
@@ -101,34 +112,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: 'rgba(70, 130, 195, 0.5)',
+    color: 'rgba(255, 255, 255, 0.40)',
   },
   dismissButton: {
     padding: 2,
   },
   dismissIcon: {
     fontSize: 11,
-    color: 'rgba(70, 130, 195, 0.4)',
+    color: 'rgba(255, 255, 255, 0.30)',
   },
   body: {
     fontSize: 12,
     lineHeight: 20,
-    color: 'rgba(255, 255, 255, 0.55)',
+    color: 'rgba(255, 255, 255, 0.60)',
     marginTop: 8,
   },
   bodyText: {
     fontSize: 12,
     lineHeight: 20,
-    color: 'rgba(255, 255, 255, 0.55)',
+    color: 'rgba(255, 255, 255, 0.60)',
   },
   boldText: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: 'rgba(255, 255, 255, 0.80)',
   },
   timestamp: {
     fontSize: 10,
-    color: 'rgba(70, 130, 195, 0.3)',
+    color: 'rgba(255, 255, 255, 0.40)',
     marginTop: 8,
   },
 });

@@ -72,14 +72,14 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.text.primary,
+    color: colors.text.full,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   body: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.text.secondary,
+    color: colors.text.tertiary,
     lineHeight: 22,
     textAlign: 'center',
   },

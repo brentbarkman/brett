@@ -17,12 +17,27 @@ export const colors = {
     heavy: "rgba(0, 0, 0, 0.85)",
   },
 
-  // Text (white at various opacities)
+  // Text (white at various opacities — aligned to DESIGN_GUIDE.md)
   text: {
-    primary: "rgba(255, 255, 255, 0.85)",
-    secondary: "rgba(255, 255, 255, 0.40)",
-    tertiary: "rgba(255, 255, 255, 0.25)",
-    quaternary: "rgba(255, 255, 255, 0.15)",
+    full: "rgba(255, 255, 255, 1.0)",       // primary headings, active nav
+    primary: "rgba(255, 255, 255, 0.90)",   // card titles, task titles
+    body: "rgba(255, 255, 255, 0.80)",      // body text, descriptions
+    secondary: "rgba(255, 255, 255, 0.60)", // metadata values
+    tertiary: "rgba(255, 255, 255, 0.40)",  // section labels, timestamps
+    placeholder: "rgba(255, 255, 255, 0.30)", // input placeholders
+    quaternary: "rgba(255, 255, 255, 0.20)", // ghost/decorative/disabled
+  },
+
+  // Semantic surfaces
+  surface: {
+    briefing: "rgba(70, 130, 195, 0.05)",       // cerulean/5
+    briefingBorder: "rgba(70, 130, 195, 0.20)", // cerulean-500/20
+    nextUp: "rgba(245, 158, 11, 0.05)",         // amber-500/5
+    nextUpBorder: "rgba(245, 158, 11, 0.25)",   // amber-500/25
+    nextUpNow: "rgba(16, 185, 129, 0.05)",      // emerald-500/5
+    nextUpNowBorder: "rgba(16, 185, 129, 0.25)",// emerald-500/25
+    brettChat: "rgba(70, 130, 195, 0.05)",      // cerulean/5
+    brettChatBorder: "rgba(70, 130, 195, 0.20)",// cerulean-500/20
   },
 
   // Borders (white at various opacities)

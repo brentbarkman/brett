@@ -15,27 +15,46 @@ interface NextUpCardProps {
   onPress: () => void;
 }
 
-/** Compute a human-readable "time until" label */
-function computeTimeUntil(startTime: string, endTime: string): string {
+// Amber (upcoming) and emerald (now happening) — matches desktop
+const AMBER_BG = 'rgba(245, 158, 11, 0.05)';
+const AMBER_BORDER = 'rgba(245, 158, 11, 0.25)';
+const AMBER_BORDER_URGENT = 'rgba(245, 158, 11, 0.35)';
+const AMBER_TEXT = 'rgba(245, 158, 11, 0.9)';
+
+const EMERALD_BG = 'rgba(16, 185, 129, 0.05)';
+const EMERALD_BORDER = 'rgba(16, 185, 129, 0.25)';
+const EMERALD_TEXT = 'rgba(16, 185, 129, 0.9)';
+
+/** Compute a human-readable "time until" label and state */
+function computeEventState(startTime: string, endTime: string): {
+  label: string;
+  isNow: boolean;
+  isUrgent: boolean;
+} {
   const now = Date.now();
   const start = new Date(startTime).getTime();
   const end = new Date(endTime).getTime();
 
   if (now >= start && now < end) {
-    return 'Now';
+    return { label: 'Now', isNow: true, isUrgent: false };
   }
 
   const diffMs = start - now;
-  if (diffMs <= 0) return 'Now';
+  if (diffMs <= 0) return { label: 'Now', isNow: true, isUrgent: false };
 
   const totalMinutes = Math.round(diffMs / 60_000);
+  const isUrgent = totalMinutes <= 10;
+
+  let label: string;
   if (totalMinutes < 60) {
-    return `In ${totalMinutes}m`;
+    label = `In ${totalMinutes}m`;
+  } else {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    label = minutes > 0 ? `In ${hours}h ${minutes}m` : `In ${hours}h`;
   }
 
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return minutes > 0 ? `In ${hours}h ${minutes}m` : `In ${hours}h`;
+  return { label, isNow: false, isUrgent };
 }
 
 /** Compute duration label from two ISO strings */
@@ -54,7 +73,7 @@ function meetingPlatformLabel(link: string): string {
 }
 
 export function NextUpCard({ event, onPress }: NextUpCardProps) {
-  const timeUntil = computeTimeUntil(event.startTime, event.endTime);
+  const { label: timeUntil, isNow, isUrgent } = computeEventState(event.startTime, event.endTime);
   const duration = computeDuration(event.startTime, event.endTime);
 
   let detail: string;
@@ -66,15 +85,33 @@ export function NextUpCard({ event, onPress }: NextUpCardProps) {
     detail = duration;
   }
 
+  const backgroundColor = isNow ? EMERALD_BG : AMBER_BG;
+  const borderColor = isNow
+    ? EMERALD_BORDER
+    : isUrgent
+    ? AMBER_BORDER_URGENT
+    : AMBER_BORDER;
+  const timeColor = isNow ? EMERALD_TEXT : AMBER_TEXT;
+
+  // Subtle glow shadow for urgent upcoming (≤10 min)
+  const shadowStyle = isUrgent && !isNow
+    ? {
+        shadowColor: 'rgba(245, 158, 11, 1)',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      }
+    : {};
+
   return (
     <Pressable
-      style={styles.wrapper}
+      style={[styles.wrapper, { backgroundColor, borderColor }, shadowStyle]}
       onPress={onPress}
       accessibilityLabel={`Next up: ${event.title}`}
     >
       {/* Left: time until */}
       <View style={styles.timeUntilContainer}>
-        <Text style={styles.timeUntil}>{timeUntil}</Text>
+        <Text style={[styles.timeUntil, { color: timeColor }]}>{timeUntil}</Text>
       </View>
 
       {/* Right: title + detail */}
@@ -94,8 +131,6 @@ const styles = StyleSheet.create({
   wrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(232, 185, 49, 0.05)',
-    borderColor: 'rgba(232, 185, 49, 0.12)',
     borderWidth: 1,
     borderRadius: radii.omnibar,
     paddingVertical: 11,
@@ -110,7 +145,6 @@ const styles = StyleSheet.create({
   timeUntil: {
     fontSize: 11,
     fontWeight: '600',
-    color: 'rgba(232, 185, 49, 0.7)',
   },
   infoContainer: {
     flex: 1,
@@ -118,10 +152,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.80)',
   },
   detail: {
     fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.3)',
+    color: 'rgba(255, 255, 255, 0.40)',
   },
 });

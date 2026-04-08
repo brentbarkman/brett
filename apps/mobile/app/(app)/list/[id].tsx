@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LivingBackground } from '../../../src/components/LivingBackground';
+import { GlassCard } from '../../../src/components/GlassCard';
 import { TaskRow } from '../../../src/components/TaskRow';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { useMockItems, useMockLists } from '../../../src/mock/hooks';
@@ -56,18 +57,20 @@ export default function ListDetailScreen() {
           {items.length === 0 ? (
             <EmptyState variant="list-empty" />
           ) : (
-            items.map((item) => (
-              <TaskRow
-                key={item.id}
-                id={item.id}
-                title={item.title}
-                isDone={item.status === 'done'}
-                contentType={item.contentType}
-                contentDomain={item.contentDomain}
-                onToggle={() => toggleItem(item.id)}
-                onPress={() => router.push(`/task/${item.id}`)}
-              />
-            ))
+            <GlassCard variant="primary" style={{ padding: 8 }}>
+              {items.map((item) => (
+                <TaskRow
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  isDone={item.status === 'done'}
+                  contentType={item.contentType}
+                  contentDomain={item.contentDomain}
+                  onToggle={() => toggleItem(item.id)}
+                  onPress={() => router.push(`/task/${item.id}`)}
+                />
+              ))}
+            </GlassCard>
           )}
         </ScrollView>
       </SafeAreaView>
