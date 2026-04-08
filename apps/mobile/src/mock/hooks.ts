@@ -66,9 +66,9 @@ export function useMockItems() {
 
   /** Today view: urgency items — active first, done at bottom. */
   const todayItems = useMemo(() => {
-    return items
-      .filter((item) => item.urgency !== null && (item.status === "active" || item.status === "done"))
-      .sort((a, b) => {
+    const active = items.filter((i) => i.urgency !== null && i.status === "active");
+    const done = items.filter((i) => i.status === "done" && i.completedAt !== null);
+    return [...active, ...done].sort((a, b) => {
         if (a.status === "done" && b.status !== "done") return 1;
         if (a.status !== "done" && b.status === "done") return -1;
         // Within active: overdue first, then today, then this_week
@@ -136,6 +136,23 @@ export function useMockItems() {
     (title: string, dueDate?: string | null, listId?: string | null): string => {
       const id = generateId();
       const now = new Date().toISOString();
+
+      let urgency: MockItem["urgency"] = null;
+      if (dueDate) {
+        const due = new Date(dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(today);
+        todayEnd.setHours(23, 59, 59, 999);
+        const weekEnd = new Date(today);
+        weekEnd.setDate(today.getDate() + (7 - today.getDay()));
+        weekEnd.setHours(23, 59, 59, 999);
+
+        if (due < today) urgency = "overdue";
+        else if (due <= todayEnd) urgency = "today";
+        else if (due <= weekEnd) urgency = "this_week";
+      }
+
       const newItem: MockItem = {
         id,
         type: "task",
@@ -155,7 +172,7 @@ export function useMockItems() {
         userId: MOCK_USER_ID,
         createdAt: now,
         updatedAt: now,
-        urgency: null,
+        urgency,
       };
       setItems((prev) => [newItem, ...prev]);
       return id;
@@ -305,18 +322,17 @@ export function useMockSubtasks(itemId: string) {
 
 // ── useTodayStats ─────────────────────────────────────────────────────────────
 
-export function useTodayStats() {
-  const { todayItems } = useMockItems();
+export function useTodayStats(items: MockItem[]) {
   const { meetingStats } = useMockCalendarEvents();
 
   const totalToday = useMemo(
-    () => todayItems.filter((i) => i.status === "active").length,
-    [todayItems],
+    () => items.filter((i) => i.urgency !== null && i.status === "active").length,
+    [items],
   );
 
   const doneToday = useMemo(
-    () => todayItems.filter((i) => i.status === "done").length,
-    [todayItems],
+    () => items.filter((i) => i.status === "done").length,
+    [items],
   );
 
   return {

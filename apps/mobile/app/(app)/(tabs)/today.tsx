@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -49,7 +49,7 @@ export default function TodayScreen() {
   const { nextEvent } = useMockCalendarEvents();
   const { content, generatedAt, isCollapsed, isDismissed, toggleCollapse, dismiss } =
     useMockBriefing();
-  const { totalToday, doneToday, meetingCount, meetingDuration } = useTodayStats();
+  const { totalToday, doneToday, meetingCount, meetingDuration } = useTodayStats(todayItems);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -71,7 +71,24 @@ export default function TodayScreen() {
   }, []);
 
   // Batch completion: prevents list reflow while rapidly toggling multiple items
-  const { batchToggle } = useBatchCompletion(toggleItem);
+  const { batchToggle, shouldReflow } = useBatchCompletion(toggleItem);
+
+  // Snapshot items when batch mode starts so toggled tasks stay in their current
+  // section (with done visual style) until the reflow timer fires.
+  const [snapshotItems, setSnapshotItems] = useState<MockItem[] | null>(null);
+
+  useEffect(() => {
+    if (!shouldReflow && snapshotItems === null) {
+      // Entering batch mode — freeze current positions
+      setSnapshotItems([...todayItems]);
+    } else if (shouldReflow && snapshotItems !== null) {
+      // Reflow triggered — clear snapshot and let live data take over
+      setSnapshotItems(null);
+    }
+  }, [shouldReflow]);
+
+  // Use the snapshot while batch mode is active, otherwise use live data
+  const displayItems = snapshotItems ?? todayItems;
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', {
@@ -80,11 +97,16 @@ export default function TodayScreen() {
     day: 'numeric',
   });
 
-  // Group items by urgency / status
-  const overdue = todayItems.filter(i => i.urgency === 'overdue' && i.status === 'active');
-  const todayActive = todayItems.filter(i => i.urgency === 'today' && i.status === 'active');
-  const thisWeek = todayItems.filter(i => i.urgency === 'this_week' && i.status === 'active');
-  const doneToday2 = todayItems.filter(i => i.status === 'done');
+  // Group items by urgency / status — use displayItems so snapshot prevents reflow
+  const overdue = displayItems.filter(i => i.urgency === 'overdue' && i.status === 'active');
+  const overdoneInOverdue = displayItems.filter(i => i.urgency === 'overdue' && i.status === 'done');
+  const todayActive = displayItems.filter(i => i.urgency === 'today' && i.status === 'active');
+  const todayDoneInSection = displayItems.filter(i => i.urgency === 'today' && i.status === 'done');
+  const thisWeek = displayItems.filter(i => i.urgency === 'this_week' && i.status === 'active');
+  const thisWeekDoneInSection = displayItems.filter(i => i.urgency === 'this_week' && i.status === 'done');
+  // Items that were in Done Today when snapshot was taken, or completed items with no urgency bucket
+  const doneToday2 = displayItems.filter(i => i.status === 'done' && i.urgency === null)
+    .concat(snapshotItems === null ? displayItems.filter(i => i.status === 'done' && i.urgency !== null) : []);
 
   const isSelecting = selectedIds.size > 0;
 
@@ -121,7 +143,7 @@ export default function TodayScreen() {
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
             keyboardShouldPersistTaps="handled"
           >
-            {overdue.length > 0 && (
+            {(overdue.length > 0 || overdoneInOverdue.length > 0) && (
               <>
                 <SectionHeader label="Overdue" variant="overdue" />
                 {overdue.map(item => (
@@ -139,10 +161,25 @@ export default function TodayScreen() {
                     onSelect={() => handleSelect(item.id)}
                   />
                 ))}
+                {overdoneInOverdue.map(item => (
+                  <TaskRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    isDone
+                    isOverdue
+                    dueLabel={formatDueLabel(item)}
+                    listName={getListForItem(item)?.name}
+                    isSelected={selectedIds.has(item.id)}
+                    onToggle={() => batchToggle(item.id)}
+                    onPress={() => router.push(`/task/${item.id}`)}
+                    onSelect={() => handleSelect(item.id)}
+                  />
+                ))}
               </>
             )}
 
-            {todayActive.length > 0 && (
+            {(todayActive.length > 0 || todayDoneInSection.length > 0) && (
               <>
                 <SectionHeader label="Today" />
                 {todayActive.map(item => (
@@ -159,10 +196,24 @@ export default function TodayScreen() {
                     onSelect={() => handleSelect(item.id)}
                   />
                 ))}
+                {todayDoneInSection.map(item => (
+                  <TaskRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    isDone
+                    dueLabel={formatDueLabel(item)}
+                    listName={getListForItem(item)?.name}
+                    isSelected={selectedIds.has(item.id)}
+                    onToggle={() => batchToggle(item.id)}
+                    onPress={() => router.push(`/task/${item.id}`)}
+                    onSelect={() => handleSelect(item.id)}
+                  />
+                ))}
               </>
             )}
 
-            {thisWeek.length > 0 && (
+            {(thisWeek.length > 0 || thisWeekDoneInSection.length > 0) && (
               <>
                 <SectionHeader label="This Week" />
                 {thisWeek.map(item => (
@@ -171,6 +222,20 @@ export default function TodayScreen() {
                     id={item.id}
                     title={item.title}
                     isDone={false}
+                    dueLabel={formatDueLabel(item)}
+                    listName={getListForItem(item)?.name}
+                    isSelected={selectedIds.has(item.id)}
+                    onToggle={() => batchToggle(item.id)}
+                    onPress={() => router.push(`/task/${item.id}`)}
+                    onSelect={() => handleSelect(item.id)}
+                  />
+                ))}
+                {thisWeekDoneInSection.map(item => (
+                  <TaskRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    isDone
                     dueLabel={formatDueLabel(item)}
                     listName={getListForItem(item)?.name}
                     isSelected={selectedIds.has(item.id)}
