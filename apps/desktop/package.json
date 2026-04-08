@@ -66,6 +66,7 @@
     "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.20",
+    "babel-plugin-react-compiler": "^1.0.0",
     "concurrently": "^8.2.0",
     "electron": "28.3.3",
     "electron-builder": "^26.8.1",

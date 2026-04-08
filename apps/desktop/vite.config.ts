@@ -6,8 +6,16 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pkg = require("./package.json");
 
+const ReactCompilerConfig = {};
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      babel: {
+        plugins: [["babel-plugin-react-compiler", ReactCompilerConfig]],
+      },
+    }),
+  ],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
