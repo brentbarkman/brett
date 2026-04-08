@@ -1,5 +1,4 @@
 import React, {
-  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -37,15 +36,15 @@ export function VideoBackground({ videos, ref }: VideoBackgroundProps) {
     useRef<HTMLVideoElement>(null),
   ];
 
-  const handleFirstLoad = useCallback(() => {
+  const handleFirstLoad = () => {
     setSlots((prev) => {
       const next = [...prev];
       next[0] = { ...next[0], visible: true };
       return next;
     });
-  }, []);
+  };
 
-  const advance = useCallback(() => {
+  const advance = () => {
     const now = Date.now();
     if (now - lastAdvance.current < 300) return;
     lastAdvance.current = now;
@@ -98,18 +97,15 @@ export function VideoBackground({ videos, ref }: VideoBackgroundProps) {
 
     // Store the intended src so rapid advances can apply it
     pendingSrc.current[oldSlot] = videos[followingIndex];
-  }, [videos]);
+  };
 
   useImperativeHandle(ref, () => ({ skip: advance }), [advance]);
 
-  const handleEnded = useCallback(
-    (slotIndex: number) => {
-      if (slotIndex === activeSlotRef.current) {
-        advance();
-      }
-    },
-    [advance]
-  );
+  const handleEnded = (slotIndex: number) => {
+    if (slotIndex === activeSlotRef.current) {
+      advance();
+    }
+  };
 
   // Preload the inactive slot when its src changes
   useEffect(() => {

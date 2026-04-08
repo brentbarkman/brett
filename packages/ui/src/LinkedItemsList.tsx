@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Plus, X, Zap, BookOpen, Link2, Loader2, Sparkles } from "lucide-react";
 import type { ItemLink, Thing } from "@brett/types";
 import { useClickOutside } from "./useClickOutside";
@@ -39,11 +39,11 @@ export function LinkedItemsList({
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const close = useCallback(() => {
+  const close = () => {
     setIsSearchOpen(false);
     setQuery("");
     setResults([]);
-  }, []);
+  };
 
   useClickOutside(searchRef, close, isSearchOpen);
 
@@ -69,13 +69,11 @@ export function LinkedItemsList({
     return () => clearTimeout(timer);
   }, [query, searchItems, links]);
 
-  const handleSelect = useCallback(
+  const handleSelect = 
     (item: Thing) => {
       onAddLink(item.id, item.type);
       close();
-    },
-    [onAddLink, close],
-  );
+    };
 
   return (
     <div>

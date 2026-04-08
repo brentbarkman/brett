@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { Thing } from "@brett/types";
 
 interface UseListKeyboardNavOptions {
@@ -28,8 +28,7 @@ export function useListKeyboardNav({
     setFocusedIndex((i) => Math.min(i, Math.max(items.length - 1, 0)));
   }, [items.length]);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept when input, textarea, or contenteditable is focused
       const el = document.activeElement;
       if (
@@ -91,9 +90,7 @@ export function useListKeyboardNav({
         onFocusAdd?.();
         return;
       }
-    },
-    [focusedIndex, focusedThing, items, onItemClick, onToggle, onFocusAdd, onExtraKey]
-  );
+  };
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);

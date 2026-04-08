@@ -1,7 +1,6 @@
 import React, {
   createContext,
   useContext,
-  useCallback,
 } from "react";
 import type { AuthUser } from "@brett/types";
 import { authClient, clearStoredToken, startGoogleOAuth } from "./auth-client";
@@ -36,39 +35,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     : null;
 
-  const signInWithEmail = useCallback(
-    async (email: string, password: string) => {
-      const { error } = await authClient.signIn.email({ email, password });
-      if (error) {
-        throw new Error(error.message || "Sign in failed");
-      }
-    },
-    []
-  );
+  const signInWithEmail = async (email: string, password: string) => {
+    const { error } = await authClient.signIn.email({ email, password });
+    if (error) {
+      throw new Error(error.message || "Sign in failed");
+    }
+  };
 
-  const signUpWithEmail = useCallback(
-    async (email: string, password: string, name: string) => {
-      const { error } = await authClient.signUp.email({
-        email,
-        password,
-        name,
-      });
-      if (error) {
-        throw new Error(error.message || "Sign up failed");
-      }
-    },
-    []
-  );
+  const signUpWithEmail = async (email: string, password: string, name: string) => {
+    const { error } = await authClient.signUp.email({
+      email,
+      password,
+      name,
+    });
+    if (error) {
+      throw new Error(error.message || "Sign up failed");
+    }
+  };
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = async () => {
     await startGoogleOAuth();
     refetch();
-  }, [refetch]);
+  };
 
-  const signOut = useCallback(async () => {
+  const signOut = async () => {
     await authClient.signOut();
     await clearStoredToken();
-  }, []);
+  };
 
   return (
     <AuthContext.Provider

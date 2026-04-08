@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { apiFetch } from "./client";
 import type { WeatherData } from "@brett/types";
 
@@ -45,7 +45,7 @@ export function useWeather(enabled: boolean = true) {
   const raw = query.data?.weather ?? null;
 
   // Derive live current conditions from hourly data as time passes
-  const weather = useMemo(() => {
+  const weather = (() => {
     if (!raw) return null;
     const currentHourStart = new Date(now);
     currentHourStart.setMinutes(0, 0, 0);
@@ -69,7 +69,7 @@ export function useWeather(enabled: boolean = true) {
         conditionCode: match.conditionCode,
       },
     };
-  }, [raw, now]);
+  })();
 
   return {
     weather,

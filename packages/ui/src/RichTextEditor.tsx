@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -46,13 +46,13 @@ function EditorScrollArea({ editor }: { editor: any }) {
   const [canScrollDown, setCanScrollDown] = useState(false);
   const [canScrollUp, setCanScrollUp] = useState(false);
 
-  const checkScroll = useCallback(() => {
+  const checkScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
     setCanScrollUp(scrollTop > 4);
     setCanScrollDown(scrollTop + clientHeight < scrollHeight - 4);
-  }, []);
+  };
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -90,14 +90,14 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const debouncedSave = useCallback((ed: any) => {
+  const debouncedSave = (ed: any) => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const storage = ed.storage as Record<string, any>;
       const md = storage.markdown.getMarkdown() as string;
       onChange(md);
     }, 500);
-  }, [onChange]);
+  };
 
   const editor = useEditor({
     extensions: [
@@ -142,25 +142,25 @@ export function RichTextEditor({
     }
   }, [content, editor]);
 
-  const toggleBold = useCallback(() => {
+  const toggleBold = () => {
     editor?.chain().focus().toggleBold().run();
-  }, [editor]);
+  };
 
-  const toggleItalic = useCallback(() => {
+  const toggleItalic = () => {
     editor?.chain().focus().toggleItalic().run();
-  }, [editor]);
+  };
 
-  const toggleHeading = useCallback(() => {
+  const toggleHeading = () => {
     editor?.chain().focus().toggleHeading({ level: 2 }).run();
-  }, [editor]);
+  };
 
-  const toggleBulletList = useCallback(() => {
+  const toggleBulletList = () => {
     editor?.chain().focus().toggleBulletList().run();
-  }, [editor]);
+  };
 
-  const toggleOrderedList = useCallback(() => {
+  const toggleOrderedList = () => {
     editor?.chain().focus().toggleOrderedList().run();
-  }, [editor]);
+  };
 
   if (!editor) return null;
 

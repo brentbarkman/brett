@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { FileText } from "lucide-react";
 
 interface AppDropZoneProps {
@@ -18,7 +18,7 @@ export function AppDropZone({ children, onDropPdf }: AppDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dragCountRef = useRef(0);
 
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
+  const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     dragCountRef.current++;
@@ -27,23 +27,23 @@ export function AppDropZone({ children, onDropPdf }: AppDropZoneProps) {
     if (e.dataTransfer.types.includes("Files")) {
       setIsDragging(true);
     }
-  }, []);
+  };
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     dragCountRef.current--;
     if (dragCountRef.current === 0) {
       setIsDragging(false);
     }
-  }, []);
+  };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-  }, []);
+  };
 
-  const handleDrop = useCallback(
+  const handleDrop = 
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -58,9 +58,7 @@ export function AppDropZone({ children, onDropPdf }: AppDropZoneProps) {
       if (pdfFile) {
         onDropPdf(pdfFile);
       }
-    },
-    [onDropPdf],
-  );
+    };
 
   return (
     <div

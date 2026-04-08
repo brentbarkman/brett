@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 const PREFS_KEY = "brett_preferences";
 const PREFS_EVENT = "brett_preferences_changed";
@@ -44,10 +44,10 @@ export function usePreference<K extends keyof Preferences>(key: K): [Preferences
     return () => window.removeEventListener(PREFS_EVENT, handler);
   }, [key]);
 
-  const update = useCallback((newValue: Preferences[K]) => {
+  const update = (newValue: Preferences[K]) => {
     setPreference(key, newValue);
     setValue(newValue);
-  }, [key]);
+  };
 
   return [value, update];
 }

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import type { WeatherData, AirQuality } from "@brett/types";
 
 interface WeatherExpandedProps {
@@ -47,7 +47,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
   const getDayFromHour = (iso: string) => iso.slice(0, 10);
 
   // Detect which day is visible during scroll
-  const handleScroll = useCallback(() => {
+  const handleScroll = () => {
     if (scrollingToDay.current) return;
     const container = hourlyRef.current;
     if (!container) return;
@@ -68,7 +68,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
     }
 
     setSelectedDay((prev) => prev !== closestDay ? closestDay : prev);
-  }, [todayStr]);
+  };
 
   useEffect(() => {
     const container = hourlyRef.current;
@@ -78,7 +78,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
   }, [handleScroll]);
 
   // Click a day → scroll the hourly strip to that day (if hourly data exists)
-  const scrollToDay = useCallback((day: string) => {
+  const scrollToDay = (day: string) => {
     setSelectedDay(day);
     const el = dayMarkerRefs.current.get(day);
     if (el && hourlyRef.current) {
@@ -92,7 +92,7 @@ export function WeatherExpanded({ weather, now: nowProp }: WeatherExpandedProps)
       // Day has no hourly data — scroll to the end of the strip
       hourlyRef.current.scrollTo({ left: hourlyRef.current.scrollWidth, behavior: "smooth" });
     }
-  }, []);
+  };
 
   // Scroll to "now" on mount
   useEffect(() => {

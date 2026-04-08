@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import { Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -49,10 +49,7 @@ export function TimezoneSection() {
     }
   }, [user]);
 
-  const allTimezones = useMemo(
-    () => [...new Set([detectedTz, selectedTz, ...commonTimezones])].sort(),
-    [selectedTz],
-  );
+  const allTimezones = [...new Set([detectedTz, selectedTz, ...commonTimezones])].sort();
 
   async function handleSave(tz: string, auto: boolean) {
     setSaving(true);

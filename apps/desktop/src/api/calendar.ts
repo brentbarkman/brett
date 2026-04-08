@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
 import { apiFetch } from "./client";
 import type {
   CalendarEventsResponse,
@@ -130,10 +129,7 @@ export function useCalendarEventBrettMessages(eventId: string | null) {
     enabled: !!eventId,
   });
 
-  const messages = useMemo(
-    () => query.data?.pages.flatMap((p) => p.messages) ?? [],
-    [query.data],
-  );
+  const messages = query.data?.pages.flatMap((p) => p.messages) ?? [];
 
   const totalCount = query.data?.pages[0]?.totalCount ?? 0;
 

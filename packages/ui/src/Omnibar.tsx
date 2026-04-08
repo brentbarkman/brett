@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Send, Search, Plus, X, Square, Check, Radar, MessageSquare } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import { useClickOutside } from "./useClickOutside";
@@ -116,7 +116,7 @@ export function Omnibar({
   const [isClosing, setIsClosing] = useState(false);
 
   // Animated close — fade out then unmount
-  const animateClose = useCallback(() => {
+  const animateClose = () => {
     if (isClosing) return;
     setIsClosing(true);
     setTimeout(() => {
@@ -125,10 +125,10 @@ export function Omnibar({
       setConfirmedTask(null);
       onClose();
     }, 150);
-  }, [isClosing, onClose]);
+  };
 
   // Intercept input changes to detect shortcut prefixes
-  const handleInputChange = useCallback((value: string) => {
+  const handleInputChange = (value: string) => {
     if (!forcedAction && value === "s ") {
       setForcedAction("search");
       onInputChange("");
@@ -144,7 +144,7 @@ export function Omnibar({
       setForcedAction(null);
     }
     onInputChange(value);
-  }, [forcedAction, onInputChange]);
+  };
 
   useClickOutside(containerRef, () => {
     // Don't close on click-outside when there's an active conversation —
@@ -247,13 +247,13 @@ export function Omnibar({
     }
   }
 
-  const handleCreateTask = useCallback((title: string) => {
+  const handleCreateTask = (title: string) => {
     onCreateTask(title);
     onInputChange("");
     setConfirmedTask(title);
-  }, [onCreateTask, onInputChange]);
+  };
 
-  const handleSuggestionSelect = useCallback(
+  const handleSuggestionSelect = 
     (suggestion: Suggestion) => {
       setForcedAction(null);
       if (suggestion.action === "ask") {
@@ -265,11 +265,9 @@ export function Omnibar({
       } else if (suggestion.action === "search") {
         onSearch(input);
       }
-    },
-    [input, onSend, handleCreateTask, onSearch]
-  );
+    };
 
-  const handleKeyDown = useCallback(
+  const handleKeyDown = 
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -365,9 +363,7 @@ export function Omnibar({
           }
         }
       }
-    },
-    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, handleCreateTask, onSearch, animateClose, onInputChange, showWeatherExpanded, onWeatherClick, hasConversation, onReset]
-  );
+    };
 
   return (
     <div ref={containerRef} className="relative w-full" {...(isOpen ? { "data-omnibar-open": true } : {})}>

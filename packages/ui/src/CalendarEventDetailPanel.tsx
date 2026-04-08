@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   MapPin,
   Video,
@@ -222,20 +222,18 @@ export function CalendarEventDetailPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail.id]);
 
-  const handleRsvpClick = useCallback(
+  const handleRsvpClick = 
     (status: CalendarRsvpStatus) => {
       setSelectedRsvp(status);
       onUpdateRsvp(status, rsvpNote.trim());
-    },
-    [rsvpNote, onUpdateRsvp],
-  );
+    };
 
-  const handleRsvpNoteBlur = useCallback(() => {
+  const handleRsvpNoteBlur = () => {
     // If RSVP already selected, fire update with note
     if (selectedRsvp && selectedRsvp !== "needsAction" && rsvpNote.trim()) {
       onUpdateRsvp(selectedRsvp, rsvpNote.trim());
     }
-  }, [selectedRsvp, rsvpNote, onUpdateRsvp]);
+  };
 
   const visibleAttendees = showAllAttendees
     ? detail.attendees

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import DOMPurify from "dompurify";
 import { AlertTriangle, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import type { ContentType, ContentStatus, ContentMetadata } from "@brett/types";
@@ -111,14 +111,14 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
 
   // The oEmbed HTML is a <blockquote> with the tweet text + a <script> tag.
   // Sanitize to keep just the blockquote content (strips the script tag).
-  const sanitizedEmbed = useMemo(() => {
+  const sanitizedEmbed = (() => {
     if (!embedHtml) return undefined;
     return tweetPurify.sanitize(embedHtml, {
       ALLOWED_TAGS: ["blockquote", "p", "a", "br", "em", "strong", "span"],
       ALLOWED_ATTR: ["href", "dir", "lang", "target", "rel"],
       ALLOW_DATA_ATTR: false,
     });
-  }, [embedHtml]);
+  })();
 
   // If we have neither oEmbed HTML nor OG text, nothing to show
   if (!sanitizedEmbed && !text) {

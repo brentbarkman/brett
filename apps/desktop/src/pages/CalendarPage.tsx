@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { CalendarDays } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { useCalendarEvents } from "../api/calendar";
@@ -27,17 +27,14 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   const [showConnectModal, setShowConnectModal] = useState(false);
 
   // Flatten all calendars from all accounts for the header dropdown
-  const allCalendars: CalendarInfo[] = useMemo(
-    () => accounts.flatMap((a) =>
-      a.calendars.map((cal) => ({
-        id: cal.id,
-        name: cal.name,
-        color: cal.color,
-        isVisible: cal.isVisible,
-        accountId: a.id,
-      })),
-    ),
-    [accounts],
+  const allCalendars: CalendarInfo[] = accounts.flatMap((a) =>
+    a.calendars.map((cal) => ({
+      id: cal.id,
+      name: cal.name,
+      color: cal.color,
+      isVisible: cal.isVisible,
+      accountId: a.id,
+    })),
   );
 
   const [view, setView] = useState<CalendarView>(() => {
@@ -51,7 +48,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   }, [view]);
 
   // Compute date range based on view
-  const { startDate, endDate } = useMemo(() => {
+  const { startDate, endDate } = (() => {
     if (view === "day") {
       const start = new Date(currentDate);
       start.setHours(0, 0, 0, 0);
@@ -86,7 +83,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
     const end = new Date(start);
     end.setDate(end.getDate() + totalCells);
     return { startDate: toISOParam(start), endDate: toISOParam(end) };
-  }, [view, currentDate]);
+  })();
 
   const { data } = useCalendarEvents({ startDate, endDate });
   const events: CalendarEventRecord[] = data?.events ?? [];

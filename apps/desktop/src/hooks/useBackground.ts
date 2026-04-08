@@ -1,5 +1,5 @@
 // apps/desktop/src/hooks/useBackground.ts
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   getTimeSegment,
   getBusynessTier,
@@ -87,21 +87,18 @@ export function useBackground({
   const categoryRef = useRef({ segment, busynessTier, backgroundStyle });
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const buildUrl = useCallback(
-    (relativePath: string) => `${baseUrl}/backgrounds/${relativePath}`,
-    [baseUrl]
-  );
+  const buildUrl = (relativePath: string) => `${baseUrl}/backgrounds/${relativePath}`;
 
   // Cancel any in-flight transition
-  const cancelTransition = useCallback(() => {
+  const cancelTransition = () => {
     if (transitionTimeoutRef.current) {
       clearTimeout(transitionTimeoutRef.current);
       transitionTimeoutRef.current = null;
     }
-  }, []);
+  };
 
   // Finalize a crossfade after CROSSFADE_MS
-  const startCrossfade = useCallback((onComplete: () => void) => {
+  const startCrossfade = (onComplete: () => void) => {
     cancelTransition();
     setIsTransitioning(true);
     transitionTimeoutRef.current = setTimeout(() => {
@@ -109,9 +106,9 @@ export function useBackground({
       setIsTransitioning(false);
       transitionTimeoutRef.current = null;
     }, CROSSFADE_MS);
-  }, [cancelTransition]);
+  };
 
-  const rotateImage = useCallback(() => {
+  const rotateImage = () => {
     const seg = getTimeSegment(new Date().getHours());
     const tier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
 
@@ -155,7 +152,7 @@ export function useBackground({
       };
       img.src = fullUrl;
     }
-  }, [meetingCount, taskCount, backgroundStyle, isAbstract, baseUrl, buildUrl, cancelTransition, startCrossfade]);
+  };
 
   // Initial load when config becomes available
   // If awakening (previous segment differs), load that first, then
@@ -271,7 +268,7 @@ export function useBackground({
   const devIndexRef = useRef(-1);
   const [devLabel, setDevLabel] = useState("");
 
-  const devNext = useCallback(() => {
+  const devNext = () => {
     devIndexRef.current++;
 
     const setName = isAbstract ? "abstract" : "photography";
@@ -299,7 +296,7 @@ export function useBackground({
       });
     };
     img.src = fullUrl;
-  }, [isAbstract, baseUrl, buildUrl, cancelTransition, startCrossfade]);
+  };
 
   // Resolve pinned background — overrides smart rotation
   if (pinnedBackground) {

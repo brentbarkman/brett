@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { CalendarEventDisplay } from "@brett/types";
 
 export interface NextUpTimerState {
@@ -41,7 +41,7 @@ export function useNextUpTimer(
   event: CalendarEventDisplay | null,
   nowOverride?: string
 ): NextUpTimerState | null {
-  const computeState = useCallback((): NextUpTimerState | null => {
+  const computeState = (): NextUpTimerState | null => {
     if (!event) return null;
 
     const now = nowOverride ? parseTimeToMinutes(nowOverride) : getNowMinutes();
@@ -69,7 +69,7 @@ export function useNextUpTimer(
       isExpired,
       minutesRemaining: Math.max(0, minutesRemaining),
     };
-  }, [event, nowOverride]);
+  };
 
   const [state, setState] = useState<NextUpTimerState | null>(computeState);
 

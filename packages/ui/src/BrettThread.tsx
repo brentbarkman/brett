@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { ChevronDown, ChevronUp, Send } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import type { DisplayHint } from "@brett/types";
@@ -178,23 +178,21 @@ export function BrettThread({
     return () => observer.disconnect();
   }, [isExpanded, hasMore, isLoadingMore, onLoadMore]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = () => {
     const trimmed = inputValue.trim();
     if (!trimmed || isSending || isStreaming) return;
     onSend(trimmed);
     setInputValue("");
     setIsExpanded(true);
-  }, [inputValue, isSending, isStreaming, onSend]);
+  };
 
-  const handleKeyDown = useCallback(
+  const handleKeyDown = 
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
-    },
-    [handleSend],
-  );
+    };
 
   // Determine if the last assistant message is actively streaming
   const lastMsg = displayMessages[displayMessages.length - 1];

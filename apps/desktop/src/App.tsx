@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { slugify, getEventGlassColor } from "@brett/utils";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
@@ -275,14 +275,14 @@ export function App() {
 
   const [showCalendarConnectModal, setShowCalendarConnectModal] = useState(false);
 
-  const handleConnectCalendar = useCallback(() => {
+  const handleConnectCalendar = () => {
     setShowCalendarConnectModal(true);
-  }, []);
+  };
 
-  const handleDismissSidebar = useCallback(() => {
+  const handleDismissSidebar = () => {
     setSidebarDismissed(true);
     localStorage.setItem(SIDEBAR_DISMISSED_KEY, "true");
-  }, []);
+  };
 
   // Clear dismissed state when accounts are connected
   useEffect(() => {
@@ -304,44 +304,40 @@ export function App() {
   }
 
   // Today's bounds (stable for the session — doesn't change when sidebar navigates)
-  const todayBounds = useMemo(() => localDayBounds(new Date()), []);
+  const [todayBounds] = useState(() => localDayBounds(new Date()));
 
   // Sidebar calendar date navigation
   const [sidebarDate, setSidebarDate] = useState(() => new Date());
-  const sidebarBounds = useMemo(() => localDayBounds(sidebarDate), [sidebarDate]);
+  const sidebarBounds = localDayBounds(sidebarDate);
 
-  const handleSidebarPrevDay = useCallback(() => {
+  const handleSidebarPrevDay = () => {
     setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
-  }, []);
-  const handleSidebarNextDay = useCallback(() => {
+  };
+  const handleSidebarNextDay = () => {
     setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
-  }, []);
-  const handleSidebarToday = useCallback(() => {
+  };
+  const handleSidebarToday = () => {
     setSidebarDate(new Date());
-  }, []);
+  };
 
   const { data: sidebarCalendarData, isLoading: isLoadingSidebarCalendar } = useCalendarEvents(sidebarBounds);
-  const sidebarCalendarEvents: CalendarEventDisplay[] = useMemo(
-    () => (sidebarCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay),
-    [sidebarCalendarData],
-  );
+  const sidebarCalendarEvents: CalendarEventDisplay[] =
+    (sidebarCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay);
 
   // Today's events for Next Up — always pinned to today, independent of sidebar navigation
   const { data: todayCalendarData } = useCalendarEvents(todayBounds);
-  const todayCalendarEvents: CalendarEventDisplay[] = useMemo(
-    () => (todayCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay),
-    [todayCalendarData],
-  );
+  const todayCalendarEvents: CalendarEventDisplay[] =
+    (todayCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay);
 
   // Next Up: find the next upcoming event from TODAY (not the sidebar date)
-  const nextUpEvent = useMemo(() => {
+  const nextUpEvent = (() => {
     if (!todayCalendarEvents.length) return null;
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
     return todayCalendarEvents.find((e) => {
       if (e.myResponseStatus === "declined" || e.isAllDay) return false;
       return parseTimeToMinutes(e.endTime) > nowMin;
     }) ?? null;
-  }, [todayCalendarEvents]);
+  })();
   const nextUpTimer = useNextUpTimer(nextUpEvent);
 
   // Fetch detail when panel is open and item is a task (not a CalendarEvent)
@@ -381,19 +377,16 @@ export function App() {
   const { data: allActiveThings = [] } = useThings({ status: "active" });
 
   // Search items for linked items
-  const handleSearchItems = useCallback(
-    async (query: string) => {
-      const q = query.toLowerCase();
-      return allActiveThings.filter(
-        (t) =>
-          t.id !== selectedId && t.title.toLowerCase().includes(q),
-      );
-    },
-    [allActiveThings, selectedId],
-  );
+  const handleSearchItems = async (query: string) => {
+    const q = query.toLowerCase();
+    return allActiveThings.filter(
+      (t) =>
+        t.id !== selectedId && t.title.toLowerCase().includes(q),
+    );
+  };
 
   // Today badge count — active items due this week or earlier
-  const endOfWeekISO = useMemo(() => getEndOfWeekUTC().toISOString(), []);
+  const [endOfWeekISO] = useState(() => getEndOfWeekUTC().toISOString());
   const { data: activeThingsForCount = [] } = useActiveThings(endOfWeekISO);
 
   // Upcoming badge count
@@ -443,14 +436,14 @@ export function App() {
   );
 
   // Compute today's task count — tasks due today or overdue
-  const todayTaskCount = useMemo(() => {
+  const todayTaskCount = (() => {
     if (!activeThingsForCount) return 0;
     const endOfToday = new Date(todayBounds.endDate);
     return activeThingsForCount.filter((t: any) => {
       if (!t.dueDate) return false;
       return new Date(t.dueDate) <= endOfToday;
     }).length;
-  }, [activeThingsForCount, todayBounds]);
+  })();
 
   // Meeting count from today's calendar events
   const todayMeetingCount = todayCalendarEvents?.length ?? 0;
@@ -514,7 +507,7 @@ export function App() {
   }, [omnibar.isOpen, omnibar.mode, omnibar.close, omnibar.open]);
 
   // Build omnibar props for the bar component
-  const currentView = useMemo(() => {
+  const currentView = (() => {
     const path = location.pathname;
     if (path === "/today") return "today";
     if (path === "/upcoming") return "upcoming";
@@ -524,80 +517,74 @@ export function App() {
     if (path === "/scouts") return "scouts";
     if (path.startsWith("/lists/")) return `list:${path.split("/lists/")[1]}`;
     return undefined;
-  }, [location.pathname]);
+  })();
 
-  const omnibarProps = useMemo(
-    () => ({
-      isOpen: omnibar.isOpen && omnibar.mode === "bar",
-      input: omnibar.input,
-      onInputChange: omnibar.setInput,
-      messages: omnibar.messages,
-      isStreaming: omnibar.isStreaming,
-      hasAI: omnibar.hasAI,
-      onSend: (text: string, intent?: string) => omnibar.send(text, currentView, intent),
-      onCreateTask: (title: string) => omnibar.createTask(title, currentView),
-      onSearch: omnibar.searchThings,
-      onNavigate: (path: string) => {
-        navigate(path);
-        omnibar.close();
-      },
-      onItemClick: (id: string) => {
-        // Create a minimal Thing to open the detail panel — it will fetch full data
-        setSelectedItem({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
+  const omnibarProps = {
+    isOpen: omnibar.isOpen && omnibar.mode === "bar",
+    input: omnibar.input,
+    onInputChange: omnibar.setInput,
+    messages: omnibar.messages,
+    isStreaming: omnibar.isStreaming,
+    hasAI: omnibar.hasAI,
+    onSend: (text: string, intent?: string) => omnibar.send(text, currentView, intent),
+    onCreateTask: (title: string) => omnibar.createTask(title, currentView),
+    onSearch: omnibar.searchThings,
+    onNavigate: (path: string) => {
+      navigate(path);
+      omnibar.close();
+    },
+    onItemClick: (id: string) => {
+      // Create a minimal Thing to open the detail panel — it will fetch full data
+      setSelectedItem({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
+      setIsDetailOpen(true);
+    },
+    onEventClick: (eventId: string) => {
+      const event = sidebarCalendarEvents.find((e) => e.id === eventId);
+      if (event) {
+        handleItemClick(event);
+      } else {
+        setSelectedItem({ id: eventId, googleEventId: "", title: "", startTime: "", endTime: "", durationMinutes: 0, color: "blue", hasBrettContext: false, isAllDay: false, myResponseStatus: "needsAction" } as any);
         setIsDetailOpen(true);
-      },
-      onEventClick: (eventId: string) => {
-        const event = sidebarCalendarEvents.find((e) => e.id === eventId);
-        if (event) {
-          handleItemClick(event);
-        } else {
-          setSelectedItem({ id: eventId, googleEventId: "", title: "", startTime: "", endTime: "", durationMinutes: 0, color: "blue", hasBrettContext: false, isAllDay: false, myResponseStatus: "needsAction" } as any);
-          setIsDetailOpen(true);
-        }
-        omnibar.close();
-      },
-      searchResults: omnibar.searchResults ?? null,
-      isSearching: omnibar.isSearching,
-      onSearchResultClick: (id: string) => {
-        // Fallback click handler for entity types not handled by onItemClick/onEventClick
-        navigate("/inbox");
-        omnibar.close();
-      },
-      onClose: () => { omnibar.close(); setShowWeatherExpanded(false); },
-      onOpen: () => { omnibar.open("bar"); setSelectedItem(null); setIsDetailOpen(false); },
-      onCancel: omnibar.cancel,
-      onReset: omnibar.reset,
-      onNavigateToSettings: () => navigate("/settings#ai-providers"),
-      onNavigateToLocationSettings: () => navigate("/settings#timezone-location"),
-      sessionId: omnibar.sessionId,
-      showTokenUsage,
-      sessionUsage: sessionUsageData ?? null,
-      weather,
-      weatherNow,
-      weatherLoading,
-      showWeatherExpanded,
-      onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
-      assistantName,
-    }),
-    [omnibar.isOpen, omnibar.mode, omnibar.input, omnibar.messages, omnibar.isStreaming, omnibar.hasAI, omnibar.send, omnibar.createTask, omnibar.searchThings, omnibar.searchResults, omnibar.isSearching, omnibar.close, omnibar.open, omnibar.cancel, omnibar.reset, omnibar.setInput, currentView, navigate, omnibar.sessionId, showTokenUsage, sessionUsageData, weather, weatherNow, weatherLoading, showWeatherExpanded, assistantName]
-  );
+      }
+      omnibar.close();
+    },
+    searchResults: omnibar.searchResults ?? null,
+    isSearching: omnibar.isSearching,
+    onSearchResultClick: (id: string) => {
+      // Fallback click handler for entity types not handled by onItemClick/onEventClick
+      navigate("/inbox");
+      omnibar.close();
+    },
+    onClose: () => { omnibar.close(); setShowWeatherExpanded(false); },
+    onOpen: () => { omnibar.open("bar"); setSelectedItem(null); setIsDetailOpen(false); },
+    onCancel: omnibar.cancel,
+    onReset: omnibar.reset,
+    onNavigateToSettings: () => navigate("/settings#ai-providers"),
+    onNavigateToLocationSettings: () => navigate("/settings#timezone-location"),
+    sessionId: omnibar.sessionId,
+    showTokenUsage,
+    sessionUsage: sessionUsageData ?? null,
+    weather,
+    weatherNow,
+    weatherLoading,
+    showWeatherExpanded,
+    onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
+    assistantName,
+  };
 
-  const scoutsOmnibarProps = useMemo(
-    () => ({
-      ...omnibarProps,
-      isOpen: omnibar.isOpen && omnibar.mode === "bar",
-      onSend: (text: string, intent?: string) => omnibar.send(text, "scouts", intent),
-      onOpen: () => { omnibar.open("bar"); },
-      weather: null,
-      weatherNow: undefined,
-      weatherLoading: false,
-      showWeatherExpanded: false,
-      onWeatherClick: undefined,
-      onNavigateToSettings: undefined,
-      onNavigateToLocationSettings: undefined,
-    }),
-    [omnibarProps, omnibar.isOpen, omnibar.mode, omnibar.send, omnibar.open],
-  );
+  const scoutsOmnibarProps = {
+    ...omnibarProps,
+    isOpen: omnibar.isOpen && omnibar.mode === "bar",
+    onSend: (text: string, intent?: string) => omnibar.send(text, "scouts", intent),
+    onOpen: () => { omnibar.open("bar"); },
+    weather: null,
+    weatherNow: undefined,
+    weatherLoading: false,
+    showWeatherExpanded: false,
+    onWeatherClick: undefined,
+    onNavigateToSettings: undefined,
+    onNavigateToLocationSettings: undefined,
+  };
 
   // Apply dark mode to root
   useEffect(() => {
@@ -650,32 +637,32 @@ export function App() {
   };
 
   // Adapter for CalendarPage which passes CalendarEventRecord
-  const handleCalendarEventClick = useCallback((event: CalendarEventRecord) => {
+  const handleCalendarEventClick = (event: CalendarEventRecord) => {
     handleItemClick(recordToDisplay(event));
-  }, []);
+  };
 
   // Update panel when keyboard nav changes focus (only if panel is open)
-  const handleFocusChange = useCallback((thing: Thing) => {
+  const handleFocusChange = (thing: Thing) => {
     if (isDetailOpen) {
       setSelectedItem(thing);
     }
-  }, [isDetailOpen]);
+  };
 
-  const handleCloseDetail = useCallback(() => {
+  const handleCloseDetail = () => {
     setIsDetailOpen(false);
     setDetailHistory([]);
     setTimeout(() => setSelectedItem(null), 300);
-  }, []);
+  };
 
-  useSSEHandler("scout.run.completed", useCallback(() => {
+  useSSEHandler("scout.run.completed", () => {
     setScoutRunning(false);
-  }, []));
+  });
 
-  useSSEHandler("calendar.event.deleted", useCallback((data: { eventId: string }) => {
+  useSSEHandler("calendar.event.deleted", (data: { eventId: string }) => {
     if (selectedItem && selectedItem.id === data.eventId) {
       handleCloseDetail();
     }
-  }, [selectedItem, handleCloseDetail]));
+  });
 
   const handleToggle = (id: string) => {
     toggleThing.mutate(id);
@@ -703,11 +690,11 @@ export function App() {
   };
 
   // Open omnibar pre-filled to start the create_scout conversational flow
-  const handleNewScout = useCallback(() => {
+  const handleNewScout = () => {
     omnibar.reset();
     omnibar.setInput("Create a scout to ");
     omnibar.open("spotlight");
-  }, [omnibar]);
+  };
 
   // Track newly created scout for "NEW" badge
   const [newScoutId, setNewScoutId] = useState<string | null>(null);
@@ -808,63 +795,57 @@ export function App() {
   };
 
   // DnD handlers
-  const handleDragStart = useCallback(
-    (event: DragStartEvent) => {
-      const data = event.active.data.current;
-      if (data?.type === "inbox-item") {
-        const ids: string[] = data.selectedIds ?? [data.thingId];
-        const thing = inboxData?.visible.find((t) => t.id === data.thingId);
-        setActiveDrag({
-          id: data.thingId,
-          title: thing?.title ?? "Item",
-          count: ids.length,
-        });
-      } else if (data?.type === "thing-card") {
-        setActiveDrag({
-          id: data.thingId,
-          title: data.title ?? "Item",
-          count: 1,
-        });
-      }
-    },
-    [inboxData]
-  );
+  const handleDragStart = (event: DragStartEvent) => {
+    const data = event.active.data.current;
+    if (data?.type === "inbox-item") {
+      const ids: string[] = data.selectedIds ?? [data.thingId];
+      const thing = inboxData?.visible.find((t) => t.id === data.thingId);
+      setActiveDrag({
+        id: data.thingId,
+        title: thing?.title ?? "Item",
+        count: ids.length,
+      });
+    } else if (data?.type === "thing-card") {
+      setActiveDrag({
+        id: data.thingId,
+        title: data.title ?? "Item",
+        count: 1,
+      });
+    }
+  };
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      setActiveDrag(null);
-      const { active, over } = event;
-      if (!over) return;
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDrag(null);
+    const { active, over } = event;
+    if (!over) return;
 
-      const activeData = active.data.current;
-      const overData = over.data.current;
+    const activeData = active.data.current;
+    const overData = over.data.current;
 
-      // Handle list reordering (list dragged onto another list)
-      if (activeData?.type === "sortable-list" && overData?.type === "sortable-list") {
-        if (active.id !== over.id) {
-          const sortableIds = lists.map((l) => `sortable-list-${l.id}`);
-          const oldIndex = sortableIds.indexOf(active.id as string);
-          const newIndex = sortableIds.indexOf(over.id as string);
-          if (oldIndex !== -1 && newIndex !== -1) {
-            const reordered = arrayMove(lists, oldIndex, newIndex);
-            reorderLists.mutate(reordered.map((l) => l.id));
-          }
+    // Handle list reordering (list dragged onto another list)
+    if (activeData?.type === "sortable-list" && overData?.type === "sortable-list") {
+      if (active.id !== over.id) {
+        const sortableIds = lists.map((l) => `sortable-list-${l.id}`);
+        const oldIndex = sortableIds.indexOf(active.id as string);
+        const newIndex = sortableIds.indexOf(over.id as string);
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const reordered = arrayMove(lists, oldIndex, newIndex);
+          reorderLists.mutate(reordered.map((l) => l.id));
         }
-        return;
       }
+      return;
+    }
 
-      // Handle item drop onto list (from inbox or today view)
-      if (overData?.type === "sortable-list" || overData?.type === "list") {
-        const listId = overData.listId;
-        const itemIds: string[] =
-          activeData?.selectedIds ?? [active.id as string];
-        bulkUpdate.mutate({ ids: itemIds, updates: { listId } });
-      }
-    },
-    [bulkUpdate, lists, reorderLists]
-  );
+    // Handle item drop onto list (from inbox or today view)
+    if (overData?.type === "sortable-list" || overData?.type === "list") {
+      const listId = overData.listId;
+      const itemIds: string[] =
+        activeData?.selectedIds ?? [active.id as string];
+      bulkUpdate.mutate({ ids: itemIds, updates: { listId } });
+    }
+  };
 
-  const handleDropPdf = useCallback((file: File) => {
+  const handleDropPdf = (file: File) => {
     const title = cleanFilename(file.name);
     createThing.mutate(
       { type: "content", title, contentType: "pdf" },
@@ -876,7 +857,7 @@ export function App() {
         onError: (err) => console.error("Failed to create PDF item:", err),
       },
     );
-  }, [createThing, uploadAttachment]);
+  };
 
   const inboxCount = inboxData?.visible.length ?? 0;
 

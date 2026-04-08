@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Calendar, List, Sparkles } from "lucide-react";
 import type { NavList, DueDatePrecision } from "@brett/types";
 import { computeTriageResult, type TriageDatePreset } from "@brett/business";
@@ -82,7 +82,7 @@ export function TriagePopup({
     }
   }, [filteredLists.length, focusedIndex, currentStep]);
 
-  const advanceOrConfirm = useCallback(
+  const advanceOrConfirm = 
     (listId: string | null, date: string | null, precision: DueDatePrecision | null) => {
       // If we're on the primary step, advance to secondary
       if (currentStep === primaryStep) {
@@ -100,35 +100,29 @@ export function TriagePopup({
         // On secondary step, confirm
         onConfirm({ listId, dueDate: date, dueDatePrecision: precision });
       }
-    },
-    [currentStep, primaryStep, secondaryStep, onConfirm, currentListId, lists]
-  );
+    };
 
-  const selectList = useCallback(
+  const selectList = 
     (listId: string) => {
       setSelectedListId(listId);
       advanceOrConfirm(listId, selectedDate, selectedPrecision);
-    },
-    [advanceOrConfirm, selectedDate, selectedPrecision]
-  );
+    };
 
-  const selectDate = useCallback(
+  const selectDate = 
     (preset: TriageDatePreset) => {
       const result = computeTriageResult(preset);
       setSelectedDate(result.dueDate);
       setSelectedPrecision(result.dueDatePrecision);
       advanceOrConfirm(selectedListId, result.dueDate, result.dueDatePrecision);
-    },
-    [advanceOrConfirm, selectedListId]
-  );
+    };
 
-  const clearDate = useCallback(() => {
+  const clearDate = () => {
     setSelectedDate(null);
     setSelectedPrecision(null);
     advanceOrConfirm(selectedListId, null, null);
-  }, [advanceOrConfirm, selectedListId]);
+  };
 
-  const handleKeyDown = useCallback(
+  const handleKeyDown = 
     (e: React.KeyboardEvent) => {
       // Escape cancels
       if (e.key === "Escape") {
@@ -206,22 +200,7 @@ export function TriagePopup({
           return;
         }
       }
-    },
-    [
-      currentStep,
-      primaryStep,
-      secondaryStep,
-      focusedIndex,
-      filteredLists,
-      selectedListId,
-      selectedDate,
-      onCancel,
-      onConfirm,
-      selectList,
-      selectDate,
-      clearDate,
-    ]
-  );
+    };
 
   return (
     <div
