@@ -32,6 +32,7 @@ pnpm db:studio              # Open Prisma Studio (DB GUI)
 - **Auth:** better-auth (email/password + Google OAuth + Sign in with Apple, JWT bearer tokens)
 - **Storage:** Railway Object Storage (S3-compatible)
 - **Notifications:** Firebase Cloud Messaging (planned — notifications only, not auth)
+- **React:** v19 with React Compiler enabled (desktop). Do NOT add `useMemo`/`useCallback`/`React.memo` — the compiler handles memoization automatically.
 
 ## Architecture
 
@@ -53,6 +54,14 @@ pnpm workspaces + Turborepo monorepo with three apps sharing four packages.
 
 @brett/ui             ← web-only React components — used by desktop only
 ```
+
+### Mobile Sync
+
+The mobile app syncs with the API via two endpoints:
+- `POST /sync/pull` — incremental pull with per-table cursors, returns upserted + deleted records
+- `POST /sync/push` — batched mutations with field-level merge (previousValues comparison)
+
+Mobile writes are offline-first: SQLite → mutation queue → push when online. See `apps/mobile/CLAUDE.md` for details.
 
 All workspace dependencies use the `workspace:*` protocol.
 
