@@ -33,7 +33,7 @@ import {
   LivingBackground,
 } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
 import {
@@ -184,6 +184,7 @@ export function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   // Initialize SSE for real-time updates
   useEventStream();
@@ -1252,6 +1253,16 @@ export function App() {
           onScoutFeedback={(scoutId, findingId, useful) =>
             submitFeedback.mutate({ scoutId, findingId, useful })
           }
+          onApproveNewsletter={async (pendingId) => {
+            await apiFetch(`/newsletters/senders/${pendingId}/approve`, { method: "POST" });
+            queryClient.invalidateQueries({ queryKey: ["things"] });
+            queryClient.invalidateQueries({ queryKey: ["inbox"] });
+          }}
+          onBlockNewsletter={async (pendingId) => {
+            await apiFetch(`/newsletters/senders/${pendingId}/block`, { method: "POST" });
+            queryClient.invalidateQueries({ queryKey: ["things"] });
+            queryClient.invalidateQueries({ queryKey: ["inbox"] });
+          }}
           onItemClick={(id) => {
             const thing = allActiveThings.find((t) => t.id === id);
             if (thing) handleDetailDrillDown(thing);
