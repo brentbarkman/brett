@@ -10,7 +10,9 @@ import { SectionHeader } from '../../../src/components/SectionHeader';
 import { TaskRow } from '../../../src/components/TaskRow';
 import { Omnibar } from '../../../src/components/Omnibar';
 import { MultiSelectToolbar } from '../../../src/components/MultiSelectToolbar';
+import { MorningRitual } from '../../../src/components/MorningRitual';
 import { useBatchCompletion } from '../../../src/hooks/use-batch-completion';
+import { useMorningRitual } from '../../../src/hooks/use-morning-ritual';
 import {
   useMockItems,
   useMockCalendarEvents,
@@ -42,6 +44,7 @@ function formatDueLabel(item: MockItem): string | undefined {
 
 export default function TodayScreen() {
   const router = useRouter();
+  const shouldAnimate = useMorningRitual();
   const { todayItems, toggleItem, createItem } = useMockItems();
   const { nextEvent } = useMockCalendarEvents();
   const { content, generatedAt, isCollapsed, isDismissed, toggleCollapse, dismiss } =
@@ -89,121 +92,123 @@ export default function TodayScreen() {
     <View style={{ flex: 1 }}>
       <LivingBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <HeaderStats
-          date={dateStr}
-          doneCount={doneToday}
-          totalCount={totalToday}
-          meetingCount={meetingCount}
-          meetingDuration={meetingDuration}
-        />
-
-        <View style={{ paddingHorizontal: 16 }}>
-          <DailyBriefing
-            content={content}
-            generatedAt={generatedAt}
-            isCollapsed={isCollapsed}
-            isDismissed={isDismissed}
-            toggleCollapse={toggleCollapse}
-            dismiss={dismiss}
+        <MorningRitual enabled={shouldAnimate}>
+          <HeaderStats
+            date={dateStr}
+            doneCount={doneToday}
+            totalCount={totalToday}
+            meetingCount={meetingCount}
+            meetingDuration={meetingDuration}
           />
 
-          {nextEvent && (
-            <NextUpCard event={nextEvent} onPress={() => {}} />
-          )}
-        </View>
+          <View style={{ paddingHorizontal: 16 }}>
+            <DailyBriefing
+              content={content}
+              generatedAt={generatedAt}
+              isCollapsed={isCollapsed}
+              isDismissed={isDismissed}
+              toggleCollapse={toggleCollapse}
+              dismiss={dismiss}
+            />
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          {overdue.length > 0 && (
-            <>
-              <SectionHeader label="Overdue" variant="overdue" />
-              {overdue.map(item => (
-                <TaskRow
-                  key={item.id}
-                  id={item.id}
-                  title={item.title}
-                  isDone={false}
-                  isOverdue
-                  dueLabel={formatDueLabel(item)}
-                  listName={getListForItem(item)?.name}
-                  isSelected={selectedIds.has(item.id)}
-                  onToggle={() => batchToggle(item.id)}
-                  onPress={() => router.push(`/task/${item.id}`)}
-                  onSelect={() => handleSelect(item.id)}
-                />
-              ))}
-            </>
-          )}
+            {nextEvent && (
+              <NextUpCard event={nextEvent} onPress={() => {}} />
+            )}
+          </View>
 
-          {todayActive.length > 0 && (
-            <>
-              <SectionHeader label="Today" />
-              {todayActive.map(item => (
-                <TaskRow
-                  key={item.id}
-                  id={item.id}
-                  title={item.title}
-                  isDone={false}
-                  dueLabel={formatDueLabel(item)}
-                  listName={getListForItem(item)?.name}
-                  isSelected={selectedIds.has(item.id)}
-                  onToggle={() => batchToggle(item.id)}
-                  onPress={() => router.push(`/task/${item.id}`)}
-                  onSelect={() => handleSelect(item.id)}
-                />
-              ))}
-            </>
-          )}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {overdue.length > 0 && (
+              <>
+                <SectionHeader label="Overdue" variant="overdue" />
+                {overdue.map(item => (
+                  <TaskRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    isDone={false}
+                    isOverdue
+                    dueLabel={formatDueLabel(item)}
+                    listName={getListForItem(item)?.name}
+                    isSelected={selectedIds.has(item.id)}
+                    onToggle={() => batchToggle(item.id)}
+                    onPress={() => router.push(`/task/${item.id}`)}
+                    onSelect={() => handleSelect(item.id)}
+                  />
+                ))}
+              </>
+            )}
 
-          {thisWeek.length > 0 && (
-            <>
-              <SectionHeader label="This Week" />
-              {thisWeek.map(item => (
-                <TaskRow
-                  key={item.id}
-                  id={item.id}
-                  title={item.title}
-                  isDone={false}
-                  dueLabel={formatDueLabel(item)}
-                  listName={getListForItem(item)?.name}
-                  isSelected={selectedIds.has(item.id)}
-                  onToggle={() => batchToggle(item.id)}
-                  onPress={() => router.push(`/task/${item.id}`)}
-                  onSelect={() => handleSelect(item.id)}
-                />
-              ))}
-            </>
-          )}
+            {todayActive.length > 0 && (
+              <>
+                <SectionHeader label="Today" />
+                {todayActive.map(item => (
+                  <TaskRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    isDone={false}
+                    dueLabel={formatDueLabel(item)}
+                    listName={getListForItem(item)?.name}
+                    isSelected={selectedIds.has(item.id)}
+                    onToggle={() => batchToggle(item.id)}
+                    onPress={() => router.push(`/task/${item.id}`)}
+                    onSelect={() => handleSelect(item.id)}
+                  />
+                ))}
+              </>
+            )}
 
-          {doneToday2.length > 0 && (
-            <>
-              <SectionHeader label="Done Today" variant="done" />
-              {doneToday2.map(item => (
-                <TaskRow
-                  key={item.id}
-                  id={item.id}
-                  title={item.title}
-                  isDone
-                  dueLabel={formatDueLabel(item)}
-                  listName={getListForItem(item)?.name}
-                  isSelected={selectedIds.has(item.id)}
-                  onToggle={() => batchToggle(item.id)}
-                  onPress={() => router.push(`/task/${item.id}`)}
-                  onSelect={() => handleSelect(item.id)}
-                />
-              ))}
-            </>
-          )}
-        </ScrollView>
+            {thisWeek.length > 0 && (
+              <>
+                <SectionHeader label="This Week" />
+                {thisWeek.map(item => (
+                  <TaskRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    isDone={false}
+                    dueLabel={formatDueLabel(item)}
+                    listName={getListForItem(item)?.name}
+                    isSelected={selectedIds.has(item.id)}
+                    onToggle={() => batchToggle(item.id)}
+                    onPress={() => router.push(`/task/${item.id}`)}
+                    onSelect={() => handleSelect(item.id)}
+                  />
+                ))}
+              </>
+            )}
 
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          <Omnibar
-            onSubmit={(text) => createItem(text, new Date().toISOString(), null)}
-          />
-        </View>
+            {doneToday2.length > 0 && (
+              <>
+                <SectionHeader label="Done Today" variant="done" />
+                {doneToday2.map(item => (
+                  <TaskRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    isDone
+                    dueLabel={formatDueLabel(item)}
+                    listName={getListForItem(item)?.name}
+                    isSelected={selectedIds.has(item.id)}
+                    onToggle={() => batchToggle(item.id)}
+                    onPress={() => router.push(`/task/${item.id}`)}
+                    onSelect={() => handleSelect(item.id)}
+                  />
+                ))}
+              </>
+            )}
+          </ScrollView>
+
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <Omnibar
+              onSubmit={(text) => createItem(text, new Date().toISOString(), null)}
+            />
+          </View>
+        </MorningRitual>
       </SafeAreaView>
 
       <MultiSelectToolbar

@@ -14,6 +14,7 @@
     "@brett/business": "workspace:*",
     "@brett/types": "workspace:*",
     "@brett/utils": "workspace:*",
+    "@react-native-async-storage/async-storage": "^3.0.2",
     "@react-native-community/netinfo": "11.5.2",
     "drizzle-orm": "^0.45.2",
     "expo": "~55.0.12",

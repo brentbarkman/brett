@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
-  Platform,
+  Dimensions,
 } from 'react-native';
 import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Animated, {
@@ -26,8 +26,11 @@ import {
   CalendarDays,
   Calendar,
 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { haptics } from '../theme/haptics';
 import { colors, typography, spacing } from '../theme/tokens';
+import { VoiceMode } from './VoiceMode';
+import { ContextualDrawer } from './ContextualDrawer';
 
 // Tab config — order must match Tabs.Screen order in _layout
 const TABS = [
@@ -45,9 +48,16 @@ const VOICE_INDEX = 2;
 // We use a percentage-based approach driven by a shared value.
 const VOICE_BUTTON_SIZE = 48;
 
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+
+type DrawerTab = 'today' | 'inbox' | 'upcoming' | 'calendar';
+
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const activeIndex = useSharedValue(state.index);
+  const [voiceModeActive, setVoiceModeActive] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<DrawerTab | null>(null);
 
   // Sync shared value with React state
   useAnimatedReaction(
@@ -83,7 +93,37 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const inboxCount = 0; // TODO: hook up to store
 
+  const tabBarHeight = 54 + Math.max(insets.bottom, 8);
+
   return (
+    <>
+      {/* Voice mode overlay — covers full screen upward from tab bar */}
+      <View
+        style={[styles.overlayContainer, { height: SCREEN_HEIGHT + tabBarHeight }]}
+        pointerEvents={voiceModeActive ? 'auto' : 'none'}
+      >
+        <VoiceMode
+          visible={voiceModeActive}
+          onDismiss={() => setVoiceModeActive(false)}
+        />
+      </View>
+
+      {/* Contextual drawer overlay */}
+      <View
+        style={[styles.overlayContainer, { height: SCREEN_HEIGHT + tabBarHeight }]}
+        pointerEvents={drawerTab !== null ? 'auto' : 'none'}
+      >
+        <ContextualDrawer
+          tab={drawerTab ?? 'today'}
+          visible={drawerTab !== null}
+          onDismiss={() => setDrawerTab(null)}
+          onNavigate={(route) => {
+            setDrawerTab(null);
+            router.push(route as never);
+          }}
+        />
+      </View>
+
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {/* Glass background */}
       <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
@@ -111,6 +151,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           const onPress = () => {
             if (isVoice) {
               haptics.heavy();
+              setVoiceModeActive(true);
               return;
             }
             const route = state.routes[index];
@@ -127,6 +168,9 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
           const onLongPress = () => {
             if (isVoice) return;
+            const tabName = tab.name as DrawerTab;
+            haptics.rigid();
+            setDrawerTab(tabName);
             const route = state.routes[index];
             if (!route) return;
             navigation.emit({
@@ -174,6 +218,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         })}
       </View>
     </View>
+    </>
   );
 }
 
@@ -251,6 +296,12 @@ function SlidingDot({ activeIndex, myIndex }: SlidingDotProps) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  overlayContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
   container: {
     position: 'absolute',
     bottom: 0,
