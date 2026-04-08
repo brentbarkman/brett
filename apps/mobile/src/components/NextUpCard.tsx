@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { radii } from '../theme/tokens';
+import { useReduceMotion } from '../hooks/use-reduce-motion';
 
 interface NextUpEvent {
   title: string;
@@ -73,6 +74,7 @@ function meetingPlatformLabel(link: string): string {
 }
 
 export function NextUpCard({ event, onPress }: NextUpCardProps) {
+  const reduceMotion = useReduceMotion();
   const { label: timeUntil, isNow, isUrgent } = computeEventState(event.startTime, event.endTime);
   const duration = computeDuration(event.startTime, event.endTime);
 
@@ -93,8 +95,8 @@ export function NextUpCard({ event, onPress }: NextUpCardProps) {
     : AMBER_BORDER;
   const timeColor = isNow ? EMERALD_TEXT : AMBER_TEXT;
 
-  // Subtle glow shadow for urgent upcoming (≤10 min)
-  const shadowStyle = isUrgent && !isNow
+  // Subtle glow shadow for urgent upcoming (≤10 min) — suppressed when reduce motion is on
+  const shadowStyle = isUrgent && !isNow && !reduceMotion
     ? {
         shadowColor: 'rgba(245, 158, 11, 1)',
         shadowOffset: { width: 0, height: 0 },

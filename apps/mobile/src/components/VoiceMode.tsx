@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { colors, typography } from '../theme/tokens';
+import { useReduceMotion } from '../hooks/use-reduce-motion';
 
 interface VoiceModeProps {
   visible: boolean;
@@ -21,13 +22,20 @@ interface WaveBarProps {
   delay: number;
   height: number;
   opacity: number;
+  reduceMotion: boolean;
 }
 
-function WaveBar({ delay, height, opacity: baseOpacity }: WaveBarProps) {
-  const scale = useSharedValue(0.4);
-  const opacity = useSharedValue(baseOpacity * 0.5);
+function WaveBar({ delay, height, opacity: baseOpacity, reduceMotion }: WaveBarProps) {
+  const scale = useSharedValue(reduceMotion ? 0.7 : 0.4);
+  const opacity = useSharedValue(reduceMotion ? baseOpacity : baseOpacity * 0.5);
 
   useEffect(() => {
+    if (reduceMotion) {
+      // Static mid-scale, no oscillation
+      scale.value = 0.7;
+      opacity.value = baseOpacity;
+      return;
+    }
     scale.value = withRepeat(
       withTiming(1.0, { duration: 800 + delay * 100 }),
       -1,
@@ -38,7 +46,7 @@ function WaveBar({ delay, height, opacity: baseOpacity }: WaveBarProps) {
       -1,
       true,
     );
-  }, []);
+  }, [reduceMotion]);
 
   const barStyle = useAnimatedStyle(() => ({
     transform: [{ scaleY: scale.value }],
@@ -71,11 +79,14 @@ const WAVE_BARS = [
 // ── VoiceMode ─────────────────────────────────────────────────────────────────
 
 export function VoiceMode({ visible, onDismiss }: VoiceModeProps) {
+  const reduceMotion = useReduceMotion();
   const overlayOpacity = useSharedValue(0);
 
   useEffect(() => {
-    overlayOpacity.value = withTiming(visible ? 1 : 0, { duration: 200 });
-  }, [visible]);
+    overlayOpacity.value = withTiming(visible ? 1 : 0, {
+      duration: reduceMotion ? 0 : 200,
+    });
+  }, [visible, reduceMotion]);
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: overlayOpacity.value,
@@ -93,7 +104,7 @@ export function VoiceMode({ visible, onDismiss }: VoiceModeProps) {
           {/* Waveform visualization */}
           <Animated.View style={styles.waveform}>
             {WAVE_BARS.map((bar, i) => (
-              <WaveBar key={i} delay={bar.delay} height={bar.height} opacity={bar.opacity} />
+              <WaveBar key={i} delay={bar.delay} height={bar.height} opacity={bar.opacity} reduceMotion={reduceMotion} />
             ))}
           </Animated.View>
 

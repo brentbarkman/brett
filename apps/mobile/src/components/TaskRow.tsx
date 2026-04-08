@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   interpolate,
   interpolateColor,
@@ -13,6 +13,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { CalendarDays, CheckSquare } from 'lucide-react-native';
 import { colors, radii, spacing, touchTargetMin, typography } from '../theme/tokens';
 import { haptics } from '../theme/haptics';
+import { useReduceMotion } from '../hooks/use-reduce-motion';
 
 interface TaskRowProps {
   id: string;
@@ -72,6 +73,7 @@ export function TaskRow({
   onSchedule,
   onSelect,
 }: TaskRowProps) {
+  const reduceMotion = useReduceMotion();
   const isContent = Boolean(contentType);
   const fillProgress = useSharedValue(isDone ? 1 : 0);
   const swipeableRef = useRef<Swipeable>(null);
@@ -87,18 +89,25 @@ export function TaskRow({
 
   useEffect(() => {
     if (isDone) {
-      // togglePulse: scale 1 → 1.15 → 1 with spring, glow expands then fades
-      checkboxScale.value = withSequence(
-        withSpring(1.15, { damping: 8, stiffness: 200 }),
-        withSpring(1, { damping: 12, stiffness: 180 }),
-      );
-      checkboxGlow.value = withSequence(
-        withTiming(1, { duration: 150 }),
-        withTiming(0, { duration: 450 }),
-      );
+      if (reduceMotion) {
+        // Instant fill, no scale pulse or glow
+        fillProgress.value = withTiming(1, { duration: 0 });
+      } else {
+        // togglePulse: scale 1 → 1.15 → 1 with spring, glow expands then fades
+        checkboxScale.value = withSequence(
+          withSpring(1.15, { damping: 8, stiffness: 200 }),
+          withSpring(1, { damping: 12, stiffness: 180 }),
+        );
+        checkboxGlow.value = withSequence(
+          withTiming(1, { duration: 150 }),
+          withTiming(0, { duration: 450 }),
+        );
+        fillProgress.value = withTiming(1, { duration: 150 });
+      }
+    } else {
+      fillProgress.value = withTiming(0, { duration: reduceMotion ? 0 : 150 });
     }
-    fillProgress.value = withTiming(isDone ? 1 : 0, { duration: 150 });
-  }, [isDone]);
+  }, [isDone, reduceMotion]);
 
   const animatedCheckboxStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
@@ -138,11 +147,16 @@ export function TaskRow({
   const handleToggle = () => {
     haptics.completion();
     onToggle();
+    AccessibilityInfo.announceForAccessibility(
+      isDone ? `Marked ${title} incomplete` : `Completed: ${title}`,
+    );
   };
 
   const handleLongPress = () => {
     haptics.rigid();
-    isLifted.value = withTiming(1, { duration: 100 });
+    if (!reduceMotion) {
+      isLifted.value = withTiming(1, { duration: 100 });
+    }
   };
 
   const handlePressOut = () => {
@@ -206,6 +220,20 @@ export function TaskRow({
           delayLongPress={500}
           accessibilityLabel={title}
           accessibilityHint="Double-tap for details"
+          accessibilityActions={[
+            { name: 'schedule', label: 'Schedule' },
+            { name: 'select', label: 'Select' },
+          ]}
+          onAccessibilityAction={(event) => {
+            switch (event.nativeEvent.actionName) {
+              case 'schedule':
+                onSchedule?.();
+                break;
+              case 'select':
+                onSelect?.();
+                break;
+            }
+          }}
         >
           {/* Selection indicator dot */}
           <Animated.View style={[styles.selectionDot, animatedSelectionStyle]} />

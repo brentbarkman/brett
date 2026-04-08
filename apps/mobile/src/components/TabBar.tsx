@@ -31,6 +31,7 @@ import { haptics } from '../theme/haptics';
 import { colors, typography, spacing } from '../theme/tokens';
 import { VoiceMode } from './VoiceMode';
 import { ContextualDrawer } from './ContextualDrawer';
+import { useReduceMotion } from '../hooks/use-reduce-motion';
 
 // Tab config — order must match Tabs.Screen order in _layout
 const TABS = [
@@ -65,6 +66,7 @@ type DrawerTab = 'today' | 'inbox' | 'upcoming' | 'calendar';
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const reduceMotion = useReduceMotion();
   const activeIndex = useSharedValue(state.index);
   const [voiceModeActive, setVoiceModeActive] = useState(false);
   const [drawerTab, setDrawerTab] = useState<DrawerTab | null>(null);
@@ -81,36 +83,48 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     },
   );
 
-  // Ambient glow pulse for voice button
-  const glowOpacity = useSharedValue(0.05);
+  // Ambient glow pulse for voice button — static when reduce motion is on
+  const glowOpacity = useSharedValue(reduceMotion ? 0.1 : 0.05);
   React.useEffect(() => {
+    if (reduceMotion) {
+      glowOpacity.value = 0.1;
+      return;
+    }
     glowOpacity.value = withRepeat(
       withTiming(0.15, { duration: 4500 }),
       -1,
       true,
     );
-  }, []);
+  }, [reduceMotion]);
 
-  // Inbox badge breathing
-  const badgeOpacity = useSharedValue(0.8);
+  // Inbox badge breathing — static when reduce motion is on
+  const badgeOpacity = useSharedValue(reduceMotion ? 1 : 0.8);
   React.useEffect(() => {
+    if (reduceMotion) {
+      badgeOpacity.value = 1;
+      return;
+    }
     badgeOpacity.value = withRepeat(
       withTiming(1.0, { duration: 2000 }),
       -1,
       true,
     );
-  }, []);
+  }, [reduceMotion]);
 
-  // Sliding dot X position — animates between tab slot centers
+  // Sliding dot X position — spring normally, fast timing when reduce motion is on
   const dotX = useSharedValue(tabSlotCenter(state.index));
 
   useAnimatedReaction(
     () => state.index,
     (current) => {
-      dotX.value = withSpring(tabSlotCenter(current), {
-        damping: 15,
-        stiffness: 200,
-      });
+      if (reduceMotion) {
+        dotX.value = withTiming(tabSlotCenter(current), { duration: 200 });
+      } else {
+        dotX.value = withSpring(tabSlotCenter(current), {
+          damping: 15,
+          stiffness: 200,
+        });
+      }
     },
   );
 
@@ -230,7 +244,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                   <InboxBadge count={inboxCount} badgeOpacity={badgeOpacity} />
                 )}
               </View>
-              <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
+              <Text style={[styles.label, { color: labelColor }]} maxFontSizeMultiplier={1.3}>{label}</Text>
               {/* Dot placeholder to maintain layout height — actual dot is rendered globally */}
               <View style={styles.dotPlaceholder} />
             </Pressable>
