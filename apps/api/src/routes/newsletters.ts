@@ -53,8 +53,8 @@ webhookRouter.post("/email/ingest/:secret", async (c) => {
 
   const senderEmail = extractEmail(from);
 
-  // 4. Size guard
-  if (htmlBody.length > MAX_BODY_SIZE) {
+  // 4. Size guard (check both HTML and text bodies)
+  if (htmlBody.length > MAX_BODY_SIZE || (textBody && textBody.length > MAX_BODY_SIZE)) {
     return c.json({ ok: true, skipped: "body too large" }, 200);
   }
 

@@ -455,6 +455,9 @@ function NewsletterPreview({
       )}
 
       {contentBody ? (
+        // SECURITY INVARIANT: NEVER add allow-scripts to this sandbox.
+        // allow-same-origin + allow-scripts would give newsletter HTML
+        // full access to the Electron renderer process.
         <iframe
           sandbox="allow-same-origin"
           srcDoc={iframeContent}

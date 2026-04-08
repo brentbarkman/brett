@@ -62,6 +62,7 @@ export function useBlockPendingSender() {
       apiFetch(`/newsletters/senders/${pendingId}/block`, { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["newsletter-pending"] });
+      qc.invalidateQueries({ queryKey: ["newsletter-senders"] });
     },
   });
 }

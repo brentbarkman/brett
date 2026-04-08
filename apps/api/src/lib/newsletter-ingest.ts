@@ -48,7 +48,7 @@ function sanitizeCssProperties(style: string): string {
  * backend doesn't reliably support document.createTreeWalker.
  */
 function sanitizeStylesInHtml(html: string): string {
-  return html.replace(/\sstyle="([^"]*)"/gi, (_match, styleValue: string) => {
+  return html.replace(/\sstyle=["']([^"']*)["']/gi, (_match, styleValue: string) => {
     const cleaned = sanitizeCssProperties(styleValue);
     return cleaned ? ` style="${cleaned}"` : "";
   });
