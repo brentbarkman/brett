@@ -131,6 +131,25 @@ export function useEventStream(): void {
       const eventHandlers = handlers.get("scout.status.changed");
       if (eventHandlers) for (const h of eventHandlers) h(data);
     });
+
+    // Item events (from mobile sync push or other sources)
+    const itemHandler = () => {
+      qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["lists"] });
+    };
+    es.addEventListener("item.created", itemHandler);
+    es.addEventListener("item.updated", itemHandler);
+    es.addEventListener("item.deleted", itemHandler);
+
+    // List events
+    const listHandler = () => {
+      qc.invalidateQueries({ queryKey: ["lists"] });
+      qc.invalidateQueries({ queryKey: ["things"] });
+    };
+    es.addEventListener("list.created", listHandler);
+    es.addEventListener("list.updated", listHandler);
+    es.addEventListener("list.deleted", listHandler);
   }, [qc]);
 
   useEffect(() => {

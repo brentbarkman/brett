@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { data } = await apiRequest<SignInResponse>(
+    const { status, data } = await apiRequest<SignInResponse & { message?: string }>(
       "/api/auth/sign-in/email",
       {
         method: "POST",
@@ -60,8 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     );
 
-    if (!data.token || !data.user?.id) {
-      throw new Error("Invalid sign-in response");
+    if (status !== 200 || !data?.token || !data?.user?.id) {
+      throw new Error(data?.message ?? `Sign-in failed (HTTP ${status})`);
     }
 
     await setToken(data.token);

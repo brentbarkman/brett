@@ -4,22 +4,26 @@ import Constants from "expo-constants";
 import { apiRequest } from "../api/client";
 
 export async function registerForPushNotifications(): Promise<string | null> {
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== "granted") return null;
-
-  const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId: Constants.expoConfig?.extra?.eas?.projectId,
-  });
-  const pushToken = tokenData.data;
-
   try {
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    if (!projectId) {
+      console.warn("Push notifications: no EAS projectId configured, skipping registration");
+      return null;
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== "granted") return null;
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    const pushToken = tokenData.data;
+
     await apiRequest("/devices/register", {
       method: "POST",
       body: JSON.stringify({
@@ -28,9 +32,10 @@ export async function registerForPushNotifications(): Promise<string | null> {
         appVersion: Constants.expoConfig?.version ?? "1.0.0",
       }),
     });
-  } catch (err) {
-    console.warn("Failed to register push token:", err);
-  }
 
-  return pushToken;
+    return pushToken;
+  } catch (err) {
+    console.warn("Push notification registration failed:", err);
+    return null;
+  }
 }

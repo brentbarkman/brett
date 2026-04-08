@@ -6,6 +6,8 @@ export const auth = createAuth({
   trustedOrigins: isLocal
     ? (request?: Request) => {
         const origin = request?.headers.get("origin") ?? "";
+        // No Origin header = non-browser client (React Native, curl) — allow
+        if (!origin) return ["*"];
         if (origin === "app://." || /^http:\/\/localhost:\d+$/.test(origin))
           return [origin];
         return [];

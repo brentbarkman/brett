@@ -194,13 +194,17 @@ export async function pull(): Promise<PullResult> {
   }
 
   // 2. POST /sync/pull
-  const { data } = await apiRequest<SyncPullResponse>("/sync/pull", {
+  const { status, data } = await apiRequest<SyncPullResponse>("/sync/pull", {
     method: "POST",
     body: JSON.stringify({
       cursors,
       protocolVersion: 1,
     } satisfies SyncPullRequest),
   });
+
+  if (status !== 200 || !data) {
+    throw new Error(`Sync pull failed: HTTP ${status}`);
+  }
 
   // 3. Handle fullSyncRequired — clear all cursors, next pull will be a full sync
   if (data.fullSyncRequired) {

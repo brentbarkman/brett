@@ -16,6 +16,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       NSFaceIDUsageDescription: "Unlock Brett with Face ID",
       UIFileSharingEnabled: false,
       LSSupportsOpeningDocumentsInPlace: false,
+      NSAppTransportSecurity: {
+        NSAllowsArbitraryLoads: true,
+      },
     },
     entitlements: {
       "com.apple.security.application-groups": ["group.com.brett.app"],

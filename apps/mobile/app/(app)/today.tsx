@@ -7,10 +7,10 @@ import {
   Pressable,
   FlatList,
   RefreshControl,
-  SafeAreaView,
   StyleSheet,
   Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../src/auth/provider";
 import { useItems } from "../../src/hooks/use-items";
 import { useLists } from "../../src/hooks/use-lists";
@@ -49,13 +49,20 @@ export default function TodayScreen() {
       initSync();
       setReady(true);
       // Kick off initial sync
-      sync().catch(() => {
-        // Errors are recorded in sync health, not thrown to the user here
-      });
+      sync().catch(() => {});
     } catch (err) {
       console.error("Initialization failed:", err);
     }
   }, []);
+
+  // Auto-sync every 30 seconds while app is active
+  useEffect(() => {
+    if (!ready) return;
+    const interval = setInterval(() => {
+      sync().catch(() => {});
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [ready]);
 
   const handleAdd = useCallback(() => {
     const title = newTitle.trim();

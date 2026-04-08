@@ -4,12 +4,40 @@ import { prisma } from "../lib/prisma.js";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { fieldLevelMerge } from "../lib/sync-merge.js";
-import { SYNC_TABLES, SYNC_TABLE_TO_MODEL, PUSHABLE_ENTITY_TYPES, MUTABLE_FIELDS } from "@brett/types";
+import { publishSSE } from "../lib/sse.js";
 import type {
   SyncPullRequest, SyncPullResponse, SyncTableChanges,
   SyncPushRequest, SyncPushResponse, SyncMutation, SyncMutationResult,
-  PushableEntityType,
+  SyncTable, PushableEntityType,
 } from "@brett/types";
+
+// Inline these constants to avoid tsx watch ESM re-export bug with workspace symlinks.
+// Source of truth: packages/types/src/sync.ts — keep in sync manually.
+const SYNC_TABLES: readonly SyncTable[] = [
+  "lists", "items", "calendar_events", "calendar_event_notes",
+  "scouts", "scout_findings", "brett_messages", "attachments",
+];
+
+const SYNC_TABLE_TO_MODEL: Record<SyncTable, string> = {
+  lists: "list",
+  items: "item",
+  calendar_events: "calendarEvent",
+  calendar_event_notes: "calendarEventNote",
+  scouts: "scout",
+  scout_findings: "scoutFinding",
+  brett_messages: "brettMessage",
+  attachments: "attachment",
+};
+
+const PUSHABLE_ENTITY_TYPES: readonly PushableEntityType[] = ["item", "list", "calendar_event_note"];
+
+const MUTABLE_FIELDS: Record<PushableEntityType, readonly string[]> = {
+  item: ["title", "description", "notes", "status", "dueDate", "dueDatePrecision",
+         "completedAt", "snoozedUntil", "reminder", "recurrence", "recurrenceRule",
+         "listId", "brettObservation", "contentType", "contentStatus"],
+  list: ["name", "colorClass", "sortOrder", "archivedAt"],
+  calendar_event_note: ["content"],
+};
 
 const CURRENT_PROTOCOL_VERSION = 1;
 const DEFAULT_LIMIT = 500;
@@ -248,6 +276,16 @@ export const sync = new Hono<AuthEnv>()
         } else {
           throw err;
         }
+      }
+
+      // Notify SSE subscribers (desktop) about the change
+      if (result.status === "applied" || result.status === "merged") {
+        const eventType = mutation.action === "CREATE" ? "created"
+          : mutation.action === "DELETE" ? "deleted" : "updated";
+        publishSSE(user.id, {
+          type: `${mutation.entityType}.${eventType}` as any,
+          payload: { id: mutation.entityId },
+        });
       }
 
       results.push(result);

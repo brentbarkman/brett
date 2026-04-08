@@ -45,6 +45,8 @@ app.use(
   "*",
   cors({
     origin: (origin) => {
+      // React Native / mobile clients send no Origin header — allow them
+      if (!origin) return "*";
       if (origin === "app://.") return origin;
       if (isLocal && origin.match(/^http:\/\/localhost:\d+$/)) return origin;
       return null;

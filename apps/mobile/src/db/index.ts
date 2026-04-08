@@ -69,6 +69,8 @@ function createTablesIfNeeded(db: SQLite.SQLiteDatabase) {
       "content_image_url" text,
       "content_favicon" text,
       "content_domain" text,
+      "content_metadata" text,
+      "meeting_note_id" text,
       "list_id" text,
       "user_id" text NOT NULL,
       "created_at" text NOT NULL,

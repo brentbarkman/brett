@@ -39,6 +39,8 @@ export const items = sqliteTable("items", {
   contentImageUrl: text("content_image_url"),
   contentFavicon: text("content_favicon"),
   contentDomain: text("content_domain"),
+  contentMetadata: text("content_metadata"), // JSON string
+  meetingNoteId: text("meeting_note_id"),
   listId: text("list_id"),
   userId: text("user_id").notNull(),
   createdAt: text("created_at").notNull(),

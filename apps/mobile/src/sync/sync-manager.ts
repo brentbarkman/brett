@@ -8,6 +8,9 @@
 
 import { push } from "./push-engine";
 import { pull } from "./pull-engine";
+import { useItemsStore } from "../store/items";
+import { useListsStore } from "../store/lists";
+import { useSyncStore } from "../store/sync";
 import { resetInFlight, getPendingCount, getDeadCount } from "./mutation-queue";
 import {
   startNetworkMonitor,
@@ -64,12 +67,17 @@ export async function sync(): Promise<void> {
   try {
     await pushIfNeeded();
     await pullChanges();
+    // Re-hydrate stores from SQLite so UI reflects pulled changes
+    useItemsStore.getState().hydrate();
+    useListsStore.getState().hydrate();
     updateSyncHealth(null);
+    useSyncStore.getState().refresh();
   } catch (err) {
     if (err instanceof AuthExpiredError) throw err;
     updateSyncHealth(
       err instanceof Error ? err.message : "Unknown sync error",
     );
+    useSyncStore.getState().refresh();
   }
 }
 
