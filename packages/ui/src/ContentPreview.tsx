@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import DOMPurify from "dompurify";
 import { AlertTriangle, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import type { ContentType, ContentStatus, ContentMetadata } from "@brett/types";
@@ -397,7 +397,7 @@ function NewsletterPreview({
   const senderName = contentMetadata?.type === "newsletter" ? contentMetadata.senderName : undefined;
   const receivedAt = contentMetadata?.type === "newsletter" ? contentMetadata.receivedAt : undefined;
 
-  const iframeContent = useMemo(() => {
+  const iframeContent = (() => {
     if (!contentBody) return "";
     const sanitized = newsletterPurify.sanitize(contentBody, {
       ALLOWED_TAGS: [
@@ -437,7 +437,7 @@ function NewsletterPreview({
   img { max-width: 100%; height: auto; }
   table { max-width: 100%; }
 </style></head><body>${sanitized}</body></html>`;
-  }, [contentBody]);
+  })();
 
   return (
     <div className="space-y-2">
