@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/tokens';
 
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -13,10 +14,19 @@ function todayMondayIndex(): number {
 interface WeekStripProps {
   /** Set of Monday-indexed day indices (0–6) that have events. */
   daysWithEvents?: Set<number>;
+  /** Optional callback fired when a day is tapped; receives the Date for that day. */
+  onDayPress?: (date: Date) => void;
 }
 
-export function WeekStrip({ daysWithEvents = new Set() }: WeekStripProps) {
+export function WeekStrip({ daysWithEvents = new Set(), onDayPress }: WeekStripProps) {
   const todayIdx = todayMondayIndex();
+
+  const handleDayPress = (idx: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (onDayPress) {
+      onDayPress(getDateForIndex(idx));
+    }
+  };
 
   return (
     <View style={styles.row}>
@@ -25,7 +35,13 @@ export function WeekStrip({ daysWithEvents = new Set() }: WeekStripProps) {
         const hasEvent = daysWithEvents.has(idx);
 
         return (
-          <View key={idx} style={styles.dayColumn}>
+          <Pressable
+            key={idx}
+            style={styles.dayColumn}
+            onPress={() => handleDayPress(idx)}
+            accessibilityRole="button"
+            accessibilityLabel={`${label} ${getDayNumber(idx)}`}
+          >
             <Text style={styles.dayLabel}>{label}</Text>
             <View style={[styles.dayCircle, isToday && styles.dayCircleToday]}>
               <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>
@@ -33,7 +49,7 @@ export function WeekStrip({ daysWithEvents = new Set() }: WeekStripProps) {
               </Text>
             </View>
             {hasEvent ? <View style={styles.dot} /> : <View style={styles.dotPlaceholder} />}
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -49,6 +65,17 @@ function getDayNumber(mondayIdx: number): string {
   const date = new Date(now);
   date.setDate(now.getDate() + diff);
   return String(date.getDate());
+}
+
+/** Returns the Date object for a given Monday-first week index. */
+function getDateForIndex(mondayIdx: number): Date {
+  const now = new Date();
+  const jsDay = now.getDay();
+  const currentMondayIdx = jsDay === 0 ? 6 : jsDay - 1;
+  const diff = mondayIdx - currentMondayIdx;
+  const date = new Date(now);
+  date.setDate(now.getDate() + diff);
+  return date;
 }
 
 const styles = StyleSheet.create({

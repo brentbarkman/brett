@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ScrollView, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LivingBackground } from '../../../src/components/LivingBackground';
@@ -22,6 +22,7 @@ import {
   type MockItem,
 } from '../../../src/mock/hooks';
 import { getListForItem } from '../../../src/mock/data';
+import { colors } from '../../../src/theme/tokens';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -111,6 +112,12 @@ export default function TodayScreen() {
 
   const isSelecting = selectedIds.size > 0;
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1000);
+  }, []);
+
   return (
     <View style={{ flex: 1 }}>
       <LivingBackground />
@@ -143,6 +150,13 @@ export default function TodayScreen() {
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
             keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.gold}
+              />
+            }
           >
             <GlassCard variant="primary" style={{ padding: 8 }}>
               {(overdue.length > 0 || overdoneInOverdue.length > 0) && (
@@ -159,7 +173,7 @@ export default function TodayScreen() {
                       listName={getListForItem(item)?.name}
                       isSelected={selectedIds.has(item.id)}
                       onToggle={() => batchToggle(item.id)}
-                      onPress={() => router.push(`/task/${item.id}`)}
+                      onPress={() => router.push(`/task/${item.id}?from=Today`)}
                       onSelect={() => handleSelect(item.id)}
                     />
                   ))}
@@ -174,7 +188,7 @@ export default function TodayScreen() {
                       listName={getListForItem(item)?.name}
                       isSelected={selectedIds.has(item.id)}
                       onToggle={() => batchToggle(item.id)}
-                      onPress={() => router.push(`/task/${item.id}`)}
+                      onPress={() => router.push(`/task/${item.id}?from=Today`)}
                       onSelect={() => handleSelect(item.id)}
                     />
                   ))}
@@ -194,7 +208,7 @@ export default function TodayScreen() {
                       listName={getListForItem(item)?.name}
                       isSelected={selectedIds.has(item.id)}
                       onToggle={() => batchToggle(item.id)}
-                      onPress={() => router.push(`/task/${item.id}`)}
+                      onPress={() => router.push(`/task/${item.id}?from=Today`)}
                       onSelect={() => handleSelect(item.id)}
                     />
                   ))}
@@ -208,7 +222,7 @@ export default function TodayScreen() {
                       listName={getListForItem(item)?.name}
                       isSelected={selectedIds.has(item.id)}
                       onToggle={() => batchToggle(item.id)}
-                      onPress={() => router.push(`/task/${item.id}`)}
+                      onPress={() => router.push(`/task/${item.id}?from=Today`)}
                       onSelect={() => handleSelect(item.id)}
                     />
                   ))}
@@ -228,7 +242,7 @@ export default function TodayScreen() {
                       listName={getListForItem(item)?.name}
                       isSelected={selectedIds.has(item.id)}
                       onToggle={() => batchToggle(item.id)}
-                      onPress={() => router.push(`/task/${item.id}`)}
+                      onPress={() => router.push(`/task/${item.id}?from=Today`)}
                       onSelect={() => handleSelect(item.id)}
                     />
                   ))}
@@ -242,7 +256,7 @@ export default function TodayScreen() {
                       listName={getListForItem(item)?.name}
                       isSelected={selectedIds.has(item.id)}
                       onToggle={() => batchToggle(item.id)}
-                      onPress={() => router.push(`/task/${item.id}`)}
+                      onPress={() => router.push(`/task/${item.id}?from=Today`)}
                       onSelect={() => handleSelect(item.id)}
                     />
                   ))}
@@ -262,7 +276,7 @@ export default function TodayScreen() {
                       listName={getListForItem(item)?.name}
                       isSelected={selectedIds.has(item.id)}
                       onToggle={() => batchToggle(item.id)}
-                      onPress={() => router.push(`/task/${item.id}`)}
+                      onPress={() => router.push(`/task/${item.id}?from=Today`)}
                       onSelect={() => handleSelect(item.id)}
                     />
                   ))}

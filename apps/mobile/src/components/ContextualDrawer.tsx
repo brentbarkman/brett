@@ -107,7 +107,7 @@ function CalendarContent({ onNavigate }: { onNavigate: (route: string) => void }
   return (
     <DrawerRow
       label="Calendar Settings"
-      onPress={() => onNavigate('/settings#calendar')}
+      onPress={() => onNavigate('/settings?section=calendar')}
     />
   );
 }

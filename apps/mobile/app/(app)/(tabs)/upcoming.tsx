@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LivingBackground } from '../../../src/components/LivingBackground';
@@ -77,6 +78,12 @@ export default function UpcomingScreen() {
 
   const groups = groupByDate(upcomingItems);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1000);
+  }, []);
+
   return (
     <View style={{ flex: 1 }}>
       <LivingBackground />
@@ -96,6 +103,13 @@ export default function UpcomingScreen() {
             style={{ flex: 1 }}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.gold}
+              />
+            }
           >
             <GlassCard variant="primary" style={{ padding: 8 }}>
               {groups.map((group) => (
@@ -109,7 +123,7 @@ export default function UpcomingScreen() {
                       isDone={false}
                       listName={getListForItem(item)?.name}
                       onToggle={() => toggleItem(item.id)}
-                      onPress={() => router.push(`/task/${item.id}` as never)}
+                      onPress={() => router.push(`/task/${item.id}?from=Upcoming` as never)}
                     />
                   ))}
                 </View>

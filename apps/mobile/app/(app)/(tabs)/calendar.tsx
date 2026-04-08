@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LivingBackground } from '../../../src/components/LivingBackground';
@@ -38,13 +39,51 @@ function startHourOf(event: MockCalendarEvent): number {
   return new Date(event.startTime).getHours();
 }
 
+/** Returns true if a date is today. */
+function isToday(date: Date): boolean {
+  const now = new Date();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
+
+// ── Current Time Indicator ────────────────────────────────────────────────────
+
+function CurrentTimeIndicator() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
+  // Only render if within the visible hour range
+  if (currentHour < START_HOUR || currentHour >= END_HOUR) return null;
+
+  const top = (currentHour - START_HOUR) * HOUR_HEIGHT + (currentMinute / 60) * HOUR_HEIGHT;
+
+  return (
+    <View style={[styles.currentTimeRow, { top }]} pointerEvents="none">
+      <View style={styles.currentTimeDot} />
+      <View style={styles.currentTimeLine} />
+    </View>
+  );
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function CalendarScreen() {
   const { todayEvents } = useMockCalendarEvents();
+  const scrollRef = useRef<ScrollView>(null);
 
   const today = new Date();
   const monthYear = formatMonthYear(today);
+  const showIndicator = isToday(today);
 
   // Build a set of Monday-indexed days that have events (for WeekStrip dots)
   const daysWithEvents = new Set<number>(
@@ -84,32 +123,39 @@ export default function CalendarScreen() {
           </View>
         ) : (
           <ScrollView
+            ref={scrollRef}
             style={{ flex: 1 }}
             contentContainerStyle={styles.timelineContent}
             showsVerticalScrollIndicator={false}
           >
-            {hours.map((hour) => {
-              const slotEvents = eventsByHour.get(hour) ?? [];
-              return (
-                <View key={hour} style={styles.hourRow}>
-                  {/* Time label */}
-                  <View style={styles.timeLabelContainer}>
-                    <Text style={styles.timeLabel}>{formatHourLabel(hour)}</Text>
-                  </View>
+            {/* Timeline container — relative so the indicator can be positioned within it */}
+            <View style={styles.timelineInner}>
+              {hours.map((hour) => {
+                const slotEvents = eventsByHour.get(hour) ?? [];
+                return (
+                  <View key={hour} style={styles.hourRow}>
+                    {/* Time label */}
+                    <View style={styles.timeLabelContainer}>
+                      <Text style={styles.timeLabel}>{formatHourLabel(hour)}</Text>
+                    </View>
 
-                  {/* Event block or empty space */}
-                  <View style={styles.eventContainer}>
-                    {slotEvents.length > 0 ? (
-                      slotEvents.map((event) => (
-                        <TimelineEvent key={event.id} event={event} />
-                      ))
-                    ) : (
-                      <View style={styles.emptySlot} />
-                    )}
+                    {/* Event block or empty space */}
+                    <View style={styles.eventContainer}>
+                      {slotEvents.length > 0 ? (
+                        slotEvents.map((event) => (
+                          <TimelineEvent key={event.id} event={event} />
+                        ))
+                      ) : (
+                        <View style={styles.emptySlot} />
+                      )}
+                    </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })}
+
+              {/* Current-time indicator — overlays the timeline when viewing today */}
+              {showIndicator && <CurrentTimeIndicator />}
+            </View>
           </ScrollView>
         )}
       </SafeAreaView>
@@ -130,6 +176,9 @@ const styles = StyleSheet.create({
   timelineContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+  },
+  timelineInner: {
+    position: 'relative',
   },
   hourRow: {
     flexDirection: 'row',
@@ -152,5 +201,27 @@ const styles = StyleSheet.create({
   },
   emptySlot: {
     height: HOUR_HEIGHT - 8,
+  },
+  // Current-time indicator
+  currentTimeRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+    // Offset left by TIME_LABEL_WIDTH so the dot aligns with the event column
+    paddingLeft: TIME_LABEL_WIDTH - 4,
+  },
+  currentTimeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E6554B',
+  },
+  currentTimeLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(230, 85, 75, 0.5)',
   },
 });

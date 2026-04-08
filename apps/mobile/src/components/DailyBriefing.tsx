@@ -1,7 +1,12 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { radii } from '../theme/tokens';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface DailyBriefingProps {
   content: string;
@@ -46,6 +51,11 @@ export function DailyBriefing({
 }: DailyBriefingProps) {
   if (isDismissed) return null;
 
+  const handleToggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    toggleCollapse();
+  };
+
   return (
     <View style={styles.wrapper}>
       <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
@@ -54,7 +64,7 @@ export function DailyBriefing({
         {/* Header row */}
         <Pressable
           style={styles.header}
-          onPress={toggleCollapse}
+          onPress={handleToggle}
           accessibilityLabel={isCollapsed ? 'Expand daily briefing' : 'Collapse daily briefing'}
         >
           <Text style={styles.label}>
@@ -70,7 +80,7 @@ export function DailyBriefing({
           </Pressable>
         </Pressable>
 
-        {/* Collapsible content */}
+        {/* Collapsible content — LayoutAnimation handles the height transition */}
         {!isCollapsed && (
           <>
             <Text style={styles.body}>

@@ -123,7 +123,7 @@ function DetailRow({ label, value, valueColor, isLast }: DetailRowProps) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function TaskDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const router = useRouter();
   const { getItem, toggleItem } = useMockItems();
   const { getList } = useMockLists();
@@ -174,7 +174,7 @@ export default function TaskDetailScreen() {
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
-            <Text style={styles.breadcrumbText}>‹ Today</Text>
+            <Text style={styles.breadcrumbText}>‹ {from ?? 'Back'}</Text>
           </Pressable>
 
           {/* Title row */}

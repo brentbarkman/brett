@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LivingBackground } from '../../../src/components/LivingBackground';
@@ -41,6 +42,12 @@ export default function InboxScreen() {
 
   const itemCount = inboxItems.length;
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1000);
+  }, []);
+
   return (
     <View style={{ flex: 1 }}>
       <LivingBackground />
@@ -63,6 +70,13 @@ export default function InboxScreen() {
             style={{ flex: 1 }}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.gold}
+              />
+            }
           >
             <GlassCard variant="primary" style={{ padding: 8 }}>
               {inboxItems.map((item: MockItem) => (
@@ -79,7 +93,7 @@ export default function InboxScreen() {
                     if (item.type === 'content') {
                       router.push(`/content/${item.id}` as never);
                     } else {
-                      router.push(`/task/${item.id}` as never);
+                      router.push(`/task/${item.id}?from=Inbox` as never);
                     }
                   }}
                 />

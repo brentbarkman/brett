@@ -48,7 +48,17 @@ const VOICE_INDEX = 2;
 // We use a percentage-based approach driven by a shared value.
 const VOICE_BUTTON_SIZE = 48;
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+
+// Each non-voice tab has flex: 1. There are 4 non-voice tabs + 1 voice wrapper (flex: 1).
+// All 5 slots share equal width = SCREEN_WIDTH / 5.
+const TAB_SLOT_WIDTH = SCREEN_WIDTH / TAB_COUNT;
+
+// Map from route tab index (0–4, including voice at 2) to the X center of the tab slot.
+function tabSlotCenter(tabIndex: number): number {
+  return TAB_SLOT_WIDTH * tabIndex + TAB_SLOT_WIDTH / 2;
+}
 
 type DrawerTab = 'today' | 'inbox' | 'upcoming' | 'calendar';
 
@@ -90,6 +100,19 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       true,
     );
   }, []);
+
+  // Sliding dot X position — animates between tab slot centers
+  const dotX = useSharedValue(tabSlotCenter(state.index));
+
+  useAnimatedReaction(
+    () => state.index,
+    (current) => {
+      dotX.value = withSpring(tabSlotCenter(current), {
+        damping: 15,
+        stiffness: 200,
+      });
+    },
+  );
 
   const inboxCount = 0; // TODO: hook up to store
 
@@ -190,9 +213,6 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             );
           }
 
-          // Effective index for dot positioning (skips voice slot)
-          const dotIndex = index < VOICE_INDEX ? index : index - 1;
-
           return (
             <Pressable
               key={tab.name}
@@ -211,12 +231,15 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                 )}
               </View>
               <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
-              {/* Sliding gold dot */}
-              <SlidingDot activeIndex={activeIndex} myIndex={index} />
+              {/* Dot placeholder to maintain layout height — actual dot is rendered globally */}
+              <View style={styles.dotPlaceholder} />
             </Pressable>
           );
         })}
       </View>
+
+      {/* Single globally-positioned sliding dot */}
+      <SlidingDot dotX={dotX} />
     </View>
     </>
   );
@@ -276,22 +299,22 @@ function InboxBadge({ count, badgeOpacity }: InboxBadgeProps) {
 }
 
 // ── Sliding Dot ───────────────────────────────────────────────────────────────
-// Each non-voice tab renders this. When it's the active tab, it shows; others hide.
+// A single absolutely-positioned dot that slides to the active tab's center.
 
 interface SlidingDotProps {
-  activeIndex: SharedValue<number>;
-  myIndex: number;
+  dotX: SharedValue<number>;
 }
 
-function SlidingDot({ activeIndex, myIndex }: SlidingDotProps) {
-  const dotStyle = useAnimatedStyle(() => {
-    // Convert floating activeIndex to opacity: 1 when close, 0 otherwise
-    const diff = Math.abs(activeIndex.value - myIndex);
-    const opacity = Math.max(0, 1 - diff * 2);
-    return { opacity };
-  });
+const DOT_SIZE = 4;
 
-  return <Animated.View style={[styles.dot, dotStyle]} />;
+function SlidingDot({ dotX }: SlidingDotProps) {
+  const dotStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dotX.value - DOT_SIZE / 2 }],
+  }));
+
+  return (
+    <Animated.View style={[styles.dot, dotStyle]} />
+  );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -339,10 +362,19 @@ const styles = StyleSheet.create({
     ...typography.tabLabel,
     marginBottom: 6,
   },
+  // Placeholder to reserve vertical space occupied by the dot
+  dotPlaceholder: {
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+  },
+  // The single globally-positioned sliding dot
   dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+    position: 'absolute',
+    bottom: spacing.xs + 4,
+    left: 0,
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+    borderRadius: DOT_SIZE / 2,
     backgroundColor: colors.gold,
   },
   // Voice button

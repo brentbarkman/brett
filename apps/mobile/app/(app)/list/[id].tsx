@@ -67,7 +67,7 @@ export default function ListDetailScreen() {
                   contentType={item.contentType}
                   contentDomain={item.contentDomain}
                   onToggle={() => toggleItem(item.id)}
-                  onPress={() => router.push(`/task/${item.id}`)}
+                  onPress={() => router.push(`/task/${item.id}?from=${encodeURIComponent(list?.name ?? 'List')}`)}
                 />
               ))}
             </GlassCard>
