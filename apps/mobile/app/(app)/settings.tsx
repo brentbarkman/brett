@@ -22,9 +22,11 @@ interface SettingRowProps {
   isLast?: boolean;
   isDestructive?: boolean;
   onPress?: () => void;
+  accessibilityLabel?: string;
+  accessibilityRole?: 'button' | 'link' | 'none' | 'menuitem' | 'summary' | 'image' | 'imagebutton' | 'keyboardkey' | 'text' | 'adjustable' | 'spinbutton' | 'combobox' | 'radiogroup' | 'scrollbar' | 'tab' | 'tablist' | 'timer' | 'toolbar' | 'checkbox' | 'radio' | 'switch' | 'header' | 'search' | 'list';
 }
 
-function SettingRow({ label, value, valueColor, isLast, isDestructive, onPress }: SettingRowProps) {
+function SettingRow({ label, value, valueColor, isLast, isDestructive, onPress, accessibilityLabel, accessibilityRole }: SettingRowProps) {
   const content = (
     <View style={[styles.row, !isLast && styles.rowBorder]}>
       <Text style={[styles.label, isDestructive && styles.labelDestructive]}>
@@ -40,7 +42,12 @@ function SettingRow({ label, value, valueColor, isLast, isDestructive, onPress }
 
   if (onPress) {
     return (
-      <Pressable onPress={onPress} android_ripple={{ color: 'rgba(255,255,255,0.05)' }}>
+      <Pressable
+        onPress={onPress}
+        android_ripple={{ color: 'rgba(255,255,255,0.05)' }}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole={accessibilityRole}
+      >
         {content}
       </Pressable>
     );
@@ -74,7 +81,12 @@ export default function SettingsScreen() {
       <LivingBackground />
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         {/* Back breadcrumb */}
-        <Pressable onPress={() => router.back()} style={styles.breadcrumb}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.breadcrumb}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
           <Text style={styles.breadcrumbText}>‹ Back</Text>
         </Pressable>
 
@@ -138,6 +150,8 @@ export default function SettingsScreen() {
               isDestructive
               isLast
               onPress={handleSignOut}
+              accessibilityLabel="Sign out"
+              accessibilityRole="button"
             />
           </SectionGroup>
         </ScrollView>

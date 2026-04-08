@@ -199,8 +199,8 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               style={styles.tab}
               onPress={onPress}
               onLongPress={onLongPress}
-              accessibilityRole="button"
-              accessibilityLabel={label}
+              accessibilityRole="tab"
+              accessibilityLabel={`${label} tab`}
               accessibilityState={{ selected: isFocused }}
             >
               <View style={styles.iconWrapper}>
@@ -239,7 +239,8 @@ function VoiceButton({ glowOpacity, onPress }: VoiceButtonProps) {
       style={styles.voiceButton}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Voice"
+      accessibilityLabel="Activate Brett voice mode"
+      accessibilityHint="Double-tap to start listening"
     >
       {/* Ambient glow */}
       <Animated.View style={[styles.voiceGlow, glowStyle]} />

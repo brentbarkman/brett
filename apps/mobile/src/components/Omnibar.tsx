@@ -54,6 +54,8 @@ export function Omnibar({ placeholder = 'Add a task...', onSubmit }: OmnibarProp
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
         blurOnSubmit={false}
+        accessibilityLabel="Add a task"
+        accessibilityHint="Type a task and press return to add"
       />
       <View style={styles.goldDot} />
     </Animated.View>

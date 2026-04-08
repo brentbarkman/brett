@@ -48,11 +48,20 @@ export function DailyBriefing({
   return (
     <View style={styles.wrapper}>
       {/* Header row */}
-      <Pressable style={styles.header} onPress={toggleCollapse}>
+      <Pressable
+        style={styles.header}
+        onPress={toggleCollapse}
+        accessibilityLabel={isCollapsed ? 'Expand daily briefing' : 'Collapse daily briefing'}
+      >
         <Text style={styles.label}>
           Daily Briefing{isCollapsed ? ' ▸' : ''}
         </Text>
-        <Pressable onPress={dismiss} hitSlop={8} style={styles.dismissButton}>
+        <Pressable
+          onPress={dismiss}
+          hitSlop={8}
+          style={styles.dismissButton}
+          accessibilityLabel="Dismiss daily briefing"
+        >
           <Text style={styles.dismissIcon}>✕</Text>
         </Pressable>
       </Pressable>

@@ -115,7 +115,12 @@ export default function ScoutDetailScreen() {
       <View style={styles.root}>
         <LivingBackground />
         <SafeAreaView edges={['top']} style={styles.safeArea}>
-          <Pressable onPress={() => router.back()} style={styles.breadcrumb}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.breadcrumb}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
             <Text style={styles.breadcrumbText}>‹ Scouts</Text>
           </Pressable>
           <View style={styles.notFound}>

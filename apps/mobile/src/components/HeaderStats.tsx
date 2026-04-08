@@ -46,7 +46,10 @@ export function HeaderStats({
   return (
     <View style={styles.container}>
       <Text style={styles.date}>{date}</Text>
-      <Animated.Text style={[styles.stats, animatedStatsStyle]}>
+      <Animated.Text
+        style={[styles.stats, animatedStatsStyle]}
+        accessibilityLabel={`${doneCount} of ${totalCount} tasks done, ${meetingCount} ${meetingWord} totaling ${meetingDuration}`}
+      >
         {statsText}
       </Animated.Text>
     </View>

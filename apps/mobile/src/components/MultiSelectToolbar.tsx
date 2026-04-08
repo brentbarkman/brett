@@ -55,17 +55,17 @@ export function MultiSelectToolbar({
       <View style={styles.content}>
         {/* Left: action buttons */}
         <View style={styles.actions}>
-          <Pressable style={styles.actionButton} onPress={onSchedule}>
+          <Pressable style={styles.actionButton} onPress={onSchedule} accessibilityLabel="Schedule selected tasks">
             <CalendarDays size={20} color={colors.gold} />
             <Text style={[styles.actionLabel, { color: colors.gold }]}>Schedule</Text>
           </Pressable>
 
-          <Pressable style={styles.actionButton} onPress={onMoveToList}>
+          <Pressable style={styles.actionButton} onPress={onMoveToList} accessibilityLabel="Move selected tasks to list">
             <FolderInput size={20} color={colors.cerulean} />
             <Text style={[styles.actionLabel, { color: colors.cerulean }]}>Move</Text>
           </Pressable>
 
-          <Pressable style={styles.actionButton} onPress={onDelete}>
+          <Pressable style={styles.actionButton} onPress={onDelete} accessibilityLabel="Delete selected tasks">
             <Trash2 size={20} color={colors.red} />
             <Text style={[styles.actionLabel, { color: colors.red }]}>Delete</Text>
           </Pressable>
@@ -76,7 +76,7 @@ export function MultiSelectToolbar({
           <Text style={styles.countText}>
             {selectedCount} selected
           </Text>
-          <Pressable style={styles.doneButton} onPress={onDone}>
+          <Pressable style={styles.doneButton} onPress={onDone} accessibilityLabel="Exit selection mode">
             <Text style={styles.doneText}>Done</Text>
           </Pressable>
         </View>

@@ -48,7 +48,12 @@ export default function ContentDetailScreen() {
       <View style={styles.root}>
         <LivingBackground />
         <SafeAreaView edges={['top']} style={styles.safeArea}>
-          <Pressable onPress={() => router.back()} style={styles.breadcrumb}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.breadcrumb}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
             <Text style={styles.breadcrumbText}>‹ Back</Text>
           </Pressable>
           <View style={styles.notFound}>
@@ -109,7 +114,7 @@ export default function ContentDetailScreen() {
 
         {/* Save as task button */}
         <View style={styles.footer}>
-          <Pressable style={styles.saveButton} onPress={handleSaveAsTask}>
+          <Pressable style={styles.saveButton} onPress={handleSaveAsTask} accessibilityLabel="Save as task" accessibilityRole="button">
             <Text style={styles.saveButtonText}>Save as task</Text>
           </Pressable>
         </View>

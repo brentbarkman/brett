@@ -183,6 +183,8 @@ export function TaskRow({
           onLongPress={handleLongPress}
           onPressOut={handlePressOut}
           delayLongPress={500}
+          accessibilityLabel={title}
+          accessibilityHint="Double-tap for details"
         >
           {/* Selection indicator dot */}
           <Animated.View style={[styles.selectionDot, animatedSelectionStyle]} />
@@ -195,6 +197,9 @@ export function TaskRow({
               style={styles.checkboxTapArea}
               onPress={handleToggle}
               hitSlop={0}
+              accessibilityLabel={isDone ? `Mark ${title} incomplete` : `Complete ${title}`}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isDone }}
             >
               <Animated.View style={[styles.checkbox, animatedCheckboxStyle]} />
             </Pressable>

@@ -67,7 +67,11 @@ export function NextUpCard({ event, onPress }: NextUpCardProps) {
   }
 
   return (
-    <Pressable style={styles.wrapper} onPress={onPress}>
+    <Pressable
+      style={styles.wrapper}
+      onPress={onPress}
+      accessibilityLabel={`Next up: ${event.title}`}
+    >
       {/* Left: time until */}
       <View style={styles.timeUntilContainer}>
         <Text style={styles.timeUntil}>{timeUntil}</Text>

@@ -28,7 +28,12 @@ export default function ListDetailScreen() {
       <LivingBackground />
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         {/* Back breadcrumb */}
-        <Pressable onPress={() => router.back()} style={styles.breadcrumb}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.breadcrumb}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
           <Text style={styles.breadcrumbText}>‹ Back</Text>
         </Pressable>
 

@@ -139,7 +139,12 @@ export default function TaskDetailScreen() {
         <SafeAreaView edges={['top']} style={styles.safeArea}>
           <View style={styles.notFoundContainer}>
             <Text style={styles.notFoundText}>Task not found</Text>
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.backButton}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
               <Text style={styles.backButtonText}>‹ Go back</Text>
             </Pressable>
           </View>
@@ -163,7 +168,12 @@ export default function TaskDetailScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Back breadcrumb */}
-          <Pressable onPress={() => router.back()} style={styles.breadcrumb}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.breadcrumb}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
             <Text style={styles.breadcrumbText}>‹ Today</Text>
           </Pressable>
 
