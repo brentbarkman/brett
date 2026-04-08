@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Video, X } from "lucide-react";
 import type {
   CalendarEventDisplay,
@@ -284,29 +284,23 @@ export function CalendarTimeline({
     };
   }, [contextMenu]);
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, event: CalendarEventDisplay) => {
-      if (!onQuickRsvp) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setContextMenu({ eventId: event.id, x: e.clientX, y: e.clientY });
-    },
-    [onQuickRsvp]
-  );
+  const handleContextMenu = (e: React.MouseEvent, event: CalendarEventDisplay) => {
+    if (!onQuickRsvp) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ eventId: event.id, x: e.clientX, y: e.clientY });
+  };
 
-  const handleRsvp = useCallback(
-    (status: CalendarRsvpStatus) => {
-      if (contextMenu && onQuickRsvp) {
-        onQuickRsvp(contextMenu.eventId, status);
-      }
-      setContextMenu(null);
-    },
-    [contextMenu, onQuickRsvp]
-  );
+  const handleRsvp = (status: CalendarRsvpStatus) => {
+    if (contextMenu && onQuickRsvp) {
+      onQuickRsvp(contextMenu.eventId, status);
+    }
+    setContextMenu(null);
+  };
 
-  // Layout computation (memoized to avoid O(n²) recalc on unrelated re-renders)
-  const layout = useMemo(() => layoutEvents(events), [events]);
-  const buffers = useMemo(() => findBuffers(events), [events]);
+  // Layout computation
+  const layout = layoutEvents(events);
+  const buffers = findBuffers(events);
 
   // Countdown: find next upcoming event (only for today's view)
   const nowMinutes = currentHour * 60 + currentMinute;

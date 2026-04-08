@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Send, Square, X, Search, Plus, Check, Radar, MessageSquare } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import { SkillResultCard } from "./SkillResultCard";
@@ -90,7 +90,7 @@ export function SpotlightModal({
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
 
   // Intercept input changes to detect shortcut prefixes
-  const handleInputChange = useCallback((value: string) => {
+  const handleInputChange = (value: string) => {
     if (!forcedAction && value === "s ") {
       setForcedAction("search");
       onInputChange("");
@@ -106,7 +106,7 @@ export function SpotlightModal({
       setForcedAction(null);
     }
     onInputChange(value);
-  }, [forcedAction, onInputChange]);
+  };
 
   // Apply initial forced action when opening
   useEffect(() => {
@@ -220,13 +220,13 @@ export function SpotlightModal({
     }
   }
 
-  const handleCreateTask = useCallback((title: string) => {
+  const handleCreateTask = (title: string) => {
     onCreateTask(title);
     onInputChange("");
     setConfirmedTask(title);
-  }, [onCreateTask, onInputChange]);
+  };
 
-  const handleSuggestionSelect = useCallback(
+  const handleSuggestionSelect = 
     (suggestion: Suggestion) => {
       setForcedAction(null);
       if (suggestion.action === "ask") {
@@ -238,11 +238,9 @@ export function SpotlightModal({
       } else if (suggestion.action === "search") {
         onSearch(input);
       }
-    },
-    [input, onSend, handleCreateTask, onSearch]
-  );
+    };
 
-  const handleKeyDown = useCallback(
+  const handleKeyDown = 
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -314,9 +312,7 @@ export function SpotlightModal({
           }
         }
       }
-    },
-    [showSuggestions, showSearchResults, suggestions, selectedSuggestion, handleSuggestionSelect, visibleResults, selectedSearchIdx, onSearchResultClick, input, forcedAction, hasAI, onSend, handleCreateTask, onSearch, onClose]
-  );
+    };
 
   if (!isOpen) return null;
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import { streamingFetch } from "./streaming";
@@ -49,7 +49,7 @@ export function useBriefing() {
       ? streamingContent
       : cachedBriefing?.content ?? null;
 
-  const regenerate = useCallback(async () => {
+  const regenerate = async () => {
     if (isGenerating) return;
 
     setStreamingContent("");
@@ -82,15 +82,15 @@ export function useBriefing() {
       abortRef.current = null;
       qc.invalidateQueries({ queryKey: ["briefing"] });
     }
-  }, [isGenerating, qc]);
+  };
 
-  const cancel = useCallback(() => {
+  const cancel = () => {
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
     setIsGenerating(false);
-  }, []);
+  };
 
   // Cleanup: abort any in-flight generation on unmount
   useEffect(() => {

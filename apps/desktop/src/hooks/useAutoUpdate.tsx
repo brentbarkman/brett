@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import { apiFetch } from "../api/client";
 
@@ -126,12 +126,12 @@ export function AutoUpdateProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const install = useCallback(() => {
+  const install = () => {
     if (!api) return;
     api.installUpdate().catch((err) => {
       console.error("[AutoUpdate] Install failed:", err);
     });
-  }, [api]);
+  };
 
   return (
     <AutoUpdateContext.Provider value={{ updateReady: version !== null, version, install }}>

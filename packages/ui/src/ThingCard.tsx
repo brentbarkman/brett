@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { StaleTooltip } from "./StaleTooltip";
 import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
@@ -32,7 +32,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
     };
   }, []);
 
-  const handleToggleClick = useCallback(
+  const handleToggleClick = 
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!onToggle || completing) return;
@@ -47,9 +47,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       } else {
         onToggle(thing.id);
       }
-    },
-    [onToggle, thing.id, thing.isCompleted, completing],
-  );
+    };
 
   const getIcon = () => {
     if (thing.type === "content") {

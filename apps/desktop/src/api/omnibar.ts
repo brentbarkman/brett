@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { streamingFetch } from "./streaming";
 import { useAIConfigs } from "./ai-config";
@@ -46,8 +46,7 @@ export function useOmnibar() {
   const { data: aiConfigData } = useAIConfigs();
   const hasAI = (aiConfigData?.configs ?? []).some((c) => c.isActive && c.isValid);
 
-  const send = useCallback(
-    async (text: string, currentView?: string, intent?: string) => {
+  const send = async (text: string, currentView?: string, intent?: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
 
@@ -221,43 +220,41 @@ export function useOmnibar() {
         setIsStreaming(false);
         abortRef.current = null;
       }
-    },
-    [isStreaming, sessionId]
-  );
+  };
 
-  const cancel = useCallback(() => {
+  const cancel = () => {
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
     setIsStreaming(false);
-  }, []);
+  };
 
-  const close = useCallback(() => {
+  const close = () => {
     cancel();
     setIsOpen(false);
     setSearchResults(null);
     // Keep input, messages, and sessionId so reopening restores state
-  }, [cancel]);
+  };
 
-  const open = useCallback((newMode: OmnibarMode = "bar") => {
+  const open = (newMode: OmnibarMode = "bar") => {
     setMode(newMode);
     setIsOpen(true);
-  }, []);
+  };
 
-  const reset = useCallback(() => {
+  const reset = () => {
     cancel();
     setMessages([]);
     setSessionId(null);
     setInput("");
     setSearchResults(null);
     toolCallNamesRef.current.clear();
-  }, [cancel]);
+  };
 
   // Local action: create a task directly (no AI needed)
   // No chat UI — just do it, invalidate queries, close the omnibar
   // When on Today view, set dueDate to today so it appears in the current list
-  const createTask = useCallback(async (title: string, currentView?: string) => {
+  const createTask = async (title: string, currentView?: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
@@ -288,14 +285,14 @@ export function useOmnibar() {
     setIsOpen(false);
     setMessages([]);
     setSessionId(null);
-  }, [queryClient]);
+  };
 
   // Local action: search things directly (no AI needed)
   // Shows results as a one-shot display, not a conversation
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  const searchThings = useCallback(async (query: string) => {
+  const searchThings = async (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
 
@@ -311,7 +308,7 @@ export function useOmnibar() {
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  };
 
   return {
     isOpen,

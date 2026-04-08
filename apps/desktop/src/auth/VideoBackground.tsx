@@ -1,6 +1,4 @@
-import {
-  forwardRef,
-  useCallback,
+import React, {
   useEffect,
   useImperativeHandle,
   useRef,
@@ -9,6 +7,7 @@ import {
 
 interface VideoBackgroundProps {
   videos: string[];
+  ref?: React.Ref<VideoBackgroundHandle>;
 }
 
 export interface VideoBackgroundHandle {
@@ -17,17 +16,14 @@ export interface VideoBackgroundHandle {
 
 const FADE_MS = 1200;
 
-export const VideoBackground = forwardRef<
-  VideoBackgroundHandle,
-  VideoBackgroundProps
->(function VideoBackground({ videos }, ref) {
+export function VideoBackground({ videos, ref }: VideoBackgroundProps) {
   const [startIndex] = useState(() =>
     Math.floor(Math.random() * videos.length)
   );
   const activeSlotRef = useRef<0 | 1>(0);
   const currentIndex = useRef(startIndex);
   const lastAdvance = useRef(0);
-  const preloadTimer = useRef<ReturnType<typeof setTimeout>>();
+  const preloadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Track what each slot should have next (may differ from current src during transitions)
   const pendingSrc = useRef<(string | null)[]>([null, null]);
   const [, forceRender] = useState(0);
@@ -40,15 +36,15 @@ export const VideoBackground = forwardRef<
     useRef<HTMLVideoElement>(null),
   ];
 
-  const handleFirstLoad = useCallback(() => {
+  const handleFirstLoad = () => {
     setSlots((prev) => {
       const next = [...prev];
       next[0] = { ...next[0], visible: true };
       return next;
     });
-  }, []);
+  };
 
-  const advance = useCallback(() => {
+  const advance = () => {
     const now = Date.now();
     if (now - lastAdvance.current < 300) return;
     lastAdvance.current = now;
@@ -101,18 +97,15 @@ export const VideoBackground = forwardRef<
 
     // Store the intended src so rapid advances can apply it
     pendingSrc.current[oldSlot] = videos[followingIndex];
-  }, [videos]);
+  };
 
   useImperativeHandle(ref, () => ({ skip: advance }), [advance]);
 
-  const handleEnded = useCallback(
-    (slotIndex: number) => {
-      if (slotIndex === activeSlotRef.current) {
-        advance();
-      }
-    },
-    [advance]
-  );
+  const handleEnded = (slotIndex: number) => {
+    if (slotIndex === activeSlotRef.current) {
+      advance();
+    }
+  };
 
   // Preload the inactive slot when its src changes
   useEffect(() => {
@@ -144,4 +137,4 @@ export const VideoBackground = forwardRef<
       ))}
     </div>
   );
-});
+}

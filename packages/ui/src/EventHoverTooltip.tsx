@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { MapPin, Users, RefreshCw, Check, HelpCircle, X } from "lucide-react";
 import type { CalendarEventDisplay, CalendarRsvpStatus } from "@brett/types";
@@ -61,10 +61,10 @@ export function EventHoverTooltip({
   const [isVisible, setIsVisible] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
-  const updatePosition = useCallback(() => {
+  const updatePosition = () => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const gap = 8;
@@ -93,22 +93,22 @@ export function EventHoverTooltip({
     }
 
     setPosition({ top, left });
-  }, [side]);
+  };
 
-  const handleMouseEnter = useCallback(() => {
+  const handleMouseEnter = () => {
     updatePosition();
     setIsVisible(true);
     setIsExpanded(false);
     timerRef.current = setTimeout(() => {
       setIsExpanded(true);
     }, 1500);
-  }, [updatePosition]);
+  };
 
-  const handleMouseLeave = useCallback(() => {
+  const handleMouseLeave = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setIsVisible(false);
     setIsExpanded(false);
-  }, []);
+  };
 
   useEffect(() => {
     return () => {

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Inbox } from "lucide-react";
 import type { Thing, NavList, FilterType } from "@brett/types";
 import { computeRelativeAge } from "@brett/business";
@@ -78,15 +78,15 @@ export function InboxView({
   }, []);
 
   // Apply type filter
-  const filteredThings = useMemo(() => {
+  const filteredThings = (() => {
     if (typeFilter === "All") return things;
     if (typeFilter === "Tasks") return things.filter((t) => t.type === "task");
     if (typeFilter === "Content") return things.filter((t) => t.type === "content");
     return things;
-  }, [things, typeFilter]);
+  })();
 
   // Build display list: current things + snapshotted animating-out items removed by refetch
-  const displayThings = useMemo(() => {
+  const displayThings = (() => {
     const currentIds = new Set(filteredThings.map((t) => t.id));
     const result = [...filteredThings];
     for (const [id, item] of animatingOutItemsRef.current) {
@@ -95,13 +95,13 @@ export function InboxView({
       }
     }
     return result;
-  }, [filteredThings]);
+  })();
 
   // ── Temporal grouping (must come before activeThings so keyboard nav matches visual order) ──
   type TimeBucket = "NEW" | "EARLIER TODAY" | "YESTERDAY" | "THIS WEEK" | "OLDER";
   const bucketOrder: TimeBucket[] = ["NEW", "EARLIER TODAY", "YESTERDAY", "THIS WEEK", "OLDER"];
 
-  const getTimeBucket = useCallback((thing: Thing): TimeBucket => {
+  const getTimeBucket = (thing: Thing): TimeBucket => {
     if (!thing.createdAt) return "OLDER";
     const created = new Date(thing.createdAt);
     const diffMs = now.current.getTime() - created.getTime();
@@ -118,9 +118,9 @@ export function InboxView({
     if (created >= yesterday) return "YESTERDAY";
     if (created >= weekStart) return "THIS WEEK";
     return "OLDER";
-  }, []);
+  };
 
-  const groupedDisplay = useMemo(() => {
+  const groupedDisplay = (() => {
     const groups = new Map<TimeBucket, Thing[]>();
     for (const bucket of bucketOrder) {
       groups.set(bucket, []);
@@ -130,32 +130,26 @@ export function InboxView({
       groups.get(bucket)!.push(thing);
     }
     return groups;
-  }, [displayThings, getTimeBucket]);
+  })();
 
   // Flat ordered list matching visual bucket order
-  const orderedDisplayThings = useMemo(() => {
+  const orderedDisplayThings = (() => {
     const result: Thing[] = [];
     for (const bucket of bucketOrder) {
       const items = groupedDisplay.get(bucket);
       if (items && items.length > 0) result.push(...items);
     }
     return result;
-  }, [groupedDisplay]);
+  })();
 
   // Active items (for focus/selection) — excludes animating out, in visual bucket order
-  const activeThings = useMemo(
-    () => orderedDisplayThings.filter((t) => !animatingOutIds.has(t.id)),
-    [orderedDisplayThings, animatingOutIds]
-  );
+  const activeThings = orderedDisplayThings.filter((t) => !animatingOutIds.has(t.id));
 
   // Index map for O(1) focus lookups
-  const activeIndexMap = useMemo(
-    () => new Map(activeThings.map((t, i) => [t.id, i])),
-    [activeThings]
-  );
+  const activeIndexMap = new Map(activeThings.map((t, i) => [t.id, i]));
 
   // New item IDs for enter animation (skip initial load)
-  const newItemIds = useMemo(() => {
+  const newItemIds = (() => {
     if (isInitialLoadRef.current) return new Set<string>();
     const ids = new Set<string>();
     for (const t of things) {
@@ -164,7 +158,7 @@ export function InboxView({
       }
     }
     return ids;
-  }, [things]);
+  })();
 
   // Update previous IDs after render
   useEffect(() => {
@@ -184,44 +178,38 @@ export function InboxView({
 
   const focusedThing = activeThings[focusedIndex];
 
-  const getTargetIds = useCallback((): string[] => {
+  const getTargetIds = (): string[] => {
     if (selectedIds.size > 0) return [...selectedIds];
     if (focusedThing) return [focusedThing.id];
     return [];
-  }, [selectedIds, focusedThing]);
+  };
 
-  const slideOut = useCallback(
-    (ids: string[]) => {
-      // Snapshot items before they might disappear from refetch
-      ids.forEach((id) => {
-        const item = things.find((t) => t.id === id);
-        if (item) animatingOutItemsRef.current.set(id, item);
-      });
-      setAnimatingOutIds((prev) => {
-        const next = new Set(prev);
-        ids.forEach((id) => next.add(id));
-        return next;
-      });
-    },
-    [things, filteredThings]
-  );
+  const slideOut = (ids: string[]) => {
+    // Snapshot items before they might disappear from refetch
+    ids.forEach((id) => {
+      const item = things.find((t) => t.id === id);
+      if (item) animatingOutItemsRef.current.set(id, item);
+    });
+    setAnimatingOutIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+  };
 
-  const handleAnimationEnd = useCallback(
-    (id: string) => {
-      animatingOutItemsRef.current.delete(id);
-      setAnimatingOutIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    },
-    []
-  );
+  const handleAnimationEnd = (id: string) => {
+    animatingOutItemsRef.current.delete(id);
+    setAnimatingOutIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
 
   // Document-level keyboard handler — works regardless of which element has focus
   useEffect(() => {
@@ -396,10 +384,10 @@ export function InboxView({
   ]);
 
   // Determine if all visible items share the same source (suppress redundant pills)
-  const allSameSource = useMemo(() => {
+  const allSameSource = (() => {
     const sources = displayThings.map((t) => t.source).filter(Boolean);
     return sources.length > 0 && sources.every((s) => s === sources[0]);
-  }, [displayThings]);
+  })();
 
   const isEmpty = displayThings.length === 0;
 

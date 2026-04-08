@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getToken } from "../auth/auth-client";
 
@@ -25,7 +25,7 @@ export function useEventStream(): void {
   const eventSourceRef = useRef<EventSource | null>(null);
   const cancelledRef = useRef(false);
 
-  const connect = useCallback(async () => {
+  const connect = async () => {
     if (cancelledRef.current) return;
 
     const token = await getToken();
@@ -150,7 +150,7 @@ export function useEventStream(): void {
     es.addEventListener("list.created", listHandler);
     es.addEventListener("list.updated", listHandler);
     es.addEventListener("list.deleted", listHandler);
-  }, [qc]);
+  };
 
   useEffect(() => {
     cancelledRef.current = false; // Reset on mount (StrictMode double-mount sets this to true)

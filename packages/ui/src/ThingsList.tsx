@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import type { Thing, NavList } from "@brett/types";
 import { ThingCard } from "./ThingCard";
 import { SectionHeader } from "./SectionHeader";
@@ -30,7 +30,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
   const pendingToggles = useRef<Set<string>>(new Set());
   const freezeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleToggleWithFreeze = useCallback((id: string) => {
+  const handleToggleWithFreeze = (id: string) => {
     pendingToggles.current.add(id);
     // Reset timer — fire all mutations 600ms after last click
     if (freezeTimer.current) clearTimeout(freezeTimer.current);
@@ -39,7 +39,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
       pendingToggles.current = new Set();
       ids.forEach(toggleId => onToggle?.(toggleId));
     }, 600);
-  }, [onToggle]);
+  };
 
   useEffect(() => {
     return () => {
@@ -47,7 +47,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
     };
   }, []);
 
-  const { uncompleted, done, grouped, allItems } = useMemo(() => {
+  const { uncompleted, done, grouped, allItems } = (() => {
     const uncompleted = things.filter((t) => !t.isCompleted);
     const done = things.filter((t) => t.isCompleted);
     const grouped = {
@@ -57,7 +57,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
     };
     const allItems = [...grouped.overdue, ...grouped.today, ...grouped.this_week, ...done];
     return { uncompleted, done, grouped, allItems };
-  }, [things]);
+  })();
   const quickAddRef = useRef<QuickAddInputHandle>(null);
 
   const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
@@ -82,11 +82,11 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
     },
   });
 
-  const handleItemClick = useCallback((thing: Thing) => {
+  const handleItemClick = (thing: Thing) => {
     const idx = allItems.findIndex((t) => t.id === thing.id);
     if (idx !== -1) setFocusedIndex(idx);
     onItemClick(thing);
-  }, [allItems, onItemClick, setFocusedIndex]);
+  };
 
   const hasUncompleted = uncompleted.length > 0;
 

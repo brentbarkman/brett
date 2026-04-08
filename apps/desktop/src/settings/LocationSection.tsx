@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import { createPortal } from "react-dom";
 import { Brain, Check, MapPin, Trash2 } from "lucide-react";
@@ -151,19 +151,16 @@ export function LocationSection() {
   const hasAI = (aiConfigData?.configs ?? []).some((c) => c.isActive && c.isValid);
   const facts = factsData?.facts ?? [];
 
-  const allTimezones = useMemo(
-    () => [...new Set([detectedTz, selectedTz, ...commonTimezones])].sort(),
-    [selectedTz],
-  );
+  const allTimezones = [...new Set([detectedTz, selectedTz, ...commonTimezones])].sort();
 
   // ── Effects ──
 
-  const updateDropdownPos = useCallback(() => {
+  const updateDropdownPos = () => {
     const el = inputWrapperRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-  }, []);
+  };
 
   useEffect(() => {
     if (user) {

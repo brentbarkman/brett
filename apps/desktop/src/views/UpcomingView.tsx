@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { Clock } from "lucide-react";
 import { ThingCard, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
 import type { Thing, FilterType } from "@brett/types";
@@ -20,12 +20,12 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
   const { data: things = [], isLoading } = useUpcomingThings();
   const toggleThing = useToggleThing();
 
-  const filteredThings = useMemo(() => {
+  const filteredThings = (() => {
     if (typeFilter === "All") return things;
     if (typeFilter === "Tasks") return things.filter((t) => t.type === "task");
     if (typeFilter === "Content") return things.filter((t) => t.type === "content");
     return things;
-  }, [things, typeFilter]);
+  })();
 
   const sections = groupUpcomingThings(filteredThings);
   const allItems = sections.flatMap((s) => s.things);

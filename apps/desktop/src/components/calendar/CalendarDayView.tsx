@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { getEventGlassColor, isSafeUrl } from "@brett/utils";
@@ -102,9 +102,9 @@ export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewP
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const allDayEvents = useMemo(() => events.filter((e) => e.isAllDay), [events]);
-  const timedEvents = useMemo(() => events.filter((e) => !e.isAllDay), [events]);
-  const layout = useMemo(() => layoutEvents(timedEvents), [timedEvents]);
+  const allDayEvents = events.filter((e) => e.isAllDay);
+  const timedEvents = events.filter((e) => !e.isAllDay);
+  const layout = layoutEvents(timedEvents);
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => i);
 
   // Real-time clock

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { getEventGlassColor } from "@brett/utils";
@@ -114,7 +114,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => i);
 
   // Build days array
-  const days = useMemo(() => {
+  const days = (() => {
     const result: Date[] = [];
     for (let i = 0; i < daysPerWeek; i++) {
       const d = new Date(startDate);
@@ -122,10 +122,10 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
       result.push(d);
     }
     return result;
-  }, [startDate, daysPerWeek]);
+  })();
 
-  // Group events by day (memoized)
-  const { eventsByDay, allDayByDay, layoutByDay } = useMemo(() => {
+  // Group events by day
+  const { eventsByDay, allDayByDay, layoutByDay } = (() => {
     const allDayEvents = events.filter((e) => e.isAllDay);
     const timedEvents = events.filter((e) => !e.isAllDay);
 
@@ -154,7 +154,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
     }
 
     return { eventsByDay: ebd, allDayByDay: abd, layoutByDay: lbd };
-  }, [events, days]);
+  })();
 
   // Real-time clock
   useEffect(() => {

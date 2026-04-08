@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
 
 interface TooltipProps {
   content: string;
@@ -13,17 +13,17 @@ export function Tooltip({ content, children, delay = 200, position = "top" }: To
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const show = useCallback(() => {
+  const show = () => {
     timerRef.current = setTimeout(() => setVisible(true), delay);
-  }, [delay]);
+  };
 
-  const hide = useCallback(() => {
+  const hide = () => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     setVisible(false);
-  }, []);
+  };
 
   const isTop = position === "top";
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Paperclip, Image, FileText, Film, Music, X, Loader2, AlertCircle, Download } from "lucide-react";
 import type { Attachment } from "@brett/types";
@@ -40,7 +40,7 @@ export function AttachmentList({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validateAndUpload = useCallback(
+  const validateAndUpload = 
     (file: File) => {
       setError(null);
       if (file.size > MAX_FILE_SIZE) {
@@ -48,36 +48,30 @@ export function AttachmentList({
         return;
       }
       onUpload(file);
-    },
-    [onUpload],
-  );
+    };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
-  }, []);
+  };
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-  }, []);
+  };
 
-  const handleDrop = useCallback(
+  const handleDrop = 
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
       Array.from(e.dataTransfer.files).forEach(validateAndUpload);
-    },
-    [validateAndUpload],
-  );
+    };
 
-  const handleFileChange = useCallback(
+  const handleFileChange =
     (e: React.ChangeEvent<HTMLInputElement>) => {
       Array.from(e.target.files ?? []).forEach(validateAndUpload);
       e.target.value = "";
-    },
-    [validateAndUpload],
-  );
+    };
 
   return (
     <div

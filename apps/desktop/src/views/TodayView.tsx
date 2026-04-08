@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Omnibar,
   DailyBriefing,
@@ -70,11 +70,9 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   const briefing = useBriefing();
   const summary = useBriefingSummary();
 
-  // Stable date boundaries for the day — memoized to avoid re-fetches on re-render
-  const { dueBefore, completedAfter } = useMemo(() => ({
-    dueBefore: getEndOfWeekUTC().toISOString(),
-    completedAfter: getTodayUTC().toISOString(),
-  }), []);
+  // Stable date boundaries for the day
+  const [dueBefore] = useState(() => getEndOfWeekUTC().toISOString());
+  const [completedAfter] = useState(() => getTodayUTC().toISOString());
 
   // Two explicit queries: active items due this week or earlier, done items from today
   const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);

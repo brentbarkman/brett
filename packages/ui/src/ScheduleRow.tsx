@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import { Calendar, Bell, RotateCw } from "lucide-react";
 import type { DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
 import { useClickOutside } from "./useClickOutside";
@@ -25,7 +25,7 @@ function ScheduleCard({ icon, label, value, children }: ScheduleCardProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = () => setOpen(false);
   useClickOutside(ref, close, open);
 
   return (

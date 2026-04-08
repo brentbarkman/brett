@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { X, RefreshCw, Loader2, Settings } from "lucide-react";
 
 interface OverdueItem {
@@ -158,23 +158,14 @@ export function DailyBriefing({
     return () => clearTimeout(timer);
   }, []);
 
-  const titleMap = useMemo(
-    () => new Map(knownItems.map(item => [item.title.toLowerCase(), item])),
-    [knownItems],
-  );
+  const titleMap = new Map(knownItems.map(item => [item.title.toLowerCase(), item]));
 
-  const renderLine = useCallback(
-    (text: string) => renderBriefingLine(text, titleMap, knownItems, onItemClick),
-    [titleMap, knownItems, onItemClick],
-  );
+  const renderLine = (text: string) => renderBriefingLine(text, titleMap, knownItems, onItemClick);
 
   // Parse AI content into bullet points
-  const bulletItems = useMemo(
-    () => content
-      ? content.split("\n").map((line) => line.replace(/^[-*•]\s*/, "").trim()).filter((line) => line.length > 0)
-      : [],
-    [content],
-  );
+  const bulletItems = content
+    ? content.split("\n").map((line) => line.replace(/^[-*•]\s*/, "").trim()).filter((line) => line.length > 0)
+    : [];
 
   // Check if the day is completely empty
   const isDayEmpty =

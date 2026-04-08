@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useRef } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import { streamingFetch } from "./streaming";
@@ -78,18 +78,15 @@ export function useBrettChat(opts: {
   });
 
   // Flatten history (newest first from API)
-  const historyMessages: ChatMessage[] = useMemo(
-    () =>
-      historyQuery.data?.pages.flatMap((p) =>
-        p.messages.map((m) => ({
-          id: m.id,
-          role: m.role === "user" ? ("user" as const) : ("assistant" as const),
-          content: m.content,
-          createdAt: m.createdAt,
-        })),
-      ) ?? [],
-    [historyQuery.data],
-  );
+  const historyMessages: ChatMessage[] =
+    historyQuery.data?.pages.flatMap((p) =>
+      p.messages.map((m) => ({
+        id: m.id,
+        role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+        content: m.content,
+        createdAt: m.createdAt,
+      })),
+    ) ?? [];
 
   const totalCount = historyQuery.data?.pages[0]?.totalCount ?? 0;
 
@@ -99,7 +96,7 @@ export function useBrettChat(opts: {
   // Deduplicate by filtering out history messages that match streaming temp IDs
   // or have the same content+role (for the brief window after server persists but
   // before streamingMessages are cleared).
-  const messages = useMemo(() => {
+  const messages = (() => {
     if (streamingMessages.length === 0) return historyMessages;
     // Streaming messages go at the START of the newest-first array
     // (they're the newest messages), in reverse send order to match newest-first
@@ -113,12 +110,11 @@ export function useBrettChat(opts: {
       (m) => !streamingContents.has(`${m.role}:${m.content}`),
     );
     return [...streamReversed, ...dedupedHistory];
-  }, [historyMessages, streamingMessages]);
+  })();
 
   // ─── Send message ───
 
-  const sendMessage = useCallback(
-    async (text: string) => {
+  const sendMessage = async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming || !postPath) return;
 
@@ -259,15 +255,13 @@ export function useBrettChat(opts: {
           qc.invalidateQueries({ queryKey: ["brett-chat", entityId] });
         }
       }
-    },
-    [isStreaming, postPath, sessionId, entityId, qc],
-  );
+  };
 
   // Reset streaming messages when history refreshes (after invalidation)
   // We clear streaming messages once the server data includes them
-  const clearStreamingMessages = useCallback(() => {
+  const clearStreamingMessages = () => {
     setStreamingMessages([]);
-  }, []);
+  };
 
   // When history query refetches successfully, clear streaming messages
   // This is triggered by the invalidation in sendMessage's finally block
