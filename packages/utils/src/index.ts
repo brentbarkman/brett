@@ -164,6 +164,7 @@ export function humanizeCadence(hours: number): string {
 }
 
 export { resolveTempUnit, convertTemp } from "./weather.js";
+export { generateCuid } from "./cuid.js";
 
 // ── Password validation ──
 

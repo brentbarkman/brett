@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { Prisma } from "@brett/api-core";
 import { privateS3, PRIVATE_STORAGE_BUCKET } from "../lib/storage.js";
 import { sanitizeFilename } from "../lib/sanitize-filename.js";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
@@ -92,8 +93,10 @@ attachments.post("/:itemId/attachments", async (c) => {
       })
     );
   } catch (err) {
-    // Rollback DB record on S3 failure
-    await prisma.attachment.delete({ where: { id: attachment.id } });
+    // Hard-delete the DB record on S3 failure — no tombstone needed since
+    // there is no S3 object to reference. Using raw SQL to bypass the
+    // soft-delete extension which would only set deletedAt.
+    await prisma.$executeRaw(Prisma.sql`DELETE FROM "Attachment" WHERE id = ${attachment.id}`);
     console.error("S3 upload failed:", err);
     return c.json({ error: "Failed to upload file" }, 500);
   }

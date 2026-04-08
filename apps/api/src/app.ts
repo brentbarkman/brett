@@ -23,6 +23,8 @@ import { importRoutes } from "./routes/import.js";
 import { download } from "./routes/download.js";
 import { config } from "./routes/config.js";
 import { scouts } from "./routes/scouts.js";
+import { devices } from "./routes/devices.js";
+import { sync } from "./routes/sync.js";
 import { internalScoutsRouter } from "./routes/internal-scouts.js";
 import searchRouter from "./routes/search.js";
 import suggestionsRouter from "./routes/suggestions.js";
@@ -43,6 +45,8 @@ app.use(
   "*",
   cors({
     origin: (origin) => {
+      // React Native / mobile clients send no Origin header — allow them
+      if (!origin) return "*";
       if (origin === "app://.") return origin;
       if (isLocal && origin.match(/^http:\/\/localhost:\d+$/)) return origin;
       return null;
@@ -87,6 +91,8 @@ app.route("/events", sse);
 app.route("/webhooks", webhooks);
 app.route("/granola/auth", granolaAuth);
 app.route("/scouts", scouts);
+app.route("/devices", devices);
+app.route("/sync", sync);
 app.route("/api", searchRouter);
 app.route("/api", suggestionsRouter);
 app.route("/admin/embeddings", adminEmbeddings);

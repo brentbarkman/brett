@@ -5,29 +5,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Dev Commands
 
 ```bash
-pnpm dev                # Run all apps in parallel (Turborepo)
-pnpm dev:full           # Start everything: Postgres + migrations + API + desktop
-pnpm dev:api            # API server only
-pnpm dev:desktop        # Desktop only
-pnpm dev:mobile         # Mobile only
-pnpm build              # Build all packages and apps
-pnpm typecheck          # Type-check all packages
-pnpm lint               # Lint all packages
-pnpm test               # Run API tests (requires Postgres)
-pnpm setup              # Start Postgres + run migrations
-pnpm db:up / db:down    # Start/stop local Postgres + MinIO via Docker
-pnpm db:migrate         # Run Prisma migrations
-pnpm db:studio          # Open Prisma Studio (DB GUI)
+pnpm dev                    # Run all apps in parallel (Turborepo)
+pnpm dev:full               # Start everything: Postgres + migrations + API + desktop
+pnpm dev:api                # API server only
+pnpm dev:desktop            # Desktop only
+pnpm dev:mobile             # Mobile Metro bundler only
+pnpm dev:mobile:simulator   # Full mobile dev: Postgres + API + iOS Simulator
+pnpm dev:mobile:device      # Full mobile dev: Postgres + API + ngrok + physical iPhone
+pnpm build                  # Build all packages and apps
+pnpm typecheck              # Type-check all packages
+pnpm lint                   # Lint all packages
+pnpm test                   # Run API tests (requires Postgres)
+pnpm setup                  # Start Postgres + run migrations
+pnpm db:up / db:down        # Start/stop local Postgres + MinIO via Docker
+pnpm db:migrate             # Run Prisma migrations
+pnpm db:studio              # Open Prisma Studio (DB GUI)
 ```
 
 ## Stack
 - **Monorepo:** pnpm workspaces + Turborepo
 - **API:** Hono + Prisma + better-auth (deployed on Railway)
 - **Desktop:** Electron + Vite + React + TypeScript
-- **Mobile:** Expo / React Native + TypeScript (deferred)
+- **Mobile:** Expo 55 / React Native + TypeScript (iOS, offline-first with SQLite sync engine)
 - **UI:** shadcn/ui
 - **Database:** Postgres (Docker Compose locally, Railway in prod)
-- **Auth:** better-auth (email/password + Google OAuth, JWT bearer tokens)
+- **Auth:** better-auth (email/password + Google OAuth + Sign in with Apple, JWT bearer tokens)
 - **Storage:** Railway Object Storage (S3-compatible)
 - **Notifications:** Firebase Cloud Messaging (planned — notifications only, not auth)
 
@@ -46,7 +48,8 @@ pnpm workspaces + Turborepo monorepo with three apps sharing four packages.
   ↑
 @brett/api            ← Hono + Prisma + better-auth (imports types, utils, business)
 @brett/desktop        ← Electron + Vite + React (imports all 4 packages + better-auth client)
-@brett/mobile         ← Expo SDK 51 + React Native (imports types, utils, business — NOT ui)
+@brett/mobile         ← Expo 55 + React Native (imports types, utils, business — NOT ui)
+                        Offline-first: SQLite + Drizzle ORM, sync engine, Zustand stores
 
 @brett/ui             ← web-only React components — used by desktop only
 ```

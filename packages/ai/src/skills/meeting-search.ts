@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@brett/api-core";
+import type { ExtendedPrismaClient } from "@brett/api-core";
 
 const FILLER_WORDS = /\b(meeting|call|chat|sync|standup|check-in|catch-?up|session|with|my|the|from|about)\b/gi;
 
@@ -25,7 +25,7 @@ export interface MeetingSearchResult {
  * 5. Individual word search on title
  */
 export async function findMeetingByQuery(
-  prisma: PrismaClient,
+  prisma: ExtendedPrismaClient,
   userId: string,
   query: string,
 ): Promise<MeetingSearchResult | null> {
@@ -99,7 +99,7 @@ export async function findMeetingByQuery(
  * Same strategy cascade as findMeetingByQuery but returns up to `take` results.
  */
 export async function findMeetingsByQuery(
-  prisma: PrismaClient,
+  prisma: ExtendedPrismaClient,
   userId: string,
   query: string,
   take = 5,

@@ -60,6 +60,7 @@ model User {
   meetingNoteSources     MeetingNoteSource[]
   scouts                 Scout[]
   passkeys               Passkey[]
+  deviceTokens           DeviceToken[]
 }
 
 model Session {
@@ -123,6 +124,7 @@ model List {
   colorClass String   @default("bg-gray-500")
   sortOrder  Int       @default(0)
   archivedAt DateTime?
+  deletedAt  DateTime?
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   items      Item[]
@@ -171,6 +173,7 @@ model Item {
   meetingNoteId    String?    @map("granolaMeetingId")
   meetingNote      MeetingNote? @relation(fields: [meetingNoteId], references: [id], onDelete: SetNull)
   scoutFindings    ScoutFinding[]
+  deletedAt        DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -192,7 +195,9 @@ model Attachment {
   item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deletedAt  DateTime?
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([itemId])
 }
@@ -223,7 +228,9 @@ model BrettMessage {
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   role              String
   content           String    @db.Text
+  deletedAt         DateTime?
   createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([itemId, createdAt])
   @@index([calendarEventId, createdAt])
@@ -312,6 +319,7 @@ model CalendarEvent {
   brettMessages     BrettMessage[]
   conversationSessions ConversationSession[]
   meetingNotes           MeetingNote[]
+  deletedAt         DateTime?
 
   @@unique([googleAccountId, googleEventId])
   @@index([userId, startTime])
@@ -325,6 +333,7 @@ model CalendarEventNote {
   userId            String
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   content           String    @db.Text
+  deletedAt         DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -595,6 +604,7 @@ model Scout {
   id                         String           @id @default(cuid())
   userId                     String
   user                       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deletedAt                  DateTime?
   createdAt                  DateTime         @default(now())
   updatedAt                  DateTime         @updatedAt
 
@@ -669,7 +679,9 @@ model ScoutFinding {
   scout          Scout       @relation(fields: [scoutId], references: [id], onDelete: Cascade)
   scoutRunId     String
   scoutRun       ScoutRun    @relation(fields: [scoutRunId], references: [id], onDelete: Cascade)
+  deletedAt      DateTime?
   createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   type           FindingType
   title          String
@@ -739,4 +751,29 @@ model ScoutConsolidation {
 
   @@index([scoutId, createdAt])
   @@index([status])
+}
+
+// ── Mobile sync tables ──
+
+model IdempotencyKey {
+  key        String   @id
+  response   Json
+  statusCode Int
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model DeviceToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String
+  appVersion String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

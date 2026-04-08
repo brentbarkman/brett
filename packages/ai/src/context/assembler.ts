@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@brett/api-core";
+import type { ExtendedPrismaClient } from "@brett/api-core";
 import type { ModelTier } from "@brett/types";
 import type { Message } from "../providers/types.js";
 import {
@@ -104,7 +104,7 @@ function formatEmbeddingContext(embeddingContext?: string): string {
 }
 
 async function loadUserFacts(
-  prisma: PrismaClient,
+  prisma: ExtendedPrismaClient,
   userId: string
 ): Promise<Array<{ category: string; key: string; value: string }>> {
   const facts = await prisma.userFact.findMany({
@@ -205,7 +205,7 @@ function formatCalendarEvent(event: {
 
 async function assembleOmnibar(
   input: OmnibarContext,
-  prisma: PrismaClient
+  prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
   const facts = await loadUserFacts(prisma, input.userId);
 
@@ -266,7 +266,7 @@ async function assembleOmnibar(
 
 async function assembleBrettThread(
   input: BrettThreadContext,
-  prisma: PrismaClient
+  prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
   const facts = await loadUserFacts(prisma, input.userId);
 
@@ -330,7 +330,7 @@ async function assembleBrettThread(
 
 async function assembleBriefing(
   input: BriefingContext,
-  prisma: PrismaClient
+  prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
   // Briefing needs minimal facts — just enough for tone/context, not the full 20
   const allFacts = await loadUserFacts(prisma, input.userId);
@@ -499,7 +499,7 @@ async function assembleBriefing(
 
 async function assembleBrettsTake(
   input: BrettsTakeContext,
-  prisma: PrismaClient
+  prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
   const facts = await loadUserFacts(prisma, input.userId);
 
@@ -626,7 +626,7 @@ async function assembleBrettsTake(
 
 export async function assembleContext(
   input: AssemblerInput,
-  prisma: PrismaClient
+  prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
   switch (input.type) {
     case "omnibar":

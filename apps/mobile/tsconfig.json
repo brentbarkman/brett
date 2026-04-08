@@ -2,16 +2,14 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types", "../../node_modules/@types"],
     "paths": {
+      "react": ["./node_modules/@types/react"],
       "@brett/types": ["../../packages/types/src"],
       "@brett/utils": ["../../packages/utils/src"],
       "@brett/business": ["../../packages/business/src"]
     }
   },
-  "include": ["src", "app"],
-  "references": [
-    { "path": "../../packages/types" },
-    { "path": "../../packages/utils" },
-    { "path": "../../packages/business" }
-  ]
+  "include": ["**/*.ts", "**/*.tsx", "app.config.ts"]
 }

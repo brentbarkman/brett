@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@brett/api-core";
+import type { ExtendedPrismaClient } from "@brett/api-core";
 
-export function scopedItems(prisma: PrismaClient, userId: string) {
+export function scopedItems(prisma: ExtendedPrismaClient, userId: string) {
   return {
     findFirst: (where: Record<string, unknown>) =>
       prisma.item.findFirst({ where: { ...(where as object), userId } }),
@@ -19,7 +19,7 @@ export function scopedItems(prisma: PrismaClient, userId: string) {
   };
 }
 
-export function scopedLists(prisma: PrismaClient, userId: string) {
+export function scopedLists(prisma: ExtendedPrismaClient, userId: string) {
   return {
     findFirst: (where: Record<string, unknown>) =>
       prisma.list.findFirst({ where: { ...(where as object), userId } }),
@@ -32,7 +32,7 @@ export function scopedLists(prisma: PrismaClient, userId: string) {
   };
 }
 
-export async function scopedEvents(prisma: PrismaClient, userId: string) {
+export async function scopedEvents(prisma: ExtendedPrismaClient, userId: string) {
   // Only include events from visible calendars — respects user's calendar visibility settings
   const visibleCalendars = await prisma.calendarList.findMany({
     where: { googleAccount: { userId }, isVisible: true },
