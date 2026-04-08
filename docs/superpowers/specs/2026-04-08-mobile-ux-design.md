@@ -74,6 +74,7 @@ Tuesday, Apr 8 · 5 of 12 done · 3 meetings (2h 15m)
 - Large date (22px, weight 700)
 - Stats line below (12px, white/35): task progress + meeting count with total duration
 - Stats update live as tasks complete and meetings pass
+- **Progress pulse:** When a task is completed, the stats line briefly pulses gold (opacity 0.35 → gold/80 → 0.35, 400ms ease-out). Subtle feedback loop — you see your progress move in the header every time you check something off.
 
 #### 1b. Daily Briefing
 
@@ -239,7 +240,23 @@ All desktop settings present, adapted to iOS form patterns:
 
 Deep-linking: any UI element that sends to Settings deep-links to the correct section.
 
-### 12. Sign In
+### 12. Empty States
+
+Empty states carry Brett's personality. They're not error screens — they're moments of connection.
+
+| Screen | Condition | Heading | Copy |
+|--------|-----------|---------|------|
+| Today | All tasks done | **"Cleared."** | "Nothing left. Go build something or enjoy the quiet." |
+| Today | No tasks, no events | — | "Nothing on the books today. A rare opening — use it well." |
+| Inbox | Zero items | **"Your inbox"** | "Everything worth doing starts here." (Show omnibar prominently) |
+| Inbox | After triaging everything | **"Cleared."** | "Nothing left. Go build something or enjoy the quiet." |
+| Upcoming | No future tasks | **"Wide open"** | "Nothing scheduled ahead. That's either zen or an oversight." |
+| List Detail | Empty list | **"No tasks yet"** | "Add one, or enjoy the emptiness." |
+| Scouts | No scouts | **"No scouts yet"** | "Scouts monitor the internet for you. Create one to get started." |
+
+Visual treatment: The dynamic background breathes more prominently through empty states — less glass overlay, more atmosphere. The heading is large (24px, weight 700), the copy is body-sized (14px, white/50). No illustrations, no clipart. Just words and space.
+
+### 13. Sign In
 
 - Email/password form
 - "Sign in with Google" button
@@ -312,12 +329,17 @@ The omnibar is the primary capture surface. Pinned above the tab bar on Today an
 
 ### Voice Capture (Center Button)
 
+Activating voice mode should feel like summoning something. This is theater:
+
 1. Tap center voice button → heavy haptic
-2. Gold pulse animation radiates from button
-3. Listening state — gold waveform visualization
-4. Speak naturally → transcription appears live
-5. On silence detection → smart parsing pipeline → task created
-6. Confirmation haptic + visual confirmation
+2. Center button scales up 1.1x (100ms spring)
+3. Gold pulse wave ripples outward through the tab bar — other tab icons dim slightly (opacity 0.4 → 0.2) as the wave passes
+4. Background vignette deepens subtly — the room gets quieter
+5. Gold waveform visualization appears above the tab bar, responsive to actual audio amplitude (not a canned animation)
+6. Speak naturally → transcription appears live above the waveform
+7. On silence detection → smart parsing pipeline → task created
+8. Waveform collapses, tab icons restore, vignette lifts — confirmation haptic
+9. Brief gold flash on the new task as it appears in the list
 
 ---
 
@@ -432,17 +454,32 @@ Minimum 44pt × 44pt for all interactive elements (Apple HIG). Checkboxes have a
 - Duration: 200-350ms for micro-interactions, 400-600ms for transitions, 2-3s for ambient (crossfade)
 - Easing: spring-based for gestures, ease-out for reveals, linear for progress
 
+### Morning Ritual (First Open of Day)
+
+The first time you open Brett each day, the Today screen loads with a staggered cascade — Brett is waking up and getting ready for you:
+
+1. **Header** slides down from top (0ms, 250ms spring)
+2. **Daily Briefing** fades in + slides up (200ms delay, 300ms ease-out)
+3. **Next Up card** slides in from right (400ms delay, 250ms spring)
+4. **Task sections** fade up from bottom (600ms delay, 300ms ease-out)
+5. **Omnibar** fades in last (750ms delay, 200ms ease-out)
+
+Total cascade: ~1 second. Feels alive, intentional. Brett is presenting your day.
+
+**After the first open of the day, everything loads instantly.** The cascade only plays once per day. Track via a `lastMorningRitualDate` in local storage — if it matches today's date, skip the animation.
+
 ### Specific Animations
 
 | Animation | Specification |
 |-----------|--------------|
-| **Task completion** | Checkbox: gold fill radiates from center (150ms spring). Row: stays in place, fades slightly. After 1.5s idle: row slides left + fades (300ms ease-out), list settles (400ms spring). |
+| **Task completion** | Checkbox: gold fill radiates from center (150ms spring). Header stats pulse gold (400ms ease-out). Row: stays in place, fades slightly. After 1.5s idle: row slides left + fades (300ms ease-out), list settles (400ms spring). |
 | **Capture submit** | Omnibar text slides up and fades (200ms). Brief gold flash on omnibar border (150ms). New task appears at appropriate position in list with slide-in from right (250ms spring). |
-| **Voice mode activate** | Center button scales up 1.1x (100ms spring). Gold pulse ring radiates outward (400ms, fades). Listening waveform begins. |
-| **Swipe actions** | Row translates with finger (spring-damped). Action reveal follows with slight delay. Snap-back on cancel (300ms spring). |
+| **Voice mode activate** | Center button scales up 1.1x (100ms spring). Gold pulse wave ripples through tab bar, dimming other icons. Background vignette deepens. Gold waveform appears, responsive to audio amplitude. On dismiss: reverse — icons restore, vignette lifts, waveform collapses (300ms). |
+| **Swipe actions** | Row translates with finger (spring-damped). Rubber-band resistance past the trigger point — the further you pull, the slower it moves. Action icon scales up as you approach threshold (0.7x → 1.0x), snaps to full size at trigger with medium haptic. Reveal color (gold/cerulean) subtly bleeds into the row's background — no hard edge. Snap-back on cancel (300ms spring). |
 | **Drag to reorder** | Lifted row scales 1.03x with shadow. Other rows part with spring animation (250ms). Drop: row settles to new position (350ms spring with slight bounce). |
 | **Section appear** | New sections (e.g., "Done Today" appearing) slide in from bottom with fade (450ms ease-out, 80ms delay — matches desktop). |
-| **Tab switching** | Instant crossfade of content (no slide). Active tab icon transitions color (150ms). |
+| **Tab switching** | Instant crossfade of content. Gold dot indicator slides between tabs with spring physics (200ms spring with slight overshoot). Active tab icon transitions color (150ms). |
+| **Tab bar life** | Voice center button has faint ambient gold glow pulsing slowly (opacity 0.05 → 0.15, 4-5s cycle). Like a heartbeat — Brett is alive, waiting. Inbox badge count has subtle breathing animation (opacity 0.8 → 1.0, 2s cycle) when items are present. |
 | **Push navigation** | Standard iOS push: new screen slides from right (350ms spring). |
 | **Background crossfade** | 3-second dissolve between background images. |
 | **Briefing collapse** | Height animation with content fade (250ms ease-out). |
@@ -530,6 +567,67 @@ Required for App Store (since Google OAuth is offered). Implemented via `expo-ap
 - Returns: user identifier, email (possibly private relay), full name (first sign-in only)
 - Server: new Apple OAuth provider in better-auth configuration
 - Token stored in Keychain via existing token storage
+
+---
+
+## Appearance
+
+**Dark mode only (v1).** Brett's visual identity — dynamic backgrounds, glass surfaces, gold/cerulean accents on dark — requires a dark canvas. The app ignores the system appearance setting and presents dark always. This is an opinionated brand choice, not a limitation.
+
+Light mode will be added later as a full-app initiative across desktop and mobile simultaneously, ensuring brand consistency. It's not a simple inversion — it requires rethinking surface treatments, text opacity scales, and accent contrast ratios.
+
+---
+
+## Accessibility
+
+### Dynamic Type
+
+All text scales with the iOS system text size setting. Typography table values are base sizes — they scale proportionally via `UIFontMetrics` (exposed through React Native's `Text` component `allowFontScaling`).
+
+- Task titles, metadata, section headers, body text: all scale
+- Tab labels: scale with a cap (max 1.3x) to prevent tab bar overflow
+- Omnibar placeholder: scales
+- Layout adapts: cards grow taller, lists get more vertical space per item
+
+### VoiceOver
+
+Every interactive element has a semantic accessibility label:
+
+| Element | Label | Hint |
+|---------|-------|------|
+| Task checkbox | "Complete [task title]" / "Mark [task title] incomplete" | "Double-tap to toggle" |
+| Task row | "[task title], [due date], [list name]" | "Double-tap for details" |
+| Omnibar | "Add a task" | "Double-tap to start typing" |
+| Voice button | "Activate Brett voice mode" | "Double-tap to start listening" |
+| Tab bar items | "[Tab name] tab, [badge count] items" | — |
+| Swipe actions | Exposed via accessibility custom actions (no gesture required) | "Schedule" / "Select" |
+
+Task completion announces: "Completed: [task title]. [X] of [Y] done today."
+
+### Reduce Motion
+
+When the user has "Reduce Motion" enabled in iOS Settings:
+
+- Morning ritual cascade → all elements appear simultaneously with a simple fade (300ms)
+- Task completion → instant gold fill, no particle effects, no pulse
+- Voice mode → instant state change, no ripple animation, no vignette shift
+- Tab switching → instant, no sliding gold indicator
+- Swipe actions → immediate reveal, no rubber-band physics
+- Background → static image, no crossfade rotation
+- Briefing collapse → instant height change
+- All spring animations → replaced with simple opacity fades
+
+Check via `UIAccessibility.isReduceMotionEnabled` (available through `react-native` AccessibilityInfo API).
+
+### High Contrast
+
+When "Increase Contrast" is enabled:
+
+- Glass surfaces increase opacity: `bg-black/30` → `bg-black/50`
+- Text primary increases: `white/85` → `white/100`
+- Text secondary increases: `white/40` → `white/60`
+- Borders become more visible: `white/6` → `white/15`
+- Gold accent slightly brightened for contrast
 
 ---
 
