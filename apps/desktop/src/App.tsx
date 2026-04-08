@@ -33,7 +33,7 @@ import {
   LivingBackground,
 } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
 import {
@@ -67,6 +67,8 @@ import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/gra
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useBackground } from "./hooks/useBackground";
+import { initDiagnostics, collectDiagnostics, recordRouteChange, type DiagnosticSnapshot } from "./lib/diagnostics";
+import { FeedbackModal } from "./components/FeedbackModal";
 import { useFavicon } from "./hooks/useFavicon";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
@@ -182,11 +184,39 @@ export function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   // Initialize SSE for real-time updates
   useEventStream();
   useTimezoneSync();
   const { install: installUpdate } = useAutoUpdate();
+
+  // Initialize diagnostics ring buffers for feedback
+  useEffect(() => {
+    initDiagnostics();
+  }, []);
+
+  // Track route changes for diagnostics breadcrumbs
+  useEffect(() => {
+    recordRouteChange(location.pathname + location.hash);
+  }, [location.pathname, location.hash]);
+
+  // Cache electron version for diagnostics (fetched once at startup)
+  const [electronVersion, setElectronVersion] = useState<string>("unknown");
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.getSystemInfo) {
+      electronAPI.getSystemInfo().then((info: { electronVersion: string }) => {
+        setElectronVersion(info.electronVersion);
+      }).catch(() => {});
+    }
+  }, []);
+
+  // Feedback modal state
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackDiagnostics, setFeedbackDiagnostics] = useState<DiagnosticSnapshot | null>(null);
+  const [feedbackScreenshot, setFeedbackScreenshot] = useState<string | null>(null);
+
   const [selectedItem, setSelectedItem] = useState<
     Thing | CalendarEventDisplay | null
   >(null);
@@ -490,7 +520,7 @@ export function App() {
         }
       }
       // Cmd+F / Ctrl+F opens spotlight with search pre-selected
-      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "f") {
         e.preventDefault();
         if (omnibar.isOpen && omnibar.mode === "spotlight") {
           omnibar.close();
@@ -505,6 +535,36 @@ export function App() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [omnibar.isOpen, omnibar.mode, omnibar.close, omnibar.open]);
+
+  // Cmd+Shift+. opens feedback modal
+  useEffect(() => {
+    const handleFeedbackShortcut = async (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === ".") {
+        e.preventDefault();
+        if (feedbackOpen) return;
+
+        // Capture screenshot BEFORE opening modal
+        let screenshot: string | null = null;
+        try {
+          const electronAPI = (window as any).electronAPI;
+          if (electronAPI?.captureScreenshot) {
+            screenshot = await electronAPI.captureScreenshot();
+          }
+        } catch (err) {
+          console.error("[feedback] Screenshot capture failed:", err);
+        }
+
+        // Snapshot diagnostics
+        const diag = collectDiagnostics(electronVersion);
+
+        setFeedbackScreenshot(screenshot);
+        setFeedbackDiagnostics(diag);
+        setFeedbackOpen(true);
+      }
+    };
+    document.addEventListener("keydown", handleFeedbackShortcut);
+    return () => document.removeEventListener("keydown", handleFeedbackShortcut);
+  }, [feedbackOpen]);
 
   // Build omnibar props for the bar component
   const currentView = (() => {
@@ -1174,6 +1234,16 @@ export function App() {
           onScoutFeedback={(scoutId, findingId, useful) =>
             submitFeedback.mutate({ scoutId, findingId, useful })
           }
+          onApproveNewsletter={async (pendingId) => {
+            await apiFetch(`/newsletters/senders/${pendingId}/approve`, { method: "POST" });
+            queryClient.invalidateQueries({ queryKey: ["things"] });
+            queryClient.invalidateQueries({ queryKey: ["inbox"] });
+          }}
+          onBlockNewsletter={async (pendingId) => {
+            await apiFetch(`/newsletters/senders/${pendingId}/block`, { method: "POST" });
+            queryClient.invalidateQueries({ queryKey: ["things"] });
+            queryClient.invalidateQueries({ queryKey: ["inbox"] });
+          }}
           onItemClick={(id) => {
             const thing = allActiveThings.find((t) => t.id === id);
             if (thing) handleDetailDrillDown(thing);
@@ -1318,6 +1388,15 @@ export function App() {
             onCancel={() => setArchiveListConfirm(null)}
           />
         )}
+
+        {/* Feedback modal */}
+        <FeedbackModal
+          isOpen={feedbackOpen}
+          onClose={() => setFeedbackOpen(false)}
+          diagnostics={feedbackDiagnostics}
+          screenshot={feedbackScreenshot}
+          userId={user?.id || "unknown"}
+        />
       </div>
       </AppDropZone>
     </DndContext>

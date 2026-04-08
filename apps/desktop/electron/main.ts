@@ -130,6 +130,34 @@ ipcMain.handle("set-auto-install-on-quit", (_event, enabled: boolean) => {
   setAutoInstallOnQuit(enabled);
 });
 
+ipcMain.handle("get-system-info", () => {
+  return {
+    electronVersion: process.versions.electron,
+    chromeVersion: process.versions.chrome,
+    nodeVersion: process.versions.node,
+    platform: process.platform,
+    arch: process.arch,
+    osVersion: require("os").release(),
+  };
+});
+
+ipcMain.handle("capture-screenshot", async () => {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  if (!win) throw new Error("No available window");
+  const image = await win.webContents.capturePage();
+  // Resize to max 1280px wide to limit payload size
+  const size = image.getSize();
+  if (size.width > 1280) {
+    const ratio = 1280 / size.width;
+    const resized = image.resize({
+      width: 1280,
+      height: Math.round(size.height * ratio),
+    });
+    return resized.toPNG().toString("base64");
+  }
+  return image.toPNG().toString("base64");
+});
+
 ipcMain.handle("things3:scan", async () => {
   try {
     return await scanThings3();

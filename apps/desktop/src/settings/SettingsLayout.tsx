@@ -7,6 +7,7 @@ import { LocationSection } from "./LocationSection";
 import { BackgroundSection } from "./BackgroundSection";
 import { AISection } from "./AISection";
 import { ImportSection } from "./ImportSection";
+import { NewsletterSection } from "./NewsletterSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { SignOutSection } from "./SignOutSection";
 import { DangerZoneSection } from "./DangerZoneSection";
@@ -19,6 +20,7 @@ type SettingsTab =
   | "security"
   | "calendar"
   | "ai-providers"
+  | "newsletters"
   | "timezone-location"
   | "import"
   | "updates"
@@ -29,6 +31,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "security", label: "Security" },
   { id: "calendar", label: "Calendar" },
   { id: "ai-providers", label: "AI Providers" },
+  { id: "newsletters", label: "Newsletters" },
   { id: "timezone-location", label: "Personalize" },
   { id: "import", label: "Import" },
   { id: "updates", label: "Updates" },
@@ -96,6 +99,8 @@ export function SettingsLayout() {
         return <CalendarSection />;
       case "ai-providers":
         return <AISection />;
+      case "newsletters":
+        return <NewsletterSection />;
       case "timezone-location":
         return (
           <div className="space-y-5">

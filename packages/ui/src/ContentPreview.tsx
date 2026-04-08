@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import DOMPurify from "dompurify";
 import { AlertTriangle, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import type { ContentType, ContentStatus, ContentMetadata } from "@brett/types";
@@ -7,9 +7,10 @@ import type { ContentType, ContentStatus, ContentMetadata } from "@brett/types";
 // Each instance gets its hooks configured once at module level.
 const tweetPurify = DOMPurify();
 const articlePurify = DOMPurify();
+const newsletterPurify = DOMPurify();
 
 // Force all links to open in new tab (critical in Electron — prevents navigating the app window)
-for (const instance of [tweetPurify, articlePurify]) {
+for (const instance of [tweetPurify, articlePurify, newsletterPurify]) {
   instance.addHook("afterSanitizeAttributes", (node: Element) => {
     if (node.tagName === "A") {
       node.setAttribute("target", "_blank");
@@ -386,6 +387,91 @@ function WebPagePreview({
   );
 }
 
+function NewsletterPreview({
+  contentBody,
+  contentMetadata,
+}: {
+  contentBody?: string;
+  contentMetadata?: ContentMetadata;
+}) {
+  const senderName = contentMetadata?.type === "newsletter" ? contentMetadata.senderName : undefined;
+  const receivedAt = contentMetadata?.type === "newsletter" ? contentMetadata.receivedAt : undefined;
+
+  const iframeContent = useMemo(() => {
+    if (!contentBody) return "";
+    const sanitized = newsletterPurify.sanitize(contentBody, {
+      ALLOWED_TAGS: [
+        "div", "span", "p", "br", "hr",
+        "h1", "h2", "h3", "h4", "h5", "h6",
+        "strong", "b", "em", "i", "u", "s", "sub", "sup",
+        "ul", "ol", "li",
+        "a", "img",
+        "table", "thead", "tbody", "tr", "td", "th",
+        "blockquote", "pre", "code",
+      ],
+      ALLOWED_ATTR: [
+        "href", "src", "alt", "title", "width", "height",
+        "style", "class", "id",
+        "target", "rel",
+        "colspan", "rowspan", "cellpadding", "cellspacing",
+      ],
+      FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "textarea", "select", "style"],
+      FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover"],
+      ALLOW_DATA_ATTR: false,
+    });
+
+    return `<!DOCTYPE html>
+<html><head><style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.85);
+    background: transparent;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 0;
+    overflow-x: hidden;
+  }
+  a { color: #D4AF37; }
+  img { max-width: 100%; height: auto; }
+  table { max-width: 100%; }
+</style></head><body>${sanitized}</body></html>`;
+  }, [contentBody]);
+
+  return (
+    <div className="space-y-2">
+      {(senderName || receivedAt) && (
+        <div className="flex items-center gap-2">
+          {senderName && (
+            <span className="text-xs text-white/50 font-medium">{senderName}</span>
+          )}
+          {receivedAt && (
+            <span className="text-xs text-white/30">
+              {new Date(receivedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          )}
+        </div>
+      )}
+
+      {contentBody ? (
+        // SECURITY INVARIANT: NEVER add allow-scripts to this sandbox.
+        // allow-same-origin + allow-scripts would give newsletter HTML
+        // full access to the Electron renderer process.
+        <iframe
+          sandbox="allow-same-origin"
+          srcDoc={iframeContent}
+          title="Newsletter content"
+          className="w-full min-h-[300px] max-h-[60vh] rounded-lg border border-white/10 bg-transparent"
+          style={{ colorScheme: "dark" }}
+        />
+      ) : (
+        <p className="text-sm text-white/40 italic">Newsletter content unavailable</p>
+      )}
+    </div>
+  );
+}
+
 export function ContentPreview({
   contentType,
   contentStatus,
@@ -443,6 +529,8 @@ export function ContentPreview({
       );
     case "pdf":
       return <PdfPreview sourceUrl={sourceUrl} attachmentUrl={attachmentUrl} />;
+    case "newsletter":
+      return <NewsletterPreview contentBody={contentBody} contentMetadata={contentMetadata} />;
     case "web_page":
     default:
       return (

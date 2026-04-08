@@ -61,6 +61,8 @@ model User {
   scouts                 Scout[]
   passkeys               Passkey[]
   deviceTokens           DeviceToken[]
+  newsletterSenders    NewsletterSender[]
+  pendingNewsletters   PendingNewsletter[]
 }
 
 model Session {
@@ -183,6 +185,38 @@ model Item {
   @@index([userId, source])
   @@index([userId, contentType])
   @@index([userId, source, sourceId])
+}
+
+model NewsletterSender {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  email     String   // stored lowercase
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, email])
+  @@index([userId])
+}
+
+model PendingNewsletter {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderEmail        String   // stored lowercase
+  senderName         String
+  subject            String
+  htmlBody           String   @db.Text
+  textBody           String?  @db.Text
+  postmarkMessageId  String
+  receivedAt         DateTime
+  approvalItemId     String?
+  createdAt          DateTime @default(now())
+
+  @@index([userId, senderEmail])
+  @@index([postmarkMessageId])
 }
 
 model Attachment {

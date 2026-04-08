@@ -88,6 +88,8 @@ interface DetailPanelProps {
   onNavigateToCalendarEvent?: (calendarEventId: string) => void;
   onNavigateToScout?: (scoutId: string) => void;
   onScoutFeedback?: (scoutId: string, findingId: string, useful: boolean | null) => void;
+  onApproveNewsletter?: (pendingId: string) => void;
+  onBlockNewsletter?: (pendingId: string) => void;
   onBack?: () => void;
   canGoBack?: boolean;
   onItemClick?: (id: string) => void;
@@ -151,6 +153,8 @@ export function DetailPanel({
   onNavigateToCalendarEvent,
   onNavigateToScout,
   onScoutFeedback,
+  onApproveNewsletter,
+  onBlockNewsletter,
   onBack,
   canGoBack,
   onItemClick,
@@ -230,6 +234,8 @@ export function DetailPanel({
             onNavigateToCalendarEvent={onNavigateToCalendarEvent}
             onNavigateToScout={onNavigateToScout}
             onScoutFeedback={onScoutFeedback}
+            onApproveNewsletter={onApproveNewsletter}
+            onBlockNewsletter={onBlockNewsletter}
             onItemClick={onItemClick}
             onEventClick={onEventClick}
             onNavigate={onNavigate}
