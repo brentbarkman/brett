@@ -31,10 +31,9 @@ export function VideoBackground({ videos, ref }: VideoBackgroundProps) {
     { src: videos[startIndex], visible: false },
     { src: videos[(startIndex + 1) % videos.length], visible: false },
   ]);
-  const videoRefs = [
-    useRef<HTMLVideoElement>(null),
-    useRef<HTMLVideoElement>(null),
-  ];
+  const videoRef0 = useRef<HTMLVideoElement>(null);
+  const videoRef1 = useRef<HTMLVideoElement>(null);
+  const videoRefs = [videoRef0, videoRef1];
 
   const handleFirstLoad = () => {
     setSlots((prev) => {

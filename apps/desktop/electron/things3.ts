@@ -7,14 +7,29 @@ import type {
   Things3ScanResult,
 } from "@brett/types";
 
-const THINGS_DB_PATH = path.join(
+const THINGS_CONTAINER = path.join(
   os.homedir(),
   "Library",
   "Group Containers",
   "JLMPQHK86H.com.culturedcode.ThingsMac",
-  "Things Database.thingsdatabase",
-  "main.sqlite"
 );
+
+/** Find Things 3 database — it moved to a ThingsData-* subdirectory in 2023 */
+function findThingsDbPath(): string | null {
+  // New location (2023+): ThingsData-*/Things Database.thingsdatabase/main.sqlite
+  try {
+    const entries = fs.readdirSync(THINGS_CONTAINER);
+    const dataDir = entries.find((e) => e.startsWith("ThingsData-"));
+    if (dataDir) {
+      const newPath = path.join(THINGS_CONTAINER, dataDir, "Things Database.thingsdatabase", "main.sqlite");
+      if (fs.existsSync(newPath)) return newPath;
+    }
+  } catch {}
+  // Legacy location
+  const legacyPath = path.join(THINGS_CONTAINER, "Things Database.thingsdatabase", "main.sqlite");
+  if (fs.existsSync(legacyPath)) return legacyPath;
+  return null;
+}
 
 /**
  * Decode Things 3's packed binary date format.
@@ -44,6 +59,7 @@ interface ThingsTask {
   trashed: number;
   creationDate: number;
   stopDate: number | null;
+  startDate: number | null;
   deadline: number | null;
   project: string | null;
 }
@@ -57,11 +73,12 @@ interface ThingsChecklist {
 }
 
 async function openDatabase(): Promise<Database> {
-  if (!fs.existsSync(THINGS_DB_PATH)) {
+  const dbPath = findThingsDbPath();
+  if (!dbPath) {
     throw new Error("Things 3 database not found. Is Things 3 installed?");
   }
   const SQL = await initSqlJs();
-  const buffer = fs.readFileSync(THINGS_DB_PATH);
+  const buffer = fs.readFileSync(dbPath);
   return new SQL.Database(buffer);
 }
 
@@ -100,13 +117,15 @@ export async function scanThings3(): Promise<Things3ScanResult> {
   const db = await openDatabase();
   try {
     const projects = queryOne<{ count: number }>(
-      db, "SELECT COUNT(*) as count FROM TMTask WHERE type = 1 AND trashed = 0"
+      db, "SELECT COUNT(*) as count FROM TMTask WHERE type = 1 AND trashed = 0 AND status = 0"
     );
     const activeTasks = queryOne<{ count: number }>(
-      db, "SELECT COUNT(*) as count FROM TMTask WHERE type = 0 AND trashed = 0 AND status = 0"
+      db, `SELECT COUNT(*) as count FROM TMTask t LEFT JOIN TMTask p ON t.project = p.uuid
+           WHERE t.type = 0 AND t.trashed = 0 AND (p.uuid IS NULL OR (p.trashed = 0 AND p.status = 0)) AND t.status = 0`
     );
     const completedTasks = queryOne<{ count: number }>(
-      db, "SELECT COUNT(*) as count FROM TMTask WHERE type = 0 AND trashed = 0 AND status IN (2, 3)"
+      db, `SELECT COUNT(*) as count FROM TMTask t LEFT JOIN TMTask p ON t.project = p.uuid
+           WHERE t.type = 0 AND t.trashed = 0 AND (p.uuid IS NULL OR (p.trashed = 0 AND p.status = 0)) AND t.status IN (2, 3)`
     );
 
     return {
@@ -123,14 +142,16 @@ export async function readThings3(): Promise<Things3ImportPayload> {
   try {
     const projects = query<{ uuid: string; title: string }>(
       db,
-      'SELECT uuid, title FROM TMTask WHERE type = 1 AND trashed = 0 ORDER BY "index"'
+      'SELECT uuid, title FROM TMTask WHERE type = 1 AND trashed = 0 AND status = 0 ORDER BY "index"'
     );
 
     const tasks = query<ThingsTask>(
       db,
-      `SELECT uuid, title, notes, status, creationDate, stopDate, deadline, project
-       FROM TMTask WHERE type = 0 AND trashed = 0
-       ORDER BY "index"`
+      `SELECT t.uuid, t.title, t.notes, t.status, t.creationDate, t.stopDate, t.startDate, t.deadline, t.project
+       FROM TMTask t
+       LEFT JOIN TMTask p ON t.project = p.uuid
+       WHERE t.type = 0 AND t.trashed = 0 AND (p.uuid IS NULL OR (p.trashed = 0 AND p.status = 0))
+       ORDER BY t."index"`
     );
 
     const checklists = query<ThingsChecklist>(
@@ -172,7 +193,7 @@ export async function readThings3(): Promise<Things3ImportPayload> {
       return {
         title: t.title || "Untitled",
         notes,
-        dueDate: t.deadline ? decodeThingsDate(t.deadline) : undefined,
+        dueDate: t.deadline ? decodeThingsDate(t.deadline) : t.startDate ? decodeThingsDate(t.startDate) : undefined,
         status: status as "active" | "done",
         completedAt: thingsTimestampToISO(t.stopDate),
         createdAt: thingsTimestampToISO(t.creationDate),
