@@ -2,6 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type { NewsletterSender, PendingNewsletterSummary } from "@brett/types";
 
+export function useNewsletterIngestAddress() {
+  return useQuery({
+    queryKey: ["newsletter-ingest-address"],
+    queryFn: () => apiFetch<{ ingestEmail: string | null }>("/newsletters/senders/ingest-address"),
+    staleTime: Infinity, // token doesn't change
+  });
+}
+
 export function useNewsletterSenders() {
   return useQuery({
     queryKey: ["newsletter-senders"],

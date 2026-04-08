@@ -39,6 +39,7 @@ model User {
   role              UserRole @default(user)
   banned          Boolean  @default(false)
   banReason       String?
+  newsletterIngestToken  String?   @unique  // random token for ingest+{token}@domain.com
   sessions      Session[]
   accounts      Account[]
   lists         List[]

@@ -24,9 +24,12 @@ function makePayload(overrides: Record<string, any> = {}) {
     TextBody: "Hello\nContent here",
     Date: "2026-04-07T10:00:00Z",
     MessageID: `msg-${generateId()}`,
+    To: `ingest+${TEST_INGEST_TOKEN}@example.com`,
     ...overrides,
   };
 }
+
+const TEST_INGEST_TOKEN = "testtoken123abc";
 
 describe("newsletter webhook + sender management", () => {
   let userId: string;
@@ -38,6 +41,7 @@ describe("newsletter webhook + sender management", () => {
         name: "Newsletter Test User",
         email: `newsletter-${Date.now()}@test.com`,
         emailVerified: true,
+        newsletterIngestToken: TEST_INGEST_TOKEN,
       },
     });
     userId = user.id;

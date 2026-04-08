@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Mail, Copy, Check, Trash2 } from "lucide-react";
 import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import {
+  useNewsletterIngestAddress,
   useNewsletterSenders,
   useNewsletterPending,
   useUpdateSender,
@@ -10,7 +11,6 @@ import {
   useBlockPendingSender,
 } from "../api/newsletters";
 import type { NewsletterSender, PendingNewsletterSummary } from "@brett/types";
-import { useAppConfig } from "../hooks/useAppConfig";
 
 function ForwardingAddressCard({ email }: { email: string | null }) {
   const [copied, setCopied] = useState(false);
@@ -165,13 +165,13 @@ function SenderRow({ sender }: SenderRowProps) {
 }
 
 export function NewsletterSection() {
-  const { data: config } = useAppConfig();
+  const { data: ingestData } = useNewsletterIngestAddress();
   const { data: senders = [], isLoading: sendersLoading, error: sendersError } = useNewsletterSenders();
   const { data: pending = [], isLoading: pendingLoading } = useNewsletterPending();
 
   return (
     <>
-      <ForwardingAddressCard email={config?.newsletterIngestEmail ?? null} />
+      <ForwardingAddressCard email={ingestData?.ingestEmail ?? null} />
 
       {/* Pending senders */}
       {(pendingLoading || pending.length > 0) && (

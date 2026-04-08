@@ -10,6 +10,7 @@ import {
   blockSender,
 } from "../lib/newsletter-ingest.js";
 import { prisma } from "../lib/prisma.js";
+import { randomBytes } from "crypto";
 
 const MAX_BODY_SIZE = 2 * 1024 * 1024; // 2 MB
 
@@ -46,6 +47,7 @@ webhookRouter.post("/email/ingest/:secret", async (c) => {
   const textBody: string | null = body.TextBody ?? body.textBody ?? null;
   const date: string = body.Date ?? body.date ?? new Date().toISOString();
   const messageId: string = body.MessageID ?? body.messageId ?? "";
+  const to: string = body.To ?? body.to ?? "";
 
   if (!from || !subject || (!htmlBody && !textBody) || !messageId) {
     return c.json({ ok: true, skipped: "missing required fields" }, 200);
@@ -58,15 +60,19 @@ webhookRouter.post("/email/ingest/:secret", async (c) => {
     return c.json({ ok: true, skipped: "body too large" }, 200);
   }
 
-  // 5. Resolve user — single-user: find the one active user in the system
-  const user = await prisma.user.findFirst({
-    where: { banned: false },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
+  // 5. Resolve user from To address — parse ingest+{token}@domain.com
+  const toEmail = extractEmail(to);
+  const tokenMatch = toEmail.match(/^ingest\+([a-z0-9]+)@/);
+  if (!tokenMatch) {
+    return c.json({ ok: true, skipped: "no ingest token in To address" }, 200);
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { newsletterIngestToken: tokenMatch[1] },
+    select: { id: true, banned: true },
   });
-  if (!user) {
-    console.error("[newsletter-webhook] No active user found");
-    return c.json({ error: "Server misconfigured" }, 500);
+  if (!user || user.banned) {
+    return c.json({ ok: true, skipped: "unknown ingest token" }, 200);
   }
   const userId = user.id;
 
@@ -123,6 +129,39 @@ webhookRouter.post("/email/ingest/:secret", async (c) => {
 // ── Sender Management Router (authed) ──
 
 const senderRouter = new Hono<AuthEnv>();
+
+// Get the user's personalized ingest address (auto-generates token on first call)
+senderRouter.get("/ingest-address", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const baseDomain = process.env.NEWSLETTER_INGEST_EMAIL;
+  if (!baseDomain) {
+    return c.json({ ingestEmail: null });
+  }
+
+  // Parse the domain from the base email (e.g., "ingest@domain.com" → "domain.com")
+  const atIdx = baseDomain.indexOf("@");
+  if (atIdx === -1) {
+    return c.json({ ingestEmail: null });
+  }
+  const domain = baseDomain.slice(atIdx + 1);
+
+  // Get or create the user's ingest token
+  let dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { newsletterIngestToken: true },
+  });
+
+  if (!dbUser?.newsletterIngestToken) {
+    const token = randomBytes(12).toString("hex"); // 24-char lowercase hex
+    dbUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { newsletterIngestToken: token },
+      select: { newsletterIngestToken: true },
+    });
+  }
+
+  return c.json({ ingestEmail: `ingest+${dbUser.newsletterIngestToken}@${domain}` });
+});
 
 // List all senders for user
 senderRouter.get("/", authMiddleware, async (c) => {
