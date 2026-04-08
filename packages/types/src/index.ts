@@ -47,7 +47,7 @@ export type DueDatePrecision = "day" | "week";
 export type ReminderType = "morning_of" | "1_hour_before" | "day_before" | "custom";
 export type RecurrenceType = "daily" | "weekly" | "monthly" | "custom";
 
-export type ContentType = "tweet" | "article" | "video" | "pdf" | "podcast" | "web_page";
+export type ContentType = "tweet" | "article" | "video" | "pdf" | "podcast" | "web_page" | "newsletter";
 export type ContentStatus = "pending" | "extracted" | "failed";
 
 export type ContentMetadata =
@@ -56,7 +56,8 @@ export type ContentMetadata =
   | { type: "podcast"; embedUrl: string; provider: "spotify" | "apple"; episodeName?: string; showName?: string }
   | { type: "article"; author?: string; publishDate?: string; wordCount?: number }
   | { type: "web_page" }
-  | { type: "pdf" };
+  | { type: "pdf" }
+  | { type: "newsletter"; senderName: string; senderEmail: string; issueSubject: string; receivedAt: string };
 
 /** DB record — mirrors the Prisma Item model */
 export interface ItemRecord {
@@ -535,6 +536,23 @@ export interface Things3ImportTask {
   completedAt?: string; // ISO 8601 datetime
   createdAt?: string; // ISO 8601 datetime
   thingsProjectUuid?: string; // resolves to listId server-side
+}
+
+// Newsletter types
+export interface NewsletterSender {
+  id: string;
+  name: string;
+  email: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface PendingNewsletterSummary {
+  id: string;
+  senderEmail: string;
+  senderName: string;
+  subject: string;
+  receivedAt: string;
 }
 
 export interface Things3ImportPayload {

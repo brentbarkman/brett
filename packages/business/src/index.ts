@@ -284,7 +284,7 @@ function isValidHttpUrl(url: string): boolean {
   }
 }
 
-const VALID_CONTENT_TYPES = new Set(["tweet", "article", "video", "pdf", "podcast", "web_page"]);
+const VALID_CONTENT_TYPES = new Set(["tweet", "article", "video", "pdf", "podcast", "web_page", "newsletter"]);
 const VALID_ITEM_TYPES = new Set(["task", "content"]);
 const VALID_STATUSES = new Set([
   "active",
