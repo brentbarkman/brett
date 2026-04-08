@@ -10,6 +10,7 @@ let reconciliationRunning = false;
 let granolaSyncRunning = false;
 let granolaSweepRunning = false;
 let scoutTickRunning = false;
+let newsletterCleanupRunning = false;
 
 export function startCronJobs(): void {
   // SSE heartbeat — every 30 seconds
@@ -237,9 +238,26 @@ export function startCronJobs(): void {
     }
   });
 
+  // Pending newsletter cleanup — daily at 3am
+  cron.schedule("0 3 * * *", async () => {
+    if (newsletterCleanupRunning) return;
+    newsletterCleanupRunning = true;
+    try {
+      const { cleanupExpiredPending } = await import("../lib/newsletter-ingest.js");
+      const cleaned = await cleanupExpiredPending();
+      if (cleaned > 0) {
+        console.log(`[cron] Cleaned up ${cleaned} expired pending newsletters`);
+      }
+    } catch (err) {
+      console.error("[cron] Pending newsletter cleanup failed:", err);
+    } finally {
+      newsletterCleanupRunning = false;
+    }
+  });
+
   console.log("[cron] Started: Scout tick (5m)");
 
   console.log(
-    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), meeting post-event (5m), meeting sweep (30m), verification cleanup (1h)",
+    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), meeting post-event (5m), meeting sweep (30m), verification cleanup (1h), newsletter cleanup (daily)",
   );
 }
