@@ -1,5 +1,6 @@
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "../src/auth/provider";
 
 function AuthGate() {
@@ -24,8 +25,10 @@ function AuthGate() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <AuthGate />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

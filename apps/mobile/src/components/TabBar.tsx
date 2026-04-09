@@ -58,6 +58,7 @@ const TAB_SLOT_WIDTH = SCREEN_WIDTH / TAB_COUNT;
 
 // Map from route tab index (0–4, including voice at 2) to the X center of the tab slot.
 function tabSlotCenter(tabIndex: number): number {
+  'worklet';
   return TAB_SLOT_WIDTH * tabIndex + TAB_SLOT_WIDTH / 2;
 }
 
