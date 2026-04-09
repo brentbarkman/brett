@@ -4,31 +4,30 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ZStack {
-            BackgroundView()
-
-            List {
-                Section("Account") {
-                    settingsRow(icon: "person.circle", title: "Profile")
-                    settingsRow(icon: "lock.shield", title: "Security")
-                }
-                Section("Integrations") {
-                    settingsRow(icon: "calendar", title: "Calendar")
-                    settingsRow(icon: "cpu", title: "AI Providers")
-                    settingsRow(icon: "newspaper", title: "Newsletters")
-                }
-                Section("Preferences") {
-                    settingsRow(icon: "globe", title: "Timezone & Location")
-                    settingsRow(icon: "list.bullet", title: "Lists")
-                    settingsRow(icon: "square.and.arrow.down", title: "Import")
-                }
-                Section("App") {
-                    settingsRow(icon: "arrow.triangle.2.circlepath", title: "Updates")
-                    settingsRow(icon: "person.badge.minus", title: "Account", isDestructive: true)
-                }
+        List {
+            Section("Account") {
+                settingsRow(icon: "person.circle", title: "Profile")
+                settingsRow(icon: "lock.shield", title: "Security")
             }
-            .scrollContentBackground(.hidden)
-            .listStyle(.insetGrouped)
+            Section("Integrations") {
+                settingsRow(icon: "calendar", title: "Calendar")
+                settingsRow(icon: "cpu", title: "AI Providers")
+                settingsRow(icon: "newspaper", title: "Newsletters")
+            }
+            Section("Preferences") {
+                settingsRow(icon: "globe", title: "Timezone & Location")
+                settingsRow(icon: "list.bullet", title: "Lists")
+                settingsRow(icon: "square.and.arrow.down", title: "Import")
+            }
+            Section("App") {
+                settingsRow(icon: "arrow.triangle.2.circlepath", title: "Updates")
+                settingsRow(icon: "person.badge.minus", title: "Account", isDestructive: true)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background {
+            BackgroundView()
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)

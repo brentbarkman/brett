@@ -4,65 +4,94 @@ struct OmnibarView: View {
     @Bindable var store: MockStore
     let placeholder: String
     @State private var text = ""
-    @State private var isEditing = false
     @State private var showListDrawer = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            // Omnibar pill
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 // List drawer button
                 Button {
                     showListDrawer = true
                 } label: {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                    Image(systemName: "square.stack.3d.up")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.35))
                 }
                 .buttonStyle(.plain)
-                .frame(width: 28, height: 28)
+                .frame(width: 32, height: 32)
+
+                // Divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 1, height: 20)
 
                 // Text field
-                TextField(placeholder, text: $text)
-                    .font(BrettTypography.omnibarPlaceholder)
-                    .foregroundStyle(BrettColors.textPrimary)
-                    .tint(BrettColors.gold)
-                    .focused($isFocused)
-                    .submitLabel(.done)
-                    .onSubmit {
-                        submitTask()
-                    }
+                HStack(spacing: 8) {
+                    // Subtle sparkle icon — AI hint
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [BrettColors.gold.opacity(0.5), BrettColors.cerulean.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
 
-                // Mic button
+                    TextField(placeholder, text: $text)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(BrettColors.textPrimary)
+                        .tint(BrettColors.gold)
+                        .focused($isFocused)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            submitTask()
+                        }
+                }
+
+                // Mic button with ambient glow
                 Button {
                     HapticManager.heavy()
-                    // Voice mode — placeholder for now
                 } label: {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(BrettColors.gold.opacity(0.8))
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [BrettColors.gold.opacity(0.15), BrettColors.gold.opacity(0.05)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+
+                        Image(systemName: "waveform")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(BrettColors.gold)
+                    }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 28, height: 28)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background {
                 Capsule()
-                    .fill(.regularMaterial)
+                    .fill(.ultraThinMaterial)
                     .overlay {
                         Capsule()
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.12),
+                                        Color.white.opacity(0.04),
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 0.5
+                            )
                     }
-                    .overlay(alignment: .leading) {
-                        // Subtle gold accent on left edge
-                        Capsule()
-                            .fill(BrettColors.gold.opacity(0.3))
-                            .frame(width: 3)
-                            .padding(.leading, 1)
-                            .padding(.vertical, 6)
-                    }
+                    .shadow(color: .black.opacity(0.3), radius: 20, y: 5)
             }
             .padding(.horizontal, 16)
         }
