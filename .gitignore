@@ -8,7 +8,9 @@ build
 *.tsbuildinfo
 .expo
 android
-ios
+# Ignore Expo-generated native dirs, but not apps/ios/
+/ios
+apps/mobile/ios
 .DS_STORE
 .superpowers/
 
