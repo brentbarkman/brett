@@ -3,15 +3,46 @@ import SwiftUI
 struct TaskRow: View {
     let item: MockItem
     let onToggle: () -> Void
-    var onTap: (() -> Void)? = nil
 
     var body: some View {
-        Button(action: { onTap?() }) {
+        NavigationLink(value: item.id) {
             HStack(spacing: 12) {
-                TaskCheckbox(
-                    isChecked: item.isCompleted,
-                    contentType: item.type == .content ? .webPage : nil,
-                    action: onToggle
+                // Visual-only checkbox appearance (not a button)
+                ZStack {
+                    Circle()
+                        .fill(
+                            item.isCompleted
+                                ? BrettColors.success.opacity(0.15)
+                                : Color.black.opacity(0.25)
+                        )
+                        .overlay {
+                            Circle()
+                                .strokeBorder(
+                                    item.isCompleted
+                                        ? BrettColors.success.opacity(0.4)
+                                        : Color.white.opacity(0.12),
+                                    lineWidth: 1
+                                )
+                        }
+                        .frame(width: 30, height: 30)
+
+                    if item.isCompleted {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(BrettColors.success)
+                    } else {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(BrettColors.gold.opacity(0.7))
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    TapGesture().onEnded {
+                        HapticManager.light()
+                        onToggle()
+                    }
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -26,7 +57,7 @@ struct TaskRow: View {
                         if let time = item.time {
                             Text(time)
                                 .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta) // white/40 for timestamps
+                                .foregroundStyle(BrettColors.textMeta)
                         } else if let captured = item.capturedAgo {
                             Text("Captured \(captured)")
                                 .font(BrettTypography.taskMeta)
@@ -39,7 +70,7 @@ struct TaskRow: View {
                                 .foregroundStyle(BrettColors.textGhost)
                             Text(listName)
                                 .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta) // white/40 for list+source
+                                .foregroundStyle(BrettColors.textMeta)
                         }
 
                         if let domain = item.contentDomain {
@@ -51,6 +82,11 @@ struct TaskRow: View {
                 }
 
                 Spacer()
+
+                // Chevron hint
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(BrettColors.textGhost)
             }
             .padding(.vertical, 4)
         }

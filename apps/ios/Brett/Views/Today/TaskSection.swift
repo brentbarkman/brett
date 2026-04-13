@@ -6,7 +6,6 @@ struct TaskSection: View {
     let labelColor: Color
     var accentColor: Color? = nil
     let onToggle: (String) -> Void
-    let onTap: (String) -> Void
 
     @ViewBuilder
     var body: some View {
@@ -14,7 +13,7 @@ struct TaskSection: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(label.uppercased())
                     .font(BrettTypography.sectionLabel)
-                    .tracking(2.4) // 0.15em at 16pt base
+                    .tracking(2.4)
                     .foregroundStyle(labelColor)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
@@ -32,16 +31,14 @@ struct TaskSection: View {
 
                                     TaskRow(
                                         item: item,
-                                        onToggle: { onToggle(item.id) },
-                                        onTap: { onTap(item.id) }
+                                        onToggle: { onToggle(item.id) }
                                     )
                                     .padding(.leading, 8)
                                 }
                             } else {
                                 TaskRow(
                                     item: item,
-                                    onToggle: { onToggle(item.id) },
-                                    onTap: { onTap(item.id) }
+                                    onToggle: { onToggle(item.id) }
                                 )
                             }
 

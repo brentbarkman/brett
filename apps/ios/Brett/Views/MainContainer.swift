@@ -3,11 +3,16 @@ import SwiftUI
 struct MainContainer: View {
     @State private var store = MockStore()
     @State private var currentPage = 1 // 0=Inbox, 1=Today, 2=Calendar
+    @State private var navPath = NavigationPath()
 
     private let pages = ["Inbox", "Today", "Calendar"]
 
+    // DEBUG: Set to a mock item ID to auto-navigate to task detail on launch
+    // Set to nil for normal behavior, or an item ID like "item-3" to test detail view
+    private let debugAutoNav: String? = nil
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navPath) {
             ZStack {
                 // Living background
                 BackgroundView()
@@ -26,7 +31,7 @@ struct MainContainer: View {
                         } label: {
                             Image(systemName: "gearshape")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.4))
+                                .foregroundStyle(Color.white.opacity(0.40))
                                 .frame(width: 44, height: 44)
                         }
                         .padding(.trailing, 12)
@@ -45,11 +50,8 @@ struct MainContainer: View {
                             .tag(2)
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
-                    // Reserve space at the bottom for the omnibar — ScrollViews
-                    // inside each page will respect this inset automatically
                     .safeAreaInset(edge: .bottom) {
                         VStack(spacing: 0) {
-                            // Fade gradient so content dissolves before the omnibar
                             LinearGradient(
                                 colors: [Color.clear, Color.black.opacity(0.5)],
                                 startPoint: .top,
@@ -66,6 +68,17 @@ struct MainContainer: View {
                             .padding(.bottom, 4)
                             .padding(.top, 4)
                         }
+                    }
+                }
+            }
+            // Navigation destination registered at the NavigationStack level
+            .navigationDestination(for: String.self) { itemId in
+                TaskDetailView(store: store, itemId: itemId)
+            }
+            .onAppear {
+                if let id = debugAutoNav {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        navPath.append(id)
                     }
                 }
             }

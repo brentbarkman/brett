@@ -2,7 +2,6 @@ import SwiftUI
 
 struct TodayPage: View {
     @Bindable var store: MockStore
-    @State private var selectedItemId: String?
 
     var body: some View {
         ScrollView {
@@ -29,8 +28,7 @@ struct TodayPage: View {
                     items: store.overdueItems,
                     labelColor: BrettColors.error,
                     accentColor: BrettColors.error,
-                    onToggle: { store.toggleItem($0) },
-                    onTap: { selectedItemId = $0 }
+                    onToggle: { store.toggleItem($0) }
                 )
 
                 // Today
@@ -38,8 +36,7 @@ struct TodayPage: View {
                     label: "Today",
                     items: store.todayItems,
                     labelColor: BrettColors.sectionLabelColor,
-                    onToggle: { store.toggleItem($0) },
-                    onTap: { selectedItemId = $0 }
+                    onToggle: { store.toggleItem($0) }
                 )
 
                 // This Week
@@ -47,8 +44,7 @@ struct TodayPage: View {
                     label: "This Week",
                     items: store.thisWeekItems,
                     labelColor: BrettColors.sectionLabelColor,
-                    onToggle: { store.toggleItem($0) },
-                    onTap: { selectedItemId = $0 }
+                    onToggle: { store.toggleItem($0) }
                 )
 
                 // Next Week
@@ -56,8 +52,7 @@ struct TodayPage: View {
                     label: "Next Week",
                     items: store.nextWeekItems,
                     labelColor: BrettColors.sectionLabelColor,
-                    onToggle: { store.toggleItem($0) },
-                    onTap: { selectedItemId = $0 }
+                    onToggle: { store.toggleItem($0) }
                 )
 
                 // Done Today
@@ -65,16 +60,12 @@ struct TodayPage: View {
                     label: "Done Today",
                     items: store.doneItems,
                     labelColor: BrettColors.sectionLabelColor,
-                    onToggle: { store.toggleItem($0) },
-                    onTap: { selectedItemId = $0 }
+                    onToggle: { store.toggleItem($0) }
                 )
 
                 Spacer(minLength: 20)
             }
         }
         .scrollIndicators(.hidden)
-        .navigationDestination(for: String.self) { itemId in
-            TaskDetailView(store: store, itemId: itemId)
-        }
     }
 }

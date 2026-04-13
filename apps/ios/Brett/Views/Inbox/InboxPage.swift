@@ -14,7 +14,7 @@ struct InboxPage: View {
 
                     Text("\(store.inboxItems.count) items to triage")
                         .font(BrettTypography.stats)
-                        .foregroundStyle(Color.white.opacity(0.35))
+                        .foregroundStyle(BrettColors.textInactive) // white/50 for page subtitles
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
@@ -39,8 +39,7 @@ struct InboxPage: View {
 
                                     TaskRow(
                                         item: item,
-                                        onToggle: { },
-                                        onTap: { }
+                                        onToggle: { }
                                     )
                                     .padding(.leading, item.type == .content ? 8 : 0)
                                 }
@@ -55,7 +54,7 @@ struct InboxPage: View {
                     .padding(.horizontal, 16)
                 }
 
-                Spacer(minLength: 100)
+                Spacer(minLength: 20)
             }
         }
         .scrollIndicators(.hidden)
