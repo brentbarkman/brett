@@ -55,9 +55,7 @@ struct ScoutsRosterView: View {
                 }
             }
         }
-        .navigationDestination(for: ScoutNav.self) { nav in
-            ScoutDetailView(store: store, scoutId: nav.id)
-        }
+        // navigationDestination for ScoutNav is registered in MainContainer
     }
 }
 
