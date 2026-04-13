@@ -337,27 +337,31 @@ struct FindingCard: View {
         }
     }
 
+    // Colors match desktop: insight=purple-400, article=brett-gold, task=amber-400
+    private static let purple400 = Color(red: 192/255, green: 132/255, blue: 252/255)
+    private static let amber400 = Color(red: 251/255, green: 191/255, blue: 36/255)
+
     private var findingTint: Color {
         switch finding.type {
-        case .insight: return Color.purple
+        case .insight: return Self.purple400
         case .article: return BrettColors.gold
-        case .task: return Color.orange
+        case .task: return Self.amber400
         }
     }
 
     private var findingColor: Color {
         switch finding.type {
-        case .insight: return Color.purple
+        case .insight: return Self.purple400
         case .article: return BrettColors.gold
-        case .task: return Color.orange
+        case .task: return Self.amber400
         }
     }
 
     private var findingIcon: String {
         switch finding.type {
-        case .insight: return "lightbulb.fill"
+        case .insight: return "bolt.fill"        // Zap on desktop
         case .article: return "doc.text"
-        case .task: return "bolt.fill"
+        case .task: return "checkmark.circle"  // CircleCheck on desktop
         }
     }
 }
