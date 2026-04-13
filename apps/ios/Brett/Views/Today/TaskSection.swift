@@ -13,8 +13,8 @@ struct TaskSection: View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text(label.uppercased())
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(1.5)
+                    .font(BrettTypography.sectionLabel)
+                    .tracking(2.4) // 0.15em at 16pt base
                     .foregroundStyle(labelColor)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)

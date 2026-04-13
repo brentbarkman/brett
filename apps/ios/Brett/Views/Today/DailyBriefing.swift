@@ -12,8 +12,8 @@ struct DailyBriefing: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("DAILY BRIEFING")
-                            .font(.system(size: 11, weight: .semibold))
-                            .tracking(1.5)
+                            .font(BrettTypography.sectionLabel)
+                            .tracking(2.4)
                             .foregroundStyle(BrettColors.ceruleanLabel)
 
                         Spacer()
@@ -33,7 +33,7 @@ struct DailyBriefing: View {
                     if !isCollapsed {
                         Text(text)
                             .font(BrettTypography.body)
-                            .foregroundStyle(Color.white.opacity(0.60))
+                            .foregroundStyle(BrettColors.textBody) // white/80 for body text
                             .lineSpacing(4)
                     }
                 }

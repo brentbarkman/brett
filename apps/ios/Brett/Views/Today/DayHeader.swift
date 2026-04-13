@@ -14,7 +14,7 @@ struct DayHeader: View {
 
             Text("\(completedCount) of \(totalCount) done · \(meetingCount) meeting\(meetingCount == 1 ? "" : "s") (\(meetingDuration))")
                 .font(BrettTypography.stats)
-                .foregroundStyle(Color.white.opacity(0.35))
+                .foregroundStyle(BrettColors.textInactive) // white/50 for page subtitles
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)

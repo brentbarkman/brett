@@ -18,7 +18,7 @@ struct GlassCard<Content: View>: View {
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                     }
             }
     }
@@ -40,7 +40,7 @@ extension View {
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                     }
             }
     }

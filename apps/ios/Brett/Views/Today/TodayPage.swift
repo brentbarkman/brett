@@ -23,7 +23,7 @@ struct TodayPage: View {
                     isDismissed: $store.briefingDismissed
                 )
 
-                // Overdue
+                // Overdue — red label is the only exception to white/40
                 TaskSection(
                     label: "Overdue",
                     items: store.overdueItems,
@@ -37,7 +37,7 @@ struct TodayPage: View {
                 TaskSection(
                     label: "Today",
                     items: store.todayItems,
-                    labelColor: BrettColors.goldLabel,
+                    labelColor: BrettColors.sectionLabelColor,
                     onToggle: { store.toggleItem($0) },
                     onTap: { selectedItemId = $0 }
                 )
@@ -46,7 +46,7 @@ struct TodayPage: View {
                 TaskSection(
                     label: "This Week",
                     items: store.thisWeekItems,
-                    labelColor: BrettColors.textTertiary,
+                    labelColor: BrettColors.sectionLabelColor,
                     onToggle: { store.toggleItem($0) },
                     onTap: { selectedItemId = $0 }
                 )
@@ -55,7 +55,7 @@ struct TodayPage: View {
                 TaskSection(
                     label: "Next Week",
                     items: store.nextWeekItems,
-                    labelColor: BrettColors.textTertiary,
+                    labelColor: BrettColors.sectionLabelColor,
                     onToggle: { store.toggleItem($0) },
                     onTap: { selectedItemId = $0 }
                 )
@@ -64,7 +64,7 @@ struct TodayPage: View {
                 TaskSection(
                     label: "Done Today",
                     items: store.doneItems,
-                    labelColor: BrettColors.textTertiary,
+                    labelColor: BrettColors.sectionLabelColor,
                     onToggle: { store.toggleItem($0) },
                     onTap: { selectedItemId = $0 }
                 )

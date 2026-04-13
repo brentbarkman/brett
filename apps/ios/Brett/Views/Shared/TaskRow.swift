@@ -10,35 +10,36 @@ struct TaskRow: View {
             HStack(spacing: 12) {
                 TaskCheckbox(
                     isChecked: item.isCompleted,
-                    contentType: item.type == .content ? (ContentType(rawValue: item.contentDomain ?? "") ?? .webPage) : nil,
+                    contentType: item.type == .content ? .webPage : nil,
                     action: onToggle
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
                         .font(BrettTypography.taskTitle)
-                        .foregroundStyle(item.isCompleted ? Color.white.opacity(0.35) : BrettColors.textPrimary)
-                        .strikethrough(item.isCompleted, color: Color.white.opacity(0.2))
+                        .foregroundStyle(item.isCompleted ? BrettColors.textMeta : BrettColors.textCardTitle)
+                        .strikethrough(item.isCompleted, color: BrettColors.textGhost)
                         .lineLimit(2)
+                        .multilineTextAlignment(.leading)
 
                     HStack(spacing: 6) {
                         if let time = item.time {
                             Text(time)
                                 .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textSecondary)
+                                .foregroundStyle(BrettColors.textMeta) // white/40 for timestamps
                         } else if let captured = item.capturedAgo {
                             Text("Captured \(captured)")
                                 .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textSecondary)
+                                .foregroundStyle(BrettColors.textMeta)
                         }
 
                         if let listName = item.listName {
                             Text("·")
                                 .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textTertiary)
+                                .foregroundStyle(BrettColors.textGhost)
                             Text(listName)
                                 .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textSecondary)
+                                .foregroundStyle(BrettColors.textMeta) // white/40 for list+source
                         }
 
                         if let domain = item.contentDomain {

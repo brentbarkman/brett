@@ -6,21 +6,32 @@ enum BrettColors {
     static let cerulean = Color(red: 70/255, green: 130/255, blue: 195/255)   // #4682C3
 
     // Semantic
-    static let success = Color(red: 72/255, green: 187/255, blue: 160/255)    // #48BBA0
+    static let success = Color(red: 72/255, green: 187/255, blue: 160/255)    // #48BBA0 (teal)
     static let error = Color(red: 230/255, green: 85/255, blue: 75/255)       // #E6554B
 
-    // Text (white at varying opacity)
-    static let textPrimary = Color.white.opacity(0.85)
-    static let textSecondary = Color.white.opacity(0.40)
-    static let textTertiary = Color.white.opacity(0.25)
-    static let textGhost = Color.white.opacity(0.15)
+    // Text opacity scale — matches design guide exactly
+    // Only use standard stops: /20, /30, /40, /50, /60, /80, /90, white
+    static let textHeading = Color.white                    // Primary headings, active nav
+    static let textCardTitle = Color.white.opacity(0.90)    // Card titles, emphasized
+    static let textBody = Color.white.opacity(0.80)         // Standard body text
+    static let textSecondary = Color.white.opacity(0.60)    // Metadata values
+    static let textInactive = Color.white.opacity(0.50)     // Unselected nav, page subtitles
+    static let textMeta = Color.white.opacity(0.40)         // Section labels, timestamps, list+source
+    static let textPlaceholder = Color.white.opacity(0.30)  // Input placeholders
+    static let textGhost = Color.white.opacity(0.20)        // Unfocused icons, decorative
 
-    // Surfaces
-    static let hairline = Color.white.opacity(0.05)
-    static let cardBorder = Color.white.opacity(0.08)
+    // Legacy aliases (for existing code — migrate to above)
+    static let textPrimary = textCardTitle
+    static let textTertiary = textMeta
 
-    // Section label variants
-    static let goldLabel = gold.opacity(0.50)
+    // Borders — design guide standard stops
+    static let cardBorder = Color.white.opacity(0.10)       // Default card/divider borders
+    static let hairline = Color.white.opacity(0.05)         // Very subtle grid lines
+
+    // Section label color — always white/40
+    static let sectionLabelColor = Color.white.opacity(0.40)
+
+    // Brett AI surfaces — cerulean tints
     static let ceruleanLabel = cerulean.opacity(0.60)
 
     /// Initialize Color from hex string (e.g. "#3B82F6" or "3B82F6")
