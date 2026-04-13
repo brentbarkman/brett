@@ -17,11 +17,14 @@ download.get("/", async (c) => {
   const latest = await getLatestVersion();
   const version = latest.version;
   // artifact key from latest.json includes "releases/" prefix — strip it for the proxy URL
-  const rawKey = latest.artifact || latest.dmg || `releases/Brett-${version}.zip`;
+  const rawKey = latest.artifact || latest.dmg || `releases/Brett-${version}-mac.zip`;
   let filename = rawKey.replace(/^releases\//, "");
-  // Validate filename to prevent open redirect via poisoned latest.json
-  if (!/^Brett-[\d.]+\.(zip|dmg)$/.test(filename)) {
-    filename = `Brett-${version}.zip`;
+  // Validate filename to prevent open redirect via poisoned latest.json.
+  // Pattern matches electron-builder outputs: "Brett-X.Y.Z.zip", "Brett-X.Y.Z-mac.zip",
+  // "Brett-X.Y.Z-arm64-mac.dmg", etc. Must stay in sync with ALLOWED_RELEASE_PATTERNS
+  // in release-proxy.ts.
+  if (!/^Brett-[\d.]+(?:-[\w.]+)?\.(zip|dmg)$/.test(filename)) {
+    filename = `Brett-${version}-mac.zip`;
   }
 
   // Escape all interpolated values for safe HTML embedding

@@ -37,8 +37,9 @@ async function release() {
     throw new Error("latest-mac.yml not found in dist/. electron-builder may not have generated it.");
   }
 
-  // 4. Upload .dmg
-  const dmgKey = `releases/Brett-${version}.dmg`;
+  // 4. Upload artifact under its native electron-builder filename (e.g. "Brett-0.1.950-mac.zip").
+  // latest-mac.yml references this exact name + SHA512, so renaming on upload breaks the updater.
+  const dmgKey = `releases/${dmgFile}`;
   const dmgBody = fs.readFileSync(dmgPath);
   console.log(`\nUploading ${dmgFile} (${(dmgBody.length / 1024 / 1024).toFixed(1)} MB) → ${dmgKey}`);
   await s3.send(
