@@ -5,7 +5,7 @@ struct TaskRow: View {
     let onToggle: () -> Void
 
     var body: some View {
-        NavigationLink(value: item.id) {
+        NavigationLink(value: NavDestination.taskDetail(id: item.id)) {
             HStack(spacing: 12) {
                 // Visual-only checkbox appearance (not a button)
                 ZStack {

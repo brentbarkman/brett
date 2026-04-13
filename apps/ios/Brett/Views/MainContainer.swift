@@ -1,5 +1,14 @@
 import SwiftUI
 
+// MARK: - Navigation value types
+
+enum NavDestination: Hashable {
+    case settings
+    case scoutsRoster
+    case scoutDetail(id: String)
+    case taskDetail(id: String)
+}
+
 struct MainContainer: View {
     @State private var store = MockStore()
     @State private var currentPage = 1 // 0=Inbox, 1=Today, 2=Calendar
@@ -9,12 +18,10 @@ struct MainContainer: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Living background
                 BackgroundView()
 
-                // Content pages
                 VStack(spacing: 0) {
-                    // Page indicator + settings
+                    // Page indicator + nav buttons
                     HStack {
                         Spacer()
                         PageIndicator(pages: pages, currentIndex: currentPage)
@@ -22,18 +29,14 @@ struct MainContainer: View {
                     }
                     .overlay(alignment: .trailing) {
                         HStack(spacing: 0) {
-                            NavigationLink {
-                                ScoutsRosterView(store: store)
-                            } label: {
+                            NavigationLink(value: NavDestination.scoutsRoster) {
                                 Image(systemName: "antenna.radiowaves.left.and.right")
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(Color.white.opacity(0.40))
                                     .frame(width: 40, height: 44)
                             }
 
-                            NavigationLink {
-                                SettingsView()
-                            } label: {
+                            NavigationLink(value: NavDestination.settings) {
                                 Image(systemName: "gearshape")
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(Color.white.opacity(0.40))
@@ -77,12 +80,18 @@ struct MainContainer: View {
                     }
                 }
             }
-            // Navigation destinations
-            .navigationDestination(for: String.self) { itemId in
-                TaskDetailView(store: store, itemId: itemId)
-            }
-            .navigationDestination(for: ScoutNav.self) { nav in
-                ScoutDetailView(store: store, scoutId: nav.id)
+            // Single unified navigation destination handler
+            .navigationDestination(for: NavDestination.self) { destination in
+                switch destination {
+                case .settings:
+                    SettingsView()
+                case .scoutsRoster:
+                    ScoutsRosterView(store: store)
+                case .scoutDetail(let id):
+                    ScoutDetailView(store: store, scoutId: id)
+                case .taskDetail(let id):
+                    TaskDetailView(store: store, itemId: id)
+                }
             }
         }
     }

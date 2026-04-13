@@ -26,7 +26,7 @@ struct ScoutsRosterView: View {
                     // Scout cards
                     VStack(spacing: 12) {
                         ForEach(store.scouts) { scout in
-                            NavigationLink(value: ScoutNav(id: scout.id)) {
+                            NavigationLink(value: NavDestination.scoutDetail(id: scout.id)) {
                                 ScoutCard(scout: scout)
                             }
                             .buttonStyle(.plain)
@@ -55,13 +55,7 @@ struct ScoutsRosterView: View {
                 }
             }
         }
-        // navigationDestination for ScoutNav is registered in MainContainer
     }
-}
-
-// Navigation value type for scouts
-struct ScoutNav: Hashable {
-    let id: String
 }
 
 // MARK: - Scout Card
