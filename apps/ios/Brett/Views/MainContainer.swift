@@ -45,45 +45,29 @@ struct MainContainer: View {
                             .tag(2)
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
-                }
+                    // Reserve space at the bottom for the omnibar — ScrollViews
+                    // inside each page will respect this inset automatically
+                    .safeAreaInset(edge: .bottom) {
+                        VStack(spacing: 0) {
+                            // Fade gradient so content dissolves before the omnibar
+                            LinearGradient(
+                                colors: [Color.clear, Color.black.opacity(0.5)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .frame(height: 30)
+                            .allowsHitTesting(false)
 
-                // Scroll fade at top — content dissolves under the page indicator
-                VStack {
-                    LinearGradient(
-                        colors: [Color.clear, Color.clear],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 0) // Reserve no space, handled by safe area
-                    Spacer()
-                }
-
-                // Omnibar overlay with fade behind it
-                VStack {
-                    Spacer()
-
-                    // Fade gradient above omnibar so cards dissolve into it
-                    LinearGradient(
-                        colors: [Color.clear, Color.black.opacity(0.6)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 50)
-                    .allowsHitTesting(false)
-
-                    OmnibarView(
-                        store: store,
-                        placeholder: currentPage == 0 ? "Capture something..." :
-                                    currentPage == 2 ? "Add an event..." : "Add a task..."
-                    )
-                    .padding(.bottom, 4)
-                    .background {
-                        // Solid backing behind omnibar area
-                        Color.black.opacity(0.3)
-                            .blur(radius: 20)
+                            OmnibarView(
+                                store: store,
+                                placeholder: currentPage == 0 ? "Capture something..." :
+                                            currentPage == 2 ? "Add an event..." : "Add a task..."
+                            )
+                            .padding(.bottom, 4)
+                            .padding(.top, 4)
+                        }
                     }
                 }
-                .ignoresSafeArea(edges: .bottom)
             }
         }
     }

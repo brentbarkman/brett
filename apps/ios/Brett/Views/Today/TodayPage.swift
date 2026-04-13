@@ -69,7 +69,7 @@ struct TodayPage: View {
                     onTap: { selectedItemId = $0 }
                 )
 
-                Spacer(minLength: 120) // Space for omnibar + fade gradient
+                Spacer(minLength: 20)
             }
         }
         .scrollIndicators(.hidden)
