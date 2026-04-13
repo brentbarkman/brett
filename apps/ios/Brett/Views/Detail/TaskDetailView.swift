@@ -19,7 +19,7 @@ struct TaskDetailView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         // Title + checkbox
                         HStack(spacing: 14) {
-                            GoldCheckbox(isChecked: item.isCompleted) {
+                            TaskCheckbox(isChecked: item.isCompleted) {
                                 store.toggleItem(item.id)
                             }
 

@@ -18,7 +18,7 @@ struct InboxPage: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
-                .padding(.top, 60)
+                .padding(.top, 12)
 
                 if store.inboxItems.isEmpty {
                     EmptyState(heading: "Your inbox", copy: "Everything worth doing starts here.")

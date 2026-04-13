@@ -14,7 +14,7 @@ struct TodayPage: View {
                     meetingCount: store.meetingCount,
                     meetingDuration: store.meetingDuration
                 )
-                .padding(.top, 60) // Below status bar + page indicator
+                .padding(.top, 12)
 
                 // Briefing
                 DailyBriefing(
@@ -69,7 +69,7 @@ struct TodayPage: View {
                     onTap: { selectedItemId = $0 }
                 )
 
-                Spacer(minLength: 100) // Space for omnibar
+                Spacer(minLength: 120) // Space for omnibar + fade gradient
             }
         }
         .scrollIndicators(.hidden)

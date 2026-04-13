@@ -12,7 +12,7 @@ struct CalendarPage: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
-                .padding(.top, 60)
+                .padding(.top, 12)
 
             // Week strip
             WeekStrip(selectedDate: $selectedDate, events: store.events)

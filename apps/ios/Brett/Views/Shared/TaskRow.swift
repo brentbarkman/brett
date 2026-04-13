@@ -8,7 +8,11 @@ struct TaskRow: View {
     var body: some View {
         Button(action: { onTap?() }) {
             HStack(spacing: 12) {
-                GoldCheckbox(isChecked: item.isCompleted, action: onToggle)
+                TaskCheckbox(
+                    isChecked: item.isCompleted,
+                    contentType: item.type == .content ? (ContentType(rawValue: item.contentDomain ?? "") ?? .webPage) : nil,
+                    action: onToggle
+                )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
