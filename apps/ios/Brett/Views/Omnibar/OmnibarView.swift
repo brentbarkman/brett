@@ -16,14 +16,14 @@ struct OmnibarView: View {
                 } label: {
                     Image(systemName: "square.stack.3d.up")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.35))
+                        .foregroundStyle(Color.white.opacity(0.40))
                 }
                 .buttonStyle(.plain)
                 .frame(width: 32, height: 32)
 
                 // Divider
                 Rectangle()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(Color.white.opacity(0.10))
                     .frame(width: 1, height: 20)
 
                 // Text field
@@ -82,8 +82,8 @@ struct OmnibarView: View {
                             .strokeBorder(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.12),
-                                        Color.white.opacity(0.04),
+                                        Color.white.opacity(0.10),
+                                        Color.white.opacity(0.05),
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom

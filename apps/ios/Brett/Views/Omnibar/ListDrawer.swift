@@ -38,10 +38,10 @@ struct ListDrawer: View {
                                 .padding(.vertical, 10)
                                 .background {
                                     Capsule()
-                                        .fill(Color.white.opacity(0.08))
+                                        .fill(Color.white.opacity(0.10))
                                         .overlay {
                                             Capsule()
-                                                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                                                .strokeBorder(Color.white.opacity(0.05), lineWidth: 0.5)
                                         }
                                 }
                             }

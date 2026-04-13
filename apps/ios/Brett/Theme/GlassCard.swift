@@ -13,7 +13,7 @@ struct GlassCard<Content: View>: View {
                     .overlay {
                         if let tint {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(tint.opacity(0.08))
+                                .fill(tint.opacity(0.10))
                         }
                     }
                     .overlay {
@@ -35,7 +35,7 @@ extension View {
                     .overlay {
                         if let tint {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(tint.opacity(0.08))
+                                .fill(tint.opacity(0.10))
                         }
                     }
                     .overlay {

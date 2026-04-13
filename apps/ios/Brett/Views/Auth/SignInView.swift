@@ -29,7 +29,7 @@ struct SignInView: View {
                             .fill(.ultraThinMaterial)
                             .overlay {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                             }
                     }
                     .textContentType(.emailAddress)
@@ -46,7 +46,7 @@ struct SignInView: View {
                             .fill(.ultraThinMaterial)
                             .overlay {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                             }
                     }
                     .textContentType(.password)

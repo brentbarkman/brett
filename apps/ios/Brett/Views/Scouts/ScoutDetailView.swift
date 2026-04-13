@@ -119,11 +119,11 @@ struct ScoutDetailView: View {
                     // Status badge
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(scout.status == .active ? Color(red: 52/255, green: 211/255, blue: 153/255) : BrettColors.textMeta)
+                            .fill(scout.status == .active ? BrettColors.emerald : BrettColors.textMeta)
                             .frame(width: 6, height: 6)
                         Text(scout.status.rawValue.capitalized)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(scout.status == .active ? Color(red: 52/255, green: 211/255, blue: 153/255) : BrettColors.textMeta)
+                            .foregroundStyle(scout.status == .active ? BrettColors.emerald : BrettColors.textMeta)
                     }
 
                     Text("·")
@@ -261,7 +261,7 @@ struct ScoutDetailView: View {
 
     private func budgetColor(used: Int, total: Int) -> Color {
         let ratio = Double(used) / Double(max(total, 1))
-        if ratio < 0.5 { return Color(red: 52/255, green: 211/255, blue: 153/255) } // emerald
+        if ratio < 0.5 { return BrettColors.emerald } // emerald
         if ratio < 0.8 { return BrettColors.cerulean }
         return BrettColors.error
     }
@@ -320,7 +320,7 @@ struct FindingCard: View {
                         Button { } label: {
                             Image(systemName: "hand.thumbsup")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(finding.feedbackUseful == true ? Color(red: 52/255, green: 211/255, blue: 153/255) : BrettColors.textMeta)
+                                .foregroundStyle(finding.feedbackUseful == true ? BrettColors.emerald : BrettColors.textMeta)
                         }
                         .buttonStyle(.plain)
 
@@ -338,22 +338,19 @@ struct FindingCard: View {
     }
 
     // Colors match desktop: insight=purple-400, article=brett-gold, task=amber-400
-    private static let purple400 = Color(red: 192/255, green: 132/255, blue: 252/255)
-    private static let amber400 = Color(red: 251/255, green: 191/255, blue: 36/255)
-
     private var findingTint: Color {
         switch finding.type {
-        case .insight: return Self.purple400
+        case .insight: return BrettColors.purple400
         case .article: return BrettColors.gold
-        case .task: return Self.amber400
+        case .task: return BrettColors.amber400
         }
     }
 
     private var findingColor: Color {
         switch finding.type {
-        case .insight: return Self.purple400
+        case .insight: return BrettColors.purple400
         case .article: return BrettColors.gold
-        case .task: return Self.amber400
+        case .task: return BrettColors.amber400
         }
     }
 

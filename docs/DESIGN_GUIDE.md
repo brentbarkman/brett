@@ -733,6 +733,52 @@ Add a subtle left border accent (`border-l-2 border-[#E8B931]`) or a glass highl
 
 ---
 
+## Cross-Platform Consistency (Desktop + Mobile)
+
+The native iOS app (`apps/ios/`) must maintain visual consistency with the Electron desktop app. These rules apply to both platforms:
+
+### Shared Values — Must Match Exactly
+
+| Token | Desktop (Tailwind) | iOS (SwiftUI) | Notes |
+|-------|-------------------|---------------|-------|
+| Brand gold | `#E8B931` | `BrettColors.gold` | |
+| Brett cerulean | `#4682C3` | `BrettColors.cerulean` | Reserved for AI surfaces only |
+| Success/teal | `#48BBA0` | `BrettColors.success` | Checkmarks, completion |
+| Error/red | `#E6554B` | `BrettColors.error` | Overdue, destructive |
+| Emerald | `#34D399` | `BrettColors.emerald` | Scout active status |
+| Purple-400 | `#C084FC` | `BrettColors.purple400` | Insight findings |
+| Amber-400 | `#FBBF24` | `BrettColors.amber400` | Task findings |
+| Card border | `border-white/10` | `Color.white.opacity(0.10)` | Never use /8 or /12 |
+| Subtle grid | `border-white/5` | `Color.white.opacity(0.05)` | Never use /6 |
+| Tint overlay | `bg-{color}/10` | `tint.opacity(0.10)` | Never use /8 |
+| Checkbox bg | `bg-black/20` | `Color.black.opacity(0.20)` | Never use /25 |
+
+### Opacity Stops — Standard Only
+
+Text: `/20`, `/30`, `/40`, `/50`, `/60`, `/80`, `/90`, `white`
+Borders: `/5`, `/10`, `/15`, `/20`
+Backgrounds: `/5`, `/10`, `/15`, `/20`, `/30`
+
+Never use non-standard stops like `/8`, `/12`, `/25`, `/35`, `/55`. If you find yourself reaching for a non-standard value, use the nearest standard stop.
+
+### Glass Materials (iOS)
+
+| Surface | Material | Desktop Equivalent |
+|---------|----------|--------------------|
+| Section cards | `.thinMaterial` | `bg-black/30 backdrop-blur-xl` |
+| Omnibar | `.ultraThinMaterial` | `bg-black/30 backdrop-blur-xl` |
+| Sheets/modals | `.regularMaterial` | `bg-black/60 backdrop-blur-2xl` |
+| Calendar event chips | `.ultraThinMaterial` | `bg-black/20 backdrop-blur-lg` |
+
+### When Adding or Changing Colors
+
+1. Check if the color already exists in `BrettColors.swift` (iOS) or `DESIGN_GUIDE.md` (desktop)
+2. If it's a new color, add it to both — `BrettColors.swift` AND this guide
+3. Never use inline `Color(red:green:blue:)` for brand/semantic colors — always reference `BrettColors.*`
+4. Run a grep for raw color values after adding features to catch drift
+
+---
+
 ## Date & Timezone Handling
 
 All date boundary logic must be timezone-aware. The user's IANA timezone is stored on their `User` record and synced from the browser on startup.

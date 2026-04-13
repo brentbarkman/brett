@@ -139,7 +139,7 @@ struct ScoutCard: View {
 
     private var statusColor: Color {
         switch scout.status {
-        case .active: return Color(red: 52/255, green: 211/255, blue: 153/255) // emerald
+        case .active: return BrettColors.emerald // emerald
         case .paused: return BrettColors.textMeta
         case .completed: return BrettColors.textMeta
         case .expired: return BrettColors.textMeta

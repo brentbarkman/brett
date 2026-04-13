@@ -31,8 +31,19 @@ enum BrettColors {
     // Section label color — always white/40
     static let sectionLabelColor = Color.white.opacity(0.40)
 
+    // Emerald (scout active status, positive feedback) — matches Tailwind emerald-400
+    static let emerald = Color(red: 52/255, green: 211/255, blue: 153/255)     // #34D399
+
+    // Finding type colors — match desktop exactly
+    static let purple400 = Color(red: 192/255, green: 132/255, blue: 252/255)  // #C084FC
+    static let amber400 = Color(red: 251/255, green: 191/255, blue: 36/255)    // #FBBF24
+
     // Brett AI surfaces — cerulean tints
     static let ceruleanLabel = cerulean.opacity(0.60)
+
+    // Background opacity stops for tints — standard stops only
+    // bg-{color}/5, /10, /15, /20, /30
+    // Never use non-standard values like /8, /12, /25
 
     /// Initialize Color from hex string (e.g. "#3B82F6" or "3B82F6")
     static func fromHex(_ hex: String) -> Color? {

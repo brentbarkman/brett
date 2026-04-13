@@ -20,7 +20,7 @@ struct DayTimeline: View {
                                 .frame(width: 45, alignment: .trailing)
 
                             Rectangle()
-                                .fill(Color.white.opacity(0.06))
+                                .fill(Color.white.opacity(0.05))
                                 .frame(height: 0.5)
                                 .frame(maxWidth: .infinity)
                         }
@@ -66,7 +66,7 @@ struct DayTimeline: View {
                             .fill(.ultraThinMaterial)
                             .overlay {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                                    .strokeBorder(Color.white.opacity(0.05), lineWidth: 0.5)
                             }
                     }
                     .padding(.leading, 58)

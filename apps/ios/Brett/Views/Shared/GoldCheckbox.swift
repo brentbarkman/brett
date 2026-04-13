@@ -19,14 +19,14 @@ struct TaskCheckbox: View {
                     .fill(
                         isChecked
                             ? BrettColors.success.opacity(0.15)
-                            : Color.black.opacity(0.25)
+                            : Color.black.opacity(0.20)
                     )
                     .overlay {
                         Circle()
                             .strokeBorder(
                                 isChecked
                                     ? BrettColors.success.opacity(0.4)
-                                    : Color.white.opacity(0.12),
+                                    : Color.white.opacity(0.10),
                                 lineWidth: 1
                             )
                     }
