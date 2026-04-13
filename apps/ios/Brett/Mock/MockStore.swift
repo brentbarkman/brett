@@ -8,6 +8,7 @@ final class MockStore {
     var lists: [MockList] = MockData.lists
     var events: [MockEvent] = MockData.events
     var briefing: String = MockData.briefing
+    var scouts: [MockScout] = MockData.scouts
     var briefingDismissed: Bool = false
     var briefingCollapsed: Bool = false
 

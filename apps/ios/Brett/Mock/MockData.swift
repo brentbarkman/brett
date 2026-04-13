@@ -95,6 +95,57 @@ enum MockData {
 
     Focus recommendation: clear the **expense report first** (30 min), prep the **Q2 slides** (45 min), then you're in good shape for the 10am.
     """
+
+    // MARK: - Scouts
+
+    static let scouts: [MockScout] = [
+        MockScout(
+            id: "scout-1",
+            name: "Competitor Watch",
+            goal: "Monitor competitor product launches, pricing changes, and feature announcements from Linear, Notion, Todoist, and Things 3. Flag anything that directly impacts our roadmap or positioning.",
+            status: .active,
+            sensitivity: "Notable only",
+            cadence: "Every 8 hours",
+            budgetUsed: 34,
+            budgetTotal: 100,
+            findingsCount: 7,
+            lastRunAgo: "2h ago",
+            findings: [
+                MockFinding(id: "f-1", type: .article, title: "Linear shipped AI triage", description: "Linear released AI-powered inbox triage that auto-categorizes and prioritizes issues. Lands squarely on Brett's own roadmap.", source: "linear.app/blog", relevance: 0.92, ago: "2h ago"),
+                MockFinding(id: "f-2", type: .insight, title: "Todoist sunset recurring task templates", description: "Todoist is deprecating shared recurring task templates in favor of their new Workflows feature. Could create migration opportunity.", source: "todoist.com/changelog", relevance: 0.78, ago: "6h ago"),
+                MockFinding(id: "f-3", type: .task, title: "Review Notion's calendar integration approach", description: "Notion launched a native calendar view that syncs with Google Calendar bidirectionally — similar scope to our implementation.", source: "notion.so/blog", relevance: 0.85, ago: "1d ago"),
+            ]
+        ),
+        MockScout(
+            id: "scout-2",
+            name: "AI Tooling Radar",
+            goal: "Track new AI developer tools, APIs, and model releases relevant to building AI-powered productivity features. Focus on Anthropic, OpenAI, and open-source alternatives.",
+            status: .active,
+            sensitivity: "Everything",
+            cadence: "Daily",
+            budgetUsed: 12,
+            budgetTotal: 50,
+            findingsCount: 3,
+            lastRunAgo: "8h ago",
+            findings: [
+                MockFinding(id: "f-4", type: .article, title: "Claude 4.5 prompt caching now GA", description: "Anthropic announced general availability of prompt caching, reducing costs by up to 90% for repeated context. Directly applicable to Brett's Take generation.", source: "anthropic.com/news", relevance: 0.95, ago: "8h ago"),
+                MockFinding(id: "f-5", type: .insight, title: "Emerging pattern: tool-use for structured output", description: "Multiple AI apps are converging on using tool-use/function-calling as a more reliable way to get structured JSON output vs. raw prompting.", source: "Various", relevance: 0.72, ago: "1d ago"),
+            ]
+        ),
+        MockScout(
+            id: "scout-3",
+            name: "Design Inspiration",
+            goal: "Find iOS app design patterns, glassmorphism examples, and innovative mobile UX that could inspire Brett's mobile app. Focus on apps featured by Apple.",
+            status: .paused,
+            sensitivity: "Notable only",
+            cadence: "Every 12 hours",
+            budgetUsed: 45,
+            budgetTotal: 50,
+            findingsCount: 12,
+            lastRunAgo: "3d ago",
+            findings: []
+        ),
+    ]
 }
 
 // MARK: - Mock Types
@@ -125,6 +176,31 @@ struct MockSubtask: Identifiable {
     let id: String
     let title: String
     var isCompleted: Bool
+}
+
+struct MockScout: Identifiable {
+    let id: String
+    let name: String
+    let goal: String
+    let status: ScoutStatus
+    let sensitivity: String
+    let cadence: String
+    let budgetUsed: Int
+    let budgetTotal: Int
+    let findingsCount: Int
+    let lastRunAgo: String
+    var findings: [MockFinding] = []
+}
+
+struct MockFinding: Identifiable {
+    let id: String
+    let type: FindingType
+    let title: String
+    let description: String
+    let source: String
+    let relevance: Double
+    let ago: String
+    var feedbackUseful: Bool? = nil
 }
 
 struct MockEvent: Identifiable {

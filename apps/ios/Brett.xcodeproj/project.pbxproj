@@ -25,8 +25,10 @@
 		5189EECFD86BE2D20259E961 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3584B0A6E5442AC4BDD4FF2C /* Item.swift */; };
 		577E6803F7F7BCFA52BFCA9E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E12724304A5A8BE141640069 /* Assets.xcassets */; };
 		5DD5F4CD86F12CF4813B2DBD /* ListDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83AE0C7CA705454EFE37793F /* ListDrawer.swift */; };
+		5F7C9D70A8F2B7827B2649E6 /* ScoutDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C3406A58B111F12E4B6161 /* ScoutDetailView.swift */; };
 		73E0A4FD755B92F5491B1F8A /* DateHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C09161BEA7FFA0D550A17C /* DateHelpers.swift */; };
 		8810E3414A205013C3D54618 /* BrettApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7718408C7FD6AB7CE9F75488 /* BrettApp.swift */; };
+		896AC0F81B19DE332427FB68 /* ScoutsRosterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73B41EA4FEFE5A550E1AB9B7 /* ScoutsRosterView.swift */; };
 		8B44CFA07DA5E80F6681DD2B /* Attachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F48604209A872380C717EBF /* Attachment.swift */; };
 		8D3CAC9CB73A70F9E454C48C /* DayTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C4C13A8A0C66AEF4484C4D /* DayTimeline.swift */; };
 		95A5DB1077DB7CB538BFD673 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3891C6DF04B521EC332E018A /* Enums.swift */; };
@@ -80,6 +82,7 @@
 		69096F97A694E9C2C3C9F7AF /* DayHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayHeader.swift; sourceTree = "<group>"; };
 		6B8BDF9672A61EB5DA098AF4 /* DailyBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefing.swift; sourceTree = "<group>"; };
 		71341D3BFB2BF641441C1AA5 /* InboxPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxPage.swift; sourceTree = "<group>"; };
+		73B41EA4FEFE5A550E1AB9B7 /* ScoutsRosterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoutsRosterView.swift; sourceTree = "<group>"; };
 		7548B8768FB7FDE28764A977 /* Scout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scout.swift; sourceTree = "<group>"; };
 		7718408C7FD6AB7CE9F75488 /* BrettApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrettApp.swift; sourceTree = "<group>"; };
 		779BEA8BBAD5E9E6F8BB35CB /* TodayPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayPage.swift; sourceTree = "<group>"; };
@@ -95,6 +98,7 @@
 		B52C2A8291880EC12422EBCD /* BrettTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BrettTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2907B780B1E93E945324350 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		C37D4F2902C7FF6679C41FE1 /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
+		D8C3406A58B111F12E4B6161 /* ScoutDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoutDetailView.swift; sourceTree = "<group>"; };
 		E0DC33B5D94411C35F18B41A /* OmnibarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnibarView.swift; sourceTree = "<group>"; };
 		E12724304A5A8BE141640069 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E27952E881470A58F1463B3F /* CalendarEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEvent.swift; sourceTree = "<group>"; };
@@ -144,6 +148,15 @@
 			path = Mock;
 			sourceTree = "<group>";
 		};
+		42E217EF537DEEEBA78E8E1F /* Scouts */ = {
+			isa = PBXGroup;
+			children = (
+				D8C3406A58B111F12E4B6161 /* ScoutDetailView.swift */,
+				73B41EA4FEFE5A550E1AB9B7 /* ScoutsRosterView.swift */,
+			);
+			path = Scouts;
+			sourceTree = "<group>";
+		};
 		5EA444D3C2F1DEC4F1021FCE /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -152,6 +165,7 @@
 				E3817002A3AA9A1B70AF7431 /* Detail */,
 				F700BA7324A6DC3E6E27F0E7 /* Inbox */,
 				0CF18D6C979F3F46451D4398 /* Omnibar */,
+				42E217EF537DEEEBA78E8E1F /* Scouts */,
 				F37807DBBFC7379D7CF4459A /* Settings */,
 				ACA66BFF9C13D4CBF2066375 /* Shared */,
 				7A87B2A623909E08E89C2D59 /* Today */,
@@ -398,7 +412,9 @@
 				B834DECA3C9F40FF559FF686 /* OmnibarView.swift in Sources */,
 				15074864D76562644F3354CC /* PageIndicator.swift in Sources */,
 				AA4165C8297C1D634209E67D /* Scout.swift in Sources */,
+				5F7C9D70A8F2B7827B2649E6 /* ScoutDetailView.swift in Sources */,
 				A44662A7DB57A729F85F13D5 /* ScoutFinding.swift in Sources */,
+				896AC0F81B19DE332427FB68 /* ScoutsRosterView.swift in Sources */,
 				A61C965633176EB1B15C3014 /* SettingsView.swift in Sources */,
 				9BADD9789E4A9B5B30B86C32 /* SignInView.swift in Sources */,
 				29EE7D27105306CD5EED3179 /* TaskDetailView.swift in Sources */,

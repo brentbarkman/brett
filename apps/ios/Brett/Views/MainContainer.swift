@@ -7,9 +7,9 @@ struct MainContainer: View {
 
     private let pages = ["Inbox", "Today", "Calendar"]
 
-    // DEBUG: Set to a mock item ID to auto-navigate to task detail on launch
-    // Set to nil for normal behavior, or an item ID like "item-3" to test detail view
+    // DEBUG: Set to "scouts" to auto-navigate to scouts roster, or an item ID for task detail
     private let debugAutoNav: String? = nil
+    @State private var showScoutsRoster = false
 
     var body: some View {
         NavigationStack(path: $navPath) {
@@ -26,15 +26,26 @@ struct MainContainer: View {
                         Spacer()
                     }
                     .overlay(alignment: .trailing) {
-                        NavigationLink {
-                            SettingsView()
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.40))
-                                .frame(width: 44, height: 44)
+                        HStack(spacing: 0) {
+                            NavigationLink {
+                                ScoutsRosterView(store: store)
+                            } label: {
+                                Image(systemName: "antenna.radiowaves.left.and.right")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.40))
+                                    .frame(width: 40, height: 44)
+                            }
+
+                            NavigationLink {
+                                SettingsView()
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.40))
+                                    .frame(width: 40, height: 44)
+                            }
                         }
-                        .padding(.trailing, 12)
+                        .padding(.trailing, 8)
                     }
                     .padding(.top, 8)
 
@@ -71,14 +82,26 @@ struct MainContainer: View {
                     }
                 }
             }
-            // Navigation destination registered at the NavigationStack level
+            // Navigation destinations
             .navigationDestination(for: String.self) { itemId in
                 TaskDetailView(store: store, itemId: itemId)
+            }
+            .navigationDestination(for: ScoutNav.self) { nav in
+                ScoutDetailView(store: store, scoutId: nav.id)
+            }
+            .navigationDestination(isPresented: $showScoutsRoster) {
+                ScoutsRosterView(store: store)
             }
             .onAppear {
                 if let id = debugAutoNav {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        navPath.append(id)
+                        if id == "scouts" {
+                            showScoutsRoster = true
+                        } else if id.hasPrefix("scout-") {
+                            navPath.append(ScoutNav(id: id))
+                        } else {
+                            navPath.append(id)
+                        }
                     }
                 }
             }
