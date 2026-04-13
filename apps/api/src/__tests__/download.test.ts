@@ -13,7 +13,7 @@ vi.mock("../lib/storage-urls.js", () => ({
       "https://api.example.com/public/videos/login-bg-2.mp4",
     ],
   }),
-  getLatestVersion: vi.fn().mockResolvedValue({ version: "1.2.3", artifact: "releases/Brett-1.2.3.zip" }),
+  getLatestVersion: vi.fn().mockResolvedValue({ version: "1.2.3", artifact: "releases/Brett-1.2.3-mac.zip" }),
 }));
 
 describe("GET /download", () => {
@@ -39,8 +39,23 @@ describe("GET /download", () => {
   it("contains a download link pointing to the release proxy", async () => {
     const res = await app.request("/download");
     const html = await res.text();
-    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3.zip");
+    // electron-builder produces "Brett-{version}-mac.zip"; latest-mac.yml references
+    // that exact name, so the download link MUST match it or the auto-updater 404s.
+    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-mac.zip");
     expect(html).toContain("Download for macOS");
+  });
+
+  it("rejects poisoned artifact keys and falls back to a safe default", async () => {
+    const { getLatestVersion } = await import("../lib/storage-urls.js");
+    (getLatestVersion as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      version: "1.2.3",
+      artifact: "releases/../../etc/passwd",
+    });
+
+    const res = await app.request("/download");
+    const html = await res.text();
+    expect(html).not.toContain("etc/passwd");
+    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-mac.zip");
   });
 
   it("contains video URLs in the script", async () => {

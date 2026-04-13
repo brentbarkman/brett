@@ -28,7 +28,6 @@ async function uploadRelease() {
     throw new Error(`Artifact "${artifactFile}" does not contain expected version "${version}". Stale build artifact?`);
   }
   const artifactPath = path.join(distDir, artifactFile);
-  const ext = path.extname(artifactFile);
 
   // Find latest-mac.yml (contains SHA512 hash — do not modify)
   const ymlPath = path.join(distDir, "latest-mac.yml");
@@ -36,8 +35,9 @@ async function uploadRelease() {
     throw new Error("latest-mac.yml not found in dist/.");
   }
 
-  // Upload artifact
-  const artifactKey = `releases/Brett-${version}${ext}`;
+  // Upload artifact under its native electron-builder filename (e.g. "Brett-0.1.950-mac.zip").
+  // latest-mac.yml references this exact name + SHA512, so renaming on upload breaks the updater.
+  const artifactKey = `releases/${artifactFile}`;
   const artifactBody = fs.readFileSync(artifactPath);
   console.log(`Uploading ${artifactFile} (${(artifactBody.length / 1024 / 1024).toFixed(1)} MB) → ${artifactKey}`);
   await releaseS3.send(
@@ -49,7 +49,7 @@ async function uploadRelease() {
       ACL: "public-read",
     })
   );
-  console.log(`  ✓ ${ext.slice(1).toUpperCase()} uploaded`);
+  console.log(`  ✓ ${path.extname(artifactFile).slice(1).toUpperCase()} uploaded`);
 
   // Upload latest-mac.yml
   const ymlKey = "releases/latest-mac.yml";
