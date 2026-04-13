@@ -3,16 +3,11 @@ import SwiftUI
 struct MainContainer: View {
     @State private var store = MockStore()
     @State private var currentPage = 1 // 0=Inbox, 1=Today, 2=Calendar
-    @State private var navPath = NavigationPath()
 
     private let pages = ["Inbox", "Today", "Calendar"]
 
-    // DEBUG: Set to "scouts" to auto-navigate to scouts roster, or an item ID for task detail
-    private let debugAutoNav: String? = nil
-    @State private var showScoutsRoster = false
-
     var body: some View {
-        NavigationStack(path: $navPath) {
+        NavigationStack {
             ZStack {
                 // Living background
                 BackgroundView()
@@ -88,22 +83,6 @@ struct MainContainer: View {
             }
             .navigationDestination(for: ScoutNav.self) { nav in
                 ScoutDetailView(store: store, scoutId: nav.id)
-            }
-            .navigationDestination(isPresented: $showScoutsRoster) {
-                ScoutsRosterView(store: store)
-            }
-            .onAppear {
-                if let id = debugAutoNav {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        if id == "scouts" {
-                            showScoutsRoster = true
-                        } else if id.hasPrefix("scout-") {
-                            navPath.append(ScoutNav(id: id))
-                        } else {
-                            navPath.append(id)
-                        }
-                    }
-                }
             }
         }
     }
