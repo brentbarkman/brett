@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import { getAvatarColor } from "./avatarColor";
-import { ProductMark, Wordmark } from "./BrettMark";
 import { Inbox, Calendar, CalendarDays, Clock, Search, Plus, MoreHorizontal, GripVertical, ChevronRight, Radar } from "lucide-react";
 import type { NavList } from "@brett/types";
 import { slugify } from "@brett/utils";
@@ -104,22 +103,10 @@ export function LeftNav({
   return (
     <nav
       className={`
-      flex flex-col h-full py-6 transition-all duration-300 ease-in-out
+      flex flex-col h-full pt-8 pb-6 transition-all duration-300 ease-in-out [-webkit-app-region:no-drag]
       ${isCollapsed ? "w-[68px] px-2" : "w-[220px] px-4"}
     `}
     >
-      {/* Header */}
-      <div
-        className={`flex items-center gap-2 mb-8 ${isCollapsed ? "justify-center" : "px-2"}`}
-      >
-        <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-          <ProductMark size={24} className="drop-shadow-[0_0_8px_rgba(232,185,49,0.4)]" />
-        </div>
-        {!isCollapsed && (
-          <Wordmark name={assistantName ?? "Brett"} isWorking={isAIWorking} />
-        )}
-      </div>
-
       {/* Main Links */}
       <div className="space-y-1 mb-8">
         <NavItem

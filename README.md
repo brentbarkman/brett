@@ -1,6 +1,10 @@
-# Brett
+<p align="center">
+  <img src="docs/logo.png" alt="Brett" width="128" height="128">
+</p>
 
-Personal productivity app — desktop-first, with a mobile companion planned.
+<h1 align="center">Brett</h1>
+
+<p align="center">Personal productivity OS — tasks, calendar, AI briefings, and scouts.<br>Desktop (Electron) · iOS (SwiftUI) · API (Hono + Prisma)</p>
 
 ## Prerequisites
 

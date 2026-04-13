@@ -25,6 +25,16 @@ export default defineConfig({
     },
   },
   base: "./",
+  server: {
+    watch: {
+      // Follow symlinks into workspace packages so HMR works across the monorepo
+      followSymlinks: true,
+    },
+    fs: {
+      // Allow serving files from workspace packages outside apps/desktop
+      allow: [path.resolve(__dirname, "../..")],
+    },
+  },
   build: {
     outDir: "dist/renderer",
   },

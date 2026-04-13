@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, shell } from "electron";
+import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session, shell } from "electron";
 import http from "http";
 import crypto from "crypto";
 import path from "path";
@@ -308,6 +308,8 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 20, y: 18 },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -360,6 +362,20 @@ app.whenReady().then(() => {
 
     return net.fetch(pathToFileURL(fullPath).toString());
   });
+
+  // In production, override the relaxed dev CSP with a strict policy
+  if (!isDev) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self' app:; script-src 'self' app:; style-src 'self' app: 'unsafe-inline'; img-src 'self' app: data: https:; media-src 'self' app: https://*.railway.app https://*.brentbarkman.com; connect-src 'self' app: https://*.railway.app https://*.brentbarkman.com; font-src 'self' app:; frame-src https://www.youtube.com https://open.spotify.com https://embed.podcasts.apple.com https://*.railway.app;"
+          ],
+        },
+      });
+    });
+  }
 
   createWindow();
   initAutoUpdater(store);

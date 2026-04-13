@@ -181,7 +181,7 @@ export function DetailPanel({
       <div
         className={`
           fixed top-0 right-0 bottom-0 w-[550px] bg-black/60 backdrop-blur-2xl border-l border-white/10
-          shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col overscroll-contain
+          shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col overscroll-contain [-webkit-app-region:no-drag]
           ${isOpen ? "translate-x-0" : "translate-x-full"}
         `}
       >
