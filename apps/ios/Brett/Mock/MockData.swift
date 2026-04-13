@@ -33,10 +33,19 @@ enum MockData {
             MockItem(id: "item-2", title: "Renew gym membership", dueDate: yesterday, listId: "list-health", listName: "Health", time: "9:00 AM"),
 
             // Today
-            MockItem(id: "item-3", title: "Prep slides for Q2 review", dueDate: today, listId: "list-work", listName: "Work", time: "9:00 AM", notes: "Use last quarter's deck as a template. Focus on YoY growth metrics.", subtasks: [
+            MockItem(id: "item-3", title: "Prep slides for Q2 review", dueDate: today, listId: "list-work", listName: "Work", time: "9:00 AM", notes: "Use last quarter's deck as a template. Focus on YoY growth metrics and highlight the new mobile launch.", subtasks: [
                 MockSubtask(id: "sub-1", title: "Pull metrics from analytics dashboard", isCompleted: true),
                 MockSubtask(id: "sub-2", title: "Add pipeline slide with deal stages", isCompleted: false),
                 MockSubtask(id: "sub-3", title: "Write exec summary (3 bullets max)", isCompleted: false),
+            ], reminder: .morningOf, recurrence: nil, attachments: [
+                MockAttachment(id: "att-1", filename: "Q1-deck-final.pdf", mimeType: "application/pdf", sizeBytes: 2_450_000),
+                MockAttachment(id: "att-2", filename: "revenue-chart.png", mimeType: "image/png", sizeBytes: 384_000),
+            ], linkedItems: [
+                MockLinkedItem(id: "link-1", title: "Annual performance self-review", type: .task, source: "embedding"),
+                MockLinkedItem(id: "link-2", title: "Q1 deck feedback from Sarah", type: .content, source: "manual"),
+            ], brettMessages: [
+                MockBrettMessage(id: "msg-1", role: "user", content: "What should I focus on for the Q2 review?"),
+                MockBrettMessage(id: "msg-2", role: "assistant", content: "Based on your Q1 deck, I'd lead with YoY revenue growth — it's your strongest metric. The pipeline slide needs updating with current deal stages. Keep the exec summary to 3 bullets max."),
             ]),
             MockItem(id: "item-4", title: "Push mobile auth fix to staging", dueDate: today, listId: "list-side", listName: "Side Project", time: "10:30 AM"),
             MockItem(id: "item-5", title: "Review Ali's PR — pagination refactor", dueDate: today, listId: "list-work", listName: "Work", time: "11:00 AM"),
@@ -170,6 +179,38 @@ struct MockItem: Identifiable {
     var subtasks: [MockSubtask] = []
     var contentDomain: String? = nil
     var capturedAgo: String? = nil
+    var reminder: ReminderType? = nil
+    var recurrence: RecurrenceType? = nil
+    var attachments: [MockAttachment] = []
+    var linkedItems: [MockLinkedItem] = []
+    var brettMessages: [MockBrettMessage] = []
+}
+
+struct MockAttachment: Identifiable {
+    let id: String
+    let filename: String
+    let mimeType: String
+    let sizeBytes: Int
+
+    var sizeLabel: String {
+        if sizeBytes >= 1_048_576 {
+            return String(format: "%.1f MB", Double(sizeBytes) / 1_048_576)
+        }
+        return "\(sizeBytes / 1024) KB"
+    }
+}
+
+struct MockLinkedItem: Identifiable {
+    let id: String
+    let title: String
+    let type: ItemType
+    let source: String // "manual" or "embedding"
+}
+
+struct MockBrettMessage: Identifiable {
+    let id: String
+    let role: String // "user" or "assistant"
+    let content: String
 }
 
 struct MockSubtask: Identifiable {
