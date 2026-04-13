@@ -125,13 +125,13 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar,
 
   return (
     <>
-      <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2">
+      <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2 [-webkit-app-region:no-drag]">
         <div className="max-w-3xl mx-auto w-full space-y-4">
           {children}
         </div>
       </main>
       {showSidebar && (
-        <div className="w-[300px] flex-shrink-0 py-2 flex flex-col gap-3">
+        <div className="w-[300px] flex-shrink-0 py-2 flex flex-col gap-3 [-webkit-app-region:no-drag]">
           {showCompactInSidebar && nextUpEvent && nextUpTimer && (
             <div className="flex-shrink-0">
               <NextUpCard
@@ -943,6 +943,9 @@ export function App() {
         />
 
 
+
+        {/* Window drag region — frameless title bar */}
+        <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
 
         {/* Main Layout Shell */}
         <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
