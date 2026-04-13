@@ -85,7 +85,42 @@ Copy `.env.example` files (`apps/api/`, `apps/desktop/`) to `.env` and fill in:
 
 Do NOT commit `.env` files.
 
+## Release Process
+
+Brett is in production with real users. All code changes flow through a gated release process.
+
+### Branching Model
+
+```
+commit to main → push → CI tests run
+main → PR to release → CI tests + deploy → live
+```
+
+- **`main`** — development branch. Brent commits and pushes directly. CI (`.github/workflows/ci.yml`) runs typecheck + tests on every push.
+- **`release`** — production branch. Merging `main → release` via PR triggers the full deploy pipeline (`.github/workflows/release.yml`): tests → Railway API deploy → health check → desktop build → artifact upload.
+- **Never push directly to `release`.** Always go through a PR from `main`.
+- **Never force-push to `main` or `release`.**
+
+### Deploying
+
+To cut a release: open a PR from `main` to `release` on GitHub, review the diff, merge. The deploy pipeline runs automatically.
+
+### Rolling Back
+
+If a release breaks production: revert the merge commit on `release` and push. This triggers a redeploy of the previous known-good state.
+
+### Migration Safety
+
+Every Prisma migration runs automatically on deploy (`prisma migrate deploy` in the Dockerfile CMD). This means a bad migration hits production the moment `release` is updated. Rules:
+
+- **No destructive migrations without a two-phase approach.** To drop a column: (1) deploy code that stops reading/writing it, (2) drop it in a follow-up release.
+- **No renaming columns in a single step.** Add the new column, migrate data, deploy code to use it, then drop the old one.
+- **Always test migrations locally against a copy of production-shaped data** before merging to `main`.
+- **`CREATE INDEX CONCURRENTLY` is not supported inside a transaction** — Prisma migrations run in a transaction by default. If you need a concurrent index, use a raw SQL migration with `-- CreateIndex` comment and test it manually.
+
 ## Engineering Principles
+
+Brett is in production. Every change ships to real users. No throwaway code, no "just for me" shortcuts, no untested paths.
 
 Before writing any code, review the plan thoroughly.
 Do NOT start implementation until the review is complete and I approve.
@@ -100,6 +135,9 @@ Principles:
 - Well-tested code is mandatory
 - "Engineered enough" — not fragile, not over-engineered
 - Prefer explicit over clever
+- **Multi-user mindset** — never assume a single user. Every query must be scoped to `userId`. Every UI state must handle concurrent accounts. Every feature must work for user N, not just user 1.
+- **No hardcoded user-specific data** — no special-casing behavior for a specific account, email, or ID. If it can't work for every user, it doesn't ship.
+- **Backwards-compatible API changes** — existing clients (desktop, mobile) may be on older versions. Additive changes only; breaking changes require versioning or a migration path.
 
 ## Plan Mode Review (for any significant change)
 

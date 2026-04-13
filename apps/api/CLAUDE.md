@@ -43,10 +43,14 @@ router.get("/example", authMiddleware, async (c) => {
 
 Prisma client singleton in `src/lib/prisma.ts`. Schema is in `prisma/schema.prisma`. The schema uses better-auth's required table structure (User, Session, Account, Verification).
 
+**Brett is in production — migrations run automatically on deploy.** See root `CLAUDE.md` "Migration Safety" for the full rules. The short version:
+
 When modifying the schema:
 1. Edit `prisma/schema.prisma`
 2. Run `pnpm db:migrate` from root (creates migration + applies it)
 3. Prisma client auto-regenerates
+4. **Review the generated SQL** in `prisma/migrations/` — never blindly trust auto-generated migrations
+5. **No destructive changes in a single step** — dropping or renaming columns requires a two-phase deploy
 
 ### Storage
 
@@ -69,6 +73,8 @@ This package uses `"type": "module"` — all imports must use `.js` extensions (
 
 ## Deployment (Railway)
 
+- Deploys are triggered by merging `main → release` (see root `CLAUDE.md` "Release Process")
+- `.github/workflows/release.yml` runs tests, then deploys via `@railway/cli`
 - Dockerfile at `apps/api/Dockerfile`, config-as-code at `apps/api/railway.json`
 - Domain: `api.brett.brentbarkman.com`
 - Dockerfile `CMD` handles both migration and server start — no `startCommand` in `railway.json`
