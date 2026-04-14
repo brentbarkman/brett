@@ -125,23 +125,51 @@ export async function extractFacts(
     // Key must be snake_case and reasonable length
     if (!/^[a-z][a-z0-9_]{1,63}$/.test(fact.key)) continue;
 
-    // 7. Upsert into UserFact
+    // 7. Temporal upsert: find active fact, supersede if value changed, or create new
     try {
-      await prisma.userFact.upsert({
-        where: { userId_key: { userId, key: fact.key } },
-        create: {
-          userId,
-          category: fact.category,
-          key: fact.key,
-          value: fact.value,
-        },
-        update: {
-          category: fact.category,
-          value: fact.value,
-        },
+      const existing = await prisma.userFact.findFirst({
+        where: { userId, key: fact.key, validUntil: null },
       });
+
+      if (existing && existing.value === fact.value) {
+        // Same value — just touch updatedAt
+        await prisma.userFact.update({
+          where: { id: existing.id },
+          data: { category: fact.category },
+        });
+      } else if (existing) {
+        // Value changed — supersede the old fact and create a new one
+        const newFact = await prisma.userFact.create({
+          data: {
+            userId,
+            category: fact.category,
+            key: fact.key,
+            value: fact.value,
+            sourceSessionId: sessionId,
+            sourceType: "conversation",
+            sourceEntityId: sessionId,
+          },
+        });
+        await prisma.userFact.update({
+          where: { id: existing.id },
+          data: { validUntil: new Date(), supersededBy: newFact.id },
+        });
+      } else {
+        // No existing active fact — create new
+        await prisma.userFact.create({
+          data: {
+            userId,
+            category: fact.category,
+            key: fact.key,
+            value: fact.value,
+            sourceSessionId: sessionId,
+            sourceType: "conversation",
+            sourceEntityId: sessionId,
+          },
+        });
+      }
     } catch {
-      // Silent fail on individual upsert errors
+      // Silent fail on individual fact errors
     }
   }
 }

@@ -508,19 +508,24 @@ model ConversationMessage {
 }
 
 model UserFact {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   category        String
   key             String
-  value           String   @db.Text
-  confidence      Float    @default(1.0)
+  value           String    @db.Text
+  confidence      Float     @default(1.0)
   sourceSessionId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  sourceType      String?
+  sourceEntityId  String?
+  validFrom       DateTime  @default(now())
+  validUntil      DateTime?
+  supersededBy    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  @@unique([userId, key])
   @@index([userId, category])
+  @@index([userId, validUntil])
 }
 
 model Embedding {
