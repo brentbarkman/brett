@@ -1,19 +1,113 @@
 /**
  * Weather API integration tests.
  *
- * NETWORK DEPENDENCY: The geocoding tests hit the real Open-Meteo geocoding
- * API (free, no key required). The weather fetch tests hit Google's Weather
- * API (requires GOOGLE_WEATHER_API_KEY env var).
- * Tests may fail if the external service is down.
+ * External HTTP calls are mocked at the fetch layer:
+ *   - Open-Meteo geocoding (https://geocoding-api.open-meteo.com) → fixture
+ *   - Google Weather / AQI (*.googleapis.com) → fixture (used when
+ *     GOOGLE_WEATHER_API_KEY is set; otherwise those tests skip)
+ * All other fetches pass through to the real implementation so unrelated
+ * services (if any) still work. This keeps the suite deterministic in CI.
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { app } from "../app.js";
 import { createTestUser, authRequest } from "./helpers.js";
 import { prisma } from "../lib/prisma.js";
 
 const hasWeatherKey = !!process.env.GOOGLE_WEATHER_API_KEY;
 const itWithWeather = hasWeatherKey ? it : it.skip;
+
+// ── fetch mock ────────────────────────────────────────────────────────────────
+
+const originalFetch = globalThis.fetch;
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+const geocodeFixture = {
+  results: [
+    {
+      name: "San Francisco",
+      admin1: "California",
+      country: "United States",
+      country_code: "US",
+      latitude: 37.7749,
+      longitude: -122.4194,
+      timezone: "America/Los_Angeles",
+    },
+  ],
+};
+
+// Minimal Google Weather fixtures — only shapes the service reads.
+const googleCurrentFixture = {
+  temperature: { degrees: 18, unit: "CELSIUS" },
+  feelsLikeTemperature: { degrees: 17, unit: "CELSIUS" },
+  weatherCondition: { type: "PARTLY_CLOUDY", description: { text: "Partly cloudy" } },
+  wind: { speed: { value: 10, unit: "KILOMETERS_PER_HOUR" }, direction: { degrees: 270 } },
+};
+
+const googleHourlyFixture = {
+  forecastHours: [
+    {
+      interval: { startTime: new Date().toISOString() },
+      temperature: { degrees: 18, unit: "CELSIUS" },
+      weatherCondition: { type: "PARTLY_CLOUDY" },
+      precipitation: { probability: { percent: 10 } },
+    },
+  ],
+};
+
+const googleDailyFixture = {
+  forecastDays: [
+    {
+      displayDate: { year: 2026, month: 4, day: 14 },
+      maxTemperature: { degrees: 20, unit: "CELSIUS" },
+      minTemperature: { degrees: 12, unit: "CELSIUS" },
+      daytimeForecast: {
+        weatherCondition: { type: "PARTLY_CLOUDY" },
+        precipitation: { probability: { percent: 10 } },
+      },
+    },
+  ],
+};
+
+const googleAqiFixture = { indexes: [{ code: "uaqi", aqi: 42, category: "Good" }] };
+
+beforeAll(() => {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+    if (url.startsWith("https://geocoding-api.open-meteo.com")) {
+      return jsonResponse(geocodeFixture);
+    }
+    if (url.startsWith("https://weather.googleapis.com/v1/currentConditions")) {
+      return jsonResponse(googleCurrentFixture);
+    }
+    if (url.startsWith("https://weather.googleapis.com/v1/forecast/hours")) {
+      return jsonResponse(googleHourlyFixture);
+    }
+    if (url.startsWith("https://weather.googleapis.com/v1/forecast/days")) {
+      return jsonResponse(googleDailyFixture);
+    }
+    if (url.startsWith("https://airquality.googleapis.com")) {
+      return jsonResponse(googleAqiFixture);
+    }
+    if (url.startsWith("https://ipapi.co/")) {
+      // Tests in this file never trigger IP geolocation, but fail fast if they do.
+      return jsonResponse({ error: true, reason: "mocked" }, 404);
+    }
+
+    return originalFetch(input as any, init);
+  }) as typeof fetch;
+});
+
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
 
 // ── GET /weather ──
 

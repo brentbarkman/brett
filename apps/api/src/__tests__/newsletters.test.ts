@@ -15,6 +15,11 @@ process.env.NEWSLETTER_INGEST_SECRET = "test-secret-abc123";
 const WEBHOOK_URL = "http://localhost/webhooks/email/ingest/test-secret-abc123";
 const WRONG_SECRET_URL = "http://localhost/webhooks/email/ingest/wrong-secret";
 
+// Ingest token is unique per test run to avoid colliding on the
+// `User.newsletterIngestToken` unique index when the test DB persists between runs.
+// Must match the webhook regex `[a-z0-9]+` in routes/newsletters.ts — strip UUID hyphens.
+const TEST_INGEST_TOKEN = generateId().replace(/-/g, "");
+
 function makePayload(overrides: Record<string, any> = {}) {
   return {
     From: "sender@newsletters.com",
@@ -28,8 +33,6 @@ function makePayload(overrides: Record<string, any> = {}) {
     ...overrides,
   };
 }
-
-const TEST_INGEST_TOKEN = "testtoken123abc";
 
 describe("newsletter webhook + sender management", () => {
   let userId: string;
