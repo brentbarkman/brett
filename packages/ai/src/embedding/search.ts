@@ -1,5 +1,6 @@
 import { Prisma } from "@brett/api-core";
 import type { EmbeddingProvider } from "../providers/types.js";
+import { AI_CONFIG } from "../config.js";
 
 // --- Types ---
 
@@ -89,10 +90,11 @@ export function fuseResults(
   });
 }
 
-// --- Keyword Search (Postgres Full-Text Search) ---
+// --- Valid Entity Types ---
 
-const KEYWORD_ENTITY_TYPES = ["item", "calendar_event", "meeting_note", "scout_finding"] as const;
-type KeywordEntityType = (typeof KEYWORD_ENTITY_TYPES)[number];
+export const VALID_ENTITY_TYPES = ["item", "calendar_event", "meeting_note", "scout_finding"] as const;
+
+// --- Keyword Search (Postgres Full-Text Search) ---
 
 /**
  * Runs full-text search across multiple entity tables using Postgres tsvector/tsquery.
@@ -105,15 +107,15 @@ export async function keywordSearch(
   types: string[] | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prisma: any,
-  limit = 30
+  limit: number = AI_CONFIG.embedding.searchResultLimit
 ): Promise<RankedResult[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const activeTypes: KeywordEntityType[] =
+  const activeTypes: string[] =
     types === null
-      ? [...KEYWORD_ENTITY_TYPES]
-      : (types.filter((t) => KEYWORD_ENTITY_TYPES.includes(t as KeywordEntityType)) as KeywordEntityType[]);
+      ? [...VALID_ENTITY_TYPES]
+      : types.filter((t) => VALID_ENTITY_TYPES.includes(t as any));
 
   if (activeTypes.length === 0) return [];
 
@@ -180,7 +182,7 @@ export async function keywordSearch(
         coalesce("title", '') AS "title",
         coalesce("summary", '') AS "snippet",
         ts_rank_cd(${Prisma.raw(`'${weights}'::float4[]`)}, "search_vector", plainto_tsquery('english', ${trimmed})) AS "fts_rank"
-      FROM "MeetingNote"
+      FROM "GranolaMeeting"
       WHERE "userId" = ${userId}
         AND "search_vector" @@ plainto_tsquery('english', ${trimmed})
       ORDER BY "fts_rank" DESC
@@ -242,8 +244,6 @@ export async function keywordSearch(
  * Embeds the query and finds similar entities via cosine similarity on the Embedding table.
  * Deduplicates by entityId — keeps the highest similarity chunk per entity.
  */
-export const VALID_ENTITY_TYPES = ["item", "calendar_event", "meeting_note", "scout_finding"] as const;
-
 export async function vectorSearch(
   userId: string,
   query: string,

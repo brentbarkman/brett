@@ -35,7 +35,7 @@ function createMockPrisma(responses: Record<string, unknown[]> = {}) {
 
       if (sql.includes('"Item"')) return Promise.resolve(responses.item ?? []);
       if (sql.includes('"CalendarEvent"')) return Promise.resolve(responses.calendar_event ?? []);
-      if (sql.includes('"MeetingNote"')) return Promise.resolve(responses.meeting_note ?? []);
+      if (sql.includes('"GranolaMeeting"')) return Promise.resolve(responses.meeting_note ?? []);
       if (sql.includes('"ScoutFinding"')) return Promise.resolve(responses.scout_finding ?? []);
       return Promise.resolve([]);
     }),

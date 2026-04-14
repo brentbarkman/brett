@@ -22,14 +22,14 @@ ALTER TABLE "CalendarEvent" ADD COLUMN IF NOT EXISTS "search_vector" tsvector
 
 CREATE INDEX IF NOT EXISTS "CalendarEvent_search_vector_idx" ON "CalendarEvent" USING GIN ("search_vector");
 
--- Meeting notes: title, summary
-ALTER TABLE "MeetingNote" ADD COLUMN IF NOT EXISTS "search_vector" tsvector
+-- Meeting notes: title, summary (model MeetingNote maps to table GranolaMeeting)
+ALTER TABLE "GranolaMeeting" ADD COLUMN IF NOT EXISTS "search_vector" tsvector
   GENERATED ALWAYS AS (
     setweight(to_tsvector('english', coalesce("title", '')), 'A') ||
     setweight(to_tsvector('english', coalesce("summary", '')), 'C')
   ) STORED;
 
-CREATE INDEX IF NOT EXISTS "MeetingNote_search_vector_idx" ON "MeetingNote" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS "GranolaMeeting_search_vector_idx" ON "GranolaMeeting" USING GIN ("search_vector");
 
 -- Scout findings: title, description
 ALTER TABLE "ScoutFinding" ADD COLUMN IF NOT EXISTS "search_vector" tsvector
