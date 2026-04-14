@@ -189,7 +189,7 @@ export function App() {
   // Initialize SSE for real-time updates
   useEventStream();
   useTimezoneSync();
-  const { install: installUpdate } = useAutoUpdate();
+  const { install: installUpdate, updateReady } = useAutoUpdate();
 
   // Initialize diagnostics ring buffers for feedback
   useEffect(() => {
@@ -979,6 +979,7 @@ export function App() {
             onArchiveList={handleArchiveList}
             onUnarchiveList={(id) => unarchiveList.mutate(id)}
             hasBrokenConnections={(brokenConnections?.count ?? 0) > 0}
+            hasPendingUpdate={updateReady}
             onOpenSpotlight={() => {
               setSpotlightInitialAction("search");
               omnibar.open("spotlight");

@@ -43,6 +43,8 @@ interface LeftNavProps {
   onOpenSpotlight?: () => void;
   /** Show amber dot on settings when integrations are broken */
   hasBrokenConnections?: boolean;
+  /** Show amber dot on settings when an auto-update is downloaded and ready to install */
+  hasPendingUpdate?: boolean;
   assistantName?: string;
   isAIWorking?: boolean;
 }
@@ -65,6 +67,7 @@ export function LeftNav({
   archivedLists,
   onOpenSpotlight,
   hasBrokenConnections,
+  hasPendingUpdate,
   assistantName,
   isAIWorking,
 }: LeftNavProps) {
@@ -265,7 +268,7 @@ export function LeftNav({
                     </span>
                   </div>
                 )}
-                {hasBrokenConnections && (
+                {(hasBrokenConnections || hasPendingUpdate) && (
                   <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-black/50" />
                 )}
               </div>

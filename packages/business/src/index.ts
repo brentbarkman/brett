@@ -261,7 +261,13 @@ export function itemToThing(
       scoutId: item.sourceId,
       scoutName: item.scoutName ?? undefined,
     }),
-    ...(item.source === "system" && item.sourceId?.startsWith("relink:") && {
+    // sourceId is passed through to the frontend only for system items the UI
+    // branches on: "relink:*" (reconnect broken integrations) and "system:update"
+    // (show "Install & Restart" button on the auto-update task).
+    ...(item.sourceId && (
+      item.sourceId.startsWith("relink:") ||
+      item.sourceId === "system:update"
+    ) && {
       sourceId: item.sourceId,
     }),
     ...(item.type === "content" && {
