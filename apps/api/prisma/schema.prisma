@@ -64,6 +64,8 @@ model User {
   deviceTokens           DeviceToken[]
   newsletterSenders    NewsletterSender[]
   pendingNewsletters   PendingNewsletter[]
+  knowledgeEntities       KnowledgeEntity[]
+  knowledgeRelationships  KnowledgeRelationship[]
 }
 
 model Session {
@@ -791,6 +793,50 @@ model ScoutConsolidation {
 
   @@index([scoutId, createdAt])
   @@index([status])
+}
+
+// ── Knowledge Graph tables ──
+
+model KnowledgeEntity {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String
+  name       String
+  properties Json     @default("{}")
+  embedding  Unsupported("vector(1024)")?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  outgoing   KnowledgeRelationship[] @relation("source")
+  incoming   KnowledgeRelationship[] @relation("target")
+
+  @@unique([userId, type, name])
+  @@index([userId])
+}
+
+model KnowledgeRelationship {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceId            String
+  source              KnowledgeEntity @relation("source", fields: [sourceId], references: [id], onDelete: Cascade)
+  targetId            String
+  target              KnowledgeEntity @relation("target", fields: [targetId], references: [id], onDelete: Cascade)
+  relationship        String
+  properties          Json      @default("{}")
+  weight              Float     @default(1.0)
+  validFrom           DateTime  @default(now())
+  validUntil          DateTime?
+  sourceType          String?
+  provenanceEntityId  String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([sourceId])
+  @@index([targetId])
+  @@index([userId, validUntil])
 }
 
 // ── Mobile sync tables ──
