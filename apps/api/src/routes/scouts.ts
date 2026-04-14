@@ -48,6 +48,7 @@ function serializeScout(scout: any, extras?: { findingsCount?: number; lastRun?:
     budgetTotal: scout.budgetTotal,
     status: scout.status,
     statusLine: scout.statusLine ?? undefined,
+    bootstrapped: scout.bootstrapped ?? false,
     endDate: scout.endDate?.toISOString() ?? undefined,
     nextRunAt: scout.nextRunAt?.toISOString() ?? undefined,
     lastRun: extras?.lastRun ?? undefined,
@@ -144,7 +145,6 @@ scouts.post("/", async (c) => {
     return c.json({ error: "Maximum of 20 active scouts allowed" }, 400);
   }
 
-  const nextRunAt = new Date(Date.now() + body.cadenceIntervalHours * 3600000);
   const budgetResetAt = startOfNextMonth();
 
   const created = await prisma.scout.create({
@@ -164,7 +164,8 @@ scouts.post("/", async (c) => {
       cadenceCurrentIntervalHours: body.cadenceIntervalHours,
       budgetTotal: body.budgetTotal,
       budgetResetAt,
-      nextRunAt,
+      nextRunAt: null,
+      statusLine: "Surveying the landscape...",
       endDate: body.endDate ? new Date(body.endDate) : null,
       conversationSessionId: body.conversationSessionId ?? null,
       activity: {
@@ -177,6 +178,11 @@ scouts.post("/", async (c) => {
   });
 
   publishSSE(user.id, { type: "scout.status.changed", payload: { scoutId: created.id, status: created.status } });
+
+  // Fire-and-forget bootstrap run
+  import("../lib/scout-runner.js")
+    .then((mod) => mod.runBootstrapScout(created.id))
+    .catch((err) => console.error(`[scouts] Bootstrap failed for ${created.id}:`, err));
 
   return c.json(serializeScout(created, { findingsCount: 0 }), 201);
 });
