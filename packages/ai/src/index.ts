@@ -74,7 +74,13 @@ export type { OrchestratorParams } from "./orchestrator.js";
 // Memory
 export { extractFacts } from "./memory/facts.js";
 export { extractEntityFacts } from "./memory/entity-facts.js";
-export { validateFacts, parseLLMFactResponse } from "./memory/validation.js";
+export {
+  validateFacts,
+  parseLLMFactResponse,
+  INJECTION_PATTERN,
+  TAG_INJECTION_PATTERN,
+  VALID_CATEGORIES,
+} from "./memory/validation.js";
 export type { RawFact } from "./memory/validation.js";
 export { embedConversation, searchSimilar } from "./memory/embeddings.js";
 export { logUsage } from "./memory/usage.js";

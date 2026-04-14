@@ -38,6 +38,16 @@ export const AI_CONFIG = {
     minCandidates: 5,
     topK: 10,
   },
+  graph: {
+    maxExtractionTextLength: 4000,
+    maxEntitiesPerExtraction: 20,
+    maxRelationshipsPerExtraction: 30,
+    entityEmbedding: true,
+    consolidationIntervalHours: 24,
+  },
+  extraction: {
+    maxDailyPerUser: 200,
+  },
   rateLimit: {
     aiStreaming: 30,
     aiConfig: 5,
