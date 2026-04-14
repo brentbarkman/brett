@@ -3,9 +3,8 @@ import type { MeetingNoteProvider, ProviderMeetingData } from "./types.js";
 import type { MeetingNoteAttendee } from "@brett/types";
 import { prisma } from "../../lib/prisma.js";
 import {
-  getDriveClient,
   getDocsClient,
-  findMeetArtifacts,
+  pickMeetArtifacts,
   readDocContent,
   parseTranscriptDoc,
   parseMeetingNotesDoc,
@@ -16,7 +15,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
 
   async isAvailable(userId: string): Promise<boolean> {
     const account = await prisma.googleAccount.findFirst({
-      where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
+      where: { userId, hasMeetingNotesScope: true, meetingNotesEnabled: true },
       orderBy: { connectedAt: "desc" },
       select: { id: true },
     });
@@ -29,7 +28,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
   ): Promise<ProviderMeetingData | null> {
     // Security: always include userId in account lookup
     const account = await prisma.googleAccount.findFirst({
-      where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
+      where: { userId, hasMeetingNotesScope: true, meetingNotesEnabled: true },
       orderBy: { connectedAt: "desc" },
     });
     if (!account) return null;
@@ -37,7 +36,6 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
     // Only process events with a Google Meet link
     if (!calendarEvent.meetingLink?.includes("meet.google.com")) return null;
 
-    const driveClient = getDriveClient(account);
     const docsClient = getDocsClient(account);
 
     // CalendarEvent.attachments is Json? — validate before casting
@@ -45,13 +43,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
       ? calendarEvent.attachments as unknown as Array<{ fileId?: string; title?: string; mimeType?: string }>
       : null;
 
-    const { transcriptFileId, notesFileId } = await findMeetArtifacts(
-      driveClient,
-      attachments,
-      calendarEvent.title,
-      calendarEvent.startTime,
-      calendarEvent.endTime,
-    );
+    const { transcriptFileId, notesFileId } = pickMeetArtifacts(attachments);
 
     if (!transcriptFileId && !notesFileId) return null;
 
@@ -112,7 +104,7 @@ export class GoogleMeetProvider implements MeetingNoteProvider {
     until: Date,
   ): Promise<ProviderMeetingData[]> {
     const account = await prisma.googleAccount.findFirst({
-      where: { userId, hasDriveScope: true, meetingNotesEnabled: true },
+      where: { userId, hasMeetingNotesScope: true, meetingNotesEnabled: true },
       orderBy: { connectedAt: "desc" },
     });
     if (!account) return [];

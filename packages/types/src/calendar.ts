@@ -123,7 +123,7 @@ export interface ConnectedCalendarAccount {
   id: string;
   googleEmail: string;
   connectedAt: string;
-  hasDriveScope: boolean;
+  hasMeetingNotesScope: boolean;
   meetingNotesEnabled: boolean;
   calendars: CalendarListRecord[];
 }

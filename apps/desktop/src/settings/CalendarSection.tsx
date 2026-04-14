@@ -128,15 +128,15 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs text-white/60">Meeting notes</span>
-            {!account.hasDriveScope && (
+            {!account.hasMeetingNotesScope && (
               <span className="text-[10px] text-brett-gold/60">Requires permissions</span>
             )}
           </div>
           <SettingsToggle
-            checked={account.hasDriveScope && account.meetingNotesEnabled}
+            checked={account.hasMeetingNotesScope && account.meetingNotesEnabled}
             onChange={() => {
-              if (!account.hasDriveScope) {
-                // No Drive scope — trigger reauth to get it
+              if (!account.hasMeetingNotesScope) {
+                // No Docs scope — trigger reauth to get it
                 reauthCalendar.mutate(account.id);
               } else {
                 // Has scope — toggle locally

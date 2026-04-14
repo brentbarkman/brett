@@ -172,7 +172,7 @@ export function startCronJobs(): void {
 
       const [granolaUsers, googleUsers] = await Promise.all([
         prisma.granolaAccount.findMany({ select: { userId: true } }),
-        prisma.googleAccount.findMany({ where: { hasDriveScope: true }, select: { userId: true } }),
+        prisma.googleAccount.findMany({ where: { hasMeetingNotesScope: true }, select: { userId: true } }),
       ]);
 
       const userIds = [...new Set([

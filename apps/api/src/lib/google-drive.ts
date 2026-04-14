@@ -1,4 +1,4 @@
-import { google, type drive_v3, type docs_v1 } from "googleapis";
+import { google, type docs_v1 } from "googleapis";
 import { decryptToken, encryptToken } from "./encryption.js";
 import { prisma } from "./prisma.js";
 import type { MeetingTranscriptTurn } from "@brett/types";
@@ -46,16 +46,8 @@ function getAuthenticatedOAuth2Client(account: GoogleAccountInfo) {
   return oauth2Client;
 }
 
-export function getDriveClient(account: GoogleAccountInfo): drive_v3.Drive {
-  return google.drive({ version: "v3", auth: getAuthenticatedOAuth2Client(account) });
-}
-
 export function getDocsClient(account: GoogleAccountInfo): docs_v1.Docs {
   return google.docs({ version: "v1", auth: getAuthenticatedOAuth2Client(account) });
-}
-
-export function escapeDriveQuery(input: string): string {
-  return input.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 const DRIVE_FILE_ID_RE = /^[a-zA-Z0-9_\-]{10,60}$/;
@@ -65,13 +57,18 @@ export interface DocParagraph {
   text: string;
 }
 
-export async function findMeetArtifacts(
-  driveClient: drive_v3.Drive,
+/**
+ * Pick transcript + notes Doc IDs from a Calendar event's attachments[].
+ *
+ * Google Meet attaches the transcript and notes Docs to the Calendar event post-meeting
+ * (typically 5-30 min after the meeting ends; Calendar webhooks notify us when they arrive).
+ * We used to also fall back to a Drive API search by filename — that required the restricted
+ * drive.metadata.readonly scope. Dropped so the app stays on sensitive-tier scopes only and
+ * can be published without a CASA security audit. The attachment path covers the ~99% case.
+ */
+export function pickMeetArtifacts(
   attachments: Array<{ fileId?: string; title?: string; mimeType?: string }> | null,
-  eventTitle: string,
-  eventStart: Date,
-  eventEnd: Date,
-): Promise<{ transcriptFileId: string | null; notesFileId: string | null }> {
+): { transcriptFileId: string | null; notesFileId: string | null } {
   let transcriptFileId: string | null = null;
   let notesFileId: string | null = null;
 
@@ -85,39 +82,6 @@ export async function findMeetArtifacts(
       } else if (!notesFileId) {
         notesFileId = att.fileId;
       }
-    }
-  }
-
-  if (!transcriptFileId || !notesFileId) {
-    const searchStart = new Date(eventStart.getTime() - 60 * 60 * 1000);
-    const searchEnd = new Date(eventEnd.getTime() + 2 * 60 * 60 * 1000);
-    const escaped = escapeDriveQuery(eventTitle);
-
-    try {
-      const res = await driveClient.files.list({
-        q: `mimeType='application/vnd.google-apps.document' and name contains '${escaped}' and (name contains 'Transcript' or name contains 'Meeting notes') and createdTime > '${searchStart.toISOString()}' and createdTime < '${searchEnd.toISOString()}'`,
-        fields: "files(id,name,createdTime)",
-        pageSize: 10,
-      });
-
-      const files = res.data.files ?? [];
-      files.sort((a, b) => {
-        const aTime = a.createdTime ? Math.abs(new Date(a.createdTime).getTime() - eventEnd.getTime()) : Infinity;
-        const bTime = b.createdTime ? Math.abs(new Date(b.createdTime).getTime() - eventEnd.getTime()) : Infinity;
-        return aTime - bTime;
-      });
-
-      for (const file of files) {
-        if (!file.id) continue;
-        const name = (file.name ?? "").toLowerCase();
-        if (!transcriptFileId && name.startsWith("transcript")) {
-          transcriptFileId = file.id;
-        } else if (!notesFileId) {
-          notesFileId = file.id;
-        }
-      }
-    } catch (err) {
-      console.warn("[google-drive] Drive search failed:", err);
     }
   }
 
