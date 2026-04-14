@@ -80,6 +80,13 @@ export { embedConversation, searchSimilar } from "./memory/embeddings.js";
 export { logUsage } from "./memory/usage.js";
 export type { UsageEntry } from "./memory/usage.js";
 export { consolidateUserMemory, runConsolidation } from "./memory/consolidation.js";
+export {
+  buildUserProfile,
+  getCachedUserProfile,
+  invalidateProfileCache,
+  formatProfileForPrompt,
+} from "./memory/user-profile.js";
+export type { UserProfile } from "./memory/user-profile.js";
 
 // Graph extraction
 export { extractGraph, parseAndValidate as parseAndValidateGraph } from "./graph/extractor.js";
@@ -91,6 +98,10 @@ export { findConnected, findEntitiesBySimilarity, buildGraphContext } from "./gr
 // MCP
 export type { MCPClient } from "./mcp/client.js";
 export { createGranolaClient } from "./mcp/granola.js";
+
+// Retrieval
+export { unifiedRetrieve } from "./retrieval/router.js";
+export type { RetrievalContext, RetrievalResult } from "./retrieval/types.js";
 
 // Context
 export {

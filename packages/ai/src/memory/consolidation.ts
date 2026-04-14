@@ -1,3 +1,5 @@
+import { invalidateProfileCache } from "./user-profile.js";
+
 const CONFIDENCE_DECAY = 0.05;
 const MIN_CONFIDENCE = 0.1;
 const STALE_DAYS = 90;
@@ -64,6 +66,9 @@ export async function consolidateUserMemory(
       deduplicated++;
     }
   }
+
+  // Invalidate cached user profile so next request rebuilds from updated facts
+  invalidateProfileCache(userId);
 
   return { decayed: decayResult, expired: expireResult, deduplicated };
 }
