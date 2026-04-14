@@ -56,7 +56,7 @@ calendarAccounts.get("/", async (c) => {
       id: a.id,
       googleEmail: a.googleEmail,
       connectedAt: a.connectedAt.toISOString(),
-      hasDriveScope: a.hasDriveScope,
+      hasMeetingNotesScope: a.hasMeetingNotesScope,
       meetingNotesEnabled: a.meetingNotesEnabled,
       calendars: a.calendars.map((cal) => ({
         id: cal.id,
@@ -140,9 +140,9 @@ calendarAccounts.get("/callback", async (c) => {
     });
   }
 
-  const hasDriveScope =
-    grantedScopes.includes("https://www.googleapis.com/auth/drive.metadata.readonly") &&
-    grantedScopes.includes("https://www.googleapis.com/auth/documents.readonly");
+  const hasMeetingNotesScope = grantedScopes.includes(
+    "https://www.googleapis.com/auth/documents.readonly",
+  );
 
   // Get Google user info
   const oauth2Client = new google.auth.OAuth2();
@@ -175,8 +175,8 @@ calendarAccounts.get("/callback", async (c) => {
       tokenExpiresAt: tokens.expiry_date
         ? new Date(tokens.expiry_date)
         : new Date(Date.now() + 3600 * 1000),
-      hasDriveScope,
-      meetingNotesEnabled: hasDriveScope,
+      hasMeetingNotesScope,
+      meetingNotesEnabled: hasMeetingNotesScope,
     },
     update: {
       googleEmail,
@@ -185,7 +185,7 @@ calendarAccounts.get("/callback", async (c) => {
       tokenExpiresAt: tokens.expiry_date
         ? new Date(tokens.expiry_date)
         : new Date(Date.now() + 3600 * 1000),
-      hasDriveScope,
+      hasMeetingNotesScope,
       // Don't override meetingNotesEnabled on reauth — preserve user's choice
     },
   });
@@ -200,8 +200,8 @@ calendarAccounts.get("/callback", async (c) => {
     console.error(`[calendar-accounts] Initial sync failed for account ${account.id}:`, err);
   });
 
-  // If Drive/Docs scopes were granted, trigger Google Meet initial sync
-  if (hasDriveScope) {
+  // If the Docs scope was granted, trigger Google Meet initial sync
+  if (hasMeetingNotesScope) {
     import("../services/meeting-providers/registry.js").then(({ meetingCoordinator }) => {
       meetingCoordinator.initialSync(user.id, "google_meet").catch((err) =>
         console.error("[calendar-accounts] Google Meet initial sync failed:", err),
@@ -249,9 +249,9 @@ calendarAccounts.patch("/:accountId/meeting-notes", async (c) => {
     return c.json({ error: "enabled must be a boolean" }, 400);
   }
 
-  // Can't enable meeting notes without Drive scopes — client should trigger reauth
-  if (body.enabled && !account.hasDriveScope) {
-    return c.json({ error: "Drive scopes not granted. Re-authenticate to enable meeting notes." }, 409);
+  // Can't enable meeting notes without the Docs scope — client should trigger reauth
+  if (body.enabled && !account.hasMeetingNotesScope) {
+    return c.json({ error: "Docs scope not granted. Re-authenticate to enable meeting notes." }, 409);
   }
 
   const updated = await prisma.googleAccount.update({

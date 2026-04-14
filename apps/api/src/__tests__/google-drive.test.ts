@@ -1,25 +1,50 @@
 import { describe, it, expect } from "vitest";
-import { escapeDriveQuery, parseTranscriptDoc, parseMeetingNotesDoc } from "../lib/google-drive.js";
+import { pickMeetArtifacts, parseTranscriptDoc, parseMeetingNotesDoc } from "../lib/google-drive.js";
 
-describe("escapeDriveQuery", () => {
-  it("escapes single quotes", () => {
-    expect(escapeDriveQuery("Alice's 1:1")).toBe("Alice\\'s 1:1");
+describe("pickMeetArtifacts", () => {
+  it("returns nulls when attachments is null", () => {
+    expect(pickMeetArtifacts(null)).toEqual({ transcriptFileId: null, notesFileId: null });
   });
 
-  it("handles multiple quotes", () => {
-    expect(escapeDriveQuery("it's Bob's meeting")).toBe("it\\'s Bob\\'s meeting");
+  it("returns nulls when attachments is empty", () => {
+    expect(pickMeetArtifacts([])).toEqual({ transcriptFileId: null, notesFileId: null });
   });
 
-  it("passes through clean strings", () => {
-    expect(escapeDriveQuery("Weekly Standup")).toBe("Weekly Standup");
+  it("picks transcript by title prefix and notes as the other Doc", () => {
+    const attachments = [
+      { fileId: "1AaBbCcDdEeFfGgHhIiJjKkLlMmNn", title: "Meeting notes", mimeType: "application/vnd.google-apps.document" },
+      { fileId: "2ZzYyXxWwVvUuTtSsRrQqPpOoNnMm", title: "Transcript — Weekly Sync", mimeType: "application/vnd.google-apps.document" },
+    ];
+    expect(pickMeetArtifacts(attachments)).toEqual({
+      transcriptFileId: "2ZzYyXxWwVvUuTtSsRrQqPpOoNnMm",
+      notesFileId: "1AaBbCcDdEeFfGgHhIiJjKkLlMmNn",
+    });
   });
 
-  it("escapes backslashes", () => {
-    expect(escapeDriveQuery("path\\to\\file")).toBe("path\\\\to\\\\file");
+  it("ignores non-Doc mime types", () => {
+    const attachments = [
+      { fileId: "1AaBbCcDdEeFfGgHhIiJjKkLlMmNn", title: "Slides", mimeType: "application/vnd.google-apps.presentation" },
+    ];
+    expect(pickMeetArtifacts(attachments)).toEqual({ transcriptFileId: null, notesFileId: null });
   });
 
-  it("escapes both backslashes and single quotes", () => {
-    expect(escapeDriveQuery("Alice\\'s file")).toBe("Alice\\\\\\'s file");
+  it("rejects malformed file IDs", () => {
+    const attachments = [
+      { fileId: "short", title: "Meeting notes", mimeType: "application/vnd.google-apps.document" },
+      { fileId: "contains/slash/bad", title: "Transcript", mimeType: "application/vnd.google-apps.document" },
+    ];
+    expect(pickMeetArtifacts(attachments)).toEqual({ transcriptFileId: null, notesFileId: null });
+  });
+
+  it("keeps the first notes doc if multiple non-transcript Docs are attached", () => {
+    const attachments = [
+      { fileId: "1AaBbCcDdEeFfGgHhIiJjKkLlMmNn", title: "Meeting notes", mimeType: "application/vnd.google-apps.document" },
+      { fileId: "3QqRrSsTtUuVvWwXxYyZzAaBbCcDd", title: "Agenda", mimeType: "application/vnd.google-apps.document" },
+    ];
+    expect(pickMeetArtifacts(attachments)).toEqual({
+      transcriptFileId: null,
+      notesFileId: "1AaBbCcDdEeFfGgHhIiJjKkLlMmNn",
+    });
   });
 });
 
@@ -69,12 +94,6 @@ describe("parseMeetingNotesDoc", () => {
 
   it("returns empty string for empty content", () => {
     expect(parseMeetingNotesDoc([])).toBe("");
-  });
-});
-
-describe("escapeDriveQuery (extended)", () => {
-  it("escapes backslashes before single quotes", () => {
-    expect(escapeDriveQuery("path\\to\\'file")).toBe("path\\\\to\\\\\\'file");
   });
 });
 
