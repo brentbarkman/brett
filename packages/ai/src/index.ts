@@ -79,12 +79,14 @@ export type { RawFact } from "./memory/validation.js";
 export { embedConversation, searchSimilar } from "./memory/embeddings.js";
 export { logUsage } from "./memory/usage.js";
 export type { UsageEntry } from "./memory/usage.js";
+export { consolidateUserMemory, runConsolidation } from "./memory/consolidation.js";
 
 // Graph extraction
 export { extractGraph, parseAndValidate as parseAndValidateGraph } from "./graph/extractor.js";
 export { upsertGraph } from "./graph/store.js";
 export type { ExtractedEntity, ExtractedRelationship, ExtractionResult } from "./graph/types.js";
 export { VALID_GRAPH_ENTITY_TYPES, VALID_RELATIONSHIP_TYPES } from "./graph/types.js";
+export { findConnected, findEntitiesBySimilarity, buildGraphContext } from "./graph/query.js";
 
 // MCP
 export type { MCPClient } from "./mcp/client.js";
