@@ -848,6 +848,12 @@ export async function runScout(scoutId: string): Promise<void> {
     return;
   }
 
+  // Guard: don't run standard runs until bootstrap is complete
+  if (!scout.bootstrapped) {
+    console.warn(`[scout-runner] Scout ${scoutId} not yet bootstrapped — skipping standard run`);
+    return;
+  }
+
   // 2. Create ScoutRun immediately to claim execution slot
   const run = await prisma.scoutRun.create({
     data: {
@@ -1289,6 +1295,16 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
     return;
   }
 
+  // Atomically claim the bootstrap slot to prevent concurrent bootstraps
+  const claimed = await prisma.scout.updateMany({
+    where: { id: scoutId, bootstrapped: false },
+    data: { bootstrapped: false }, // no-op data, just testing the WHERE
+  });
+  if (claimed.count === 0) {
+    console.warn(`[scout-runner] Bootstrap: Scout ${scoutId} claimed by another runner`);
+    return;
+  }
+
   const run = await prisma.scoutRun.create({
     data: {
       scoutId: scout.id,
@@ -1335,14 +1351,30 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
   try {
     if (scout.budgetUsed >= scout.budgetTotal) {
       await finalizeRun("skipped", { reasoning: "Monthly budget exhausted — skipping bootstrap" });
-      await prisma.scout.update({ where: { id: scout.id }, data: { bootstrapped: true } });
+      await prisma.scout.update({ where: { id: scout.id }, data: { bootstrapped: true, nextRunAt: scout.budgetResetAt } });
       return;
+    }
+
+    // System budget check
+    const systemBudget = parseInt(process.env.SCOUT_SYSTEM_BUDGET_MONTHLY ?? "0", 10);
+    if (systemBudget > 0) {
+      const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+      const globalCount = await prisma.scoutRun.count({
+        where: { status: "success", createdAt: { gte: monthStart } },
+      });
+      if (globalCount >= systemBudget) {
+        await finalizeRun("skipped", { reasoning: "System monthly budget exhausted" });
+        const retryAt = new Date(Date.now() + RETRY_INTERVAL_MS);
+        await prisma.scout.update({ where: { id: scout.id }, data: { bootstrapped: true, nextRunAt: retryAt } });
+        return;
+      }
     }
 
     const aiConfig = scout.user.aiConfigs[0];
     if (!aiConfig) {
+      const retryAt = new Date(Date.now() + RETRY_INTERVAL_MS);
       await finalizeRun("skipped", { reasoning: "No active AI configuration — skipping bootstrap" });
-      await prisma.scout.update({ where: { id: scout.id }, data: { bootstrapped: true } });
+      await prisma.scout.update({ where: { id: scout.id }, data: { bootstrapped: true, nextRunAt: retryAt } });
       return;
     }
 
@@ -1362,7 +1394,8 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
         `Your ${aiConfig.provider} API key is no longer valid. Go to Settings → AI Provider to enter a new key.`,
       ).catch((e) => console.error("[scout-runner] Failed to create re-link task:", e));
       await finalizeRun("skipped", { reasoning: "AI API key is no longer valid" });
-      await prisma.scout.update({ where: { id: scout.id }, data: { bootstrapped: true } });
+      const retryAt = new Date(Date.now() + RETRY_INTERVAL_MS);
+      await prisma.scout.update({ where: { id: scout.id }, data: { bootstrapped: true, nextRunAt: retryAt } });
       return;
     }
 
@@ -1494,13 +1527,15 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
     }
 
     const nextRunAt = new Date(Date.now() + scout.cadenceCurrentIntervalHours * 3600000);
+    // Strip URLs from landscape summary before displaying in UI
+    const safeStatusLine = judgment.landscapeSummary.replace(/https?:\/\/\S+/gi, "").replace(/\s{2,}/g, " ").trim();
     await prisma.scout.update({
       where: { id: scout.id },
       data: {
         bootstrapped: true,
         budgetUsed: { increment: 1 },
         nextRunAt,
-        statusLine: judgment.landscapeSummary,
+        statusLine: safeStatusLine || "Initial survey complete",
       },
     });
 
@@ -1539,10 +1574,12 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
 
     await finalizeRun("failed", { error: safeError });
 
+    const nextRunAt = new Date(Date.now() + scout.cadenceCurrentIntervalHours * 3600000);
     await prisma.scout.update({
       where: { id: scoutId },
       data: {
         bootstrapped: true,
+        nextRunAt,
         statusLine: "Initial survey failed — starting without baseline",
       },
     });

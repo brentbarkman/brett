@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
+import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { Prisma } from "@brett/api-core";
 import { publishSSE } from "../lib/sse.js";
@@ -99,7 +100,7 @@ scouts.get("/", async (c) => {
 });
 
 // POST /scouts — create scout
-scouts.post("/", async (c) => {
+scouts.post("/", rateLimiter(5), async (c) => {
   const user = c.get("user");
   const body = (await c.req.json()) as CreateScoutInput;
 
@@ -135,6 +136,14 @@ scouts.post("/", async (c) => {
   // Cadence minimum
   if (body.cadenceMinIntervalHours < 0.25) {
     return c.json({ error: "cadenceMinIntervalHours must be at least 0.25 (15 minutes)" }, 400);
+  }
+
+  // Budget bounds: min 2 (bootstrap + at least 1 regular run), max 500
+  if (typeof body.budgetTotal !== "number" || body.budgetTotal < 2) {
+    return c.json({ error: "budgetTotal must be at least 2" }, 400);
+  }
+  if (body.budgetTotal > 500) {
+    return c.json({ error: "budgetTotal must be 500 or fewer" }, 400);
   }
 
   // Max 20 active scouts per user

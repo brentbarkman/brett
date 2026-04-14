@@ -112,8 +112,8 @@ export const createScoutSkill: Skill = {
     if (p.cadenceMinIntervalHours !== undefined && p.cadenceMinIntervalHours < 0.25) {
       return { success: false, message: "Minimum cadence interval must be at least 0.25 hours (15 minutes)." };
     }
-    if (!p.budgetTotal || p.budgetTotal <= 0) {
-      return { success: false, message: "Budget total must be a positive integer." };
+    if (!p.budgetTotal || p.budgetTotal < 2) {
+      return { success: false, message: "Budget total must be at least 2 (one for initial survey, one for regular monitoring)." };
     }
     if (p.budgetTotal > 500) {
       return { success: false, message: "Budget total must be 500 or fewer runs per month." };
