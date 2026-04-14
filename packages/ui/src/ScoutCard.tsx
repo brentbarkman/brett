@@ -92,7 +92,11 @@ export function ScoutCard({ scout, onClick, isSelected, isNew, variant = "full" 
         </div>
         <p className="text-[13px] text-white/50 line-clamp-2">{scout.goal}</p>
         <div className="flex items-center gap-3 text-[11px] text-white/40 font-medium">
-          <span>Last run: {scout.lastRun ? formatRelativeTime(scout.lastRun) : "Never"}</span>
+          {!scout.bootstrapped && scout.status === "active" ? (
+            <span className="text-brett-gold/70 animate-pulse">{scout.statusLine ?? "Surveying the landscape..."}</span>
+          ) : (
+            <span>Last run: {scout.lastRun ? formatRelativeTime(scout.lastRun) : "Never"}</span>
+          )}
           <span className="text-white/20">·</span>
           <span>{scout.findingsCount} findings</span>
           <span className="text-white/20">·</span>
