@@ -3,6 +3,8 @@
 export type {
   AIProvider,
   EmbeddingProvider,
+  RerankProvider,
+  RerankResult,
   ChatParams,
   Message,
   ToolDefinition,
@@ -10,6 +12,7 @@ export type {
 export { getProvider } from "./providers/factory.js";
 export { OpenAIEmbeddingProvider } from "./providers/embedding.js";
 export { VoyageEmbeddingProvider } from "./providers/voyage.js";
+export { VoyageRerankProvider } from "./providers/voyage-rerank.js";
 export { resolveModel, MODEL_MAP } from "./router.js";
 
 // Skills

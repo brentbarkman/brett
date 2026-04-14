@@ -32,6 +32,12 @@ export const AI_CONFIG = {
     debounceMs: 500,
     maxRetries: 3,
   },
+  rerank: {
+    model: "rerank-2.5" as const,
+    enabled: true,
+    minCandidates: 5,
+    topK: 10,
+  },
   rateLimit: {
     aiStreaming: 30,
     aiConfig: 5,

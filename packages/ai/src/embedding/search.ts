@@ -1,5 +1,5 @@
 import { Prisma } from "@brett/api-core";
-import type { EmbeddingProvider } from "../providers/types.js";
+import type { EmbeddingProvider, RerankProvider } from "../providers/types.js";
 import { AI_CONFIG } from "../config.js";
 
 // --- Types ---
@@ -334,11 +334,12 @@ export async function hybridSearch(
   provider: EmbeddingProvider | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prisma: any,
-  limit: number
+  limit: number,
+  rerankProvider?: RerankProvider | null,
 ): Promise<SearchResult[]> {
   if (provider === null) {
     const kwResults = await keywordSearch(userId, query, types, prisma, limit);
-    return kwResults.map((r) => ({
+    let results: SearchResult[] = kwResults.map((r) => ({
       entityType: r.entityType,
       entityId: r.entityId,
       title: r.title,
@@ -347,15 +348,49 @@ export async function hybridSearch(
       matchType: "keyword" as const,
       metadata: {},
     }));
+
+    results = await maybeRerank(query, results, rerankProvider, limit);
+    return results;
   }
 
   const [kwResults, vecResults] = await Promise.all([
-    keywordSearch(userId, query, types, prisma, limit),
-    vectorSearch(userId, query, types, provider, prisma, limit).catch((err) => {
+    keywordSearch(userId, query, types, prisma, limit * 2),
+    vectorSearch(userId, query, types, provider, prisma, limit * 2).catch((err) => {
       console.error("[embedding] Vector search failed, falling back to keyword-only:", err.message);
       return [] as RankedResult[];
     }),
   ]);
 
-  return fuseResults(kwResults, vecResults, limit);
+  let fused = fuseResults(kwResults, vecResults, limit * 2);
+
+  fused = await maybeRerank(query, fused, rerankProvider, limit);
+
+  return fused.slice(0, limit);
+}
+
+/**
+ * Reranks results using the provided rerank provider if available and conditions are met.
+ * Falls back to the original order on error.
+ */
+async function maybeRerank(
+  query: string,
+  results: SearchResult[],
+  rerankProvider: RerankProvider | null | undefined,
+  limit: number,
+): Promise<SearchResult[]> {
+  if (!rerankProvider || results.length < AI_CONFIG.rerank.minCandidates) {
+    return results;
+  }
+
+  try {
+    const documents = results.map((r) => `${r.title}\n${r.snippet}`);
+    const reranked = await rerankProvider.rerank(query, documents, AI_CONFIG.rerank.topK);
+    return reranked.map((rr) => ({
+      ...results[rr.index],
+      score: rr.relevanceScore,
+    }));
+  } catch (err) {
+    console.error("[rerank] Failed, falling back to RRF order:", err);
+    return results.slice(0, limit);
+  }
 }

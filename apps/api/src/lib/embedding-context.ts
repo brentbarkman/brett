@@ -1,6 +1,7 @@
 import { hybridSearch } from "@brett/ai";
 import type { EmbeddingProvider } from "@brett/ai";
 import type { ExtendedPrismaClient } from "@brett/api-core";
+import { getRerankProvider } from "./embedding-provider.js";
 
 // Per-session cache — avoids redundant hybrid searches in multi-turn conversations.
 // Key: "userId:sessionId", Value: { context, cachedAt }
@@ -51,7 +52,7 @@ export async function loadEmbeddingContext(
   }
 
   try {
-    const results = await hybridSearch(userId, text, null, provider, prisma, limit);
+    const results = await hybridSearch(userId, text, null, provider, prisma, limit, getRerankProvider());
     const context = results.length === 0 ? "" : formatResults(results);
 
     // Cache for session reuse

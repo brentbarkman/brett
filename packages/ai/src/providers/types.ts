@@ -49,3 +49,12 @@ export interface EmbeddingProvider {
   embedBatch(texts: string[], inputType?: "query" | "document"): Promise<number[][]>;
   readonly dimensions: number;
 }
+
+export interface RerankResult {
+  index: number;
+  relevanceScore: number;
+}
+
+export interface RerankProvider {
+  rerank(query: string, documents: string[], topK?: number): Promise<RerankResult[]>;
+}
