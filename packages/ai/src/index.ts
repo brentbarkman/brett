@@ -73,9 +73,18 @@ export type { OrchestratorParams } from "./orchestrator.js";
 
 // Memory
 export { extractFacts } from "./memory/facts.js";
+export { extractEntityFacts } from "./memory/entity-facts.js";
+export { validateFacts, parseLLMFactResponse } from "./memory/validation.js";
+export type { RawFact } from "./memory/validation.js";
 export { embedConversation, searchSimilar } from "./memory/embeddings.js";
 export { logUsage } from "./memory/usage.js";
 export type { UsageEntry } from "./memory/usage.js";
+
+// Graph extraction
+export { extractGraph, parseAndValidate as parseAndValidateGraph } from "./graph/extractor.js";
+export { upsertGraph } from "./graph/store.js";
+export type { ExtractedEntity, ExtractedRelationship, ExtractionResult } from "./graph/types.js";
+export { VALID_GRAPH_ENTITY_TYPES, VALID_RELATIONSHIP_TYPES } from "./graph/types.js";
 
 // MCP
 export type { MCPClient } from "./mcp/client.js";
@@ -88,6 +97,7 @@ export {
   getBrettsTakePrompt,
   getFactExtractionPrompt,
   SCOUT_CREATION_PROMPT,
+  SECURITY_BLOCK,
 } from "./context/system-prompts.js";
 export { assembleContext } from "./context/assembler.js";
 export type { AssemblerInput, AssembledContext } from "./context/assembler.js";
