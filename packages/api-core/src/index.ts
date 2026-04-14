@@ -1,4 +1,4 @@
-export { prisma, SOFT_DELETE_MODEL_NAMES } from "./prisma.js";
+export { prisma, initPrisma, SOFT_DELETE_MODEL_NAMES } from "./prisma.js";
 export type { ExtendedPrismaClient } from "./prisma.js";
 export { createAuth, type Auth, type AuthOptions } from "./auth.js";
 export { createAuthMiddleware, type AuthEnv } from "./middleware/auth.js";

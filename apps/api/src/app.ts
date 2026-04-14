@@ -36,7 +36,7 @@ import { releaseProxy } from "./routes/release-proxy.js";
 import { startCronJobs } from "./jobs/cron.js";
 import { setEmbedProcessor } from "@brett/ai";
 import { getEmbeddingProvider } from "./lib/embedding-provider.js";
-import { prisma } from "./lib/prisma.js";
+import { prisma, initPrisma } from "./lib/prisma.js";
 
 export const app = new Hono();
 
@@ -119,6 +119,9 @@ if (embeddingProvider) {
 }
 
 startCronJobs();
+
+// Tune HNSW ef_search for better vector recall
+initPrisma().catch((err: unknown) => console.error("[startup] HNSW tuning failed:", err));
 
 // Reconcile embeddings on startup — catches items missed during restarts.
 // Delayed 30s to let the server warm up and avoid competing with initial requests.
