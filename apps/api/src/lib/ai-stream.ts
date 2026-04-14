@@ -4,6 +4,24 @@ import { getEmbeddingProvider } from "./embedding-provider.js";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, StreamChunk } from "@brett/types";
 
+/** Retry an async fn up to maxRetries times with exponential backoff (1s, 2s, 4s). */
+async function withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 2): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        const delay = 1000 * 2 ** attempt;
+        console.warn(`[ai-stream] ${label} attempt ${attempt + 1} failed, retrying in ${delay}ms:`, (err as Error).message);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Build a ReadableStream that pipes orchestrator chunks as SSE events.
  *
@@ -81,17 +99,26 @@ export function buildStream(
             .then(() => {
               const memoryCtx = opts?.memoryCtx;
               if (memoryCtx) {
+                console.log("[ai-stream] Memory pipelines firing for session", sessionId);
                 enqueueEmbed({ entityType: "conversation", entityId: sessionId, userId: memoryCtx.userId });
-                extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma, memoryCtx.itemContext, memoryCtx.assistantName)
-                  .catch((err) => console.error("[fact-extraction] Failed:", err.message));
-                extractGraph(assistantContentRef.value, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma, { type: "conversation", entityId: sessionId })
+                withRetry(
+                  () => extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma, memoryCtx.itemContext, memoryCtx.assistantName),
+                  "fact-extraction",
+                )
+                  .then(() => console.log("[fact-extraction] Complete for session", sessionId))
+                  .catch((err) => console.error("[fact-extraction] Failed after retries:", err.message));
+                withRetry(
+                  () => extractGraph(assistantContentRef.value, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma, { type: "conversation", entityId: sessionId }),
+                  "graph-extraction",
+                )
                   .then((result) => {
+                    console.log("[graph-extraction] Complete:", result.entities.length, "entities,", result.relationships.length, "relationships");
                     if (result.entities.length > 0 || result.relationships.length > 0) {
                       upsertGraph(memoryCtx.userId, result, prisma, getEmbeddingProvider(), { type: "conversation", entityId: sessionId })
                         .catch((err) => console.error("[graph-upsert]", err.message));
                     }
                   })
-                  .catch((err) => console.error("[graph-extraction]", err.message));
+                  .catch((err) => console.error("[graph-extraction] Failed after retries:", err.message));
               }
 
               if (opts?.onDone) {

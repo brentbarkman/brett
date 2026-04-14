@@ -4,7 +4,7 @@ import { decryptToken } from "./encryption.js";
 import { getSearchProvider, classifySourceType } from "./search-providers/index.js";
 import { runExtraction } from "./content-extractor.js";
 import type { SearchResult } from "./search-providers/types.js";
-import { getProvider, resolveModel, enqueueEmbed, AI_CONFIG } from "@brett/ai";
+import { getProvider, resolveModel, enqueueEmbed, AI_CONFIG, SECURITY_BLOCK } from "@brett/ai";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, ScoutSource, FindingType } from "@brett/types";
 import { humanizeCadence, detectContentType } from "@brett/utils";
@@ -180,6 +180,7 @@ async function buildSearchQueries(
     : "";
 
   const systemMessage =
+    `${SECURITY_BLOCK}\n\n` +
     `You are a search query generator for a monitoring agent.\n\n` +
     `Today's date: ${today}\n\n` +
     `Generate 1-3 web search queries for the given monitoring goal. Rules:\n` +

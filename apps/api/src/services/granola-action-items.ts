@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { decryptToken } from "../lib/encryption.js";
-import { getProvider, resolveModel, logUsage } from "@brett/ai";
+import { getProvider, resolveModel, logUsage, SECURITY_BLOCK } from "@brett/ai";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, ModelTier } from "@brett/types";
 import { validateCreateItem } from "@brett/business";
@@ -57,28 +57,15 @@ async function aiExtractActionItems(
     ? input.attendees.map((a) => `${a.name} <${a.email}>`).join(", ")
     : "No attendee information available";
 
-  const prompt = `Analyze this meeting summary and extract action items. For each one, determine:
+  const systemPrompt = `You extract structured action items from meeting notes. Return only valid JSON.
+
+Analyze the meeting summary and extract action items. For each one, determine:
 1. Whether it's for the user ("me") or someone else ("other")
 2. A clear, concise task title
 3. A due date if mentioned or clearly implied
 
-The user is: ${input.userName}
-Meeting: "${input.meetingTitle}" on ${input.meetingDate}
-Attendees: ${attendeeList}
-
-Meeting summary:
-${input.summary}
-
-Return ONLY a JSON array (no markdown fencing, no explanation). Each item:
-{
-  "assignee": "me" or "other",
-  "assigneeName": "Person Name" (only if assignee is "other"),
-  "title": "Clean task title",
-  "dueDate": "YYYY-MM-DD" or null
-}
-
 Title guidelines:
-- Remove the user's name (${input.userName}) from all titles — never start with "${input.userName}:" or "${input.userName} to"
+- Remove the user's name from all titles — never start with the user's name
 - Make titles actionable verbs ("Send proposal" not "Proposal needs to be sent")
 - For the user's own tasks (assignee=me): just the action ("Send revised proposal to Dan")
 - For other people's tasks (assignee=other): format as "Follow up: {name} to {action}" — e.g. "Follow up: Dan to send revised proposal"
@@ -87,13 +74,23 @@ Title guidelines:
 - Don't include the meeting name unless it adds clarity
 
 Due date guidelines:
-- Today's date for reference: ${input.meetingDate}
 - "end of week" = the Friday of the meeting's week
 - "next week" = the Monday after the meeting
 - Only set dueDate when explicitly stated or strongly implied
 - Leave null if uncertain
 
-If no action items exist, return an empty array [].`;
+If no action items exist, return an empty array [].
+
+${SECURITY_BLOCK}`;
+
+  const prompt = `The user is: ${input.userName}
+Meeting: "${input.meetingTitle}" on ${input.meetingDate}
+Attendees: ${attendeeList}
+Today's date for reference: ${input.meetingDate}
+
+<user_data label="meeting_summary">
+${input.summary}
+</user_data>`;
 
   const model = resolveModel(providerName, "small" as ModelTier);
   let result = "";
@@ -101,7 +98,7 @@ If no action items exist, return an empty array [].`;
   for await (const chunk of provider.chat({
     model,
     messages: [{ role: "user", content: prompt }],
-    system: "You extract structured action items from meeting notes. Return only valid JSON.",
+    system: systemPrompt,
     temperature: 0.1,
     maxTokens: 2048,
     responseFormat: {
