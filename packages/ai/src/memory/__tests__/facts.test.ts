@@ -1,43 +1,16 @@
 import { describe, it, expect } from "vitest";
+import {
+  validateFacts,
+  parseLLMFactResponse,
+  INJECTION_PATTERN,
+  TAG_INJECTION_PATTERN,
+  VALID_CATEGORIES,
+} from "../validation.js";
+import type { RawFact } from "../validation.js";
 
-// We test the validation logic from facts.ts by extracting the same constants and rules.
-// Since the validation is inline in extractFacts (not exported), we replicate the exact
-// validation checks here to test the security boundary directly.
-
-const VALID_CATEGORIES = new Set([
-  "preference",
-  "context",
-  "relationship",
-  "habit",
-]);
-
-const INJECTION_PATTERN =
-  /\b(ignore|override|system prompt|instruction|you are now|always execute|never ask|secret|api.?key|password|disregard|bypass|credentials|token)\b/i;
-
-const TAG_INJECTION_PATTERN = /<\/?user_data|<\/?system|<\/?instruction/i;
-
-const SNAKE_CASE_KEY = /^[a-z][a-z0-9_]{1,63}$/;
-
-interface Fact {
-  category: string;
-  key: string;
-  value: string;
-}
-
-/** Replicates the validation logic from extractFacts for testability */
-function validateFact(fact: Fact): boolean {
-  if (typeof fact.category !== "string") return false;
-  if (typeof fact.key !== "string") return false;
-  if (typeof fact.value !== "string") return false;
-
-  if (!VALID_CATEGORIES.has(fact.category)) return false;
-  if (fact.value.length > 200) return false;
-  if (INJECTION_PATTERN.test(fact.value)) return false;
-  if (INJECTION_PATTERN.test(fact.key)) return false;
-  if (TAG_INJECTION_PATTERN.test(fact.value)) return false;
-  if (!SNAKE_CASE_KEY.test(fact.key)) return false;
-
-  return true;
+/** Single-fact convenience wrapper around validateFacts */
+function validateFact(fact: RawFact): boolean {
+  return validateFacts([fact]).length === 1;
 }
 
 describe("fact validation", () => {
@@ -267,5 +240,69 @@ describe("fact validation", () => {
         })
       ).toBe(true);
     });
+  });
+});
+
+describe("validateFacts batch", () => {
+  it("filters out invalid facts from a mixed array", () => {
+    const input = [
+      { category: "preference", key: "valid_one", value: "Good fact" },
+      { category: "INVALID", key: "bad_cat", value: "Nope" },
+      { category: "context", key: "valid_two", value: "Another good fact" },
+      null,
+      42,
+    ];
+    const result = validateFacts(input);
+    expect(result).toHaveLength(2);
+    expect(result[0].key).toBe("valid_one");
+    expect(result[1].key).toBe("valid_two");
+  });
+
+  it("returns empty array for non-array input", () => {
+    expect(validateFacts("not an array")).toEqual([]);
+    expect(validateFacts(null)).toEqual([]);
+    expect(validateFacts(undefined)).toEqual([]);
+    expect(validateFacts({})).toEqual([]);
+  });
+});
+
+describe("parseLLMFactResponse", () => {
+  it("parses clean JSON", () => {
+    const result = parseLLMFactResponse('[{"key": "test"}]');
+    expect(result).toEqual([{ key: "test" }]);
+  });
+
+  it("strips markdown code fences", () => {
+    const result = parseLLMFactResponse('```json\n[{"key": "test"}]\n```');
+    expect(result).toEqual([{ key: "test" }]);
+  });
+
+  it("returns null for invalid JSON", () => {
+    expect(parseLLMFactResponse("not json at all")).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(parseLLMFactResponse("")).toBeNull();
+  });
+});
+
+describe("exported constants", () => {
+  it("VALID_CATEGORIES has exactly 4 categories", () => {
+    expect(VALID_CATEGORIES.size).toBe(4);
+    expect(VALID_CATEGORIES.has("preference")).toBe(true);
+    expect(VALID_CATEGORIES.has("context")).toBe(true);
+    expect(VALID_CATEGORIES.has("relationship")).toBe(true);
+    expect(VALID_CATEGORIES.has("habit")).toBe(true);
+  });
+
+  it("INJECTION_PATTERN catches common prompt injection keywords", () => {
+    expect(INJECTION_PATTERN.test("ignore previous")).toBe(true);
+    expect(INJECTION_PATTERN.test("normal text")).toBe(false);
+  });
+
+  it("TAG_INJECTION_PATTERN catches XML-like tag injection", () => {
+    expect(TAG_INJECTION_PATTERN.test("</user_data>")).toBe(true);
+    expect(TAG_INJECTION_PATTERN.test("<system>")).toBe(true);
+    expect(TAG_INJECTION_PATTERN.test("normal text")).toBe(false);
   });
 });

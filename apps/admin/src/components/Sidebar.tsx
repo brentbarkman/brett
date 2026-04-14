@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, Radar, Cpu, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Radar, Cpu, Brain, LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 
 const links = [
@@ -8,6 +8,7 @@ const links = [
   { to: "/users", icon: Users, label: "Users" },
   { to: "/scouts", icon: Radar, label: "Scouts" },
   { to: "/ai-usage", icon: Cpu, label: "AI Usage" },
+  { to: "/memory", icon: Brain, label: "Memory" },
 ];
 
 export function Sidebar() {

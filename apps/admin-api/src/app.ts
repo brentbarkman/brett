@@ -5,6 +5,7 @@ import { dashboard } from "./routes/dashboard.js";
 import { users } from "./routes/users.js";
 import { scouts } from "./routes/scouts.js";
 import { aiUsage } from "./routes/ai-usage.js";
+import { memory } from "./routes/memory.js";
 
 const isLocal = process.env.NODE_ENV !== "production" &&
   (!process.env.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL.includes("localhost"));
@@ -41,6 +42,7 @@ adminRoutes.route("/dashboard", dashboard);
 adminRoutes.route("/users", users);
 adminRoutes.route("/scouts", scouts);
 adminRoutes.route("/ai", aiUsage);
+adminRoutes.route("/memory", memory);
 
 app.route("/admin", adminRoutes);
 

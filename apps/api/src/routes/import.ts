@@ -4,6 +4,7 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { Prisma } from "@brett/api-core";
 import { validateThings3Import } from "@brett/business";
+import { enqueueEmbed } from "@brett/ai";
 
 const importRoutes = new Hono<AuthEnv>();
 
@@ -86,7 +87,17 @@ importRoutes.post("/things3", bodyLimit({ maxSize: 50 * 1024 * 1024 }), async (c
         await tx.item.createMany({ data: taskData });
       }
 
-      return { lists: lists.length, tasks: taskData.length };
+      // Query back IDs inside the transaction to avoid race conditions
+      const createdItems = taskData.length > 0
+        ? await tx.item.findMany({
+            where: { userId: user.id, source: "Things 3" },
+            select: { id: true },
+            orderBy: { createdAt: "desc" },
+            take: taskData.length,
+          })
+        : [];
+
+      return { lists: lists.length, tasks: taskData.length, itemIds: createdItems.map((i: { id: string }) => i.id) };
     }, { timeout: 30000 });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
@@ -95,7 +106,12 @@ importRoutes.post("/things3", bodyLimit({ maxSize: 50 * 1024 * 1024 }), async (c
     throw err;
   }
 
-  return c.json(result, 201);
+  // Queue imported items through the full embedding + extraction pipeline (fire-and-forget)
+  for (const id of result.itemIds) {
+    enqueueEmbed({ entityType: "item", entityId: id, userId: user.id });
+  }
+
+  return c.json({ lists: result.lists, tasks: result.tasks }, 201);
 });
 
 export { importRoutes };

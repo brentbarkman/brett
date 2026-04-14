@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { getEmbeddingProvider } from "../lib/embedding-provider.js";
+import { getEmbeddingProvider, getRerankProvider } from "../lib/embedding-provider.js";
 import { hybridSearch } from "@brett/ai";
 
 const search = new Hono<AuthEnv>();
@@ -27,7 +27,7 @@ search.get("/search", authMiddleware, async (c) => {
 
   const provider = getEmbeddingProvider();
 
-  const results = await hybridSearch(user.id, q, types, provider, prisma, limit);
+  const results = await hybridSearch(user.id, q, types, provider, prisma, limit, getRerankProvider());
 
   // Batch-load entity metadata by type
   const itemIds = results.filter((r) => r.entityType === "item").map((r) => r.entityId);

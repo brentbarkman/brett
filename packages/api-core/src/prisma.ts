@@ -176,3 +176,21 @@ export type ExtendedPrismaClient = typeof prisma;
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
+
+// ── HNSW tuning ──
+
+// Tune HNSW recall — runs once per process on first query
+let hnswTuned = false;
+async function ensureHnswTuning(client: ReturnType<typeof withSoftDelete>) {
+  if (hnswTuned) return;
+  hnswTuned = true;
+  try {
+    await client.$executeRawUnsafe("SET hnsw.ef_search = 100");
+  } catch {
+    // pgvector may not be installed in test environments
+  }
+}
+
+export async function initPrisma(): Promise<void> {
+  await ensureHnswTuning(prisma);
+}

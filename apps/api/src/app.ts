@@ -18,6 +18,7 @@ import { brettOmnibar } from "./routes/brett-omnibar.js";
 import { brettChat } from "./routes/brett-chat.js";
 import { brettIntelligence } from "./routes/brett-intelligence.js";
 import { brettMemory } from "./routes/brett-memory.js";
+import { knowledgeGraph } from "./routes/knowledge-graph.js";
 import { weather } from "./routes/weather.js";
 import { importRoutes } from "./routes/import.js";
 import { download } from "./routes/download.js";
@@ -34,9 +35,12 @@ import adminEmbeddings from "./routes/admin-embeddings.js";
 import { storageProxy } from "./routes/storage-proxy.js";
 import { releaseProxy } from "./routes/release-proxy.js";
 import { startCronJobs } from "./jobs/cron.js";
-import { setEmbedProcessor } from "@brett/ai";
+import { startMemoryConsolidation } from "./jobs/memory-consolidation.js";
+import { setEmbedProcessor, getProvider } from "@brett/ai";
+import type { AIProviderName } from "@brett/types";
 import { getEmbeddingProvider } from "./lib/embedding-provider.js";
-import { prisma } from "./lib/prisma.js";
+import { decryptToken } from "./lib/encryption.js";
+import { prisma, initPrisma } from "./lib/prisma.js";
 
 export const app = new Hono();
 
@@ -87,6 +91,7 @@ app.route("/brett/omnibar", brettOmnibar);
 app.route("/brett/chat", brettChat);
 app.route("/brett", brettIntelligence);
 app.route("/brett/memory", brettMemory);
+app.route("/api/graph", knowledgeGraph);
 app.route("/weather", weather);
 app.route("/import", importRoutes);
 app.route("/events", sse);
@@ -107,6 +112,25 @@ const embeddingProvider = getEmbeddingProvider();
 if (embeddingProvider) {
   setEmbedProcessor(async (job) => {
     const { embedEntity } = await import("@brett/ai");
+
+    // Resolve AI chat provider for entity fact extraction (best-effort, non-blocking)
+    let aiProvider;
+    let aiProviderName: AIProviderName | undefined;
+    if (["item", "meeting_note"].includes(job.entityType)) {
+      try {
+        const config = await prisma.userAIConfig.findFirst({
+          where: { userId: job.userId, isActive: true, isValid: true },
+        });
+        if (config) {
+          const apiKey = decryptToken(config.encryptedKey);
+          aiProviderName = config.provider as AIProviderName;
+          aiProvider = getProvider(aiProviderName, apiKey);
+        }
+      } catch {
+        // No AI config — skip fact extraction, embedding still proceeds
+      }
+    }
+
     await embedEntity({
       entityType: job.entityType,
       entityId: job.entityId,
@@ -114,11 +138,17 @@ if (embeddingProvider) {
       provider: embeddingProvider,
       prisma,
       skipAutoLink: job.skipAutoLink,
+      aiProvider,
+      aiProviderName,
     });
   });
 }
 
 startCronJobs();
+startMemoryConsolidation();
+
+// Tune HNSW ef_search for better vector recall
+initPrisma().catch((err: unknown) => console.error("[startup] HNSW tuning failed:", err));
 
 // Reconcile embeddings on startup — catches items missed during restarts.
 // Delayed 30s to let the server warm up and avoid competing with initial requests.

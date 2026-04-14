@@ -1,1 +1,1 @@
-export { prisma } from "@brett/api-core";
+export { prisma, initPrisma } from "@brett/api-core";

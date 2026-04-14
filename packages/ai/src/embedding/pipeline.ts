@@ -1,5 +1,9 @@
 import { createHash } from "crypto";
-import type { EmbeddingProvider } from "../providers/types.js";
+import type { EmbeddingProvider, AIProvider } from "../providers/types.js";
+import type { AIProviderName } from "@brett/types";
+import { extractEntityFacts } from "../memory/entity-facts.js";
+import { extractGraph } from "../graph/extractor.js";
+import { upsertGraph } from "../graph/store.js";
 import {
   assembleItemText,
   assembleContentText,
@@ -35,6 +39,10 @@ export interface EmbedEntityParams {
   prisma: any;
   /** Skip auto-link detection (e.g., when inline dup detection already ran) */
   skipAutoLink?: boolean;
+  /** AI chat provider — needed for entity fact extraction */
+  aiProvider?: AIProvider;
+  /** AI provider name — needed for entity fact extraction */
+  aiProviderName?: AIProviderName;
 }
 
 // --- Entity loaders + text assemblers ---
@@ -183,7 +191,7 @@ async function loadAndAssemble(
  * Uses raw SQL for vector operations since Prisma doesn't support the vector type natively.
  */
 export async function embedEntity(params: EmbedEntityParams): Promise<void> {
-  const { entityType, entityId, provider, prisma, skipAutoLink } = params;
+  const { entityType, entityId, provider, prisma, skipAutoLink, aiProvider, aiProviderName } = params;
 
   // 1. Load entity and assemble text chunks
   const result = await loadAndAssemble(entityType, entityId, prisma);
@@ -304,6 +312,24 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
     } catch (err) {
       console.error("[embedding] Auto-link failed:", err);
     }
+  }
+
+  // 7. Extract user facts from entity content (fire-and-forget)
+  if (["item", "meeting_note"].includes(entityType) && aiProvider && aiProviderName) {
+    extractEntityFacts(entityType, entityId, userId, chunks.join("\n\n").slice(0, 4000), aiProvider, aiProviderName, prisma)
+      .catch((err) => console.error("[entity-fact-extraction] Failed:", (err as Error).message));
+  }
+
+  // 8. Extract knowledge graph from entity content (fire-and-forget)
+  if (aiProvider && aiProviderName) {
+    extractGraph(chunks.join("\n\n").slice(0, 4000), userId, aiProvider, aiProviderName, prisma, { type: entityType, entityId })
+      .then((result) => {
+        if (result.entities.length > 0 || result.relationships.length > 0) {
+          upsertGraph(userId, result, prisma, provider, { type: entityType, entityId })
+            .catch((err) => console.error("[graph-upsert]", (err as Error).message));
+        }
+      })
+      .catch((err) => console.error("[graph-extraction]", (err as Error).message));
   }
 }
 

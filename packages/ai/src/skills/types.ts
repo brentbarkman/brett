@@ -1,6 +1,6 @@
 import type { ModelTier, DisplayHint } from "@brett/types";
 import type { ExtendedPrismaClient } from "@brett/api-core";
-import type { AIProvider, EmbeddingProvider } from "../providers/types.js";
+import type { AIProvider, EmbeddingProvider, RerankProvider } from "../providers/types.js";
 
 export interface SkillContext {
   userId: string;
@@ -8,6 +8,8 @@ export interface SkillContext {
   provider?: AIProvider;
   /** Optional embedding provider for semantic search in skills */
   embeddingProvider?: EmbeddingProvider | null;
+  /** Optional rerank provider for post-retrieval reranking */
+  rerankProvider?: RerankProvider | null;
   /** Fire-and-forget callback for content items that need extraction */
   onContentCreated?: (itemId: string, sourceUrl: string) => void;
 }

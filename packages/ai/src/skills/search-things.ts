@@ -1,6 +1,5 @@
 import type { Skill } from "./types.js";
-import { scopedItems } from "./scoped-queries.js";
-import { findMeetingsByQuery } from "./meeting-search.js";
+import { hybridSearch } from "../embedding/search.js";
 
 export const searchThingsSkill: Skill = {
   name: "search_things",
@@ -26,34 +25,66 @@ export const searchThingsSkill: Skill = {
       limit?: number;
     };
 
-    // Search across title, notes, and contentType (so "podcast" finds podcast content)
-    const textFilter = { contains: p.query, mode: "insensitive" as const };
-    const where: Record<string, unknown> = {
-      OR: [
-        { title: textFilter },
-        { notes: textFilter },
-        { contentType: textFilter },
-        { contentTitle: textFilter },
-      ],
+    const limit = Math.min(p.limit ?? 10, 25);
+
+    // Determine which entity types to search.
+    // Both "task" and "content" map to the "item" entity type in the embeddings table.
+    // When no type filter is specified, also search meeting_notes.
+    const entityTypes: string[] = p.type ? ["item"] : ["item", "meeting_note"];
+
+    const searchResults = await hybridSearch(
+      ctx.userId,
+      p.query,
+      entityTypes,
+      ctx.embeddingProvider ?? null,
+      ctx.prisma,
+      limit * 2, // over-fetch to allow post-filtering
+      ctx.rerankProvider ?? null,
+    );
+
+    // Separate item and meeting_note results
+    const itemIds = searchResults
+      .filter((r) => r.entityType === "item")
+      .map((r) => r.entityId);
+    const meetingIds = searchResults
+      .filter((r) => r.entityType === "meeting_note")
+      .map((r) => r.entityId);
+
+    // Fetch full item records for enrichment and post-filtering
+    const itemWhere: Record<string, unknown> = {
+      id: { in: itemIds },
+      userId: ctx.userId,
     };
-    if (p.type) where.type = p.type;
-    if (p.status) where.status = p.status;
+    if (p.type) itemWhere.type = p.type;
+    if (p.status) itemWhere.status = p.status;
 
-    const items = scopedItems(ctx.prisma, ctx.userId);
-    const results = await items.findMany({
-      where,
-      orderBy: { updatedAt: "desc" },
-      take: Math.min(p.limit ?? 10, 25),
-    });
+    const fetchedItems = itemIds.length > 0
+      ? await ctx.prisma.item.findMany({
+          where: itemWhere,
+          take: limit,
+        })
+      : [];
 
-    // Also search meetings for the same query
-    const meetings = await findMeetingsByQuery(ctx.prisma, ctx.userId, p.query, 3);
+    // Re-order fetched items to match hybridSearch ranking order
+    const itemById = new Map(fetchedItems.map((i: any) => [i.id, i]));
+    const results = itemIds
+      .map((id) => itemById.get(id))
+      .filter(Boolean)
+      .slice(0, limit);
+
+    // Fetch full meeting records for enrichment
+    const meetings = meetingIds.length > 0
+      ? await ctx.prisma.meetingNote.findMany({
+          where: { id: { in: meetingIds }, userId: ctx.userId },
+          orderBy: { meetingStartedAt: "desc" },
+          take: 3,
+        })
+      : [];
 
     // Fetch linked Item records for each meeting (these are the actual tasks)
-    const meetingIds = meetings.map((m) => m.id);
-    const linkedItems = meetingIds.length > 0
+    const linkedItems = meetings.length > 0
       ? await ctx.prisma.item.findMany({
-          where: { meetingNoteId: { in: meetingIds }, userId: ctx.userId, source: "Granola" },
+          where: { meetingNoteId: { in: meetings.map((m) => m.id) }, userId: ctx.userId, source: "Granola" },
           select: { id: true, title: true, status: true, dueDate: true, meetingNoteId: true },
           orderBy: { createdAt: "asc" },
         })
