@@ -620,6 +620,7 @@ enum ScoutActivityType {
   config_changed
   cadence_adapted
   budget_alert
+  bootstrap_completed
 }
 
 enum ScoutMemoryType {
@@ -671,6 +672,7 @@ model Scout {
 
   status                     ScoutStatus      @default(active)
   statusLine                 String?
+  bootstrapped               Boolean          @default(false)
   endDate                    DateTime?
   nextRunAt                  DateTime?
 
@@ -695,6 +697,7 @@ model ScoutRun {
   scoutId        String
   scout          Scout          @relation(fields: [scoutId], references: [id], onDelete: Cascade)
   createdAt      DateTime       @default(now())
+  mode           String         @default("standard") // "standard" | "bootstrap"
 
   status         ScoutRunStatus
   searchQueries  Json           @default("[]")
