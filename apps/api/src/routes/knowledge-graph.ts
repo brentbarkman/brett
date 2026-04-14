@@ -12,7 +12,7 @@ knowledgeGraph.get("/entities", async (c) => {
   const user = c.get("user");
   const type = c.req.query("type");
 
-  const entities = await prisma.knowledgeEntity.findMany({
+  const entities = await (prisma as any).knowledgeEntity.findMany({
     where: { userId: user.id, ...(type ? { type } : {}) },
     orderBy: { updatedAt: "desc" },
     take: 100,
@@ -41,7 +41,7 @@ knowledgeGraph.get("/entities/:id/connections", async (c) => {
   const entityId = c.req.param("id");
   const hops = Math.min(parseInt(c.req.query("hops") ?? "2"), 3);
 
-  const entity = await prisma.knowledgeEntity.findFirst({
+  const entity = await (prisma as any).knowledgeEntity.findFirst({
     where: { id: entityId, userId: user.id },
   });
   if (!entity) return c.json({ error: "Entity not found" }, 404);
