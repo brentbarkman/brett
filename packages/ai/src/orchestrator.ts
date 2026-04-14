@@ -36,6 +36,8 @@ export interface OrchestratorParams {
   rerankProvider?: RerankProvider | null;
   /** Called when a content item is created and needs extraction */
   onContentCreated?: (itemId: string, sourceUrl: string) => void;
+  /** Called when a scout is created and needs bootstrap */
+  onScoutCreated?: (scoutId: string) => void;
 }
 
 // ─── Helpers ───
@@ -245,6 +247,7 @@ export async function* orchestrate(
                   embeddingProvider: params.embeddingProvider,
                   rerankProvider: params.rerankProvider,
                   onContentCreated: params.onContentCreated,
+                  onScoutCreated: params.onScoutCreated,
                 });
 
                 // Buffer fire-and-forget results; yield others immediately.

@@ -1,5 +1,4 @@
 import type { Skill } from "./types.js";
-import { humanizeCadence } from "@brett/utils";
 
 const GRADIENT_PAIRS: Array<[string, string]> = [
   ["#f59e0b", "#ef4444"],
@@ -138,11 +137,8 @@ export const createScoutSkill: Skill = {
 
     const cadenceMinIntervalHours = p.cadenceMinIntervalHours ?? 1;
 
-    // nextRunAt = now + cadenceIntervalHours
-    const now = new Date();
-    const nextRunAt = new Date(now.getTime() + p.cadenceIntervalHours * 60 * 60 * 1000);
-
     // budgetResetAt = first day of next month (UTC)
+    const now = new Date();
     const budgetResetAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
     const scout = await ctx.prisma.scout.create({
@@ -164,7 +160,8 @@ export const createScoutSkill: Skill = {
         budgetUsed: 0,
         budgetResetAt,
         status: "active",
-        nextRunAt,
+        nextRunAt: null, // Bootstrap run will set this on completion
+        statusLine: "Surveying the landscape...",
         endDate: p.endDate ? new Date(p.endDate) : null,
       },
     });
@@ -177,13 +174,14 @@ export const createScoutSkill: Skill = {
       },
     });
 
-    const cadenceLabel = humanizeCadence(p.cadenceIntervalHours);
+    // Fire-and-forget bootstrap run
+    ctx.onScoutCreated?.(scout.id);
 
     return {
       success: true,
       data: { id: scout.id, name: scout.name },
       displayHint: { type: "confirmation" },
-      message: `Scout "${scout.name}" is live. First check in ${cadenceLabel}.`,
+      message: `Scout "${scout.name}" is live. Surveying the landscape now...`,
     };
   },
 };

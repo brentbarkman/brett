@@ -127,6 +127,11 @@ brettOmnibar.post(
           runExtraction(itemId, sourceUrl, user.id).catch((err) =>
             console.error(`[omnibar] Content extraction failed for ${itemId}:`, err));
         },
+        onScoutCreated: (scoutId) => {
+          import("../lib/scout-runner.js")
+            .then((mod) => mod.runBootstrapScout(scoutId))
+            .catch((err) => console.error(`[omnibar] Bootstrap failed for ${scoutId}:`, err));
+        },
       },
       session.id,
       { memoryCtx: { userId: user.id, provider, providerName, assistantName: input.assistantName } },

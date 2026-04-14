@@ -12,6 +12,8 @@ export interface SkillContext {
   rerankProvider?: RerankProvider | null;
   /** Fire-and-forget callback for content items that need extraction */
   onContentCreated?: (itemId: string, sourceUrl: string) => void;
+  /** Fire-and-forget callback for newly created scouts that need bootstrap */
+  onScoutCreated?: (scoutId: string) => void;
 }
 
 export interface SkillResult {

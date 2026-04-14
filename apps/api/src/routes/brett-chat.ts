@@ -180,6 +180,11 @@ brettChat.post(
           runExtraction(itemId, sourceUrl, user.id).catch((err) =>
             console.error(`[brett-chat] Content extraction failed for ${itemId}:`, err));
         },
+        onScoutCreated: (scoutId) => {
+          import("../lib/scout-runner.js")
+            .then((mod) => mod.runBootstrapScout(scoutId))
+            .catch((err) => console.error(`[brett-chat] Bootstrap failed for ${scoutId}:`, err));
+        },
       },
       session.id,
       { memoryCtx: { userId: user.id, provider, providerName, itemContext: `User was discussing task "${item.title}"`, assistantName: input.assistantName } },
@@ -295,6 +300,11 @@ brettChat.post(
         onContentCreated: (itemId, sourceUrl) => {
           runExtraction(itemId, sourceUrl, user.id).catch((err) =>
             console.error(`[brett-chat] Content extraction failed for ${itemId}:`, err));
+        },
+        onScoutCreated: (scoutId) => {
+          import("../lib/scout-runner.js")
+            .then((mod) => mod.runBootstrapScout(scoutId))
+            .catch((err) => console.error(`[brett-chat] Bootstrap failed for ${scoutId}:`, err));
         },
       },
       session.id,
