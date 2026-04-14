@@ -11,6 +11,14 @@ export interface RankedResult {
   rank: number;
 }
 
+/** Raw row returned by full-text search queries */
+interface FtsRow {
+  id: string;
+  title: string;
+  snippet: string;
+  fts_rank: number;
+}
+
 export interface SearchResult {
   entityType: string;
   entityId: string;
@@ -81,44 +89,15 @@ export function fuseResults(
   });
 }
 
-// --- Keyword Search ---
+// --- Keyword Search (Postgres Full-Text Search) ---
 
 const KEYWORD_ENTITY_TYPES = ["item", "calendar_event", "meeting_note", "scout_finding"] as const;
 type KeywordEntityType = (typeof KEYWORD_ENTITY_TYPES)[number];
 
 /**
- * Simple relevance score for keyword matches.
- * Title matches score higher than body matches; exact word boundary matches score higher than substring.
- */
-function keywordRelevance(title: string, snippet: string, query: string): number {
-  const lower = query.toLowerCase();
-  const titleLower = (title ?? "").toLowerCase();
-  const snippetLower = (snippet ?? "").toLowerCase();
-
-  let score = 0;
-  // Title contains query → strong signal
-  if (titleLower.includes(lower)) {
-    score += 10;
-    // Exact title match or starts-with → even stronger
-    if (titleLower === lower || titleLower.startsWith(lower + " ") || titleLower.startsWith(lower + ":")) {
-      score += 5;
-    }
-  }
-  // Body/snippet contains query
-  if (snippetLower.includes(lower)) {
-    score += 3;
-  }
-  // Bonus: shorter titles with match are more relevant (precision)
-  if (titleLower.includes(lower) && title.length < 80) {
-    score += 2;
-  }
-  return score;
-}
-
-/**
- * Runs ILIKE search across multiple entity tables.
+ * Runs full-text search across multiple entity tables using Postgres tsvector/tsquery.
+ * Uses GIN-indexed generated columns and ts_rank_cd for BM25-like ranking.
  * Only searches entity types in the `types` array (or all if null).
- * Results are ranked by relevance (title matches > body matches).
  */
 export async function keywordSearch(
   userId: string,
@@ -128,118 +107,126 @@ export async function keywordSearch(
   prisma: any,
   limit = 30
 ): Promise<RankedResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
   const activeTypes: KeywordEntityType[] =
     types === null
       ? [...KEYWORD_ENTITY_TYPES]
       : (types.filter((t) => KEYWORD_ENTITY_TYPES.includes(t as KeywordEntityType)) as KeywordEntityType[]);
 
-  const allResults: Array<RankedResult & { relevance: number }> = [];
+  if (activeTypes.length === 0) return [];
+
+  const allResults: Array<RankedResult & { ftsRank: number }> = [];
+
+  // Weight array for ts_rank_cd: {D, C, B, A}
+  // A=1.0 (title), B=0.6 (contentTitle), C=0.3 (description/body), D=0.1 (notes/location)
+  const weights = "{0.1, 0.3, 0.6, 1.0}";
 
   if (activeTypes.includes("item")) {
-    const items = await prisma.item.findMany({
-      where: {
-        userId,
-        OR: [
-          { title: { contains: query, mode: "insensitive" } },
-          { notes: { contains: query, mode: "insensitive" } },
-          { contentTitle: { contains: query, mode: "insensitive" } },
-          { description: { contains: query, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true, title: true, notes: true, description: true },
-      take: limit,
-    });
-
-    for (const item of items) {
-      const snippet = item.notes ?? item.description ?? "";
+    const rows = await prisma.$queryRaw<FtsRow[]>`
+      SELECT
+        "id",
+        coalesce("title", '') AS "title",
+        coalesce("notes", "description", '') AS "snippet",
+        ts_rank_cd(${Prisma.raw(`'${weights}'::float4[]`)}, "search_vector", plainto_tsquery('english', ${trimmed})) AS "fts_rank"
+      FROM "Item"
+      WHERE "userId" = ${userId}
+        AND "search_vector" @@ plainto_tsquery('english', ${trimmed})
+      ORDER BY "fts_rank" DESC
+      LIMIT ${limit}
+    `;
+    for (const row of rows) {
       allResults.push({
         entityType: "item",
-        entityId: item.id,
-        title: item.title ?? "",
-        snippet,
+        entityId: row.id,
+        title: row.title,
+        snippet: row.snippet,
         rank: 0,
-        relevance: keywordRelevance(item.title ?? "", snippet, query),
+        ftsRank: Number(row.fts_rank),
       });
     }
   }
 
   if (activeTypes.includes("calendar_event")) {
-    const events = await prisma.calendarEvent.findMany({
-      where: {
-        userId,
-        OR: [
-          { title: { contains: query, mode: "insensitive" } },
-          { description: { contains: query, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true, title: true, description: true },
-      take: limit,
-    });
-
-    for (const event of events) {
+    const rows = await prisma.$queryRaw<FtsRow[]>`
+      SELECT
+        "id",
+        coalesce("title", '') AS "title",
+        coalesce("description", '') AS "snippet",
+        ts_rank_cd(${Prisma.raw(`'${weights}'::float4[]`)}, "search_vector", plainto_tsquery('english', ${trimmed})) AS "fts_rank"
+      FROM "CalendarEvent"
+      WHERE "userId" = ${userId}
+        AND "search_vector" @@ plainto_tsquery('english', ${trimmed})
+      ORDER BY "fts_rank" DESC
+      LIMIT ${limit}
+    `;
+    for (const row of rows) {
       allResults.push({
         entityType: "calendar_event",
-        entityId: event.id,
-        title: event.title ?? "",
-        snippet: event.description ?? "",
+        entityId: row.id,
+        title: row.title,
+        snippet: row.snippet,
         rank: 0,
-        relevance: keywordRelevance(event.title ?? "", event.description ?? "", query),
+        ftsRank: Number(row.fts_rank),
       });
     }
   }
 
   if (activeTypes.includes("meeting_note")) {
-    const notes = await prisma.meetingNote.findMany({
-      where: {
-        userId,
-        OR: [
-          { title: { contains: query, mode: "insensitive" } },
-          { summary: { contains: query, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true, title: true, summary: true },
-      take: limit,
-    });
-
-    for (const note of notes) {
+    const rows = await prisma.$queryRaw<FtsRow[]>`
+      SELECT
+        "id",
+        coalesce("title", '') AS "title",
+        coalesce("summary", '') AS "snippet",
+        ts_rank_cd(${Prisma.raw(`'${weights}'::float4[]`)}, "search_vector", plainto_tsquery('english', ${trimmed})) AS "fts_rank"
+      FROM "MeetingNote"
+      WHERE "userId" = ${userId}
+        AND "search_vector" @@ plainto_tsquery('english', ${trimmed})
+      ORDER BY "fts_rank" DESC
+      LIMIT ${limit}
+    `;
+    for (const row of rows) {
       allResults.push({
         entityType: "meeting_note",
-        entityId: note.id,
-        title: note.title ?? "",
-        snippet: note.summary ?? "",
+        entityId: row.id,
+        title: row.title,
+        snippet: row.snippet,
         rank: 0,
-        relevance: keywordRelevance(note.title ?? "", note.summary ?? "", query),
+        ftsRank: Number(row.fts_rank),
       });
     }
   }
 
   if (activeTypes.includes("scout_finding")) {
-    const findings = await prisma.scoutFinding.findMany({
-      where: {
-        scout: { userId },
-        OR: [
-          { title: { contains: query, mode: "insensitive" } },
-          { description: { contains: query, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true, title: true, description: true },
-      take: limit,
-    });
-
-    for (const finding of findings) {
+    // ScoutFinding doesn't have userId directly — JOIN through Scout table
+    const rows = await prisma.$queryRaw<FtsRow[]>`
+      SELECT
+        sf."id",
+        coalesce(sf."title", '') AS "title",
+        coalesce(sf."description", '') AS "snippet",
+        ts_rank_cd(${Prisma.raw(`'${weights}'::float4[]`)}, sf."search_vector", plainto_tsquery('english', ${trimmed})) AS "fts_rank"
+      FROM "ScoutFinding" sf
+      JOIN "Scout" s ON sf."scoutId" = s."id"
+      WHERE s."userId" = ${userId}
+        AND sf."search_vector" @@ plainto_tsquery('english', ${trimmed})
+      ORDER BY "fts_rank" DESC
+      LIMIT ${limit}
+    `;
+    for (const row of rows) {
       allResults.push({
         entityType: "scout_finding",
-        entityId: finding.id,
-        title: finding.title ?? "",
-        snippet: finding.description ?? "",
+        entityId: row.id,
+        title: row.title,
+        snippet: row.snippet,
         rank: 0,
-        relevance: keywordRelevance(finding.title ?? "", finding.description ?? "", query),
+        ftsRank: Number(row.fts_rank),
       });
     }
   }
 
-  // Sort by relevance (descending), then assign 1-based ranks for RRF fusion
-  allResults.sort((a, b) => b.relevance - a.relevance);
+  // Sort by fts_rank (descending), then assign 1-based ranks for RRF fusion
+  allResults.sort((a, b) => b.ftsRank - a.ftsRank);
   return allResults.slice(0, limit).map((r, i) => ({
     entityType: r.entityType,
     entityId: r.entityId,
