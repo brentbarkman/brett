@@ -1,11 +1,11 @@
-import type { ExtendedPrismaClient } from "@brett/api-core";
 import type { EmbeddingProvider } from "../providers/types.js";
 import type { ExtractionResult } from "./types.js";
 
 export async function upsertGraph(
   userId: string,
   extraction: ExtractionResult,
-  prisma: ExtendedPrismaClient,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prisma: any,
   embeddingProvider?: EmbeddingProvider | null,
   sourceContext?: { type: string; entityId: string },
 ): Promise<void> {
@@ -88,7 +88,8 @@ async function embedEntityNode(
   entityId: string,
   name: string,
   provider: EmbeddingProvider,
-  prisma: ExtendedPrismaClient,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prisma: any,
 ): Promise<void> {
   const embedding = await provider.embed(name, "document");
   const vectorStr = `[${embedding.join(",")}]`;
