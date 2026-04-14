@@ -34,6 +34,7 @@ import adminEmbeddings from "./routes/admin-embeddings.js";
 import { storageProxy } from "./routes/storage-proxy.js";
 import { releaseProxy } from "./routes/release-proxy.js";
 import { startCronJobs } from "./jobs/cron.js";
+import { startMemoryConsolidation } from "./jobs/memory-consolidation.js";
 import { setEmbedProcessor, getProvider } from "@brett/ai";
 import type { AIProviderName } from "@brett/types";
 import { getEmbeddingProvider } from "./lib/embedding-provider.js";
@@ -142,6 +143,7 @@ if (embeddingProvider) {
 }
 
 startCronJobs();
+startMemoryConsolidation();
 
 // Tune HNSW ef_search for better vector recall
 initPrisma().catch((err: unknown) => console.error("[startup] HNSW tuning failed:", err));
