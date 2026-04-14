@@ -4,6 +4,7 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { Prisma } from "@brett/api-core";
 import { validateThings3Import } from "@brett/business";
+import { enqueueEmbed } from "@brett/ai";
 
 const importRoutes = new Hono<AuthEnv>();
 
@@ -93,6 +94,25 @@ importRoutes.post("/things3", bodyLimit({ maxSize: 50 * 1024 * 1024 }), async (c
       return c.json({ error: "A list name conflict occurred. Please try again." }, 409);
     }
     throw err;
+  }
+
+  // Queue imported items through the full embedding + extraction pipeline (fire-and-forget)
+  if (result.tasks > 0) {
+    prisma.item
+      .findMany({
+        where: { userId: user.id, source: "Things 3" },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+        take: result.tasks,
+      })
+      .then((items) => {
+        for (const item of items) {
+          enqueueEmbed({ entityType: "item", entityId: item.id, userId: user.id });
+        }
+      })
+      .catch((err) => {
+        console.error("[import] Failed to queue embeddings for imported items:", err);
+      });
   }
 
   return c.json(result, 201);

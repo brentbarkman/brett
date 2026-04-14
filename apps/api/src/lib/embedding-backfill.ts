@@ -10,9 +10,11 @@ interface BackfillResult {
   skippedTables: string[];
 }
 
-export async function runEmbeddingBackfill(): Promise<BackfillResult> {
+export async function runEmbeddingBackfill(options?: { maxPerType?: number }): Promise<BackfillResult> {
   const provider = getEmbeddingProvider();
   if (!provider) return { processed: 0, errors: 0, skippedTables: [] };
+
+  const limit = options?.maxPerType ?? 500;
 
   let processed = 0;
   let errors = 0;
@@ -39,7 +41,7 @@ export async function runEmbeddingBackfill(): Promise<BackfillResult> {
       FROM "Item" i
       LEFT JOIN "Embedding" e ON e."entityType" = 'item' AND e."entityId" = i.id
       WHERE e.id IS NULL
-      LIMIT 500
+      LIMIT ${limit}
     `,
   );
 
@@ -61,7 +63,7 @@ export async function runEmbeddingBackfill(): Promise<BackfillResult> {
       FROM "CalendarEvent" ce
       LEFT JOIN "Embedding" e ON e."entityType" = 'calendar_event' AND e."entityId" = ce.id
       WHERE e.id IS NULL
-      LIMIT 500
+      LIMIT ${limit}
     `,
   );
 
@@ -83,7 +85,7 @@ export async function runEmbeddingBackfill(): Promise<BackfillResult> {
       FROM "MeetingNote" mn
       LEFT JOIN "Embedding" e ON e."entityType" = 'meeting_note' AND e."entityId" = mn.id
       WHERE e.id IS NULL
-      LIMIT 500
+      LIMIT ${limit}
     `,
   );
 
@@ -106,7 +108,7 @@ export async function runEmbeddingBackfill(): Promise<BackfillResult> {
       JOIN "Scout" s ON sf."scoutId" = s.id
       LEFT JOIN "Embedding" e ON e."entityType" = 'scout_finding' AND e."entityId" = sf.id
       WHERE e.id IS NULL
-      LIMIT 500
+      LIMIT ${limit}
     `,
   );
 

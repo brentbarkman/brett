@@ -22,7 +22,7 @@ export const recallMemorySkill: Skill = {
     const { query } = params as { query: string };
 
     const { results, graphContext } = await unifiedRetrieve(
-      { userId: ctx.userId, query },
+      { userId: ctx.userId, query, maxResults: 5 },
       ctx.prisma,
       ctx.embeddingProvider ?? null,
       ctx.rerankProvider,
