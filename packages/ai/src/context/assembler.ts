@@ -108,7 +108,7 @@ async function loadUserFacts(
   userId: string
 ): Promise<Array<{ category: string; key: string; value: string }>> {
   const facts = await prisma.userFact.findMany({
-    where: { userId },
+    where: { userId, validUntil: null }, // Only current facts
     orderBy: { createdAt: "desc" },
     take: MAX_FACTS,
     select: { category: true, key: true, value: true },
