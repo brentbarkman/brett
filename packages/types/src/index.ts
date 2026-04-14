@@ -455,6 +455,7 @@ export type ActivityEntry =
       entryType: "run";
       id: string;
       createdAt: string;
+      mode: ScoutRunMode;
       status: ScoutRunStatus;
       resultCount: number;
       findingsCount: number;

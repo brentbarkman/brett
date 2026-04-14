@@ -3,12 +3,12 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { Prisma } from "@brett/api-core";
 import { publishSSE } from "../lib/sse.js";
-import type { Scout, ScoutSource, CreateScoutInput, ScoutFinding, ActivityEntry, ScoutBudgetSummary, ScoutRunStatus, ScoutActivityType } from "@brett/types";
+import type { Scout, ScoutSource, CreateScoutInput, ScoutFinding, ActivityEntry, ScoutBudgetSummary, ScoutRunStatus, ScoutRunMode, ScoutActivityType } from "@brett/types";
 
 const scouts = new Hono<AuthEnv>();
 
 const VALID_RUN_STATUSES = new Set(["running", "success", "failed", "skipped"]);
-const VALID_ACTIVITY_TYPES = new Set(["created", "paused", "resumed", "completed", "expired", "config_changed", "cadence_adapted", "budget_alert"]);
+const VALID_ACTIVITY_TYPES = new Set(["created", "paused", "resumed", "completed", "expired", "config_changed", "cadence_adapted", "budget_alert", "bootstrap_completed"]);
 
 function asRunStatus(value: string): ScoutRunStatus {
   if (!VALID_RUN_STATUSES.has(value)) {
@@ -701,6 +701,7 @@ scouts.get("/:id/activity", async (c) => {
     entryType: "run" as const,
     id: run.id,
     createdAt: run.createdAt.toISOString(),
+    mode: (run.mode ?? "standard") as ScoutRunMode,
     status: asRunStatus(run.status),
     resultCount: run.resultCount,
     findingsCount: run.findingsCount,
