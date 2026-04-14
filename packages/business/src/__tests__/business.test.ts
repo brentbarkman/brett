@@ -468,6 +468,21 @@ describe("itemToThing", () => {
   it("dueDate is undefined when null", () => {
     expect(itemToThing(makeItem(), NOW).dueDate).toBeUndefined();
   });
+
+  it("passes through sourceId for system:update tasks (drives the Install & Restart button)", () => {
+    const item = makeItem({ sourceId: "system:update" });
+    expect(itemToThing(item, NOW).sourceId).toBe("system:update");
+  });
+
+  it("passes through sourceId for relink:* tasks (drives the Reconnect button)", () => {
+    const item = makeItem({ sourceId: "relink:google_calendar" });
+    expect(itemToThing(item, NOW).sourceId).toBe("relink:google_calendar");
+  });
+
+  it("strips sourceId for non-whitelisted sources (avoids leaking internal ids to the UI)", () => {
+    const item = makeItem({ sourceId: "internal:some-pipeline-id" });
+    expect(itemToThing(item, NOW).sourceId).toBeUndefined();
+  });
 });
 
 // ── validateCreateItem ──
