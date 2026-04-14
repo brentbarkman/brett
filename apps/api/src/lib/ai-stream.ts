@@ -1,5 +1,6 @@
-import { orchestrate, extractFacts, enqueueEmbed } from "@brett/ai";
+import { orchestrate, extractFacts, enqueueEmbed, extractGraph, upsertGraph } from "@brett/ai";
 import { prisma } from "./prisma.js";
+import { getEmbeddingProvider } from "./embedding-provider.js";
 import type { AIProvider } from "@brett/ai";
 import type { AIProviderName, StreamChunk } from "@brett/types";
 
@@ -83,6 +84,14 @@ export function buildStream(
                 enqueueEmbed({ entityType: "conversation", entityId: sessionId, userId: memoryCtx.userId });
                 extractFacts(sessionId, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma, memoryCtx.itemContext, memoryCtx.assistantName)
                   .catch((err) => console.error("[fact-extraction] Failed:", err.message));
+                extractGraph(assistantContentRef.value, memoryCtx.userId, memoryCtx.provider, memoryCtx.providerName, prisma, { type: "conversation", entityId: sessionId })
+                  .then((result) => {
+                    if (result.entities.length > 0 || result.relationships.length > 0) {
+                      upsertGraph(memoryCtx.userId, result, prisma, getEmbeddingProvider(), { type: "conversation", entityId: sessionId })
+                        .catch((err) => console.error("[graph-upsert]", err.message));
+                    }
+                  })
+                  .catch((err) => console.error("[graph-extraction]", err.message));
               }
 
               if (opts?.onDone) {

@@ -2,6 +2,8 @@ import { createHash } from "crypto";
 import type { EmbeddingProvider, AIProvider } from "../providers/types.js";
 import type { AIProviderName } from "@brett/types";
 import { extractEntityFacts } from "../memory/entity-facts.js";
+import { extractGraph } from "../graph/extractor.js";
+import { upsertGraph } from "../graph/store.js";
 import {
   assembleItemText,
   assembleContentText,
@@ -316,6 +318,18 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
   if (["item", "meeting_note"].includes(entityType) && aiProvider && aiProviderName) {
     extractEntityFacts(entityType, entityId, userId, chunks.join("\n\n").slice(0, 4000), aiProvider, aiProviderName, prisma)
       .catch((err) => console.error("[entity-fact-extraction] Failed:", (err as Error).message));
+  }
+
+  // 8. Extract knowledge graph from entity content (fire-and-forget)
+  if (aiProvider && aiProviderName) {
+    extractGraph(chunks.join("\n\n").slice(0, 4000), userId, aiProvider, aiProviderName, prisma, { type: entityType, entityId })
+      .then((result) => {
+        if (result.entities.length > 0 || result.relationships.length > 0) {
+          upsertGraph(userId, result, prisma, provider, { type: entityType, entityId })
+            .catch((err) => console.error("[graph-upsert]", (err as Error).message));
+        }
+      })
+      .catch((err) => console.error("[graph-extraction]", (err as Error).message));
   }
 }
 
