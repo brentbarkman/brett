@@ -126,48 +126,48 @@ export async function extractFacts(
     if (!/^[a-z][a-z0-9_]{1,63}$/.test(fact.key)) continue;
 
     // 7. Temporal upsert: find active fact, supersede if value changed, or create new
+    // Wrapped in a transaction to prevent race conditions on concurrent extractions
     try {
-      const existing = await prisma.userFact.findFirst({
-        where: { userId, key: fact.key, validUntil: null },
-      });
+      await prisma.$transaction(async (tx: any) => {
+        const existing = await tx.userFact.findFirst({
+          where: { userId, key: fact.key, validUntil: null },
+        });
 
-      if (existing && existing.value === fact.value) {
-        // Same value — just touch updatedAt
-        await prisma.userFact.update({
-          where: { id: existing.id },
-          data: { category: fact.category },
-        });
-      } else if (existing) {
-        // Value changed — supersede the old fact and create a new one
-        const newFact = await prisma.userFact.create({
-          data: {
-            userId,
-            category: fact.category,
-            key: fact.key,
-            value: fact.value,
-            sourceSessionId: sessionId,
-            sourceType: "conversation",
-            sourceEntityId: sessionId,
-          },
-        });
-        await prisma.userFact.update({
-          where: { id: existing.id },
-          data: { validUntil: new Date(), supersededBy: newFact.id },
-        });
-      } else {
-        // No existing active fact — create new
-        await prisma.userFact.create({
-          data: {
-            userId,
-            category: fact.category,
-            key: fact.key,
-            value: fact.value,
-            sourceSessionId: sessionId,
-            sourceType: "conversation",
-            sourceEntityId: sessionId,
-          },
-        });
-      }
+        if (existing && existing.value === fact.value) {
+          // Same value — skip (no contradiction)
+          return;
+        } else if (existing) {
+          // Value changed — supersede the old fact and create a new one
+          const newFact = await tx.userFact.create({
+            data: {
+              userId,
+              category: fact.category,
+              key: fact.key,
+              value: fact.value,
+              sourceSessionId: sessionId,
+              sourceType: "conversation",
+              sourceEntityId: sessionId,
+            },
+          });
+          await tx.userFact.update({
+            where: { id: existing.id },
+            data: { validUntil: new Date(), supersededBy: newFact.id },
+          });
+        } else {
+          // No existing active fact — create new
+          await tx.userFact.create({
+            data: {
+              userId,
+              category: fact.category,
+              key: fact.key,
+              value: fact.value,
+              sourceSessionId: sessionId,
+              sourceType: "conversation",
+              sourceEntityId: sessionId,
+            },
+          });
+        }
+      });
     } catch {
       // Silent fail on individual fact errors
     }

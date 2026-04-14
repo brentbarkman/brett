@@ -6,7 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import { registry } from "../lib/ai-registry.js";
 import { buildStream, sseResponse } from "../lib/ai-stream.js";
 import { getUserDayBounds } from "@brett/business";
-import { getEmbeddingProvider } from "../lib/embedding-provider.js";
+import { getEmbeddingProvider, getRerankProvider } from "../lib/embedding-provider.js";
 import { loadEmbeddingContext } from "../lib/embedding-context.js";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
@@ -176,7 +176,7 @@ brettIntelligence.post(
     };
 
     const { stream } = buildStream(
-      { input, provider, providerName, prisma, registry, sessionId: session.id, embeddingProvider },
+      { input, provider, providerName, prisma, registry, sessionId: session.id, embeddingProvider, rerankProvider: getRerankProvider() },
       session.id,
     );
 
@@ -233,7 +233,7 @@ brettIntelligence.post(
     };
 
     const { stream } = buildStream(
-      { input, provider, providerName, prisma, registry, sessionId: session.id, embeddingProvider },
+      { input, provider, providerName, prisma, registry, sessionId: session.id, embeddingProvider, rerankProvider: getRerankProvider() },
       session.id,
       {
         onDone: (content) => {

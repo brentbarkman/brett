@@ -28,6 +28,7 @@ export const recallMemorySkill: Skill = {
       ctx.embeddingProvider ?? null,
       ctx.prisma,
       5,
+      ctx.rerankProvider,
     );
 
     if (results.length === 0) {
