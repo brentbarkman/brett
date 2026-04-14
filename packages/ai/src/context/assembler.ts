@@ -10,6 +10,7 @@ import {
 import { AI_CONFIG } from "../config.js";
 import { getUserDayBounds } from "@brett/business";
 import { resolveTempUnit, convertTemp } from "@brett/utils";
+import { getCachedUserProfile, formatProfileForPrompt } from "../memory/user-profile.js";
 
 // ─── Input types ───
 
@@ -103,12 +104,22 @@ function formatEmbeddingContext(embeddingContext?: string): string {
   return `\n\nRelevant context from past conversations and stored content:\n${wrapUserData("embedding_context", embeddingContext)}`;
 }
 
+async function loadUserProfile(
+  prisma: ExtendedPrismaClient,
+  userId: string,
+): Promise<string> {
+  const profile = await getCachedUserProfile(userId, prisma);
+  if (!profile) return "";
+  const formatted = formatProfileForPrompt(profile);
+  return `\n\nUser profile:\n${wrapUserData("user_profile", formatted)}`;
+}
+
 async function loadUserFacts(
   prisma: ExtendedPrismaClient,
   userId: string
 ): Promise<Array<{ category: string; key: string; value: string }>> {
   const facts = await prisma.userFact.findMany({
-    where: { userId },
+    where: { userId, validUntil: null }, // Only current facts
     orderBy: { createdAt: "desc" },
     take: MAX_FACTS,
     select: { category: true, key: true, value: true },
@@ -207,7 +218,10 @@ async function assembleOmnibar(
   input: OmnibarContext,
   prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
-  const facts = await loadUserFacts(prisma, input.userId);
+  const [facts, profileBlock] = await Promise.all([
+    loadUserFacts(prisma, input.userId),
+    loadUserProfile(prisma, input.userId),
+  ]);
 
   // Only inject scout creation guidance when the user is on the scouts page or explicitly
   // intends to create one. Saves ~400 tokens on every other request.
@@ -215,7 +229,7 @@ async function assembleOmnibar(
   const scoutBlock = isScoutContext ? SCOUT_CREATION_PROMPT : "";
 
   const system =
-    getSystemPrompt(input.assistantName ?? "Brett") + scoutBlock + formatFacts(facts) + formatEmbeddingContext(input.embeddingContext) + currentDateLine();
+    getSystemPrompt(input.assistantName ?? "Brett") + scoutBlock + formatFacts(facts) + profileBlock + formatEmbeddingContext(input.embeddingContext) + currentDateLine();
 
   const messages: Message[] = [];
 
@@ -268,7 +282,10 @@ async function assembleBrettThread(
   input: BrettThreadContext,
   prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
-  const facts = await loadUserFacts(prisma, input.userId);
+  const [facts, profileBlock] = await Promise.all([
+    loadUserFacts(prisma, input.userId),
+    loadUserProfile(prisma, input.userId),
+  ]);
 
   let itemContext = "";
 
@@ -315,6 +332,7 @@ async function assembleBrettThread(
   const system =
     getSystemPrompt(input.assistantName ?? "Brett") +
     formatFacts(facts) +
+    profileBlock +
     itemContext +
     formatEmbeddingContext(input.embeddingContext) +
     currentDateLine();
@@ -333,7 +351,10 @@ async function assembleBriefing(
   prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
   // Briefing needs minimal facts — just enough for tone/context, not the full 20
-  const allFacts = await loadUserFacts(prisma, input.userId);
+  const [allFacts, profileBlock] = await Promise.all([
+    loadUserFacts(prisma, input.userId),
+    loadUserProfile(prisma, input.userId),
+  ]);
   const facts = allFacts.slice(0, 5);
 
   // Validate timezone at point-of-use (defense-in-depth)
@@ -352,6 +373,7 @@ async function assembleBriefing(
   const system =
     getBriefingPrompt(input.assistantName ?? "Brett") +
     formatFacts(facts) +
+    profileBlock +
     formatEmbeddingContext(input.embeddingContext) +
     `\nCurrent date: ${currentDate}` +
     `\nCurrent timezone: ${safeTimezone}`;
@@ -501,7 +523,10 @@ async function assembleBrettsTake(
   input: BrettsTakeContext,
   prisma: ExtendedPrismaClient
 ): Promise<AssembledContext> {
-  const facts = await loadUserFacts(prisma, input.userId);
+  const [facts, profileBlock] = await Promise.all([
+    loadUserFacts(prisma, input.userId),
+    loadUserProfile(prisma, input.userId),
+  ]);
 
   const user = await prisma.user.findFirst({
     where: { id: input.userId },
@@ -605,6 +630,7 @@ async function assembleBrettsTake(
   const system =
     getBrettsTakePrompt(input.assistantName ?? "Brett") +
     formatFacts(facts) +
+    profileBlock +
     formatEmbeddingContext(input.embeddingContext) +
     `\nCurrent date: ${currentDate}` +
     `\nCurrent time: ${currentTime}` +

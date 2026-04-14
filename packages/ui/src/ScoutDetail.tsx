@@ -21,6 +21,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   ChevronDown,
+  Compass,
 } from "lucide-react";
 import type {
   Scout,
@@ -946,6 +947,8 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         <SkipForward size={14} className="text-white/30" />
       );
 
+    const runLabel = entry.mode === "bootstrap" ? "Initial survey" : "Run";
+
     const stats = [
       entry.resultCount > 0 && `${entry.resultCount} searched`,
       entry.findingsCount > 0 && `${entry.findingsCount} found`,
@@ -970,7 +973,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-white/70 capitalize">
-              Run {entry.status}
+              {runLabel} {entry.status}
             </span>
             {stats.length > 0 && (
               <span className="text-xs text-white/40">
@@ -1004,7 +1007,11 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
   return (
     <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
       <div className="mt-0.5 flex-shrink-0">
-        <Activity size={14} className="text-white/40" />
+        {entry.type === "bootstrap_completed" ? (
+          <Compass size={14} className="text-brett-gold" />
+        ) : (
+          <Activity size={14} className="text-white/40" />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <span className="text-xs text-white/70">{entry.description}</span>

@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { UsersPage } from "./pages/UsersPage";
 import { ScoutsPage } from "./pages/ScoutsPage";
 import { AIUsagePage } from "./pages/AIUsagePage";
+import { MemoryPage } from "./pages/MemoryPage";
 
 export function App() {
   return (
@@ -14,6 +15,7 @@ export function App() {
         <Route path="users" element={<UsersPage />} />
         <Route path="scouts" element={<ScoutsPage />} />
         <Route path="ai-usage" element={<AIUsagePage />} />
+        <Route path="memory" element={<MemoryPage />} />
       </Route>
     </Routes>
   );

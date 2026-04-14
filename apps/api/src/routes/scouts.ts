@@ -1,14 +1,15 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
+import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { Prisma } from "@brett/api-core";
 import { publishSSE } from "../lib/sse.js";
-import type { Scout, ScoutSource, CreateScoutInput, ScoutFinding, ActivityEntry, ScoutBudgetSummary, ScoutRunStatus, ScoutActivityType } from "@brett/types";
+import type { Scout, ScoutSource, CreateScoutInput, ScoutFinding, ActivityEntry, ScoutBudgetSummary, ScoutRunStatus, ScoutRunMode, ScoutActivityType } from "@brett/types";
 
 const scouts = new Hono<AuthEnv>();
 
 const VALID_RUN_STATUSES = new Set(["running", "success", "failed", "skipped"]);
-const VALID_ACTIVITY_TYPES = new Set(["created", "paused", "resumed", "completed", "expired", "config_changed", "cadence_adapted", "budget_alert"]);
+const VALID_ACTIVITY_TYPES = new Set(["created", "paused", "resumed", "completed", "expired", "config_changed", "cadence_adapted", "budget_alert", "bootstrap_completed"]);
 
 function asRunStatus(value: string): ScoutRunStatus {
   if (!VALID_RUN_STATUSES.has(value)) {
@@ -48,6 +49,7 @@ function serializeScout(scout: any, extras?: { findingsCount?: number; lastRun?:
     budgetTotal: scout.budgetTotal,
     status: scout.status,
     statusLine: scout.statusLine ?? undefined,
+    bootstrapped: scout.bootstrapped ?? false,
     endDate: scout.endDate?.toISOString() ?? undefined,
     nextRunAt: scout.nextRunAt?.toISOString() ?? undefined,
     lastRun: extras?.lastRun ?? undefined,
@@ -98,7 +100,7 @@ scouts.get("/", async (c) => {
 });
 
 // POST /scouts — create scout
-scouts.post("/", async (c) => {
+scouts.post("/", rateLimiter(5), async (c) => {
   const user = c.get("user");
   const body = (await c.req.json()) as CreateScoutInput;
 
@@ -136,6 +138,14 @@ scouts.post("/", async (c) => {
     return c.json({ error: "cadenceMinIntervalHours must be at least 0.25 (15 minutes)" }, 400);
   }
 
+  // Budget bounds: min 2 (bootstrap + at least 1 regular run), max 500
+  if (typeof body.budgetTotal !== "number" || body.budgetTotal < 2) {
+    return c.json({ error: "budgetTotal must be at least 2" }, 400);
+  }
+  if (body.budgetTotal > 500) {
+    return c.json({ error: "budgetTotal must be 500 or fewer" }, 400);
+  }
+
   // Max 20 active scouts per user
   const activeCount = await prisma.scout.count({
     where: { userId: user.id, status: { not: "completed" } },
@@ -144,7 +154,6 @@ scouts.post("/", async (c) => {
     return c.json({ error: "Maximum of 20 active scouts allowed" }, 400);
   }
 
-  const nextRunAt = new Date(Date.now() + body.cadenceIntervalHours * 3600000);
   const budgetResetAt = startOfNextMonth();
 
   const created = await prisma.scout.create({
@@ -164,7 +173,8 @@ scouts.post("/", async (c) => {
       cadenceCurrentIntervalHours: body.cadenceIntervalHours,
       budgetTotal: body.budgetTotal,
       budgetResetAt,
-      nextRunAt,
+      nextRunAt: null,
+      statusLine: "Surveying the landscape...",
       endDate: body.endDate ? new Date(body.endDate) : null,
       conversationSessionId: body.conversationSessionId ?? null,
       activity: {
@@ -177,6 +187,11 @@ scouts.post("/", async (c) => {
   });
 
   publishSSE(user.id, { type: "scout.status.changed", payload: { scoutId: created.id, status: created.status } });
+
+  // Fire-and-forget bootstrap run
+  import("../lib/scout-runner.js")
+    .then((mod) => mod.runBootstrapScout(created.id))
+    .catch((err) => console.error(`[scouts] Bootstrap failed for ${created.id}:`, err));
 
   return c.json(serializeScout(created, { findingsCount: 0 }), 201);
 });
@@ -695,6 +710,7 @@ scouts.get("/:id/activity", async (c) => {
     entryType: "run" as const,
     id: run.id,
     createdAt: run.createdAt.toISOString(),
+    mode: (run.mode ?? "standard") as ScoutRunMode,
     status: asRunStatus(run.status),
     resultCount: run.resultCount,
     findingsCount: run.findingsCount,

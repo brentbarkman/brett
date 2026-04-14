@@ -3,6 +3,8 @@
 export type {
   AIProvider,
   EmbeddingProvider,
+  RerankProvider,
+  RerankResult,
   ChatParams,
   Message,
   ToolDefinition,
@@ -10,6 +12,7 @@ export type {
 export { getProvider } from "./providers/factory.js";
 export { OpenAIEmbeddingProvider } from "./providers/embedding.js";
 export { VoyageEmbeddingProvider } from "./providers/voyage.js";
+export { VoyageRerankProvider } from "./providers/voyage-rerank.js";
 export { resolveModel, MODEL_MAP } from "./router.js";
 
 // Skills
@@ -70,13 +73,41 @@ export type { OrchestratorParams } from "./orchestrator.js";
 
 // Memory
 export { extractFacts } from "./memory/facts.js";
+export { extractEntityFacts } from "./memory/entity-facts.js";
+export {
+  validateFacts,
+  parseLLMFactResponse,
+  INJECTION_PATTERN,
+  TAG_INJECTION_PATTERN,
+  VALID_CATEGORIES,
+} from "./memory/validation.js";
+export type { RawFact } from "./memory/validation.js";
 export { embedConversation, searchSimilar } from "./memory/embeddings.js";
 export { logUsage } from "./memory/usage.js";
 export type { UsageEntry } from "./memory/usage.js";
+export { consolidateUserMemory, runConsolidation } from "./memory/consolidation.js";
+export {
+  buildUserProfile,
+  getCachedUserProfile,
+  invalidateProfileCache,
+  formatProfileForPrompt,
+} from "./memory/user-profile.js";
+export type { UserProfile } from "./memory/user-profile.js";
+
+// Graph extraction
+export { extractGraph, parseAndValidate as parseAndValidateGraph } from "./graph/extractor.js";
+export { upsertGraph } from "./graph/store.js";
+export type { ExtractedEntity, ExtractedRelationship, ExtractionResult } from "./graph/types.js";
+export { VALID_GRAPH_ENTITY_TYPES, VALID_RELATIONSHIP_TYPES } from "./graph/types.js";
+export { findConnected, findEntitiesBySimilarity, buildGraphContext } from "./graph/query.js";
 
 // MCP
 export type { MCPClient } from "./mcp/client.js";
 export { createGranolaClient } from "./mcp/granola.js";
+
+// Retrieval
+export { unifiedRetrieve } from "./retrieval/router.js";
+export type { RetrievalContext, RetrievalResult } from "./retrieval/types.js";
 
 // Context
 export {
@@ -85,6 +116,7 @@ export {
   getBrettsTakePrompt,
   getFactExtractionPrompt,
   SCOUT_CREATION_PROMPT,
+  SECURITY_BLOCK,
 } from "./context/system-prompts.js";
 export { assembleContext } from "./context/assembler.js";
 export type { AssemblerInput, AssembledContext } from "./context/assembler.js";

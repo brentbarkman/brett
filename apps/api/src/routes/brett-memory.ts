@@ -11,13 +11,16 @@ brettMemory.get("/facts", async (c) => {
   const user = c.get("user");
 
   const facts = await prisma.userFact.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, validUntil: null },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
       category: true,
       key: true,
       value: true,
+      confidence: true,
+      sourceType: true,
+      validFrom: true,
       createdAt: true,
       updatedAt: true,
     },

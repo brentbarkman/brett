@@ -1,5 +1,5 @@
 import type { Skill, SkillContext } from "./types.js";
-import { hybridSearch } from "../embedding/search.js";
+import { unifiedRetrieve } from "../retrieval/router.js";
 
 export const recallMemorySkill: Skill = {
   name: "recall_memory",
@@ -21,16 +21,14 @@ export const recallMemorySkill: Skill = {
   async execute(params: unknown, ctx: SkillContext) {
     const { query } = params as { query: string };
 
-    const results = await hybridSearch(
-      ctx.userId,
-      query,
-      null, // Search all entity types
-      ctx.embeddingProvider ?? null,
+    const { results, graphContext } = await unifiedRetrieve(
+      { userId: ctx.userId, query, maxResults: 5 },
       ctx.prisma,
-      5,
+      ctx.embeddingProvider ?? null,
+      ctx.rerankProvider,
     );
 
-    if (results.length === 0) {
+    if (results.length === 0 && !graphContext) {
       return {
         success: true,
         data: null,
@@ -39,13 +37,20 @@ export const recallMemorySkill: Skill = {
     }
 
     const formatted = results
-      .map((r, i) => `${i + 1}. ${r.snippet.slice(0, 300)}`)
+      .map((r, i) => `${i + 1}. ${r.content.slice(0, 300)}`)
       .join("\n\n");
+
+    const message = [
+      `Found ${results.length} relevant past conversations:\n\n${formatted}`,
+      graphContext ? `\nGraph context:\n${graphContext}` : "",
+    ]
+      .filter(Boolean)
+      .join("");
 
     return {
       success: true,
       data: { memories: results },
-      message: `Found ${results.length} relevant past conversations:\n\n${formatted}`,
+      message,
     };
   },
 };

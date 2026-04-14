@@ -1,6 +1,7 @@
-import { hybridSearch } from "@brett/ai";
+import { unifiedRetrieve } from "@brett/ai";
 import type { EmbeddingProvider } from "@brett/ai";
 import type { ExtendedPrismaClient } from "@brett/api-core";
+import { getRerankProvider } from "./embedding-provider.js";
 
 // Per-session cache — avoids redundant hybrid searches in multi-turn conversations.
 // Key: "userId:sessionId", Value: { context, cachedAt }
@@ -16,10 +17,10 @@ setInterval(() => {
   }
 }, 60_000);
 
-function formatResults(results: Array<{ entityType: string; snippet: string }>): string {
+function formatResults(results: Array<{ entityType: string; content: string }>): string {
   return results
     .map((r) => {
-      const snippet = r.snippet.slice(0, 300);
+      const snippet = r.content.slice(0, 300);
       const label = r.entityType === "conversation" ? "Past conversation" : r.entityType.replace("_", " ");
       return `[${label}] ${snippet}`;
     })
@@ -28,10 +29,11 @@ function formatResults(results: Array<{ entityType: string; snippet: string }>):
 
 /**
  * Load relevant embedding context for a given text query.
- * Returns a formatted string of relevant snippets, or empty string if none found.
+ * Uses the unified retrieval router which combines hybrid search (keyword + vector)
+ * with knowledge graph context.
  *
  * When a sessionId is provided, caches the result for 5 minutes to avoid
- * redundant hybrid searches in multi-turn conversations about the same topic.
+ * redundant retrieval in multi-turn conversations about the same topic.
  */
 export async function loadEmbeddingContext(
   userId: string,
@@ -51,8 +53,19 @@ export async function loadEmbeddingContext(
   }
 
   try {
-    const results = await hybridSearch(userId, text, null, provider, prisma, limit);
-    const context = results.length === 0 ? "" : formatResults(results);
+    const { results, graphContext } = await unifiedRetrieve(
+      { userId, query: text, sessionId, maxResults: limit },
+      prisma,
+      provider,
+      getRerankProvider(),
+    );
+
+    let context = results.length === 0 ? "" : formatResults(results);
+
+    // Append graph context wrapped in user_data tags for security
+    if (graphContext) {
+      context += `\n\n<user_data label="graph_context">\n${graphContext}\n</user_data>`;
+    }
 
     // Cache for session reuse
     if (sessionId) {

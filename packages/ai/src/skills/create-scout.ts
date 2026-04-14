@@ -1,5 +1,4 @@
 import type { Skill } from "./types.js";
-import { humanizeCadence } from "@brett/utils";
 
 const GRADIENT_PAIRS: Array<[string, string]> = [
   ["#f59e0b", "#ef4444"],
@@ -113,8 +112,8 @@ export const createScoutSkill: Skill = {
     if (p.cadenceMinIntervalHours !== undefined && p.cadenceMinIntervalHours < 0.25) {
       return { success: false, message: "Minimum cadence interval must be at least 0.25 hours (15 minutes)." };
     }
-    if (!p.budgetTotal || p.budgetTotal <= 0) {
-      return { success: false, message: "Budget total must be a positive integer." };
+    if (!p.budgetTotal || p.budgetTotal < 2) {
+      return { success: false, message: "Budget total must be at least 2 (one for initial survey, one for regular monitoring)." };
     }
     if (p.budgetTotal > 500) {
       return { success: false, message: "Budget total must be 500 or fewer runs per month." };
@@ -138,11 +137,8 @@ export const createScoutSkill: Skill = {
 
     const cadenceMinIntervalHours = p.cadenceMinIntervalHours ?? 1;
 
-    // nextRunAt = now + cadenceIntervalHours
-    const now = new Date();
-    const nextRunAt = new Date(now.getTime() + p.cadenceIntervalHours * 60 * 60 * 1000);
-
     // budgetResetAt = first day of next month (UTC)
+    const now = new Date();
     const budgetResetAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
     const scout = await ctx.prisma.scout.create({
@@ -164,7 +160,8 @@ export const createScoutSkill: Skill = {
         budgetUsed: 0,
         budgetResetAt,
         status: "active",
-        nextRunAt,
+        nextRunAt: null, // Bootstrap run will set this on completion
+        statusLine: "Surveying the landscape...",
         endDate: p.endDate ? new Date(p.endDate) : null,
       },
     });
@@ -177,13 +174,14 @@ export const createScoutSkill: Skill = {
       },
     });
 
-    const cadenceLabel = humanizeCadence(p.cadenceIntervalHours);
+    // Fire-and-forget bootstrap run
+    ctx.onScoutCreated?.(scout.id);
 
     return {
       success: true,
       data: { id: scout.id, name: scout.name },
       displayHint: { type: "confirmation" },
-      message: `Scout "${scout.name}" is live. First check in ${cadenceLabel}.`,
+      message: `Scout "${scout.name}" is live. Surveying the landscape now...`,
     };
   },
 };

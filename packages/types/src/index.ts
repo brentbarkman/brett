@@ -333,6 +333,7 @@ export type ScoutStatus = "active" | "paused" | "completed" | "expired";
 export type ScoutSensitivity = "low" | "medium" | "high";
 export type ScoutAnalysisTier = "standard" | "deep";
 export type ScoutRunStatus = "running" | "success" | "failed" | "skipped";
+export type ScoutRunMode = "standard" | "bootstrap";
 export type FindingType = "insight" | "article" | "task";
 export type ScoutActivityType =
   | "created"
@@ -342,7 +343,8 @@ export type ScoutActivityType =
   | "expired"
   | "config_changed"
   | "cadence_adapted"
-  | "budget_alert";
+  | "budget_alert"
+  | "bootstrap_completed";
 
 export type ScoutMemoryType = "factual" | "judgment" | "pattern";
 export type ScoutMemoryStatus = "active" | "superseded" | "removed" | "user_deleted";
@@ -372,6 +374,7 @@ export interface Scout {
   budgetTotal: number;
   status: ScoutStatus;
   statusLine?: string;
+  bootstrapped: boolean;
   endDate?: string;
   nextRunAt?: string;
   lastRun?: string;
@@ -431,6 +434,7 @@ export interface ScoutConsolidation {
 export interface ScoutRun {
   id: string;
   scoutId: string;
+  mode: ScoutRunMode;
   status: ScoutRunStatus;
   searchQueries: string[];
   resultCount: number;
@@ -451,6 +455,7 @@ export type ActivityEntry =
       entryType: "run";
       id: string;
       createdAt: string;
+      mode: ScoutRunMode;
       status: ScoutRunStatus;
       resultCount: number;
       findingsCount: number;

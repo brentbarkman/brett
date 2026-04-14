@@ -1,4 +1,4 @@
-import type { AIProvider, EmbeddingProvider, Message } from "./providers/types.js";
+import type { AIProvider, EmbeddingProvider, RerankProvider, Message } from "./providers/types.js";
 import type { AIProviderName, ModelTier, StreamChunk } from "@brett/types";
 import type { ExtendedPrismaClient } from "@brett/api-core";
 import { resolveModel } from "./router.js";
@@ -32,8 +32,12 @@ export interface OrchestratorParams {
   logUsage?: boolean;
   /** Optional embedding provider for semantic search in skills */
   embeddingProvider?: EmbeddingProvider | null;
+  /** Optional rerank provider for post-retrieval reranking in skills */
+  rerankProvider?: RerankProvider | null;
   /** Called when a content item is created and needs extraction */
   onContentCreated?: (itemId: string, sourceUrl: string) => void;
+  /** Called when a scout is created and needs bootstrap */
+  onScoutCreated?: (scoutId: string) => void;
 }
 
 // ─── Helpers ───
@@ -241,7 +245,9 @@ export async function* orchestrate(
                   prisma,
                   provider,
                   embeddingProvider: params.embeddingProvider,
+                  rerankProvider: params.rerankProvider,
                   onContentCreated: params.onContentCreated,
+                  onScoutCreated: params.onScoutCreated,
                 });
 
                 // Buffer fire-and-forget results; yield others immediately.
