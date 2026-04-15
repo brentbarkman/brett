@@ -555,15 +555,15 @@ export function Omnibar({
             </div>
           )}
 
-          {/* Task Created — inline confirmation */}
+          {/* Task Created — inline confirmation. Matches SkillResultCard's
+              task_created style: small check icon + muted text, no colored
+              accent bars. "Whisper, don't shout." */}
           {confirmedTask && (
-            <div className="border-t border-white/10">
-              <div className="flex items-center gap-3 px-4 py-3 border-l-2 border-brett-teal/40 ml-4">
-                <Check size={14} className="text-brett-teal flex-shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-sm text-white/85 font-medium truncate">{confirmedTask}</div>
-                  <div className="text-[11px] text-white/40">Added to Inbox</div>
-                </div>
+            <div className="border-t border-white/10 px-4 py-3 flex items-start gap-2">
+              <Check size={14} className="text-brett-teal/70 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-sm text-white/70 truncate">{confirmedTask}</div>
+                <div className="text-[11px] text-white/30">Added to Inbox</div>
               </div>
             </div>
           )}
