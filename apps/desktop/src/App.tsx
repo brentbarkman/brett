@@ -516,9 +516,11 @@ export function App() {
   });
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">("playing");
   const handleAwakeningEnded = () => {
-    // Hold on the rest frame for 500ms, then fade out over 500ms, then unmount
+    // Hold on the rest frame for 500ms, then cross-fade for 700ms:
+    // cover fades out AND UI fades in simultaneously, revealing the
+    // settled LivingBackground + app chrome in one smooth motion.
     setTimeout(() => setAwakeningPhase("fading"), 500);
-    setTimeout(() => setAwakeningPhase("done"), 1000);
+    setTimeout(() => setAwakeningPhase("done"), 500 + 700);
   };
 
   // Safety: if the video element neither ends nor errors within 5s of mount
@@ -983,7 +985,7 @@ export function App() {
             current-segment image is revealed smoothly. */}
         {awakening.status !== "skip" && awakeningPhase !== "done" && (
           <div
-            className="absolute inset-0 z-[5] bg-black transition-opacity duration-500 pointer-events-none"
+            className="absolute inset-0 z-[5] bg-black transition-opacity duration-700 pointer-events-none"
             style={{ opacity: awakeningPhase === "fading" ? 0 : 1 }}
           >
             {awakening.status === "play" && (
@@ -997,8 +999,14 @@ export function App() {
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
 
-        {/* Main Layout Shell */}
-        <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
+        {/* Main Layout Shell — hidden during awakening so the video plays alone.
+            Fades in (700ms) once awakeningPhase leaves "playing". For skip
+            cases (reduced motion / session-already-played), phase is forced
+            to "done" synchronously so this is visible immediately. */}
+        <div
+          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0 transition-opacity duration-700 ease-out"
+          style={{ opacity: awakeningPhase === "playing" ? 0 : 1 }}
+        >
           {/* Left Column: Navigation */}
           <LeftNav
             isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScoutId !== null)}
