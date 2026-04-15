@@ -51,6 +51,14 @@ export async function getLatestVersion(): Promise<{ version: string; dmg?: strin
     return cachedVersion;
   }
 
+  // Short-circuit when no release storage is configured. Without this guard
+  // the S3 client falls back to AWS's real endpoints + retry/backoff, which
+  // can stall for 10+ seconds in CI before failing — long enough to blow
+  // through Vitest's 5s default timeout.
+  if (!process.env.RELEASE_STORAGE_ENDPOINT && !process.env.STORAGE_ENDPOINT) {
+    return cachedVersion || { version: "0.0.1" };
+  }
+
   try {
     const { GetObjectCommand } = await import("@aws-sdk/client-s3");
     const { s3, bucket } = await getReleaseClient();
