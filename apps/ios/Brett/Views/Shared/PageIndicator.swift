@@ -9,6 +9,9 @@ import SwiftUI
 struct PageIndicator: View {
     let pages: [String]
     let currentIndex: Int
+    /// Optional hook for VoiceOver's adjustable action (rotor swipe up/down).
+    /// When `nil` the indicator stays read-only.
+    var onAdjust: ((AccessibilityAdjustmentDirection) -> Void)? = nil
 
     /// Width/height of inactive dots.
     private let dotSize: CGFloat = 5
@@ -31,7 +34,23 @@ struct PageIndicator: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Page \(currentIndex + 1) of \(pages.count)"))
+        .accessibilityLabel(Text(accessibilityLabel))
+        .accessibilityAdjustableAction { direction in
+            onAdjust?(direction)
+        }
+    }
+
+    /// Reads as e.g. "Today, page 2 of 3" — pairs the positional info with
+    /// the human-friendly page name so VoiceOver users know *where* they are,
+    /// not just *which index* they're on.
+    private var accessibilityLabel: String {
+        guard !pages.isEmpty else { return "Page indicator" }
+        let clamped = max(0, min(currentIndex, pages.count - 1))
+        return AccessibilityLabels.pageIndicator(
+            current: clamped + 1,
+            total: pages.count,
+            name: pages[clamped]
+        )
     }
 
     /// Spring used for dot transitions. Falls through to `nil` (instant) when

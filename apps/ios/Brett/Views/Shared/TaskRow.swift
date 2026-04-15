@@ -137,8 +137,29 @@ struct TaskRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(viewModel.title), \(viewModel.listName ?? ""), \(viewModel.isCompleted ? "completed" : "pending")")
-        .accessibilityHint("Double-tap for details")
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityHint("Double-tap to open details.")
+        .dynamicTypeClamp()
+    }
+
+    /// VoiceOver label — built from the `ViewModel` so the announced whisper
+    /// tracks the visual one (time, captured-ago, list, completion). Kept
+    /// inside the row rather than in `AccessibilityLabels` because the row
+    /// supports both the mock-item path and the real-Item path; routing both
+    /// through the shared helper would require threading the raw `Item` in
+    /// through the mock initialiser as well.
+    private var accessibilityLabelText: String {
+        var parts: [String] = [viewModel.title]
+        if let time = viewModel.timeLabel {
+            parts.append("due \(time)")
+        } else if let captured = viewModel.capturedLabel {
+            parts.append("captured \(captured)")
+        }
+        if let listName = viewModel.listName, !listName.isEmpty {
+            parts.append("in \(listName) list")
+        }
+        parts.append(viewModel.isCompleted ? "Completed" : "Pending")
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - View model

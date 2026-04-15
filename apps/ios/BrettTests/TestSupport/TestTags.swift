@@ -20,4 +20,5 @@ extension Tag {
     @Tag static var models: Self
     @Tag static var smoke: Self
     @Tag static var views: Self
+    @Tag static var accessibility: Self
 }
