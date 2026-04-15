@@ -62,6 +62,8 @@ export interface OmnibarProps {
   placeholder?: string;
   showScoutAction?: boolean;
   assistantName?: string;
+  isMinimized?: boolean;
+  onMinimize?: () => void;
 }
 
 type Suggestion = {
@@ -105,6 +107,8 @@ export function Omnibar({
   placeholder: placeholderOverride,
   showScoutAction,
   assistantName = "Brett",
+  isMinimized,
+  onMinimize,
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -171,11 +175,13 @@ export function Omnibar({
   };
 
   useClickOutside(containerRef, () => {
-    // Don't close on click-outside when there's an active conversation —
-    // user might be clicking on a task or elsewhere and wants to come back.
-    // Only suggestions/search dropdowns should close on click-outside.
-    if (isOpen && !isStreaming && messages.length === 0) {
+    if (!isOpen || isStreaming) return;
+    if (messages.length === 0) {
       animateClose();
+    } else if (onMinimize) {
+      // Preserve conversation state but collapse to bar form. The next open()
+      // (or click-to-focus the bar) restores the conversation.
+      onMinimize();
     }
   }, isOpen);
 
@@ -248,6 +254,7 @@ export function Omnibar({
   }, [confirmedTask, animateClose]);
 
   const hasConversation = messages.length > 0;
+  const showConversation = hasConversation && !isMinimized;
 
   const showSuggestions = isOpen && (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
   const showSearchResults = isOpen && !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));
@@ -433,7 +440,7 @@ export function Omnibar({
         `}
       >
         {/* Top Bar — visible when collapsed or when open without conversation */}
-        {!hasConversation && (
+        {!showConversation && (
           <div
             className="flex items-center h-12 px-4 cursor-text"
             onClick={() => !isOpen && onOpen()}
@@ -447,7 +454,7 @@ export function Omnibar({
             <input
               ref={!hasConversation ? inputRef : undefined}
               type="text"
-              placeholder={placeholderOverride ?? (forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? `Ask ${assistantName} anything...` : "Create a task or search...")}
+              placeholder={placeholderOverride ?? (hasConversation && isMinimized ? "Resume conversation..." : forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? `Ask ${assistantName} anything...` : "Create a task or search...")}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
@@ -587,7 +594,7 @@ export function Omnibar({
         </div>
 
         {/* Conversation Area — replaces the top bar entirely */}
-        {isOpen && hasConversation && (
+        {isOpen && showConversation && (
           <div>
             {/* Messages */}
             <div ref={chatContainerRef} onScroll={handleScroll} className="max-h-[450px] overflow-y-auto scrollbar-hide p-4 space-y-4">
