@@ -1041,7 +1041,13 @@ export function App() {
           gradient={background.gradient}
           nextGradient={background.nextGradient}
           awakeningZoom={
-            awakeningMode === "kenburns" && awakening.status === "play"
+            // Note: use status !== "skip" (not status === "play") so the
+            // image is already at scale(1.15) on first paint during the
+            // brief "pending" period. Otherwise the transform animates
+            // 1 → 1.15 when status resolves, then gets interrupted 80ms
+            // later by the 1.15 → 1 transition — effectively cancelling
+            // itself out and leaving almost no visible zoom.
+            awakeningMode === "kenburns" && awakening.status !== "skip"
               ? awakeningPhase === "playing"
               : undefined
           }
