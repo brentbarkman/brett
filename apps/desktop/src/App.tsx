@@ -352,6 +352,9 @@ export function App() {
   // Today's bounds — recomputed when the UTC day rolls over so queries that
   // depend on "today" stay fresh without requiring an app reload.
   const todayKey = useTodayKey();
+  // todayKey triggers recompute on UTC day rollover; localDayBounds uses local
+  // day, so we can't derive it from todayKey directly.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const todayBounds = useMemo(() => localDayBounds(new Date()), [todayKey]);
 
   // Sidebar calendar date navigation
@@ -435,7 +438,7 @@ export function App() {
 
   // Today badge count — active items due this week or earlier. Recomputed
   // when the UTC day rolls over (via shared todayKey above).
-  const endOfWeekISO = useMemo(() => getEndOfWeekUTC().toISOString(), [todayKey]);
+  const endOfWeekISO = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
   const { data: activeThingsForCount = [] } = useActiveThings(endOfWeekISO);
 
   // Upcoming badge count

@@ -74,8 +74,9 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   // Date boundaries — recomputed when the UTC day rolls over so tasks coming
   // due today become visible without requiring an app reload.
   const todayKey = useTodayKey();
-  const dueBefore = useMemo(() => getEndOfWeekUTC().toISOString(), [todayKey]);
-  const completedAfter = useMemo(() => getTodayUTC().toISOString(), [todayKey]);
+  const dueBefore = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
+  // todayKey is already `getTodayUTC().toISOString()`, so use it directly.
+  const completedAfter = todayKey;
 
   // Two explicit queries: active items due this week or earlier, done items from today
   const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);
