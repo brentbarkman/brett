@@ -124,21 +124,16 @@ function getStoredAwakeningMode(): AwakeningMode {
   return "video";
 }
 
-// ----- Awakening-video timing (tune freely without re-encoding the clips) -----
+// ----- Awakening timing -----
 /** Max playback length before auto-pause + onEnded. Overrides natural video
  *  duration if shorter. Set to a larger number than the source clip to let
  *  the video end naturally. */
 const AWAKENING_MAX_DURATION_S = 1.5;
-/** Cover (black layer) fade-out duration when near-end fires. Drives the
- *  entire reveal: the UI shell sits at opacity 1 always, so everything
- *  emerges as this cover dissolves. Glass cards' backdrop-filter transitions
- *  naturally from "blurring the black cover" (looks solid dark) to
- *  "blurring LivingBackground" (looks like actual glass). */
-const AWAKENING_COVER_FADE_MS = 1400;
-/** Ken Burns mode: how long the scale(1.15) → scale(1) transform runs.
- *  Intentionally longer than the cover fade so the zoom continues past when
- *  the cover is gone — the image keeps settling after the reveal completes. */
-const AWAKENING_KENBURNS_DURATION_MS = 2800;
+/** Single reveal duration — drives EVERYTHING: cover fade, Ken Burns scale
+ *  transition, and effective UI fade-in (since cover sits ABOVE UI, the
+ *  cover fading out IS the UI being revealed). All animations start
+ *  together and finish at AWAKENING_REVEAL_MS. */
+const AWAKENING_REVEAL_MS = 1500;
 /** Absolute safety: if neither near-end nor ended fires within this window,
  *  force phase = "done" so the UI is never stuck behind a black cover. */
 const AWAKENING_SAFETY_MS = 5000;
@@ -562,7 +557,7 @@ export function App() {
     // wallpaper for this session. No crossfade to LivingBackground.
     if (awakeningMode === "videoFreeze") return;
     setAwakeningPhase("fading");
-    setTimeout(() => setAwakeningPhase("done"), AWAKENING_COVER_FADE_MS);
+    setTimeout(() => setAwakeningPhase("done"), AWAKENING_REVEAL_MS);
   };
   // Safety fallback — fires on natural video end or error. Only drives to
   // "done" if near-end never happened (and we're not in videoFreeze, which
@@ -572,17 +567,24 @@ export function App() {
     if (awakeningPhase === "playing") setAwakeningPhase("done");
   };
 
-  // Ken Burns mode: no video, so we drive the cover fade ourselves. After a
-  // tiny paint delay (so the initial scaled-up frame is visible for one beat),
-  // kick off cover fade and let LivingBackground's transform animate.
+  // Ken Burns mode: no video, so we drive the cover fade ourselves. Double
+  // rAF ensures the initial frame (scale(1.15), cover opaque) has painted
+  // before we flip state — so the browser runs a real transition rather
+  // than short-circuiting.
   useEffect(() => {
     if (awakeningMode !== "kenburns") return;
-    if (awakening.status !== "play") return;
-    const startTimer = setTimeout(() => {
-      setAwakeningPhase("fading");
-      setTimeout(() => setAwakeningPhase("done"), AWAKENING_COVER_FADE_MS);
-    }, 80);
-    return () => clearTimeout(startTimer);
+    if (awakening.status === "skip") return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setAwakeningPhase("fading");
+        setTimeout(() => setAwakeningPhase("done"), AWAKENING_REVEAL_MS);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
   }, [awakeningMode, awakening.status]);
 
   // Safety: if the video element neither ends nor errors within the safety
@@ -1041,31 +1043,32 @@ export function App() {
           gradient={background.gradient}
           nextGradient={background.nextGradient}
           awakeningZoom={
-            // Note: use status !== "skip" (not status === "play") so the
-            // image is already at scale(1.15) on first paint during the
-            // brief "pending" period. Otherwise the transform animates
-            // 1 → 1.15 when status resolves, then gets interrupted 80ms
-            // later by the 1.15 → 1 transition — effectively cancelling
-            // itself out and leaving almost no visible zoom.
+            // status !== "skip" (not status === "play") so the image is
+            // already at scale(1.15) on first paint during the brief
+            // "pending" period. Otherwise the transform animates 1 → 1.15
+            // when status resolves, then immediately interrupts itself with
+            // the 1.15 → 1 transition — cancelling out the zoom.
             awakeningMode === "kenburns" && awakening.status !== "skip"
               ? awakeningPhase === "playing"
               : undefined
           }
-          awakeningZoomDurationMs={AWAKENING_KENBURNS_DURATION_MS}
+          awakeningZoomDurationMs={AWAKENING_REVEAL_MS}
         />
         <BackgroundScrim />
 
-        {/* Awakening cover: covers LivingBackground while the reveal runs.
-            Video modes mount AwakeningVideo inside the cover; Ken Burns mode
-            leaves it empty (the cover just fades out while LivingBackground
-            scales). UI layer (below, z-10) starts fading in over this layer
-            before the cover drops — creating a layered reveal. */}
+        {/* Awakening cover — positioned ABOVE the UI shell (z-30 > z-10).
+            The cover fading to transparent IS the UI reveal: glass cards
+            below stay at full opacity throughout, so their backdrop-filter
+            works continuously (always blurring LivingBackground). The cover
+            just "un-veils" the whole composite as it fades. In video modes,
+            AwakeningVideo is mounted inside the cover so it renders on top
+            of the UI during playback. */}
         {awakening.status !== "skip" && awakeningPhase !== "done" && (
           <div
-            className="absolute inset-0 z-[5] bg-black pointer-events-none transition-opacity ease-out"
+            className="absolute inset-0 z-[30] bg-black pointer-events-none transition-opacity ease-out"
             style={{
               opacity: awakeningPhase === "fading" ? 0 : 1,
-              transitionDuration: `${AWAKENING_COVER_FADE_MS}ms`,
+              transitionDuration: `${AWAKENING_REVEAL_MS}ms`,
             }}
           >
             {awakening.status === "play" &&
@@ -1108,14 +1111,11 @@ export function App() {
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
 
-        {/* Main Layout Shell. UI shell sits at opacity 1 always — NOT faded
-            in. Animating opacity (or any stacking-context-creating property:
-            isolation, transform, filter, will-change) on the shell disables
-            backdrop-filter on descendants. We rely entirely on the cover
-            (z-5 below) to gate the reveal: glass cards show solid dark at
-            t=0 (blurring the black
-            cover), then gradually become glassy as the cover fades and
-            LivingBackground appears behind them. */}
+        {/* Main Layout Shell — always at opacity 1. Animating opacity (or
+            any stacking-context-creating property: isolation, transform,
+            filter, will-change) on the shell disables backdrop-filter on
+            descendant glass cards. The awakening cover (z-30, above) hides
+            this shell until its own fade reveals everything. */}
         <div
           className="relative z-10 flex w-full h-full gap-4 p-4 pl-0"
         >
