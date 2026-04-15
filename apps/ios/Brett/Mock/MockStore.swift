@@ -11,6 +11,7 @@ final class MockStore {
     var scouts: [MockScout] = MockData.scouts
     var briefingDismissed: Bool = false
     var briefingCollapsed: Bool = false
+    var selectedTaskId: String? = nil
 
     // MARK: - Computed sections
 
@@ -54,18 +55,7 @@ final class MockStore {
 
     func toggleItem(_ id: String) {
         if let idx = items.firstIndex(where: { $0.id == id }) {
-            items[idx] = MockItem(
-                id: items[idx].id,
-                title: items[idx].title,
-                type: items[idx].type,
-                dueDate: items[idx].dueDate,
-                listId: items[idx].listId,
-                listName: items[idx].listName,
-                time: items[idx].time,
-                isCompleted: !items[idx].isCompleted,
-                notes: items[idx].notes,
-                subtasks: items[idx].subtasks
-            )
+            items[idx].isCompleted.toggle()
         }
     }
 
