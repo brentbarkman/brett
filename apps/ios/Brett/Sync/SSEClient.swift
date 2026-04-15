@@ -137,13 +137,23 @@ final class SSEClient {
                 try await openAndStream()
                 // `openAndStream` returns when the stream closes cleanly. We
                 // still want to reconnect — servers can drop idle streams.
-                reconnectAttempt += 1
+                // Skip the attempt bump when the task has been cancelled
+                // between the `.bytes(for:)` network completing and the loop
+                // regaining control — otherwise a `disconnect()` that races
+                // with in-flight bytes can leave `reconnectAttempt == 1`
+                // after teardown instead of 0.
+                if !Task.isCancelled {
+                    reconnectAttempt += 1
+                }
             } catch is CancellationError {
                 break
             } catch {
                 // Any other error means the connection failed or dropped
-                // mid-stream. Bump the attempt counter and back off.
-                reconnectAttempt += 1
+                // mid-stream. Same race-guard as above — honour a cancel
+                // that arrived while the error was propagating up.
+                if !Task.isCancelled {
+                    reconnectAttempt += 1
+                }
             }
 
             isConnected = false
@@ -158,6 +168,7 @@ final class SSEClient {
         // told to finish. Reset state so a future `connect()` starts fresh.
         loopTask = nil
         isConnected = false
+        reconnectAttempt = 0
     }
 
     /// Fetch a ticket, open the stream, and iterate its events. Returns when

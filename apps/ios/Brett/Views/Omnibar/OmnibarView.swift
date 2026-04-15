@@ -14,6 +14,17 @@ struct OmnibarView: View {
     var currentPage: Int = 1
     var onSelectList: ((String) -> Void)? = nil
 
+    @Environment(AuthManager.self) private var authManager
+
+    /// Real store used for sync-backed capture. Falls back to MockStore
+    /// only when there's no signed-in user (e.g. preview / UITest seed).
+    @State private var itemStore = ItemStore(
+        context: PersistenceController.shared.container.mainContext
+    )
+    @State private var listStore = ListStore(
+        context: PersistenceController.shared.container.mainContext
+    )
+
     @State private var inputText = ""
     @State private var showListDrawer = false
     @State private var isVoiceMode = false
@@ -146,7 +157,16 @@ struct OmnibarView: View {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let lists = store.lists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
+        // Prefer the real list store (so #listname matches sync-backed lists
+        // first). Fall back to MockStore lists only if SwiftData has none —
+        // preserves the prototype flow.
+        let realLists = listStore.fetchAll()  // excludes archived by default
+        let lists: [SmartParser.ListRef]
+        if !realLists.isEmpty {
+            lists = realLists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
+        } else {
+            lists = store.lists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
+        }
         let parsed = SmartParser.parse(
             trimmed,
             context: SmartParser.ParseContext(currentPage: currentPage, lists: lists)
@@ -160,24 +180,50 @@ struct OmnibarView: View {
             return
         }
 
-        switch parsed.kind {
-        case .task, .event, .question:
-            // MockStore has a single `addItem` API — the parsed kind and
-            // reminder are preserved via listName / dueDate for now; a
-            // future pass will thread `ItemType` and `ReminderType` all
-            // the way through once the Omnibar migrates off MockStore.
+        // Route through ItemStore (sync-backed) when a user is signed in.
+        // MockStore stays as fallback so the SwiftUI previews + unauthed
+        // UITests keep working. Task/event/question all persist as items;
+        // the `question` kind is tagged for a future chat-route; `event` is
+        // captured as a content item so it's not lost until the calendar
+        // draft flow lands.
+        if let userId = authManager.currentUser?.id {
+            // Resolve list id against the real ListStore first (the parser
+            // was given the set of real lists); otherwise the parsed id is
+            // still a valid Swift UUID and sync will upsert.
+            let resolvedListId = parsed.listId
+            let itemType: ItemType = parsed.kind == .event ? .content : .task
+            _ = itemStore.create(
+                userId: userId,
+                title: parsed.title,
+                type: itemType,
+                dueDate: parsed.dueDate,
+                listId: resolvedListId
+            )
+            // Reminder mapping: apply as a second mutation if parser found
+            // one (ItemStore.create has no reminder param, so we patch it
+            // in on the freshly-created record).
+            if let reminder = parsed.reminder {
+                if let created = itemStore.fetchAll(listId: resolvedListId, status: nil)
+                    .first(where: { $0.title == parsed.title && $0.reminder == nil }) {
+                    itemStore.update(
+                        id: created.id,
+                        changes: ["reminder": reminder],
+                        previousValues: ["reminder": NSNull()]
+                    )
+                }
+            }
+            #if DEBUG
+            if parsed.kind == .question {
+                print("[Omnibar] Question captured — future: open Brett chat: \(parsed.title)")
+            }
+            #endif
+        } else {
+            // No auth context — prototype/preview path.
             store.addItem(
                 title: parsed.title,
                 dueDate: parsed.dueDate,
                 listId: parsed.listId
             )
-            #if DEBUG
-            if parsed.kind == .question {
-                print("[Omnibar] Question captured — would open Brett chat: \(parsed.title)")
-            } else if parsed.kind == .event {
-                print("[Omnibar] Event captured — would open calendar draft: \(parsed.title)")
-            }
-            #endif
         }
 
         HapticManager.light()

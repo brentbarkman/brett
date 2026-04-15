@@ -159,7 +159,10 @@ struct TodayPage: View {
             accentColor: BrettColors.error,
             listNameProvider: listName(for:),
             onToggle: toggle,
-            onSelect: select
+            onSelect: select,
+            onSchedule: schedule,
+            onArchive: archive,
+            onDelete: delete
         )
 
         TaskSection(
@@ -169,7 +172,10 @@ struct TodayPage: View {
             labelColor: .white,
             listNameProvider: listName(for:),
             onToggle: toggle,
-            onSelect: select
+            onSelect: select,
+            onSchedule: schedule,
+            onArchive: archive,
+            onDelete: delete
         )
 
         TaskSection(
@@ -179,7 +185,10 @@ struct TodayPage: View {
             labelColor: .white,
             listNameProvider: listName(for:),
             onToggle: toggle,
-            onSelect: select
+            onSelect: select,
+            onSchedule: schedule,
+            onArchive: archive,
+            onDelete: delete
         )
 
         TaskSection(
@@ -189,7 +198,10 @@ struct TodayPage: View {
             labelColor: .white,
             listNameProvider: listName(for:),
             onToggle: toggle,
-            onSelect: select
+            onSelect: select,
+            onSchedule: schedule,
+            onArchive: archive,
+            onDelete: delete
         )
 
         TaskSection(
@@ -199,7 +211,10 @@ struct TodayPage: View {
             labelColor: BrettColors.textInactive,
             listNameProvider: listName(for:),
             onToggle: toggle,
-            onSelect: select
+            onSelect: select,
+            onSchedule: schedule,
+            onArchive: archive,
+            onDelete: delete
         )
     }
 
@@ -310,6 +325,39 @@ struct TodayPage: View {
 
     private func select(_ id: String) {
         store.selectedTaskId = id
+    }
+
+    /// Swipe-to-schedule: update dueDate (nil clears it, "Someday").
+    /// We snapshot the current value into `previousValues` so the push engine
+    /// can field-level merge if the server changed dueDate in the meantime.
+    private func schedule(_ id: String, dueDate: Date?) {
+        guard let item = itemStore.fetchById(id) else { return }
+        HapticManager.medium()
+        itemStore.update(
+            id: id,
+            changes: ["dueDate": dueDate as Any? ?? NSNull()],
+            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()]
+        )
+    }
+
+    /// Swipe-to-archive: sets status to .archived. Mirrors the desktop's
+    /// soft-archive semantics — record stays on the server, hidden from
+    /// active views.
+    private func archive(_ id: String) {
+        guard let item = itemStore.fetchById(id) else { return }
+        HapticManager.medium()
+        itemStore.update(
+            id: id,
+            changes: ["status": ItemStatus.archived.rawValue],
+            previousValues: ["status": item.status]
+        )
+    }
+
+    /// Swipe-to-delete: hard delete. ItemStore enqueues a DELETE mutation;
+    /// the server treats as soft-delete (sets deletedAt).
+    private func delete(_ id: String) {
+        HapticManager.heavy()
+        itemStore.delete(id: id)
     }
 
     // MARK: - Ticker

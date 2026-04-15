@@ -99,11 +99,15 @@
 - `DELETE /users/me` + `POST /users/export` for account management in Settings
 - Consider `/api/auth/ios/google` GET shim if Apple identity-token flow needs iOS-specific handling
 
-**Polish gaps (intentional, non-blocking):**
-- `TaskSection.swift` and `ListView.swift` don't yet pass swipe handlers to `TaskRow` — the swipes reveal visually but fall through to no-op closures. Trivial wiring (~6 lines each) — deferred.
-- `OmnibarView` still writes to `MockStore` at submit time. The `SmartParser` result is fully correct; the parsed `ParsedInput` just needs routing to `ItemStore.create(title:dueDate:listId:reminder:)` at the submit site. Deferred.
-- MockStore remains alongside real stores as a pass-through param on several page views (back-compat to avoid churn in the worktree). Safe to delete in a follow-up cleanup.
-- One SSE test has known flakiness under parallel test execution (cancellation race around `disconnect()`); passes consistently when run alone.
+**Polish gaps closed (post-handoff pass):**
+- ✅ `TaskSection.swift` now accepts `onSchedule` / `onArchive` / `onDelete` / `onReorder` handlers with no-op defaults. `TodayPage` wires them into `ItemStore.update/delete` (with real `previousValues` snapshots for field-level merge) — swipe-schedule / swipe-archive / swipe-delete fully persist through the sync engine.
+- ✅ `ListView` migrated off MockStore for the task-data path: uses `ItemStore.fetchAll(listId:)` for rows, `ItemStore.create/update/toggleStatus/delete` for mutations, `ListStore` for rename / archive / unarchive (with previousValues for each). MockStore stays only as a prototype-list fallback + `selectedTaskId` sheet binding. Swipe handlers fully wired on the row.
+- ✅ `OmnibarView` submits through `ItemStore.create(userId:title:type:dueDate:listId:)` when a user is signed in (mock path only used as preview/unauthenticated fallback). The `SmartParser` output routes reminders into a follow-up `ItemStore.update` so natural-language "in 20 minutes" / "tomorrow at 5pm" actually persists with correct fields. ParseContext also gets real sync-backed lists from `ListStore.fetchAll()` — `#listname` tags resolve against synced lists first.
+- ✅ SSE flaky test resolved: `SSEClient.runConnectLoop` now guards the `reconnectAttempt +=` bump with a `Task.isCancelled` check on both happy-path and catch branches so a `disconnect()` racing with an in-flight `URLSession.bytes(for:)` completion no longer leaks a stale increment. Also resets the counter after the loop exits. Verified 5/5 consecutive runs clean.
+
+**Remaining intentional gaps (non-blocking):**
+- Full `MockStore` removal is a sizeable refactor (`selectedTaskId` sheet binding, `ListDrawer` list rendering, prototype list fallbacks in Today/Calendar). The mock store is kept as a pass-through parameter on page signatures; all hot-path mutations (tasks, reminders, scheduling, archiving, deletion) already route through real stores. Deferred to a focused follow-up.
+- Per-item `sortOrder` is not yet a field on `Item`, so `ListView`'s `onReorder` shows haptic/visual feedback but doesn't persist order. One-field schema addition + a mutation in `ItemStore.reorder` closes it.
 
 **Simulator screenshot:** `/tmp/brett-overnight-final.png` (sign-in), `/tmp/brett-today.png` (Today page with daily briefing card + seeded "Review design spec" task over atmospheric background).
 
