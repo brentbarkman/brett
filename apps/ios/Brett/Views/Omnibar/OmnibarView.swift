@@ -3,6 +3,7 @@ import SwiftUI
 struct OmnibarView: View {
     @Bindable var store: MockStore
     let placeholder: String
+    var onSelectList: ((String) -> Void)? = nil
     @State private var text = ""
     @State private var showListDrawer = false
     @FocusState private var isFocused: Bool
@@ -65,7 +66,7 @@ struct OmnibarView: View {
         }
         .animation(.easeOut(duration: 0.15), value: text.isEmpty)
         .sheet(isPresented: $showListDrawer) {
-            ListDrawer(store: store)
+            ListDrawer(store: store, onSelectList: onSelectList)
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
