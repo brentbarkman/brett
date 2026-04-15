@@ -82,7 +82,7 @@ struct ListReorderTests {
 
         let mutations = try context.fetch(FetchDescriptor<MutationQueueEntry>())
         let updateMutationIds = mutations
-            .filter { $0.action == .update && $0.entityType == "list" }
+            .filter { $0.actionEnum == .update && $0.entityType == "list" }
             .map(\.entityId)
 
         #expect(updateMutationIds.contains("a"), "a's sortOrder changed — expected enqueued mutation")
