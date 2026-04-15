@@ -32,9 +32,8 @@ import {
   ScoutDetail,
   LivingBackground,
   BackgroundScrim,
-  AwakeningVideo,
 } from "@brett/ui";
-import { useAwakeningVideo, _resetAwakeningSessionFlag } from "./hooks/useAwakeningVideo";
+import { useAwakeningVideo } from "./hooks/useAwakeningVideo";
 import { useAppConfig } from "./hooks/useAppConfig";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -108,35 +107,18 @@ import type { RecentFindingItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
-// ----- Awakening mode (prototype toggle) -----
-/** Three modes for the cold-launch reveal, toggleable via the dev pill in the
- *  bottom-right corner (dev builds only). Persisted to localStorage. */
-type AwakeningMode = "video" | "videoFreeze" | "kenburns";
-const AWAKENING_MODE_KEY = "awakening-mode";
-
-function getStoredAwakeningMode(): AwakeningMode {
-  try {
-    const stored = localStorage.getItem(AWAKENING_MODE_KEY);
-    if (stored === "video" || stored === "videoFreeze" || stored === "kenburns") {
-      return stored;
-    }
-  } catch { /* localStorage unavailable */ }
-  return "video";
-}
-
-// ----- Awakening timing -----
-/** Max playback length before auto-pause + onEnded. Overrides natural video
- *  duration if shorter. Set to a larger number than the source clip to let
- *  the video end naturally. */
-const AWAKENING_MAX_DURATION_S = 1.5;
-/** Single reveal duration — drives EVERYTHING: cover fade, Ken Burns scale
- *  transition, and effective UI fade-in (since cover sits ABOVE UI, the
- *  cover fading out IS the UI being revealed). All animations start
- *  together and finish at AWAKENING_REVEAL_MS. */
+// ----- Awakening timing (Ken Burns cold-launch reveal) -----
+/** Total reveal duration. Drives the Ken Burns scale transition on
+ *  LivingBackground (scale 1.15 → 1.0). Also acts as the outer deadline:
+ *  UI opacity finishes fading in at the same moment Ken Burns ends. */
 const AWAKENING_REVEAL_MS = 1500;
-/** Absolute safety: if neither near-end nor ended fires within this window,
- *  force phase = "done" so the UI is never stuck behind a black cover. */
-const AWAKENING_SAFETY_MS = 5000;
+/** How long to show ONLY the Ken-Burnsing background before the UI begins
+ *  fading in. User asked for "see the background ken-burns BEFORE the UI
+ *  fades in" — this is that delay. */
+const AWAKENING_UI_DELAY_MS = 500;
+/** UI fade-in duration. AWAKENING_UI_DELAY_MS + AWAKENING_UI_FADE_MS =
+ *  AWAKENING_REVEAL_MS, so UI fade and Ken Burns finish together. */
+const AWAKENING_UI_FADE_MS = AWAKENING_REVEAL_MS - AWAKENING_UI_DELAY_MS;
 
 function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer, assistantName }: {
   children: React.ReactNode;
@@ -544,64 +526,42 @@ export function App() {
     baseUrl: appConfig?.storageBaseUrl ?? "",
     segment: background.segment,
   });
-  // Prototype: three reveal modes — full video crossfade, video-freeze (video
-  // pauses on last frame and stays as wallpaper), or Ken Burns (no video, slow
-  // zoom-out on the wallpaper image). Persisted to localStorage; dev toggle
-  // cycles it.
-  const [awakeningMode] = useState<AwakeningMode>(getStoredAwakeningMode);
-  // Cover (black layer) lifecycle: playing → fading → done
-  const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">("playing");
+  // Awakening: LivingBackground image starts at scale(1.15) and transitions
+  // to scale(1.0) over AWAKENING_REVEAL_MS. UI opacity starts at 0 and
+  // transitions to 1, starting AWAKENING_UI_DELAY_MS after mount — so the
+  // user sees the Ken Burns happening BEFORE the UI materializes on top.
+  // Both animations complete at t = AWAKENING_REVEAL_MS.
+  //
+  // Key insight: UI mounts at opacity 0, so the sectionEnter translateY
+  // animations in ThingsList play INVISIBLY during 0-450ms (while the user
+  // can't see them). By the time UI opacity fades in, sections are already
+  // at their final translateY(0) — no "dropping in" effect visible.
+  const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading">("playing");
+  const [uiRevealed, setUiRevealed] = useState(() => awakening.status === "skip");
 
-  const handleAwakeningNearEnd = () => {
-    // videoFreeze: keep the cover black; the paused video stays as the
-    // wallpaper for this session. No crossfade to LivingBackground.
-    if (awakeningMode === "videoFreeze") return;
-    setAwakeningPhase("fading");
-    setTimeout(() => setAwakeningPhase("done"), AWAKENING_REVEAL_MS);
-  };
-  // Safety fallback — fires on natural video end or error. Only drives to
-  // "done" if near-end never happened (and we're not in videoFreeze, which
-  // wants the paused video to stay).
-  const handleAwakeningEnded = () => {
-    if (awakeningMode === "videoFreeze") return;
-    if (awakeningPhase === "playing") setAwakeningPhase("done");
-  };
-
-  // Ken Burns mode: no video, so we drive the cover fade ourselves. Double
-  // rAF ensures the initial frame (scale(1.15), cover opaque) has painted
-  // before we flip state — so the browser runs a real transition rather
-  // than short-circuiting.
   useEffect(() => {
-    if (awakeningMode !== "kenburns") return;
-    if (awakening.status === "skip") return;
+    if (awakening.status === "skip") {
+      // Session already played / reduced motion — no animation, UI instant.
+      setAwakeningPhase("fading");
+      setUiRevealed(true);
+      return;
+    }
+    // Double rAF ensures the initial frame (scale(1.15), UI opacity 0) has
+    // painted before we flip state — so the browser runs a real transition
+    // rather than short-circuiting to the final values.
     let raf2 = 0;
+    let uiTimer: ReturnType<typeof setTimeout> | undefined;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         setAwakeningPhase("fading");
-        setTimeout(() => setAwakeningPhase("done"), AWAKENING_REVEAL_MS);
+        uiTimer = setTimeout(() => setUiRevealed(true), AWAKENING_UI_DELAY_MS);
       });
     });
     return () => {
       cancelAnimationFrame(raf1);
       if (raf2) cancelAnimationFrame(raf2);
+      if (uiTimer) clearTimeout(uiTimer);
     };
-  }, [awakeningMode, awakening.status]);
-
-  // Safety: if the video element neither ends nor errors within the safety
-  // window (e.g., hung loading), force the awakening to "done" so
-  // LivingBackground is revealed rather than left covered indefinitely.
-  useEffect(() => {
-    if (awakening.status !== "play") return;
-    const safetyTimer = setTimeout(() => setAwakeningPhase("done"), AWAKENING_SAFETY_MS);
-    return () => clearTimeout(safetyTimer);
-  }, [awakening.status]);
-
-  // When skip resolves (reduced motion or session already played), jump to
-  // "done" so those users aren't stuck on a black cover.
-  useEffect(() => {
-    if (awakening.status === "skip") {
-      setAwakeningPhase("done");
-    }
   }, [awakening.status]);
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
@@ -1048,76 +1008,25 @@ export function App() {
             // "pending" period. Otherwise the transform animates 1 → 1.15
             // when status resolves, then immediately interrupts itself with
             // the 1.15 → 1 transition — cancelling out the zoom.
-            awakeningMode === "kenburns" && awakening.status !== "skip"
-              ? awakeningPhase === "playing"
-              : undefined
+            awakening.status !== "skip" ? awakeningPhase === "playing" : undefined
           }
           awakeningZoomDurationMs={AWAKENING_REVEAL_MS}
         />
         <BackgroundScrim />
 
-        {/* Awakening cover — positioned ABOVE the UI shell (z-30 > z-10).
-            The cover fading to transparent IS the UI reveal: glass cards
-            below stay at full opacity throughout, so their backdrop-filter
-            works continuously (always blurring LivingBackground). The cover
-            just "un-veils" the whole composite as it fades. In video modes,
-            AwakeningVideo is mounted inside the cover so it renders on top
-            of the UI during playback. */}
-        {awakening.status !== "skip" && awakeningPhase !== "done" && (
-          <div
-            className="absolute inset-0 z-[30] bg-black pointer-events-none transition-opacity ease-out"
-            style={{
-              opacity: awakeningPhase === "fading" ? 0 : 1,
-              transitionDuration: `${AWAKENING_REVEAL_MS}ms`,
-            }}
-          >
-            {awakening.status === "play" &&
-              (awakeningMode === "video" || awakeningMode === "videoFreeze") && (
-                <AwakeningVideo
-                  sources={awakening.videoUrls}
-                  maxDurationSeconds={AWAKENING_MAX_DURATION_S}
-                  onNearEnd={handleAwakeningNearEnd}
-                  onEnded={handleAwakeningEnded}
-                />
-              )}
-          </div>
-        )}
-
-        {/* Dev-only toggle: cycles awakening modes + reloads so you can feel
-            each variant. Hidden in production builds. */}
-        {import.meta.env.DEV && (
-          <button
-            type="button"
-            className="fixed bottom-4 right-4 z-[9999] px-3 py-2 rounded-full bg-black/70 backdrop-blur-sm text-xs text-white/90 border border-white/10 hover:bg-black/85 transition-colors font-mono"
-            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-            onClick={() => {
-              const next: Record<AwakeningMode, AwakeningMode> = {
-                video: "videoFreeze",
-                videoFreeze: "kenburns",
-                kenburns: "video",
-              };
-              localStorage.setItem(AWAKENING_MODE_KEY, next[awakeningMode]);
-              _resetAwakeningSessionFlag();
-              window.location.reload();
-            }}
-            title="Click to cycle: video → videoFreeze → kenburns"
-          >
-            awakening: {awakeningMode}
-          </button>
-        )}
-
-
-
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
 
-        {/* Main Layout Shell — always at opacity 1. Animating opacity (or
-            any stacking-context-creating property: isolation, transform,
-            filter, will-change) on the shell disables backdrop-filter on
-            descendant glass cards. The awakening cover (z-30, above) hides
-            this shell until its own fade reveals everything. */}
+        {/* Main Layout Shell. UI fades in via opacity during awakening.
+            Glass cards inside use .awakening-glass-layer class (see
+            index.css) to force their own compositor layer so backdrop-filter
+            keeps rendering correctly while the shell opacity animates. */}
         <div
-          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0"
+          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0 transition-opacity ease-out"
+          style={{
+            opacity: uiRevealed ? 1 : 0,
+            transitionDuration: `${AWAKENING_UI_FADE_MS}ms`,
+          }}
         >
           {/* Left Column: Navigation */}
           <LeftNav
