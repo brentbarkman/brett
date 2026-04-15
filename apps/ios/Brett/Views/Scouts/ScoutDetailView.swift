@@ -1,12 +1,41 @@
 import SwiftUI
 
+/// Scout detail — header, findings timeline, activity log, memory, settings.
+///
+/// Takes `MockStore` for nav compatibility (same as `ScoutsRosterView`) and
+/// runs its own `ScoutStore` internally.
 struct ScoutDetailView: View {
     @Bindable var store: MockStore
     let scoutId: String
+
+    @State private var scoutStore = ScoutStore()
+    @State private var scout: APIClient.ScoutDTO?
+    @State private var findings: [APIClient.FindingDTO] = []
+    @State private var findingsCursor: String?
+    @State private var findingsType: FindingFilter = .all
+    @State private var activity: [APIClient.ActivityEntryDTO] = []
+    @State private var memories: [APIClient.MemoryDTO] = []
+    @State private var memoryFilter: MemoryFilter = .all
+    @State private var localFeedback: [String: Bool?] = [:]
+    @State private var isRunning: Bool = false
+    @State private var isPresentingEdit: Bool = false
+    @State private var pendingDelete: Bool = false
+    @State private var errorMessage: String?
+
     @Environment(\.dismiss) private var dismiss
 
-    private var scout: MockScout? {
-        store.scouts.first(where: { $0.id == scoutId })
+    enum FindingFilter: String, CaseIterable, Identifiable {
+        case all, article, insight, task
+        var id: String { rawValue }
+        var title: String { self == .all ? "All" : rawValue.capitalized }
+        var serverValue: String? { self == .all ? nil : rawValue }
+    }
+
+    enum MemoryFilter: String, CaseIterable, Identifiable {
+        case all, factual, judgment, pattern
+        var id: String { rawValue }
+        var title: String { self == .all ? "All" : rawValue.capitalized }
+        var serverValue: String? { self == .all ? nil : rawValue }
     }
 
     var body: some View {
@@ -16,31 +45,26 @@ struct ScoutDetailView: View {
             if let scout {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        // MARK: - Header
-                        headerSection(scout)
-
-                        // MARK: - Goal
-                        goalSection(scout)
-
-                        // MARK: - Config strip
-                        configSection(scout)
-
-                        // MARK: - Findings
-                        findingsSection(scout)
-
-                        Spacer(minLength: 40)
+                        headerCard(scout)
+                        findingsSection
+                        activitySection
+                        memorySection
+                        settingsSection
+                        Spacer(minLength: 100)
                     }
                     .padding(.top, 8)
                 }
                 .scrollIndicators(.hidden)
+
+                runFAB
+            } else {
+                ProgressView().tint(BrettColors.gold)
             }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    dismiss()
-                } label: {
+                Button { dismiss() } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 14, weight: .semibold))
@@ -50,315 +74,488 @@ struct ScoutDetailView: View {
                     .foregroundStyle(BrettColors.gold)
                 }
             }
-
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    if scout?.status == .active {
-                        Button { } label: {
-                            Label("Pause Scout", systemImage: "pause.circle")
-                        }
-                        Button { } label: {
-                            Label("Run Now", systemImage: "bolt.circle")
-                        }
-                    } else {
-                        Button { } label: {
-                            Label("Resume Scout", systemImage: "play.circle")
-                        }
+        }
+        .task { await loadAll() }
+        .onChange(of: findingsType) { _, _ in Task { await refreshFindings() } }
+        .onChange(of: memoryFilter) { _, _ in Task { await refreshMemories() } }
+        .sheet(isPresented: $isPresentingEdit) {
+            if let scout {
+                ScoutEditSheet(scout: scout) { patch in
+                    do {
+                        self.scout = try await scoutStore.update(id: scout.id, changes: patch)
+                    } catch {
+                        errorMessage = "Couldn't save changes."
                     }
-                    Divider()
-                    Button(role: .destructive) { } label: {
-                        Label("Delete Scout", systemImage: "trash")
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+        }
+        .alert("Delete scout?", isPresented: $pendingDelete) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    if let scout {
+                        try? await scoutStore.delete(id: scout.id)
+                        dismiss()
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.40))
                 }
             }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This removes the scout and all its findings.")
         }
     }
 
     // MARK: - Header
 
     @ViewBuilder
-    private func headerSection(_ scout: MockScout) -> some View {
-        HStack(spacing: 14) {
-            // Large avatar
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: scout.status == .active
-                                ? [BrettColors.gold.opacity(0.6), BrettColors.cerulean.opacity(0.4)]
-                                : [Color.white.opacity(0.15), Color.white.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+    private func headerCard(_ scout: APIClient.ScoutDTO) -> some View {
+        GlassCard(tint: BrettColors.cerulean) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 14) {
+                    ScoutAvatar(
+                        letter: scout.avatarLetter,
+                        gradient: scout.avatarGradient,
+                        diameter: 52,
+                        showGlow: scout.status == "active"
                     )
-                    .frame(width: 52, height: 52)
 
-                // Ambient glow for active scouts
-                if scout.status == .active {
-                    Circle()
-                        .fill(BrettColors.gold.opacity(0.15))
-                        .frame(width: 68, height: 68)
-                        .blur(radius: 12)
-                }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(scout.name)
+                            .font(BrettTypography.detailTitle)
+                            .foregroundStyle(.white)
 
-                Text(String(scout.name.prefix(1)))
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(scout.name)
-                    .font(BrettTypography.detailTitle)
-                    .foregroundStyle(.white)
-
-                HStack(spacing: 8) {
-                    // Status badge
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(scout.status == .active ? BrettColors.emerald : BrettColors.textMeta)
-                            .frame(width: 6, height: 6)
-                        Text(scout.status.rawValue.capitalized)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(scout.status == .active ? BrettColors.emerald : BrettColors.textMeta)
+                        HStack(spacing: 6) {
+                            StatusDot(status: scout.status)
+                            Text(scout.status.capitalized)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(BrettColors.textSecondary)
+                            Text("·")
+                                .foregroundStyle(BrettColors.textGhost)
+                            Text(nextRunLabel(scout))
+                                .font(.system(size: 11))
+                                .foregroundStyle(BrettColors.textMeta)
+                        }
                     }
 
-                    Text("·")
-                        .foregroundStyle(BrettColors.textGhost)
-
-                    Text("Last run \(scout.lastRunAgo)")
-                        .font(.system(size: 11))
-                        .foregroundStyle(BrettColors.textMeta)
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-    }
-
-    // MARK: - Goal
-
-    @ViewBuilder
-    private func goalSection(_ scout: MockScout) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("GOAL")
-                .font(BrettTypography.sectionLabel)
-                .tracking(2.4)
-                .foregroundStyle(BrettColors.sectionLabelColor)
-                .padding(.horizontal, 20)
-
-            GlassCard {
-                Text(scout.goal)
-                    .font(BrettTypography.body)
-                    .foregroundStyle(BrettColors.textBody)
-                    .lineSpacing(4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-
-    // MARK: - Config strip
-
-    @ViewBuilder
-    private func configSection(_ scout: MockScout) -> some View {
-        GlassCard {
-            VStack(spacing: 12) {
-                HStack {
-                    Text("CONFIGURATION")
-                        .font(BrettTypography.sectionLabel)
-                        .tracking(2.4)
-                        .foregroundStyle(BrettColors.sectionLabelColor)
                     Spacer()
                 }
 
-                // Config items in a grid-like layout
-                HStack(spacing: 16) {
-                    configItem(label: "Sensitivity", value: scout.sensitivity)
-                    configItem(label: "Cadence", value: scout.cadence)
+                if let statusLine = scout.statusLine {
+                    Text(statusLine)
+                        .font(.system(size: 13, weight: .regular).italic())
+                        .foregroundStyle(BrettColors.cerulean.opacity(0.85))
                 }
 
-                HStack(spacing: 16) {
-                    configItem(label: "Budget", value: "\(scout.budgetUsed)/\(scout.budgetTotal)")
-                    configItem(label: "Findings", value: "\(scout.findingsCount)")
-                }
-
-                // Budget progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.white.opacity(0.10))
-                            .frame(height: 4)
-
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(budgetColor(used: scout.budgetUsed, total: scout.budgetTotal))
-                            .frame(width: geo.size.width * CGFloat(scout.budgetUsed) / CGFloat(max(scout.budgetTotal, 1)), height: 4)
-                    }
-                }
-                .frame(height: 4)
+                budgetBar(scout)
             }
         }
         .padding(.horizontal, 16)
     }
 
-    // MARK: - Findings
-
     @ViewBuilder
-    private func findingsSection(_ scout: MockScout) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func budgetBar(_ scout: APIClient.ScoutDTO) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("FINDINGS")
+                Text("BUDGET")
                     .font(BrettTypography.sectionLabel)
                     .tracking(2.4)
                     .foregroundStyle(BrettColors.sectionLabelColor)
-
                 Spacer()
-
-                Text("\(scout.findings.count)")
-                    .font(BrettTypography.taskMeta)
+                Text("\(scout.budgetUsed) / \(scout.budgetTotal)")
+                    .font(.system(size: 11))
                     .foregroundStyle(BrettColors.textMeta)
             }
-            .padding(.horizontal, 20)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(height: 4)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(BrettColors.gold)
+                        .frame(
+                            width: geo.size.width * ScoutCard.budgetFraction(
+                                used: scout.budgetUsed,
+                                total: scout.budgetTotal
+                            ),
+                            height: 4
+                        )
+                }
+            }
+            .frame(height: 4)
+        }
+    }
 
-            if scout.findings.isEmpty {
+    private func nextRunLabel(_ scout: APIClient.ScoutDTO) -> String {
+        if let last = scout.lastRun {
+            return "Last run \(FindingCard.relative(last)) ago"
+        }
+        return "Not yet run"
+    }
+
+    // MARK: - Findings
+
+    @ViewBuilder
+    private var findingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("FINDINGS", trailing: "\(findings.count)")
+
+            Picker("Type", selection: $findingsType) {
+                ForEach(FindingFilter.allCases) { f in
+                    Text(f.title).tag(f)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+
+            if findings.isEmpty {
                 GlassCard {
-                    VStack(spacing: 8) {
-                        Image(systemName: "sparkle")
-                            .font(.system(size: 24, weight: .light))
-                            .foregroundStyle(BrettColors.textGhost)
-                        Text("No findings yet")
-                            .font(BrettTypography.body)
-                            .foregroundStyle(BrettColors.textMeta)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
+                    Text("No findings yet — check back soon.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(BrettColors.textMeta)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
                 }
                 .padding(.horizontal, 16)
             } else {
-                ForEach(scout.findings) { finding in
-                    FindingCard(finding: finding)
-                        .padding(.horizontal, 16)
+                ForEach(findings, id: \.id) { finding in
+                    FindingCard(
+                        finding: finding,
+                        feedback: localFeedback[finding.id] ?? finding.feedbackUseful,
+                        onFeedback: { useful in
+                            Task { await submitFeedback(finding: finding, useful: useful) }
+                        },
+                        onOpen: nil
+                    )
+                    .padding(.horizontal, 16)
                 }
+
+                if findingsCursor != nil {
+                    Button {
+                        Task { await loadMoreFindings() }
+                    } label: {
+                        Text("Load more")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(BrettColors.gold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: - Activity
+
+    @ViewBuilder
+    private var activitySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("ACTIVITY", trailing: "\(activity.count)")
+
+            if activity.isEmpty {
+                GlassCard {
+                    Text("No activity yet.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(BrettColors.textMeta)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
+                }
+                .padding(.horizontal, 16)
+            } else {
+                GlassCard {
+                    VStack(spacing: 4) {
+                        ForEach(Array(activity.prefix(20).enumerated()), id: \.offset) { idx, entry in
+                            ActivityRow(entry: entry)
+                            if idx < min(activity.count, 20) - 1 {
+                                Divider()
+                                    .overlay(BrettColors.hairline)
+                                    .padding(.horizontal, 12)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    // MARK: - Memory
+
+    @ViewBuilder
+    private var memorySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("MEMORY", trailing: "\(memories.count)")
+
+            Picker("Type", selection: $memoryFilter) {
+                ForEach(MemoryFilter.allCases) { f in
+                    Text(f.title).tag(f)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+
+            if memories.isEmpty {
+                GlassCard {
+                    Text("Brett hasn't learned anything persistent yet.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(BrettColors.textMeta)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
+                }
+                .padding(.horizontal, 16)
+            } else {
+                GlassCard(tint: BrettColors.cerulean) {
+                    VStack(spacing: 0) {
+                        ForEach(memories, id: \.id) { memory in
+                            MemoryCard(memory: memory) {
+                                Task { await deleteMemory(memory) }
+                            }
+                            if memory.id != memories.last?.id {
+                                Divider()
+                                    .overlay(BrettColors.hairline)
+                                    .padding(.horizontal, 12)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    // MARK: - Settings / Danger
+
+    @ViewBuilder
+    private var settingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("SETTINGS", trailing: nil)
+
+            GlassCard {
+                VStack(spacing: 0) {
+                    Button {
+                        isPresentingEdit = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 14))
+                                .foregroundStyle(BrettColors.cerulean)
+                            Text("Edit scout")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11))
+                                .foregroundStyle(BrettColors.textGhost)
+                        }
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider().overlay(BrettColors.hairline)
+
+                    if scout?.status == "paused" {
+                        settingsButton(icon: "play.circle", label: "Resume scout", color: BrettColors.emerald) {
+                            Task {
+                                if let s = scout {
+                                    scout = try? await scoutStore.resume(id: s.id)
+                                }
+                            }
+                        }
+                    } else if scout?.status == "active" {
+                        settingsButton(icon: "pause.circle", label: "Pause scout", color: BrettColors.textInactive) {
+                            Task {
+                                if let s = scout {
+                                    scout = try? await scoutStore.pause(id: s.id)
+                                }
+                            }
+                        }
+                    }
+
+                    Divider().overlay(BrettColors.hairline)
+
+                    settingsButton(icon: "archivebox", label: "Archive", color: BrettColors.textInactive) {
+                        Task {
+                            if let s = scout {
+                                scout = try? await scoutStore.archive(id: s.id)
+                            }
+                        }
+                    }
+
+                    Divider().overlay(BrettColors.hairline)
+
+                    settingsButton(icon: "trash", label: "Delete scout", color: BrettColors.error) {
+                        pendingDelete = true
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    @ViewBuilder
+    private func settingsButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(color)
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(color)
+                Spacer()
+            }
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - FAB
+
+    @ViewBuilder
+    private var runFAB: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    Task { await triggerRun() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isRunning {
+                            ProgressView().tint(.black)
+                        } else {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        Text(isRunning ? "Running..." : "Run now")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(
+                        Capsule()
+                            .fill(BrettColors.gold)
+                            .shadow(color: BrettColors.gold.opacity(0.6), radius: 12)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isRunning || scout?.status == "paused")
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
             }
         }
     }
 
     // MARK: - Helpers
 
-    private func configItem(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(BrettColors.textMeta)
-            Text(value)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(BrettColors.textCardTitle)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func budgetColor(used: Int, total: Int) -> Color {
-        let ratio = Double(used) / Double(max(total, 1))
-        if ratio < 0.5 { return BrettColors.emerald } // emerald
-        if ratio < 0.8 { return BrettColors.cerulean }
-        return BrettColors.error
-    }
-}
-
-// MARK: - Finding Card
-
-struct FindingCard: View {
-    let finding: MockFinding
-
-    var body: some View {
-        GlassCard(tint: findingTint) {
-            VStack(alignment: .leading, spacing: 8) {
-                // Type badge + relevance
-                HStack {
-                    HStack(spacing: 4) {
-                        Image(systemName: findingIcon)
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(finding.type.rawValue.capitalized)
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundStyle(findingColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(findingColor.opacity(0.15), in: Capsule())
-
-                    Spacer()
-
-                    Text(finding.ago)
-                        .font(BrettTypography.taskMeta)
-                        .foregroundStyle(BrettColors.textMeta)
-                }
-
-                // Title
-                Text(finding.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(BrettColors.textCardTitle)
-
-                // Description
-                Text(finding.description)
-                    .font(BrettTypography.body)
-                    .foregroundStyle(BrettColors.textBody)
-                    .lineLimit(3)
-
-                // Source + feedback
-                HStack {
-                    Image(systemName: "link")
-                        .font(.system(size: 10))
-                    Text(finding.source)
-                        .font(BrettTypography.taskMeta)
-
-                    Spacer()
-
-                    // Feedback buttons
-                    HStack(spacing: 8) {
-                        Button { } label: {
-                            Image(systemName: "hand.thumbsup")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(finding.feedbackUseful == true ? BrettColors.emerald : BrettColors.textMeta)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button { } label: {
-                            Image(systemName: "hand.thumbsdown")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(finding.feedbackUseful == false ? BrettColors.error : BrettColors.textMeta)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .foregroundStyle(BrettColors.textMeta)
+    @ViewBuilder
+    private func sectionLabel(_ text: String, trailing: String?) -> some View {
+        HStack {
+            Text(text)
+                .font(BrettTypography.sectionLabel)
+                .tracking(2.4)
+                .foregroundStyle(BrettColors.sectionLabelColor)
+            Spacer()
+            if let trailing {
+                Text(trailing)
+                    .font(BrettTypography.taskMeta)
+                    .foregroundStyle(BrettColors.textMeta)
             }
         }
+        .padding(.horizontal, 20)
     }
 
-    // Colors match desktop: insight=purple-400, article=brett-gold, task=amber-400
-    private var findingTint: Color {
-        switch finding.type {
-        case .insight: return BrettColors.purple400
-        case .article: return BrettColors.gold
-        case .task: return BrettColors.amber400
+    // MARK: - Data loading
+
+    private func loadAll() async {
+        do {
+            scout = try await scoutStore.fetchDetail(id: scoutId)
+        } catch {
+            errorMessage = "Couldn't load scout."
+        }
+        await refreshFindings()
+        await refreshActivity()
+        await refreshMemories()
+    }
+
+    private func refreshFindings() async {
+        do {
+            let page = try await scoutStore.fetchFindingsPage(
+                scoutId: scoutId,
+                type: findingsType.serverValue,
+                cursor: nil
+            )
+            findings = page.findings
+            findingsCursor = page.cursor
+        } catch {}
+    }
+
+    private func loadMoreFindings() async {
+        guard let cursor = findingsCursor else { return }
+        do {
+            let page = try await scoutStore.fetchFindingsPage(
+                scoutId: scoutId,
+                type: findingsType.serverValue,
+                cursor: cursor
+            )
+            findings.append(contentsOf: page.findings)
+            findingsCursor = page.cursor
+        } catch {}
+    }
+
+    private func refreshActivity() async {
+        do {
+            let page = try await scoutStore.fetchActivity(scoutId: scoutId)
+            activity = page.entries
+        } catch {}
+    }
+
+    private func refreshMemories() async {
+        do {
+            memories = try await scoutStore.fetchMemories(
+                scoutId: scoutId,
+                type: memoryFilter.serverValue
+            )
+        } catch {}
+    }
+
+    private func submitFeedback(finding: APIClient.FindingDTO, useful: Bool?) async {
+        let previous = localFeedback[finding.id] ?? finding.feedbackUseful
+        localFeedback[finding.id] = useful
+        do {
+            _ = try await scoutStore.submitFeedback(
+                scoutId: scoutId,
+                findingId: finding.id,
+                useful: useful
+            )
+        } catch {
+            localFeedback[finding.id] = previous
         }
     }
 
-    private var findingColor: Color {
-        switch finding.type {
-        case .insight: return BrettColors.purple400
-        case .article: return BrettColors.gold
-        case .task: return BrettColors.amber400
+    private func deleteMemory(_ memory: APIClient.MemoryDTO) async {
+        let previous = memories
+        memories.removeAll { $0.id == memory.id }
+        do {
+            try await scoutStore.deleteMemory(scoutId: scoutId, memoryId: memory.id)
+        } catch {
+            memories = previous
         }
     }
 
-    private var findingIcon: String {
-        switch finding.type {
-        case .insight: return "bolt.fill"        // Zap on desktop
-        case .article: return "doc.text"
-        case .task: return "checkmark.circle"  // CircleCheck on desktop
+    private func triggerRun() async {
+        isRunning = true
+        defer { isRunning = false }
+        do {
+            try await scoutStore.triggerRun(id: scoutId)
+            try? await Task.sleep(for: .seconds(1))
+            await refreshActivity()
+            await refreshFindings()
+        } catch {
+            errorMessage = "Couldn't trigger run."
         }
     }
 }
