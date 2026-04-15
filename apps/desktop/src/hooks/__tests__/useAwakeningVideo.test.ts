@@ -69,4 +69,19 @@ describe("useAwakeningVideo", () => {
     );
     expect(result.current.shouldPlay).toBe(false);
   });
+
+  it("flips to shouldPlay=true when baseUrl arrives async (rerender)", () => {
+    const { result, rerender } = renderHook(
+      ({ baseUrl }: { baseUrl: string }) =>
+        useAwakeningVideo({ baseUrl, segment: "morning" }),
+      { initialProps: { baseUrl: "" } }
+    );
+    expect(result.current.shouldPlay).toBe(false);
+    rerender({ baseUrl: "https://cdn.test" });
+    expect(result.current.shouldPlay).toBe(true);
+    expect(result.current.videoUrls).toEqual([
+      "https://cdn.test/videos/awakening/morning.webm",
+      "https://cdn.test/videos/awakening/morning.mp4",
+    ]);
+  });
 });

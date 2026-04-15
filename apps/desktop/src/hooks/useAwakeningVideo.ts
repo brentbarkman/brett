@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import manifest from "../data/awakening-manifest.json";
 
 type Segment = "dawn" | "morning" | "afternoon" | "goldenHour" | "evening" | "night";
@@ -27,27 +27,36 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+const NO_PLAY: UseAwakeningVideoResult = { shouldPlay: false, videoUrls: [] };
+
+/**
+ * Decides whether to play the awakening video. Uses useEffect (not a useState
+ * initializer with side effects) so it re-evaluates correctly when baseUrl
+ * arrives async from useAppConfig. Sets state at most once per session: from
+ * NO_PLAY → {shouldPlay: true} when conditions are met, never the reverse.
+ */
 export function useAwakeningVideo({
   baseUrl,
   segment,
 }: UseAwakeningVideoArgs): UseAwakeningVideoResult {
-  // Decide ONCE per hook instance — useState lazy initializer captures the
-  // decision at mount time so re-renders don't replay it.
-  const [decision] = useState<UseAwakeningVideoResult>(() => {
-    if (SESSION_PLAYED) return { shouldPlay: false, videoUrls: [] };
-    if (prefersReducedMotion()) return { shouldPlay: false, videoUrls: [] };
-    if (!baseUrl) return { shouldPlay: false, videoUrls: [] };
+  const [decision, setDecision] = useState<UseAwakeningVideoResult>(NO_PLAY);
+
+  useEffect(() => {
+    if (decision.shouldPlay) return; // already decided to play; lock the value
+    if (SESSION_PLAYED) return; // another instance played this session
+    if (prefersReducedMotion()) return;
+    if (!baseUrl) return; // wait for storage URL
 
     const entry = (manifest as { videos: Record<string, { mp4: string; webm: string }> }).videos[segment];
-    if (!entry) return { shouldPlay: false, videoUrls: [] };
+    if (!entry) return;
 
     SESSION_PLAYED = true;
-    return {
+    setDecision({
       shouldPlay: true,
       // WebM first (smaller, modern), MP4 fallback. <video> picks the first playable source.
       videoUrls: [`${baseUrl}/${entry.webm}`, `${baseUrl}/${entry.mp4}`],
-    };
-  });
+    });
+  }, [baseUrl, segment, decision.shouldPlay]);
 
   return decision;
 }

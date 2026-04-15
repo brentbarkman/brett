@@ -506,15 +506,15 @@ export function App() {
     pinnedBackground,
   });
 
-  // Awakening video — plays once on cold launch, handed off to LivingBackground
+  // Awakening video — plays once on cold launch, handed off to LivingBackground.
+  // Phase always starts at "playing"; the conditional render below uses
+  // awakening.shouldPlay to decide whether to actually mount the video.
   const { data: appConfig } = useAppConfig();
   const awakening = useAwakeningVideo({
     baseUrl: appConfig?.storageBaseUrl ?? "",
     segment: background.segment,
   });
-  const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">(
-    awakening.shouldPlay ? "playing" : "done"
-  );
+  const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">("playing");
   const handleAwakeningEnded = () => {
     // Hold on the rest frame for 500ms, then fade out over 500ms, then unmount
     setTimeout(() => setAwakeningPhase("fading"), 500);
