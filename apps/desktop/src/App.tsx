@@ -108,17 +108,17 @@ import type { RecentFindingItem } from "@brett/ui";
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
 // ----- Awakening timing (Ken Burns cold-launch reveal) -----
-/** Total reveal duration. Drives the Ken Burns scale transition on
- *  LivingBackground (scale 1.15 → 1.0). Also acts as the outer deadline:
- *  UI opacity finishes fading in at the same moment Ken Burns ends. */
+/** Ken Burns scale transition duration (scale 1.15 → 1.0 on
+ *  LivingBackground). Also the outer deadline — nothing animates past it. */
 const AWAKENING_REVEAL_MS = 2000;
 /** How long to show ONLY the Ken-Burnsing background before the UI begins
- *  fading in. User asked for "see the background ken-burns BEFORE the UI
- *  fades in" — this is that delay. */
-const AWAKENING_UI_DELAY_MS = 600;
-/** UI fade-in duration. AWAKENING_UI_DELAY_MS + AWAKENING_UI_FADE_MS =
- *  AWAKENING_REVEAL_MS, so UI fade and Ken Burns finish together. */
-const AWAKENING_UI_FADE_MS = AWAKENING_REVEAL_MS - AWAKENING_UI_DELAY_MS;
+ *  fading in. */
+const AWAKENING_UI_DELAY_MS = 300;
+/** UI fade-in duration. Intentionally finishes BEFORE Ken Burns ends
+ *  (300 + 1400 = 1700ms < 2000ms) — this gives the image ~300ms of solo
+ *  settling motion after the UI is fully revealed, which helps mask any
+ *  compositor-level glass-blur transitions happening near opacity === 1. */
+const AWAKENING_UI_FADE_MS = 1400;
 
 function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer, assistantName }: {
   children: React.ReactNode;
