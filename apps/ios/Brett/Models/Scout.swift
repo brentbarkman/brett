@@ -1,46 +1,93 @@
 import Foundation
 import SwiftData
 
+/// Mirrors Prisma `Scout`. Cadence tracks how often it runs; budget limits total spend.
 @Model
 final class Scout {
     @Attribute(.unique) var id: String
+    var userId: String
+
+    // Presentation
     var name: String
+    var avatarLetter: String = ""
+    var avatarGradientFrom: String = ""
+    var avatarGradientTo: String = ""
+
+    // Behaviour
     var goal: String
     var context: String?
-    var sourcesJSON: String?   // JSON array of { name, url? }
-    var sensitivity: String = "medium"
-    var analysisTier: String = "standard"
+    var sourcesJSON: String?          // JSON: [{ name, url? }]
+
+    var sensitivity: String = ScoutSensitivity.medium.rawValue
+    var analysisTier: String = AnalysisTier.standard.rawValue
+
+    // Cadence
     var cadenceIntervalHours: Double
-    var budgetUsed: Int = 0
+    var cadenceMinIntervalHours: Double = 1
+    var cadenceCurrentIntervalHours: Double = 24
+    var cadenceReason: String?
+
+    // Budget
     var budgetTotal: Int
-    var status: String = "active"
+    var budgetUsed: Int = 0
+    var budgetResetAt: Date?
+
+    // Status
+    var status: String = ScoutStatus.active.rawValue
     var statusLine: String?
+    var bootstrapped: Bool = false
+    var endDate: Date?
     var nextRunAt: Date?
-    var userId: String
+
+    // Timestamps
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
 
-    var syncStatus: String = "synced"
-    var baseUpdatedAt: Date?
+    // Sync metadata
+    var _syncStatus: String = SyncStatus.synced.rawValue
+    var _baseUpdatedAt: String?
+    var _lastError: String?
 
     init(
         id: String = UUID().uuidString,
+        userId: String,
         name: String,
         goal: String,
+        context: String? = nil,
         cadenceIntervalHours: Double = 24,
         budgetTotal: Int = 100,
-        userId: String
+        sensitivity: ScoutSensitivity = .medium,
+        analysisTier: AnalysisTier = .standard,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
     ) {
         self.id = id
+        self.userId = userId
         self.name = name
         self.goal = goal
+        self.context = context
         self.cadenceIntervalHours = cadenceIntervalHours
+        self.cadenceCurrentIntervalHours = cadenceIntervalHours
         self.budgetTotal = budgetTotal
-        self.userId = userId
-        self.createdAt = Date()
-        self.updatedAt = Date()
+        self.sensitivity = sensitivity.rawValue
+        self.analysisTier = analysisTier.rawValue
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 
+    // MARK: - Typed helpers
     var scoutStatus: ScoutStatus { ScoutStatus(rawValue: status) ?? .active }
+    var scoutSensitivity: ScoutSensitivity { ScoutSensitivity(rawValue: sensitivity) ?? .medium }
+    var scoutAnalysisTier: AnalysisTier { AnalysisTier(rawValue: analysisTier) ?? .standard }
+
+    var syncStatusEnum: SyncStatus {
+        SyncStatus(rawValue: _syncStatus) ?? .synced
+    }
+
+    /// Decoded source list — safe on missing/invalid JSON.
+    var sources: [[String: Any]] {
+        guard let data = sourcesJSON?.data(using: .utf8) else { return [] }
+        return (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+    }
 }
