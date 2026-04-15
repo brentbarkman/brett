@@ -44,6 +44,8 @@ export function useOmnibar() {
   const [isMinimized, setIsMinimized] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  const pendingTextRef = useRef<string>("");
+  const pendingFrameRef = useRef<number | null>(null);
   // Maps tool call id → name so we can look up the name when the result arrives
   const toolCallNamesRef = useRef<Map<string, string>>(new Map());
   const queryClient = useQueryClient();
@@ -70,6 +72,35 @@ export function useOmnibar() {
   // ────────────────────────────────────────────────────────────────────
   const stateRef = useRef({ isStreaming, messages, sessionId });
   stateRef.current = { isStreaming, messages, sessionId };
+
+  const flushPendingText = useCallback(() => {
+    if (pendingFrameRef.current !== null) {
+      cancelAnimationFrame(pendingFrameRef.current);
+      pendingFrameRef.current = null;
+    }
+    const buffered = pendingTextRef.current;
+    if (!buffered) return;
+    pendingTextRef.current = "";
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last && last.role === "assistant") {
+        updated[updated.length - 1] = {
+          ...last,
+          content: last.content + buffered,
+        };
+      }
+      return updated;
+    });
+  }, []);
+
+  const scheduleFlush = useCallback(() => {
+    if (pendingFrameRef.current !== null) return;
+    pendingFrameRef.current = requestAnimationFrame(() => {
+      pendingFrameRef.current = null;
+      flushPendingText();
+    });
+  }, [flushPendingText]);
 
   const send = useCallback(async (text: string, currentView?: string, intent?: string) => {
       const trimmed = text.trim();
@@ -131,20 +162,12 @@ export function useOmnibar() {
 
           switch (chunk.type) {
             case "text":
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === "assistant") {
-                  updated[updated.length - 1] = {
-                    ...last,
-                    content: last.content + chunk.content,
-                  };
-                }
-                return updated;
-              });
+              pendingTextRef.current += chunk.content;
+              scheduleFlush();
               break;
 
             case "tool_call":
+              flushPendingText();
               // Record the tool name so we can look it up when the result arrives
               toolCallNamesRef.current.set(chunk.id, chunk.name);
               setMessages((prev) => {
@@ -169,6 +192,7 @@ export function useOmnibar() {
               break;
 
             case "tool_result":
+              flushPendingText();
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -207,12 +231,14 @@ export function useOmnibar() {
               break;
 
             case "done":
+              flushPendingText();
               if (chunk.sessionId) {
                 setSessionId(chunk.sessionId);
               }
               break;
 
             case "error":
+              flushPendingText();
               console.error("[omnibar] SSE error event:", chunk);
               setMessages((prev) => {
                 const updated = [...prev];
@@ -229,6 +255,7 @@ export function useOmnibar() {
           }
         }
       } catch (err) {
+        flushPendingText();
         console.error("[omnibar] Stream exception:", err);
         if ((err as Error).name !== "AbortError") {
           setMessages((prev) => {
@@ -244,10 +271,11 @@ export function useOmnibar() {
           });
         }
       } finally {
+        flushPendingText();
         setIsStreaming(false);
         abortRef.current = null;
       }
-  }, [queryClient]);
+  }, [queryClient, scheduleFlush, flushPendingText]);
 
   const cancel = useCallback(() => {
     if (abortRef.current) {

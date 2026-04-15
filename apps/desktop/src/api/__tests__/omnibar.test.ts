@@ -323,6 +323,60 @@ describe("useOmnibar", () => {
     });
   });
 
+  describe("streaming text batching", () => {
+    it("coalesces multiple text chunks into the final message content", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+      mockStream.mockImplementation(async function* () {
+        yield { type: "text" as const, content: "A" };
+        yield { type: "text" as const, content: "B" };
+        yield { type: "text" as const, content: "C" };
+        yield { type: "text" as const, content: "D" };
+        yield { type: "text" as const, content: "E" };
+        yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.send("hello");
+      });
+
+      const lastMsg = result.current.messages[result.current.messages.length - 1];
+      expect(lastMsg.role).toBe("assistant");
+      expect(lastMsg.content).toBe("ABCDE");
+    });
+
+    it("flushes buffered text synchronously on done", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+      mockStream.mockImplementation(async function* () {
+        yield { type: "text" as const, content: "final" };
+        yield { type: "done" as const, sessionId: "s2", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.send("hi");
+      });
+
+      // After `done`, isStreaming must be false AND the text must be visible —
+      // proving the pending rAF buffer flushed before the streaming lifecycle ended.
+      expect(result.current.isStreaming).toBe(false);
+      const lastMsg = result.current.messages[result.current.messages.length - 1];
+      expect(lastMsg.content).toBe("final");
+    });
+  });
+
   describe("close and reset", () => {
     it("close clears search results", async () => {
       mockApiFetch.mockResolvedValue([{ id: "1", title: "Test", status: "active" }]);
