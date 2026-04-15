@@ -30,9 +30,13 @@ export function useWeather(enabled: boolean = true) {
   const query = useQuery({
     queryKey: ["weather"],
     queryFn: async () => {
-      const res = await apiFetch<WeatherResponse>("/weather");
-      if (!res.weather) throw new Error(res.reason ?? "Weather unavailable");
-      return res;
+      // `weather: null` with a reason is a valid terminal state (no_location,
+      // disabled, fetch_failed) — not an error. Let the consumer render the
+      // empty state directly rather than throwing into React Query's retry
+      // loop, which would keep `isLoading` true for ~60s and stall the UI
+      // on the skeleton. Network/HTTP errors still throw from apiFetch and
+      // will be retried normally.
+      return apiFetch<WeatherResponse>("/weather");
     },
     enabled,
     staleTime: 5 * 60 * 1000,
