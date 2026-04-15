@@ -521,6 +521,15 @@ export function App() {
     setTimeout(() => setAwakeningPhase("done"), 1000);
   };
 
+  // Safety: if the video element neither ends nor errors within 5s of mount
+  // (e.g., hung loading), force the awakening to "done" so LivingBackground
+  // is revealed rather than left black.
+  useEffect(() => {
+    if (!awakening.shouldPlay) return;
+    const safetyTimer = setTimeout(() => setAwakeningPhase("done"), 5000);
+    return () => clearTimeout(safetyTimer);
+  }, [awakening.shouldPlay]);
+
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
 

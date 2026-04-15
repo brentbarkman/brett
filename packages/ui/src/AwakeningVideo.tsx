@@ -1,8 +1,9 @@
 interface AwakeningVideoProps {
   /** Source URLs in priority order — webm first if available, mp4 fallback. */
   sources: string[];
-  /** Fired when video playback completes naturally. Parent should pause-on-frame
-   *  (we set videoElement.currentTime = videoElement.duration) and then fade us out. */
+  /** Fired when video playback completes naturally OR when all sources fail to load
+   *  (so the parent can fall through to LivingBackground instead of hanging on a
+   *  black overlay forever). */
   onEnded: () => void;
 }
 
@@ -15,20 +16,24 @@ function getMimeType(url: string): string {
 /**
  * Plays an awakening video once on mount. The parent (App.tsx) decides
  * whether to mount us via useAwakeningVideo's `shouldPlay`. We do nothing
- * fancy — autoplay muted inline, fire onEnded when done.
+ * fancy — autoplay muted inline, fire onEnded when done OR if loading fails.
  *
- * After onEnded the parent should hold us mounted briefly (the video pauses
- * automatically on its last frame) then fade us to opacity 0 and unmount.
+ * No background color — if the video fails to load, the LivingBackground
+ * underneath remains visible.
  */
 export function AwakeningVideo({ sources, onEnded }: AwakeningVideoProps) {
   return (
-    <div className="absolute inset-0 z-0 bg-black pointer-events-none">
+    <div className="absolute inset-0 z-0 pointer-events-none">
       <video
         autoPlay
         muted
         playsInline
         preload="auto"
         onEnded={onEnded}
+        // If the <video> element exhausts all sources without one playing, browsers
+        // fire `error` on the video element. Treat that as "done" so the parent
+        // unmounts us and reveals LivingBackground.
+        onError={onEnded}
         className="absolute inset-0 w-full h-full object-cover"
       >
         {sources.map((src) => (

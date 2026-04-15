@@ -33,4 +33,14 @@ describe("AwakeningVideo", () => {
     video.dispatchEvent(new Event("ended"));
     expect(onEnded).toHaveBeenCalledOnce();
   });
+
+  it("calls onEnded when the video element fires error (e.g., all sources 404)", () => {
+    const onEnded = vi.fn();
+    const { container } = render(
+      <AwakeningVideo sources={["https://cdn/missing.webm", "https://cdn/missing.mp4"]} onEnded={onEnded} />
+    );
+    const video = container.querySelector("video") as HTMLVideoElement;
+    video.dispatchEvent(new Event("error"));
+    expect(onEnded).toHaveBeenCalledOnce();
+  });
 });
