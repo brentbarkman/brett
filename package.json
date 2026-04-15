@@ -29,6 +29,8 @@
     "audit:backgrounds": "npx tsx scripts/backgrounds/audit-cli.ts",
     "source:backgrounds": "npx tsx scripts/backgrounds/unsplash-source.ts",
     "process:backgrounds": "npx tsx scripts/backgrounds/process-images.ts",
+    "source:awakening": "npx tsx scripts/awakening-videos/pexels-source.ts",
+    "process:awakening": "npx tsx scripts/awakening-videos/process-videos.ts",
     "release": "npx tsx scripts/release.ts"
   },
   "devDependencies": {
