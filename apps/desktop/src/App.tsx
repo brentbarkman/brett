@@ -109,8 +109,9 @@ const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
 // ----- Awakening timing (Ken Burns cold-launch reveal) -----
 /** Ken Burns scale transition duration (scale 1.15 → 1.0 on
- *  LivingBackground). Also the outer deadline — nothing animates past it. */
-const AWAKENING_REVEAL_MS = 2000;
+ *  LivingBackground). Cover fade (1950ms) finishes before this, so the
+ *  image keeps settling for ~550ms after the UI is fully revealed. */
+const AWAKENING_REVEAL_MS = 2500;
 
 // ---- Reveal mode prototype ----
 // Three experimental modes for how the UI appears on cold launch. Dev-only
