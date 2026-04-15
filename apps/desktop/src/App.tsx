@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { slugify, getEventGlassColor } from "@brett/utils";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
+import { useTodayKey } from "./hooks/useTodayKey";
 import { getEndOfWeekUTC } from "@brett/business";
 import type { BackgroundStyle } from "@brett/business";
 import {
@@ -348,8 +349,10 @@ export function App() {
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   }
 
-  // Today's bounds (stable for the session — doesn't change when sidebar navigates)
-  const [todayBounds] = useState(() => localDayBounds(new Date()));
+  // Today's bounds — recomputed when the UTC day rolls over so queries that
+  // depend on "today" stay fresh without requiring an app reload.
+  const todayKey = useTodayKey();
+  const todayBounds = useMemo(() => localDayBounds(new Date()), [todayKey]);
 
   // Sidebar calendar date navigation
   const [sidebarDate, setSidebarDate] = useState(() => new Date());
@@ -430,8 +433,9 @@ export function App() {
     );
   };
 
-  // Today badge count — active items due this week or earlier
-  const [endOfWeekISO] = useState(() => getEndOfWeekUTC().toISOString());
+  // Today badge count — active items due this week or earlier. Recomputed
+  // when the UTC day rolls over (via shared todayKey above).
+  const endOfWeekISO = useMemo(() => getEndOfWeekUTC().toISOString(), [todayKey]);
   const { data: activeThingsForCount = [] } = useActiveThings(endOfWeekISO);
 
   // Upcoming badge count

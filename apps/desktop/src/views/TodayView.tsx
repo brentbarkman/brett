@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Omnibar,
   DailyBriefing,
@@ -23,6 +23,7 @@ import {
 import { useBriefing, useBriefingSummary } from "../api/briefing";
 import { usePreference } from "../api/preferences";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
+import { useTodayKey } from "../hooks/useTodayKey";
 
 interface TodayViewProps {
   lists: NavList[];
@@ -70,9 +71,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   const briefing = useBriefing();
   const summary = useBriefingSummary();
 
-  // Stable date boundaries for the day
-  const [dueBefore] = useState(() => getEndOfWeekUTC().toISOString());
-  const [completedAfter] = useState(() => getTodayUTC().toISOString());
+  // Date boundaries — recomputed when the UTC day rolls over so tasks coming
+  // due today become visible without requiring an app reload.
+  const todayKey = useTodayKey();
+  const dueBefore = useMemo(() => getEndOfWeekUTC().toISOString(), [todayKey]);
+  const completedAfter = useMemo(() => getTodayUTC().toISOString(), [todayKey]);
 
   // Two explicit queries: active items due this week or earlier, done items from today
   const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);
