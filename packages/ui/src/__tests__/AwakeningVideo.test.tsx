@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { AwakeningVideo } from "../AwakeningVideo";
 
@@ -7,6 +7,7 @@ describe("AwakeningVideo", () => {
     const { container } = render(
       <AwakeningVideo
         sources={["https://cdn/x.webm", "https://cdn/x.mp4"]}
+        onNearEnd={() => {}}
         onEnded={() => {}}
       />
     );
@@ -27,20 +28,55 @@ describe("AwakeningVideo", () => {
   it("calls onEnded when the video element fires ended", () => {
     const onEnded = vi.fn();
     const { container } = render(
-      <AwakeningVideo sources={["https://cdn/x.mp4"]} onEnded={onEnded} />
+      <AwakeningVideo sources={["https://cdn/x.mp4"]} onNearEnd={() => {}} onEnded={onEnded} />
     );
     const video = container.querySelector("video") as HTMLVideoElement;
-    video.dispatchEvent(new Event("ended"));
+    fireEvent.ended(video);
     expect(onEnded).toHaveBeenCalledOnce();
   });
 
   it("calls onEnded when the video element fires error (e.g., all sources 404)", () => {
     const onEnded = vi.fn();
     const { container } = render(
-      <AwakeningVideo sources={["https://cdn/missing.webm", "https://cdn/missing.mp4"]} onEnded={onEnded} />
+      <AwakeningVideo sources={["https://cdn/missing.webm", "https://cdn/missing.mp4"]} onNearEnd={() => {}} onEnded={onEnded} />
     );
     const video = container.querySelector("video") as HTMLVideoElement;
-    video.dispatchEvent(new Event("error"));
+    fireEvent.error(video);
     expect(onEnded).toHaveBeenCalledOnce();
+  });
+
+  it("calls onNearEnd once when currentTime enters the last 500ms of the video", () => {
+    const onNearEnd = vi.fn();
+    const { container } = render(
+      <AwakeningVideo sources={["https://cdn/x.mp4"]} onNearEnd={onNearEnd} onEnded={() => {}} />
+    );
+    const video = container.querySelector("video") as HTMLVideoElement;
+    // Stub duration + currentTime since jsdom doesn't have real playback
+    Object.defineProperty(video, "duration", { value: 1.5, configurable: true });
+    Object.defineProperty(video, "currentTime", { value: 0.5, configurable: true, writable: true });
+    fireEvent.timeUpdate(video);
+    expect(onNearEnd).not.toHaveBeenCalled();
+
+    // Advance to within the near-end window
+    Object.defineProperty(video, "currentTime", { value: 1.1, configurable: true, writable: true });
+    fireEvent.timeUpdate(video);
+    expect(onNearEnd).toHaveBeenCalledOnce();
+
+    // Further timeupdate events shouldn't re-fire
+    Object.defineProperty(video, "currentTime", { value: 1.4, configurable: true, writable: true });
+    fireEvent.timeUpdate(video);
+    expect(onNearEnd).toHaveBeenCalledOnce();
+  });
+
+  it("does not fire onNearEnd when duration is NaN (metadata still loading)", () => {
+    const onNearEnd = vi.fn();
+    const { container } = render(
+      <AwakeningVideo sources={["https://cdn/x.mp4"]} onNearEnd={onNearEnd} onEnded={() => {}} />
+    );
+    const video = container.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(video, "duration", { value: NaN, configurable: true });
+    Object.defineProperty(video, "currentTime", { value: 0, configurable: true, writable: true });
+    fireEvent.timeUpdate(video);
+    expect(onNearEnd).not.toHaveBeenCalled();
   });
 });

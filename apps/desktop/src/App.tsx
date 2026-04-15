@@ -515,13 +515,13 @@ export function App() {
     segment: background.segment,
   });
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">("playing");
-  const handleAwakeningEnded = () => {
-    // Hold on the rest frame for 500ms, then cross-fade for 700ms:
-    // cover fades out AND UI fades in simultaneously, revealing the
-    // settled LivingBackground + app chrome in one smooth motion.
-    setTimeout(() => setAwakeningPhase("fading"), 500);
-    setTimeout(() => setAwakeningPhase("done"), 500 + 700);
-  };
+  // Fires ~500ms before the video naturally ends: begin the cross-fade
+  // WHILE the video is still playing so motion bridges smoothly into UI
+  // fade-in (avoids the "video pauses then fade starts" jerk).
+  const handleAwakeningNearEnd = () => setAwakeningPhase("fading");
+  // Fires when the video has fully ended (or errored). Finalize the phase
+  // so LivingBackground + UI are fully visible.
+  const handleAwakeningEnded = () => setAwakeningPhase("done");
 
   // Safety: if the video element neither ends nor errors within 5s of mount
   // (e.g., hung loading), force the awakening to "done" so LivingBackground
@@ -989,7 +989,11 @@ export function App() {
             style={{ opacity: awakeningPhase === "fading" ? 0 : 1 }}
           >
             {awakening.status === "play" && (
-              <AwakeningVideo sources={awakening.videoUrls} onEnded={handleAwakeningEnded} />
+              <AwakeningVideo
+                sources={awakening.videoUrls}
+                onNearEnd={handleAwakeningNearEnd}
+                onEnded={handleAwakeningEnded}
+              />
             )}
           </div>
         )}

@@ -1,9 +1,14 @@
+import { useRef } from "react";
+
 interface AwakeningVideoProps {
   /** Source URLs in priority order — webm first if available, mp4 fallback. */
   sources: string[];
-  /** Fired when video playback completes naturally OR when all sources fail to load
-   *  (so the parent can fall through to LivingBackground instead of hanging on a
-   *  black overlay forever). */
+  /** Fires ~500ms before the video ends, so the parent can begin fading the
+   *  cover out / UI in while the video is still playing — avoids the jarring
+   *  "video freezes, then fade starts" moment. */
+  onNearEnd: () => void;
+  /** Fires when playback fully completes OR when all sources fail to load.
+   *  Parent should finalize the awakening (e.g., mark phase = "done"). */
   onEnded: () => void;
 }
 
@@ -13,6 +18,9 @@ function getMimeType(url: string): string {
   return "";
 }
 
+/** How many seconds before the natural end of the video to fire onNearEnd. */
+const NEAR_END_SECONDS = 0.5;
+
 /**
  * Plays an awakening video once on mount. The parent (App.tsx) decides
  * whether to mount us via useAwakeningVideo's status.
@@ -21,13 +29,28 @@ function getMimeType(url: string): string {
  * (typically black) so a transparent video element during loading doesn't
  * reveal LivingBackground beneath.
  */
-export function AwakeningVideo({ sources, onEnded }: AwakeningVideoProps) {
+export function AwakeningVideo({ sources, onNearEnd, onEnded }: AwakeningVideoProps) {
+  // Track whether we've fired onNearEnd yet — don't re-fire on every frame
+  const nearEndFiredRef = useRef(false);
+
+  const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    if (nearEndFiredRef.current) return;
+    const video = e.currentTarget;
+    // duration may be NaN while metadata is still loading
+    if (!Number.isFinite(video.duration)) return;
+    if (video.duration - video.currentTime <= NEAR_END_SECONDS) {
+      nearEndFiredRef.current = true;
+      onNearEnd();
+    }
+  };
+
   return (
     <video
       autoPlay
       muted
       playsInline
       preload="auto"
+      onTimeUpdate={handleTimeUpdate}
       onEnded={onEnded}
       // If the <video> element exhausts all sources without one playing, browsers
       // fire `error` on the video element. Treat that as "done" so the parent

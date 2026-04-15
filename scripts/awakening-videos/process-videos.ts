@@ -15,7 +15,7 @@ const SOURCES_PATH = path.resolve(__dirname, "sources.json");
 const DOWNLOAD_DIR = path.resolve(__dirname, "downloads");
 const OUTPUT_DIR = path.resolve(__dirname, "../../apps/desktop/public/videos/awakening");
 
-const TRIM_SECONDS = 2.5;
+const TRIM_SECONDS = 1.5;
 const TARGET_WIDTH = 2560;
 
 async function downloadIfMissing(url: string, outPath: string) {
