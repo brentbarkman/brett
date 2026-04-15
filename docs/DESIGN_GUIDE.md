@@ -36,8 +36,8 @@ All containers use the glass morphism pattern. Never use solid opaque background
 
 | Surface | Classes | Use |
 |---------|---------|-----|
-| **Card** | `bg-black/30 backdrop-blur-xl rounded-xl border border-white/10` | Primary containers (ThingsList, Calendar) |
-| **Elevated card** | `bg-black/40 backdrop-blur-md border-{color}-500/30` | Accent cards (DailyBriefing, UpNextCard) |
+| **Card** | `bg-black/40 backdrop-blur-xl rounded-xl border border-white/10` | Primary containers (ThingsList, Calendar) |
+| **Elevated card** | `bg-black/40 backdrop-blur-md border-{color}-500/30` | Accent cards (DailyBriefing, UpNextCard) — distinguished by colored border + blur level, not opacity |
 | **Overlay** | `bg-black/60 backdrop-blur-2xl` | Panels over content (DetailPanel) |
 | **Inline input** | `bg-transparent` or `bg-white/5` | Inputs within cards |
 | **Hover surface** | `hover:bg-white/10` | Interactive list items, buttons |
@@ -352,7 +352,7 @@ className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40"
 
 ### Glass Card
 ```jsx
-className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4"
+className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4"
 ```
 
 ### Inline Input (inside cards)
@@ -765,8 +765,8 @@ Never use non-standard stops like `/8`, `/12`, `/25`, `/35`, `/55`. If you find 
 
 | Surface | Material | Desktop Equivalent |
 |---------|----------|--------------------|
-| Section cards | `.thinMaterial` | `bg-black/30 backdrop-blur-xl` |
-| Omnibar | `.ultraThinMaterial` | `bg-black/30 backdrop-blur-xl` |
+| Section cards | `.thinMaterial` | `bg-black/40 backdrop-blur-xl` |
+| Omnibar | `.ultraThinMaterial` | `bg-black/40 backdrop-blur-xl` |
 | Sheets/modals | `.regularMaterial` | `bg-black/60 backdrop-blur-2xl` |
 | Calendar event chips | `.ultraThinMaterial` | `bg-black/20 backdrop-blur-lg` |
 
