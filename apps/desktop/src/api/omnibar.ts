@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { streamingFetch } from "./streaming";
 import { useAIConfigs } from "./ai-config";
@@ -73,6 +73,10 @@ export function useOmnibar() {
   const stateRef = useRef({ isStreaming, messages, sessionId });
   stateRef.current = { isStreaming, messages, sessionId };
 
+  // Deps: empty. Reads only from refs (pendingTextRef, pendingFrameRef) and
+  // setMessages (React-stable). If you add reactive state reads here, you
+  // must also propagate them through scheduleFlush and send's dep array —
+  // prefer the stateRef pattern instead to keep this callback stable.
   const flushPendingText = useCallback(() => {
     if (pendingFrameRef.current !== null) {
       cancelAnimationFrame(pendingFrameRef.current);
@@ -101,6 +105,17 @@ export function useOmnibar() {
       flushPendingText();
     });
   }, [flushPendingText]);
+
+  // Cancel any pending rAF on unmount so a late-firing flush doesn't hit
+  // setMessages on a dead component.
+  useEffect(() => {
+    return () => {
+      if (pendingFrameRef.current !== null) {
+        cancelAnimationFrame(pendingFrameRef.current);
+        pendingFrameRef.current = null;
+      }
+    };
+  }, []);
 
   const send = useCallback(async (text: string, currentView?: string, intent?: string) => {
       const trimmed = text.trim();
@@ -255,7 +270,7 @@ export function useOmnibar() {
           }
         }
       } catch (err) {
-        flushPendingText();
+        flushPendingText(); // drain buffered text before appending error message
         console.error("[omnibar] Stream exception:", err);
         if ((err as Error).name !== "AbortError") {
           setMessages((prev) => {
@@ -271,7 +286,7 @@ export function useOmnibar() {
           });
         }
       } finally {
-        flushPendingText();
+        flushPendingText(); // idempotent safety net — no-op if catch already drained
         setIsStreaming(false);
         abortRef.current = null;
       }
