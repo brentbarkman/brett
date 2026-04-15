@@ -452,7 +452,7 @@ export function Omnibar({
               }`}
             />
             <input
-              ref={!hasConversation ? inputRef : undefined}
+              ref={!showConversation ? inputRef : undefined}
               type="text"
               placeholder={placeholderOverride ?? (hasConversation && isMinimized ? "Resume conversation..." : forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? `Ask ${assistantName} anything...` : "Create a task or search...")}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
