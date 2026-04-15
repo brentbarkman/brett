@@ -113,9 +113,14 @@ const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
  *  duration if shorter. Set to a larger number than the source clip to let
  *  the video end naturally. */
 const AWAKENING_MAX_DURATION_S = 1.5;
-/** Cross-fade duration for cover fade-out + UI fade-in (must match both
- *  the cover's Tailwind `duration-*` class and the UI shell's). */
-const AWAKENING_FADE_MS = 700;
+/** How long into the awakening before UI starts fading in. UI appears ON TOP
+ *  of the still-playing video — layered reveal effect. */
+const AWAKENING_UI_REVEAL_DELAY_MS = 500;
+/** UI fade-in duration. Aim for (UI_REVEAL_DELAY_MS + UI_FADE_MS) to land
+ *  near the video's end so UI is fully visible as the cover drops. */
+const AWAKENING_UI_FADE_MS = 1000;
+/** Cover (black layer) fade-out duration when near-end fires. */
+const AWAKENING_COVER_FADE_MS = 700;
 /** Absolute safety: if neither near-end nor ended fires within this window,
  *  force phase = "done" so the UI is never stuck behind a black cover. */
 const AWAKENING_SAFETY_MS = 5000;
@@ -526,17 +531,19 @@ export function App() {
     baseUrl: appConfig?.storageBaseUrl ?? "",
     segment: background.segment,
   });
+  // Cover (black layer) lifecycle: playing → fading → done
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">("playing");
-  // near-end drives the flow: we start the cross-fade WHILE the video is still
-  // playing (so its motion bridges into UI fade-in), then schedule "done"
-  // after the fade completes so the cover doesn't unmount mid-transition.
+  // UI reveal — independent of cover. Starts fading in DURING video playback
+  // (so UI appears on top of the still-playing video, layered reveal effect).
+  // For skip cases, initialized true so UI is visible immediately.
+  const [uiRevealed, setUiRevealed] = useState(() => awakening.status === "skip");
+
   const handleAwakeningNearEnd = () => {
     setAwakeningPhase("fading");
-    setTimeout(() => setAwakeningPhase("done"), AWAKENING_FADE_MS);
+    setTimeout(() => setAwakeningPhase("done"), AWAKENING_COVER_FADE_MS);
   };
   // Safety fallback — fires on natural video end or error. Only drives to
-  // "done" if near-end never happened (e.g., video errored before its
-  // last 500ms, so we didn't cross-fade gracefully).
+  // "done" if near-end never happened.
   const handleAwakeningEnded = () => {
     if (awakeningPhase === "playing") setAwakeningPhase("done");
   };
@@ -554,7 +561,19 @@ export function App() {
   // "playing" so the cover stays mounted. When skip resolves, jump to "done"
   // so reduced-motion / already-played users don't get stuck on a black cover.
   useEffect(() => {
-    if (awakening.status === "skip") setAwakeningPhase("done");
+    if (awakening.status === "skip") {
+      setAwakeningPhase("done");
+      setUiRevealed(true);
+    }
+  }, [awakening.status]);
+
+  // Schedule the UI fade-in to start partway through the video, while it's
+  // still playing — the UI materializes on top of motion, then the cover
+  // drops after the video ends.
+  useEffect(() => {
+    if (awakening.status !== "play") return;
+    const timer = setTimeout(() => setUiRevealed(true), AWAKENING_UI_REVEAL_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [awakening.status]);
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
@@ -999,12 +1018,16 @@ export function App() {
         <BackgroundScrim />
 
         {/* Awakening cover: covers LivingBackground while video plays (or while
-            we wait for video metadata). Fades out at the end so the settled
-            current-segment image is revealed smoothly. */}
+            we wait for video metadata). Video sits inside the cover. UI layer
+            (below, z-10) starts fading in over this layer before the cover
+            drops — creating a layered reveal. */}
         {awakening.status !== "skip" && awakeningPhase !== "done" && (
           <div
-            className="absolute inset-0 z-[5] bg-black transition-opacity duration-700 pointer-events-none"
-            style={{ opacity: awakeningPhase === "fading" ? 0 : 1 }}
+            className="absolute inset-0 z-[5] bg-black pointer-events-none transition-opacity ease-out"
+            style={{
+              opacity: awakeningPhase === "fading" ? 0 : 1,
+              transitionDuration: `${AWAKENING_COVER_FADE_MS}ms`,
+            }}
           >
             {awakening.status === "play" && (
               <AwakeningVideo
@@ -1022,13 +1045,17 @@ export function App() {
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
 
-        {/* Main Layout Shell — hidden during awakening so the video plays alone.
-            Fades in (700ms) once awakeningPhase leaves "playing". For skip
-            cases (reduced motion / session-already-played), phase is forced
-            to "done" synchronously so this is visible immediately. */}
+        {/* Main Layout Shell — materializes on top of the still-playing video
+            (layered reveal). UI reveal timer fires AWAKENING_UI_REVEAL_DELAY_MS
+            after awakening starts, then fades in over AWAKENING_UI_FADE_MS.
+            For skip cases, uiRevealed starts true so UI is visible immediately
+            with no fade. */}
         <div
-          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0 transition-opacity duration-700 ease-out"
-          style={{ opacity: awakeningPhase === "playing" ? 0 : 1 }}
+          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0 transition-opacity ease-out"
+          style={{
+            opacity: uiRevealed ? 1 : 0,
+            transitionDuration: `${AWAKENING_UI_FADE_MS}ms`,
+          }}
         >
           {/* Left Column: Navigation */}
           <LeftNav
