@@ -78,10 +78,13 @@ struct ListColorTests {
 
     // MARK: - Picker surface
 
-    @Test("Picker exposes all canonical swatches without duplicates")
+    @Test("Picker exposes every allowed swatch without duplicates, excluding cerulean")
     func pickerSwatches() {
         let swatches = ListColor.pickerSwatches
-        #expect(swatches.count == 9)
+        // 8 = all 9 enum cases minus cerulean (reserved for Brett AI surfaces
+        // per the design guide; not user-selectable for regular lists).
+        #expect(swatches.count == 8)
+        #expect(!swatches.contains(.cerulean), "cerulean is reserved and must not appear in the list-color picker")
         let uniqueRaws = Set(swatches.map(\.rawValue))
         #expect(uniqueRaws.count == swatches.count, "picker swatches must be unique")
     }

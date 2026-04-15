@@ -160,7 +160,10 @@ struct SmartParserTests {
 
     @Test("On the Calendar page, a plain-ish input becomes an event")
     func calendarPageEvent() {
-        let result = SmartParser.parse("meeting at 3pm", context: Self.context(page: 2))
+        // Calendar is index 3 after the Lists tab was added at index 0.
+        // If this breaks, check `MainContainer.currentPage` and the page
+        // ordering in the TabView.
+        let result = SmartParser.parse("meeting at 3pm", context: Self.context(page: 3))
         #expect(result.kind == .event)
         #expect(result.hasExplicitTime)
     }
