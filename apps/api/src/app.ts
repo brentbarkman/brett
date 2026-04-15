@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authRouter } from "./routes/auth.js";
+import { authIOS } from "./routes/auth-ios.js";
 import { users } from "./routes/users.js";
 import { things } from "./routes/things.js";
 import { lists } from "./routes/lists.js";
@@ -76,6 +77,11 @@ app.route("/public", storageProxy);
 app.route("/releases", releaseProxy);
 
 // Routes
+// Native-mobile Google sign-in: iOS client posts an ID token minted by
+// GoogleSignIn-iOS; server verifies + exchanges for a Brett session.
+// Must be mounted BEFORE authRouter because authRouter has a `/*` catch-all
+// that forwards to better-auth, which would otherwise swallow this path.
+app.route("/api/auth/ios", authIOS);
 app.route("/api/auth", authRouter);
 app.route("/users", users);
 app.route("/things", things);

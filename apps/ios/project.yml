@@ -7,6 +7,18 @@ options:
   generateEmptyDirectories: true
   groupSortPosition: top
 
+# SPM dependencies. Kept minimal on purpose — every entry here is justified
+# below. If you're tempted to add a generic utility package, see if we can
+# do it in first-party Swift instead (the codebase prefers zero-dep).
+packages:
+  # GoogleSignIn-iOS — native Google sign-in. Gives users the system
+  # account chooser that reads from Gmail / YouTube / Drive if those apps
+  # are installed, so first-time sign-in is ~one tap for most users.
+  # Verified on the server via /api/auth/ios/google/token.
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "7.1.0"
+
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -32,6 +44,11 @@ targets:
         excludes:
           - "**/*.xcassets"
       - path: Brett/Assets.xcassets
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - package: GoogleSignIn
+        product: GoogleSignInSwift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.brett.app

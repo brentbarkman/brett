@@ -30,10 +30,33 @@
 				<string>brett</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.brett.app.googlesignin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!--
+				  GoogleSignIn-iOS SDK callback. Replace with the REVERSED iOS
+				  client ID from Google Cloud Console, e.g.:
+				  com.googleusercontent.apps.123456789-abcdefg
+				  See apps/ios/CREDENTIALS.md §2.
+				-->
+				<string>com.googleusercontent.apps.REPLACE_WITH_REVERSED_IOS_CLIENT_ID</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>GoogleiOSClientID</key>
+	<!--
+	  GoogleSignIn-iOS SDK reads the iOS OAuth Client ID from this key.
+	  Create under Google Cloud Console → APIs & Services → Credentials →
+	  OAuth client ID → iOS (bundle id com.brett.app). The SAME client ID
+	  must be set as GOOGLE_IOS_CLIENT_ID on the API server — the server
+	  validates idToken audience against its env var.
+	-->
+	<key>GIDClientID</key>
 	<string></string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>

@@ -14,21 +14,44 @@ Xcode capability, per-target:
 
 The provider at `Brett/Auth/AppleSignInProvider.swift` requests `.fullName` and `.email` scopes and POSTs the identity token to `/api/auth/sign-in/social` with `provider: "apple"`.
 
-## 2. Google OAuth (iOS client)
+## 2. Google OAuth (iOS client) — native GoogleSignIn-iOS SDK
 
-Google policy requires a dedicated iOS OAuth Client ID — you cannot reuse the web client used by the desktop app.
+The iOS app uses the native [GoogleSignIn-iOS SDK](https://github.com/google/GoogleSignIn-iOS) so users get the system Google account chooser (one-tap if Gmail/YouTube/Drive are signed in on the device). This requires a **dedicated iOS OAuth Client ID** — different from the web client used by desktop.
 
-1. Visit <https://console.cloud.google.com/apis/credentials>.
+### 2a. Create the iOS OAuth Client
+
+1. Visit <https://console.cloud.google.com/apis/credentials> — use the **same Google Cloud project** as your existing web client so both clients share the OAuth consent screen and emit identical `sub` values for a given user.
 2. **Create Credentials → OAuth client ID → iOS**.
 3. **Bundle ID:** `com.brett.app`.
-4. Copy the **iOS client ID** (format: `123-abc.apps.googleusercontent.com`).
-5. Also copy the **reversed client ID** (format: `com.googleusercontent.apps.123-abc`).
-6. In `Brett/Info.plist`:
-   - Set `GoogleiOSClientID` to the iOS client ID from step 4.
-   - Add the reversed client ID as an additional URL scheme under `CFBundleURLTypes`. The existing entry already contains `brett` (for the OAuth callback); add the reversed client ID as a second `CFBundleURLSchemes` entry or a second dict under `CFBundleURLTypes`.
-7. The provider at `Brett/Auth/GoogleSignInProvider.swift` uses `ASWebAuthenticationSession` to open `{BrettAPIURL}/api/auth/sign-in/social?provider=google&callbackURL=brett://oauth-callback` and extracts the session token from the callback URL query parameter.
+4. Copy the **iOS client ID** (format: `123456789-abcdefg.apps.googleusercontent.com`).
+5. Copy the **reversed client ID** (format: `com.googleusercontent.apps.123456789-abcdefg`).
 
-**Note:** The API side may need a `/api/auth/ios/google` GET shim (mirroring the existing `/api/auth/desktop/google`) so the POST-only `/sign-in/social` endpoint can be hit via browser redirect. If Google sign-in fails with a `method_not_allowed` error, add that shim on the API.
+### 2b. Configure the iOS app
+
+In `Brett/Info.plist`:
+- Set `GIDClientID` to the iOS client ID from step 4.
+- Under `CFBundleURLTypes`, replace `com.googleusercontent.apps.REPLACE_WITH_REVERSED_IOS_CLIENT_ID` with the reversed client ID from step 5 (the scaffold has the slot pre-wired alongside the existing `brett` scheme).
+
+`BrettApp.swift` forwards every inbound URL to `GIDSignIn.sharedInstance.handle(url)` via `.onOpenURL`, so the SDK's OAuth callback returns to the app correctly.
+
+### 2c. Configure the API server
+
+Set `GOOGLE_IOS_CLIENT_ID` in `apps/api/.env` (and in Railway env vars for prod) to the **same** iOS client ID from step 4. The server verifies incoming idTokens against this audience in [`apps/api/src/lib/ios-google-verifier.ts`](../api/src/lib/ios-google-verifier.ts). Without it, the iOS sign-in endpoint returns `503 ios_google_not_configured`.
+
+### 2d. Flow recap
+
+1. iOS app calls `GIDSignIn.sharedInstance.signIn(withPresenting:)`.
+2. Native chooser returns a `GIDSignInResult` containing `user.idToken.tokenString`.
+3. App POSTs `{ idToken }` to `/api/auth/ios/google/token`.
+4. Server verifies the token against Google's public JWKS with audience = `GOOGLE_IOS_CLIENT_ID`, extracts `sub` + `email`, then upserts:
+   - **existing** — Google account row already exists → reuse user.
+   - **linked** — no Google row but a user exists with this email AND `email_verified=true` → link and reuse.
+   - **created** — brand-new Brett user.
+5. Server returns `{ token, user, outcome }`; app stores the bearer token in Keychain via `AuthManager`.
+
+### 2e. User unification
+
+Both the desktop web client and the iOS client live in the same Google Cloud project, so Google returns the same stable `sub` for a given Google account across both. Better-auth's `Account` table is keyed on `(providerId, accountId=sub)`, so a user who signs up on desktop and later installs the iOS app sees the same Brett workspace — no manual linking step.
 
 ## 3. API URL (`BrettAPIURL`)
 

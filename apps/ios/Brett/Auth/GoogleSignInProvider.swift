@@ -1,108 +1,130 @@
-import AuthenticationServices
 import Foundation
+import UIKit
+import GoogleSignIn
 
-/// Google OAuth provider — opens the system browser via
-/// `ASWebAuthenticationSession` so Google's cookies / passkeys on the device
-/// are reused (much better UX than an in-app webview, and required by Google
-/// policy for some OAuth configurations).
+/// Google sign-in via GoogleSignIn-iOS SDK.
+///
+/// Why native SDK instead of ASWebAuthenticationSession:
+/// - Native account chooser that reads from the iOS Google account store
+///   (Gmail, YouTube, Drive, Meet). Users with those apps already signed in
+///   get a one-tap sign-in without typing their address.
+/// - PKCE + nonce handled on-device, so the idToken is safe to hand to the
+///   server.
+/// - Token refresh is automatic if we ever need it later.
 ///
 /// Flow:
-/// 1. Request a start URL from the API (better-auth's `/sign-in/social` with
-///    `provider: "google"` and a `callbackURL` pointing at `brett://oauth-callback`).
-/// 2. `ASWebAuthenticationSession` opens that URL in the system browser.
-/// 3. Google redirects back to better-auth's callback, which redirects to our
-///    custom URL scheme with the session token in a query parameter.
-/// 4. Parse the token from the callback URL, then call `getMe()` to hydrate
-///    the user profile.
+/// 1. `GIDSignIn.sharedInstance.signIn(withPresenting:)` shows the system
+///    account chooser / sign-in UI.
+/// 2. On success we extract `user.idToken.tokenString`.
+/// 3. POST the idToken to our server's `/api/auth/ios/google/token` endpoint.
+/// 4. Server verifies the token against Google's JWKS, upserts the user,
+///    and returns a Brett session bearer token.
 ///
-/// The iOS OAuth Client ID (if Google requires it) lives in Info.plist under
-/// `GoogleiOSClientID`. See CREDENTIALS.md for setup.
+/// Configuration lives in Info.plist:
+/// - `GIDClientID` — the iOS OAuth Client ID you create in Google Cloud
+///   Console (separate from the web client used by desktop).
+/// - `CFBundleURLTypes` — must include the reversed client ID as a URL
+///   scheme so GIDSignIn's OAuth callback can return to the app.
+///
+/// See apps/ios/CREDENTIALS.md for the setup walkthrough.
 @MainActor
-final class GoogleSignInProvider: NSObject, AuthProvider, ASWebAuthenticationPresentationContextProviding {
+final class GoogleSignInProvider: AuthProvider {
     private let endpoints: AuthEndpoints
-    private let callbackScheme = "brett"
-    private let callbackURL = "brett://oauth-callback"
 
     init(endpoints: AuthEndpoints = AuthEndpoints()) {
         self.endpoints = endpoints
-        super.init()
+        configureIfNeeded()
     }
 
     func signIn() async throws -> AuthSession {
-        let startURL = buildStartURL()
-
-        let callback = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
-            let session = ASWebAuthenticationSession(
-                url: startURL,
-                callbackURLScheme: callbackScheme
-            ) { url, error in
-                if let error {
-                    cont.resume(throwing: error)
-                    return
-                }
-                guard let url else {
-                    cont.resume(throwing: APIError.validation("Google sign-in returned no URL."))
-                    return
-                }
-                cont.resume(returning: url)
-            }
-            session.presentationContextProvider = self
-            session.prefersEphemeralWebBrowserSession = false
-            session.start()
+        guard let rootViewController = Self.topViewController() else {
+            throw APIError.validation("No view controller available to present Google Sign-In.")
         }
 
-        // Parse `token` out of the callback URL.
-        guard let components = URLComponents(url: callback, resolvingAgainstBaseURL: false),
-              let token = components.queryItems?.first(where: { $0.name == "token" })?.value,
-              !token.isEmpty else {
-            throw APIError.validation("Google sign-in didn't return a session token.")
+        // Present the SDK's native sign-in UI. The SDK handles PKCE, nonce,
+        // and the OAuth redirect back via the reversed-client-ID URL scheme
+        // (which BrettApp.onOpenURL hands off to `GIDSignIn.sharedInstance
+        // .handle(url)`).
+        let result: GIDSignInResult
+        do {
+            result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+        } catch {
+            // User-cancellation returns an error — surface as a soft failure
+            // rather than a crash. AuthManager shows this message in-line.
+            throw Self.mapGIDError(error)
         }
 
-        // We have a token but no user payload from this flow — set the token
-        // on the client and hydrate via /users/me. AuthManager does the final
-        // token persistence; we just return a populated AuthSession.
-        APIClient.shared.tokenProvider = { token }
-        let user = try await endpoints.getMe()
-        return AuthSession(token: token, user: user)
+        guard let idToken = result.user.idToken?.tokenString, !idToken.isEmpty else {
+            throw APIError.validation("Google Sign-In did not return an identity token.")
+        }
+
+        // Exchange the Google idToken for a Brett session via our own
+        // verified endpoint. Server validates the token against the iOS
+        // client-ID audience + Google's JWKS and hands back a bearer token.
+        let session = try await endpoints.signInIOSGoogle(idToken: idToken)
+
+        // AuthManager persists the token via Keychain; we just return the
+        // populated session so the provider contract matches Email / Apple.
+        APIClient.shared.tokenProvider = { session.token }
+        return session
     }
 
-    /// Build the URL that kicks off the better-auth social flow. The API
-    /// expects a POST for `/sign-in/social`, so we route through a GET
-    /// endpoint that the API already serves for browser-based sign-ins — or
-    /// fall back to constructing the URL directly with query parameters, if
-    /// your API exposes a GET shim. The desktop client uses a `/desktop/google`
-    /// endpoint — iOS gets its own `/ios/google` shim (not yet built).
-    ///
-    /// For now we hit `/api/auth/sign-in/social` with URL-encoded query
-    /// parameters via a custom URL. The API may need a corresponding shim on
-    /// the server side — see CREDENTIALS.md.
-    private func buildStartURL() -> URL {
-        let base = APIClient.shared.baseURL
-        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)!
-        components.path = "/api/auth/sign-in/social"
-        components.queryItems = [
-            URLQueryItem(name: "provider", value: "google"),
-            URLQueryItem(name: "callbackURL", value: callbackURL),
-        ]
-        return components.url ?? base
+    // MARK: - Configuration
+
+    /// Read `GIDClientID` from Info.plist and wire it into GIDSignIn once.
+    /// No-op on subsequent calls. The SDK happily throws at sign-in time if
+    /// we skip this, so we do it eagerly at provider init.
+    private func configureIfNeeded() {
+        guard GIDSignIn.sharedInstance.configuration == nil else { return }
+        guard
+            let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String,
+            !clientID.isEmpty
+        else {
+            // Misconfiguration — log but don't crash. signIn() will fail with
+            // a clean error below when the SDK tries to use the config.
+            #if DEBUG
+            print("[GoogleSignIn] GIDClientID missing from Info.plist; see CREDENTIALS.md")
+            #endif
+            return
+        }
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
     }
 
-    // MARK: - ASWebAuthenticationPresentationContextProviding
+    // MARK: - Presentation anchor
 
-    nonisolated func presentationAnchor(
-        for session: ASWebAuthenticationSession
-    ) -> ASPresentationAnchor {
-        // The key window is the right anchor for single-scene apps. Fall back
-        // to a fresh ASPresentationAnchor if none is available (e.g. during
-        // early app launch).
-        MainActor.assumeIsolated {
-            if let window = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .flatMap(\.windows)
-                .first(where: \.isKeyWindow) {
-                return window
-            }
-            return ASPresentationAnchor()
+    /// Walk the active window scene to find the top-most view controller.
+    /// Presenting from the root key window works for our single-scene app.
+    private static func topViewController() -> UIViewController? {
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+        var vc = window?.rootViewController
+        while let presented = vc?.presentedViewController {
+            vc = presented
         }
+        return vc
+    }
+
+    // MARK: - Error mapping
+
+    /// Translate GIDSignIn errors into the app's APIError vocabulary so the
+    /// UI layer doesn't need to know the SDK exists. Cancellation is the
+    /// common case — keep it quiet; everything else we surface.
+    private static func mapGIDError(_ error: Error) -> APIError {
+        let nsError = error as NSError
+        if nsError.domain == kGIDSignInErrorDomain {
+            switch nsError.code {
+            case GIDSignInError.canceled.rawValue:
+                return APIError.validation("Sign-in cancelled.")
+            case GIDSignInError.hasNoAuthInKeychain.rawValue:
+                return APIError.validation("No Google account found. Tap Sign in with Google to continue.")
+            case GIDSignInError.unknown.rawValue:
+                return APIError.unknown(error)
+            default:
+                return APIError.unknown(error)
+            }
+        }
+        return APIError.unknown(error)
     }
 }

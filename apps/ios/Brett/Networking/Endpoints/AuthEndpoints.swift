@@ -77,6 +77,45 @@ struct AuthEndpoints {
         return try await performSignIn(path: "/api/auth/sign-in/social", body: body)
     }
 
+    /// Native iOS Google Sign-In — exchange an idToken minted by
+    /// GoogleSignIn-iOS for a Brett bearer token.
+    ///
+    /// The server's `/api/auth/ios/google/token` verifies the token against
+    /// the iOS client-ID audience and Google's JWKS, then upserts the user
+    /// and issues a session. Response shape:
+    /// `{ token: string, user: { id, email, name, image?, createdAt }, outcome }`
+    func signInIOSGoogle(idToken: String) async throws -> AuthSession {
+        struct Body: Encodable { let idToken: String }
+        struct Response: Decodable {
+            let token: String
+            let user: ResponseUser
+            struct ResponseUser: Decodable {
+                let id: String
+                let email: String
+                let name: String?
+                let image: String?
+            }
+        }
+
+        let encoded = try JSONEncoder().encode(Body(idToken: idToken))
+        let (data, _) = try await client.rawRequest(
+            path: "/api/auth/ios/google/token",
+            method: "POST",
+            body: encoded
+        )
+
+        let decoded = try JSONDecoder().decode(Response.self, from: data)
+        let user = AuthUser(
+            id: decoded.user.id,
+            email: decoded.user.email,
+            name: decoded.user.name,
+            avatarUrl: decoded.user.image,
+            timezone: nil,
+            assistantName: nil
+        )
+        return AuthSession(token: decoded.token, user: user)
+    }
+
     /// Sign out. Best-effort — we always clear local state even if this fails.
     func signOut() async throws {
         _ = try await client.rawRequest(path: "/api/auth/sign-out", method: "POST")

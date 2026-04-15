@@ -1,3 +1,4 @@
+import GoogleSignIn
 import SwiftData
 import SwiftUI
 
@@ -70,6 +71,15 @@ struct BrettApp: App {
                 .environment(authManager)
                 .environment(APIClient.shared)
                 .preferredColorScheme(.dark)
+                // GoogleSignIn-iOS finishes its OAuth dance by redirecting to
+                // the reversed client-ID URL scheme. The SDK needs to see
+                // that redirect to complete the pending sign-in call, so we
+                // hand every inbound URL to it. Returns `true` if the SDK
+                // consumed the URL; otherwise it's ours to ignore (or route
+                // elsewhere in the future — deep links, magic email links).
+                .onOpenURL { url in
+                    _ = GIDSignIn.sharedInstance.handle(url)
+                }
         }
         // Single shared ModelContainer owned by `PersistenceController` —
         // registers every @Model type (domain + sync infra) in one place
