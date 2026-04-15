@@ -51,14 +51,14 @@ Verdict per image: **Keep**, **Replace**, or **Cut** (if the category has enough
 
 ### Constraints
 
-- **Pool size:** Aim for 3 images per category as today (54 total), but accept 2 if a category is genuinely thin. Better fewer-and-better than filler.
+- **Pool size: A+ only, minimum 2 per category.** No filler images to pad a category to 3. If a category is genuinely thin after the cut, we source replacements from Unsplash (Step 2) until we clear the A+ bar. Tiny categories (2 images) are acceptable.
 - **Resolution / file size:** Keep under current total footprint (~22 MB for photography set). WebP q=80.
-- **Licensing:** Unsplash's license covers this use. Track source/photographer in manifest for attribution (we don't have to display, but we should record).
+- **Licensing:** Unsplash's license covers this use. Track source/photographer in manifest (no UI attribution this pass; see below).
+- **Abstract set:** Out of scope for this pass. Remains as-is.
 
-### Open questions
+### Attribution
 
-- **Do we keep the abstract set in its current form?** My take: yes, out of scope for this pass. Abstract backgrounds are forgiving and the current set is fine.
-- **Attribution in a subtle UI element?** E.g., a small "Photo by X" tucked into Settings → Background. My take: nice-to-have, defer.
+Record photographer + source URL in the manifest for every image, for future traceability. **No UI surfacing** in V1 — deferred.
 
 ---
 
@@ -89,6 +89,7 @@ Shape:     radial-gradient(ellipse at 30% 45%, transparent 0%, rgba(0,0,0,0.25) 
 Position:  30% from left, 45% from top (biases toward where content lives; sidebar is on the left)
 Z-index:   above LivingBackground image/video layer, below all app chrome
 Blend:     normal (not multiply — too muddy)
+Animation: STATIC. No pulse, no breath. Ambient chrome only.
 ```
 
 This gives us:
@@ -96,16 +97,17 @@ This gives us:
 - **Dark forest:** scrim has almost no visible effect; `/40` is fine
 - **Any photo:** card edges always have enough contrast with the background around them
 
-**3. Re-test existing top/bottom gradient vignettes.** The current top/bottom `from-black/40 via-transparent to-black/60` linear gradients in `LivingBackground.tsx:69-75` may double up with the new radial scrim. Verify they don't compound too dark on night scenes — I'd lean toward **removing the bottom linear vignette** once the radial is in, since they overlap in purpose.
+**3. Restructure the existing linear vignettes:**
+   - **Drop the bottom portion** of the vertical gradient — the radial scrim covers the bottom-edge darkening and doubling up muddies night scenes.
+   - **Reduce the top portion** from `to-black/40` to `to-black/30` — the top darkening exists to give contrast behind the macOS traffic-light buttons; too dark when the radial scrim is under it.
+   - **Keep the left sidebar scrim** (312px horizontal gradient) — serves a distinct purpose (darkening behind fixed nav chrome) that the radial doesn't replicate.
+   - **Verify on night/dark scenes** during implementation. If any scene reads too dark, tune the radial's peak opacity down from `0.25` to `0.20`.
 
 ### Verification
 
 - Test matrix: walk the app with the background pinned to one image from each of (bright sky, dark forest, muted abstract, bright abstract, golden hour warm, night navy). Every card type (list items, calendar events, empty states, chat bubble, settings panel) must be legible at a glance.
 - Run the legibility check in Settings → Appearance with a "cycle through all images" debug tool (new, simple button). Drop at ship.
 
-### Open questions
-
-- **Should the scrim be animated?** E.g., pulse very subtly with breath cycle? My take: no. Ambient enough already, we'd be adding motion for motion's sake.
 
 ---
 
@@ -141,15 +143,18 @@ Key design choices:
 - **Motion:** Slow, breathing, ambient. Think: mist drifting over water, clouds moving slowly across sky, light shifting on mountains. NOT tracking shots, NOT birds flying across, NOT anything that pulls the eye.
 - **Rest frame:** Each video's final frame is its own "still." No need to match a specific photo in the pool.
 
-### Sourcing (open question — the hard part)
+### Sourcing — Pexels (licensed stock)
 
-Options:
+**Source:** Pexels Video API. Free, permissive license, good catalog for ambient nature footage.
 
-1. **Licensed stock video** (Pexels, Coverr, Artgrid). Cheap, but sourcing 6 clips that match our exact quality bar and have correct "settle into stillness" cadence is hard.
-2. **AI-generated** (Runway, Kling, Veo). We have control over the exact "rest frame" behavior. Quality is emerging — 2026 models are capable but need directing.
-3. **Commissioned footage.** Expensive, highest quality.
+Process per segment:
+1. Search Pexels with a curated query per segment (e.g., "misty lake dawn slow motion", "ocean waves sunset ambient").
+2. Shortlist 5–10 candidates per segment, review together.
+3. Trim each to 2.5s with a "settle into stillness" end-point (fade out motion, land on a composed frame).
+4. Ensure the final frame is legible-enough to host the scrim+glass treatment.
+5. Encode H.265 MP4 + VP9 WebM fallback, upload to Railway Object Storage.
 
-My recommendation: **start with AI-generated for Phase 3**. We can iterate quickly, dial in the exact rest-frame behavior, and if quality doesn't hit we swap to licensed stock. User decides per budget.
+If Pexels doesn't yield quality across all 6 segments after a good-faith pass, we evaluate AI-generated (Runway/Veo) as a targeted fallback for the thin ones. Not leading with AI.
 
 ### Platform notes
 
@@ -216,13 +221,15 @@ When the user is in the app at 5pm and the time segment shifts to golden hour, p
 
 ---
 
-## Open Questions (summary)
+## Decisions Locked
 
-Flagged inline above; collecting here for visibility:
+Originally open questions, now resolved:
 
-1. **Phase 1 target pool size** — 54 (3 per category) or "whatever's A+, minimum 2 per category"?
-2. **Attribution UI** — nice-to-have, defer?
-3. **Phase 2 scrim animation** — ambient pulse, or static?
-4. **Phase 2 linear vignettes** — keep or remove once radial is in?
-5. **Phase 3 sourcing** — AI-generated first, or licensed stock first?
-6. **Phase 3 reduced-motion** — confirmed yes, but worth calling out.
+| # | Decision |
+|---|----------|
+| 1 | Pool size: A+ only, **minimum 2 per category**. No filler. |
+| 2 | Attribution: record in manifest, **no UI surfacing this pass**. |
+| 3 | Scrim animation: **static**. No pulse. |
+| 4 | Linear vignettes: **drop bottom**, **reduce top to `to-black/30`**, **keep left sidebar scrim**. Verify on night scenes. |
+| 5 | Phase 3 sourcing: **Pexels** (licensed stock video API). AI-generated only as targeted fallback. |
+| 6 | Reduced-motion: confirmed yes — instant still + existing 1.5s awakening crossfade when `prefers-reduced-motion: reduce`. |
