@@ -331,29 +331,32 @@ export function useOmnibar() {
     }
   }, []);
 
-  // Stable identity unless an observable value actually changes. Consumers
-  // rely on this — App.tsx uses `omnibar` as a useEffect dep. Without
-  // memoization the object identity would churn every render and effects
-  // depending on it would re-run constantly (one such case caused a render
-  // loop / React error #185 in prod).
-  return useMemo(() => ({
+  // Actions — stable identity across streaming state changes. Consumer effects
+  // that only depend on actions (e.g. keyboard shortcut setup in App.tsx) won't
+  // re-run per SSE chunk.
+  const actions = useMemo(() => ({
+    open,
+    close,
+    cancel,
+    reset,
+    setInput,
+    send,
+    createTask,
+    searchThings,
+  }), [open, close, cancel, reset, send, createTask, searchThings]);
+  // setInput is a useState setter — already stable, no dep needed
+
+  // State — changes per render; consumers that read these are expected to re-render
+  const state = useMemo(() => ({
     isOpen,
     mode,
     input,
-    setInput,
     messages,
     isStreaming,
     sessionId,
     hasAI,
-    send,
-    createTask,
-    searchThings,
     searchResults,
     isSearching,
-    cancel,
-    close,
-    open,
-    reset,
   }), [
     isOpen,
     mode,
@@ -362,14 +365,9 @@ export function useOmnibar() {
     isStreaming,
     sessionId,
     hasAI,
-    send,
-    createTask,
-    searchThings,
     searchResults,
     isSearching,
-    cancel,
-    close,
-    open,
-    reset,
   ]);
+
+  return useMemo(() => ({ ...state, ...actions }), [state, actions]);
 }
