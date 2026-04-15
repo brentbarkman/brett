@@ -254,7 +254,12 @@ export function Omnibar({
   }, [confirmedTask, animateClose]);
 
   const hasConversation = messages.length > 0;
-  const showConversation = hasConversation && !isMinimized;
+  // Conversation area only replaces the top bar when the omnibar is actively
+  // open. If messages exist but isOpen is false (e.g. the user escaped out of
+  // mid-compose, or dismissed Spotlight while a stream was in flight), we
+  // still render the top bar so the surface remains interactive. Clicking
+  // the bar re-opens and restores the conversation via the hook's state.
+  const showConversation = isOpen && hasConversation && !isMinimized;
 
   const showSuggestions = isOpen && (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
   const showSearchResults = isOpen && !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));
@@ -594,7 +599,7 @@ export function Omnibar({
         </div>
 
         {/* Conversation Area — replaces the top bar entirely */}
-        {isOpen && showConversation && (
+        {showConversation && (
           <div>
             {/* Messages */}
             <div ref={chatContainerRef} onScroll={handleScroll} className="max-h-[450px] overflow-y-auto scrollbar-hide p-4 space-y-4">

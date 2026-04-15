@@ -121,6 +121,13 @@ export function useOmnibar() {
       const trimmed = text.trim();
       if (!trimmed || stateRef.current.isStreaming) return;
 
+      // Starting a send implies the user wants the omnibar visible so they
+      // can see the response. Ensure the surface is open and not minimized —
+      // protects against the "Enter pressed while omnibar is closing" race
+      // and against orphaned post-Spotlight-dismiss sends.
+      setIsOpen(true);
+      setIsMinimized(false);
+
       // Add user message
       const userMsg: OmnibarMessage = { role: "user", content: trimmed };
       setMessages((prev) => [...prev, userMsg]);
