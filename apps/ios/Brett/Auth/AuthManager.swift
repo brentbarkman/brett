@@ -19,6 +19,10 @@ final class AuthManager {
     private(set) var token: String?
     private(set) var isLoading: Bool = false
     private(set) var errorMessage: String?
+    /// True when the last sign-in attempt failed because the email/password
+    /// combo didn't match an existing account. `SignInView` reads this to
+    /// offer a "create account" CTA instead of a plain error banner.
+    private(set) var errorIsNoAccount: Bool = false
 
     /// True when a token + user are present. Used by the app-level gate to
     /// decide between SignInView and MainContainer.
@@ -102,6 +106,9 @@ final class AuthManager {
         token = nil
         currentUser = nil
         try? KeychainStore.deleteToken()
+        // Clear the mirrored user-id in the App Group so a pending share
+        // from this user can't leak into the next sign-in's account.
+        SharedConfig.writeCurrentUserId(nil)
 
         do {
             try await endpoints.signOut()
@@ -119,6 +126,7 @@ final class AuthManager {
     private func runSignIn(_ action: () async throws -> AuthSession) async {
         isLoading = true
         errorMessage = nil
+        errorIsNoAccount = false
         defer { isLoading = false }
 
         do {
@@ -126,6 +134,9 @@ final class AuthManager {
             try await persist(session: session)
         } catch let apiError as APIError {
             errorMessage = apiError.userFacingMessage
+            if case .invalidCredentials = apiError {
+                errorIsNoAccount = true
+            }
         } catch {
             errorMessage = APIError.unknown(error).userFacingMessage
         }
@@ -139,6 +150,11 @@ final class AuthManager {
         self.token = session.token
         self.currentUser = session.user
 
+        // Mirror the current user-id into the App Group so the share
+        // extension can stamp captured payloads with the right account —
+        // prevents cross-user contamination on account switches.
+        SharedConfig.writeCurrentUserId(session.user.id)
+
         // Hydrate full user profile. Non-fatal if it fails — we already have
         // a minimal user from the sign-in response.
         await refreshCurrentUser()
@@ -149,6 +165,12 @@ final class AuthManager {
         guard token != nil else { return }
         do {
             self.currentUser = try await endpoints.getMe()
+            // Mirror to the App Group so the share extension sees the
+            // right user-id even on the "already signed in at launch"
+            // path (where `persist(session:)` wasn't called this run).
+            if let userId = self.currentUser?.id {
+                SharedConfig.writeCurrentUserId(userId)
+            }
         } catch {
             // Leave existing currentUser in place if the refresh fails.
         }
@@ -158,6 +180,7 @@ final class AuthManager {
     /// user edits a field or dismisses the banner.
     func clearError() {
         errorMessage = nil
+        errorIsNoAccount = false
     }
 
     #if DEBUG

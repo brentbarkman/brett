@@ -94,6 +94,8 @@ struct BrettApp: App {
 /// pushing mutations without an auth token.
 private struct RootView: View {
     @Environment(AuthManager.self) private var authManager
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var lockManager = BiometricLockManager.shared
 
     /// Event handler kept alive for the lifetime of the authenticated session.
     /// Holds a strong ref so its consumer task doesn't get collected.
@@ -102,32 +104,86 @@ private struct RootView: View {
     var body: some View {
         ZStack {
             if authManager.isAuthenticated {
-                MainContainer()
-                    .transition(.opacity)
-                    .task {
-                        // Fires once per authenticated mount — covers the
-                        // "already signed in at launch" path.
-                        if !Self.isUITest {
-                            SyncManager.shared.start()
-                            startSSE()
+                // Biometric gate: sits between sign-in and the real app.
+                // When the user has Face ID enabled, `BiometricLockView`
+                // auto-prompts and only yields to `MainContainer` on
+                // successful authentication.
+                if lockManager.isLocked {
+                    BiometricLockView()
+                        .transition(.opacity)
+                } else {
+                    MainContainer()
+                        .transition(.opacity)
+                        .task {
+                            // Fires once per authenticated mount — covers the
+                            // "already signed in at launch" path.
+                            if !Self.isUITest {
+                                SyncManager.shared.start()
+                                startSSE()
+                            }
                         }
-                    }
+                }
             } else {
                 SignInView()
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.35), value: authManager.isAuthenticated)
+        .animation(.easeInOut(duration: 0.25), value: lockManager.isLocked)
         // Also handle the live transition case (sign-in during session).
         .onChange(of: authManager.isAuthenticated) { _, isAuth in
             if Self.isUITest { return }
             if isAuth {
                 SyncManager.shared.start()
                 startSSE()
+                // Fresh credentials > biometric gate. Don't immediately
+                // prompt the user for Face ID right after they typed
+                // their password.
+                lockManager.handleFreshSignIn()
             } else {
                 SyncManager.shared.stop()
                 stopSSE()
+                lockManager.handleSignOut()
             }
+        }
+        // Scene-phase drives the biometric re-lock. Backgrounding the
+        // app flips `isLocked` on (when enabled); returning to
+        // foreground triggers a fresh prompt. We also invalidate any
+        // pending auth context on background so the prompt doesn't
+        // re-appear stale.
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                lockManager.handleDidEnterBackground()
+                // Stop accelerometer polling while backgrounded — no
+                // shake gestures matter when we're not visible, and
+                // stopping saves a small but real amount of battery.
+                ShakeMonitor.shared.stop()
+            case .active:
+                lockManager.handleWillEnterForeground()
+                // Resume shake-to-report. Idempotent — no-op if already
+                // running (covers the cold-launch path too where the
+                // .task below also calls start()).
+                ShakeMonitor.shared.start()
+                // Drain any payloads the share extension left in the
+                // App Group queue. Runs every time the app becomes
+                // active so in-foreground shares reconcile quickly too.
+                ShareIngestor.shared.configure(auth: authManager)
+                Task { await ShareIngestor.shared.drain() }
+            default:
+                break
+            }
+        }
+        .task {
+            // Cold launch — kick off shake detection. The scenePhase
+            // hook above keeps it in sync afterward.
+            ShakeMonitor.shared.start()
+            // Also drain on cold launch — the .active scenePhase change
+            // fires on first render, but belt-and-braces covers any case
+            // where the user opens the app directly after a share and
+            // the hook hasn't wired yet.
+            ShareIngestor.shared.configure(auth: authManager)
+            Task { await ShareIngestor.shared.drain() }
         }
     }
 

@@ -37,6 +37,12 @@ final class APIClient {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         self.decoder = decoder
+
+        // Mirror the resolved base URL into the App Group so the share
+        // extension talks to the same API server the main app does. Matters
+        // in dev where `BrettAPIURL` is a LAN IP that changes by network —
+        // without this the extension would silently post to production.
+        SharedConfig.writeAPIURL(self.baseURL)
     }
 
     // MARK: - Base URL resolution

@@ -5,6 +5,8 @@ import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { fieldLevelMerge } from "../lib/sync-merge.js";
 import { publishSSE } from "../lib/sse.js";
+import { detectContentType } from "@brett/utils";
+import { runExtraction } from "../lib/content-extractor.js";
 import type {
   SyncPullRequest, SyncPullResponse, SyncTableChanges,
   SyncPushRequest, SyncPushResponse, SyncMutation, SyncMutationResult,
@@ -321,7 +323,7 @@ async function processCreate(
   }
 
   // R7: Inject userId from auth context. Client payload NEVER controls userId.
-  const data = {
+  const data: Record<string, unknown> = {
     ...mutation.payload,
     id: mutation.entityId,
     userId,
@@ -329,7 +331,35 @@ async function processCreate(
     updatedAt: new Date(),
   };
 
+  // For item content-type creates (e.g. iOS share extension, offline-first
+  // captures on mobile), mirror the `POST /things` enrichment so we don't
+  // ship items without a contentType / never trigger the extractor. Keeping
+  // this here means every content-item create path gets the same treatment
+  // regardless of which route it came in on.
+  let shouldExtract = false;
+  if (
+    mutation.entityType === "item" &&
+    data.type === "content" &&
+    typeof data.sourceUrl === "string" &&
+    data.sourceUrl.length > 0
+  ) {
+    if (typeof data.contentType !== "string" || data.contentType.length === 0) {
+      data.contentType = detectContentType(data.sourceUrl);
+    }
+    data.contentStatus = "pending";
+    shouldExtract = true;
+  }
+
   const record = await model.create({ data });
+
+  if (shouldExtract && typeof record.sourceUrl === "string") {
+    // Fire-and-forget — extraction runs in the background and writes its
+    // result back to the item. Errors are logged inside runExtraction.
+    runExtraction(record.id, record.sourceUrl, userId).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("[sync.push] content extraction failed", { itemId: record.id, err });
+    });
+  }
 
   return {
     idempotencyKey: mutation.idempotencyKey,

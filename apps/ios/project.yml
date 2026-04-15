@@ -44,17 +44,51 @@ targets:
         excludes:
           - "**/*.xcassets"
       - path: Brett/Assets.xcassets
+      # Share-extension-shared files — SharePayload and SharedConfig are
+      # used by both the main app (for ShareIngestor reconciliation and
+      # the URL mirror) and the extension (for payload building + queue
+      # persistence). Pulled into both targets to avoid a separate module.
+      - path: Brett-ShareExtension/Shared
     dependencies:
       - package: GoogleSignIn
         product: GoogleSignIn
       - package: GoogleSignIn
         product: GoogleSignInSwift
+      # Embed the share extension into the main app's .app bundle under
+      # PlugIns/. Without this, iOS won't install the extension.
+      - target: BrettShareExtension
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.brett.app
         INFOPLIST_FILE: Brett/Info.plist
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: "NO"
+        CODE_SIGN_ENTITLEMENTS: Brett/Brett.entitlements
+
+  BrettShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      # Explicit list so Shared/ isn't double-compiled — the extension
+      # source root is just this target's Swift files, plus the shared ones.
+      - path: Brett-ShareExtension
+        excludes:
+          - "**/*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.brett.app.ShareExtension
+        INFOPLIST_FILE: Brett-ShareExtension/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_ENTITLEMENTS: Brett-ShareExtension/BrettShareExtension.entitlements
+        # Extensions need their own versioning but must match the host app
+        # to pass App Store validation.
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # Share extensions have a strict memory budget — skip the launch
+        # storyboard and keep the extension headless.
+        GENERATE_INFOPLIST_FILE: "NO"
 
   BrettTests:
     type: bundle.unit-test
@@ -68,6 +102,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.brett.app.tests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Brett.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Brett"
         BUNDLE_LOADER: "$(TEST_HOST)"
+        # Reuse the host app's entitlements so tests that touch the shared
+        # keychain access group (e.g. KeychainEdgeTests) can read/write.
+        # Without this, tests run with only the default group and get
+        # errSecMissingEntitlement (-34018) on any shared-group read.
+        CODE_SIGN_ENTITLEMENTS: Brett/Brett.entitlements
 
   BrettUITests:
     type: bundle.ui-testing
@@ -86,6 +125,7 @@ schemes:
     build:
       targets:
         Brett: all
+        BrettShareExtension: all
         BrettTests: [test]
         BrettUITests: [test]
     run:

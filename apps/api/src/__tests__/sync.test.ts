@@ -723,4 +723,138 @@ describe("Sync Push", () => {
     expect(body.results[0].record!.name).toBe("Sync List");
     expect(body.results[0].record!.userId).toBe(userId);
   });
+
+  // ── Content-item enrichment (added for iOS share extension) ──
+  //
+  // Parity with POST /things: when /sync/push CREATEs an item with
+  // type=content and a sourceUrl, the server auto-detects contentType
+  // and sets contentStatus=pending so the extraction worker picks it up.
+  // Without this, mobile offline-first content captures (and the iOS
+  // share extension) ship items without metadata, which is a silent UX
+  // regression relative to desktop capture.
+
+  it("CREATE content item: auto-detects contentType from YouTube URL", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+
+    const res = await pushRequest([{
+      idempotencyKey: `content-yt-${nonce}-${entityId}`,
+      entityType: "item",
+      entityId,
+      action: "CREATE",
+      payload: {
+        type: "content",
+        title: "https://www.youtube.com/watch?v=abc123",
+        sourceUrl: "https://www.youtube.com/watch?v=abc123",
+        status: "active",
+        source: "ios_share",
+      },
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("applied");
+    expect(body.results[0].record!.contentType).toBe("video");
+    expect(body.results[0].record!.contentStatus).toBe("pending");
+  });
+
+  it("CREATE content item: auto-detects contentType from medium.com URL", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+
+    const res = await pushRequest([{
+      idempotencyKey: `content-medium-${nonce}-${entityId}`,
+      entityType: "item",
+      entityId,
+      action: "CREATE",
+      payload: {
+        type: "content",
+        title: "https://medium.com/foo/bar",
+        sourceUrl: "https://medium.com/foo/bar",
+        status: "active",
+      },
+    }]);
+
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].record!.contentType).toBe("article");
+    expect(body.results[0].record!.contentStatus).toBe("pending");
+  });
+
+  it("CREATE content item: unknown URL defaults to web_page", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+
+    const res = await pushRequest([{
+      idempotencyKey: `content-wp-${nonce}-${entityId}`,
+      entityType: "item",
+      entityId,
+      action: "CREATE",
+      payload: {
+        type: "content",
+        title: "https://example.invalid/random-page",
+        sourceUrl: "https://example.invalid/random-page",
+        status: "active",
+      },
+    }]);
+
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].record!.contentType).toBe("web_page");
+    expect(body.results[0].record!.contentStatus).toBe("pending");
+  });
+
+  it("CREATE content item: respects explicit contentType from client", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+
+    const res = await pushRequest([{
+      idempotencyKey: `content-explicit-${nonce}-${entityId}`,
+      entityType: "item",
+      entityId,
+      action: "CREATE",
+      payload: {
+        type: "content",
+        title: "https://example.com/thing",
+        sourceUrl: "https://example.com/thing",
+        contentType: "newsletter",
+        status: "active",
+      },
+    }]);
+
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].record!.contentType).toBe("newsletter");
+  });
+
+  it("CREATE task item: does not set contentType or contentStatus", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+
+    const res = await pushRequest([{
+      idempotencyKey: `task-no-content-${nonce}-${entityId}`,
+      entityType: "item",
+      entityId,
+      action: "CREATE",
+      payload: { type: "task", title: "Not a content item", status: "active" },
+    }]);
+
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].record!.contentType).toBeNull();
+    expect(body.results[0].record!.contentStatus).toBeNull();
+  });
+
+  it("CREATE content item: no sourceUrl means no enrichment (client must ensure sourceUrl present)", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+
+    const res = await pushRequest([{
+      idempotencyKey: `content-no-url-${nonce}-${entityId}`,
+      entityType: "item",
+      entityId,
+      action: "CREATE",
+      payload: { type: "content", title: "orphan content", status: "active" },
+    }]);
+
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].record!.contentType).toBeNull();
+    expect(body.results[0].record!.contentStatus).toBeNull();
+  });
 });

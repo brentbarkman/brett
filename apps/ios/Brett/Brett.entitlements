@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Group shared with BrettShareExtension. Used for the share queue
+	     directory and a small UserDefaults suite that mirrors the resolved
+	     API base URL so the extension doesn't need to duplicate the lookup. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.brett.app</string>
+	</array>
+
+	<!-- Keychain access group so the share extension can read the bearer
+	     token the main app writes. The $(AppIdentifierPrefix) placeholder is
+	     expanded by the code-signing pipeline to the Apple Team ID prefix. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.brett.app.auth</string>
+	</array>
+</dict>
+</plist>
