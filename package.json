@@ -28,10 +28,12 @@
     "upload:backgrounds": "npx tsx scripts/upload-backgrounds.ts",
     "audit:backgrounds": "npx tsx scripts/backgrounds/audit-cli.ts",
     "source:backgrounds": "npx tsx scripts/backgrounds/unsplash-source.ts",
+    "process:backgrounds": "npx tsx scripts/backgrounds/process-images.ts",
     "release": "npx tsx scripts/release.ts"
   },
   "devDependencies": {
     "dotenv": "^17.4.1",
+    "sharp": "^0.34.5",
     "turbo": "^2.8.20",
     "typescript": "^5.3.3"
   },
