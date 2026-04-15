@@ -343,8 +343,8 @@ export function useOmnibar() {
     send,
     createTask,
     searchThings,
+    // setInput omitted from deps below — useState setter, identity is guaranteed stable by React
   }), [open, close, cancel, reset, send, createTask, searchThings]);
-  // setInput is a useState setter — already stable, no dep needed
 
   // State — changes per render; consumers that read these are expected to re-render
   const state = useMemo(() => ({
