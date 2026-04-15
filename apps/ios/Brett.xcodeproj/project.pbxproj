@@ -11,6 +11,7 @@
 		0280527F332C7741B33D74C6 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 6BB657719231D27772A2B265 /* README.md */; };
 		030145984EF3F00746EB7DE3 /* DailyBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B8BDF9672A61EB5DA098AF4 /* DailyBriefing.swift */; };
 		0427EBA7FA6C607FE147A76D /* SyncPendingIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF60131C0CC76E953EEED03 /* SyncPendingIndicator.swift */; };
+		05A10464B15FB67DA92D5C96 /* GoogleSignInButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDE3FB260B2BB38D8DB4BE38 /* GoogleSignInButton.swift */; };
 		05E019C780BE5C1441CB25B1 /* NetworkMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CBF1778DEF5D3D01FFCDD9E /* NetworkMonitorTests.swift */; };
 		063C187324D1199AF81D015E /* QuickScheduleSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1129CC6D7148F8C2AA25E96 /* QuickScheduleSheet.swift */; };
 		06E24B7A4892DA976C84BB9E /* QueryHighlighterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB9244ECCA82C5777903085A /* QueryHighlighterTests.swift */; };
@@ -71,6 +72,7 @@
 		3FB1119C8D5396447044D2B6 /* ListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 432C1F702F1400DE60BF0B31 /* ListStore.swift */; };
 		413E310198C8B765CB749BE4 /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0C802EE1CB84AF281C2D71 /* PersistenceController.swift */; };
 		41DA726B27678F2EFFD70AA2 /* TaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A325BAE026A208778A8B6D /* TaskRow.swift */; };
+		427592B57864C687F5FE8ECE /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37F42C98B008E2A54BAE0F0 /* BrandMark.swift */; };
 		45014771C429DB75B82F4566 /* SearchEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51D20F0EC94E912DAE9D4E92 /* SearchEndpoints.swift */; };
 		4549741A26E89F63A5A231D9 /* MorningRitualModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A99772907DDAFA6561A9D8A /* MorningRitualModifier.swift */; };
 		467C226A6CB764B056304BD0 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81DED9A99F71CFF02FB4DBD /* APIClient.swift */; };
@@ -437,11 +439,13 @@
 		CEA8E0E97F41807B9C90C575 /* QueryHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryHighlighter.swift; sourceTree = "<group>"; };
 		CEDF1C0CFEEBE754B3725102 /* AppleSignInProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInProvider.swift; sourceTree = "<group>"; };
 		D1129CC6D7148F8C2AA25E96 /* QuickScheduleSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickScheduleSheet.swift; sourceTree = "<group>"; };
+		D37F42C98B008E2A54BAE0F0 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
 		D8C3406A58B111F12E4B6161 /* ScoutDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoutDetailView.swift; sourceTree = "<group>"; };
 		D95B89E7305002D1C51E05E0 /* SearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchSheet.swift; sourceTree = "<group>"; };
 		DC51D7013C4ADB7CA1A9FFF3 /* MutationQueueEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutationQueueEntry.swift; sourceTree = "<group>"; };
 		DCF60131C0CC76E953EEED03 /* SyncPendingIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPendingIndicator.swift; sourceTree = "<group>"; };
 		DD2F80241DAE1D7B3915BE7F /* ConflictLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConflictLogTests.swift; sourceTree = "<group>"; };
+		DDE3FB260B2BB38D8DB4BE38 /* GoogleSignInButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInButton.swift; sourceTree = "<group>"; };
 		DED7699784591001D02DCAE7 /* ToastManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManagerTests.swift; sourceTree = "<group>"; };
 		DF0499D1751C4272293DC331 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		E0DC33B5D94411C35F18B41A /* OmnibarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnibarView.swift; sourceTree = "<group>"; };
@@ -803,11 +807,13 @@
 			children = (
 				19967775898029A43AD89004 /* AppearTransition.swift */,
 				7A449B4A58261AF252E05CC6 /* BackgroundView.swift */,
+				D37F42C98B008E2A54BAE0F0 /* BrandMark.swift */,
 				90C20455C911B39807AB5428 /* DragReorderModifier.swift */,
 				0FD64A55A6E32786944DE2A6 /* EmptyState.swift */,
 				16BBA70AE88F3B6C1D3D7A8F /* ErrorToast.swift */,
 				62BAE48447403F87DC643164 /* GoldCheckbox.swift */,
 				E9AF9892A05A919397B6E2EC /* GoldPulseModifier.swift */,
+				DDE3FB260B2BB38D8DB4BE38 /* GoogleSignInButton.swift */,
 				2A7F29D1B3FAC8873D449F4A /* LaunchView.swift */,
 				157005A11004726D19E3D6D4 /* MarkdownRenderer.swift */,
 				8A99772907DDAFA6561A9D8A /* MorningRitualModifier.swift */,
@@ -1119,6 +1125,7 @@
 				10D3466E58A184445F89CD33 /* AuthProvider.swift in Sources */,
 				D23CB9397A9BB8B92457C27C /* AuthUser.swift in Sources */,
 				20D59D987A25C7BD34B2AC43 /* BackgroundView.swift in Sources */,
+				427592B57864C687F5FE8ECE /* BrandMark.swift in Sources */,
 				B4B3E3BEC653D54FF51EC629 /* BrettAnimations.swift in Sources */,
 				8810E3414A205013C3D54618 /* BrettApp.swift in Sources */,
 				A03FD00875992CE41313DFDB /* BrettChatSection.swift in Sources */,
@@ -1155,6 +1162,7 @@
 				172911FFCC3935B989F2DDCB /* GlassCard.swift in Sources */,
 				D11D73EE79633F4CF59BD743 /* GoldCheckbox.swift in Sources */,
 				8E2ABE9C125EE4FD66B9EB3C /* GoldPulseModifier.swift in Sources */,
+				05A10464B15FB67DA92D5C96 /* GoogleSignInButton.swift in Sources */,
 				06EF4127803876F9023478F9 /* GoogleSignInProvider.swift in Sources */,
 				3D937BFAEF0B51A2995A290A /* HapticManager.swift in Sources */,
 				999562E0B52BA59F23C110BF /* InboxPage.swift in Sources */,

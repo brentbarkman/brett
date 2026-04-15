@@ -85,19 +85,26 @@ struct SignInView: View {
 
     // MARK: - Composable bits
 
-    /// Brand wordmark + one-line tagline. Matches the desktop's
-    /// "Brett / Sign in to continue" pair.
+    /// Stacked brand mark + wordmark + one-line tagline. The mark is the
+    /// gold three-row brief per the brand system (BrandMark.swift) — same
+    /// asset as the app icon and the launch splash.
     private var header: some View {
-        VStack(spacing: 4) {
-            Text("Brett")
-                .font(.system(size: 28, weight: .semibold, design: .default))
-                .foregroundStyle(.white)
-                .tracking(-0.5)
-            Text(isSignUp ? "Create your account" : "Sign in to continue")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.60))
+        VStack(spacing: 14) {
+            BrandMark()
+                .frame(width: 52, height: 52)
+                .shadow(color: BrettColors.gold.opacity(0.25), radius: 18, y: 2)
+
+            VStack(spacing: 3) {
+                Text("Brett")
+                    .font(.system(size: 26, weight: .semibold, design: .default))
+                    .foregroundStyle(.white)
+                    .tracking(-0.4)
+                Text(isSignUp ? "Create your account" : "Sign in to continue")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.55))
+            }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, 2)
     }
 
     /// Input with an uppercase tracked label — matches the desktop's
@@ -210,34 +217,15 @@ struct SignInView: View {
         }
     }
 
+    /// Official Google Sign-In button per Google's Identity brand guidelines —
+    /// 4-color G mark on a dark-theme surface. See
+    /// `Views/Shared/GoogleSignInButton.swift` for the mark geometry.
     private var googleButton: some View {
-        Button {
-            Task { await authManager.signInGoogle() }
-        } label: {
-            HStack(spacing: 10) {
-                // Inline Google "G" glyph (rendered in SF Symbols style so it
-                // doesn't need a rasterised asset). Desktop ships the full
-                // multicolor mark; we approximate with a monochrome dot to
-                // keep the bundle lean.
-                Image(systemName: "g.circle.fill")
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.80))
-                Text("Continue with Google")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.90))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-                    }
-            }
-        }
-        .disabled(authManager.isLoading)
+        GoogleSignInButton(
+            action: { Task { await authManager.signInGoogle() } },
+            title: isSignUp ? "Sign up with Google" : "Sign in with Google",
+            isDisabled: authManager.isLoading
+        )
     }
 
     private var appleButton: some View {
