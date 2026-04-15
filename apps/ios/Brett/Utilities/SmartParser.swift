@@ -280,17 +280,19 @@ enum SmartParser {
         in input: String,
         context: ParseContext
     ) -> DateHit? {
+        // Day/week durations → start-of-day; hour/minute durations → preserve time.
         let patterns: [(String, (NSTextCheckingResult, NSString) -> Date?)] = [
-            // "in 3 days" / "in 1 day"
+            // "in 3 days" / "in 1 day" — day precision, anchor to start-of-day.
             (
                 "\\bin\\s+(\\d+)\\s+days?\\b",
                 { match, ns in
                     guard match.numberOfRanges >= 2 else { return nil }
                     let n = Int(ns.substring(with: match.range(at: 1))) ?? 0
-                    return context.calendar.date(byAdding: .day, value: n, to: context.now)
+                    let future = context.calendar.date(byAdding: .day, value: n, to: context.now) ?? context.now
+                    return context.calendar.startOfDay(for: future)
                 }
             ),
-            // "in an hour" / "in 1 hour"
+            // "in an hour" / "in 1 hour" — minute precision preserved.
             (
                 "\\bin\\s+(?:an|1|a)\\s+hours?\\b",
                 { _, _ in
@@ -306,7 +308,7 @@ enum SmartParser {
                     return context.calendar.date(byAdding: .hour, value: n, to: context.now)
                 }
             ),
-            // "in 30 minutes"
+            // "in 30 minutes" — minute precision preserved.
             (
                 "\\bin\\s+(\\d+)\\s+min(?:ute)?s?\\b",
                 { match, ns in
@@ -315,11 +317,12 @@ enum SmartParser {
                     return context.calendar.date(byAdding: .minute, value: n, to: context.now)
                 }
             ),
-            // "in a week"
+            // "in a week" — day precision, start-of-day.
             (
                 "\\bin\\s+(?:a|1)\\s+weeks?\\b",
                 { _, _ in
-                    context.calendar.date(byAdding: .day, value: 7, to: context.now)
+                    let future = context.calendar.date(byAdding: .day, value: 7, to: context.now) ?? context.now
+                    return context.calendar.startOfDay(for: future)
                 }
             ),
             // "in N weeks"
@@ -328,7 +331,8 @@ enum SmartParser {
                 { match, ns in
                     guard match.numberOfRanges >= 2 else { return nil }
                     let n = Int(ns.substring(with: match.range(at: 1))) ?? 0
-                    return context.calendar.date(byAdding: .day, value: n * 7, to: context.now)
+                    let future = context.calendar.date(byAdding: .day, value: n * 7, to: context.now) ?? context.now
+                    return context.calendar.startOfDay(for: future)
                 }
             ),
         ]
@@ -505,7 +509,14 @@ enum SmartParser {
             return (composed, true)
         }
 
-        // Day only — anchor to start-of-day.
+        // Day only — but if the anchor already carries a specific time
+        // (e.g. from `matchRelativeDuration` giving us `now + 20 minutes`),
+        // preserve it rather than truncating to start-of-day.
+        let components = cal.dateComponents([.hour, .minute], from: anchorDay)
+        let hasExplicitTime = (components.hour ?? 0) != 0 || (components.minute ?? 0) != 0
+        if hasExplicitTime {
+            return (anchorDay, true)
+        }
         let startOfDay = cal.startOfDay(for: anchorDay)
         return (startOfDay, false)
     }

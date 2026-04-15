@@ -245,12 +245,20 @@ final class AttachmentUploader {
                 }
             } catch is CancellationError {
                 await MainActor.run {
-                    self.finalizeFailure(uploadId: uploadId, itemId: itemId, error: "Cancelled", keepFile: true)
+                    self.finalizeFailure(uploadId: uploadId, itemId: itemId, error: "Cancelled", keepFile: true, permanent: true)
                 }
             } catch {
                 let message = (error as? APIError)?.userFacingMessage ?? String(describing: error)
+                // 4xx responses mean the file itself is bad (wrong MIME, too
+                // large, etc.) — retrying won't help. Mirror MutationQueue's
+                // retry policy: permanent failures short-circuit the cap.
+                let permanent: Bool = {
+                    if case .validation = (error as? APIError) { return true }
+                    if case .unauthorized = (error as? APIError) { return true }
+                    return false
+                }()
                 await MainActor.run {
-                    self.finalizeFailure(uploadId: uploadId, itemId: itemId, error: message, keepFile: true)
+                    self.finalizeFailure(uploadId: uploadId, itemId: itemId, error: message, keepFile: !permanent, permanent: permanent)
                 }
             }
         }
@@ -290,9 +298,18 @@ final class AttachmentUploader {
         }
     }
 
-    private func finalizeFailure(uploadId: String, itemId: String, error: String, keepFile: Bool) {
+    private func finalizeFailure(uploadId: String, itemId: String, error: String, keepFile: Bool, permanent: Bool = false) {
+        // When the failure is permanent (4xx, cancel), jump the retry count
+        // past the cap so `processUpload` won't pick it up again.
+        if permanent, let upload = fetchUpload(id: uploadId) {
+            upload.retryCount = Self.maxRetryCount
+            try? persistence.mainContext.save()
+        }
         attachmentStore.markFailed(uploadId: uploadId, error: error)
-        // Intentionally do NOT delete the staged file so retries can re-read it.
+        // For transient failures, keep the staged file so retries can re-read it.
+        // For permanent failures, the client decided further retries are
+        // useless; the staged file is preserved for user-initiated retry but
+        // the queue processor will skip it.
         _ = keepFile
         if let upload = fetchUpload(id: uploadId) {
             emit(uploadId: uploadId, itemId: itemId, fraction: upload.uploadProgress, stage: .failed)
