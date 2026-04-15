@@ -5,6 +5,13 @@ interface LivingBackgroundProps {
   /** CSS background value for abstract mode */
   gradient?: string | null;
   nextGradient?: string | null;
+  /** When true, the image layer is scaled up (scale 1.08). Toggle to false to
+   *  animate it back to natural scale (scale 1.0). Used for the "Ken Burns"
+   *  awakening mode — a slow zoom-out as the cold-launch reveal. */
+  awakeningZoom?: boolean;
+  /** Duration of the scale transition in ms. Only applied when awakeningZoom
+   *  is a defined boolean (i.e., the caller is driving the zoom animation). */
+  awakeningZoomDurationMs?: number;
 }
 
 export function LivingBackground({
@@ -13,8 +20,19 @@ export function LivingBackground({
   isTransitioning,
   gradient,
   nextGradient,
+  awakeningZoom,
+  awakeningZoomDurationMs,
 }: LivingBackgroundProps) {
   const useGradients = gradient != null;
+  const zoomStyle =
+    awakeningZoom !== undefined
+      ? {
+          transform: awakeningZoom ? "scale(1.08)" : "scale(1)",
+          transition: awakeningZoomDurationMs
+            ? `transform ${awakeningZoomDurationMs}ms cubic-bezier(0.16, 1, 0.3, 1)`
+            : undefined,
+        }
+      : undefined;
 
   return (
     <div className="absolute inset-0 z-0">
@@ -52,6 +70,7 @@ export function LivingBackground({
             src={imageUrl}
             alt=""
             className="absolute inset-0 w-full h-full object-cover"
+            style={zoomStyle}
             draggable={false}
           />
 
@@ -60,7 +79,7 @@ export function LivingBackground({
             src={nextImageUrl ?? imageUrl}
             alt=""
             className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms] ease-in-out"
-            style={{ opacity: isTransitioning ? 1 : 0 }}
+            style={{ opacity: isTransitioning ? 1 : 0, ...zoomStyle }}
             draggable={false}
           />
         </>

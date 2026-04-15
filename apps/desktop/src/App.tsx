@@ -34,7 +34,7 @@ import {
   BackgroundScrim,
   AwakeningVideo,
 } from "@brett/ui";
-import { useAwakeningVideo } from "./hooks/useAwakeningVideo";
+import { useAwakeningVideo, _resetAwakeningSessionFlag } from "./hooks/useAwakeningVideo";
 import { useAppConfig } from "./hooks/useAppConfig";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -108,6 +108,22 @@ import type { RecentFindingItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
+// ----- Awakening mode (prototype toggle) -----
+/** Three modes for the cold-launch reveal, toggleable via the dev pill in the
+ *  bottom-right corner (dev builds only). Persisted to localStorage. */
+type AwakeningMode = "video" | "videoFreeze" | "kenburns";
+const AWAKENING_MODE_KEY = "awakening-mode";
+
+function getStoredAwakeningMode(): AwakeningMode {
+  try {
+    const stored = localStorage.getItem(AWAKENING_MODE_KEY);
+    if (stored === "video" || stored === "videoFreeze" || stored === "kenburns") {
+      return stored;
+    }
+  } catch { /* localStorage unavailable */ }
+  return "video";
+}
+
 // ----- Awakening-video timing (tune freely without re-encoding the clips) -----
 /** Max playback length before auto-pause + onEnded. Overrides natural video
  *  duration if shorter. Set to a larger number than the source clip to let
@@ -118,9 +134,9 @@ const AWAKENING_MAX_DURATION_S = 1.5;
 const AWAKENING_UI_REVEAL_DELAY_MS = 500;
 /** UI fade-in duration. Aim for (UI_REVEAL_DELAY_MS + UI_FADE_MS) to land
  *  near the video's end so UI is fully visible as the cover drops. */
-const AWAKENING_UI_FADE_MS = 1000;
+const AWAKENING_UI_FADE_MS = 1300;
 /** Cover (black layer) fade-out duration when near-end fires. */
-const AWAKENING_COVER_FADE_MS = 700;
+const AWAKENING_COVER_FADE_MS = 1400;
 /** Absolute safety: if neither near-end nor ended fires within this window,
  *  force phase = "done" so the UI is never stuck behind a black cover. */
 const AWAKENING_SAFETY_MS = 5000;
@@ -523,30 +539,53 @@ export function App() {
     pinnedBackground,
   });
 
-  // Awakening video — plays once on cold launch, hides LivingBackground's
-  // own previous-segment crossfade so the user sees: black → video → settled
-  // current-segment image, instead of: previous-segment → video → current-segment.
+  // Awakening — plays once on cold launch, hides LivingBackground's
+  // own previous-segment crossfade so the user sees: black → reveal → settled
+  // current-segment image, instead of: previous-segment → reveal → current-segment.
   const { data: appConfig } = useAppConfig();
   const awakening = useAwakeningVideo({
     baseUrl: appConfig?.storageBaseUrl ?? "",
     segment: background.segment,
   });
+  // Prototype: three reveal modes — full video crossfade, video-freeze (video
+  // pauses on last frame and stays as wallpaper), or Ken Burns (no video, slow
+  // zoom-out on the wallpaper image). Persisted to localStorage; dev toggle
+  // cycles it.
+  const [awakeningMode] = useState<AwakeningMode>(getStoredAwakeningMode);
   // Cover (black layer) lifecycle: playing → fading → done
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">("playing");
-  // UI reveal — independent of cover. Starts fading in DURING video playback
-  // (so UI appears on top of the still-playing video, layered reveal effect).
+  // UI reveal — independent of cover. Starts fading in DURING the reveal
+  // (so UI appears on top of it, layered reveal effect).
   // For skip cases, initialized true so UI is visible immediately.
   const [uiRevealed, setUiRevealed] = useState(() => awakening.status === "skip");
 
   const handleAwakeningNearEnd = () => {
+    // videoFreeze: keep the cover black; the paused video stays as the
+    // wallpaper for this session. No crossfade to LivingBackground.
+    if (awakeningMode === "videoFreeze") return;
     setAwakeningPhase("fading");
     setTimeout(() => setAwakeningPhase("done"), AWAKENING_COVER_FADE_MS);
   };
   // Safety fallback — fires on natural video end or error. Only drives to
-  // "done" if near-end never happened.
+  // "done" if near-end never happened (and we're not in videoFreeze, which
+  // wants the paused video to stay).
   const handleAwakeningEnded = () => {
+    if (awakeningMode === "videoFreeze") return;
     if (awakeningPhase === "playing") setAwakeningPhase("done");
   };
+
+  // Ken Burns mode: no video, so we drive the cover fade ourselves. After a
+  // tiny paint delay (so the initial scaled-up frame is visible for one beat),
+  // kick off cover fade and let LivingBackground's transform animate.
+  useEffect(() => {
+    if (awakeningMode !== "kenburns") return;
+    if (awakening.status !== "play") return;
+    const startTimer = setTimeout(() => {
+      setAwakeningPhase("fading");
+      setTimeout(() => setAwakeningPhase("done"), AWAKENING_COVER_FADE_MS);
+    }, 80);
+    return () => clearTimeout(startTimer);
+  }, [awakeningMode, awakening.status]);
 
   // Safety: if the video element neither ends nor errors within the safety
   // window (e.g., hung loading), force the awakening to "done" so
@@ -1014,13 +1053,20 @@ export function App() {
           isTransitioning={background.isTransitioning}
           gradient={background.gradient}
           nextGradient={background.nextGradient}
+          awakeningZoom={
+            awakeningMode === "kenburns" && awakening.status === "play"
+              ? awakeningPhase === "playing"
+              : undefined
+          }
+          awakeningZoomDurationMs={AWAKENING_COVER_FADE_MS}
         />
         <BackgroundScrim />
 
-        {/* Awakening cover: covers LivingBackground while video plays (or while
-            we wait for video metadata). Video sits inside the cover. UI layer
-            (below, z-10) starts fading in over this layer before the cover
-            drops — creating a layered reveal. */}
+        {/* Awakening cover: covers LivingBackground while the reveal runs.
+            Video modes mount AwakeningVideo inside the cover; Ken Burns mode
+            leaves it empty (the cover just fades out while LivingBackground
+            scales). UI layer (below, z-10) starts fading in over this layer
+            before the cover drops — creating a layered reveal. */}
         {awakening.status !== "skip" && awakeningPhase !== "done" && (
           <div
             className="absolute inset-0 z-[5] bg-black pointer-events-none transition-opacity ease-out"
@@ -1029,15 +1075,39 @@ export function App() {
               transitionDuration: `${AWAKENING_COVER_FADE_MS}ms`,
             }}
           >
-            {awakening.status === "play" && (
-              <AwakeningVideo
-                sources={awakening.videoUrls}
-                maxDurationSeconds={AWAKENING_MAX_DURATION_S}
-                onNearEnd={handleAwakeningNearEnd}
-                onEnded={handleAwakeningEnded}
-              />
-            )}
+            {awakening.status === "play" &&
+              (awakeningMode === "video" || awakeningMode === "videoFreeze") && (
+                <AwakeningVideo
+                  sources={awakening.videoUrls}
+                  maxDurationSeconds={AWAKENING_MAX_DURATION_S}
+                  onNearEnd={handleAwakeningNearEnd}
+                  onEnded={handleAwakeningEnded}
+                />
+              )}
           </div>
+        )}
+
+        {/* Dev-only toggle: cycles awakening modes + reloads so you can feel
+            each variant. Hidden in production builds. */}
+        {import.meta.env.DEV && (
+          <button
+            type="button"
+            className="fixed bottom-4 right-4 z-[9999] px-3 py-2 rounded-full bg-black/70 backdrop-blur-sm text-xs text-white/90 border border-white/10 hover:bg-black/85 transition-colors font-mono"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+            onClick={() => {
+              const next: Record<AwakeningMode, AwakeningMode> = {
+                video: "videoFreeze",
+                videoFreeze: "kenburns",
+                kenburns: "video",
+              };
+              localStorage.setItem(AWAKENING_MODE_KEY, next[awakeningMode]);
+              _resetAwakeningSessionFlag();
+              window.location.reload();
+            }}
+            title="Click to cycle: video → videoFreeze → kenburns"
+          >
+            awakening: {awakeningMode}
+          </button>
         )}
 
 
