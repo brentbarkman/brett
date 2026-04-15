@@ -46,6 +46,10 @@
 	<string>Unlock Brett with Face ID</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Brett needs local network to connect to the dev API server.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Brett needs microphone access for voice input.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Brett needs speech recognition to convert voice to text.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
