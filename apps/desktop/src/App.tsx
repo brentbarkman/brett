@@ -565,16 +565,20 @@ export function App() {
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
 
-  // Global Cmd+K / Ctrl+K listener for spotlight
+  // Global Cmd+K / Ctrl+K listener for spotlight.
+  // Destructures actions so the effect doesn't re-run on every SSE text
+  // chunk (the top-level `omnibar` object changes identity when state updates,
+  // but these specific action refs are stable across streaming).
+  const { open: omnibarOpen, close: omnibarClose, mode: omnibarMode, isOpen: omnibarIsOpen } = omnibar;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        if (omnibar.isOpen && omnibar.mode === "spotlight") {
-          omnibar.close();
+        if (omnibarIsOpen && omnibarMode === "spotlight") {
+          omnibarClose();
         } else {
           setSpotlightInitialAction(null);
-          omnibar.open("spotlight");
+          omnibarOpen("spotlight");
           setSelectedItem(null);
           setIsDetailOpen(false);
         }
@@ -582,11 +586,11 @@ export function App() {
       // Cmd+F / Ctrl+F opens spotlight with search pre-selected
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "f") {
         e.preventDefault();
-        if (omnibar.isOpen && omnibar.mode === "spotlight") {
-          omnibar.close();
+        if (omnibarIsOpen && omnibarMode === "spotlight") {
+          omnibarClose();
         } else {
           setSpotlightInitialAction("search");
-          omnibar.open("spotlight");
+          omnibarOpen("spotlight");
           setSelectedItem(null);
           setIsDetailOpen(false);
         }
@@ -594,7 +598,7 @@ export function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [omnibar]);
+  }, [omnibarOpen, omnibarClose, omnibarMode, omnibarIsOpen]);
 
   // Cmd+Shift+. opens feedback modal
   useEffect(() => {
@@ -679,6 +683,8 @@ export function App() {
     onOpen: () => { omnibar.open("bar"); setSelectedItem(null); setIsDetailOpen(false); },
     onCancel: omnibar.cancel,
     onReset: omnibar.reset,
+    isMinimized: omnibar.isMinimized,
+    onMinimize: omnibar.minimize,
     onNavigateToSettings: () => navigate("/settings#ai-providers"),
     onNavigateToLocationSettings: () => navigate("/settings#timezone-location"),
     sessionId: omnibar.sessionId,
