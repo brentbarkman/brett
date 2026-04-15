@@ -21,25 +21,16 @@ import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { imageAttributions, type ImageAttribution } from "@brett/business";
 import { publicS3 as s3, PUBLIC_BUCKET as BUCKET } from "../s3";
 
-const ATTR_PATH = path.resolve(
-  __dirname,
-  "../../apps/desktop/src/data/image-attributions.json"
-);
 const PORTRAIT_DIR = path.resolve(__dirname, "../../backgrounds/photo-portrait");
 const CACHE_DIR = path.resolve(__dirname, "downloads-portrait-src");
 
 const TARGET_W = 1290;
 const TARGET_H = 2796;
 const QUALITY = 80;
-
-type Attr = {
-  photographer: string | null;
-  unsplashId: string | null;
-  unsplashUrl: string | null;
-  note?: string;
-};
+const DEFAULT_CROP_FOCUS = "attention" as const;
 
 async function downloadUnsplash(id: string, outPath: string) {
   // Public download endpoint auto-redirects to the CDN. No API key needed.
@@ -62,7 +53,7 @@ async function downloadFromStorage(slotKey: string, outPath: string) {
   fs.writeFileSync(outPath, Buffer.concat(chunks));
 }
 
-async function processSlot(slotKey: string, attr: Attr) {
+async function processSlot(slotKey: string, attr: ImageAttribution) {
   const cacheExt = attr.unsplashId ? "jpg" : "webp";
   const cacheName = `${slotKey.replace(/[/]/g, "_").replace(/\.webp$/, "")}.${cacheExt}`;
   const cachePath = path.join(CACHE_DIR, cacheName);
@@ -84,20 +75,26 @@ async function processSlot(slotKey: string, attr: Attr) {
     console.log(`  ✓ cached source`);
   }
 
+  // Per-slot crop override, falls back to attention-based smart crop.
+  const cropFocus = attr.cropFocus ?? DEFAULT_CROP_FOCUS;
+
   // Crop + resize. Sharp can upscale if source is smaller than target.
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   await sharp(cachePath)
     .resize(TARGET_W, TARGET_H, {
       fit: "cover",
-      position: "attention", // entropy-based smart crop
+      position: cropFocus,
       kernel: "lanczos3",
     })
     .webp({ quality: QUALITY })
     .toFile(outPath);
 
   const outSize = (fs.statSync(outPath).size / 1024).toFixed(0);
-  const note = attr.unsplashId ? "" : "  ⚠ upscaled from landscape";
-  console.log(`  → ${path.relative(process.cwd(), outPath)} (${outSize} KB)${note}`);
+  const flags: string[] = [];
+  if (!attr.unsplashId) flags.push("⚠ upscaled from landscape");
+  if (attr.cropFocus) flags.push(`crop: ${attr.cropFocus}`);
+  const suffix = flags.length ? `  ${flags.join(" · ")}` : "";
+  console.log(`  → ${path.relative(process.cwd(), outPath)} (${outSize} KB)${suffix}`);
 
   return outPath;
 }
@@ -122,11 +119,7 @@ async function main() {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   fs.mkdirSync(PORTRAIT_DIR, { recursive: true });
 
-  const attributions: Record<string, Attr> = JSON.parse(
-    fs.readFileSync(ATTR_PATH, "utf-8")
-  );
-
-  const slots = Object.entries(attributions);
+  const slots = Object.entries(imageAttributions);
   console.log(`\nProcessing ${slots.length} slots → photo-portrait/\n`);
 
   const uploaded: string[] = [];

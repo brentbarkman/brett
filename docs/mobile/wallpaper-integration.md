@@ -26,9 +26,28 @@ Segments: `dawn`, `morning`, `afternoon`, `goldenHour` (camelCase in code,
 
 Slots: `light-1`, `light-2`, `light-3` (dawn/afternoon/evening only),
 `moderate-1`, `moderate-2`, `moderate-3` (dawn/evening only), `packed-1`,
-`packed-2`. Mirror of the desktop manifest at
-`apps/desktop/src/data/background-manifest.json` — copy that for now
-(move to a shared package when convenient).
+`packed-2`. The manifest + `selectImage()` rotation helper are exported
+from `@brett/business`:
+
+```ts
+import {
+  backgroundManifest,
+  selectImage,
+  getTimeSegment,
+  getBusynessTier,
+  type TimeSegment,
+  type BusynessTier,
+} from "@brett/business";
+
+const segment: TimeSegment = getTimeSegment(new Date().getHours());
+const tier: BusynessTier = getBusynessTier(meetingCount, taskCount);
+const slotPath = selectImage(backgroundManifest, "photography", segment, tier, shownSoFar);
+// → "photo/dawn/light-1.webp" (use `selectImage` result as-is for landscape;
+//    swap `photo/` → `photo-portrait/` for the iOS variant)
+```
+
+Credit info (photographer, Unsplash URL) is in the same package via
+`imageAttributions`.
 
 **Golden-hour quirk:** the manifest key is `goldenHour` but the URL path
 segment is `golden-hour` (hyphenated). Convert when building URLs:
@@ -86,9 +105,25 @@ pnpm portraits:backgrounds # → backgrounds/photo-portrait/
 
 Portraits target **1290×2796 (9:19.5)** via sharp's `position: "attention"`
 — entropy-based smart crop that picks the most visually interesting window.
-Good for ~80% of images; the other ~20% may crop awkwardly. If a specific
-slot's portrait composition looks wrong, we can override per-slot later
-(add a manual `cropFocus` field to attribution).
+Good for ~80% of images; the other ~20% may crop awkwardly.
+
+**Per-slot override:** add `cropFocus` to the slot's
+[`imageAttributions`](../../packages/business/src/data/image-attributions.json)
+entry. Accepts any sharp position string (`"top"`, `"bottom"`, `"left top"`,
+`"entropy"`, etc — see the `CropFocus` type in `@brett/business`).
+
+```json
+"photo/afternoon/packed-1.webp": {
+  "photographer": "Alex Moliski",
+  "unsplashId": "I6eSxKL26bo",
+  "unsplashUrl": "https://unsplash.com/...",
+  "cropFocus": "top"   // pulls the portrait crop toward the top of the source
+}
+```
+
+Then `pnpm portraits:backgrounds` re-generates using the override. The
+landscape pipeline (`process:backgrounds`) respects the same field too —
+useful when the default center-crop cuts off a subject.
 
 ## Regenerating
 

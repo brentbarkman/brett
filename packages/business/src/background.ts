@@ -47,6 +47,40 @@ export interface BackgroundManifest {
   sets: Record<string, Record<string, Record<string, string[]>>>;
 }
 
+/**
+ * Where the portrait pipeline should focus when cropping a landscape source
+ * to a portrait frame. Values are sharp's `position` option names.
+ * Defaults to "attention" (entropy-based smart crop) when unset.
+ */
+export type CropFocus =
+  | "center"
+  | "top"
+  | "right"
+  | "bottom"
+  | "left"
+  | "top left"
+  | "top right"
+  | "bottom left"
+  | "bottom right"
+  | "entropy"
+  | "attention";
+
+/**
+ * Per-image credit + metadata. Keyed by the landscape slot path
+ * (e.g. "photo/dawn/light-1.webp") in the attributions JSON.
+ */
+export interface ImageAttribution {
+  photographer: string | null;
+  unsplashId: string | null;
+  unsplashUrl: string | null;
+  /** Freeform note, e.g. "original curated set" for legacy images. */
+  note?: string;
+  /** Override the default crop focus for the portrait pipeline. */
+  cropFocus?: CropFocus;
+}
+
+export type ImageAttributions = Record<string, ImageAttribution>;
+
 export function selectImage(
   manifest: BackgroundManifest,
   style: BackgroundStyle,

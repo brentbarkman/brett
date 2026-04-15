@@ -12,6 +12,9 @@ importers:
 
   .:
     devDependencies:
+      '@brett/business':
+        specifier: workspace:*
+        version: link:packages/business
       dotenv:
         specifier: ^17.4.1
         version: 17.4.1

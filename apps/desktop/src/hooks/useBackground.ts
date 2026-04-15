@@ -4,12 +4,12 @@ import {
   getTimeSegment,
   getBusynessTier,
   selectImage,
+  backgroundManifest as manifest,
   type TimeSegment,
   type BusynessTier,
   type BackgroundStyle,
   type BackgroundManifest,
 } from "@brett/business";
-import manifest from "../data/background-manifest.json";
 import { solidColors } from "../data/solid-colors";
 import { useAppConfig } from "./useAppConfig";
 import fallbackBg from "../assets/fallback-bg.webp";

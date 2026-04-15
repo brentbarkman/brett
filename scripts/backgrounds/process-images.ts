@@ -3,6 +3,7 @@
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
+import { imageAttributions } from "@brett/business";
 
 type SourceEntry = {
   segment: string;
@@ -21,6 +22,7 @@ const BG_DIR = path.resolve(__dirname, "../../backgrounds");
 const TARGET_WIDTH = 2560;
 const TARGET_HEIGHT = 1440;
 const QUALITY = 80;
+const DEFAULT_CROP_FOCUS = "center" as const;
 
 async function downloadImage(url: string, outPath: string) {
   const resp = await fetch(url);
@@ -57,15 +59,18 @@ async function main() {
       console.log(`[${i + 1}/${entries.length}] Already downloaded ${e.unsplashId}`);
     }
 
-    // Convert
+    // Convert. Honor any per-slot cropFocus override in image-attributions,
+    // falling back to a center crop (unchanged default behavior).
+    const cropFocus = imageAttributions[e.slot]?.cropFocus ?? DEFAULT_CROP_FOCUS;
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     await sharp(downloadPath)
-      .resize(TARGET_WIDTH, TARGET_HEIGHT, { fit: "cover", position: "center" })
+      .resize(TARGET_WIDTH, TARGET_HEIGHT, { fit: "cover", position: cropFocus })
       .webp({ quality: QUALITY })
       .toFile(outPath);
 
     const sizeKB = (fs.statSync(outPath).size / 1024).toFixed(0);
-    console.log(`  → ${e.slot} (${sizeKB} KB)`);
+    const focusNote = cropFocus !== DEFAULT_CROP_FOCUS ? `  crop: ${cropFocus}` : "";
+    console.log(`  → ${e.slot} (${sizeKB} KB)${focusNote}`);
   }
 
   console.log("\nDone. Run 'pnpm tsx scripts/upload-backgrounds.ts' to upload.");

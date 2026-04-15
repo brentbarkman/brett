@@ -3,7 +3,7 @@
 import fs from "fs";
 import path from "path";
 import readline from "readline";
-import manifest from "../../apps/desktop/src/data/background-manifest.json";
+import { backgroundManifest as manifest } from "@brett/business";
 
 type Verdict = "keep" | "cut" | "replace";
 type AuditEntry = {
