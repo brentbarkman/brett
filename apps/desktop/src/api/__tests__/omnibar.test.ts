@@ -377,6 +377,82 @@ describe("useOmnibar", () => {
     });
   });
 
+  describe("query invalidation batching", () => {
+    it("defers non-confirmation tool_result invalidations until stream end", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+      mockStream.mockImplementation(async function* () {
+        yield { type: "tool_call" as const, id: "t1", name: "search_things", args: {} };
+        yield {
+          type: "tool_result" as const,
+          id: "t1",
+          data: { results: [] },
+          // No displayHint → should NOT invalidate mid-stream
+        };
+        yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(QueryClientProvider, { client: queryClient }, children);
+      const { result } = renderHook(() => useOmnibar(), { wrapper });
+
+      await act(async () => {
+        await result.current.send("hi");
+      });
+
+      // Post-stream, no invalidation should have been called for "things" because
+      // the tool_result had no confirmation displayHint.
+      const thingsCalls = invalidateSpy.mock.calls.filter(
+        (c) => Array.isArray((c[0] as any)?.queryKey) && (c[0] as any).queryKey[0] === "things"
+      );
+      expect(thingsCalls.length).toBe(0);
+    });
+
+    it("invalidates immediately on confirmation displayHint", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+      mockStream.mockImplementation(async function* () {
+        yield { type: "tool_call" as const, id: "t1", name: "create_task", args: {} };
+        yield {
+          type: "tool_result" as const,
+          id: "t1",
+          data: { ok: true },
+          displayHint: { type: "task_created" as const, taskId: "task-001" },
+        };
+        yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(QueryClientProvider, { client: queryClient }, children);
+      const { result } = renderHook(() => useOmnibar(), { wrapper });
+
+      await act(async () => {
+        await result.current.send("make a task");
+      });
+
+      const thingsCalls = invalidateSpy.mock.calls.filter(
+        (c) => Array.isArray((c[0] as any)?.queryKey) && (c[0] as any).queryKey[0] === "things"
+      );
+      expect(thingsCalls.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe("close and reset", () => {
     it("close clears search results", async () => {
       mockApiFetch.mockResolvedValue([{ id: "1", title: "Test", status: "active" }]);

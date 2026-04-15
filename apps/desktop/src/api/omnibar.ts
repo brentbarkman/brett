@@ -133,6 +133,8 @@ export function useOmnibar() {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      const pendingInvalidations = new Set<string>();
+
       try {
         const body: Record<string, unknown> = { message: trimmed };
         const currentSessionId = stateRef.current.sessionId;
@@ -221,26 +223,21 @@ export function useOmnibar() {
                 }
                 return updated;
               });
-              // Invalidate + refetch data queries when a skill modifies data.
-              // Both calls are needed: invalidate marks stale, refetch forces immediate update
-              // (staleTime is 30s, so invalidate alone may not trigger an immediate refetch).
+              // Confirmation-style results: invalidate immediately so the
+              // user-visible card reflects fresh backing data. No refetch
+              // calls — mark-stale is enough for any active observer.
               if (chunk.displayHint?.type === "task_created" || chunk.displayHint?.type === "confirmation") {
                 queryClient.invalidateQueries({ queryKey: ["things"] });
-                queryClient.refetchQueries({ queryKey: ["things"] });
                 queryClient.invalidateQueries({ queryKey: ["thing-detail"] });
-                queryClient.refetchQueries({ queryKey: ["thing-detail"] });
                 queryClient.invalidateQueries({ queryKey: ["inbox"] });
-                queryClient.refetchQueries({ queryKey: ["inbox"] });
                 queryClient.invalidateQueries({ queryKey: ["lists"] });
               }
-              // Invalidate scouts queries when a scout skill modifies data.
-              // tool_result chunks have no name field; we look up the name via the ref
-              // populated when the corresponding tool_call chunk was processed.
+              // Scout mutations: defer to stream end. No visible card, so
+              // batching until the stream completes is user-invisible.
               {
                 const toolName = toolCallNamesRef.current.get(chunk.id);
                 if (toolName === "create_scout" || toolName === "update_scout" || toolName === "delete_scout") {
-                  queryClient.invalidateQueries({ queryKey: ["scouts"] });
-                  queryClient.refetchQueries({ queryKey: ["scouts"] });
+                  pendingInvalidations.add("scouts");
                 }
               }
               break;
@@ -287,6 +284,9 @@ export function useOmnibar() {
         }
       } finally {
         flushPendingText(); // idempotent safety net — no-op if catch already drained
+        for (const key of pendingInvalidations) {
+          queryClient.invalidateQueries({ queryKey: [key] });
+        }
         setIsStreaming(false);
         abortRef.current = null;
       }
