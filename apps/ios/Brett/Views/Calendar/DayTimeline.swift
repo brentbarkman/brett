@@ -80,6 +80,7 @@ struct DayTimeline: View {
             .padding(.bottom, 100)
         }
         .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 
     @ViewBuilder

@@ -12,6 +12,7 @@
 		159A994C3E0462E309AE80B0 /* TodayPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 779BEA8BBAD5E9E6F8BB35CB /* TodayPage.swift */; };
 		172911FFCC3935B989F2DDCB /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA2323A55B5F248FE04E3DD /* GlassCard.swift */; };
 		181E55155EF3AF642D59149C /* MockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 412976D102F4EFD90FD78765 /* MockStore.swift */; };
+		1824F8F379162E1F43681A10 /* StickyCardSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F23797A748EC5F6BABB3DE2 /* StickyCardSection.swift */; };
 		1E2362B85A17E06167E6F12E /* MainContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 224CB805EE005CDE578FF390 /* MainContainer.swift */; };
 		20D59D987A25C7BD34B2AC43 /* BackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A449B4A58261AF252E05CC6 /* BackgroundView.swift */; };
 		230DCDC6BE2770B67F28AAC8 /* DayHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69096F97A694E9C2C3C9F7AF /* DayHeader.swift */; };
@@ -62,6 +63,7 @@
 /* Begin PBXFileReference section */
 		00066437D21235507488EBF2 /* CalendarPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPage.swift; sourceTree = "<group>"; };
 		037F95AD4F958F895E50C42C /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		0F23797A748EC5F6BABB3DE2 /* StickyCardSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickyCardSection.swift; sourceTree = "<group>"; };
 		0FD64A55A6E32786944DE2A6 /* EmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyState.swift; sourceTree = "<group>"; };
 		11C09161BEA7FFA0D550A17C /* DateHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateHelpers.swift; sourceTree = "<group>"; };
 		1BECBAF51EA62FCC5E944B87 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -78,7 +80,7 @@
 		626EBD0D0AD8B33AA0606917 /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
 		62BAE48447403F87DC643164 /* GoldCheckbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoldCheckbox.swift; sourceTree = "<group>"; };
 		62FF3D5EFF88F0F12BFFEF1A /* PageIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageIndicator.swift; sourceTree = "<group>"; };
-		63AC655AD0C654E4512E8960 /* Brett.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Brett.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		63AC655AD0C654E4512E8960 /* Brett.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Brett.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		69096F97A694E9C2C3C9F7AF /* DayHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayHeader.swift; sourceTree = "<group>"; };
 		6B8BDF9672A61EB5DA098AF4 /* DailyBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefing.swift; sourceTree = "<group>"; };
 		71341D3BFB2BF641441C1AA5 /* InboxPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxPage.swift; sourceTree = "<group>"; };
@@ -227,6 +229,7 @@
 				0FD64A55A6E32786944DE2A6 /* EmptyState.swift */,
 				62BAE48447403F87DC643164 /* GoldCheckbox.swift */,
 				62FF3D5EFF88F0F12BFFEF1A /* PageIndicator.swift */,
+				0F23797A748EC5F6BABB3DE2 /* StickyCardSection.swift */,
 				80A325BAE026A208778A8B6D /* TaskRow.swift */,
 			);
 			path = Shared;
@@ -340,7 +343,6 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					35DB8B32AB10170D269EDDE4 = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					4B72560AC660F3001873E768 = {
@@ -417,6 +419,7 @@
 				896AC0F81B19DE332427FB68 /* ScoutsRosterView.swift in Sources */,
 				A61C965633176EB1B15C3014 /* SettingsView.swift in Sources */,
 				9BADD9789E4A9B5B30B86C32 /* SignInView.swift in Sources */,
+				1824F8F379162E1F43681A10 /* StickyCardSection.swift in Sources */,
 				29EE7D27105306CD5EED3179 /* TaskDetailView.swift in Sources */,
 				41DA726B27678F2EFFD70AA2 /* TaskRow.swift in Sources */,
 				2958E1822E56BE5D619A9486 /* TaskSection.swift in Sources */,
@@ -603,6 +606,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = FQUJNV9M6S;
 				INFOPLIST_FILE = Brett/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -620,6 +624,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = FQUJNV9M6S;
 				INFOPLIST_FILE = Brett/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

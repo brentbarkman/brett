@@ -12,13 +12,23 @@ struct CalendarPage: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .padding(.top, 8)
 
             // Week strip
             WeekStrip(selectedDate: $selectedDate, events: store.events)
 
-            // Day timeline
+            // Day timeline in a glass card
             DayTimeline(events: store.todayEvents)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(.thinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                        }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 16)
         }
     }
 }

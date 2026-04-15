@@ -33,11 +33,7 @@ enum MockData {
             MockItem(id: "item-2", title: "Renew gym membership", dueDate: yesterday, listId: "list-health", listName: "Health", time: "9:00 AM"),
 
             // Today
-            MockItem(id: "item-3", title: "Prep slides for Q2 review", dueDate: today, listId: "list-work", listName: "Work", time: "9:00 AM", notes: "Use last quarter's deck as a template. Focus on YoY growth metrics and highlight the new mobile launch.", subtasks: [
-                MockSubtask(id: "sub-1", title: "Pull metrics from analytics dashboard", isCompleted: true),
-                MockSubtask(id: "sub-2", title: "Add pipeline slide with deal stages", isCompleted: false),
-                MockSubtask(id: "sub-3", title: "Write exec summary (3 bullets max)", isCompleted: false),
-            ], reminder: .morningOf, recurrence: nil, attachments: [
+            MockItem(id: "item-3", title: "Prep slides for Q2 review", dueDate: today, listId: "list-work", listName: "Work", time: "9:00 AM", notes: "Use last quarter's deck as a template. Focus on YoY growth metrics and highlight the new mobile launch.", reminder: .morningOf, recurrence: nil, attachments: [
                 MockAttachment(id: "att-1", filename: "Q1-deck-final.pdf", mimeType: "application/pdf", sizeBytes: 2_450_000),
                 MockAttachment(id: "att-2", filename: "revenue-chart.png", mimeType: "image/png", sizeBytes: 384_000),
             ], linkedItems: [
@@ -176,7 +172,6 @@ struct MockItem: Identifiable {
     var time: String? = nil
     var isCompleted: Bool = false
     var notes: String? = nil
-    var subtasks: [MockSubtask] = []
     var contentDomain: String? = nil
     var capturedAgo: String? = nil
     var reminder: ReminderType? = nil
@@ -211,12 +206,6 @@ struct MockBrettMessage: Identifiable {
     let id: String
     let role: String // "user" or "assistant"
     let content: String
-}
-
-struct MockSubtask: Identifiable {
-    let id: String
-    let title: String
-    var isCompleted: Bool
 }
 
 struct MockScout: Identifiable {

@@ -3,9 +3,12 @@ import SwiftUI
 struct TaskRow: View {
     let item: MockItem
     let onToggle: () -> Void
+    let onSelect: () -> Void
 
     var body: some View {
-        NavigationLink(value: NavDestination.taskDetail(id: item.id)) {
+        Button {
+            onSelect()
+        } label: {
             HStack(spacing: 12) {
                 // Visual-only checkbox appearance (not a button)
                 ZStack {
@@ -82,11 +85,6 @@ struct TaskRow: View {
                 }
 
                 Spacer()
-
-                // Chevron hint
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(BrettColors.textGhost)
             }
             .padding(.vertical, 4)
         }
