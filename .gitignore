@@ -33,6 +33,7 @@ firebase-service-account.json
 scripts/backgrounds/audit-results.json
 scripts/backgrounds/replacement-sources.json
 scripts/backgrounds/downloads/
+scripts/backgrounds/downloads-portrait-src/
 
 # Awakening-video local artifacts
 scripts/awakening-videos/sources.json

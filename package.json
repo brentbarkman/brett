@@ -30,6 +30,7 @@
     "audit:backgrounds": "npx tsx scripts/backgrounds/audit-cli.ts",
     "source:backgrounds": "npx tsx scripts/backgrounds/unsplash-source.ts",
     "process:backgrounds": "npx tsx scripts/backgrounds/process-images.ts",
+    "portraits:backgrounds": "npx tsx scripts/backgrounds/generate-portraits.ts",
     "release": "npx tsx scripts/release.ts"
   },
   "devDependencies": {
