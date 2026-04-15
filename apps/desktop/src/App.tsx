@@ -506,9 +506,9 @@ export function App() {
     pinnedBackground,
   });
 
-  // Awakening video — plays once on cold launch, handed off to LivingBackground.
-  // Phase always starts at "playing"; the conditional render below uses
-  // awakening.shouldPlay to decide whether to actually mount the video.
+  // Awakening video — plays once on cold launch, hides LivingBackground's
+  // own previous-segment crossfade so the user sees: black → video → settled
+  // current-segment image, instead of: previous-segment → video → current-segment.
   const { data: appConfig } = useAppConfig();
   const awakening = useAwakeningVideo({
     baseUrl: appConfig?.storageBaseUrl ?? "",
@@ -523,12 +523,19 @@ export function App() {
 
   // Safety: if the video element neither ends nor errors within 5s of mount
   // (e.g., hung loading), force the awakening to "done" so LivingBackground
-  // is revealed rather than left black.
+  // is revealed rather than left covered indefinitely.
   useEffect(() => {
-    if (!awakening.shouldPlay) return;
+    if (awakening.status !== "play") return;
     const safetyTimer = setTimeout(() => setAwakeningPhase("done"), 5000);
     return () => clearTimeout(safetyTimer);
-  }, [awakening.shouldPlay]);
+  }, [awakening.status]);
+
+  // While awakening is "pending" (waiting for storage URL), force phase to
+  // "playing" so the cover stays mounted. When skip resolves, jump to "done"
+  // so reduced-motion / already-played users don't get stuck on a black cover.
+  useEffect(() => {
+    if (awakening.status === "skip") setAwakeningPhase("done");
+  }, [awakening.status]);
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
@@ -971,12 +978,17 @@ export function App() {
         />
         <BackgroundScrim />
 
-        {awakening.shouldPlay && awakeningPhase !== "done" && (
+        {/* Awakening cover: covers LivingBackground while video plays (or while
+            we wait for video metadata). Fades out at the end so the settled
+            current-segment image is revealed smoothly. */}
+        {awakening.status !== "skip" && awakeningPhase !== "done" && (
           <div
-            className="absolute inset-0 z-[5] transition-opacity duration-500 pointer-events-none"
+            className="absolute inset-0 z-[5] bg-black transition-opacity duration-500 pointer-events-none"
             style={{ opacity: awakeningPhase === "fading" ? 0 : 1 }}
           >
-            <AwakeningVideo sources={awakening.videoUrls} onEnded={handleAwakeningEnded} />
+            {awakening.status === "play" && (
+              <AwakeningVideo sources={awakening.videoUrls} onEnded={handleAwakeningEnded} />
+            )}
           </div>
         )}
 

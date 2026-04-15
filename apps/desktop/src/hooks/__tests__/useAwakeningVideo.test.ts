@@ -33,26 +33,26 @@ describe("useAwakeningVideo", () => {
     });
   });
 
-  it("returns shouldPlay=true on first call with valid baseUrl + segment", () => {
+  it("resolves to status='play' on first call with valid baseUrl + segment", () => {
     const { result } = renderHook(() =>
       useAwakeningVideo({ baseUrl: "https://cdn.test", segment: "morning" })
     );
-    expect(result.current.shouldPlay).toBe(true);
+    expect(result.current.status).toBe("play");
     expect(result.current.videoUrls).toEqual([
       "https://cdn.test/videos/awakening/morning.webm",
       "https://cdn.test/videos/awakening/morning.mp4",
     ]);
   });
 
-  it("returns shouldPlay=false on second call (already played in session)", () => {
+  it("resolves to status='skip' on second call (already played in session)", () => {
     renderHook(() => useAwakeningVideo({ baseUrl: "https://cdn.test", segment: "morning" }));
     const { result } = renderHook(() =>
       useAwakeningVideo({ baseUrl: "https://cdn.test", segment: "evening" })
     );
-    expect(result.current.shouldPlay).toBe(false);
+    expect(result.current.status).toBe("skip");
   });
 
-  it("returns shouldPlay=false when prefers-reduced-motion is set", () => {
+  it("resolves to status='skip' synchronously when prefers-reduced-motion is set", () => {
     Object.defineProperty(window, "matchMedia", {
       writable: true,
       value: matchMediaMock(true),
@@ -60,25 +60,25 @@ describe("useAwakeningVideo", () => {
     const { result } = renderHook(() =>
       useAwakeningVideo({ baseUrl: "https://cdn.test", segment: "morning" })
     );
-    expect(result.current.shouldPlay).toBe(false);
+    expect(result.current.status).toBe("skip");
   });
 
-  it("returns shouldPlay=false when baseUrl is empty", () => {
+  it("starts as 'pending' when baseUrl is empty (waiting for storage URL)", () => {
     const { result } = renderHook(() =>
       useAwakeningVideo({ baseUrl: "", segment: "morning" })
     );
-    expect(result.current.shouldPlay).toBe(false);
+    expect(result.current.status).toBe("pending");
   });
 
-  it("flips to shouldPlay=true when baseUrl arrives async (rerender)", () => {
+  it("transitions pending → play when baseUrl arrives async (rerender)", () => {
     const { result, rerender } = renderHook(
       ({ baseUrl }: { baseUrl: string }) =>
         useAwakeningVideo({ baseUrl, segment: "morning" }),
       { initialProps: { baseUrl: "" } }
     );
-    expect(result.current.shouldPlay).toBe(false);
+    expect(result.current.status).toBe("pending");
     rerender({ baseUrl: "https://cdn.test" });
-    expect(result.current.shouldPlay).toBe(true);
+    expect(result.current.status).toBe("play");
     expect(result.current.videoUrls).toEqual([
       "https://cdn.test/videos/awakening/morning.webm",
       "https://cdn.test/videos/awakening/morning.mp4",

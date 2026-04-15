@@ -8,9 +8,14 @@ interface UseAwakeningVideoArgs {
   segment: Segment;
 }
 
+export type AwakeningStatus = "pending" | "play" | "skip";
+
 interface UseAwakeningVideoResult {
-  shouldPlay: boolean;
-  /** Sources in priority order — pass directly to <video> as multiple <source> children. */
+  /** Tri-state decision so callers can show a black cover during "pending"
+   *  (avoiding a flash of LivingBackground before the video mounts) and
+   *  immediately render LivingBackground on "skip" (no cover needed). */
+  status: AwakeningStatus;
+  /** Sources in priority order — only meaningful when status === "play". */
   videoUrls: string[];
 }
 
@@ -27,36 +32,46 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-const NO_PLAY: UseAwakeningVideoResult = { shouldPlay: false, videoUrls: [] };
-
 /**
- * Decides whether to play the awakening video. Uses useEffect (not a useState
- * initializer with side effects) so it re-evaluates correctly when baseUrl
- * arrives async from useAppConfig. Sets state at most once per session: from
- * NO_PLAY → {shouldPlay: true} when conditions are met, never the reverse.
+ * Decides whether to play the awakening video. Returns one of three statuses:
+ *
+ * - "skip": resolved synchronously when SESSION_PLAYED or reduced motion is
+ *   active. Caller should render LivingBackground normally with no cover.
+ * - "pending": waiting for baseUrl to resolve from useAppConfig. Caller
+ *   should render a black cover so LivingBackground doesn't flash through.
+ * - "play": video is ready to mount. Caller renders <AwakeningVideo>.
  */
 export function useAwakeningVideo({
   baseUrl,
   segment,
 }: UseAwakeningVideoArgs): UseAwakeningVideoResult {
-  const [decision, setDecision] = useState<UseAwakeningVideoResult>(NO_PLAY);
+  const [decision, setDecision] = useState<UseAwakeningVideoResult>(() => {
+    // Synchronously resolvable: skip the awakening if session already played
+    // or reduced motion is set. This avoids any black-cover flash for users
+    // who don't get the awakening anyway.
+    if (SESSION_PLAYED || prefersReducedMotion()) {
+      return { status: "skip", videoUrls: [] };
+    }
+    return { status: "pending", videoUrls: [] };
+  });
 
   useEffect(() => {
-    if (decision.shouldPlay) return; // already decided to play; lock the value
-    if (SESSION_PLAYED) return; // another instance played this session
-    if (prefersReducedMotion()) return;
+    if (decision.status !== "pending") return; // already resolved
     if (!baseUrl) return; // wait for storage URL
 
     const entry = (manifest as { videos: Record<string, { mp4: string; webm: string }> }).videos[segment];
-    if (!entry) return;
+    if (!entry) {
+      // No video for this segment — skip cleanly
+      setDecision({ status: "skip", videoUrls: [] });
+      return;
+    }
 
     SESSION_PLAYED = true;
     setDecision({
-      shouldPlay: true,
-      // WebM first (smaller, modern), MP4 fallback. <video> picks the first playable source.
+      status: "play",
       videoUrls: [`${baseUrl}/${entry.webm}`, `${baseUrl}/${entry.mp4}`],
     });
-  }, [baseUrl, segment, decision.shouldPlay]);
+  }, [baseUrl, segment, decision.status]);
 
   return decision;
 }

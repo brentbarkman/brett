@@ -15,31 +15,29 @@ function getMimeType(url: string): string {
 
 /**
  * Plays an awakening video once on mount. The parent (App.tsx) decides
- * whether to mount us via useAwakeningVideo's `shouldPlay`. We do nothing
- * fancy — autoplay muted inline, fire onEnded when done OR if loading fails.
+ * whether to mount us via useAwakeningVideo's status.
  *
- * No background color — if the video fails to load, the LivingBackground
- * underneath remains visible.
+ * The wrapper is transparent — the parent provides any background color
+ * (typically black) so a transparent video element during loading doesn't
+ * reveal LivingBackground beneath.
  */
 export function AwakeningVideo({ sources, onEnded }: AwakeningVideoProps) {
   return (
-    <div className="absolute inset-0 z-0 pointer-events-none">
-      <video
-        autoPlay
-        muted
-        playsInline
-        preload="auto"
-        onEnded={onEnded}
-        // If the <video> element exhausts all sources without one playing, browsers
-        // fire `error` on the video element. Treat that as "done" so the parent
-        // unmounts us and reveals LivingBackground.
-        onError={onEnded}
-        className="absolute inset-0 w-full h-full object-cover"
-      >
-        {sources.map((src) => (
-          <source key={src} src={src} type={getMimeType(src)} />
-        ))}
-      </video>
-    </div>
+    <video
+      autoPlay
+      muted
+      playsInline
+      preload="auto"
+      onEnded={onEnded}
+      // If the <video> element exhausts all sources without one playing, browsers
+      // fire `error` on the video element. Treat that as "done" so the parent
+      // unmounts us and reveals LivingBackground.
+      onError={onEnded}
+      className="absolute inset-0 w-full h-full object-cover"
+    >
+      {sources.map((src) => (
+        <source key={src} src={src} type={getMimeType(src)} />
+      ))}
+    </video>
   );
 }
