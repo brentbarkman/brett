@@ -20,6 +20,7 @@ export { ThingsList } from "./ThingsList";
 export { CalendarTimeline } from "./CalendarTimeline";
 export { DetailPanel } from "./DetailPanel";
 export { LivingBackground } from "./LivingBackground";
+export { BackgroundScrim } from "./BackgroundScrim";
 export { ThingsEmptyState } from "./ThingsEmptyState";
 export { CrossFade } from "./CrossFade";
 export { InboxView } from "./InboxView";
