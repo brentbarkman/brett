@@ -227,19 +227,33 @@ describe("useOmnibar", () => {
   });
 
   describe("minimize", () => {
-    it("sets isMinimized without clearing messages", () => {
+    it("sets isMinimized without clearing messages", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+      mockStream.mockImplementation(async function* () {
+        yield { type: "text" as const, content: "hello" };
+        yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
       const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
 
-      // Seed state — real use populates messages via streaming, but for this test
-      // the flag-flip behavior is what matters.
-      act(() => {
-        result.current.setInput("hi");
+      await act(async () => {
+        await result.current.send("hi");
       });
+
+      expect(result.current.messages.length).toBeGreaterThan(0);
+      const messagesBefore = result.current.messages;
+
       act(() => {
         result.current.minimize();
       });
 
       expect(result.current.isMinimized).toBe(true);
+      expect(result.current.messages).toBe(messagesBefore); // identity unchanged
     });
 
     it("open() clears isMinimized", () => {
@@ -267,6 +281,45 @@ describe("useOmnibar", () => {
         result.current.reset();
       });
       expect(result.current.isMinimized).toBe(false);
+    });
+
+    it("is a no-op while streaming", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+      // Infinite generator — send() stays in-flight (isStreaming === true) throughout
+      mockStream.mockImplementation(async function* () {
+        yield { type: "text" as const, content: "still streaming..." };
+        // Never yield "done" — simulate a stream in progress
+        await new Promise<void>(() => {}); // hang indefinitely
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      // Kick off send() without awaiting — it'll hang on the infinite generator.
+      act(() => {
+        void result.current.send("hi");
+      });
+
+      // Let the text chunk settle and isStreaming flip to true
+      await waitFor(() => {
+        expect(result.current.isStreaming).toBe(true);
+      });
+
+      // Now try to minimize — should be a no-op
+      act(() => {
+        result.current.minimize();
+      });
+
+      expect(result.current.isMinimized).toBe(false);
+
+      // Clean up — abort the hanging stream so the test exits cleanly
+      act(() => {
+        result.current.cancel();
+      });
     });
   });
 
