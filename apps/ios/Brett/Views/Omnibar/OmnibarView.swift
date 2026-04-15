@@ -74,6 +74,7 @@ struct OmnibarView: View {
             .focused($isFocused)
             .submitLabel(.send)
             .onSubmit { submit() }
+            .accessibilityIdentifier("omnibar.input")
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -92,6 +93,7 @@ struct OmnibarView: View {
                         .background(BrettColors.gold, in: Circle())
                 }
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
+                .accessibilityIdentifier("omnibar.send")
             } else {
                 Button { enterVoiceMode() } label: {
                     Image(systemName: "mic.fill")

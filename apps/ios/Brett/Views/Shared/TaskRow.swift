@@ -111,6 +111,11 @@ struct TaskRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityLabelText)
             .accessibilityHint("Double-tap to open details.")
+            // Stable identifier for XCUITest: title-based because UI tests
+            // can't easily construct the random UUID at assertion time.
+            // Sanitised (lowercase, spaces → underscores) so predicates like
+            // `.matching(identifier:)` stay deterministic.
+            .accessibilityIdentifier("task.row.\(Self.identifierToken(for: viewModel.title))")
             .dynamicTypeClamp()
             .goldPulse(trigger: pulseTrigger)
             .applyIf(allowSwipeRight) { view in
@@ -299,6 +304,17 @@ struct TaskRow: View {
         let capturedLabel: String?
         let listName: String?
         let contentDomain: String?
+    }
+
+    /// Convert a task title into a stable, predictable accessibility-id token.
+    /// Lowercase, alnum-only, spaces → underscores, clamped to 40 chars so the
+    /// id stays short enough for XCUITest predicates.
+    private static func identifierToken(for title: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+        let lowered = title.lowercased().replacingOccurrences(of: " ", with: "_")
+        let filtered = lowered.unicodeScalars.filter { allowed.contains($0) }
+        let result = String(String.UnicodeScalarView(filtered))
+        return String(result.prefix(40))
     }
 
     // MARK: - Real-Item formatters

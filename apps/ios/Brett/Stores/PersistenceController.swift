@@ -11,7 +11,29 @@ import SwiftData
 ///     `SchemaMigrationPlan`.
 @MainActor
 final class PersistenceController {
+    #if DEBUG
+    /// Backing storage for `shared`. Tests can swap this out by calling
+    /// `PersistenceController.configureForTesting(inMemory:)` before any
+    /// view code reads `.shared`. Ordinary app startup just reads the
+    /// lazily-initialised on-disk container.
+    nonisolated(unsafe) private static var _shared: PersistenceController?
+    static var shared: PersistenceController {
+        if let existing = _shared { return existing }
+        let fresh = PersistenceController()
+        _shared = fresh
+        return fresh
+    }
+
+    /// Swap the shared controller to an in-memory instance. Only called from
+    /// `BrettApp` during UI-test launches. No-op once any view has read the
+    /// current shared instance.
+    static func configureForTesting(inMemory: Bool) {
+        guard inMemory else { return }
+        _shared = PersistenceController(inMemoryOnly: true)
+    }
+    #else
     static let shared = PersistenceController()
+    #endif
 
     let container: ModelContainer
 

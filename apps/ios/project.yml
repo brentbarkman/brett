@@ -78,3 +78,14 @@ schemes:
       targets:
         - BrettTests
         - BrettUITests
+  BrettUITestsOnly:
+    build:
+      targets:
+        Brett: all
+        BrettUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BrettUITests

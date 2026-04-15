@@ -159,4 +159,30 @@ final class AuthManager {
     func clearError() {
         errorMessage = nil
     }
+
+    #if DEBUG
+    /// Injects a fake session for UI tests. Bypasses Keychain + network and
+    /// flips `isAuthenticated` to true so the app transitions straight to
+    /// `MainContainer`. DEBUG-only — never compiled into App Store builds.
+    @MainActor
+    func injectFakeSession(user: AuthUser, token: String) {
+        self.token = token
+        self.currentUser = user
+    }
+    #endif
 }
+
+#if DEBUG
+extension AuthUser {
+    /// Canonical test user — shared by UI-test launch-arg injection so every
+    /// test sees the same identity without needing real credentials.
+    static let testUser = AuthUser(
+        id: "uitest-user-id",
+        email: "uitest@brett.app",
+        name: "UI Test",
+        avatarUrl: nil,
+        timezone: "America/Los_Angeles",
+        assistantName: "Brett"
+    )
+}
+#endif

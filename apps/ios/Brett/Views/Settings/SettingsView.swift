@@ -197,6 +197,7 @@ struct SettingsView: View {
             }
             .disabled(isSigningOut)
             .listRowBackground(glassRowBackground)
+            .accessibilityIdentifier("settings.signout")
         }
         .confirmationDialog("Sign out of Brett?", isPresented: $showSignOutConfirm, titleVisibility: .visible) {
             Button("Sign Out", role: .destructive) {

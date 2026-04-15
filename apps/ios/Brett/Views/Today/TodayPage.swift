@@ -77,6 +77,11 @@ struct TodayPage: View {
                 emptyState
             }
             .padding(.bottom, 70)
+            // Inner VStack surfaces more reliably as an accessibility
+            // element than the outer ScrollView — XCUITest identifier
+            // lookups on ScrollView inconsistently resolve.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("today.page")
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)

@@ -75,13 +75,22 @@ struct MainContainer: View {
                                 .contentShape(Rectangle())
                         }
 
-                        NavigationLink(value: NavDestination.settings) {
+                        // Settings gear: using an explicit Button + programmatic
+                        // path.append so XCUITest can reliably tap this via
+                        // its accessibility identifier. `NavigationLink` inside
+                        // a `safeAreaInset` overlay has a known issue where
+                        // its tap handler doesn't register from synthesized
+                        // coordinate taps on iOS 26+.
+                        Button {
+                            path.append(NavDestination.settings)
+                        } label: {
                             Image(systemName: "gearshape")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(Color.white.opacity(0.55))
                                 .frame(width: 40, height: 40)
                                 .contentShape(Rectangle())
                         }
+                        .accessibilityIdentifier("nav.settings")
                     }
                     .padding(.trailing, 8)
                 }

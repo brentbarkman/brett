@@ -58,6 +58,7 @@ struct SignInView: View {
                     }
                     .textContentType(.emailAddress)
                     .autocapitalization(.none)
+                    .accessibilityIdentifier("signin.email")
 
                 // Password
                 SecureField("Password", text: $password)
@@ -74,6 +75,7 @@ struct SignInView: View {
                             }
                     }
                     .textContentType(isSignUp ? .newPassword : .password)
+                    .accessibilityIdentifier("signin.password")
 
                 // Error banner — shown when AuthManager surfaces an error
                 if let error = authManager.errorMessage {
@@ -115,6 +117,7 @@ struct SignInView: View {
                     .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .disabled(authManager.isLoading || !isEmailFormValid)
+                .accessibilityIdentifier("signin.submit")
 
                 // Toggle between sign-in / sign-up
                 Button {

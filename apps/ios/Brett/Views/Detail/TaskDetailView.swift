@@ -115,6 +115,7 @@ private struct TaskDetailBody: View {
                     .foregroundStyle(BrettColors.textInactive)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("detail.close")
             }
 
             HStack(alignment: .top, spacing: 12) {
@@ -128,6 +129,7 @@ private struct TaskDetailBody: View {
                     .lineLimit(1...4)
                     .submitLabel(.done)
                     .onSubmit { commitDraft() }
+                    .accessibilityIdentifier("detail.titleField")
             }
         }
         .padding(.top, 4)
@@ -154,6 +156,7 @@ private struct TaskDetailBody: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("detail.checkbox")
     }
 
     @ViewBuilder
