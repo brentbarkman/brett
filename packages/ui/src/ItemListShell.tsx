@@ -12,7 +12,7 @@ export function ItemListShell({ header, children, hints }: ItemListShellProps) {
     <div className="flex flex-col gap-4 pb-20">
       <div
         tabIndex={0}
-        className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4 outline-none"
+        className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4 outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">

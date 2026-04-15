@@ -3,66 +3,192 @@
   "sets": {
     "photography": {
       "dawn": {
-        "light": ["photo/dawn/light-1.webp", "photo/dawn/light-2.webp", "photo/dawn/light-3.webp"],
-        "moderate": ["photo/dawn/moderate-1.webp", "photo/dawn/moderate-2.webp", "photo/dawn/moderate-3.webp"],
-        "packed": ["photo/dawn/packed-1.webp", "photo/dawn/packed-2.webp", "photo/dawn/packed-3.webp"]
+        "light": [
+          "photo/dawn/light-1.webp",
+          "photo/dawn/light-2.webp"
+        ],
+        "moderate": [
+          "photo/dawn/moderate-1.webp",
+          "photo/dawn/moderate-3.webp"
+        ],
+        "packed": [
+          "photo/dawn/packed-1.webp",
+          "photo/dawn/packed-2.webp"
+        ]
       },
       "morning": {
-        "light": ["photo/morning/light-1.webp", "photo/morning/light-2.webp", "photo/morning/light-3.webp"],
-        "moderate": ["photo/morning/moderate-1.webp", "photo/morning/moderate-2.webp", "photo/morning/moderate-3.webp"],
-        "packed": ["photo/morning/packed-1.webp", "photo/morning/packed-2.webp", "photo/morning/packed-3.webp"]
+        "light": [
+          "photo/morning/light-1.webp",
+          "photo/morning/light-2.webp"
+        ],
+        "moderate": [
+          "photo/morning/moderate-1.webp",
+          "photo/morning/moderate-2.webp"
+        ],
+        "packed": [
+          "photo/morning/packed-1.webp",
+          "photo/morning/packed-2.webp"
+        ]
       },
       "afternoon": {
-        "light": ["photo/afternoon/light-1.webp", "photo/afternoon/light-2.webp", "photo/afternoon/light-3.webp"],
-        "moderate": ["photo/afternoon/moderate-1.webp", "photo/afternoon/moderate-2.webp", "photo/afternoon/moderate-3.webp"],
-        "packed": ["photo/afternoon/packed-1.webp", "photo/afternoon/packed-2.webp", "photo/afternoon/packed-3.webp"]
+        "light": [
+          "photo/afternoon/light-1.webp",
+          "photo/afternoon/light-3.webp"
+        ],
+        "moderate": [
+          "photo/afternoon/moderate-1.webp",
+          "photo/afternoon/moderate-2.webp"
+        ],
+        "packed": [
+          "photo/afternoon/packed-1.webp",
+          "photo/afternoon/packed-2.webp"
+        ]
       },
       "goldenHour": {
-        "light": ["photo/golden-hour/light-1.webp", "photo/golden-hour/light-2.webp", "photo/golden-hour/light-3.webp"],
-        "moderate": ["photo/golden-hour/moderate-1.webp", "photo/golden-hour/moderate-2.webp", "photo/golden-hour/moderate-3.webp"],
-        "packed": ["photo/golden-hour/packed-1.webp", "photo/golden-hour/packed-2.webp", "photo/golden-hour/packed-3.webp"]
+        "light": [
+          "photo/golden-hour/light-1.webp",
+          "photo/golden-hour/light-2.webp"
+        ],
+        "moderate": [
+          "photo/golden-hour/moderate-1.webp",
+          "photo/golden-hour/moderate-2.webp"
+        ],
+        "packed": [
+          "photo/golden-hour/packed-1.webp",
+          "photo/golden-hour/packed-2.webp"
+        ]
       },
       "evening": {
-        "light": ["photo/evening/light-1.webp", "photo/evening/light-2.webp", "photo/evening/light-3.webp"],
-        "moderate": ["photo/evening/moderate-1.webp", "photo/evening/moderate-2.webp", "photo/evening/moderate-3.webp"],
-        "packed": ["photo/evening/packed-1.webp", "photo/evening/packed-2.webp", "photo/evening/packed-3.webp"]
+        "light": [
+          "photo/evening/light-1.webp",
+          "photo/evening/light-3.webp"
+        ],
+        "moderate": [
+          "photo/evening/moderate-2.webp",
+          "photo/evening/moderate-3.webp"
+        ],
+        "packed": [
+          "photo/evening/packed-1.webp",
+          "photo/evening/packed-2.webp"
+        ]
       },
       "night": {
-        "light": ["photo/night/light-1.webp", "photo/night/light-2.webp", "photo/night/light-3.webp"],
-        "moderate": ["photo/night/moderate-1.webp", "photo/night/moderate-2.webp", "photo/night/moderate-3.webp"],
-        "packed": ["photo/night/packed-1.webp", "photo/night/packed-2.webp", "photo/night/packed-3.webp"]
+        "light": [
+          "photo/night/light-2.webp",
+          "photo/night/light-3.webp"
+        ],
+        "moderate": [
+          "photo/night/moderate-1.webp",
+          "photo/night/moderate-2.webp"
+        ],
+        "packed": [
+          "photo/night/packed-1.webp",
+          "photo/night/packed-2.webp"
+        ]
       }
     },
     "abstract": {
       "dawn": {
-        "light": ["abstract/dawn/light-1.webp", "abstract/dawn/light-2.webp", "abstract/dawn/light-3.webp"],
-        "moderate": ["abstract/dawn/moderate-1.webp", "abstract/dawn/moderate-2.webp", "abstract/dawn/moderate-3.webp"],
-        "packed": ["abstract/dawn/packed-1.webp", "abstract/dawn/packed-2.webp", "abstract/dawn/packed-3.webp"]
+        "light": [
+          "abstract/dawn/light-1.webp",
+          "abstract/dawn/light-2.webp",
+          "abstract/dawn/light-3.webp"
+        ],
+        "moderate": [
+          "abstract/dawn/moderate-1.webp",
+          "abstract/dawn/moderate-2.webp",
+          "abstract/dawn/moderate-3.webp"
+        ],
+        "packed": [
+          "abstract/dawn/packed-1.webp",
+          "abstract/dawn/packed-2.webp",
+          "abstract/dawn/packed-3.webp"
+        ]
       },
       "morning": {
-        "light": ["abstract/morning/light-1.webp", "abstract/morning/light-2.webp", "abstract/morning/light-3.webp"],
-        "moderate": ["abstract/morning/moderate-1.webp", "abstract/morning/moderate-2.webp", "abstract/morning/moderate-3.webp"],
-        "packed": ["abstract/morning/packed-1.webp", "abstract/morning/packed-2.webp", "abstract/morning/packed-3.webp"]
+        "light": [
+          "abstract/morning/light-1.webp",
+          "abstract/morning/light-2.webp",
+          "abstract/morning/light-3.webp"
+        ],
+        "moderate": [
+          "abstract/morning/moderate-1.webp",
+          "abstract/morning/moderate-2.webp",
+          "abstract/morning/moderate-3.webp"
+        ],
+        "packed": [
+          "abstract/morning/packed-1.webp",
+          "abstract/morning/packed-2.webp",
+          "abstract/morning/packed-3.webp"
+        ]
       },
       "afternoon": {
-        "light": ["abstract/afternoon/light-1.webp", "abstract/afternoon/light-2.webp", "abstract/afternoon/light-3.webp"],
-        "moderate": ["abstract/afternoon/moderate-1.webp", "abstract/afternoon/moderate-2.webp", "abstract/afternoon/moderate-3.webp"],
-        "packed": ["abstract/afternoon/packed-1.webp", "abstract/afternoon/packed-2.webp", "abstract/afternoon/packed-3.webp"]
+        "light": [
+          "abstract/afternoon/light-1.webp",
+          "abstract/afternoon/light-2.webp",
+          "abstract/afternoon/light-3.webp"
+        ],
+        "moderate": [
+          "abstract/afternoon/moderate-1.webp",
+          "abstract/afternoon/moderate-2.webp",
+          "abstract/afternoon/moderate-3.webp"
+        ],
+        "packed": [
+          "abstract/afternoon/packed-1.webp",
+          "abstract/afternoon/packed-2.webp",
+          "abstract/afternoon/packed-3.webp"
+        ]
       },
       "goldenHour": {
-        "light": ["abstract/golden-hour/light-1.webp", "abstract/golden-hour/light-2.webp", "abstract/golden-hour/light-3.webp"],
-        "moderate": ["abstract/golden-hour/moderate-1.webp", "abstract/golden-hour/moderate-2.webp", "abstract/golden-hour/moderate-3.webp"],
-        "packed": ["abstract/golden-hour/packed-1.webp", "abstract/golden-hour/packed-2.webp", "abstract/golden-hour/packed-3.webp"]
+        "light": [
+          "abstract/golden-hour/light-1.webp",
+          "abstract/golden-hour/light-2.webp",
+          "abstract/golden-hour/light-3.webp"
+        ],
+        "moderate": [
+          "abstract/golden-hour/moderate-1.webp",
+          "abstract/golden-hour/moderate-2.webp",
+          "abstract/golden-hour/moderate-3.webp"
+        ],
+        "packed": [
+          "abstract/golden-hour/packed-1.webp",
+          "abstract/golden-hour/packed-2.webp",
+          "abstract/golden-hour/packed-3.webp"
+        ]
       },
       "evening": {
-        "light": ["abstract/evening/light-1.webp", "abstract/evening/light-2.webp", "abstract/evening/light-3.webp"],
-        "moderate": ["abstract/evening/moderate-1.webp", "abstract/evening/moderate-2.webp", "abstract/evening/moderate-3.webp"],
-        "packed": ["abstract/evening/packed-1.webp", "abstract/evening/packed-2.webp", "abstract/evening/packed-3.webp"]
+        "light": [
+          "abstract/evening/light-1.webp",
+          "abstract/evening/light-2.webp",
+          "abstract/evening/light-3.webp"
+        ],
+        "moderate": [
+          "abstract/evening/moderate-1.webp",
+          "abstract/evening/moderate-2.webp",
+          "abstract/evening/moderate-3.webp"
+        ],
+        "packed": [
+          "abstract/evening/packed-1.webp",
+          "abstract/evening/packed-2.webp",
+          "abstract/evening/packed-3.webp"
+        ]
       },
       "night": {
-        "light": ["abstract/night/light-1.webp", "abstract/night/light-2.webp", "abstract/night/light-3.webp"],
-        "moderate": ["abstract/night/moderate-1.webp", "abstract/night/moderate-2.webp", "abstract/night/moderate-3.webp"],
-        "packed": ["abstract/night/packed-1.webp", "abstract/night/packed-2.webp", "abstract/night/packed-3.webp"]
+        "light": [
+          "abstract/night/light-1.webp",
+          "abstract/night/light-2.webp",
+          "abstract/night/light-3.webp"
+        ],
+        "moderate": [
+          "abstract/night/moderate-1.webp",
+          "abstract/night/moderate-2.webp",
+          "abstract/night/moderate-3.webp"
+        ],
+        "packed": [
+          "abstract/night/packed-1.webp",
+          "abstract/night/packed-2.webp",
+          "abstract/night/packed-3.webp"
+        ]
       }
     }
   }

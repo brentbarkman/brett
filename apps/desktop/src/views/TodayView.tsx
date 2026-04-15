@@ -187,7 +187,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
         </div>
       )}
 
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+      <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4">
         <div className="pb-3">
           <FilterPills
             activeFilter={activeFilter}

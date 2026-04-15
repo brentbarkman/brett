@@ -90,15 +90,6 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
 
   const hasUncompleted = uncompleted.length > 0;
 
-  // Track whether header/done section just appeared (for enter animations)
-  const hadHeader = useRef(!!header);
-  const headerIsNew = !!header && !hadHeader.current;
-  useEffect(() => { hadHeader.current = !!header; }, [header]);
-
-  const hadDone = useRef(done.length > 0);
-  const doneIsNew = done.length > 0 && !hadDone.current;
-  useEffect(() => { hadDone.current = done.length > 0; }, [done.length]);
-
   // Compute running offset so Section knows which indices are "focused"
   let offset = 0;
   const overdueOffset = offset;
@@ -109,21 +100,13 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
   offset += grouped.this_week.length;
   const doneOffset = offset;
 
-  const cardClass = bare ? "" : "bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4";
+  const cardClass = bare ? "" : "bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4";
 
   return (
     <div className="flex flex-col gap-4 pb-20">
       <div className={cardClass}>
         <div className="flex flex-col gap-4">
-          {header && (
-            <div
-              style={headerIsNew ? {
-                animation: "sectionEnter 450ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
-              } : undefined}
-            >
-              {header}
-            </div>
-          )}
+          {header && <div>{header}</div>}
 
           {grouped.overdue.length > 0 && (
             <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
@@ -140,13 +123,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           )}
 
           {done.length > 0 && (
-            <div
-              style={doneIsNew ? {
-                animation: "sectionEnter 450ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
-                animationDelay: "80ms",
-                opacity: 0,
-              } : undefined}
-            >
+            <div>
               <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
             </div>
           )}

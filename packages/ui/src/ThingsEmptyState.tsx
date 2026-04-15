@@ -46,7 +46,7 @@ export function ThingsEmptyState({
     );
     if (inline) return content;
     return (
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8">
+      <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-8">
         {content}
       </div>
     );
@@ -56,7 +56,7 @@ export function ThingsEmptyState({
   if (hasThingsElsewhere) {
     const isContentFilter = activeFilter === "Content";
     return (
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8">
+      <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-8">
         <div className="flex flex-col items-center text-center gap-4">
           <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
             {isContentFilter

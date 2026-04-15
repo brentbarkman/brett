@@ -174,7 +174,7 @@ export function CalendarTimeline({
     const ctaTop = 2.5 * gh;
 
     return (
-      <div className="flex flex-col h-full bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden relative">
+      <div className="flex flex-col h-full bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden relative">
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <h2 className="text-white font-medium">{displayDate}</h2>
           <button
@@ -362,7 +362,7 @@ export function CalendarTimeline({
   const isDisplayToday = isToday;
 
   return (
-    <div className="flex flex-col h-full bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
+    <div className="flex flex-col h-full bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <div className="flex items-center gap-2">

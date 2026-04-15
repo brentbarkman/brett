@@ -44,7 +44,13 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
     }
   }, [isOpen]);
 
-  // Reset state on close
+  // Reset state on close.
+  //
+  // submitFeedback is intentionally OMITTED from deps: useMutation's observer
+  // produces a new object reference whenever its internal state changes, and
+  // submitFeedback.reset() itself triggers a state change. Including it here
+  // creates an infinite render loop (reset → new ref → effect re-runs → reset
+  // → ...). reset() is stable enough to call directly without dep tracking.
   useEffect(() => {
     if (!isOpen) {
       setType("bug");

@@ -31,7 +31,10 @@ import {
   ScoutsRoster,
   ScoutDetail,
   LivingBackground,
+  BackgroundScrim,
 } from "@brett/ui";
+import { useAwakening } from "./hooks/useAwakening";
+import { useAppConfig } from "./hooks/useAppConfig";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./api/client";
@@ -103,6 +106,18 @@ import {
 import type { RecentFindingItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
+
+// ----- Awakening timing (Ken Burns cold-launch reveal) -----
+/** Ken Burns scale transition duration (scale 1.15 → 1.0 on
+ *  LivingBackground). The UI cover finishes fading ~1000ms before this,
+ *  so the image keeps settling for a beat after the UI is fully revealed. */
+const AWAKENING_KENBURNS_MS = 2500;
+/** Cover fade-out duration. The cover sits ABOVE the UI (z-30) and is
+ *  opaque at mount; as it fades, both the Ken-Burnsing background and
+ *  the UI emerge together. Because UI shell stays at opacity 1
+ *  throughout, glass cards' backdrop-filter renders continuously with no
+ *  pop. */
+const AWAKENING_COVER_FADE_MS = 1500;
 
 function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer, assistantName }: {
   children: React.ReactNode;
@@ -501,6 +516,47 @@ export function App() {
     avgBusynessScore,
     pinnedBackground,
   });
+
+  // Awakening — plays once per session on cold launch.
+  const { data: appConfig } = useAppConfig();
+  const awakening = useAwakening({
+    baseUrl: appConfig?.storageBaseUrl ?? "",
+  });
+  // Awakening: LivingBackground image starts at scale(1.15) and transitions
+  // to scale(1.0) over AWAKENING_KENBURNS_MS. A black cover above the UI
+  // (z-30) is opaque at mount and fades to transparent over
+  // AWAKENING_COVER_FADE_MS — the cover fading IS the UI reveal. Because
+  // the UI shell stays at opacity 1 the whole time, glass cards'
+  // backdrop-filter renders continuously (no "pop" at opacity === 1).
+  const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading">("playing");
+  const [coverFaded, setCoverFaded] = useState(() => awakening.status === "skip");
+
+  useEffect(() => {
+    if (awakening.status === "skip") {
+      // Session already played / reduced motion — no animation, UI instant.
+      setAwakeningPhase("fading");
+      setCoverFaded(true);
+      return;
+    }
+    // Wait for the real wallpaper to load before kicking off. If we started
+    // on the empty (black) state and the image loaded mid-zoom, the user
+    // would see an abrupt image pop-in.
+    if (!background.hasLoadedImage) return;
+    // Double rAF ensures the initial frame (scale(1.15), cover opaque) has
+    // painted before we flip state — so the browser runs real transitions
+    // rather than short-circuiting to the final values.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setAwakeningPhase("fading"); // starts Ken Burns scale transition
+        setCoverFaded(true);         // starts cover fade-out (UI reveal)
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [awakening.status, background.hasLoadedImage]);
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
@@ -940,15 +996,44 @@ export function App() {
           isTransitioning={background.isTransitioning}
           gradient={background.gradient}
           nextGradient={background.nextGradient}
+          awakeningZoom={
+            // status !== "skip" (not status === "play") so the image is
+            // already at scale(1.15) on first paint during the brief
+            // "pending" period. Otherwise the transform animates 1 → 1.15
+            // when status resolves, then immediately interrupts itself with
+            // the 1.15 → 1 transition — cancelling out the zoom.
+            awakening.status !== "skip" ? awakeningPhase === "playing" : undefined
+          }
+          awakeningZoomDurationMs={AWAKENING_KENBURNS_MS}
         />
+        <BackgroundScrim />
 
-
+        {/* Cold-launch cover: black overlay above UI (z-30). Opaque at
+            mount, fades to transparent over AWAKENING_COVER_FADE_MS. The
+            cover fading IS the UI reveal — UI shell below stays at
+            opacity 1 throughout, so glass cards' backdrop-filter renders
+            continuously (no pop at opacity === 1). */}
+        {awakening.status !== "skip" && (
+          <div
+            className="absolute inset-0 z-[30] bg-black pointer-events-none transition-opacity ease-out"
+            style={{
+              opacity: coverFaded ? 0 : 1,
+              transitionDuration: `${AWAKENING_COVER_FADE_MS}ms`,
+            }}
+          />
+        )}
 
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
 
-        {/* Main Layout Shell */}
-        <div className="relative z-10 flex w-full h-full gap-4 p-4 pl-0">
+        {/* Main Layout Shell. Always at opacity 1 — the awakening cover
+            above (z-30) handles the reveal. Any opacity / transform /
+            filter / isolation on this shell would create a stacking
+            context and disable backdrop-filter on descendant glass
+            cards. */}
+        <div
+          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0"
+        >
           {/* Left Column: Navigation */}
           <LeftNav
             isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScoutId !== null)}
@@ -1401,6 +1486,7 @@ export function App() {
           screenshot={feedbackScreenshot}
           userId={user?.id || "unknown"}
         />
+
       </div>
       </AppDropZone>
     </DndContext>

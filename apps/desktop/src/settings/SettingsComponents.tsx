@@ -17,7 +17,7 @@ export function SettingsCard({
 }) {
   return (
     <div
-      className={`bg-black/30 backdrop-blur-xl rounded-xl border ${
+      className={`bg-black/40 backdrop-blur-xl rounded-xl border ${
         danger ? "border-red-500/30" : "border-white/10"
       } p-6 ${className}`}
     >

@@ -41,7 +41,7 @@ export function ScoutsRoster({ scouts, onSelectScout, onNewScout, isLoading, omn
       <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide">
         <div className="flex flex-col gap-4 pb-20">
           {/* Glass card container — matches ItemListShell pattern */}
-          <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+          <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div>
