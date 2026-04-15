@@ -767,11 +767,13 @@ export function App() {
     handleItemClick(recordToDisplay(event));
   };
 
-  // Update panel when keyboard nav changes focus (only if panel is open)
+  // Always keep selectedItem in sync with keyboard-nav focus so that
+  // operations (triage, detail panel) target the visually-highlighted item,
+  // not an item the user previously clicked.  When the panel is open this
+  // drives the live detail update; when it is closed it primes selectedItem
+  // so actions that read it (e.g. Enter-to-open) see the correct task.
   const handleFocusChange = (thing: Thing) => {
-    if (isDetailOpen) {
-      setSelectedItem(thing);
-    }
+    setSelectedItem(thing);
   };
 
   const handleCloseDetail = () => {

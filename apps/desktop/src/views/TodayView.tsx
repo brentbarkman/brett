@@ -28,7 +28,7 @@ import { useTodayKey } from "../hooks/useTodayKey";
 interface TodayViewProps {
   lists: NavList[];
   onItemClick: (item: Thing | CalendarEventDisplay) => void;
-  onTriageOpen: (mode: "list-first" | "date-first", ids: string[]) => void;
+  onTriageOpen: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   onFocusChange?: (thing: Thing) => void;
   omnibarProps: OmnibarProps;
   nextUpEvent?: CalendarEventDisplay | null;
