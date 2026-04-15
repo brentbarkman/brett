@@ -33,7 +33,7 @@ import {
   LivingBackground,
   BackgroundScrim,
 } from "@brett/ui";
-import { useAwakeningVideo } from "./hooks/useAwakeningVideo";
+import { useAwakening } from "./hooks/useAwakening";
 import { useAppConfig } from "./hooks/useAppConfig";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -517,13 +517,10 @@ export function App() {
     pinnedBackground,
   });
 
-  // Awakening — plays once on cold launch, hides LivingBackground's
-  // own previous-segment crossfade so the user sees: black → reveal → settled
-  // current-segment image, instead of: previous-segment → reveal → current-segment.
+  // Awakening — plays once per session on cold launch.
   const { data: appConfig } = useAppConfig();
-  const awakening = useAwakeningVideo({
+  const awakening = useAwakening({
     baseUrl: appConfig?.storageBaseUrl ?? "",
-    segment: background.segment,
   });
   // Awakening: LivingBackground image starts at scale(1.15) and transitions
   // to scale(1.0) over AWAKENING_KENBURNS_MS. A black cover above the UI
