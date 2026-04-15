@@ -68,6 +68,45 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     return () => document.removeEventListener("keydown", handleEscape);
   }, [showColorPicker]);
 
+  // NOTE: All hooks must be called before any early return — keyboard nav
+  // and its inputs are computed unconditionally so React sees a stable hook
+  // call order even when `list` is missing.
+  const handleToggle = (thingId: string) => {
+    toggleThing.mutate(thingId);
+  };
+
+  const filteredThings = things.filter((t) => {
+    if (typeFilter === "All") return true;
+    if (typeFilter === "Tasks") return t.type === "task";
+    if (typeFilter === "Content") return t.type === "content";
+    return true;
+  });
+  const activeThings = filteredThings.filter((t) => !t.isCompleted);
+  const doneThings = filteredThings.filter((t) => t.isCompleted);
+  const allItems = [...activeThings, ...doneThings];
+
+  const { focusedIndex, setFocusedIndex, setAddInputFocused } = useListKeyboardNav({
+    items: allItems,
+    onItemClick,
+    onToggle: handleToggle,
+    onFocusChange,
+    onFocusAdd: () => quickAddRef.current?.focus(),
+    onExtraKey: (e, focusedThing) => {
+      if (!focusedThing || !onTriageOpen) return false;
+      if (e.key === "l") {
+        e.preventDefault();
+        onTriageOpen("list-first", [focusedThing.id], focusedThing);
+        return true;
+      }
+      if (e.key === "d") {
+        e.preventDefault();
+        onTriageOpen("date-first", [focusedThing.id], focusedThing);
+        return true;
+      }
+      return false;
+    },
+  });
+
   // Still loading lists (e.g., after creating a new list)
   if (!list && listsFetching) {
     return <SkeletonListView />;
@@ -112,10 +151,6 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     setShowColorPicker(false);
   };
 
-  const handleToggle = (thingId: string) => {
-    toggleThing.mutate(thingId);
-  };
-
   const handleAdd = (title: string) => {
     createThing.mutate(
       { type: "task", title, listId: list.id },
@@ -134,38 +169,6 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
     const incompleteCount = things.filter((t) => !t.isCompleted).length;
     onArchiveList?.(list.id, incompleteCount);
   };
-
-  const filteredThings = things.filter((t) => {
-    if (typeFilter === "All") return true;
-    if (typeFilter === "Tasks") return t.type === "task";
-    if (typeFilter === "Content") return t.type === "content";
-    return true;
-  });
-  const activeThings = filteredThings.filter((t) => !t.isCompleted);
-  const doneThings = filteredThings.filter((t) => t.isCompleted);
-  const allItems = [...activeThings, ...doneThings];
-
-  const { focusedIndex, setFocusedIndex, setAddInputFocused } = useListKeyboardNav({
-    items: allItems,
-    onItemClick,
-    onToggle: handleToggle,
-    onFocusChange,
-    onFocusAdd: () => quickAddRef.current?.focus(),
-    onExtraKey: (e, focusedThing) => {
-      if (!focusedThing || !onTriageOpen) return false;
-      if (e.key === "l") {
-        e.preventDefault();
-        onTriageOpen("list-first", [focusedThing.id], focusedThing);
-        return true;
-      }
-      if (e.key === "d") {
-        e.preventDefault();
-        onTriageOpen("date-first", [focusedThing.id], focusedThing);
-        return true;
-      }
-      return false;
-    },
-  });
 
   const listHeader = (
     <>

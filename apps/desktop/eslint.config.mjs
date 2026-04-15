@@ -26,21 +26,22 @@ export default tseslint.config(
     files: ["src/**/*.{ts,tsx}", "electron/**/*.ts"],
   })),
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}", "electron/**/*.ts"],
     plugins: {
       "react-hooks": reactHooks,
     },
     rules: {
-      // The only rule we enforce, for the reasons documented above.
+      // The only rules we enforce, for the reasons documented above.
       "react-hooks/exhaustive-deps": "error",
       "react-hooks/rules-of-hooks": "error",
 
-      // Disable noisy defaults from js.configs.recommended — not the focus
-      // of this lint pass, TS/compiler already covers them.
+      // Disable noisy defaults from js.configs.recommended + tseslint.configs.recommended.
+      // TS/compiler already covers correctness; broader style enforcement is out of scope.
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-empty-object-type": "off",
+      "@typescript-eslint/no-require-imports": "off",
       "no-empty": "off",
       "no-useless-escape": "off",
       "no-control-regex": "off",

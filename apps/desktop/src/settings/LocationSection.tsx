@@ -174,8 +174,16 @@ export function LocationSection() {
   useEffect(() => {
     const shouldShow = results.length > 0 && query.length >= 2;
     setShowDropdown(shouldShow);
-    if (shouldShow) updateDropdownPos();
-  }, [results, query, updateDropdownPos]);
+    if (shouldShow) {
+      // Inline updateDropdownPos here so the effect doesn't re-run on
+      // every parent render via the function's identity.
+      const el = inputWrapperRef.current;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      }
+    }
+  }, [results, query]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

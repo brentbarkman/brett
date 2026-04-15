@@ -122,7 +122,6 @@ export function useToggleThing() {
 
       // Optimistically toggle item status in any cached granola meeting
       await qc.cancelQueries({ queryKey: ["granola", "meeting"] });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const meetingQueries = qc.getQueriesData<any>({ queryKey: ["granola", "meeting"] });
       for (const [key, data] of meetingQueries) {
         if (data?.items) {

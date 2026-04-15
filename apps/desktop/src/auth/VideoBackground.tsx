@@ -98,7 +98,12 @@ export function VideoBackground({ videos, ref }: VideoBackgroundProps) {
     pendingSrc.current[oldSlot] = videos[followingIndex];
   };
 
-  useImperativeHandle(ref, () => ({ skip: advance }), [advance]);
+  // Stash advance in a ref so the imperative handle is set up exactly once
+  // (parent's ref doesn't churn). The handle's skip() always reads the
+  // latest advance via the ref.
+  const advanceRef = useRef(advance);
+  advanceRef.current = advance;
+  useImperativeHandle(ref, () => ({ skip: () => advanceRef.current() }), []);
 
   const handleEnded = (slotIndex: number) => {
     if (slotIndex === activeSlotRef.current) {
@@ -106,14 +111,17 @@ export function VideoBackground({ videos, ref }: VideoBackgroundProps) {
     }
   };
 
-  // Preload the inactive slot when its src changes
+  // Preload the inactive slot when its src changes. Extract slot srcs to
+  // locals so the deps array satisfies the no-complex-expression rule.
+  const slot0Src = slots[0].src;
+  const slot1Src = slots[1].src;
   useEffect(() => {
     const inactiveSlot: 0 | 1 = activeSlotRef.current === 0 ? 1 : 0;
-    const vid = videoRefs[inactiveSlot].current;
+    const vid = inactiveSlot === 0 ? videoRef0.current : videoRef1.current;
     if (vid) {
       vid.load();
     }
-  }, [slots[0].src, slots[1].src]);
+  }, [slot0Src, slot1Src]);
 
   return (
     <div className="absolute inset-0 bg-black">

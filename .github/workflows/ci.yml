@@ -49,6 +49,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Lint
+        run: pnpm --filter @brett/desktop lint
+
       - name: Run migrations on test DB
         run: pnpm --filter @brett/api exec prisma migrate deploy
         env:

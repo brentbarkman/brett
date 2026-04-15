@@ -154,12 +154,22 @@ export function useBackground({
     }
   };
 
+  // Stash the latest rotateImage in a ref. The interval/visibility/style
+  // effects below depend on rotateImage, but rotateImage closes over many
+  // props/state and changes identity on every render. Listing it in the
+  // deps array would re-run those effects on every render — clearing and
+  // resetting the 10-min interval before it ever fires (auto-rotation
+  // would silently never run). The ref pattern lets the effects run
+  // exactly once while still calling the latest rotateImage.
+  const rotateImageRef = useRef(rotateImage);
+  rotateImageRef.current = rotateImage;
+
   // Initial load when config becomes available
   // If awakening (previous segment differs), load that first, then
   // after a short delay crossfade to the current segment.
   useEffect(() => {
     if (baseUrl) {
-      rotateImage();
+      rotateImageRef.current();
 
       // Awakening: if we started with the previous segment, schedule
       // a second rotation to the current segment after 1.5s
@@ -170,13 +180,13 @@ export function useBackground({
           setSegment(currentSegment);
           categoryRef.current.segment = currentSegment;
           shownRef.current = [];
-          rotateImage();
+          rotateImageRef.current();
         }, 1500);
         return () => clearTimeout(awakeTimer);
       }
       hasAwokenRef.current = true;
     }
-  }, [baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: only run once when baseUrl becomes available; rotateImageRef.current always reads the latest
 
   // Persist the current segment so next launch can do the awakening effect
   useEffect(() => {
@@ -185,16 +195,16 @@ export function useBackground({
 
   // Rotation timer (10 min)
   useEffect(() => {
-    const interval = setInterval(rotateImage, ROTATION_INTERVAL_MS);
+    const interval = setInterval(() => rotateImageRef.current(), ROTATION_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [rotateImage]);
+  }, []);
 
   // Segment check (60s) + visibility change listener
   useEffect(() => {
     const checkSegment = () => {
       const newSegment = getTimeSegment(new Date().getHours());
       if (newSegment !== categoryRef.current.segment) {
-        rotateImage();
+        rotateImageRef.current();
       }
     };
 
@@ -211,13 +221,13 @@ export function useBackground({
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [rotateImage]);
+  }, []);
 
   // Recalculate busyness when inputs change
   useEffect(() => {
     const newTier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
     setBusynessTier(newTier);
-  }, [meetingCount, taskCount]);
+  }, [meetingCount, taskCount, avgBusynessScore]);
 
   // Immediately rotate when user switches background style
   const prevStyleRef = useRef(backgroundStyle);
@@ -225,9 +235,9 @@ export function useBackground({
     if (prevStyleRef.current !== backgroundStyle) {
       prevStyleRef.current = backgroundStyle;
       shownRef.current = [];
-      rotateImage();
+      rotateImageRef.current();
     }
-  }, [backgroundStyle, rotateImage]);
+  }, [backgroundStyle]);
 
   // Preload next segment's image 5 minutes before boundary
   useEffect(() => {
@@ -262,7 +272,10 @@ export function useBackground({
 
     const interval = setInterval(preloadCheck, SEGMENT_CHECK_MS);
     return () => clearInterval(interval);
-  }, [isAbstract, meetingCount, taskCount, backgroundStyle, baseUrl, buildUrl]);
+  // buildUrl is a fresh closure each render but only references baseUrl, which is in deps —
+  // safe to omit. Including it would re-run the effect (and reset the interval) on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingCount, taskCount, backgroundStyle, baseUrl, avgBusynessScore]);
 
   // Dev: sequential cycling through ALL images, ignoring smart logic
   const devIndexRef = useRef(-1);
