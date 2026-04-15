@@ -66,10 +66,22 @@ export function LivingBackground({
         </>
       )}
 
-      {/* Readability overlays — only for images, not solid colors */}
+      {/* Readability overlays — only for images, not solid colors.
+       *
+       * Linear gradients here complement BackgroundScrim (mounted above
+       * LivingBackground in App.tsx) which provides the full-viewport radial
+       * darkening. These linears serve purposes the radial doesn't:
+       *
+       * - Top gradient: contrast behind the macOS traffic-light window chrome
+       *   (reduced from to-black/40 → to-black/30 now that the scrim sits on top)
+       * - Left gradient: darkens behind the fixed sidebar nav (unchanged)
+       *
+       * Bottom gradient removed — the radial scrim handles bottom-edge
+       * darkening and doubling up muddied night scenes.
+       */}
       {!useGradients && (
         <>
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
+          <div className="absolute inset-x-0 top-0 h-[40%] bg-gradient-to-b from-black/30 to-transparent pointer-events-none" />
           <div className="absolute inset-y-0 left-0 w-[312px] bg-gradient-to-r from-black/60 to-transparent pointer-events-none" />
         </>
       )}
