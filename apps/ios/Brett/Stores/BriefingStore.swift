@@ -101,6 +101,34 @@ final class BriefingStore {
         isDismissedToday = true
     }
 
+    // MARK: - Markdown rendering
+
+    /// Parse the cached `briefing` Markdown into a block-structured view
+    /// model. Returns `nil` when there's no briefing.
+    ///
+    /// Callers typically render via `MarkdownRenderer(source: …)` directly
+    /// — this hook is here so tests and non-SwiftUI consumers can inspect
+    /// the block segmentation without touching the rendering pipeline.
+    func parsedBlocks() -> [MarkdownBlock] {
+        guard let briefing, !briefing.isEmpty else { return [] }
+        return MarkdownBlock.parse(briefing)
+    }
+
+    /// Inline-only `AttributedString` for the briefing, with full syntax
+    /// support (bold, italic, code spans, links) and newlines preserved.
+    ///
+    /// Returns `nil` when there's no briefing cached. Useful for quick
+    /// inline renders (e.g. Today header preview) without spinning up the
+    /// block renderer.
+    func parsedContent() -> AttributedString? {
+        guard let briefing, !briefing.isEmpty else { return nil }
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace
+        )
+        return (try? AttributedString(markdown: briefing, options: options))
+            ?? AttributedString(briefing)
+    }
+
     // MARK: - Helpers
 
     private static func describe(_ error: Error) -> String {

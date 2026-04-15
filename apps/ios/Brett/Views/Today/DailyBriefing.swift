@@ -2,13 +2,14 @@ import SwiftUI
 
 /// The Daily Briefing card on the Today page.
 ///
-/// Cerulean-tinted StickyCardSection — Brett AI signature colour. Markdown in
-/// the briefing body (**bold**, _italic_, `code`, [links](url)) is rendered
-/// via SwiftUI's `AttributedString(markdown:)` so asterisks and link syntax
-/// never leak through to the user.
+/// Cerulean-tinted StickyCardSection — Brett AI signature colour. The body
+/// is full Markdown: headings, ordered + unordered lists, **bold**, _italic_,
+/// `code`, and [links](url) all render via `MarkdownRenderer`. Links open
+/// in-app in `SafariView` so the user never loses their place.
 struct DailyBriefing: View {
     @Bindable var store: BriefingStore
     @State private var isCollapsed: Bool = false
+    @State private var externalURL: IdentifiedURL?
 
     @ViewBuilder
     var body: some View {
@@ -66,22 +67,26 @@ struct DailyBriefing: View {
                         .padding(16)
                 }
             }
+            .sheet(item: $externalURL) { identified in
+                SafariView(url: identified.url)
+                    .ignoresSafeArea()
+            }
         }
     }
 
     @ViewBuilder
     private var bodyContent: some View {
         if let briefing = store.briefing, !briefing.isEmpty {
-            Text(markdownAttributed(briefing))
-                .font(BrettTypography.body)
-                .foregroundStyle(BrettColors.textBody)
-                .lineSpacing(4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .gesture(swipeDismiss)
-                .accessibilityAction(named: Text("Dismiss")) {
-                    store.dismiss()
-                }
+            MarkdownRenderer(source: briefing, style: .briefing) { url in
+                HapticManager.light()
+                externalURL = IdentifiedURL(url: url)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .gesture(swipeDismiss)
+            .accessibilityAction(named: Text("Dismiss")) {
+                store.dismiss()
+            }
         } else if store.isGenerating {
             Text("Brett is putting your briefing together…")
                 .font(BrettTypography.body)
@@ -114,16 +119,4 @@ struct DailyBriefing: View {
             }
     }
 
-    /// Parse the server's Markdown into an `AttributedString`. Falling back
-    /// to the raw string keeps the card usable even when the server returns
-    /// unexpected formatting.
-    private func markdownAttributed(_ source: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .inlineOnlyPreservingWhitespace
-        )
-        if let parsed = try? AttributedString(markdown: source, options: options) {
-            return parsed
-        }
-        return AttributedString(source)
-    }
 }
