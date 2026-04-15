@@ -147,10 +147,13 @@ const AWAKENING_UI_DELAY_MS = 300;
  *  (before Ken Burns ends at 2000ms) — gives the image 300ms of solo
  *  settling motion after UI is fully revealed. */
 const AWAKENING_UI_FADE_MS = 1400;
-/** "cover" mode: how long cover stays fully opaque before fading. Tuned so
- *  ThingsList's sectionEnter animations (450ms) play out INVISIBLY under
- *  the cover, avoiding the "dropping down" effect. */
-const COVER_OPAQUE_MS = 450;
+/** "cover" mode: how long cover stays fully opaque before fading. Short
+ *  enough to not feel like a "black screen pause" on cold launch, long
+ *  enough to hide the visible part of ThingsList's sectionEnter slide
+ *  (ease-out curve, so most of the translate completes in the first
+ *  ~150ms). The tail of sectionEnter (~200-450ms) settles behind the
+ *  fading cover — tiny translate deltas at that point, imperceptible. */
+const COVER_OPAQUE_MS = 200;
 /** "cover" mode: cover fade-out duration. 450 + 1500 = 1950ms (just before
  *  Ken Burns end). */
 const COVER_FADE_MS = 1500;
