@@ -199,6 +199,11 @@ aiConfig.delete("/config/:id", async (c) => {
 
   await prisma.userAIConfig.delete({ where: { id } });
 
+  // Resolve any existing re-link task — user is in a valid state now (no AI configured)
+  await resolveRelinkTask(user.id, "ai").catch((e) =>
+    console.error("[ai-config] Failed to resolve re-link task:", e),
+  );
+
   return c.json({ ok: true });
 });
 

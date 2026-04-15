@@ -345,6 +345,12 @@ granolaAuth.delete("/", authMiddleware, async (c) => {
   });
   // Cascade delete: GranolaAccount -> MeetingNote
   await prisma.granolaAccount.delete({ where: { id: account.id } });
+
+  // Resolve any existing re-link task — user is in a valid state now (account removed)
+  await resolveRelinkTask(user.id, "granola").catch((e) =>
+    console.error("[granola-auth] Failed to resolve re-link task:", e),
+  );
+
   return c.json({ ok: true });
 });
 
