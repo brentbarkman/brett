@@ -108,6 +108,7 @@ export function Omnibar({
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // chatEndRef removed — use chatContainerRef.scrollTop instead to avoid page jumping
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
@@ -119,13 +120,30 @@ export function Omnibar({
   const animateClose = () => {
     if (isClosing) return;
     setIsClosing(true);
-    setTimeout(() => {
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
       setIsClosing(false);
       setForcedAction(null);
       setConfirmedTask(null);
       onClose();
     }, 150);
   };
+
+  // Cancel any pending close animation when the omnibar is reopened. Without
+  // this, a rapid close → reopen leaves isClosing true and the old timer
+  // eventually clears it, producing a visible flicker.
+  useEffect(() => {
+    if (isOpen && closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+      setIsClosing(false);
+    }
+  }, [isOpen]);
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+  }, []);
 
   // Intercept input changes to detect shortcut prefixes
   const handleInputChange = (value: string) => {
@@ -157,9 +175,9 @@ export function Omnibar({
 
   // Focus input when opening
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!isOpen) return;
+    const raf = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
   }, [isOpen]);
 
   // Auto-scroll chat container to bottom (not the page)
@@ -370,7 +388,7 @@ export function Omnibar({
       {/* Top Pill / Input Area */}
       <div
         className={`
-          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-300 ease-in-out overflow-hidden
+          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-[border-color,box-shadow] duration-300 ease-in-out overflow-hidden
           ${isOpen ? "border-brett-cerulean/50 shadow-[0_0_20px_rgba(70,130,195,0.15)]" : "border-white/10 hover:border-white/20"}
           ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
         `}
@@ -420,7 +438,7 @@ export function Omnibar({
         )}
 
         {/* Expanded content — animates out on close */}
-        <div className={`transition-all duration-150 ease-out origin-top ${
+        <div className={`transition-[opacity,transform] duration-150 ease-out origin-top ${
           isClosing ? "opacity-0 scale-y-95 -translate-y-1" : ""
         }`}>
           {/* Suggestions — inline */}
