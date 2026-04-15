@@ -14,11 +14,19 @@ enum InMemoryPersistenceController {
         Item.self,
         ItemList.self,
         CalendarEvent.self,
+        CalendarEventNote.self,
         Scout.self,
         ScoutFinding.self,
         BrettMessage.self,
         Attachment.self,
         UserProfile.self,
+
+        // Sync infrastructure — must match PersistenceController.modelTypes.
+        MutationQueueEntry.self,
+        SyncCursor.self,
+        ConflictLogEntry.self,
+        SyncHealth.self,
+        AttachmentUpload.self,
     ]
 
     /// Build a `ModelContainer` backed purely by memory. Safe to call once
