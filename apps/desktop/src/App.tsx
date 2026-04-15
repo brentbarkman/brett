@@ -33,7 +33,7 @@ import {
   LivingBackground,
   BackgroundScrim,
 } from "@brett/ui";
-import { useAwakeningVideo } from "./hooks/useAwakeningVideo";
+import { useAwakeningVideo, _resetAwakeningSessionFlag } from "./hooks/useAwakeningVideo";
 import { useAppConfig } from "./hooks/useAppConfig";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -111,14 +111,50 @@ const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 /** Ken Burns scale transition duration (scale 1.15 → 1.0 on
  *  LivingBackground). Also the outer deadline — nothing animates past it. */
 const AWAKENING_REVEAL_MS = 2000;
-/** How long to show ONLY the Ken-Burnsing background before the UI begins
- *  fading in. */
+
+// ---- Reveal mode prototype ----
+// Three experimental modes for how the UI appears on cold launch. Dev-only
+// toggle (bottom-right pill) cycles between them + persists to localStorage.
+//
+// - "fade":  current behavior. UI shell animates opacity 0 → 1. Glass cards
+//            suffer a small "pop" at opacity === 1 due to Chromium's
+//            opacity-group behavior with backdrop-filter descendants.
+// - "cover": UI shell always at opacity 1. A black overlay above UI (z-30)
+//            starts opaque and fades to transparent — this reveal IS the UI
+//            fade. Glass cards render continuously at full quality (no pop)
+//            because no ancestor opacity animates. Trade-off: the cover
+//            also covers BG initially, so user sees solid black briefly
+//            before BG + UI reveal together.
+// - "snap":  UI shell visibility: hidden → visible at a timed moment. No
+//            fade on UI — it just appears. Glass is always at full quality.
+//            Trade-off: "instant" UI feel, not a soft fade.
+type AwakeningRevealMode = "fade" | "cover" | "snap";
+const REVEAL_MODE_KEY = "awakening-reveal-mode";
+
+function getStoredRevealMode(): AwakeningRevealMode {
+  try {
+    const stored = localStorage.getItem(REVEAL_MODE_KEY);
+    if (stored === "fade" || stored === "cover" || stored === "snap") return stored;
+  } catch { /* ignore */ }
+  return "fade";
+}
+
+// --- Timings per mode ---
+/** "fade" mode: how long to show BG alone before UI opacity starts rising. */
 const AWAKENING_UI_DELAY_MS = 300;
-/** UI fade-in duration. Intentionally finishes BEFORE Ken Burns ends
- *  (300 + 1400 = 1700ms < 2000ms) — this gives the image ~300ms of solo
- *  settling motion after the UI is fully revealed, which helps mask any
- *  compositor-level glass-blur transitions happening near opacity === 1. */
+/** "fade" mode: UI opacity transition duration. Ends at 300 + 1400 = 1700ms
+ *  (before Ken Burns ends at 2000ms) — gives the image 300ms of solo
+ *  settling motion after UI is fully revealed. */
 const AWAKENING_UI_FADE_MS = 1400;
+/** "cover" mode: how long cover stays fully opaque before fading. Tuned so
+ *  ThingsList's sectionEnter animations (450ms) play out INVISIBLY under
+ *  the cover, avoiding the "dropping down" effect. */
+const COVER_OPAQUE_MS = 450;
+/** "cover" mode: cover fade-out duration. 450 + 1500 = 1950ms (just before
+ *  Ken Burns end). */
+const COVER_FADE_MS = 1500;
+/** "snap" mode: how long to show BG alone before UI snaps visible. */
+const SNAP_DELAY_MS = 500;
 
 function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer, assistantName }: {
   children: React.ReactNode;
@@ -527,15 +563,14 @@ export function App() {
     segment: background.segment,
   });
   // Awakening: LivingBackground image starts at scale(1.15) and transitions
-  // to scale(1.0) over AWAKENING_REVEAL_MS. UI opacity starts at 0 and
-  // transitions to 1, starting AWAKENING_UI_DELAY_MS after mount — so the
-  // user sees the Ken Burns happening BEFORE the UI materializes on top.
-  // Both animations complete at t = AWAKENING_REVEAL_MS.
+  // to scale(1.0) over AWAKENING_REVEAL_MS. How the UI arrives is
+  // mode-dependent (see AwakeningRevealMode).
   //
-  // Key insight: UI mounts at opacity 0, so the sectionEnter translateY
-  // animations in ThingsList play INVISIBLY during 0-450ms (while the user
-  // can't see them). By the time UI opacity fades in, sections are already
-  // at their final translateY(0) — no "dropping in" effect visible.
+  // uiRevealed is a unified "UI should be visible" flag:
+  //   - "fade":  drives UI shell opacity (0 → 1)
+  //   - "cover": drives cover opacity INVERSE (cover = 1-revealed)
+  //   - "snap":  drives UI visibility (hidden → visible)
+  const [awakeningMode] = useState<AwakeningRevealMode>(getStoredRevealMode);
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading">("playing");
   const [uiRevealed, setUiRevealed] = useState(() => awakening.status === "skip");
 
@@ -550,7 +585,14 @@ export function App() {
     // If we started the animation on the empty (black) initial state and the
     // image loaded mid-zoom, the user would see an abrupt image pop-in.
     if (!background.hasLoadedImage) return;
-    // Double rAF ensures the initial frame (scale(1.15), UI opacity 0) has
+    // Pick the mode-specific delay before flipping uiRevealed.
+    const uiDelay =
+      awakeningMode === "fade"
+        ? AWAKENING_UI_DELAY_MS
+        : awakeningMode === "cover"
+        ? COVER_OPAQUE_MS
+        : SNAP_DELAY_MS;
+    // Double rAF ensures the initial frame (scale(1.15), UI hidden) has
     // painted before we flip state — so the browser runs a real transition
     // rather than short-circuiting to the final values.
     let raf2 = 0;
@@ -558,7 +600,7 @@ export function App() {
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         setAwakeningPhase("fading");
-        uiTimer = setTimeout(() => setUiRevealed(true), AWAKENING_UI_DELAY_MS);
+        uiTimer = setTimeout(() => setUiRevealed(true), uiDelay);
       });
     });
     return () => {
@@ -566,7 +608,7 @@ export function App() {
       if (raf2) cancelAnimationFrame(raf2);
       if (uiTimer) clearTimeout(uiTimer);
     };
-  }, [awakening.status, background.hasLoadedImage]);
+  }, [awakening.status, background.hasLoadedImage, awakeningMode]);
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
@@ -1018,19 +1060,41 @@ export function App() {
         />
         <BackgroundScrim />
 
+        {/* Cover mode only: black overlay above UI (z-30). Stays opaque for
+            COVER_OPAQUE_MS (hiding UI + BG), then fades to transparent. UI
+            shell below stays at opacity 1, so glass cards render at full
+            quality throughout — no pop. */}
+        {awakeningMode === "cover" && awakening.status !== "skip" && (
+          <div
+            className="absolute inset-0 z-[30] bg-black pointer-events-none transition-opacity ease-out"
+            style={{
+              opacity: uiRevealed ? 0 : 1,
+              transitionDuration: `${COVER_FADE_MS}ms`,
+            }}
+          />
+        )}
+
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
 
-        {/* Main Layout Shell. UI fades in via opacity during awakening.
-            Glass cards inside use .awakening-glass-layer class (see
-            index.css) to force their own compositor layer so backdrop-filter
-            keeps rendering correctly while the shell opacity animates. */}
+        {/* Main Layout Shell. Reveal behavior depends on awakeningMode:
+            - "fade":  opacity 0 → 1 (glass pop at end due to Chromium)
+            - "cover": opacity 1 always, cover above handles reveal
+            - "snap":  visibility hidden → visible (no fade, no pop) */}
         <div
-          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0 transition-opacity ease-out"
-          style={{
-            opacity: uiRevealed ? 1 : 0,
-            transitionDuration: `${AWAKENING_UI_FADE_MS}ms`,
-          }}
+          className={`relative z-10 flex w-full h-full gap-4 p-4 pl-0${
+            awakeningMode === "fade" ? " transition-opacity ease-out" : ""
+          }`}
+          style={
+            awakeningMode === "fade"
+              ? {
+                  opacity: uiRevealed ? 1 : 0,
+                  transitionDuration: `${AWAKENING_UI_FADE_MS}ms`,
+                }
+              : awakeningMode === "snap"
+              ? { visibility: uiRevealed ? "visible" : "hidden" }
+              : undefined
+          }
         >
           {/* Left Column: Navigation */}
           <LeftNav
@@ -1484,6 +1548,30 @@ export function App() {
           screenshot={feedbackScreenshot}
           userId={user?.id || "unknown"}
         />
+
+        {/* Dev-only awakening reveal mode toggle. Cycles fade → cover →
+            snap, persists to localStorage, resets the session-played flag,
+            and reloads so you can feel each variant. Hidden in prod. */}
+        {import.meta.env.DEV && (
+          <button
+            type="button"
+            className="fixed bottom-4 right-4 z-[9999] px-3 py-2 rounded-full bg-black/70 backdrop-blur-sm text-xs text-white/90 border border-white/10 hover:bg-black/85 transition-colors font-mono"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+            onClick={() => {
+              const next: Record<AwakeningRevealMode, AwakeningRevealMode> = {
+                fade: "cover",
+                cover: "snap",
+                snap: "fade",
+              };
+              localStorage.setItem(REVEAL_MODE_KEY, next[awakeningMode]);
+              _resetAwakeningSessionFlag();
+              window.location.reload();
+            }}
+            title="Cycle: fade → cover → snap"
+          >
+            reveal: {awakeningMode}
+          </button>
+        )}
       </div>
       </AppDropZone>
     </DndContext>
