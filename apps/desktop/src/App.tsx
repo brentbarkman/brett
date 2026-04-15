@@ -153,7 +153,7 @@ const AWAKENING_UI_FADE_MS = 1400;
  *  (ease-out curve, so most of the translate completes in the first
  *  ~150ms). The tail of sectionEnter (~200-450ms) settles behind the
  *  fading cover — tiny translate deltas at that point, imperceptible. */
-const COVER_OPAQUE_MS = 100;
+const COVER_OPAQUE_MS = 0;
 /** "cover" mode: cover fade-out duration. 450 + 1500 = 1950ms (just before
  *  Ken Burns end). */
 const COVER_FADE_MS = 1500;
