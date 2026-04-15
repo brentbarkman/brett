@@ -6,6 +6,7 @@ enum NavDestination: Hashable {
     case settings
     case scoutsRoster
     case scoutDetail(id: String)
+    case eventDetail(id: String)
     case listView(id: String)
 }
 
@@ -84,6 +85,8 @@ struct MainContainer: View {
                     ScoutsRosterView(store: store)
                 case .scoutDetail(let id):
                     ScoutDetailView(store: store, scoutId: id)
+                case .eventDetail(let id):
+                    EventDetailView(eventId: id)
                 case .listView(let id):
                     ListView(store: store, listId: id)
                 }
