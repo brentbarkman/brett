@@ -19,4 +19,5 @@ extension Tag {
     @Tag static var dates: Self
     @Tag static var models: Self
     @Tag static var smoke: Self
+    @Tag static var views: Self
 }

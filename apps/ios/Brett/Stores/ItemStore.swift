@@ -176,6 +176,69 @@ final class ItemStore {
         SyncManager.shared.schedulePushDebounced()
     }
 
+    // MARK: - Bulk mutate
+
+    /// Apply the same changeset to every id, computing per-item `previousValues`
+    /// so field-level conflict resolution still works on the server.
+    ///
+    /// This simply enqueues one UPDATE mutation per item; the mutation queue's
+    /// compactor coalesces redundant ops when it flushes.
+    ///
+    /// - Parameters:
+    ///   - ids: item IDs to apply `changes` to. Missing IDs are silently skipped.
+    ///   - changes: `[fieldName: newValue]`. The same values are applied to every
+    ///     item, but previousValues are snapshotted per item (so the server
+    ///     sees the correct base state for each).
+    func bulkUpdate(ids: [String], changes: [String: Any]) {
+        guard !ids.isEmpty, !changes.isEmpty else { return }
+        for id in ids {
+            guard let item = fetchById(id) else { continue }
+            let previousValues = previousValuesForChanges(Array(changes.keys), on: item)
+            update(id: id, changes: changes, previousValues: previousValues)
+        }
+    }
+
+    /// Soft-delete many items at once. Enqueues one DELETE per item — the
+    /// mutation queue compactor will collapse redundant ops.
+    func bulkDelete(ids: [String]) {
+        guard !ids.isEmpty else { return }
+        for id in ids {
+            delete(id: id)
+        }
+    }
+
+    /// Snapshot the current value of a set of fields on an item. Used by
+    /// `bulkUpdate` so each enqueued mutation has per-item previousValues.
+    private func previousValuesForChanges(_ fields: [String], on item: Item) -> [String: Any] {
+        var out: [String: Any] = [:]
+        for field in fields {
+            switch field {
+            case "title": out["title"] = item.title
+            case "description": out["description"] = item.itemDescription as Any
+            case "notes": out["notes"] = item.notes as Any
+            case "status": out["status"] = item.status
+            case "type": out["type"] = item.type
+            case "dueDate": out["dueDate"] = item.dueDate as Any
+            case "dueDatePrecision": out["dueDatePrecision"] = item.dueDatePrecision as Any
+            case "completedAt": out["completedAt"] = item.completedAt as Any
+            case "snoozedUntil": out["snoozedUntil"] = item.snoozedUntil as Any
+            case "listId": out["listId"] = item.listId as Any
+            case "reminder": out["reminder"] = item.reminder as Any
+            case "recurrence": out["recurrence"] = item.recurrence as Any
+            case "recurrenceRule": out["recurrenceRule"] = item.recurrenceRule as Any
+            case "brettObservation": out["brettObservation"] = item.brettObservation as Any
+            case "sourceUrl": out["sourceUrl"] = item.sourceUrl as Any
+            case "contentTitle": out["contentTitle"] = item.contentTitle as Any
+            case "contentDescription": out["contentDescription"] = item.contentDescription as Any
+            case "contentImageUrl": out["contentImageUrl"] = item.contentImageUrl as Any
+            case "contentFavicon": out["contentFavicon"] = item.contentFavicon as Any
+            case "contentDomain": out["contentDomain"] = item.contentDomain as Any
+            default: continue
+            }
+        }
+        return out
+    }
+
     // MARK: - Helpers
 
     private func save() {
