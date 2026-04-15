@@ -111,11 +111,11 @@ const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 /** Total reveal duration. Drives the Ken Burns scale transition on
  *  LivingBackground (scale 1.15 → 1.0). Also acts as the outer deadline:
  *  UI opacity finishes fading in at the same moment Ken Burns ends. */
-const AWAKENING_REVEAL_MS = 1500;
+const AWAKENING_REVEAL_MS = 2000;
 /** How long to show ONLY the Ken-Burnsing background before the UI begins
  *  fading in. User asked for "see the background ken-burns BEFORE the UI
  *  fades in" — this is that delay. */
-const AWAKENING_UI_DELAY_MS = 500;
+const AWAKENING_UI_DELAY_MS = 600;
 /** UI fade-in duration. AWAKENING_UI_DELAY_MS + AWAKENING_UI_FADE_MS =
  *  AWAKENING_REVEAL_MS, so UI fade and Ken Burns finish together. */
 const AWAKENING_UI_FADE_MS = AWAKENING_REVEAL_MS - AWAKENING_UI_DELAY_MS;
@@ -546,6 +546,10 @@ export function App() {
       setUiRevealed(true);
       return;
     }
+    // Wait for the real wallpaper to be loaded before kicking off Ken Burns.
+    // If we started the animation on the empty (black) initial state and the
+    // image loaded mid-zoom, the user would see an abrupt image pop-in.
+    if (!background.hasLoadedImage) return;
     // Double rAF ensures the initial frame (scale(1.15), UI opacity 0) has
     // painted before we flip state — so the browser runs a real transition
     // rather than short-circuiting to the final values.
@@ -562,7 +566,7 @@ export function App() {
       if (raf2) cancelAnimationFrame(raf2);
       if (uiTimer) clearTimeout(uiTimer);
     };
-  }, [awakening.status]);
+  }, [awakening.status, background.hasLoadedImage]);
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);

@@ -65,23 +65,29 @@ export function LivingBackground({
            * After the transition completes, A updates to the new image and B hides.
            */}
 
-          {/* Image layer A — current (always visible) */}
-          <img
-            src={imageUrl}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover"
-            style={zoomStyle}
-            draggable={false}
-          />
+          {/* Image layer A — current (always visible). Only render when we
+              have a real URL; empty src means "not yet loaded" — the outer
+              layout's bg-black shows through instead of a broken img. */}
+          {imageUrl && (
+            <img
+              src={imageUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+              style={zoomStyle}
+              draggable={false}
+            />
+          )}
 
           {/* Image layer B — next (fades in on top) */}
-          <img
-            src={nextImageUrl ?? imageUrl}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms] ease-in-out"
-            style={{ opacity: isTransitioning ? 1 : 0, ...zoomStyle }}
-            draggable={false}
-          />
+          {(nextImageUrl ?? imageUrl) && (
+            <img
+              src={nextImageUrl ?? imageUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms] ease-in-out"
+              style={{ opacity: isTransitioning ? 1 : 0, ...zoomStyle }}
+              draggable={false}
+            />
+          )}
         </>
       )}
 

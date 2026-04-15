@@ -96,17 +96,23 @@
 /*
  * Backdrop-filter fix for the awakening UI opacity fade-in.
  *
- * Chromium disables backdrop-filter on descendants while ANY ancestor has
- * opacity < 1, then snaps it on at opacity === 1 — producing a visible
- * "glass pop" at the end of a fade. Promoting each backdrop-blur element
- * to its own compositor layer (via translate3d) gives it a dedicated
- * backing store, so backdrop-filter keeps evaluating correctly even when
- * the ancestor is opacity-animating.
+ * Chromium disables backdrop-filter on descendants while an ancestor has
+ * opacity < 1 (the ancestor becomes an opacity group; children render into
+ * the group, and backdrop-filter only sees the group's content, not beyond).
+ * The effect snaps on at opacity === 1 — a visible "glass pop".
  *
- * Targets Tailwind's `backdrop-blur-*` utilities. Applies globally — the
- * cost is a few extra compositor layers, which is negligible and arguably
- * desirable for glass-heavy UIs anyway.
+ * Mitigation: promote each backdrop-blur element to its own compositor
+ * layer with will-change + translateZ(0). A dedicated layer can be
+ * composited independently of the parent opacity group, so backdrop-filter
+ * keeps evaluating the true backdrop throughout the fade.
+ *
+ * Targets Tailwind's `backdrop-blur-*` utilities. Applies globally — cost
+ * is a few extra compositor layers, which is negligible for glass-heavy
+ * UIs.
  */
 [class*="backdrop-blur"] {
-  transform: translate3d(0, 0, 0);
+  will-change: transform, backdrop-filter;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
