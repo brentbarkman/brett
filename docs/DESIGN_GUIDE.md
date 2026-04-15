@@ -91,7 +91,7 @@ When users see this color, they know Brett is involved. This creates instant vis
 | Role | Color | Hex | Usage |
 |------|-------|-----|-------|
 | **Success/complete** | Teal | `#48BBA0` | Completion checkmarks, "done" states |
-| **Error/danger** | Warm red | `#E6554B` | Overdue badges, errors, destructive confirms |
+| **Error/danger** | Red | `#F87171` | Overdue badges, errors, destructive confirms |
 | **Warning** | Amber (lighter gold) | — | Approaching deadlines, caution states |
 | **Calendar accents** | Teal, violet, coral, blue | Various | Event color coding (each at /20 bg, /50 border) |
 
@@ -744,7 +744,7 @@ The native iOS app (`apps/ios/`) must maintain visual consistency with the Elect
 | Brand gold | `#E8B931` | `BrettColors.gold` | |
 | Brett cerulean | `#4682C3` | `BrettColors.cerulean` | Reserved for AI surfaces only |
 | Success/teal | `#48BBA0` | `BrettColors.success` | Checkmarks, completion |
-| Error/red | `#E6554B` | `BrettColors.error` | Overdue, destructive |
+| Error/red | `#F87171` | `BrettColors.error` | Overdue, destructive |
 | Emerald | `#34D399` | `BrettColors.emerald` | Scout active status |
 | Purple-400 | `#C084FC` | `BrettColors.purple400` | Insight findings |
 | Amber-400 | `#FBBF24` | `BrettColors.amber400` | Task findings |
