@@ -137,6 +137,10 @@ const AWAKENING_UI_REVEAL_DELAY_MS = 500;
 const AWAKENING_UI_FADE_MS = 1300;
 /** Cover (black layer) fade-out duration when near-end fires. */
 const AWAKENING_COVER_FADE_MS = 1400;
+/** Ken Burns mode: how long the scale(1.15) → scale(1) transform runs.
+ *  Intentionally longer than the cover fade so the zoom continues past when
+ *  the cover is gone — the image keeps settling after the reveal completes. */
+const AWAKENING_KENBURNS_DURATION_MS = 2800;
 /** Absolute safety: if neither near-end nor ended fires within this window,
  *  force phase = "done" so the UI is never stuck behind a black cover. */
 const AWAKENING_SAFETY_MS = 5000;
@@ -1058,7 +1062,7 @@ export function App() {
               ? awakeningPhase === "playing"
               : undefined
           }
-          awakeningZoomDurationMs={AWAKENING_COVER_FADE_MS}
+          awakeningZoomDurationMs={AWAKENING_KENBURNS_DURATION_MS}
         />
         <BackgroundScrim />
 
@@ -1120,11 +1124,18 @@ export function App() {
             after awakening starts, then fades in over AWAKENING_UI_FADE_MS.
             For skip cases, uiRevealed starts true so UI is visible immediately
             with no fade. */}
+        {/* isolation + will-change: opacity promote this to a dedicated
+            compositor layer for the entire fade. Without them, Chromium
+            disables backdrop-filter on descendants while opacity < 1 and
+            snaps it on at opacity === 1 — visible as a "glass pop-in"
+            after the fade completes. */}
         <div
           className="relative z-10 flex w-full h-full gap-4 p-4 pl-0 transition-opacity ease-out"
           style={{
             opacity: uiRevealed ? 1 : 0,
             transitionDuration: `${AWAKENING_UI_FADE_MS}ms`,
+            willChange: "opacity",
+            isolation: "isolate",
           }}
         >
           {/* Left Column: Navigation */}

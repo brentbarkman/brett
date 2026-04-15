@@ -27,7 +27,7 @@ export function LivingBackground({
   const zoomStyle =
     awakeningZoom !== undefined
       ? {
-          transform: awakeningZoom ? "scale(1.08)" : "scale(1)",
+          transform: awakeningZoom ? "scale(1.15)" : "scale(1)",
           transition: awakeningZoomDurationMs
             ? `transform ${awakeningZoomDurationMs}ms cubic-bezier(0.16, 1, 0.3, 1)`
             : undefined,
