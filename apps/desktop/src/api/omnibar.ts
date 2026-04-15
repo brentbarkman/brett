@@ -223,9 +223,20 @@ export function useOmnibar() {
                 }
                 return updated;
               });
+              // Cache invalidation paths for tool_result:
+              //   1. Confirmation displayHints → immediate invalidate (user sees a card)
+              //   2. Scout mutations → deferred to stream end (no visible card mid-stream)
+              //   3. Read-only tools (search, list, etc.) → no invalidation needed
+              // If a new mutation skill is added, it MUST emit a confirmation
+              // displayHint (path 1) or be added to the scout-adjacent deferred
+              // set (path 2). Silence = no cache update for active observers.
               // Confirmation-style results: invalidate immediately so the
-              // user-visible card reflects fresh backing data. No refetch
-              // calls — mark-stale is enough for any active observer.
+              // user-visible card reflects fresh backing data. invalidateQueries
+              // marks the query stale and triggers a background refetch if there
+              // is an active observer (any mounted component that subscribes to
+              // this key). This is the normal case while the omnibar is open.
+              // If a relevant list view is not mounted at this moment, the
+              // refetch is deferred until next mount — acceptable tradeoff.
               if (chunk.displayHint?.type === "task_created" || chunk.displayHint?.type === "confirmation") {
                 queryClient.invalidateQueries({ queryKey: ["things"] });
                 queryClient.invalidateQueries({ queryKey: ["thing-detail"] });
@@ -235,8 +246,10 @@ export function useOmnibar() {
               // Scout mutations: defer to stream end. No visible card, so
               // batching until the stream completes is user-invisible.
               {
+                // Scout mutations go through AI tools: create_scout, update_scout.
+                // Deletion is not an AI tool — it uses useDeleteScout directly.
                 const toolName = toolCallNamesRef.current.get(chunk.id);
-                if (toolName === "create_scout" || toolName === "update_scout" || toolName === "delete_scout") {
+                if (toolName === "create_scout" || toolName === "update_scout") {
                   pendingInvalidations.add("scouts");
                 }
               }

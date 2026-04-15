@@ -378,21 +378,27 @@ describe("useOmnibar", () => {
   });
 
   describe("query invalidation batching", () => {
-    it("defers non-confirmation tool_result invalidations until stream end", async () => {
+    it("defers scout invalidations until stream end", async () => {
       const { streamingFetch } = await import("../streaming");
       const mockStream = vi.mocked(streamingFetch);
 
       const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
+      let midStreamScoutCalls = -1;
+
       mockStream.mockImplementation(async function* () {
-        yield { type: "tool_call" as const, id: "t1", name: "search_things", args: {} };
+        yield { type: "tool_call" as const, id: "t1", name: "create_scout", args: {} };
         yield {
           type: "tool_result" as const,
           id: "t1",
-          data: { results: [] },
-          // No displayHint → should NOT invalidate mid-stream
+          data: { ok: true },
+          // No displayHint → should route through pendingInvalidations.add("scouts")
         };
+        // Snapshot mid-stream — BEFORE done is emitted
+        midStreamScoutCalls = invalidateSpy.mock.calls.filter(
+          (c) => Array.isArray((c[0] as any)?.queryKey) && (c[0] as any).queryKey[0] === "scouts"
+        ).length;
         yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
       });
 
@@ -405,15 +411,17 @@ describe("useOmnibar", () => {
       const { result } = renderHook(() => useOmnibar(), { wrapper });
 
       await act(async () => {
-        await result.current.send("hi");
+        await result.current.send("create a scout");
       });
 
-      // Post-stream, no invalidation should have been called for "things" because
-      // the tool_result had no confirmation displayHint.
-      const thingsCalls = invalidateSpy.mock.calls.filter(
-        (c) => Array.isArray((c[0] as any)?.queryKey) && (c[0] as any).queryKey[0] === "things"
-      );
-      expect(thingsCalls.length).toBe(0);
+      // Mid-stream, no invalidation for scouts (deferred)
+      expect(midStreamScoutCalls).toBe(0);
+
+      // Post-stream, exactly one invalidation for scouts (flushed from Set)
+      const postStreamScoutCalls = invalidateSpy.mock.calls.filter(
+        (c) => Array.isArray((c[0] as any)?.queryKey) && (c[0] as any).queryKey[0] === "scouts"
+      ).length;
+      expect(postStreamScoutCalls).toBe(1);
     });
 
     it("invalidates immediately on confirmation displayHint", async () => {
