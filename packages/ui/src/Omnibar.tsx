@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { Send, Search, Plus, X, Square, Check, Radar, MessageSquare } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import { useClickOutside } from "./useClickOutside";
@@ -116,9 +116,15 @@ export function Omnibar({
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
 
+  // Mirror isClosing into a ref so animateClose can read it without listing
+  // it as a dep (which would rotate the callback's identity every time
+  // isClosing flipped, destabilizing any useEffect that deps on animateClose
+  // — e.g. the confirmedTask auto-dismiss effect).
+  const isClosingRef = useRef(isClosing);
+  isClosingRef.current = isClosing;
   // Animated close — fade out then unmount
-  const animateClose = () => {
-    if (isClosing) return;
+  const animateClose = useCallback(() => {
+    if (isClosingRef.current) return;
     setIsClosing(true);
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null;
@@ -127,7 +133,7 @@ export function Omnibar({
       setConfirmedTask(null);
       onClose();
     }, 150);
-  };
+  }, [onClose]);
 
   // Cancel any pending close animation when the omnibar is reopened. Without
   // this, a rapid close → reopen leaves isClosing true and the old timer
