@@ -135,6 +135,7 @@ struct ScoutCard: View {
         case .paused: return BrettColors.textMeta
         case .completed: return BrettColors.textMeta
         case .expired: return BrettColors.textMeta
+        case .archived: return BrettColors.textMeta
         }
     }
 

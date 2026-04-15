@@ -35,6 +35,20 @@
                ReferencedContainer = "container:Brett.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "186595853033417F72BC6F1E"
+               BuildableName = "BrettUITests.xctest"
+               BlueprintName = "BrettUITests"
+               ReferencedContainer = "container:Brett.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -61,6 +75,17 @@
                BlueprintIdentifier = "4B72560AC660F3001873E768"
                BuildableName = "BrettTests.xctest"
                BlueprintName = "BrettTests"
+               ReferencedContainer = "container:Brett.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "186595853033417F72BC6F1E"
+               BuildableName = "BrettUITests.xctest"
+               BlueprintName = "BrettUITests"
                ReferencedContainer = "container:Brett.xcodeproj">
             </BuildableReference>
          </TestableReference>
