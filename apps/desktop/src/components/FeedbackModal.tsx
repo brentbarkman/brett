@@ -56,10 +56,11 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
       setShowScreenshotPreview(false);
       submitFeedback.reset();
     }
-  // submitFeedback is a useMutation result with unstable identity; listing
-  // it would re-run this effect on every render. It's only invoked here as
-  // a side effect when the modal closes — which is exactly what `isOpen`
-  // tracks, so isOpen is the only correct dep.
+  // submitFeedback is a useMutation result — its identity changes every
+  // render by design, so listing it would re-run this effect every render.
+  // The reset is only meaningful when isOpen flips to false; the
+  // setState/reset calls are idempotent on equal values, so worst case is
+  // one wasted call when isOpen is already false. Effectively gated by isOpen.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 

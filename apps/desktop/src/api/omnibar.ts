@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { streamingFetch } from "./streaming";
 import { useAIConfigs } from "./ai-config";
@@ -37,6 +37,11 @@ export function useOmnibar() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
+  // Local action: search things directly (no AI needed)
+  // Shows results as a one-shot display, not a conversation
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+
   const abortRef = useRef<AbortController | null>(null);
   // Maps tool call id → name so we can look up the name when the result arrives
   const toolCallNamesRef = useRef<Map<string, string>>(new Map());
@@ -46,9 +51,28 @@ export function useOmnibar() {
   const { data: aiConfigData } = useAIConfigs();
   const hasAI = (aiConfigData?.configs ?? []).some((c) => c.isActive && c.isValid);
 
-  const send = async (text: string, currentView?: string, intent?: string) => {
+  // ────────────────────────────────────────────────────────────────────
+  // STABILITY CONTRACT
+  //
+  // Consumers depend on the returned object being stable when state hasn't
+  // changed (e.g. App.tsx lists `omnibar` as an effect dep). The React
+  // Compiler bails on this hook because of the large async `send` closure
+  // (~150 lines, multiple try/catch, switch, ref mutation), so we have to
+  // memoize manually.
+  //
+  // Pattern: capture all mutable state in a single ref that's updated on
+  // every render. Each public function reads from `stateRef.current` so its
+  // identity doesn't depend on individual state values — useCallback can
+  // use empty deps (or just queryClient, which is stable). The final
+  // `return useMemo(...)` then changes identity only when state observed
+  // by consumers actually changes.
+  // ────────────────────────────────────────────────────────────────────
+  const stateRef = useRef({ isStreaming, messages, sessionId });
+  stateRef.current = { isStreaming, messages, sessionId };
+
+  const send = useCallback(async (text: string, currentView?: string, intent?: string) => {
       const trimmed = text.trim();
-      if (!trimmed || isStreaming) return;
+      if (!trimmed || stateRef.current.isStreaming) return;
 
       // Add user message
       const userMsg: OmnibarMessage = { role: "user", content: trimmed };
@@ -64,7 +88,8 @@ export function useOmnibar() {
 
       try {
         const body: Record<string, unknown> = { message: trimmed };
-        if (sessionId) body.sessionId = sessionId;
+        const currentSessionId = stateRef.current.sessionId;
+        if (currentSessionId) body.sessionId = currentSessionId;
         const ctx: Record<string, unknown> = {};
         if (currentView) ctx.currentView = currentView;
         if (intent) ctx.intent = intent;
@@ -72,8 +97,9 @@ export function useOmnibar() {
         // Send recent messages so server has context even if DB persist hasn't completed.
         // For assistant messages, include tool result messages alongside text content
         // so the LLM has full context about what was found/discussed.
-        if (messages.length > 0) {
-          body.recentMessages = messages
+        const currentMessages = stateRef.current.messages;
+        if (currentMessages.length > 0) {
+          body.recentMessages = currentMessages
             .filter((m) => m.content || m.toolCalls?.some((tc) => tc.result))
             .slice(-10)
             .map((m) => {
@@ -220,41 +246,41 @@ export function useOmnibar() {
         setIsStreaming(false);
         abortRef.current = null;
       }
-  };
+  }, [queryClient]);
 
-  const cancel = () => {
+  const cancel = useCallback(() => {
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
     setIsStreaming(false);
-  };
+  }, []);
 
-  const close = () => {
+  const close = useCallback(() => {
     cancel();
     setIsOpen(false);
     setSearchResults(null);
     // Keep input, messages, and sessionId so reopening restores state
-  };
+  }, [cancel]);
 
-  const open = (newMode: OmnibarMode = "bar") => {
+  const open = useCallback((newMode: OmnibarMode = "bar") => {
     setMode(newMode);
     setIsOpen(true);
-  };
+  }, []);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     cancel();
     setMessages([]);
     setSessionId(null);
     setInput("");
     setSearchResults(null);
     toolCallNamesRef.current.clear();
-  };
+  }, [cancel]);
 
   // Local action: create a task directly (no AI needed)
   // No chat UI — just do it, invalidate queries, close the omnibar
   // When on Today view, set dueDate to today so it appears in the current list
-  const createTask = async (title: string, currentView?: string) => {
+  const createTask = useCallback(async (title: string, currentView?: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
@@ -285,14 +311,9 @@ export function useOmnibar() {
     setIsOpen(false);
     setMessages([]);
     setSessionId(null);
-  };
+  }, [queryClient]);
 
-  // Local action: search things directly (no AI needed)
-  // Shows results as a one-shot display, not a conversation
-  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-
-  const searchThings = async (query: string) => {
+  const searchThings = useCallback(async (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
 
@@ -308,9 +329,14 @@ export function useOmnibar() {
     } finally {
       setIsSearching(false);
     }
-  };
+  }, []);
 
-  return {
+  // Stable identity unless an observable value actually changes. Consumers
+  // rely on this — App.tsx uses `omnibar` as a useEffect dep. Without
+  // memoization the object identity would churn every render and effects
+  // depending on it would re-run constantly (one such case caused a render
+  // loop / React error #185 in prod).
+  return useMemo(() => ({
     isOpen,
     mode,
     input,
@@ -328,5 +354,22 @@ export function useOmnibar() {
     close,
     open,
     reset,
-  };
+  }), [
+    isOpen,
+    mode,
+    input,
+    messages,
+    isStreaming,
+    sessionId,
+    hasAI,
+    send,
+    createTask,
+    searchThings,
+    searchResults,
+    isSearching,
+    cancel,
+    close,
+    open,
+    reset,
+  ]);
 }

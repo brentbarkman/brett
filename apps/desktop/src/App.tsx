@@ -534,11 +534,7 @@ export function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  // useOmnibar() returns a fresh object literal every render, so listing
-  // `omnibar` as a dep would re-run this effect on every render. List the
-  // specific properties we read instead — those are stable enough.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [omnibar.isOpen, omnibar.mode, omnibar.close, omnibar.open]);
+  }, [omnibar]);
 
   // Cmd+Shift+. opens feedback modal
   useEffect(() => {
@@ -784,11 +780,7 @@ export function App() {
         }
       }
     }
-  // useOmnibar() returns a fresh object literal every render. Listing
-  // `omnibar` would re-run this effect on every render, and the body
-  // calls omnibar.reset() (multiple setStates) → re-render → loop.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [omnibar.messages, omnibar.reset]);
+  }, [omnibar]);
 
   const handleInboxAddContent = (url: string) => {
     createThing.mutate(
