@@ -6,16 +6,18 @@ enum NavDestination: Hashable {
     case settings
     case scoutsRoster
     case scoutDetail(id: String)
+    case listView(id: String)
 }
 
 struct MainContainer: View {
     @State private var store = MockStore()
     @State private var currentPage = 1 // 0=Inbox, 1=Today, 2=Calendar
+    @State private var path = NavigationPath()
 
     private let pages = ["Inbox", "Today", "Calendar"]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 BackgroundView()
 
@@ -63,7 +65,15 @@ struct MainContainer: View {
                 OmnibarView(
                     store: store,
                     placeholder: currentPage == 0 ? "Capture something..." :
-                                currentPage == 2 ? "Add an event..." : "Add a task..."
+                                currentPage == 2 ? "Add an event..." : "Add a task...",
+                    onSelectList: { id in
+                        // Dismiss-then-push: sheet dismissal is already fired by
+                        // the drawer. Delay the push a frame so the sheet's
+                        // disappear animation doesn't compete with the push.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            path.append(NavDestination.listView(id: id))
+                        }
+                    }
                 )
             }
             .navigationDestination(for: NavDestination.self) { destination in
@@ -74,6 +84,8 @@ struct MainContainer: View {
                     ScoutsRosterView(store: store)
                 case .scoutDetail(let id):
                     ScoutDetailView(store: store, scoutId: id)
+                case .listView(let id):
+                    ListView(store: store, listId: id)
                 }
             }
             // Task detail as a near-full-screen sheet
