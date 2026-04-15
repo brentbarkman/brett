@@ -41,6 +41,7 @@ export function useOmnibar() {
   // Shows results as a one-shot display, not a conversation
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   // Maps tool call id → name so we can look up the name when the result arrives
@@ -266,6 +267,7 @@ export function useOmnibar() {
   const open = useCallback((newMode: OmnibarMode = "bar") => {
     setMode(newMode);
     setIsOpen(true);
+    setIsMinimized(false);
   }, []);
 
   const reset = useCallback(() => {
@@ -274,8 +276,14 @@ export function useOmnibar() {
     setSessionId(null);
     setInput("");
     setSearchResults(null);
+    setIsMinimized(false);
     toolCallNamesRef.current.clear();
   }, [cancel]);
+
+  const minimize = useCallback(() => {
+    if (stateRef.current.isStreaming) return; // don't minimize mid-stream
+    setIsMinimized(true);
+  }, []);
 
   // Local action: create a task directly (no AI needed)
   // No chat UI — just do it, invalidate queries, close the omnibar
@@ -343,8 +351,9 @@ export function useOmnibar() {
     send,
     createTask,
     searchThings,
+    minimize,
     // setInput omitted from deps below — useState setter, identity is guaranteed stable by React
-  }), [open, close, cancel, reset, send, createTask, searchThings]);
+  }), [open, close, cancel, reset, send, createTask, searchThings, minimize]);
 
   // State — changes per render; consumers that read these are expected to re-render
   const state = useMemo(() => ({
@@ -357,6 +366,7 @@ export function useOmnibar() {
     hasAI,
     searchResults,
     isSearching,
+    isMinimized,
   }), [
     isOpen,
     mode,
@@ -367,6 +377,7 @@ export function useOmnibar() {
     hasAI,
     searchResults,
     isSearching,
+    isMinimized,
   ]);
 
   return useMemo(() => ({ ...state, ...actions }), [state, actions]);

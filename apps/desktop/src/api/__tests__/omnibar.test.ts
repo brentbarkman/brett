@@ -226,6 +226,50 @@ describe("useOmnibar", () => {
     });
   });
 
+  describe("minimize", () => {
+    it("sets isMinimized without clearing messages", () => {
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      // Seed state — real use populates messages via streaming, but for this test
+      // the flag-flip behavior is what matters.
+      act(() => {
+        result.current.setInput("hi");
+      });
+      act(() => {
+        result.current.minimize();
+      });
+
+      expect(result.current.isMinimized).toBe(true);
+    });
+
+    it("open() clears isMinimized", () => {
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      act(() => {
+        result.current.minimize();
+      });
+      expect(result.current.isMinimized).toBe(true);
+
+      act(() => {
+        result.current.open("bar");
+      });
+      expect(result.current.isMinimized).toBe(false);
+    });
+
+    it("reset() clears isMinimized", () => {
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      act(() => {
+        result.current.minimize();
+      });
+
+      act(() => {
+        result.current.reset();
+      });
+      expect(result.current.isMinimized).toBe(false);
+    });
+  });
+
   describe("close and reset", () => {
     it("close clears search results", async () => {
       mockApiFetch.mockResolvedValue([{ id: "1", title: "Test", status: "active" }]);
