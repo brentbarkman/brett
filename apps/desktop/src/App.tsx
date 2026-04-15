@@ -31,6 +31,7 @@ import {
   ScoutsRoster,
   ScoutDetail,
   LivingBackground,
+  BackgroundScrim,
 } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -941,6 +942,7 @@ export function App() {
           gradient={background.gradient}
           nextGradient={background.nextGradient}
         />
+        <BackgroundScrim />
 
 
 
