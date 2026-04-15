@@ -108,6 +108,18 @@ import type { RecentFindingItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
+// ----- Awakening-video timing (tune freely without re-encoding the clips) -----
+/** Max playback length before auto-pause + onEnded. Overrides natural video
+ *  duration if shorter. Set to a larger number than the source clip to let
+ *  the video end naturally. */
+const AWAKENING_MAX_DURATION_S = 1.5;
+/** Cross-fade duration for cover fade-out + UI fade-in (must match both
+ *  the cover's Tailwind `duration-*` class and the UI shell's). */
+const AWAKENING_FADE_MS = 700;
+/** Absolute safety: if neither near-end nor ended fires within this window,
+ *  force phase = "done" so the UI is never stuck behind a black cover. */
+const AWAKENING_SAFETY_MS = 5000;
+
 function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer, assistantName }: {
   children: React.ReactNode;
   onEventClick: (e: any) => void;
@@ -515,20 +527,26 @@ export function App() {
     segment: background.segment,
   });
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">("playing");
-  // Fires ~500ms before the video naturally ends: begin the cross-fade
-  // WHILE the video is still playing so motion bridges smoothly into UI
-  // fade-in (avoids the "video pauses then fade starts" jerk).
-  const handleAwakeningNearEnd = () => setAwakeningPhase("fading");
-  // Fires when the video has fully ended (or errored). Finalize the phase
-  // so LivingBackground + UI are fully visible.
-  const handleAwakeningEnded = () => setAwakeningPhase("done");
+  // near-end drives the flow: we start the cross-fade WHILE the video is still
+  // playing (so its motion bridges into UI fade-in), then schedule "done"
+  // after the fade completes so the cover doesn't unmount mid-transition.
+  const handleAwakeningNearEnd = () => {
+    setAwakeningPhase("fading");
+    setTimeout(() => setAwakeningPhase("done"), AWAKENING_FADE_MS);
+  };
+  // Safety fallback — fires on natural video end or error. Only drives to
+  // "done" if near-end never happened (e.g., video errored before its
+  // last 500ms, so we didn't cross-fade gracefully).
+  const handleAwakeningEnded = () => {
+    if (awakeningPhase === "playing") setAwakeningPhase("done");
+  };
 
-  // Safety: if the video element neither ends nor errors within 5s of mount
-  // (e.g., hung loading), force the awakening to "done" so LivingBackground
-  // is revealed rather than left covered indefinitely.
+  // Safety: if the video element neither ends nor errors within the safety
+  // window (e.g., hung loading), force the awakening to "done" so
+  // LivingBackground is revealed rather than left covered indefinitely.
   useEffect(() => {
     if (awakening.status !== "play") return;
-    const safetyTimer = setTimeout(() => setAwakeningPhase("done"), 5000);
+    const safetyTimer = setTimeout(() => setAwakeningPhase("done"), AWAKENING_SAFETY_MS);
     return () => clearTimeout(safetyTimer);
   }, [awakening.status]);
 
@@ -991,6 +1009,7 @@ export function App() {
             {awakening.status === "play" && (
               <AwakeningVideo
                 sources={awakening.videoUrls}
+                maxDurationSeconds={AWAKENING_MAX_DURATION_S}
                 onNearEnd={handleAwakeningNearEnd}
                 onEnded={handleAwakeningEnded}
               />

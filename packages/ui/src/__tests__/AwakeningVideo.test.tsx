@@ -79,4 +79,37 @@ describe("AwakeningVideo", () => {
     fireEvent.timeUpdate(video);
     expect(onNearEnd).not.toHaveBeenCalled();
   });
+
+  it("honors maxDurationSeconds cap: fires onNearEnd + onEnded based on the cap, not natural duration", () => {
+    const onNearEnd = vi.fn();
+    const onEnded = vi.fn();
+    const pause = vi.fn();
+    const { container } = render(
+      <AwakeningVideo
+        sources={["https://cdn/x.mp4"]}
+        maxDurationSeconds={1.5}
+        onNearEnd={onNearEnd}
+        onEnded={onEnded}
+      />
+    );
+    const video = container.querySelector("video") as HTMLVideoElement;
+    // Natural video is 10s long, but cap is 1.5s
+    Object.defineProperty(video, "duration", { value: 10, configurable: true });
+    Object.defineProperty(video, "pause", { value: pause, configurable: true });
+    Object.defineProperty(video, "currentTime", { value: 0.5, configurable: true, writable: true });
+    fireEvent.timeUpdate(video);
+    expect(onNearEnd).not.toHaveBeenCalled();
+
+    // Inside near-end window (cap - 0.5 = 1.0): fires
+    Object.defineProperty(video, "currentTime", { value: 1.05, configurable: true, writable: true });
+    fireEvent.timeUpdate(video);
+    expect(onNearEnd).toHaveBeenCalledOnce();
+    expect(onEnded).not.toHaveBeenCalled();
+
+    // Past cap: fires onEnded + pauses video
+    Object.defineProperty(video, "currentTime", { value: 1.5, configurable: true, writable: true });
+    fireEvent.timeUpdate(video);
+    expect(onEnded).toHaveBeenCalledOnce();
+    expect(pause).toHaveBeenCalledOnce();
+  });
 });

@@ -3,12 +3,15 @@ import { useRef } from "react";
 interface AwakeningVideoProps {
   /** Source URLs in priority order — webm first if available, mp4 fallback. */
   sources: string[];
-  /** Fires ~500ms before the video ends, so the parent can begin fading the
-   *  cover out / UI in while the video is still playing — avoids the jarring
-   *  "video freezes, then fade starts" moment. */
+  /** Optional playback cap (in seconds). When reached, the video is paused
+   *  and onEnded fires, regardless of natural duration. Use for experimenting
+   *  with timing without re-encoding the source. */
+  maxDurationSeconds?: number;
+  /** Fires ~500ms before effective end of playback (min of natural duration
+   *  and maxDurationSeconds). Parent uses this to begin cross-fading while
+   *  the video is still in motion. */
   onNearEnd: () => void;
-  /** Fires when playback fully completes OR when all sources fail to load.
-   *  Parent should finalize the awakening (e.g., mark phase = "done"). */
+  /** Fires at natural end, cap-pause, or on load error. Parent finalizes. */
   onEnded: () => void;
 }
 
@@ -18,7 +21,7 @@ function getMimeType(url: string): string {
   return "";
 }
 
-/** How many seconds before the natural end of the video to fire onNearEnd. */
+/** How many seconds before the effective end to fire onNearEnd. */
 const NEAR_END_SECONDS = 0.5;
 
 /**
@@ -29,33 +32,60 @@ const NEAR_END_SECONDS = 0.5;
  * (typically black) so a transparent video element during loading doesn't
  * reveal LivingBackground beneath.
  */
-export function AwakeningVideo({ sources, onNearEnd, onEnded }: AwakeningVideoProps) {
-  // Track whether we've fired onNearEnd yet — don't re-fire on every frame
+export function AwakeningVideo({
+  sources,
+  maxDurationSeconds,
+  onNearEnd,
+  onEnded,
+}: AwakeningVideoProps) {
   const nearEndFiredRef = useRef(false);
+  const endedFiredRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    if (nearEndFiredRef.current) return;
     const video = e.currentTarget;
-    // duration may be NaN while metadata is still loading
     if (!Number.isFinite(video.duration)) return;
-    if (video.duration - video.currentTime <= NEAR_END_SECONDS) {
+
+    const effectiveEnd = maxDurationSeconds
+      ? Math.min(video.duration, maxDurationSeconds)
+      : video.duration;
+
+    // Cap enforcement: pause + onEnded when we reach the cap early
+    if (!endedFiredRef.current && video.currentTime >= effectiveEnd) {
+      endedFiredRef.current = true;
+      video.pause();
+      onEnded();
+      return;
+    }
+
+    if (!nearEndFiredRef.current && effectiveEnd - video.currentTime <= NEAR_END_SECONDS) {
       nearEndFiredRef.current = true;
       onNearEnd();
     }
   };
 
+  const handleNativeEnded = () => {
+    if (endedFiredRef.current) return;
+    endedFiredRef.current = true;
+    onEnded();
+  };
+
+  const handleError = () => {
+    if (endedFiredRef.current) return;
+    endedFiredRef.current = true;
+    onEnded();
+  };
+
   return (
     <video
+      ref={videoRef}
       autoPlay
       muted
       playsInline
       preload="auto"
       onTimeUpdate={handleTimeUpdate}
-      onEnded={onEnded}
-      // If the <video> element exhausts all sources without one playing, browsers
-      // fire `error` on the video element. Treat that as "done" so the parent
-      // unmounts us and reveals LivingBackground.
-      onError={onEnded}
+      onEnded={handleNativeEnded}
+      onError={handleError}
       className="absolute inset-0 w-full h-full object-cover"
     >
       {sources.map((src) => (
