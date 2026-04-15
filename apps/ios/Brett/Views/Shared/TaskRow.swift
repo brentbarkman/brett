@@ -1,27 +1,72 @@
 import SwiftUI
 
+/// Task row — compact 48pt height line with checkbox + title + metadata whisper.
+///
+/// Two initialisers:
+///  - `init(item: MockItem, ...)` — legacy mock path, still used by Inbox and
+///    anywhere else we haven't migrated off `MockStore` yet. Kept until every
+///    caller flips to the real sync-backed `Item`.
+///  - `init(item: Item, listName:, onToggle:, onSelect:)` — real SwiftData
+///    Item. Taking the list name as a separate parameter avoids reaching into
+///    `ListStore` from a leaf view and keeps the row cheap to render.
 struct TaskRow: View {
-    let item: MockItem
-    let onToggle: () -> Void
-    let onSelect: () -> Void
+    private let viewModel: ViewModel
+    private let onToggle: () -> Void
+    private let onSelect: () -> Void
+
+    // MARK: - Initialisers
+
+    init(item: MockItem, onToggle: @escaping () -> Void, onSelect: @escaping () -> Void) {
+        self.viewModel = ViewModel(
+            id: item.id,
+            title: item.title,
+            isCompleted: item.isCompleted,
+            timeLabel: item.time,
+            capturedLabel: item.capturedAgo,
+            listName: item.listName,
+            contentDomain: item.contentDomain
+        )
+        self.onToggle = onToggle
+        self.onSelect = onSelect
+    }
+
+    init(
+        item: Item,
+        listName: String? = nil,
+        onToggle: @escaping () -> Void,
+        onSelect: @escaping () -> Void
+    ) {
+        self.viewModel = ViewModel(
+            id: item.id,
+            title: item.title,
+            isCompleted: item.isCompleted,
+            timeLabel: Self.timeLabel(for: item),
+            capturedLabel: Self.capturedLabel(for: item),
+            listName: listName,
+            contentDomain: item.contentDomain
+        )
+        self.onToggle = onToggle
+        self.onSelect = onSelect
+    }
+
+    // MARK: - Body
 
     var body: some View {
         Button {
             onSelect()
         } label: {
             HStack(spacing: 12) {
-                // Visual-only checkbox appearance (not a button)
                 ZStack {
                     Circle()
                         .fill(
-                            item.isCompleted
+                            viewModel.isCompleted
                                 ? BrettColors.success.opacity(0.15)
                                 : Color.black.opacity(0.20)
                         )
                         .overlay {
                             Circle()
                                 .strokeBorder(
-                                    item.isCompleted
+                                    viewModel.isCompleted
                                         ? BrettColors.success.opacity(0.4)
                                         : Color.white.opacity(0.10),
                                     lineWidth: 1
@@ -29,7 +74,7 @@ struct TaskRow: View {
                         }
                         .frame(width: 30, height: 30)
 
-                    if item.isCompleted {
+                    if viewModel.isCompleted {
                         Image(systemName: "checkmark")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(BrettColors.success)
@@ -49,34 +94,36 @@ struct TaskRow: View {
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title)
+                    Text(viewModel.title)
                         .font(BrettTypography.taskTitle)
-                        .foregroundStyle(item.isCompleted ? BrettColors.textMeta : BrettColors.textCardTitle)
-                        .strikethrough(item.isCompleted, color: BrettColors.textGhost)
+                        .foregroundStyle(viewModel.isCompleted ? BrettColors.textMeta : BrettColors.textCardTitle)
+                        .strikethrough(viewModel.isCompleted, color: BrettColors.textGhost)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
                     HStack(spacing: 6) {
-                        if let time = item.time {
+                        if let time = viewModel.timeLabel {
                             Text(time)
                                 .font(BrettTypography.taskMeta)
                                 .foregroundStyle(BrettColors.textMeta)
-                        } else if let captured = item.capturedAgo {
+                        } else if let captured = viewModel.capturedLabel {
                             Text("Captured \(captured)")
                                 .font(BrettTypography.taskMeta)
                                 .foregroundStyle(BrettColors.textMeta)
                         }
 
-                        if let listName = item.listName {
-                            Text("·")
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textGhost)
+                        if let listName = viewModel.listName {
+                            if viewModel.timeLabel != nil || viewModel.capturedLabel != nil {
+                                Text("·")
+                                    .font(BrettTypography.taskMeta)
+                                    .foregroundStyle(BrettColors.textGhost)
+                            }
                             Text(listName)
                                 .font(BrettTypography.taskMeta)
                                 .foregroundStyle(BrettColors.textMeta)
                         }
 
-                        if let domain = item.contentDomain {
+                        if let domain = viewModel.contentDomain {
                             Text(domain)
                                 .font(BrettTypography.taskMeta)
                                 .foregroundStyle(BrettColors.cerulean.opacity(0.6))
@@ -90,7 +137,49 @@ struct TaskRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.title), \(item.listName ?? ""), \(item.isCompleted ? "completed" : "pending")")
+        .accessibilityLabel("\(viewModel.title), \(viewModel.listName ?? ""), \(viewModel.isCompleted ? "completed" : "pending")")
         .accessibilityHint("Double-tap for details")
+    }
+
+    // MARK: - View model
+
+    private struct ViewModel {
+        let id: String
+        let title: String
+        let isCompleted: Bool
+        let timeLabel: String?
+        let capturedLabel: String?
+        let listName: String?
+        let contentDomain: String?
+    }
+
+    // MARK: - Real-Item formatters
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+
+    /// Time whisper — only render when the due date carries a time-of-day
+    /// (we skip midnight-only dates so the row doesn't read "12:00 AM" for
+    /// every item without a precise time).
+    private static func timeLabel(for item: Item) -> String? {
+        guard let due = item.dueDate else { return nil }
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: due)
+        if (comps.hour ?? 0) == 0 && (comps.minute ?? 0) == 0 { return nil }
+        return timeFormatter.string(from: due).lowercased() // "9:00 am" style
+    }
+
+    private static func capturedLabel(for item: Item) -> String? {
+        // "Captured {relative}" for undated content/inbox items
+        guard item.dueDate == nil else { return nil }
+        let elapsed = Date().timeIntervalSince(item.createdAt)
+        let days = Int(elapsed / 86_400)
+        if days == 0 { return "today" }
+        if days == 1 { return "yesterday" }
+        if days < 7 { return "\(days)d ago" }
+        let weeks = days / 7
+        return "\(weeks)w ago"
     }
 }
