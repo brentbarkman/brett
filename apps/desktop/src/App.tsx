@@ -490,7 +490,7 @@ export function App() {
   // Sync busyness average on app mount (fire-and-forget)
   useEffect(() => {
     apiFetch("/users/busyness-sync", { method: "POST" }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const pinnedBackground = userPrefs?.pinnedBackground ?? null;
 
@@ -534,7 +534,7 @@ export function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [omnibar.isOpen, omnibar.mode, omnibar.close, omnibar.open]);
+  }, [omnibar]);
 
   // Cmd+Shift+. opens feedback modal
   useEffect(() => {
@@ -564,7 +564,7 @@ export function App() {
     };
     document.addEventListener("keydown", handleFeedbackShortcut);
     return () => document.removeEventListener("keydown", handleFeedbackShortcut);
-  }, [feedbackOpen]);
+  }, [feedbackOpen, electronVersion]);
 
   // Build omnibar props for the bar component
   const currentView = (() => {
@@ -780,7 +780,7 @@ export function App() {
         }
       }
     }
-  }, [omnibar.messages]);
+  }, [omnibar]);
 
   const handleInboxAddContent = (url: string) => {
     createThing.mutate(

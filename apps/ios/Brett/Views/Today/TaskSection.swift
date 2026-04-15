@@ -6,6 +6,7 @@ struct TaskSection: View {
     let labelColor: Color
     var accentColor: Color? = nil
     let onToggle: (String) -> Void
+    var onSelect: ((String) -> Void)? = nil
 
     @ViewBuilder
     var body: some View {
@@ -31,14 +32,16 @@ struct TaskSection: View {
 
                                     TaskRow(
                                         item: item,
-                                        onToggle: { onToggle(item.id) }
+                                        onToggle: { onToggle(item.id) },
+                                        onSelect: { onSelect?(item.id) }
                                     )
                                     .padding(.leading, 8)
                                 }
                             } else {
                                 TaskRow(
                                     item: item,
-                                    onToggle: { onToggle(item.id) }
+                                    onToggle: { onToggle(item.id) },
+                                    onSelect: { onSelect?(item.id) }
                                 )
                             }
 

@@ -5,7 +5,7 @@ struct InboxPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(spacing: 0) {
                 // Header
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Inbox")
@@ -14,21 +14,37 @@ struct InboxPage: View {
 
                     Text("\(store.inboxItems.count) items to triage")
                         .font(BrettTypography.stats)
-                        .foregroundStyle(BrettColors.textInactive) // white/50 for page subtitles
+                        .foregroundStyle(BrettColors.textInactive)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
 
                 if store.inboxItems.isEmpty {
                     EmptyState(heading: "Your inbox", copy: "Everything worth doing starts here.")
                 } else {
-                    // One glass card for all inbox items
-                    GlassCard {
+                    StickyCardSection {
+                        HStack(spacing: 6) {
+                            Image(systemName: "tray")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.80))
+
+                            Text("TO TRIAGE")
+                                .font(BrettTypography.sectionLabel)
+                                .tracking(2.4)
+                                .foregroundStyle(Color.white.opacity(0.80))
+
+                            Spacer()
+
+                            Text("\(store.inboxItems.count)")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.50))
+                        }
+                    } content: {
                         VStack(spacing: 0) {
                             ForEach(Array(store.inboxItems.enumerated()), id: \.element.id) { index, item in
                                 HStack(spacing: 0) {
-                                    // Cerulean accent for content items
                                     if item.type == .content {
                                         Rectangle()
                                             .fill(BrettColors.cerulean)
@@ -37,26 +53,24 @@ struct InboxPage: View {
                                             .padding(.vertical, 4)
                                     }
 
-                                    TaskRow(
-                                        item: item,
-                                        onToggle: { }
-                                    )
-                                    .padding(.leading, item.type == .content ? 8 : 0)
+                                    TaskRow(item: item, onToggle: { }, onSelect: { store.selectedTaskId = item.id })
+                                        .padding(.leading, item.type == .content ? 8 : 0)
                                 }
 
                                 if index < store.inboxItems.count - 1 {
-                                    Divider()
-                                        .background(BrettColors.hairline)
+                                    Divider().background(BrettColors.hairline)
+                                        .padding(.horizontal, 16)
                                 }
                             }
                         }
+                        .padding(.bottom, 8)
                     }
-                    .padding(.horizontal, 16)
                 }
-
-                Spacer(minLength: 20)
             }
+            .padding(.bottom, 70)
         }
         .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .coordinateSpace(name: "scroll")
     }
 }

@@ -4,8 +4,25 @@ struct TaskDetailView: View {
     @Bindable var store: MockStore
     let itemId: String
     @Environment(\.dismiss) private var dismiss
+
     @State private var isEditingTitle = false
     @State private var titleDraft = ""
+    @State private var isEditingNotes = false
+    @State private var notesDraft = ""
+    @State private var isBrettExpanded = false
+    @State private var brettInput = ""
+    @State private var linkSearchText = ""
+    @State private var isSearchingLinks = false
+    @FocusState private var isTitleFocused: Bool
+    @FocusState private var isNotesFocused: Bool
+    @FocusState private var isBrettFocused: Bool
+
+    // On a solid dark surface (no material), theme colors need boosting.
+    // These override BrettColors values that assume glass/material behind them.
+    private let sectionLabel = Color.white.opacity(0.60)
+    private let metaText = Color.white.opacity(0.50)
+    private let placeholder = Color.white.opacity(0.40)
+    private let dimIcon = Color.white.opacity(0.30)
 
     private var item: MockItem? {
         store.items.first(where: { $0.id == itemId }) ??
@@ -13,126 +30,57 @@ struct TaskDetailView: View {
     }
 
     var body: some View {
-        ZStack {
-            BackgroundView()
-
-            if let item {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        // MARK: - Header
-                        headerSection(item)
-
-                        // MARK: - Title + checkbox
-                        titleSection(item)
-
-                        // MARK: - List pill
-                        if let listName = item.listName {
-                            listPill(listName, colorHex: store.lists.first(where: { $0.id == item.listId })?.colorHex)
-                        }
-
-                        // MARK: - Schedule row (3 mini cards)
-                        scheduleRow(item)
-
-                        // MARK: - Notes
-                        if let notes = item.notes, !notes.isEmpty {
-                            notesSection(notes)
-                        }
-
-                        // MARK: - Subtasks
-                        if !item.subtasks.isEmpty {
-                            subtasksSection(item.subtasks)
-                        }
-
-                        // MARK: - Attachments
-                        if !item.attachments.isEmpty {
-                            attachmentsSection(item.attachments)
-                        }
-
-                        // MARK: - Linked Items
-                        if !item.linkedItems.isEmpty {
-                            linkedItemsSection(item.linkedItems)
-                        }
-
-                        // MARK: - Brett Thread
-                        brettSection(item)
-
-                        Spacer(minLength: 40)
-                    }
-                    .padding(.top, 8)
-                }
-                .scrollIndicators(.hidden)
+        if let item {
+            ScrollView {
+                mainCard(item)
+                    .padding(.top, 12)
+                    .padding(.bottom, 40)
             }
-        }
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    dismiss()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Back")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .foregroundStyle(BrettColors.gold)
-                }
-            }
-
-            ToolbarItem(placement: .navigationBarTrailing) {
-                if let item {
-                    HStack(spacing: 4) {
-                        // Complete toggle
-                        Button {
-                            HapticManager.light()
-                            store.toggleItem(item.id)
-                        } label: {
-                            Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "checkmark.circle")
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundStyle(item.isCompleted ? BrettColors.success : Color.white.opacity(0.40))
-                        }
-
-                        // Overflow menu
-                        Menu {
-                            Button {
-                                store.toggleItem(item.id)
-                            } label: {
-                                Label(
-                                    item.isCompleted ? "Mark Incomplete" : "Complete",
-                                    systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark.circle"
-                                )
-                            }
-
-                            Button {} label: {
-                                Label("Duplicate", systemImage: "doc.on.doc")
-                            }
-
-                            Button {} label: {
-                                Label("Move to List", systemImage: "folder")
-                            }
-
-                            Button {} label: {
-                                Label("Copy Link", systemImage: "link")
-                            }
-
-                            Divider()
-
-                            Button(role: .destructive) {} label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.40))
-                                .frame(width: 32, height: 32)
-                        }
-                    }
-                }
-            }
+            .scrollIndicators(.hidden)
         }
     }
 
-    // MARK: - Header: label + recurrence badge + status
+    // MARK: - Main content card
+
+    @ViewBuilder
+    private func mainCard(_ item: MockItem) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header: label + complete + overflow
+            headerSection(item)
+
+            sectionDivider()
+
+            // Title
+            titleSection(item)
+
+            sectionDivider()
+
+            // Schedule
+            scheduleSection(item)
+
+            sectionDivider()
+
+            // Notes
+            notesSection(item)
+
+            sectionDivider()
+
+            // Attachments
+            attachmentsSection(item)
+
+            sectionDivider()
+
+            // Linked Items
+            linkedItemsSection(item)
+
+            sectionDivider()
+
+            // Brett thread — integrated as last section
+            brettSection(item)
+        }
+    }
+
+    // MARK: - Header
 
     @ViewBuilder
     private func headerSection(_ item: MockItem) -> some View {
@@ -140,7 +88,7 @@ struct TaskDetailView: View {
             Text("TASK")
                 .font(BrettTypography.sectionLabel)
                 .tracking(2.4)
-                .foregroundStyle(BrettColors.sectionLabelColor)
+                .foregroundStyle(sectionLabel)
 
             if let recurrence = item.recurrence {
                 HStack(spacing: 4) {
@@ -156,129 +104,141 @@ struct TaskDetailView: View {
                 .background(BrettColors.gold.opacity(0.15), in: Capsule())
             }
 
-            if item.isCompleted {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10))
-                    Text("DONE")
-                        .font(BrettTypography.sectionLabel)
-                        .tracking(2.4)
+            Spacer()
+
+            Button {
+                HapticManager.light()
+                store.toggleItem(item.id)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(.system(size: 12, weight: .medium))
+                    Text(item.isCompleted ? "Done" : "Complete")
+                        .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundStyle(BrettColors.success)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(BrettColors.success.opacity(0.15), in: Capsule())
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .foregroundStyle(item.isCompleted ? BrettColors.success : Color.white.opacity(0.60))
+                .background(
+                    (item.isCompleted ? BrettColors.success : Color.white).opacity(item.isCompleted ? 0.15 : 0.10),
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule().strokeBorder(
+                        (item.isCompleted ? BrettColors.success : Color.white).opacity(item.isCompleted ? 0.30 : 0.10),
+                        lineWidth: 0.5
+                    )
+                }
             }
 
-            Spacer()
+            overflowMenu(item)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
-    // MARK: - Title (tap to edit) with checkbox
+    // MARK: - Title
 
     @ViewBuilder
     private func titleSection(_ item: MockItem) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            TaskCheckbox(isChecked: item.isCompleted) {
-                store.toggleItem(item.id)
-            }
-
+        VStack(alignment: .leading, spacing: 0) {
             if isEditingTitle {
                 TextField("Task title", text: $titleDraft)
-                    .font(BrettTypography.detailTitle)
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
                     .tint(BrettColors.gold)
+                    .focused($isTitleFocused)
                     .submitLabel(.done)
-                    .onSubmit { commitTitle(item) }
-                    .onAppear { titleDraft = item.title }
+                    .onSubmit { isEditingTitle = false }
+                    .onAppear {
+                        titleDraft = item.title
+                        isTitleFocused = true
+                    }
             } else {
                 Text(item.title)
-                    .font(BrettTypography.detailTitle)
-                    .foregroundStyle(item.isCompleted ? BrettColors.textMeta : .white)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(item.isCompleted ? metaText : .white)
                     .strikethrough(item.isCompleted, color: BrettColors.textGhost)
-                    .onTapGesture { isEditingTitle = true; titleDraft = item.title }
+                    .lineSpacing(2)
+                    .onTapGesture {
+                        isEditingTitle = true
+                        titleDraft = item.title
+                    }
             }
 
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 20)
-    }
+            // Metadata row
+            if let time = item.time {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(time)
+                        .font(BrettTypography.taskMeta)
+                }
+                .foregroundStyle(metaText)
+                .padding(.top, 6)
+            }
 
-    // MARK: - List pill
-
-    @ViewBuilder
-    private func listPill(_ name: String, colorHex: String?) -> some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(BrettColors.fromHex(colorHex ?? "#3B82F6") ?? BrettColors.cerulean)
-                .frame(width: 8, height: 8)
-
-            Text(name)
-                .font(BrettTypography.badge)
-                .foregroundStyle(BrettColors.textSecondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Color.white.opacity(0.05), in: Capsule())
-        .overlay {
-            Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-        }
-        .padding(.horizontal, 20)
-    }
-
-    // MARK: - Schedule row: 3 mini glass cards side by side
-
-    @ViewBuilder
-    private func scheduleRow(_ item: MockItem) -> some View {
-        HStack(spacing: 8) {
-            scheduleMiniCard(
-                icon: "calendar",
-                label: "Due Date",
-                value: item.dueDate.map { DateHelpers.formatRelativeDate($0) } ?? "Not set",
-                valueColor: urgencyColor(for: item)
-            )
-
-            scheduleMiniCard(
-                icon: "bell",
-                label: "Reminder",
-                value: item.reminder.map { reminderLabel($0) } ?? "Not set",
-                valueColor: item.reminder != nil ? BrettColors.textCardTitle : BrettColors.textMeta
-            )
-
-            scheduleMiniCard(
-                icon: "repeat",
-                label: "Recurrence",
-                value: item.recurrence.map { $0.rawValue.capitalized } ?? "Not set",
-                valueColor: item.recurrence != nil ? BrettColors.gold : BrettColors.textMeta
-            )
-        }
-        .padding(.horizontal, 16)
-    }
-
-    @ViewBuilder
-    private func scheduleMiniCard(icon: String, label: String, value: String, valueColor: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(BrettColors.textMeta)
-
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(BrettColors.textMeta)
-
-            Text(value)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(valueColor)
-                .lineLimit(1)
+            if let listName = item.listName {
+                HStack(spacing: 6) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(listName)
+                        .font(BrettTypography.taskMeta)
+                }
+                .foregroundStyle(metaText)
+                .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    // MARK: - Schedule
+
+    @ViewBuilder
+    private func scheduleSection(_ item: MockItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("SCHEDULE")
+                .font(BrettTypography.sectionLabel)
+                .tracking(2.4)
+                .foregroundStyle(sectionLabel)
+
+            HStack(spacing: 8) {
+                dueDateMenu(item)
+                reminderMenu(item)
+                recurrenceMenu(item)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    @ViewBuilder
+    private func scheduleMiniCard(icon: String, label: String, value: String, isSet: Bool, accentColor: Color) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isSet ? accentColor.opacity(0.80) : metaText)
+
+            Text(label)
+                .font(.system(size: 8, weight: .semibold))
+                .tracking(1.5)
+                .foregroundStyle(sectionLabel)
+
+            Text(value)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isSet ? accentColor : Color.white.opacity(0.30))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 6)
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.05))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.10))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
                 }
         }
@@ -287,214 +247,182 @@ struct TaskDetailView: View {
     // MARK: - Notes
 
     @ViewBuilder
-    private func notesSection(_ notes: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func notesSection(_ item: MockItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text("NOTES")
                 .font(BrettTypography.sectionLabel)
                 .tracking(2.4)
-                .foregroundStyle(BrettColors.sectionLabelColor)
-                .padding(.horizontal, 20)
+                .foregroundStyle(sectionLabel)
 
-            GlassCard {
+            if isEditingNotes {
+                TextEditor(text: $notesDraft)
+                    .font(BrettTypography.body)
+                    .foregroundStyle(BrettColors.textBody)
+                    .scrollContentBackground(.hidden)
+                    .focused($isNotesFocused)
+                    .frame(minHeight: 80)
+                    .tint(BrettColors.gold)
+                    .padding(10)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.white.opacity(0.05))
+                    }
+                    .onAppear {
+                        notesDraft = item.notes ?? ""
+                        isNotesFocused = true
+                    }
+            } else if let notes = item.notes, !notes.isEmpty {
                 Text(notes)
                     .font(BrettTypography.body)
                     .foregroundStyle(BrettColors.textBody)
                     .lineSpacing(4)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isEditingNotes = true }
+            } else {
+                Text("Add notes\u{2026}")
+                    .font(BrettTypography.body)
+                    .foregroundStyle(placeholder)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isEditingNotes = true }
             }
-            .padding(.horizontal, 16)
         }
-    }
-
-    // MARK: - Subtasks
-
-    @ViewBuilder
-    private func subtasksSection(_ subtasks: [MockSubtask]) -> some View {
-        let done = subtasks.filter(\.isCompleted).count
-
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("SUBTASKS")
-                    .font(BrettTypography.sectionLabel)
-                    .tracking(2.4)
-                    .foregroundStyle(BrettColors.sectionLabelColor)
-
-                Spacer()
-
-                Text("\(done)/\(subtasks.count)")
-                    .font(BrettTypography.taskMeta)
-                    .foregroundStyle(BrettColors.textMeta)
-            }
-            .padding(.horizontal, 20)
-
-            GlassCard {
-                VStack(spacing: 0) {
-                    ForEach(Array(subtasks.enumerated()), id: \.element.id) { index, subtask in
-                        HStack(spacing: 12) {
-                            // Mini checkbox
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        subtask.isCompleted
-                                            ? BrettColors.success.opacity(0.15)
-                                            : Color.black.opacity(0.20)
-                                    )
-                                    .overlay {
-                                        Circle()
-                                            .strokeBorder(
-                                                subtask.isCompleted
-                                                    ? BrettColors.success.opacity(0.40)
-                                                    : Color.white.opacity(0.10),
-                                                lineWidth: 1
-                                            )
-                                    }
-                                    .frame(width: 22, height: 22)
-
-                                if subtask.isCompleted {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(BrettColors.success)
-                                }
-                            }
-
-                            Text(subtask.title)
-                                .font(BrettTypography.taskTitle)
-                                .foregroundStyle(subtask.isCompleted ? BrettColors.textMeta : BrettColors.textCardTitle)
-                                .strikethrough(subtask.isCompleted, color: BrettColors.textGhost)
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 6)
-
-                        if index < subtasks.count - 1 {
-                            Divider().background(BrettColors.hairline)
-                        }
-                    }
-
-                    // Add subtask row
-                    Divider().background(BrettColors.hairline)
-
-                    HStack(spacing: 12) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(BrettColors.textPlaceholder)
-                            .frame(width: 22, height: 22)
-
-                        Text("Add subtask")
-                            .font(BrettTypography.body)
-                            .foregroundStyle(BrettColors.textPlaceholder)
-
-                        Spacer()
-                    }
-                    .padding(.vertical, 6)
-                }
-            }
-            .padding(.horizontal, 16)
-
-            // Progress bar
-            GeometryReader { geo in
-                let progress = subtasks.isEmpty ? 0 : CGFloat(done) / CGFloat(subtasks.count)
-
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(Color.white.opacity(0.10))
-                        .frame(height: 3)
-
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(BrettColors.success)
-                        .frame(width: geo.size.width * progress, height: 3)
-                }
-            }
-            .frame(height: 3)
-            .padding(.horizontal, 16)
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     // MARK: - Attachments
 
     @ViewBuilder
-    private func attachmentsSection(_ attachments: [MockAttachment]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func attachmentsSection(_ item: MockItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text("ATTACHMENTS")
                 .font(BrettTypography.sectionLabel)
                 .tracking(2.4)
-                .foregroundStyle(BrettColors.sectionLabelColor)
-                .padding(.horizontal, 20)
+                .foregroundStyle(sectionLabel)
 
-            GlassCard {
+            if !item.attachments.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
+                    ForEach(Array(item.attachments.enumerated()), id: \.element.id) { index, attachment in
                         HStack(spacing: 12) {
-                            // File type icon
                             ZStack {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(Color.white.opacity(0.05))
-                                    .frame(width: 36, height: 36)
+                                    .fill(Color.white.opacity(0.10))
+                                    .frame(width: 34, height: 34)
 
                                 Image(systemName: attachmentIcon(attachment.mimeType))
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(attachmentColor(attachment.mimeType))
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(attachment.filename)
-                                    .font(BrettTypography.taskTitle)
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(BrettColors.textCardTitle)
                                     .lineLimit(1)
-
                                 Text(attachment.sizeLabel)
-                                    .font(BrettTypography.taskMeta)
-                                    .foregroundStyle(BrettColors.textMeta)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(metaText)
                             }
 
                             Spacer()
 
-                            Image(systemName: "arrow.down.circle")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(BrettColors.textGhost)
+                            Button {} label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.30))
+                            }
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 6)
 
-                        if index < attachments.count - 1 {
+                        if index < item.attachments.count - 1 {
                             Divider().background(BrettColors.hairline)
                         }
                     }
                 }
             }
-            .padding(.horizontal, 16)
+
+            // Upload zone
+            Button {} label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("Tap to attach a file")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(Color.white.opacity(0.30))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                }
+            }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     // MARK: - Linked Items
 
     @ViewBuilder
-    private func linkedItemsSection(_ linkedItems: [MockLinkedItem]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func linkedItemsSection(_ item: MockItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("LINKED ITEMS")
                     .font(BrettTypography.sectionLabel)
                     .tracking(2.4)
-                    .foregroundStyle(BrettColors.sectionLabelColor)
+                    .foregroundStyle(sectionLabel)
 
                 Spacer()
 
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(BrettColors.textMeta)
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        isSearchingLinks.toggle()
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(metaText)
+                        .frame(width: 22, height: 22)
+                        .background(Color.white.opacity(0.10), in: Circle())
+                }
             }
-            .padding(.horizontal, 20)
 
-            GlassCard {
+            if isSearchingLinks {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.30))
+                    TextField("Search items\u{2026}", text: $linkSearchText)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                        .tint(BrettColors.gold)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                        }
+                }
+            }
+
+            if !item.linkedItems.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(Array(linkedItems.enumerated()), id: \.element.id) { index, linked in
+                    ForEach(Array(item.linkedItems.enumerated()), id: \.element.id) { index, linked in
                         HStack(spacing: 10) {
                             Image(systemName: linked.type == .task ? "bolt.fill" : "book")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(linked.type == .task ? BrettColors.gold : BrettColors.cerulean)
+                                .foregroundStyle(linked.type == .task ? BrettColors.gold : BrettColors.amber400.opacity(0.8))
 
                             Text(linked.title)
-                                .font(BrettTypography.body)
-                                .foregroundStyle(BrettColors.textCardTitle)
+                                .font(.system(size: 13))
+                                .foregroundStyle(BrettColors.textBody)
                                 .lineLimit(1)
 
                             Spacer()
@@ -502,104 +430,229 @@ struct TaskDetailView: View {
                             if linked.source == "embedding" {
                                 Image(systemName: "sparkles")
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(BrettColors.gold.opacity(0.60))
+                                    .foregroundStyle(BrettColors.amber400.opacity(0.50))
+                            }
+
+                            Button {} label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.30))
                             }
                         }
                         .padding(.vertical, 6)
 
-                        if index < linkedItems.count - 1 {
+                        if index < item.linkedItems.count - 1 {
                             Divider().background(BrettColors.hairline)
                         }
                     }
                 }
+            } else if !isSearchingLinks {
+                HStack(spacing: 6) {
+                    Image(systemName: "link")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(dimIcon)
+                    Text("No linked items")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.30))
+                }
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 16)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
-    // MARK: - Brett Thread
+    // MARK: - Brett Section (integrated)
 
     @ViewBuilder
     private func brettSection(_ item: MockItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("BRETT")
-                .font(BrettTypography.sectionLabel)
-                .tracking(2.4)
-                .foregroundStyle(BrettColors.ceruleanLabel)
-                .padding(.horizontal, 20)
+        VStack(alignment: .leading, spacing: 12) {
+            // Section header with Brett mark
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(BrettColors.gold)
+                        .frame(width: 5, height: 5)
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(BrettColors.cerulean.opacity(0.60))
+                        .frame(width: 16, height: 2.5)
+                }
 
-            GlassCard(tint: BrettColors.cerulean) {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Brett's mark
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(BrettColors.gold)
-                            .frame(width: 6, height: 6)
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(BrettColors.cerulean.opacity(0.60))
-                            .frame(width: 20, height: 3)
-                    }
+                Text("BRETT")
+                    .font(BrettTypography.sectionLabel)
+                    .tracking(2.4)
+                    .foregroundStyle(BrettColors.cerulean.opacity(0.60))
 
-                    if item.brettMessages.isEmpty {
-                        Text("Ask Brett about this task...")
-                            .font(BrettTypography.body)
-                            .foregroundStyle(BrettColors.cerulean.opacity(0.60))
-                    } else {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(item.brettMessages) { message in
-                                if message.role == "user" {
-                                    HStack {
-                                        Spacer(minLength: 40)
-                                        Text(message.content)
-                                            .font(BrettTypography.body)
-                                            .foregroundStyle(Color.white.opacity(0.90))
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    }
-                                } else {
-                                    Text(message.content)
-                                        .font(BrettTypography.body)
-                                        .foregroundStyle(BrettColors.textBody)
-                                        .lineSpacing(3)
-                                }
+                Spacer()
+            }
+
+            // Message history
+            if !item.brettMessages.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(item.brettMessages) { message in
+                        if message.role == "user" {
+                            HStack {
+                                Spacer(minLength: 60)
+                                Text(message.content)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Color.white.opacity(0.90))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        Color.white.opacity(0.10),
+                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    )
                             }
-                        }
-
-                        Divider().background(BrettColors.hairline)
-
-                        HStack(spacing: 8) {
-                            Text("Ask Brett...")
-                                .font(BrettTypography.body)
-                                .foregroundStyle(BrettColors.cerulean.opacity(0.40))
-
-                            Spacer()
-
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(BrettColors.cerulean.opacity(0.30))
+                        } else {
+                            Text(message.content)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.white.opacity(0.80))
+                                .lineSpacing(3)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    BrettColors.cerulean.opacity(0.10),
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                )
                         }
                     }
                 }
             }
-            .padding(.horizontal, 16)
+
+            // Input — always visible
+            HStack(spacing: 8) {
+                TextField("Ask Brett about this task\u{2026}", text: $brettInput)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+                    .tint(BrettColors.cerulean)
+                    .focused($isBrettFocused)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(
+                        Color.white.opacity(0.05),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                    }
+
+                Button {} label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .opacity(brettInput.trimmingCharacters(in: .whitespaces).isEmpty ? 0.25 : 1.0)
+                .disabled(brettInput.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     // MARK: - Helpers
 
+    @ViewBuilder
+    private func sectionDivider() -> some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.10))
+            .frame(height: 0.5)
+            .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func overflowMenu(_ item: MockItem) -> some View {
+        Menu {
+            Button {
+                store.toggleItem(item.id)
+            } label: {
+                Label(
+                    item.isCompleted ? "Mark Incomplete" : "Complete",
+                    systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark.circle"
+                )
+            }
+            Button {} label: { Label("Duplicate", systemImage: "doc.on.doc") }
+            Button {} label: { Label("Move to List", systemImage: "folder") }
+            Button {} label: { Label("Copy Link", systemImage: "link") }
+            Divider()
+            Button(role: .destructive) {} label: { Label("Delete", systemImage: "trash") }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.40))
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+    }
+
+    @ViewBuilder
+    private func dueDateMenu(_ item: MockItem) -> some View {
+        Menu {
+            Button {} label: { Label("Today", systemImage: "") }
+            Button {} label: { Label("Tomorrow", systemImage: "") }
+            Button {} label: { Label("This Week", systemImage: "") }
+            Divider()
+            Button {} label: { Label("No date", systemImage: "") }
+        } label: {
+            scheduleMiniCard(
+                icon: "calendar",
+                label: "DUE DATE",
+                value: item.dueDate.map { DateHelpers.formatRelativeDate($0) } ?? "Not set",
+                isSet: item.dueDate != nil,
+                accentColor: urgencyColor(for: item)
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func reminderMenu(_ item: MockItem) -> some View {
+        Menu {
+            Button {} label: { Label("Morning of", systemImage: "") }
+            Button {} label: { Label("1 hour before", systemImage: "") }
+            Button {} label: { Label("Day before", systemImage: "") }
+            Divider()
+            Button {} label: { Label("No reminder", systemImage: "") }
+        } label: {
+            scheduleMiniCard(
+                icon: "bell",
+                label: "REMINDER",
+                value: item.reminder.map { reminderLabel($0) } ?? "Not set",
+                isSet: item.reminder != nil,
+                accentColor: BrettColors.textCardTitle
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func recurrenceMenu(_ item: MockItem) -> some View {
+        Menu {
+            Button {} label: { Label("Daily", systemImage: "") }
+            Button {} label: { Label("Weekly", systemImage: "") }
+            Button {} label: { Label("Monthly", systemImage: "") }
+            Divider()
+            Button {} label: { Label("No recurrence", systemImage: "") }
+        } label: {
+            scheduleMiniCard(
+                icon: "repeat",
+                label: "RECURRENCE",
+                value: item.recurrence.map { $0.rawValue.capitalized } ?? "Not set",
+                isSet: item.recurrence != nil,
+                accentColor: BrettColors.gold
+            )
+        }
+    }
+
     private func urgencyColor(for item: MockItem) -> Color {
-        guard let date = item.dueDate else { return BrettColors.textMeta }
+        guard let date = item.dueDate else { return Color.white.opacity(0.30) }
         let urgency = DateHelpers.computeUrgency(dueDate: date, isCompleted: item.isCompleted)
         switch urgency {
         case .overdue: return BrettColors.error
         case .today: return BrettColors.gold
         default: return BrettColors.textCardTitle
         }
-    }
-
-    private func commitTitle(_ item: MockItem) {
-        isEditingTitle = false
     }
 
     private func reminderLabel(_ reminder: ReminderType) -> String {
@@ -623,6 +676,6 @@ struct TaskDetailView: View {
         if mimeType.hasPrefix("image/") { return BrettColors.cerulean }
         if mimeType.contains("pdf") { return BrettColors.error }
         if mimeType.hasPrefix("video/") { return BrettColors.purple400 }
-        return BrettColors.textMeta
+        return metaText
     }
 }

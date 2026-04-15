@@ -87,15 +87,8 @@ download.get("/", async (c) => {
       width: 64px;
       height: 64px;
       margin: 0 auto 20px;
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      font-weight: 800;
-      color: white;
-      box-shadow: 0 0 40px rgba(245, 158, 11, 0.25);
+      display: block;
+      filter: drop-shadow(0 0 40px rgba(245, 158, 11, 0.25));
     }
     .app-name {
       font-size: 32px;
@@ -155,7 +148,76 @@ download.get("/", async (c) => {
 </div>
 
 <div class="download-card">
-  <div class="logo">B</div>
+  <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-label="Brett">
+    <defs>
+      <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#F5D96B"/>
+        <stop offset="40%" stop-color="#E8B931"/>
+        <stop offset="100%" stop-color="#B8891A"/>
+      </linearGradient>
+      <linearGradient id="barHighlight" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#FBE88A" stop-opacity="0.6"/>
+        <stop offset="35%" stop-color="#F5D96B" stop-opacity="0"/>
+      </linearGradient>
+      <radialGradient id="sphere1" cx="38%" cy="35%" r="55%">
+        <stop offset="0%" stop-color="#FBE88A"/>
+        <stop offset="40%" stop-color="#E8B931"/>
+        <stop offset="100%" stop-color="#A67B10"/>
+      </radialGradient>
+      <radialGradient id="sphere2" cx="38%" cy="35%" r="55%">
+        <stop offset="0%" stop-color="#D4B060"/>
+        <stop offset="40%" stop-color="#BF9A28"/>
+        <stop offset="100%" stop-color="#8A6A10"/>
+      </radialGradient>
+      <radialGradient id="sphere3" cx="38%" cy="35%" r="55%">
+        <stop offset="0%" stop-color="#A89050"/>
+        <stop offset="40%" stop-color="#917A20"/>
+        <stop offset="100%" stop-color="#6B5510"/>
+      </radialGradient>
+      <radialGradient id="bg" cx="50%" cy="44%" r="60%">
+        <stop offset="0%" stop-color="#181C2A"/>
+        <stop offset="100%" stop-color="#0C0F15"/>
+      </radialGradient>
+      <radialGradient id="vignette" cx="50%" cy="46%" r="58%">
+        <stop offset="0%" stop-color="black" stop-opacity="0"/>
+        <stop offset="75%" stop-color="black" stop-opacity="0"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0.35"/>
+      </radialGradient>
+      <radialGradient id="warmth" cx="52%" cy="50%" r="38%">
+        <stop offset="0%" stop-color="#E8B931" stop-opacity="0.14"/>
+        <stop offset="60%" stop-color="#E8B931" stop-opacity="0.05"/>
+        <stop offset="100%" stop-color="#E8B931" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="innerGlow" cx="48%" cy="50%" r="25%">
+        <stop offset="0%" stop-color="#E8B931" stop-opacity="0.08"/>
+        <stop offset="100%" stop-color="#E8B931" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="borderGold" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#F5D96B" stop-opacity="0.5"/>
+        <stop offset="50%" stop-color="#C49A1A" stop-opacity="0.2"/>
+        <stop offset="100%" stop-color="#F2D04A" stop-opacity="0.4"/>
+      </linearGradient>
+    </defs>
+    <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+    <rect width="512" height="512" rx="112" fill="url(#vignette)"/>
+    <rect width="512" height="512" rx="112" fill="url(#warmth)"/>
+    <rect width="512" height="512" rx="112" fill="url(#innerGlow)"/>
+    <ellipse cx="256" cy="45" rx="140" ry="35" fill="white" opacity="0.012"/>
+    <rect x="1.5" y="1.5" width="509" height="509" rx="111" fill="none" stroke="url(#borderGold)" stroke-width="2"/>
+    <circle cx="135" cy="170" r="28" fill="url(#sphere1)"/>
+    <rect x="191" y="159" width="196" height="22" rx="11" fill="url(#gold)"/>
+    <rect x="191" y="159" width="196" height="10" rx="5" fill="url(#barHighlight)"/>
+    <g opacity="0.75">
+      <circle cx="135" cy="256" r="28" fill="url(#sphere2)"/>
+      <rect x="191" y="245" width="155" height="22" rx="11" fill="url(#gold)"/>
+      <rect x="191" y="245" width="155" height="10" rx="5" fill="url(#barHighlight)"/>
+    </g>
+    <g opacity="0.45">
+      <circle cx="135" cy="342" r="28" fill="url(#sphere3)"/>
+      <rect x="191" y="331" width="108" height="22" rx="11" fill="url(#gold)"/>
+      <rect x="191" y="331" width="108" height="10" rx="5" fill="url(#barHighlight)"/>
+    </g>
+  </svg>
   <div class="app-name">Brett</div>
   <div class="tagline">Your day, handled.</div>
 

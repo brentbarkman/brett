@@ -56,7 +56,7 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
       setShowScreenshotPreview(false);
       submitFeedback.reset();
     }
-  }, [isOpen]);
+  }, [isOpen, submitFeedback]);
 
   // Escape to close
   useEffect(() => {

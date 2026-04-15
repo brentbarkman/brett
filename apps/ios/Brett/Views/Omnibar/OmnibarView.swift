@@ -8,93 +8,62 @@ struct OmnibarView: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                // List drawer button
-                Button {
-                    showListDrawer = true
-                } label: {
-                    Image(systemName: "square.stack.3d.up")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.40))
-                }
-                .buttonStyle(.plain)
-                .frame(width: 32, height: 32)
+        HStack(spacing: 8) {
+            Button {
+                showListDrawer = true
+            } label: {
+                Image(systemName: "list.bullet")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.40))
+                    .frame(width: 28, height: 28)
+            }
 
-                // Divider
-                Rectangle()
-                    .fill(Color.white.opacity(0.10))
-                    .frame(width: 1, height: 20)
-
-                // Text field
-                HStack(spacing: 8) {
-                    // Subtle sparkle icon — AI hint
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [BrettColors.gold.opacity(0.5), BrettColors.cerulean.opacity(0.4)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    TextField(placeholder, text: $text)
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(BrettColors.textPrimary)
-                        .tint(BrettColors.gold)
-                        .focused($isFocused)
-                        .submitLabel(.done)
-                        .onSubmit {
-                            submitTask()
-                        }
-                }
-
-                // Mic button with ambient glow
-                Button {
-                    HapticManager.heavy()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [BrettColors.gold.opacity(0.15), BrettColors.gold.opacity(0.05)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .frame(width: 32, height: 32)
-
-                        Image(systemName: "waveform")
-                            .font(.system(size: 13, weight: .semibold))
+            TextField(placeholder, text: $text)
+                .font(.system(size: 15))
+                .foregroundStyle(.white)
+                .tint(BrettColors.gold)
+                .focused($isFocused)
+                .submitLabel(.done)
+                .onSubmit { submitTask() }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { isFocused = false }
                             .foregroundStyle(BrettColors.gold)
                     }
                 }
-                .buttonStyle(.plain)
+
+            if !text.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button { submitTask() } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+                        .background(BrettColors.gold, in: Circle())
+                }
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+            } else {
+                Button { HapticManager.heavy() } label: {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.25))
+                        .frame(width: 26, height: 26)
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule()
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.10),
-                                        Color.white.opacity(0.05),
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 0.5
-                            )
-                    }
-                    .shadow(color: .black.opacity(0.3), radius: 20, y: 5)
-            }
-            .padding(.horizontal, 16)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.04))
+                        .frame(height: 0.5)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        }
+        .animation(.easeOut(duration: 0.15), value: text.isEmpty)
         .sheet(isPresented: $showListDrawer) {
             ListDrawer(store: store)
                 .presentationDetents([.medium])
