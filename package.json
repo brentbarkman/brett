@@ -26,6 +26,7 @@
     "eval:compare": "pnpm --filter @brett/evals eval:compare",
     "upload:videos": "npx tsx scripts/upload-videos.ts",
     "upload:backgrounds": "npx tsx scripts/upload-backgrounds.ts",
+    "audit:backgrounds": "npx tsx scripts/backgrounds/audit-cli.ts",
     "release": "npx tsx scripts/release.ts"
   },
   "devDependencies": {

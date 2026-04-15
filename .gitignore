@@ -21,10 +21,15 @@ packages/api-core/src/generated/
 apps/desktop/public/videos/*.mp4
 
 # Background images (hosted on Railway Object Storage, not bundled)
-backgrounds/
+/backgrounds/
 
 # Firebase service account keys
 *-firebase-adminsdk-*.json
 firebase-service-account.json
 .claude/worktrees/
 .worktrees/
+
+# Background audit local artifacts (verdicts + sourced URLs)
+scripts/backgrounds/audit-results.json
+scripts/backgrounds/replacement-sources.json
+scripts/backgrounds/downloads/
