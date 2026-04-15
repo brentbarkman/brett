@@ -80,6 +80,10 @@ final class AttachmentStore {
         context.insert(attachment)
 
         try? context.save()
+        // Upload path is handled by W2-E's uploader, but we still nudge the
+        // sync manager so any other pending mutations (e.g. the parent item's
+        // attachment list) flush promptly.
+        SyncManager.shared.schedulePushDebounced()
     }
 
     func markFailed(uploadId: String, error: String) {

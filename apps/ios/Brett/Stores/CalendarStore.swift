@@ -74,6 +74,7 @@ final class CalendarStore {
             )
             context.insert(entry)
             save()
+            SyncManager.shared.schedulePushDebounced()
             return existing
         }
 
@@ -104,6 +105,7 @@ final class CalendarStore {
         context.insert(entry)
 
         save()
+        SyncManager.shared.schedulePushDebounced()
         return note
     }
 

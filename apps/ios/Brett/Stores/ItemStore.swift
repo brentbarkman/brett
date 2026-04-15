@@ -107,6 +107,7 @@ final class ItemStore {
 
         enqueueCreate(item)
         save()
+        SyncManager.shared.schedulePushDebounced()
         return item
     }
 
@@ -137,6 +138,7 @@ final class ItemStore {
             beforeSnapshot: before
         )
         save()
+        SyncManager.shared.schedulePushDebounced()
     }
 
     /// Toggle the done/active state of an item (common Inbox + Today action).
@@ -171,6 +173,7 @@ final class ItemStore {
 
         enqueueDelete(item, beforeSnapshot: before)
         save()
+        SyncManager.shared.schedulePushDebounced()
     }
 
     // MARK: - Helpers
