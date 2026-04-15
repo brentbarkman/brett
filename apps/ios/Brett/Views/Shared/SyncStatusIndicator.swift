@@ -2,13 +2,13 @@ import SwiftUI
 
 /// Tiny inline indicator that reflects `SyncManager.shared.state`.
 ///
-/// - `idle` → invisible (0 opacity — retained in the layout so it doesn't
-///   jump when a sync starts).
-/// - `pushing` / `pulling` → faint gold dot.
-/// - `error` → red dot, tappable to surface the underlying message.
+/// States:
+/// - `idle`      → invisible 8x8 dot (kept in layout so other icons don't shift).
+/// - `pushing`   → gold dot with a subtle pulse (local changes → server).
+/// - `pulling`   → cerulean dot with a subtle pulse (server changes → local).
+/// - `error`     → red dot, tappable; opens a sheet with the underlying message.
 ///
-/// Not currently mounted into `MainContainer` — callers opt-in by dropping it
-/// into a status-bar-adjacent position when they're ready to expose this.
+/// Mount inside the top bar next to the settings / scouts / search icons.
 struct SyncStatusIndicator: View {
     /// Bind to the shared singleton by default; tests can inject a different
     /// instance via the parameterised initialiser.
@@ -16,6 +16,9 @@ struct SyncStatusIndicator: View {
 
     /// Toggled when a tappable error is showing and the user taps it.
     @State private var showErrorDetails = false
+
+    /// Drives the pulse animation for pushing/pulling states.
+    @State private var isPulsing = false
 
     init(syncManager: SyncManager = .shared) {
         self.syncManager = syncManager
@@ -25,15 +28,29 @@ struct SyncStatusIndicator: View {
         Group {
             switch syncManager.state {
             case .idle:
-                dot(color: .clear, isInteractive: false)
-            case .pushing, .pulling:
-                dot(color: BrettColors.gold.opacity(0.6), isInteractive: false)
+                dot(color: .clear, isInteractive: false, pulse: false)
+
+            case .pushing:
+                dot(color: BrettColors.gold.opacity(0.85), isInteractive: false, pulse: true)
+
+            case .pulling:
+                dot(color: BrettColors.cerulean.opacity(0.85), isInteractive: false, pulse: true)
+
             case .error:
-                dot(color: BrettColors.error, isInteractive: true)
+                dot(color: BrettColors.error, isInteractive: true, pulse: false)
                     .onTapGesture { showErrorDetails = true }
             }
         }
+        .frame(width: 12, height: 12, alignment: .center) // 12pt hit target, 8pt dot
         .animation(.easeInOut(duration: 0.2), value: syncManager.state)
+        .onChange(of: syncManager.state) { _, newValue in
+            switch newValue {
+            case .pushing, .pulling:
+                isPulsing = true
+            default:
+                isPulsing = false
+            }
+        }
         .alert("Sync error", isPresented: $showErrorDetails) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -46,11 +63,20 @@ struct SyncStatusIndicator: View {
     // MARK: - Dot
 
     @ViewBuilder
-    private func dot(color: Color, isInteractive: Bool) -> some View {
+    private func dot(color: Color, isInteractive: Bool, pulse: Bool) -> some View {
         Circle()
             .fill(color)
-            .frame(width: 6, height: 6)
+            .frame(width: 8, height: 8)
+            .scaleEffect(pulse && isPulsing ? 1.15 : 1.0)
+            .opacity(pulse && isPulsing ? 0.75 : 1.0)
+            .animation(
+                pulse
+                    ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                    : .default,
+                value: isPulsing
+            )
             .contentShape(Rectangle())
+            .frame(width: 12, height: 12, alignment: .center)
             .allowsHitTesting(isInteractive)
             .accessibilityLabel(accessibilityLabel)
     }

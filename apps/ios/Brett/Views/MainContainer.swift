@@ -36,6 +36,11 @@ struct MainContainer: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
+            // Polished state UX — offline banner stays sticky at the top,
+            // toast host sits above the omnibar. Both attach here so every
+            // page inside the NavigationStack inherits them.
+            .offlineBanner()
+            .errorToastHost()
             .safeAreaInset(edge: .top) {
                 // Top controls — safeAreaInset handles dynamic island clearance
                 HStack {
@@ -44,7 +49,14 @@ struct MainContainer: View {
                     Spacer()
                 }
                 .overlay(alignment: .trailing) {
-                    HStack(spacing: 0) {
+                    HStack(spacing: 6) {
+                        // Pending-sync pill — hidden when the queue is empty.
+                        SyncPendingIndicator()
+
+                        // Animated dot that reflects SyncManager.state (idle /
+                        // pushing / pulling / error).
+                        SyncStatusIndicator()
+
                         Button {
                             showSearch = true
                         } label: {
