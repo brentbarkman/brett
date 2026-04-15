@@ -109,7 +109,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
   offset += grouped.this_week.length;
   const doneOffset = offset;
 
-  const cardClass = bare ? "" : "bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4";
+  const cardClass = bare ? "" : "bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4";
 
   return (
     <div className="flex flex-col gap-4 pb-20">
