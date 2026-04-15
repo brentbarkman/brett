@@ -440,7 +440,7 @@ export function Omnibar({
       <div
         className={`
           relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-[border-color,box-shadow] duration-300 ease-in-out overflow-hidden
-          ${isOpen ? "border-brett-cerulean/50 shadow-[0_0_20px_rgba(70,130,195,0.15)]" : "border-white/10 hover:border-white/20"}
+          ${isOpen ? "border-brett-cerulean/70 shadow-[0_0_24px_rgba(70,130,195,0.25)]" : "border-white/10 hover:border-white/20"}
           ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
         `}
       >

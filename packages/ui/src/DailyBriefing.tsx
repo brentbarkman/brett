@@ -177,7 +177,7 @@ export function DailyBriefing({
   return (
     <div
       className={`
-        relative w-full bg-black/40 backdrop-blur-md border border-brett-cerulean/30 rounded-xl p-4
+        relative w-full bg-black/40 backdrop-blur-md border border-brett-cerulean/50 rounded-xl p-4
         transition-all duration-500 ease-out transform
         ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
       `}
