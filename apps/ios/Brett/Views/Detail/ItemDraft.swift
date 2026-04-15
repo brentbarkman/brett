@@ -50,8 +50,11 @@ struct ItemDraft: Equatable {
     /// `changes[field]` holds the new value (or `NSNull()` when clearing).
     /// `previousValues[field]` holds the old value for conflict resolution.
     struct Diff: Equatable {
-        var changes: [String: AnyHashable?]
-        var previousValues: [String: AnyHashable?]
+        /// Value type uses `AnyHashable` (not optional) + `NSNull()` as the
+        /// explicit "cleared" sentinel. This avoids Swift's `dict[key] = nil`
+        /// behaviour which removes the key entirely instead of storing a nil.
+        var changes: [String: AnyHashable]
+        var previousValues: [String: AnyHashable]
 
         var isEmpty: Bool { changes.isEmpty }
         var changedFields: [String] { Array(changes.keys).sorted() }
@@ -61,49 +64,62 @@ struct ItemDraft: Equatable {
     /// Skips fields that match byte-for-byte (empty strings are normalised to
     /// `nil` for the text fields so a cleared TextEditor doesn't beat a nil).
     func diff(against item: Item) -> Diff {
-        var changes: [String: AnyHashable?] = [:]
-        var previousValues: [String: AnyHashable?] = [:]
+        var changes: [String: AnyHashable] = [:]
+        var previousValues: [String: AnyHashable] = [:]
+
+        func record(_ field: String, newValue: Any?, oldValue: Any?) {
+            changes[field] = anyHashable(newValue)
+            previousValues[field] = anyHashable(oldValue)
+        }
 
         // Title — required, never nil. Trim trailing whitespace but don't
         // silently discard an empty title (the caller can validate upstream).
-        let newTitle = title
-        if newTitle != item.title {
-            changes["title"] = newTitle
-            previousValues["title"] = item.title
+        if title != item.title {
+            record("title", newValue: title, oldValue: item.title)
         }
 
         // Notes — empty string is treated as nil on the wire.
         let newNotes: String? = notes.isEmpty ? nil : notes
         if newNotes != item.notes {
-            changes["notes"] = newNotes
-            previousValues["notes"] = item.notes
+            record("notes", newValue: newNotes, oldValue: item.notes)
         }
 
         // Due date
         if !datesEqual(dueDate, item.dueDate) {
-            changes["dueDate"] = dueDate
-            previousValues["dueDate"] = item.dueDate
+            record("dueDate", newValue: dueDate, oldValue: item.dueDate)
         }
 
         // List id
         if listId != item.listId {
-            changes["listId"] = listId
-            previousValues["listId"] = item.listId
+            record("listId", newValue: listId, oldValue: item.listId)
         }
 
         // Reminder
         if reminder != item.reminder {
-            changes["reminder"] = reminder
-            previousValues["reminder"] = item.reminder
+            record("reminder", newValue: reminder, oldValue: item.reminder)
         }
 
         // Recurrence
         if recurrence != item.recurrence {
-            changes["recurrence"] = recurrence
-            previousValues["recurrence"] = item.recurrence
+            record("recurrence", newValue: recurrence, oldValue: item.recurrence)
         }
 
         return Diff(changes: changes, previousValues: previousValues)
+    }
+
+    /// Wraps a value into `AnyHashable`, substituting `NSNull()` for nil so
+    /// the dictionary preserves the "cleared" signal.
+    private func anyHashable(_ value: Any?) -> AnyHashable {
+        switch value {
+        case let s as String: return AnyHashable(s)
+        case let d as Date: return AnyHashable(d)
+        case let n as Int: return AnyHashable(n)
+        case let d as Double: return AnyHashable(d)
+        case let b as Bool: return AnyHashable(b)
+        case let h as AnyHashable: return h
+        case nil: return AnyHashable(NSNull())
+        default: return AnyHashable(String(describing: value!))
+        }
     }
 
     /// Dates stored in SwiftData can drift sub-millisecond on re-encode; use
@@ -132,13 +148,13 @@ extension ItemStore {
         update(id: id, changes: changes, previousValues: previousValues)
     }
 
-    /// Strip the `Optional` wrapper — `NSNull` slots in for explicit nils so
-    /// the downstream payload encoder writes JSON null instead of omitting
-    /// the field.
-    private func anyDict(_ input: [String: AnyHashable?]) -> [String: Any] {
+    /// Unwrap `AnyHashable` back into the `[String: Any]` shape `update(...)`
+    /// expects. `NSNull()` sentinels pass through as-is so the downstream
+    /// payload encoder writes JSON null for cleared fields.
+    private func anyDict(_ input: [String: AnyHashable]) -> [String: Any] {
         var out: [String: Any] = [:]
         for (k, v) in input {
-            if let v { out[k] = v as Any } else { out[k] = NSNull() }
+            out[k] = v.base
         }
         return out
     }

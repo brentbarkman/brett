@@ -55,9 +55,10 @@ struct ItemDraftTests {
 
         let diff = draft.diff(against: item)
         #expect(diff.changedFields.contains("notes"))
-        // Empty string should have been normalised to nil.
-        let noteChange = diff.changes["notes"] ?? nil
-        #expect(noteChange == nil)
+        // Empty string should have been normalised to NSNull (the explicit
+        // "cleared" sentinel) so the key survives in the dict.
+        let noteChange = diff.changes["notes"]
+        #expect(noteChange?.base is NSNull)
     }
 
     @Test func notesNoChangeWhenBothEmpty() throws {
