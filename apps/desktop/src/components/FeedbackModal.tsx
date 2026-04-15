@@ -56,7 +56,12 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
       setShowScreenshotPreview(false);
       submitFeedback.reset();
     }
-  }, [isOpen, submitFeedback]);
+  // submitFeedback is a useMutation result with unstable identity; listing
+  // it would re-run this effect on every render. It's only invoked here as
+  // a side effect when the modal closes — which is exactly what `isOpen`
+  // tracks, so isOpen is the only correct dep.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Escape to close
   useEffect(() => {
