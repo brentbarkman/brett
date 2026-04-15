@@ -3,10 +3,11 @@ import { useEffect, useRef } from "react";
 type FaviconMode = "default" | "working";
 
 /**
- * Dynamic favicon with count badge:
+ * Dynamic favicon:
  * - count = 0          → base product mark
- * - count > 0          → product mark + cerulean badge with count
- * - mode = "working"   → Brett's mark (AI streaming), no badge
+ * - count > 0          → product mark + small cerulean dot (unread indicator,
+ *                         no numeral — numerals were illegible at 16px tab size)
+ * - mode = "working"   → Brett's mark (AI streaming), no dot
  */
 export function useFavicon(mode: FaviconMode, count: number) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -15,7 +16,7 @@ export function useFavicon(mode: FaviconMode, count: number) {
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
     if (!link) return;
 
-    // Working mode uses a static SVG — no badge needed
+    // Working mode uses a static SVG — no dot needed
     if (mode === "working") {
       link.href = "/favicon-working.svg";
       return;
@@ -27,7 +28,7 @@ export function useFavicon(mode: FaviconMode, count: number) {
       return;
     }
 
-    // Draw base favicon + count badge on canvas
+    // Draw base favicon + unread dot on canvas
     if (!canvasRef.current) {
       canvasRef.current = document.createElement("canvas");
       canvasRef.current.width = 64;
@@ -43,45 +44,22 @@ export function useFavicon(mode: FaviconMode, count: number) {
       ctx.clearRect(0, 0, size, size);
       ctx.drawImage(img, 0, 0, size, size);
 
-      // Badge config — oversized so it's legible at 16px tab favicon
-      const label = count > 99 ? "99+" : String(count);
-      const fontSize = label.length >= 3 ? 22 : label.length === 2 ? 28 : 32;
-      ctx.font = `bold ${fontSize}px -apple-system, "Helvetica Neue", sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
+      // Unread dot — top-right. Sized so it reads as a dot at 16px tab favicon
+      // (the favicon is downscaled ~4x, so a 16px dot renders as ~4px on-screen).
+      const dotRadius = 16;
+      const dotX = size - dotRadius - 2;
+      const dotY = dotRadius + 2;
 
-      const textMetrics = ctx.measureText(label);
-      const textWidth = textMetrics.width;
-      const badgeHeight = 30;
-      const badgePadding = 7;
-      const badgeWidth = Math.max(badgeHeight, textWidth + badgePadding * 2);
-      const badgeX = size - badgeWidth / 2 - 1;
-      const badgeY = badgeHeight / 2 + 1;
-
-      // Badge background — cerulean blue
+      // Subtle ring against busy icon colors, then the cerulean fill
       ctx.beginPath();
-      if (badgeWidth === badgeHeight) {
-        ctx.arc(badgeX, badgeY, badgeHeight / 2, 0, Math.PI * 2);
-      } else {
-        const r = badgeHeight / 2;
-        const left = badgeX - badgeWidth / 2;
-        const right = badgeX + badgeWidth / 2;
-        const top = badgeY - r;
-        const bottom = badgeY + r;
-        ctx.moveTo(left + r, top);
-        ctx.lineTo(right - r, top);
-        ctx.arcTo(right, top, right, badgeY, r);
-        ctx.arcTo(right, bottom, right - r, bottom, r);
-        ctx.lineTo(left + r, bottom);
-        ctx.arcTo(left, bottom, left, badgeY, r);
-        ctx.arcTo(left, top, left + r, top, r);
-      }
-      ctx.fillStyle = "#4682C3";
+      ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "#0C0F15"; // brett-bg — dark ring so the dot pops on any backdrop
       ctx.fill();
 
-      // Badge text — white
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(label, badgeX, badgeY + 1);
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotRadius - 3, 0, Math.PI * 2);
+      ctx.fillStyle = "#4682C3"; // brett-cerulean
+      ctx.fill();
 
       link.href = canvas.toDataURL("image/png");
     };

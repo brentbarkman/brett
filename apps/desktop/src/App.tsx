@@ -989,12 +989,12 @@ export function App() {
 
   const inboxCount = inboxData?.visible.length ?? 0;
 
-  // Dynamic window title: "(3) Jarvis" or just "Jarvis"
+  // Window title — just the assistant name; unread state lives in the favicon dot
   useEffect(() => {
-    document.title = inboxCount > 0 ? `(${inboxCount}) ${assistantName}` : assistantName;
-  }, [inboxCount, assistantName]);
+    document.title = assistantName;
+  }, [assistantName]);
 
-  // Dynamic favicon: working (Brett streaming) > count badge > default
+  // Dynamic favicon: working (Brett streaming) > unread dot (count > 0) > default
   const faviconMode = omnibar.isStreaming ? "working" as const : "default" as const;
   useFavicon(faviconMode, todayTaskCount);
 
