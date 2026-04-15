@@ -188,12 +188,38 @@ export function Omnibar({
 
   // Auto-scroll chat container to bottom (not the page)
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
+  const scrollFrameRef = useRef<number | null>(null);
+
+  const handleScroll = () => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    userScrolledUpRef.current = !nearBottom;
+  };
+
   useEffect(() => {
-    const container = chatContainerRef.current;
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
+    if (userScrolledUpRef.current) return;
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const el = chatContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
   }, [messages]);
+
+  // Reset scroll-to-bottom when the user sends a new message — their own
+  // message should always be visible, and we assume they want to see the
+  // response that follows.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last?.role === "user") userScrolledUpRef.current = false;
+  }, [messages.length]);
+
+  // Cleanup pending rAF on unmount
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+  }, []);
 
   // Reset suggestion selection when input changes
   useEffect(() => {
@@ -557,7 +583,7 @@ export function Omnibar({
         {isOpen && hasConversation && (
           <div>
             {/* Messages */}
-            <div ref={chatContainerRef} className="max-h-[450px] overflow-y-auto scrollbar-hide p-4 space-y-4">
+            <div ref={chatContainerRef} onScroll={handleScroll} className="max-h-[450px] overflow-y-auto scrollbar-hide p-4 space-y-4">
               {messages.map((msg, i) => (
                 <MessageBubble
                   key={i}
