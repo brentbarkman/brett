@@ -88,7 +88,20 @@ final class MockURLProtocol: URLProtocol {
 
         MockURLProtocol.queue.sync { MockURLProtocol.requestLog.append(request) }
 
-        let stub = MockURLProtocol.queue.sync { MockURLProtocol.stubs[url] }
+        // Look up with full URL first, then fall back to path-only matching —
+        // lets tests stub `/api/search` and have it match requests with
+        // `?q=...&limit=...` query strings without re-registering per query.
+        let stub = MockURLProtocol.queue.sync { () -> Stub? in
+            if let exact = MockURLProtocol.stubs[url] { return exact }
+            if var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                comps.query = nil
+                comps.fragment = nil
+                if let pathOnly = comps.url, let match = MockURLProtocol.stubs[pathOnly] {
+                    return match
+                }
+            }
+            return nil
+        }
 
         guard let stub else {
             client?.urlProtocol(self, didFailWithError: URLError(.resourceUnavailable))

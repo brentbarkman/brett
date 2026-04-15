@@ -116,6 +116,56 @@ final class APIClient {
         }
     }
 
+    /// Perform a request with a raw relative path+query string (e.g.
+    /// `"/api/search?q=hello&limit=30"`). `request(path:)` routes through
+    /// `URL.appendingPathComponent`, which percent-encodes `?` — use this
+    /// variant when the query string must stay intact.
+    func requestRelative<T: Decodable>(
+        _ type: T.Type = T.self,
+        relativePath: String,
+        method: String,
+        body: Encodable? = nil,
+        timeout: TimeInterval = 30
+    ) async throws -> T {
+        let encoded: Data?
+        if let body {
+            encoded = try JSONEncoder().encode(AnyEncodable(body))
+        } else {
+            encoded = nil
+        }
+
+        let trimmed = relativePath.hasPrefix("/") ? String(relativePath.dropFirst()) : relativePath
+        guard let url = URL(string: trimmed, relativeTo: baseURL)?.absoluteURL else {
+            throw APIError.unknown(URLError(.badURL))
+        }
+
+        let token = tokenProvider?()
+        let request = RequestBuilder.build(
+            url: url,
+            method: method,
+            token: token,
+            body: encoded,
+            timeout: timeout
+        )
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw APIError.unknown(URLError(.badServerResponse))
+            }
+            try Self.validate(status: http.statusCode, data: data)
+            return try decoder.decode(T.self, from: data)
+        } catch let error as APIError {
+            throw error
+        } catch let decoding as DecodingError {
+            throw APIError.decodingFailed(decoding)
+        } catch let urlError as URLError {
+            throw Self.map(urlError: urlError)
+        } catch {
+            throw APIError.unknown(error)
+        }
+    }
+
     // MARK: - Status validation
 
     private static func validate(status: Int, data: Data) throws {

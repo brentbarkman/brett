@@ -43,14 +43,15 @@ extension APIClient {
         }
         components.queryItems = items
 
-        // Match the pattern used by ScoutEndpoints.fetchScoutFindings:
-        // hand the raw `path?query` string to `request`, which forwards to
-        // `URL.appendingPathComponent`. Using a pre-encoded query string
-        // avoids round-tripping through `URL` twice.
-        let path = "\(components.path)?\(components.percentEncodedQuery ?? "")"
-        return try await request(
+        // `URL.appendingPathComponent` percent-encodes `?`, so we can't hand
+        // it a path+query string. Instead, build the full URL off baseURL
+        // manually and route through `requestURL(_:)` so the query string
+        // stays intact.
+        let query = components.percentEncodedQuery ?? ""
+        let relativeURL = "\(components.path)?\(query)"
+        return try await requestRelative(
             [SearchResult].self,
-            path: path,
+            relativePath: relativeURL,
             method: "GET"
         )
     }
