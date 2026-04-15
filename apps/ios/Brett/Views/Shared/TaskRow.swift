@@ -9,10 +9,40 @@ import SwiftUI
 ///  - `init(item: Item, listName:, onToggle:, onSelect:)` — real SwiftData
 ///    Item. Taking the list name as a separate parameter avoids reaching into
 ///    `ListStore` from a leaf view and keeps the row cheap to render.
+///
+/// ### Gestures
+///
+/// Rich per-row gestures (swipe-to-schedule leading, swipe-to-delete/archive
+/// trailing, drag-to-reorder long-press) are opt-in via init flags. Callers
+/// that already have their own swipe behaviour (e.g. Inbox's `TriagePopup`)
+/// pass `allowSwipe* = false` to opt out. Behaviour is identical across all
+/// list views by default — per the "list behavior consistency" project rule.
 struct TaskRow: View {
     private let viewModel: ViewModel
     private let onToggle: () -> Void
     private let onSelect: () -> Void
+
+    // Gesture feature flags — each defaults to on so Today + custom lists
+    // pick them up with no plumbing. Inbox passes false.
+    private let allowSwipeRight: Bool
+    private let allowSwipeLeft: Bool
+    private let allowDrag: Bool
+
+    // Gesture handlers — called when swipe actions fire. Caller wires them
+    // to their store (ItemStore.update/delete) so this leaf view stays free
+    // of environment lookups.
+    private let onSchedule: (_ dueDate: Date?) -> Void
+    private let onArchive: () -> Void
+    private let onDelete: () -> Void
+
+    // Drag-to-reorder wiring (only read when allowDrag == true).
+    private let dragIDs: [String]
+    private let onReorder: (_ newOrder: [String]) -> Void
+
+    // MARK: - Pulse + sheet state
+
+    @State private var pulseTrigger: Int = 0
+    @State private var showsScheduleSheet: Bool = false
 
     // MARK: - Initialisers
 
@@ -28,13 +58,30 @@ struct TaskRow: View {
         )
         self.onToggle = onToggle
         self.onSelect = onSelect
+        // Legacy mock path can't mutate the store — keep gestures off.
+        self.allowSwipeRight = false
+        self.allowSwipeLeft = false
+        self.allowDrag = false
+        self.onSchedule = { _ in }
+        self.onArchive = {}
+        self.onDelete = {}
+        self.dragIDs = []
+        self.onReorder = { _ in }
     }
 
     init(
         item: Item,
         listName: String? = nil,
+        allowSwipeRight: Bool = true,
+        allowSwipeLeft: Bool = true,
+        allowDrag: Bool = true,
+        dragIDs: [String] = [],
         onToggle: @escaping () -> Void,
-        onSelect: @escaping () -> Void
+        onSelect: @escaping () -> Void,
+        onSchedule: @escaping (_ dueDate: Date?) -> Void = { _ in },
+        onArchive: @escaping () -> Void = {},
+        onDelete: @escaping () -> Void = {},
+        onReorder: @escaping (_ newOrder: [String]) -> Void = { _ in }
     ) {
         self.viewModel = ViewModel(
             id: item.id,
@@ -47,11 +94,86 @@ struct TaskRow: View {
         )
         self.onToggle = onToggle
         self.onSelect = onSelect
+        self.allowSwipeRight = allowSwipeRight
+        self.allowSwipeLeft = allowSwipeLeft
+        self.allowDrag = allowDrag
+        self.onSchedule = onSchedule
+        self.onArchive = onArchive
+        self.onDelete = onDelete
+        self.dragIDs = dragIDs
+        self.onReorder = onReorder
     }
 
     // MARK: - Body
 
     var body: some View {
+        rowButton
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityLabelText)
+            .accessibilityHint("Double-tap to open details.")
+            .dynamicTypeClamp()
+            .goldPulse(trigger: pulseTrigger)
+            .applyIf(allowSwipeRight) { view in
+                view.swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    Button {
+                        apply(dueDate: Calendar.current.startOfDay(for: Date()))
+                    } label: {
+                        Label("Today", systemImage: "sun.max.fill")
+                    }
+                    .tint(BrettColors.gold)
+
+                    Button {
+                        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+                        apply(dueDate: Calendar.current.startOfDay(for: tomorrow))
+                    } label: {
+                        Label("Tomorrow", systemImage: "sunrise.fill")
+                    }
+                    .tint(BrettColors.gold.opacity(0.70))
+
+                    Button {
+                        HapticManager.light()
+                        showsScheduleSheet = true
+                    } label: {
+                        Label("Later", systemImage: "calendar")
+                    }
+                    .tint(BrettColors.gold.opacity(0.50))
+                }
+            }
+            .applyIf(allowSwipeLeft) { view in
+                view.swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        HapticManager.heavy()
+                        onDelete()
+                    } label: {
+                        Label("Delete", systemImage: "trash.fill")
+                    }
+
+                    Button {
+                        HapticManager.medium()
+                        onArchive()
+                    } label: {
+                        Label("Archive", systemImage: "archivebox.fill")
+                    }
+                    .tint(BrettColors.textSecondary)
+                }
+            }
+            .applyIf(allowDrag && !dragIDs.isEmpty) { view in
+                view.reorderable(
+                    id: viewModel.id,
+                    ids: dragIDs,
+                    onReorder: onReorder
+                )
+            }
+            .sheet(isPresented: $showsScheduleSheet) {
+                QuickScheduleSheet { date in
+                    apply(dueDate: date)
+                }
+            }
+    }
+
+    // MARK: - Row chrome
+
+    private var rowButton: some View {
         Button {
             onSelect()
         } label: {
@@ -88,7 +210,8 @@ struct TaskRow: View {
                 .contentShape(Rectangle())
                 .highPriorityGesture(
                     TapGesture().onEnded {
-                        HapticManager.light()
+                        HapticManager.success()
+                        pulseTrigger &+= 1
                         onToggle()
                     }
                 )
@@ -136,10 +259,14 @@ struct TaskRow: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabelText)
-        .accessibilityHint("Double-tap to open details.")
-        .dynamicTypeClamp()
+    }
+
+    /// Central landing for "a schedule action fired." Drives the haptic,
+    /// trigger the gold pulse, and dispatch to the caller.
+    private func apply(dueDate: Date?) {
+        HapticManager.medium()
+        pulseTrigger &+= 1
+        onSchedule(dueDate)
     }
 
     /// VoiceOver label — built from the `ViewModel` so the announced whisper
@@ -202,5 +329,22 @@ struct TaskRow: View {
         if days < 7 { return "\(days)d ago" }
         let weeks = days / 7
         return "\(weeks)w ago"
+    }
+}
+
+/// Tiny conditional view modifier — lets us chain `.swipeActions` + `.reorderable`
+/// behind opt-in flags without writing a dozen overloads. Both branches return
+/// the same `some View` via SwiftUI's `ViewBuilder`.
+private extension View {
+    @ViewBuilder
+    func applyIf<Transform: View>(
+        _ condition: Bool,
+        transform: (Self) -> Transform
+    ) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
     }
 }
