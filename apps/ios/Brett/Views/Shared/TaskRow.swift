@@ -2,13 +2,8 @@ import SwiftUI
 
 /// Task row — compact 48pt height line with checkbox + title + metadata whisper.
 ///
-/// Two initialisers:
-///  - `init(item: MockItem, ...)` — legacy mock path, still used by Inbox and
-///    anywhere else we haven't migrated off `MockStore` yet. Kept until every
-///    caller flips to the real sync-backed `Item`.
-///  - `init(item: Item, listName:, onToggle:, onSelect:)` — real SwiftData
-///    Item. Taking the list name as a separate parameter avoids reaching into
-///    `ListStore` from a leaf view and keeps the row cheap to render.
+/// Takes the list name as a separate parameter to avoid reaching into
+/// `ListStore` from a leaf view — keeps the row cheap to render.
 ///
 /// ### Gestures
 ///
@@ -46,28 +41,6 @@ struct TaskRow: View {
 
     // MARK: - Initialisers
 
-    init(item: MockItem, onToggle: @escaping () -> Void, onSelect: @escaping () -> Void) {
-        self.viewModel = ViewModel(
-            id: item.id,
-            title: item.title,
-            isCompleted: item.isCompleted,
-            timeLabel: item.time,
-            capturedLabel: item.capturedAgo,
-            listName: item.listName,
-            contentDomain: item.contentDomain
-        )
-        self.onToggle = onToggle
-        self.onSelect = onSelect
-        // Legacy mock path can't mutate the store — keep gestures off.
-        self.allowSwipeRight = false
-        self.allowSwipeLeft = false
-        self.allowDrag = false
-        self.onSchedule = { _ in }
-        self.onArchive = {}
-        self.onDelete = {}
-        self.dragIDs = []
-        self.onReorder = { _ in }
-    }
 
     init(
         item: Item,

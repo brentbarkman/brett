@@ -1,13 +1,32 @@
 import SwiftUI
+import SwiftData
 
 /// Half-sheet surfaced from the omnibar's ≡ button. Renders the user's
 /// lists as glass pills with a colored dot + count, an inline "New list"
 /// form, and an expandable "Archived" disclosure. Tap a pill → the drawer
 /// dismisses and the caller pushes via `onSelectList`.
+///
+/// Data flows through the real `ListStore` + a `@Query` on `Item` so the
+/// pill counts stay accurate without manual invalidation.
 struct ListDrawer: View {
-    @Bindable var store: MockStore
     var onSelectList: ((String) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(AuthManager.self) private var authManager
+
+    @State private var listStore = ListStore()
+
+    /// Live read of all non-deleted lists. Sorted by sortOrder; archived vs
+    /// active are split in Swift since `@Query` can't dynamically filter on
+    /// a nil/non-nil `archivedAt`.
+    @Query(
+        filter: #Predicate<ItemList> { $0.deletedAt == nil },
+        sort: \ItemList.sortOrder
+    ) private var allLists: [ItemList]
+
+    /// Item counts per list — computed off the live item set so pill counts
+    /// refresh automatically when items are created/toggled/moved.
+    @Query(filter: #Predicate<Item> { $0.deletedAt == nil })
+    private var allItems: [Item]
 
     @State private var isCreating = false
     @State private var draftName: String = ""
@@ -17,11 +36,11 @@ struct ListDrawer: View {
     @FocusState private var nameFieldFocused: Bool
 
     private var activeLists: [PillModel] {
-        pillModels().filter { !store.archivedListIds.contains($0.id) }
+        pillModels(from: allLists.filter { $0.archivedAt == nil })
     }
 
     private var archivedLists: [PillModel] {
-        pillModels().filter { store.archivedListIds.contains($0.id) }
+        pillModels(from: allLists.filter { $0.archivedAt != nil })
     }
 
     var body: some View {
@@ -56,7 +75,7 @@ struct ListDrawer: View {
         .scrollIndicators(.hidden)
         .animation(.easeOut(duration: 0.2), value: isCreating)
         .animation(.easeOut(duration: 0.2), value: showArchived)
-        .animation(.easeOut(duration: 0.2), value: store.archivedListIds)
+        .animation(.easeOut(duration: 0.2), value: archivedLists.map(\.id))
     }
 
     private func sectionHeader(_ text: String) -> some View {
@@ -84,16 +103,14 @@ struct ListDrawer: View {
                 Label("Change color", systemImage: "paintpalette")
             }
             Button(role: .destructive) {
-                store.archiveList(model.id)
-                HapticManager.success()
+                archive(model.id)
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
-                store.archiveList(model.id)
-                HapticManager.success()
+                archive(model.id)
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
@@ -103,7 +120,7 @@ struct ListDrawer: View {
             set: { if !$0 { colorPickerListId = nil } }
         )) {
             ListColorPicker(selected: model.color) { newColor in
-                store.setListColor(model.id, colorClass: newColor.rawValue)
+                recolor(model.id, to: newColor)
                 colorPickerListId = nil
                 HapticManager.light()
             }
@@ -247,8 +264,7 @@ struct ListDrawer: View {
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button {
-                                    store.unarchiveList(model.id)
-                                    HapticManager.success()
+                                    unarchive(model.id)
                                 } label: {
                                     Label("Restore", systemImage: "tray.and.arrow.up")
                                 }
@@ -256,8 +272,7 @@ struct ListDrawer: View {
                             }
                             .contextMenu {
                                 Button {
-                                    store.unarchiveList(model.id)
-                                    HapticManager.success()
+                                    unarchive(model.id)
                                 } label: {
                                     Label("Unarchive", systemImage: "tray.and.arrow.up")
                                 }
@@ -270,24 +285,55 @@ struct ListDrawer: View {
         }
     }
 
-    private func pillModels() -> [PillModel] {
-        store.lists
-            .map { list in
-                PillModel(
-                    id: list.id,
-                    name: store.displayName(forList: list.id) ?? list.name,
-                    color: store.displayColor(forList: list.id),
-                    itemCount: store.itemsForList(list.id).count,
-                    sortOrder: list.sortOrder
-                )
-            }
-            .sorted { $0.sortOrder < $1.sortOrder }
+    private func pillModels(from lists: [ItemList]) -> [PillModel] {
+        lists.map { list in
+            let count = allItems.filter { $0.listId == list.id && $0.itemStatus != .done }.count
+            return PillModel(
+                id: list.id,
+                name: list.name,
+                color: ListColor(colorClass: list.colorClass) ?? .slate,
+                itemCount: count,
+                sortOrder: list.sortOrder
+            )
+        }
+        .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    // MARK: - Mutations
+
+    private func archive(_ id: String) {
+        listStore.archive(id: id)
+        HapticManager.success()
+    }
+
+    private func unarchive(_ id: String) {
+        listStore.unarchive(id: id)
+        HapticManager.success()
+    }
+
+    private func recolor(_ id: String, to color: ListColor) {
+        guard let list = listStore.fetchById(id) else { return }
+        listStore.update(
+            id: id,
+            changes: ["colorClass": color.rawValue],
+            previousValues: ["colorClass": list.colorClass]
+        )
     }
 
     private func commitDraft() {
         let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        store.createList(name: trimmed, colorClass: draftColor.rawValue)
+        // Require a signed-in user to create. For preview / unauthenticated
+        // the drawer is still visible but "Create" is effectively a no-op.
+        guard let userId = authManager.currentUser?.id else {
+            cancelDraft()
+            return
+        }
+        _ = listStore.create(
+            userId: userId,
+            name: trimmed,
+            colorClass: draftColor.rawValue
+        )
         HapticManager.success()
         isCreating = false
         draftName = ""

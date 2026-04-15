@@ -1,11 +1,7 @@
 import SwiftUI
 
 /// Scout detail — header, findings timeline, activity log, memory, settings.
-///
-/// Takes `MockStore` for nav compatibility (same as `ScoutsRosterView`) and
-/// runs its own `ScoutStore` internally.
 struct ScoutDetailView: View {
-    @Bindable var store: MockStore
     let scoutId: String
 
     @State private var scoutStore = ScoutStore()
@@ -424,7 +420,7 @@ struct ScoutDetailView: View {
                 } label: {
                     HStack(spacing: 6) {
                         if isRunning {
-                            ProgressView().tint(.black)
+                            ProgressView().tint(.white)
                         } else {
                             Image(systemName: "bolt.fill")
                                 .font(.system(size: 14, weight: .bold))
@@ -432,7 +428,7 @@ struct ScoutDetailView: View {
                         Text(isRunning ? "Running..." : "Run now")
                             .font(.system(size: 14, weight: .semibold))
                     }
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 12)
                     .background(

@@ -9,9 +9,6 @@ import SwiftUI
 /// follow-up wave — we ignore everything on it except `selectedTaskId`, which
 /// still drives the TaskDetail sheet until that view is migrated too.
 struct TodayPage: View {
-    // TODO: remove MockStore param post-Wave-3 once MainContainer is migrated.
-    @Bindable var store: MockStore
-
     // MARK: - Real stores
 
     @State private var itemStore = ItemStore(
@@ -324,7 +321,7 @@ struct TodayPage: View {
     }
 
     private func select(_ id: String) {
-        store.selectedTaskId = id
+        SelectionStore.shared.selectedTaskId = id
     }
 
     /// Swipe-to-schedule: update dueDate (nil clears it, "Someday").
@@ -495,7 +492,7 @@ struct TodaySections {
 
     return ZStack {
         BackgroundView()
-        TodayPage(store: MockStore())
+        TodayPage()
     }
     .modelContainer(preview.container)
     .preferredColorScheme(.dark)
@@ -505,7 +502,7 @@ struct TodaySections {
     let preview = PersistenceController.makePreview()
     return ZStack {
         BackgroundView()
-        TodayPage(store: MockStore())
+        TodayPage()
     }
     .modelContainer(preview.container)
     .preferredColorScheme(.dark)

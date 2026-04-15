@@ -13,180 +13,243 @@ struct SignInView: View {
         ZStack {
             BackgroundView()
 
-            VStack(spacing: 24) {
-                Spacer()
+            // Frosted glass card — mirrors the desktop's
+            // `bg-black/40 backdrop-blur-2xl border-white/10 rounded-xl p-8`
+            // container. Keeps the fields together as one surface rather
+            // than letting them float over the background individually.
+            VStack(spacing: 22) {
+                header
 
-                // Logo
-                Text("Brett")
-                    .font(.system(size: 36, weight: .bold))
-                    .foregroundStyle(BrettColors.gold)
-
-                Spacer()
-
-                // Optional name field when signing up
                 if isSignUp {
-                    TextField("Name", text: $name)
-                        .textFieldStyle(.plain)
-                        .font(BrettTypography.taskTitle)
-                        .foregroundStyle(.white)
-                        .padding(14)
-                        .background {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                                }
-                        }
-                        .textContentType(.name)
-                        .autocapitalization(.words)
+                    labeledField("NAME") {
+                        TextField("Your name", text: $name)
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(.white)
+                            .textContentType(.name)
+                            .autocapitalization(.words)
+                    }
                 }
 
-                // Email
-                TextField("Email", text: $email)
-                    .textFieldStyle(.plain)
-                    .font(BrettTypography.taskTitle)
-                    .foregroundStyle(.white)
-                    .padding(14)
-                    .background {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                            }
-                    }
-                    .textContentType(.emailAddress)
-                    .autocapitalization(.none)
-                    .accessibilityIdentifier("signin.email")
-
-                // Password
-                SecureField("Password", text: $password)
-                    .textFieldStyle(.plain)
-                    .font(BrettTypography.taskTitle)
-                    .foregroundStyle(.white)
-                    .padding(14)
-                    .background {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                            }
-                    }
-                    .textContentType(isSignUp ? .newPassword : .password)
-                    .accessibilityIdentifier("signin.password")
-
-                // Error banner — shown when AuthManager surfaces an error
-                if let error = authManager.errorMessage {
-                    Text(error)
-                        .font(BrettTypography.taskMeta)
+                labeledField("EMAIL") {
+                    TextField("you@example.com", text: $email)
+                        .textFieldStyle(.plain)
                         .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 14)
-                        .background {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(BrettColors.error.opacity(0.20))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .strokeBorder(BrettColors.error.opacity(0.40), lineWidth: 1)
-                                }
-                        }
+                        .textContentType(.emailAddress)
+                        .autocapitalization(.none)
+                        .keyboardType(.emailAddress)
+                        .accessibilityIdentifier("signin.email")
+                }
+
+                labeledField("PASSWORD") {
+                    SecureField("••••••••", text: $password)
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(.white)
+                        .textContentType(isSignUp ? .newPassword : .password)
+                        .accessibilityIdentifier("signin.password")
+                }
+
+                if let error = authManager.errorMessage {
+                    errorBanner(error)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
-                // Primary action button (Sign In / Sign Up)
-                Button {
-                    Task { await submitEmailPassword() }
-                } label: {
-                    Group {
-                        if authManager.isLoading {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(.black)
-                        } else {
-                            Text(isSignUp ? "Sign Up" : "Sign In")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.black)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .disabled(authManager.isLoading || !isEmailFormValid)
-                .accessibilityIdentifier("signin.submit")
+                primaryButton
 
-                // Toggle between sign-in / sign-up
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isSignUp.toggle()
-                        authManager.clearError()
-                    }
-                } label: {
-                    Text(isSignUp ? "Already have an account? Sign in" : "Need an account? Sign up")
-                        .font(BrettTypography.taskMeta)
-                        .foregroundStyle(BrettColors.textSecondary)
-                }
+                toggleLink
 
-                Text("or")
-                    .font(BrettTypography.taskMeta)
-                    .foregroundStyle(BrettColors.textSecondary)
+                divider
 
-                // Sign in with Google
-                Button {
-                    Task { await authManager.signInGoogle() }
-                } label: {
-                    Group {
-                        if authManager.isLoading {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(.white)
-                        } else {
-                            Text("Sign in with Google")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-                            }
-                    }
-                }
-                .disabled(authManager.isLoading)
+                googleButton
 
-                // Sign in with Apple — uses Apple's native button which
-                // handles its own chrome. We intercept the request to hand
-                // off to AuthManager.signInApple().
-                SignInWithAppleButton(.signIn, onRequest: { request in
-                    request.requestedScopes = [.fullName, .email]
-                }, onCompletion: { _ in
-                    // The ASAuthorizationController driven by AuthManager's
-                    // provider is what actually posts the identity token to
-                    // the backend. SignInWithAppleButton completes its own
-                    // flow independently, so we trigger the provider here to
-                    // keep all logic flowing through AuthManager.
-                    Task { await authManager.signInApple() }
-                })
-                .signInWithAppleButtonStyle(.white)
-                .frame(height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .disabled(authManager.isLoading)
-
-                Spacer()
+                appleButton
             }
-            .padding(.horizontal, 32)
+            .padding(24)
+            .frame(maxWidth: 360)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.black.opacity(0.40))
+                    .background {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                    }
+            }
+            .padding(.horizontal, 24)
             .animation(.easeInOut(duration: 0.2), value: authManager.errorMessage)
             .animation(.easeInOut(duration: 0.2), value: isSignUp)
         }
+    }
+
+    // MARK: - Composable bits
+
+    /// Brand wordmark + one-line tagline. Matches the desktop's
+    /// "Brett / Sign in to continue" pair.
+    private var header: some View {
+        VStack(spacing: 4) {
+            Text("Brett")
+                .font(.system(size: 28, weight: .semibold, design: .default))
+                .foregroundStyle(.white)
+                .tracking(-0.5)
+            Text(isSignUp ? "Create your account" : "Sign in to continue")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.white.opacity(0.60))
+        }
+        .padding(.bottom, 4)
+    }
+
+    /// Input with an uppercase tracked label — matches the desktop's
+    /// `text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40`
+    /// treatment on field labels.
+    @ViewBuilder
+    private func labeledField(_ label: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.5)
+                .foregroundStyle(Color.white.opacity(0.40))
+
+            content()
+                .font(.system(size: 15))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                        }
+                }
+                .tint(BrettColors.gold)  // caret + selection use brand gold
+        }
+    }
+
+    private func errorBanner(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13))
+            .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.40))
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(BrettColors.error.opacity(0.12))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(BrettColors.error.opacity(0.25), lineWidth: 0.5)
+                    }
+            }
+    }
+
+    /// Primary CTA. Matches desktop: solid gold background + **white** text.
+    /// (Black text on gold reads as a consumer-coupon aesthetic — white is
+    /// the editorial-premium treatment.)
+    private var primaryButton: some View {
+        Button {
+            Task { await submitEmailPassword() }
+        } label: {
+            Group {
+                if authManager.isLoading {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                } else {
+                    Text(isSignUp ? "Sign Up" : "Sign In")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(BrettColors.gold)
+            }
+            .opacity(isEmailFormValid && !authManager.isLoading ? 1.0 : 0.35)
+        }
+        .disabled(authManager.isLoading || !isEmailFormValid)
+        .accessibilityIdentifier("signin.submit")
+    }
+
+    /// "Need an account? Sign up" — follows desktop pattern of muted prose
+    /// with a gold inline action word.
+    private var toggleLink: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isSignUp.toggle()
+                authManager.clearError()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(isSignUp ? "Already have an account?" : "Need an account?")
+                    .foregroundStyle(Color.white.opacity(0.40))
+                Text(isSignUp ? "Sign in" : "Sign up")
+                    .foregroundStyle(BrettColors.gold)
+            }
+            .font(.system(size: 13))
+        }
+    }
+
+    /// Horizontal "OR" separator — matches desktop's rule + tracked label.
+    private var divider: some View {
+        HStack(spacing: 12) {
+            Rectangle()
+                .fill(Color.white.opacity(0.10))
+                .frame(height: 1)
+            Text("OR")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.5)
+                .foregroundStyle(Color.white.opacity(0.40))
+            Rectangle()
+                .fill(Color.white.opacity(0.10))
+                .frame(height: 1)
+        }
+    }
+
+    private var googleButton: some View {
+        Button {
+            Task { await authManager.signInGoogle() }
+        } label: {
+            HStack(spacing: 10) {
+                // Inline Google "G" glyph (rendered in SF Symbols style so it
+                // doesn't need a rasterised asset). Desktop ships the full
+                // multicolor mark; we approximate with a monochrome dot to
+                // keep the bundle lean.
+                Image(systemName: "g.circle.fill")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.80))
+                Text("Continue with Google")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.90))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                    }
+            }
+        }
+        .disabled(authManager.isLoading)
+    }
+
+    private var appleButton: some View {
+        SignInWithAppleButton(.signIn, onRequest: { request in
+            request.requestedScopes = [.fullName, .email]
+        }, onCompletion: { _ in
+            Task { await authManager.signInApple() }
+        })
+        .signInWithAppleButtonStyle(.white)
+        .frame(height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .disabled(authManager.isLoading)
     }
 
     // MARK: - Helpers

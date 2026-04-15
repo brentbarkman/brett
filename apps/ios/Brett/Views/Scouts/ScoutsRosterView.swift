@@ -2,12 +2,7 @@ import SwiftUI
 
 /// Full-screen roster of the user's scouts. Pushes from the masthead
 /// `antenna.radiowaves.left.and.right` icon in `MainContainer`.
-///
-/// The view takes `MockStore` for nav compatibility but drives its rendering
-/// from `ScoutStore` + `APIClient`. MockStore is ignored here today — it can
-/// be wired up later if we want to pre-seed the roster from cached mock data.
 struct ScoutsRosterView: View {
-    @Bindable var store: MockStore
     @State private var scoutStore = ScoutStore()
     @State private var statusFilter: StatusFilter = .all
     @State private var isPresentingNewScout = false
@@ -223,7 +218,7 @@ struct ScoutsRosterView: View {
                 } label: {
                     Text("Create your first scout")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(BrettColors.gold, in: Capsule())
@@ -247,7 +242,7 @@ struct ScoutsRosterView: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.white)
                         .frame(width: 56, height: 56)
                         .background(
                             Circle()

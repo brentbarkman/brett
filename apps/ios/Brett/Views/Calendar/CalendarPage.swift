@@ -1,11 +1,8 @@
 import SwiftUI
 
 /// Calendar page — wired to the live `CalendarStore` (SwiftData backed by
-/// the sync pull). The incoming `MockStore` is kept for back-compat with
-/// the rest of the TabView but isn't used for data.
+/// the sync pull).
 struct CalendarPage: View {
-    @Bindable var store: MockStore
-
     @State private var selectedDate = Date()
     @State private var calendarStore = CalendarStore()
     @State private var accountsStore = CalendarAccountsStore()
@@ -80,7 +77,7 @@ struct CalendarPage: View {
                     } label: {
                         Text("Connect Google Calendar")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
                             .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 10, style: .continuous))

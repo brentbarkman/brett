@@ -153,7 +153,7 @@ struct EventDetailView: View {
                 } label: {
                     Text(isSubmittingRsvp ? "Sending…" : "Send RSVP")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .background(BrettColors.gold, in: Capsule())

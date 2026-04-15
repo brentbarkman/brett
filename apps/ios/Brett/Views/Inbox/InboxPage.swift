@@ -12,8 +12,6 @@ import SwiftUI
 /// - Triage lives in `TriagePopup`, a medium-detent sheet that calls
 ///   `itemStore.bulkUpdate(ids:changes:)` and dismisses on confirm.
 struct InboxPage: View {
-    @Bindable var store: MockStore
-
     // Live sync-backed stores. We keep them as @State so SwiftUI owns their
     // lifecycle and re-renders this view when Observable state changes.
     @State private var itemStore = ItemStore()
@@ -186,7 +184,7 @@ struct InboxPage: View {
                         if isSelectMode {
                             toggleSelection(item.id)
                         } else {
-                            store.selectedTaskId = item.id
+                            SelectionStore.shared.selectedTaskId = item.id
                         }
                     }
                 )

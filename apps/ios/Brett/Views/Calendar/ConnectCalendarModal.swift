@@ -54,7 +54,7 @@ struct ConnectCalendarModal: View {
                         Text(isConnecting ? "Connecting..." : "Connect")
                             .font(.system(size: 15, weight: .semibold))
                     }
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
                     .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

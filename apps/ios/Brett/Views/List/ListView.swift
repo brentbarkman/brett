@@ -10,13 +10,9 @@ import SwiftUI
 ///      capture sits at the top of the card.
 ///   4. Empty state when the card has zero items.
 struct ListView: View {
-    @Bindable var store: MockStore
     let listId: String
     @Environment(AuthManager.self) private var authManager
 
-    // Real sync-backed stores. MockStore stays on the view only to drive
-    // `selectedTaskId` (which MainContainer's task-detail sheet reads) and
-    // to cover the prototype fallback when a list exists only in mock data.
     @State private var itemStore = ItemStore(
         context: PersistenceController.shared.container.mainContext
     )
@@ -30,28 +26,24 @@ struct ListView: View {
     @FocusState private var nameFocused: Bool
     @FocusState private var captureFocused: Bool
 
-    // Real-store resolution, with MockStore fallback so the prototype lists
-    // in `MockData` still render until every list originates from sync.
     private var realList: ItemList? {
         listStore.fetchById(listId)
     }
 
     private var listName: String {
-        realList?.name ?? store.displayName(forList: listId) ?? store.lists.first(where: { $0.id == listId })?.name ?? "List"
+        realList?.name ?? "List"
     }
 
     private var listColor: ListColor {
         if let colorClass = realList?.colorClass, let color = ListColor(colorClass: colorClass) {
             return color
         }
-        return store.displayColor(forList: listId)
+        return .slate
     }
 
-    /// Real items first; fall back to mock items if this list doesn't exist
-    /// in SwiftData yet (prototype / test fixtures).
     private var items: [Item] {
-        let all = itemStore.fetchAll(listId: listId, status: nil)
-        return all.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
+        itemStore.fetchAll(listId: listId, status: nil)
+            .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
     }
 
     private var activeCount: Int {
@@ -59,10 +51,7 @@ struct ListView: View {
     }
 
     private var isArchived: Bool {
-        if let real = realList {
-            return real.archivedAt != nil
-        }
-        return store.archivedListIds.contains(listId)
+        realList?.archivedAt != nil
     }
 
     var body: some View {
@@ -115,7 +104,7 @@ struct ListView: View {
                                         allowDrag: true,
                                         dragIDs: items.map(\.id),
                                         onToggle: { toggle(item.id) },
-                                        onSelect: { store.selectedTaskId = item.id },
+                                        onSelect: { SelectionStore.shared.selectedTaskId = item.id },
                                         onSchedule: { dueDate in schedule(item.id, dueDate: dueDate) },
                                         onArchive: { archive(item.id) },
                                         onDelete: { delete(item.id) },
@@ -145,7 +134,6 @@ struct ListView: View {
         }
         .overlay(alignment: .bottom) {
             OmnibarView(
-                store: store,
                 placeholder: "Add to \(listName)..."
             )
         }
@@ -228,16 +216,12 @@ struct ListView: View {
 
     private func commitNameEdit() {
         let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            if let existing = realList {
-                listStore.update(
-                    id: listId,
-                    changes: ["name": trimmed],
-                    previousValues: ["name": existing.name]
-                )
-            } else {
-                store.renameList(listId, to: trimmed)
-            }
+        if !trimmed.isEmpty, let existing = realList {
+            listStore.update(
+                id: listId,
+                changes: ["name": trimmed],
+                previousValues: ["name": existing.name]
+            )
         }
         isEditingName = false
         nameFocused = false
@@ -276,9 +260,9 @@ struct ListView: View {
     }
 
     private func reorder(_ newOrder: [String]) {
-        // Per-item order is not yet a first-class concept in `Item` (no
-        // `sortOrder` field). Drag still gives visual + haptic feedback via
-        // `DragReorderModifier`; persistence lands when we add a sort field.
+        // Visual + haptic only — persistence waits on a server-side
+        // `Item.sortOrder` column + push allowlist update. Tracked in
+        // BUILD_LOG under "remaining gaps".
         HapticManager.success()
     }
 
@@ -376,45 +360,30 @@ struct ListView: View {
 
     private func commitCapture() {
         let trimmed = captureText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, let userId = authManager.currentUser?.id else { return }
         HapticManager.light()
-        // Route through the real store when we have a signed-in user AND
-        // the list exists in SwiftData. Otherwise fall back to the mock
-        // path so prototype lists still reflect captures.
-        if realList != nil, let userId = authManager.currentUser?.id {
-            _ = itemStore.create(userId: userId, title: trimmed, listId: listId)
-        } else {
-            store.addItem(title: trimmed, dueDate: nil, listId: listId)
-        }
+        _ = itemStore.create(userId: userId, title: trimmed, listId: listId)
         captureText = ""
         captureFocused = false
     }
 
-    // Unarchive action reused by the top toolbar button and the archived
-    // banner. Mirrors the listStore path when the list exists there.
     private func unarchiveCurrentList() {
-        if let existing = realList {
-            listStore.update(
-                id: listId,
-                changes: ["archivedAt": NSNull()],
-                previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()]
-            )
-        } else {
-            store.unarchiveList(listId)
-        }
+        guard let existing = realList else { return }
+        listStore.update(
+            id: listId,
+            changes: ["archivedAt": NSNull()],
+            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()]
+        )
         HapticManager.success()
     }
 
     private func archiveCurrentList() {
-        if let existing = realList {
-            listStore.update(
-                id: listId,
-                changes: ["archivedAt": Date()],
-                previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()]
-            )
-        } else {
-            store.archiveList(listId)
-        }
+        guard let existing = realList else { return }
+        listStore.update(
+            id: listId,
+            changes: ["archivedAt": Date()],
+            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()]
+        )
         HapticManager.success()
     }
 }

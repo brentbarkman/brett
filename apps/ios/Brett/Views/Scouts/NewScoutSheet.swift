@@ -285,7 +285,7 @@ struct NewScoutSheet: View {
             } label: {
                 Text(step < 3 ? "Next" : "Create")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(BrettColors.gold, in: Capsule())

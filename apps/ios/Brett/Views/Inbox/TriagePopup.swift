@@ -133,7 +133,7 @@ struct TriagePopup: View {
                 } label: {
                     Text("Schedule")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 10))
@@ -228,7 +228,7 @@ struct TriagePopup: View {
                     } label: {
                         Text("Create")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(.white)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
                             .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 10))

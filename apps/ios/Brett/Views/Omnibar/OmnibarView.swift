@@ -6,18 +6,13 @@ import SwiftUI
 /// tags, or questions without any structured UI. Tapping the mic switches
 /// to voice mode (speech-to-text with a live waveform).
 struct OmnibarView: View {
-    @Bindable var store: MockStore
     let placeholder: String
     /// 0 = Inbox, 1 = Today, 2 = Calendar. Drives parser defaults.
-    /// Defaults to `.task` (Today) so ListView's legacy call site keeps
-    /// working without modification.
     var currentPage: Int = 1
     var onSelectList: ((String) -> Void)? = nil
 
     @Environment(AuthManager.self) private var authManager
 
-    /// Real store used for sync-backed capture. Falls back to MockStore
-    /// only when there's no signed-in user (e.g. preview / UITest seed).
     @State private var itemStore = ItemStore(
         context: PersistenceController.shared.container.mainContext
     )
@@ -54,7 +49,7 @@ struct OmnibarView: View {
                 }
             }
             .sheet(isPresented: $showListDrawer) {
-                ListDrawer(store: store, onSelectList: onSelectList)
+                ListDrawer(onSelectList: onSelectList)
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(.ultraThinMaterial)
@@ -157,16 +152,8 @@ struct OmnibarView: View {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Prefer the real list store (so #listname matches sync-backed lists
-        // first). Fall back to MockStore lists only if SwiftData has none —
-        // preserves the prototype flow.
         let realLists = listStore.fetchAll()  // excludes archived by default
-        let lists: [SmartParser.ListRef]
-        if !realLists.isEmpty {
-            lists = realLists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
-        } else {
-            lists = store.lists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
-        }
+        let lists = realLists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
         let parsed = SmartParser.parse(
             trimmed,
             context: SmartParser.ParseContext(currentPage: currentPage, lists: lists)
@@ -180,51 +167,40 @@ struct OmnibarView: View {
             return
         }
 
-        // Route through ItemStore (sync-backed) when a user is signed in.
-        // MockStore stays as fallback so the SwiftUI previews + unauthed
-        // UITests keep working. Task/event/question all persist as items;
-        // the `question` kind is tagged for a future chat-route; `event` is
-        // captured as a content item so it's not lost until the calendar
-        // draft flow lands.
-        if let userId = authManager.currentUser?.id {
-            // Resolve list id against the real ListStore first (the parser
-            // was given the set of real lists); otherwise the parsed id is
-            // still a valid Swift UUID and sync will upsert.
-            let resolvedListId = parsed.listId
-            let itemType: ItemType = parsed.kind == .event ? .content : .task
-            _ = itemStore.create(
-                userId: userId,
-                title: parsed.title,
-                type: itemType,
-                dueDate: parsed.dueDate,
-                listId: resolvedListId
-            )
-            // Reminder mapping: apply as a second mutation if parser found
-            // one (ItemStore.create has no reminder param, so we patch it
-            // in on the freshly-created record).
-            if let reminder = parsed.reminder {
-                if let created = itemStore.fetchAll(listId: resolvedListId, status: nil)
-                    .first(where: { $0.title == parsed.title && $0.reminder == nil }) {
-                    itemStore.update(
-                        id: created.id,
-                        changes: ["reminder": reminder],
-                        previousValues: ["reminder": NSNull()]
-                    )
-                }
-            }
-            #if DEBUG
-            if parsed.kind == .question {
-                print("[Omnibar] Question captured — future: open Brett chat: \(parsed.title)")
-            }
-            #endif
-        } else {
-            // No auth context — prototype/preview path.
-            store.addItem(
-                title: parsed.title,
-                dueDate: parsed.dueDate,
-                listId: parsed.listId
+        // Route through ItemStore (sync-backed). Without a signed-in user
+        // the omnibar shouldn't be reachable (root is gated by SignInView),
+        // but if we somehow end up here anyway, just bail with a haptic.
+        guard let userId = authManager.currentUser?.id else {
+            HapticManager.error()
+            flashParseFailure()
+            return
+        }
+
+        let itemType: ItemType = parsed.kind == .event ? .content : .task
+        let created = itemStore.create(
+            userId: userId,
+            title: parsed.title,
+            type: itemType,
+            dueDate: parsed.dueDate,
+            listId: parsed.listId
+        )
+
+        // Reminder mapping: apply as a follow-up mutation so ItemStore.create
+        // doesn't need a reminder parameter. Uses the just-created item id
+        // directly rather than re-querying.
+        if let reminder = parsed.reminder {
+            itemStore.update(
+                id: created.id,
+                changes: ["reminder": reminder],
+                previousValues: ["reminder": NSNull()]
             )
         }
+
+        #if DEBUG
+        if parsed.kind == .question {
+            print("[Omnibar] Question captured — future: open Brett chat: \(parsed.title)")
+        }
+        #endif
 
         HapticManager.light()
         flashSubmitPulse()

@@ -22,25 +22,23 @@ import SwiftData
 ///  6. LinksSection
 ///  7. BrettChatSection
 struct TaskDetailView: View {
-    @Bindable var store: MockStore
     let itemId: String
 
     // Stack of pushed linked-item detail views so tapping a link preserves
     // history inside this sheet.
     @State private var linkStack: [String] = []
 
-    init(store: MockStore, itemId: String) {
-        self._store = Bindable(wrappedValue: store)
+    init(itemId: String) {
         self.itemId = itemId
     }
 
     var body: some View {
         NavigationStack(path: $linkStack) {
-            TaskDetailBody(store: store, itemId: itemId) { id in
+            TaskDetailBody(itemId: itemId) { id in
                 linkStack.append(id)
             }
             .navigationDestination(for: String.self) { linkedId in
-                TaskDetailBody(store: store, itemId: linkedId) { id in
+                TaskDetailBody(itemId: linkedId) { id in
                     linkStack.append(id)
                 }
             }
@@ -51,7 +49,6 @@ struct TaskDetailView: View {
 // MARK: - Body (the actual content, reusable for link navigation)
 
 private struct TaskDetailBody: View {
-    @Bindable var store: MockStore
     let itemId: String
     let onOpenLinkedItem: (String) -> Void
 

@@ -11,8 +11,8 @@ enum NavDestination: Hashable {
 }
 
 struct MainContainer: View {
-    @State private var store = MockStore()
     @State private var searchStore = SearchStore()
+    @State private var selection = SelectionStore.shared
     @State private var currentPage = 1 // 0=Inbox, 1=Today, 2=Calendar
     @State private var path = NavigationPath()
     @State private var showSearch = false
@@ -25,13 +25,13 @@ struct MainContainer: View {
                 BackgroundView()
 
                 TabView(selection: $currentPage) {
-                    InboxPage(store: store)
+                    InboxPage()
                         .tag(0)
 
-                    TodayPage(store: store)
+                    TodayPage()
                         .tag(1)
 
-                    CalendarPage(store: store)
+                    CalendarPage()
                         .tag(2)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -97,7 +97,6 @@ struct MainContainer: View {
             }
             .overlay(alignment: .bottom) {
                 OmnibarView(
-                    store: store,
                     placeholder: currentPage == 0 ? "Capture something..." :
                                 currentPage == 2 ? "Add an event..." : "Add a task...",
                     currentPage: currentPage,
@@ -116,22 +115,24 @@ struct MainContainer: View {
                 case .settings:
                     SettingsView()
                 case .scoutsRoster:
-                    ScoutsRosterView(store: store)
+                    ScoutsRosterView()
                 case .scoutDetail(let id):
-                    ScoutDetailView(store: store, scoutId: id)
+                    ScoutDetailView(scoutId: id)
                 case .eventDetail(let id):
                     EventDetailView(eventId: id)
                 case .listView(let id):
-                    ListView(store: store, listId: id)
+                    ListView(listId: id)
                 }
             }
-            // Task detail as a near-full-screen sheet
+            // Task detail as a near-full-screen sheet. Driven by the
+            // app-wide `SelectionStore` — any row tap across the app
+            // writes `selection.selectedTaskId = id` to present this.
             .sheet(isPresented: Binding(
-                get: { store.selectedTaskId != nil },
-                set: { if !$0 { store.selectedTaskId = nil } }
+                get: { selection.selectedTaskId != nil },
+                set: { if !$0 { selection.selectedTaskId = nil } }
             )) {
-                if let taskId = store.selectedTaskId {
-                    TaskDetailView(store: store, itemId: taskId)
+                if let taskId = selection.selectedTaskId {
+                    TaskDetailView(itemId: taskId)
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
                         .presentationBackground(Color.black.opacity(0.80))
@@ -159,7 +160,7 @@ struct MainContainer: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             switch result.entityType {
             case .item:
-                store.selectedTaskId = result.entityId
+                selection.selectedTaskId = result.entityId
             case .calendarEvent, .meetingNote:
                 path.append(NavDestination.eventDetail(id: result.entityId))
             case .scoutFinding:

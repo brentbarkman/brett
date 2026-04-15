@@ -207,6 +207,7 @@ final class ItemStore {
         }
     }
 
+
     /// Snapshot the current value of a set of fields on an item. Used by
     /// `bulkUpdate` so each enqueued mutation has per-item previousValues.
     private func previousValuesForChanges(_ fields: [String], on item: Item) -> [String: Any] {
