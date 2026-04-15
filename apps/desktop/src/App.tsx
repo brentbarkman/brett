@@ -32,7 +32,10 @@ import {
   ScoutDetail,
   LivingBackground,
   BackgroundScrim,
+  AwakeningVideo,
 } from "@brett/ui";
+import { useAwakeningVideo } from "./hooks/useAwakeningVideo";
+import { useAppConfig } from "./hooks/useAppConfig";
 import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision, ReminderType, RecurrenceType, Scout } from "@brett/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./api/client";
@@ -503,6 +506,21 @@ export function App() {
     pinnedBackground,
   });
 
+  // Awakening video — plays once on cold launch, handed off to LivingBackground
+  const { data: appConfig } = useAppConfig();
+  const awakening = useAwakeningVideo({
+    baseUrl: appConfig?.storageBaseUrl ?? "",
+    segment: background.segment,
+  });
+  const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">(
+    awakening.shouldPlay ? "playing" : "done"
+  );
+  const handleAwakeningEnded = () => {
+    // Hold on the rest frame for 500ms, then fade out over 500ms, then unmount
+    setTimeout(() => setAwakeningPhase("fading"), 500);
+    setTimeout(() => setAwakeningPhase("done"), 1000);
+  };
+
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
 
@@ -943,6 +961,15 @@ export function App() {
           nextGradient={background.nextGradient}
         />
         <BackgroundScrim />
+
+        {awakening.shouldPlay && awakeningPhase !== "done" && (
+          <div
+            className="absolute inset-0 z-[5] transition-opacity duration-500 pointer-events-none"
+            style={{ opacity: awakeningPhase === "fading" ? 0 : 1 }}
+          >
+            <AwakeningVideo sources={awakening.videoUrls} onEnded={handleAwakeningEnded} />
+          </div>
+        )}
 
 
 
