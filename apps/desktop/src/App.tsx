@@ -129,13 +129,11 @@ function getStoredAwakeningMode(): AwakeningMode {
  *  duration if shorter. Set to a larger number than the source clip to let
  *  the video end naturally. */
 const AWAKENING_MAX_DURATION_S = 1.5;
-/** How long into the awakening before UI starts fading in. UI appears ON TOP
- *  of the still-playing video — layered reveal effect. */
-const AWAKENING_UI_REVEAL_DELAY_MS = 500;
-/** UI fade-in duration. Aim for (UI_REVEAL_DELAY_MS + UI_FADE_MS) to land
- *  near the video's end so UI is fully visible as the cover drops. */
-const AWAKENING_UI_FADE_MS = 1300;
-/** Cover (black layer) fade-out duration when near-end fires. */
+/** Cover (black layer) fade-out duration when near-end fires. Drives the
+ *  entire reveal: the UI shell sits at opacity 1 always, so everything
+ *  emerges as this cover dissolves. Glass cards' backdrop-filter transitions
+ *  naturally from "blurring the black cover" (looks solid dark) to
+ *  "blurring LivingBackground" (looks like actual glass). */
 const AWAKENING_COVER_FADE_MS = 1400;
 /** Ken Burns mode: how long the scale(1.15) → scale(1) transform runs.
  *  Intentionally longer than the cover fade so the zoom continues past when
@@ -558,10 +556,6 @@ export function App() {
   const [awakeningMode] = useState<AwakeningMode>(getStoredAwakeningMode);
   // Cover (black layer) lifecycle: playing → fading → done
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading" | "done">("playing");
-  // UI reveal — independent of cover. Starts fading in DURING the reveal
-  // (so UI appears on top of it, layered reveal effect).
-  // For skip cases, initialized true so UI is visible immediately.
-  const [uiRevealed, setUiRevealed] = useState(() => awakening.status === "skip");
 
   const handleAwakeningNearEnd = () => {
     // videoFreeze: keep the cover black; the paused video stays as the
@@ -600,23 +594,12 @@ export function App() {
     return () => clearTimeout(safetyTimer);
   }, [awakening.status]);
 
-  // While awakening is "pending" (waiting for storage URL), force phase to
-  // "playing" so the cover stays mounted. When skip resolves, jump to "done"
-  // so reduced-motion / already-played users don't get stuck on a black cover.
+  // When skip resolves (reduced motion or session already played), jump to
+  // "done" so those users aren't stuck on a black cover.
   useEffect(() => {
     if (awakening.status === "skip") {
       setAwakeningPhase("done");
-      setUiRevealed(true);
     }
-  }, [awakening.status]);
-
-  // Schedule the UI fade-in to start partway through the video, while it's
-  // still playing — the UI materializes on top of motion, then the cover
-  // drops after the video ends.
-  useEffect(() => {
-    if (awakening.status !== "play") return;
-    const timer = setTimeout(() => setUiRevealed(true), AWAKENING_UI_REVEAL_DELAY_MS);
-    return () => clearTimeout(timer);
   }, [awakening.status]);
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
@@ -1119,24 +1102,16 @@ export function App() {
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
 
-        {/* Main Layout Shell — materializes on top of the still-playing video
-            (layered reveal). UI reveal timer fires AWAKENING_UI_REVEAL_DELAY_MS
-            after awakening starts, then fades in over AWAKENING_UI_FADE_MS.
-            For skip cases, uiRevealed starts true so UI is visible immediately
-            with no fade. */}
-        {/* isolation + will-change: opacity promote this to a dedicated
-            compositor layer for the entire fade. Without them, Chromium
-            disables backdrop-filter on descendants while opacity < 1 and
-            snaps it on at opacity === 1 — visible as a "glass pop-in"
-            after the fade completes. */}
+        {/* Main Layout Shell. UI shell sits at opacity 1 always — NOT faded
+            in. Animating opacity (or any stacking-context-creating property:
+            isolation, transform, filter, will-change) on the shell disables
+            backdrop-filter on descendants. We rely entirely on the cover
+            (z-5 below) to gate the reveal: glass cards show solid dark at
+            t=0 (blurring the black
+            cover), then gradually become glassy as the cover fades and
+            LivingBackground appears behind them. */}
         <div
-          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0 transition-opacity ease-out"
-          style={{
-            opacity: uiRevealed ? 1 : 0,
-            transitionDuration: `${AWAKENING_UI_FADE_MS}ms`,
-            willChange: "opacity",
-            isolation: "isolate",
-          }}
+          className="relative z-10 flex w-full h-full gap-4 p-4 pl-0"
         >
           {/* Left Column: Navigation */}
           <LeftNav
