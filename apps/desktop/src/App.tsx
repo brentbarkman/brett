@@ -141,8 +141,8 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar,
 
   return (
     <>
-      <main className="flex-1 min-w-0 overflow-y-auto scrollbar-hide py-2 rounded-b-xl [-webkit-app-region:no-drag]">
-        <div className="max-w-3xl mx-auto w-full space-y-4">
+      <main className="flex-1 min-w-0 overflow-hidden py-2 rounded-b-xl [-webkit-app-region:no-drag]">
+        <div className="max-w-3xl mx-auto w-full h-full min-h-0 flex flex-col space-y-4">
           {children}
         </div>
       </main>

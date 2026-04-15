@@ -190,17 +190,19 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
         </div>
       )}
 
-      <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4">
-        <div className="pb-3">
+      <div className="flex-1 min-h-0 flex flex-col bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
+        <div className="flex-shrink-0 px-4 pt-4 pb-3">
           <FilterPills
             activeFilter={activeFilter}
             onSelectFilter={setActiveFilter}
           />
         </div>
 
-        <CrossFade stateKey={thingsStateKey} exitMs={180} enterMs={280}>
-          {thingsContent}
-        </CrossFade>
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-4 pb-4">
+          <CrossFade stateKey={thingsStateKey} exitMs={180} enterMs={280}>
+            {thingsContent}
+          </CrossFade>
+        </div>
       </div>
 
     </>
