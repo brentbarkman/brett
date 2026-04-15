@@ -203,6 +203,9 @@ export function Omnibar({
     if (scrollFrameRef.current !== null) return;
     scrollFrameRef.current = requestAnimationFrame(() => {
       scrollFrameRef.current = null;
+      // Re-check: the user may have scrolled up during the ~16ms between
+      // scheduling and firing — we don't want to yank them back.
+      if (userScrolledUpRef.current) return;
       const el = chatContainerRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     });
@@ -211,6 +214,10 @@ export function Omnibar({
   // Reset scroll-to-bottom when the user sends a new message — their own
   // message should always be visible, and we assume they want to see the
   // response that follows.
+  // Using messages.length (not messages) is intentional: we only want this
+  // to fire when a new message is added (user send), not on every stream
+  // token update that mutates the last message's content. A `messages` dep
+  // would reset the scroll flag during every AI response token, defeating it.
   useEffect(() => {
     const last = messages[messages.length - 1];
     if (last?.role === "user") userScrolledUpRef.current = false;
