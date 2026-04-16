@@ -1,22 +1,39 @@
 import SwiftUI
 import CoreLocation
 
-/// Timezone + location preferences.
+/// Assistant, timezone, weather, and location preferences.
 ///
-/// Timezone is persisted via `PATCH /users/timezone` (accepts `timezone` and
-/// `auto`). Home/work addresses go through `PATCH /users/location` along
-/// with lat/lng from CoreLocation geocoding.
+/// API endpoints:
+/// - `PATCH /users/me`        — `{ assistantName }`
+/// - `PATCH /users/timezone`  — `{ timezone, auto }`
+/// - `PATCH /users/location`  — `{ city?, countryCode?, latitude?, longitude?, tempUnit?, weatherEnabled? }`
+/// - `GET  /weather/geocode?q=query` — server-side city search
 ///
-/// Geocoding happens on-demand when the user taps "Save" — not on every
-/// keystroke — to avoid hammering the geocoder.
+/// Briefing preference is local-only (`@AppStorage`).
 struct LocationSettingsView: View {
     @Bindable var store: UserProfileStore
 
+    // ── Assistant ──
+    @State private var assistantName: String = "Brett"
+    @State private var isAssistantNameSaving = false
+
+    // ── Briefing ──
+    @AppStorage("briefing.enabled") private var briefingEnabled: Bool = true
+
+    // ── Timezone ──
     @State private var timezoneAuto: Bool = true
     @State private var selectedTimezone: String = TimeZone.current.identifier
-    @State private var homeAddress: String = ""
-    @State private var workAddress: String = ""
     @State private var searchText: String = ""
+
+    // ── Weather & location ──
+    @State private var weatherEnabled: Bool = true
+    @State private var selectedTempUnit: TempUnit = .auto
+    @State private var cityQuery: String = ""
+    @State private var geocodeResults: [GeocodeCityResult] = []
+    @State private var isSearching = false
+    @State private var debounceTask: Task<Void, Never>?
+
+    // ── General ──
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
@@ -52,69 +69,14 @@ struct LocationSettingsView: View {
                 }
             }
 
-            BrettSettingsSection("Timezone") {
-                Toggle(isOn: $timezoneAuto) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Auto-detect")
-                            .foregroundStyle(BrettColors.textCardTitle)
-                        Text("Use the device's current timezone")
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.textMeta)
-                    }
-                }
-                .tint(BrettColors.gold)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+            // ═══ Assistant ═══
+            assistantSection
 
-                if !timezoneAuto {
-                    BrettSettingsDivider()
+            // ═══ Timezone ═══
+            timezoneSection
 
-                    NavigationLink {
-                        timezonePickerScreen
-                    } label: {
-                        HStack {
-                            Text("Timezone")
-                                .foregroundStyle(BrettColors.textCardTitle)
-                            Spacer()
-                            Text(selectedTimezone)
-                                .foregroundStyle(BrettColors.textMeta)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.30))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                BrettSettingsSection("Locations") {
-                    TextField("Home address", text: $homeAddress, axis: .vertical)
-                        .foregroundStyle(.white)
-                        .textInputAutocapitalization(.words)
-                        .lineLimit(1...3)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-
-                    BrettSettingsDivider()
-
-                    TextField("Work address", text: $workAddress, axis: .vertical)
-                        .foregroundStyle(.white)
-                        .textInputAutocapitalization(.words)
-                        .lineLimit(1...3)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                }
-
-                Text("Addresses are geocoded once when you tap Save. We only store the coordinates for travel-time features.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(BrettColors.textMeta)
-                    .padding(.horizontal, 4)
-            }
+            // ═══ Weather & Location ═══
+            weatherLocationSection
         }
         .navigationTitle("Timezone & Location")
         .navigationBarTitleDisplayMode(.large)
@@ -137,6 +99,243 @@ struct LocationSettingsView: View {
         }
         .onAppear { hydrate() }
     }
+
+    // MARK: - Assistant section
+
+    @ViewBuilder
+    private var assistantSection: some View {
+        BrettSettingsSection("Assistant") {
+            // Name field
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Name your assistant")
+                    .font(BrettTypography.taskMeta)
+                    .foregroundStyle(BrettColors.textMeta)
+
+                HStack(spacing: 10) {
+                    TextField("Brett", text: $assistantName)
+                        .foregroundStyle(.white)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .onChange(of: assistantName) { _, newValue in
+                            // Enforce regex: alphanumeric + spaces + hyphens + apostrophes, max 10
+                            let filtered = String(newValue.prefix(10)).filter { c in
+                                c.isLetter || c.isNumber || c == " " || c == "-" || c == "'"
+                            }
+                            if filtered != newValue {
+                                assistantName = filtered
+                            }
+                        }
+
+                    Text("\(assistantName.count)/10")
+                        .font(.system(size: 11))
+                        .foregroundStyle(BrettColors.textMeta)
+                        .monospacedDigit()
+                }
+
+                Button {
+                    Task { await saveAssistantName() }
+                } label: {
+                    HStack {
+                        if isAssistantNameSaving {
+                            ProgressView().progressViewStyle(.circular).tint(BrettColors.gold)
+                        }
+                        Text(isAssistantNameSaving ? "Saving..." : "Save Name")
+                            .font(BrettTypography.badge)
+                            .foregroundStyle(BrettColors.gold)
+                    }
+                }
+                .disabled(
+                    isAssistantNameSaving
+                    || assistantName.trimmingCharacters(in: .whitespaces).isEmpty
+                    || assistantName.trimmingCharacters(in: .whitespaces) == (store.current?.assistantName ?? "Brett")
+                )
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            BrettSettingsDivider()
+
+            // Daily briefing toggle
+            Toggle(isOn: $briefingEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Daily briefing")
+                        .foregroundStyle(BrettColors.textCardTitle)
+                    Text("Show a morning summary on the Today page")
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.textMeta)
+                }
+            }
+            .tint(BrettColors.gold)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - Timezone section
+
+    @ViewBuilder
+    private var timezoneSection: some View {
+        BrettSettingsSection("Timezone") {
+            Toggle(isOn: $timezoneAuto) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Auto-detect")
+                        .foregroundStyle(BrettColors.textCardTitle)
+                    Text("Use the device's current timezone")
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.textMeta)
+                }
+            }
+            .tint(BrettColors.gold)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            if !timezoneAuto {
+                BrettSettingsDivider()
+
+                NavigationLink {
+                    timezonePickerScreen
+                } label: {
+                    HStack {
+                        Text("Timezone")
+                            .foregroundStyle(BrettColors.textCardTitle)
+                        Spacer()
+                        Text(selectedTimezone)
+                            .foregroundStyle(BrettColors.textMeta)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.30))
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+
+    // MARK: - Weather & Location section
+
+    @ViewBuilder
+    private var weatherLocationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            BrettSettingsSection("Weather & Location") {
+                // Weather toggle
+                Toggle(isOn: $weatherEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show weather")
+                            .foregroundStyle(BrettColors.textCardTitle)
+                        Text("Display weather conditions in your briefing")
+                            .font(BrettTypography.taskMeta)
+                            .foregroundStyle(BrettColors.textMeta)
+                    }
+                }
+                .tint(BrettColors.gold)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+
+                if weatherEnabled {
+                    BrettSettingsDivider()
+
+                    // Temperature unit picker
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Temperature unit")
+                            .font(BrettTypography.taskMeta)
+                            .foregroundStyle(BrettColors.textMeta)
+
+                        Picker("Temperature", selection: $selectedTempUnit) {
+                            Text("Auto").tag(TempUnit.auto)
+                            Text("\u{00B0}C").tag(TempUnit.c)
+                            Text("\u{00B0}F").tag(TempUnit.f)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+
+                    BrettSettingsDivider()
+
+                    // City search
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let city = store.current?.city, !city.isEmpty {
+                            HStack(spacing: 6) {
+                                Image(systemName: "mappin.and.ellipse")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(BrettColors.gold)
+                                Text(city)
+                                    .font(BrettTypography.taskMeta)
+                                    .foregroundStyle(BrettColors.textCardTitle)
+                            }
+                        }
+
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 13))
+                                .foregroundStyle(BrettColors.textMeta)
+
+                            TextField("Search city\u{2026}", text: $cityQuery)
+                                .foregroundStyle(.white)
+                                .textInputAutocapitalization(.words)
+                                .autocorrectionDisabled()
+                                .onChange(of: cityQuery) { _, newValue in
+                                    debouncedCitySearch(newValue)
+                                }
+
+                            if isSearching {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .scaleEffect(0.7)
+                                    .tint(BrettColors.gold)
+                            }
+                        }
+
+                        // Search results
+                        if !geocodeResults.isEmpty {
+                            VStack(spacing: 0) {
+                                ForEach(Array(geocodeResults.enumerated()), id: \.offset) { index, result in
+                                    if index > 0 {
+                                        Rectangle()
+                                            .fill(Color.white.opacity(0.06))
+                                            .frame(height: 0.5)
+                                    }
+                                    Button {
+                                        selectCity(result)
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "mappin")
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(BrettColors.textMeta)
+                                            Text(result.displayName)
+                                                .font(BrettTypography.taskMeta)
+                                                .foregroundStyle(BrettColors.textCardTitle)
+                                                .lineLimit(1)
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 8)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                }
+            }
+
+            Text("Search for your city to set location and weather. Coordinates are stored for weather and travel-time features.")
+                .font(.system(size: 12))
+                .foregroundStyle(BrettColors.textMeta)
+                .padding(.horizontal, 4)
+        }
+    }
+
+    // MARK: - Timezone picker
 
     @ViewBuilder
     private var timezonePickerScreen: some View {
@@ -174,13 +373,91 @@ struct LocationSettingsView: View {
         return allTimezones.filter { $0.localizedCaseInsensitiveContains(searchText) }
     }
 
+    // MARK: - City search
+
+    private func debouncedCitySearch(_ query: String) {
+        debounceTask?.cancel()
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 2 else {
+            geocodeResults = []
+            return
+        }
+        debounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            await searchCity(trimmed)
+        }
+    }
+
+    private func searchCity(_ query: String) async {
+        isSearching = true
+        defer { isSearching = false }
+
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        do {
+            let response: GeocodeCityResponse = try await client.requestRelative(
+                relativePath: "/weather/geocode?q=\(encoded)",
+                method: "GET"
+            )
+            geocodeResults = response.results
+        } catch {
+            geocodeResults = []
+        }
+    }
+
+    private func selectCity(_ result: GeocodeCityResult) {
+        cityQuery = ""
+        geocodeResults = []
+
+        Task {
+            do {
+                struct LocationPayload: Encodable {
+                    let city: String
+                    let countryCode: String
+                    let latitude: Double
+                    let longitude: Double
+                }
+                struct GenericResponse: Decodable {}
+                let _: GenericResponse = try await client.request(
+                    path: "/users/location",
+                    method: "PATCH",
+                    body: LocationPayload(
+                        city: result.name,
+                        countryCode: result.countryCode,
+                        latitude: result.latitude,
+                        longitude: result.longitude
+                    )
+                )
+
+                // Update the timezone if a timezone came back and auto is off
+                if !timezoneAuto, !result.timezone.isEmpty {
+                    selectedTimezone = result.timezone
+                }
+
+                // Refresh profile to pick up new city
+                await refreshProfile()
+                successMessage = "Location updated."
+                clearMessagesAfterDelay()
+            } catch let apiError as APIError {
+                errorMessage = apiError.userFacingMessage
+            } catch {
+                errorMessage = "Couldn't save location."
+            }
+        }
+    }
+
+    // MARK: - Hydrate
+
     private func hydrate() {
         guard let profile = store.current else { return }
+        assistantName = profile.assistantName
         timezoneAuto = profile.timezoneAuto
         selectedTimezone = profile.timezone
-        homeAddress = UserDefaults.standard.string(forKey: "settings.location.home") ?? ""
-        workAddress = UserDefaults.standard.string(forKey: "settings.location.work") ?? ""
+        weatherEnabled = profile.weatherEnabled
+        selectedTempUnit = Self.tempUnitFromAPI(profile.tempUnit)
     }
+
+    // MARK: - Save (toolbar button)
 
     private func save() async {
         isSaving = true
@@ -190,14 +467,46 @@ struct LocationSettingsView: View {
 
         do {
             try await saveTimezone()
-            try await saveLocationIfChanged()
+            try await saveWeatherLocation()
             successMessage = "Saved."
+            clearMessagesAfterDelay()
         } catch let apiError as APIError {
             errorMessage = apiError.userFacingMessage
         } catch {
             errorMessage = "Couldn't save preferences."
         }
     }
+
+    // MARK: - Save assistant name
+
+    private func saveAssistantName() async {
+        let trimmed = assistantName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        guard trimmed != (store.current?.assistantName ?? "Brett") else { return }
+
+        isAssistantNameSaving = true
+        errorMessage = nil
+        defer { isAssistantNameSaving = false }
+
+        do {
+            struct Payload: Encodable { let assistantName: String }
+            struct GenericResponse: Decodable {}
+            let _: GenericResponse = try await client.request(
+                path: "/users/me",
+                method: "PATCH",
+                body: Payload(assistantName: trimmed)
+            )
+            await refreshProfile()
+            successMessage = "Assistant name updated."
+            clearMessagesAfterDelay()
+        } catch let apiError as APIError {
+            errorMessage = apiError.userFacingMessage
+        } catch {
+            errorMessage = "Couldn't update assistant name."
+        }
+    }
+
+    // MARK: - Save timezone
 
     private func saveTimezone() async throws {
         struct Payload: Encodable { let timezone: String; let auto: Bool }
@@ -210,42 +519,107 @@ struct LocationSettingsView: View {
         )
     }
 
-    private func saveLocationIfChanged() async throws {
-        let homeTrimmed = homeAddress.trimmingCharacters(in: .whitespaces)
-        let workTrimmed = workAddress.trimmingCharacters(in: .whitespaces)
+    // MARK: - Save weather & location
 
-        UserDefaults.standard.set(homeTrimmed, forKey: "settings.location.home")
-        UserDefaults.standard.set(workTrimmed, forKey: "settings.location.work")
-
-        guard !homeTrimmed.isEmpty else { return }
-
-        let coord = try await geocode(homeTrimmed)
-
+    private func saveWeatherLocation() async throws {
         struct LocationPayload: Encodable {
-            let city: String?
-            let latitude: Double
-            let longitude: Double
+            let weatherEnabled: Bool
+            let tempUnit: String
         }
         struct GenericResponse: Decodable {}
         let _: GenericResponse = try await client.request(
             path: "/users/location",
             method: "PATCH",
             body: LocationPayload(
-                city: coord.locality,
-                latitude: coord.latitude,
-                longitude: coord.longitude
+                weatherEnabled: weatherEnabled,
+                tempUnit: Self.tempUnitToAPI(selectedTempUnit)
             )
         )
     }
 
-    private struct GeocodeResult {
+    // MARK: - Temp unit mapping
+    //
+    // iOS enum: .auto / .c / .f
+    // API values: "auto" / "celsius" / "fahrenheit"
+
+    private static func tempUnitFromAPI(_ raw: String) -> TempUnit {
+        switch raw {
+        case "fahrenheit": return .f
+        case "celsius": return .c
+        case "auto": return .auto
+        default:
+            // Try enum raw value as fallback (handles "c", "f")
+            return TempUnit(rawValue: raw) ?? .auto
+        }
+    }
+
+    private static func tempUnitToAPI(_ unit: TempUnit) -> String {
+        switch unit {
+        case .auto: return "auto"
+        case .c: return "celsius"
+        case .f: return "fahrenheit"
+        }
+    }
+
+    // MARK: - Profile refresh
+
+    private func refreshProfile() async {
+        struct UserMeResponse: Decodable {
+            let id: String
+            let email: String
+            let name: String?
+            let image: String?
+            let assistantName: String?
+            let timezone: String?
+            let timezoneAuto: Bool?
+            let city: String?
+            let countryCode: String?
+            let tempUnit: String?
+            let weatherEnabled: Bool?
+            let backgroundStyle: String?
+            let pinnedBackground: String?
+            let avgBusynessScore: Double?
+        }
+
+        do {
+            let response: UserMeResponse = try await client.request(
+                path: "/users/me",
+                method: "GET"
+            )
+            // Build a dictionary to match UserProfileStore.update(from:)
+            var payload: [String: Any] = [
+                "id": response.id,
+                "email": response.email,
+            ]
+            if let name = response.name { payload["name"] = name }
+            if let image = response.image { payload["image"] = image }
+            if let an = response.assistantName { payload["assistantName"] = an }
+            if let tz = response.timezone { payload["timezone"] = tz }
+            if let tza = response.timezoneAuto { payload["timezoneAuto"] = tza }
+            if let city = response.city { payload["city"] = city }
+            if let cc = response.countryCode { payload["countryCode"] = cc }
+            if let tu = response.tempUnit { payload["tempUnit"] = tu }
+            if let we = response.weatherEnabled { payload["weatherEnabled"] = we }
+            if let bs = response.backgroundStyle { payload["backgroundStyle"] = bs }
+            payload["pinnedBackground"] = response.pinnedBackground as Any
+            if let abs = response.avgBusynessScore { payload["avgBusynessScore"] = abs }
+
+            store.update(from: payload)
+        } catch {
+            // Silent — we already showed a success or error for the mutation itself.
+        }
+    }
+
+    // MARK: - CoreLocation fallback geocoding
+
+    private struct CoreLocationResult {
         let latitude: Double
         let longitude: Double
         let locality: String?
     }
 
-    private func geocode(_ address: String) async throws -> GeocodeResult {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<GeocodeResult, Error>) in
+    private func geocodeFallback(_ address: String) async throws -> CoreLocationResult {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CoreLocationResult, Error>) in
             CLGeocoder().geocodeAddressString(address) { placemarks, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -256,7 +630,7 @@ struct LocationSettingsView: View {
                     continuation.resume(throwing: APIError.validation("Couldn't resolve that address."))
                     return
                 }
-                continuation.resume(returning: GeocodeResult(
+                continuation.resume(returning: CoreLocationResult(
                     latitude: coord.latitude,
                     longitude: coord.longitude,
                     locality: place.locality
@@ -264,4 +638,31 @@ struct LocationSettingsView: View {
             }
         }
     }
+
+    // MARK: - Helpers
+
+    private func clearMessagesAfterDelay() {
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            successMessage = nil
+            errorMessage = nil
+        }
+    }
+}
+
+// MARK: - Geocode response models
+
+private struct GeocodeCityResponse: Decodable {
+    let results: [GeocodeCityResult]
+}
+
+private struct GeocodeCityResult: Decodable {
+    let name: String
+    let state: String?
+    let country: String
+    let countryCode: String
+    let latitude: Double
+    let longitude: Double
+    let timezone: String
+    let displayName: String
 }

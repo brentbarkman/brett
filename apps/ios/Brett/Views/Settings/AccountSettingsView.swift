@@ -2,15 +2,28 @@ import SwiftUI
 
 /// Account management: read-only email, export, and delete.
 ///
-/// Export + delete endpoints don't exist yet on the server. We surface
-/// them in the UI so the design stays parity with desktop, but both
-/// show a "Coming soon" message rather than firing a fake request.
+/// Delete calls `DELETE /api/auth/delete-user` (bearer auth, no body). The
+/// user must type exactly "DELETE" to confirm — matching the desktop client's
+/// confirmation UX.
+///
+/// Export is desktop-only (Electron file-save dialog); we surface a
+/// descriptive message here rather than a fake endpoint.
 struct AccountSettingsView: View {
     @Bindable var store: UserProfileStore
+    @Environment(AuthManager.self) private var authManager
 
     @State private var confirmText: String = ""
     @State private var showDeleteDialog = false
+    @State private var isDeleting = false
     @State private var infoMessage: String?
+    @State private var errorMessage: String?
+
+    private let client: APIClient
+
+    init(store: UserProfileStore, client: APIClient = .shared) {
+        self.store = store
+        self.client = client
+    }
 
     var body: some View {
         BrettSettingsScroll {
@@ -19,6 +32,16 @@ struct AccountSettingsView: View {
                     Text(infoMessage)
                         .font(BrettTypography.taskMeta)
                         .foregroundStyle(BrettColors.textCardTitle)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                }
+            }
+
+            if let errorMessage {
+                BrettSettingsSection {
+                    Text(errorMessage)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.error)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
                 }
@@ -44,7 +67,7 @@ struct AccountSettingsView: View {
                         Text("User ID")
                             .foregroundStyle(BrettColors.textMeta)
                         Spacer()
-                        Text(userId.prefix(8) + "…")
+                        Text(userId.prefix(8) + "...")
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(BrettColors.textSecondary)
                     }
@@ -55,7 +78,7 @@ struct AccountSettingsView: View {
 
             BrettSettingsSection("Data") {
                 Button {
-                    infoMessage = "Data export is available on desktop. We're adding it to iOS soon."
+                    infoMessage = "Export is available on the desktop app."
                 } label: {
                     HStack {
                         Image(systemName: "square.and.arrow.up")
@@ -79,8 +102,14 @@ struct AccountSettingsView: View {
                         Text("Delete account")
                             .foregroundStyle(BrettColors.error)
                         Spacer()
+                        if isDeleting {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(BrettColors.error)
+                        }
                     }
                 }
+                .disabled(isDeleting)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
@@ -94,22 +123,43 @@ struct AccountSettingsView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
         .alert("Delete your account?", isPresented: $showDeleteDialog) {
-            TextField("Type DELETE MY ACCOUNT", text: $confirmText)
+            TextField("Type DELETE", text: $confirmText)
                 .textInputAutocapitalization(.characters)
             Button("Cancel", role: .cancel) {
                 confirmText = ""
             }
             Button("Delete", role: .destructive) {
-                if confirmText.trimmingCharacters(in: .whitespaces).uppercased() == "DELETE MY ACCOUNT" {
-                    // Endpoint not implemented yet — surface explanation
-                    // instead of pretending to delete.
-                    infoMessage = "Account deletion is coming soon. Contact support@brett.app to delete your account now."
+                if confirmText.trimmingCharacters(in: .whitespaces).uppercased() == "DELETE" {
+                    Task { await deleteAccount() }
+                } else {
+                    errorMessage = "You must type DELETE to confirm."
                 }
                 confirmText = ""
             }
         } message: {
-            Text("Type 'DELETE MY ACCOUNT' (all caps) to confirm. This cannot be undone.")
+            Text("Type 'DELETE' to confirm. This cannot be undone.")
         }
     }
 
+    // MARK: - Network
+
+    private func deleteAccount() async {
+        isDeleting = true
+        errorMessage = nil
+        defer { isDeleting = false }
+
+        do {
+            _ = try await client.rawRequest(
+                path: "/api/auth/delete-user",
+                method: "DELETE"
+            )
+            // Server confirmed deletion. Clear local state and return to
+            // the sign-in screen.
+            await authManager.signOut()
+        } catch let apiError as APIError {
+            errorMessage = apiError.userFacingMessage
+        } catch {
+            errorMessage = "Couldn't delete account. Please try again."
+        }
+    }
 }
