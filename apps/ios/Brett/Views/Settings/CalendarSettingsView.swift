@@ -16,76 +16,74 @@ struct CalendarSettingsView: View {
     @State private var pendingDeleteId: String?
 
     var body: some View {
-        ZStack {
-            BackgroundView()
-
-            Form {
-                if let errorMessage {
-                    Section {
-                        Text(errorMessage)
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.error)
-                            .listRowBackground(glassRowBackground)
-                    }
-                } else if let storeError = store.lastError {
-                    Section {
-                        Text(storeError)
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.error)
-                            .listRowBackground(glassRowBackground)
-                    }
+        BrettSettingsScroll {
+            if let errorMessage {
+                BrettSettingsSection {
+                    Text(errorMessage)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.error)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                 }
-
-                if store.accounts.isEmpty, !store.isLoading {
-                    Section {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("No calendars connected")
-                                .font(BrettTypography.taskTitle)
-                                .foregroundStyle(BrettColors.textCardTitle)
-                            Text("Connect a Google Calendar to see your events in Brett.")
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta)
-                        }
-                        .listRowBackground(glassRowBackground)
-                    }
-                }
-
-                ForEach(store.accounts) { account in
-                    Section {
-                        accountHeaderRow(account)
-
-                        ForEach(account.calendars) { calendar in
-                            calendarToggleRow(account: account, calendar: calendar)
-                        }
-                    } header: {
-                        sectionHeader(account.googleEmail)
-                    }
-                }
-
-                Section {
-                    Button {
-                        Task { await connect() }
-                    } label: {
-                        HStack {
-                            if isConnecting {
-                                ProgressView().progressViewStyle(.circular).tint(BrettColors.gold)
-                            } else {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundStyle(BrettColors.gold)
-                            }
-                            Text("Connect Google Calendar")
-                                .foregroundStyle(BrettColors.textCardTitle)
-                        }
-                    }
-                    .disabled(isConnecting)
-                    .listRowBackground(glassRowBackground)
+            } else if let storeError = store.lastError {
+                BrettSettingsSection {
+                    Text(storeError)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.error)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .refreshable { await store.fetchAccounts() }
+
+            if store.accounts.isEmpty, !store.isLoading {
+                BrettSettingsSection {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("No calendars connected")
+                            .font(BrettTypography.taskTitle)
+                            .foregroundStyle(BrettColors.textCardTitle)
+                        Text("Connect a Google Calendar to see your events in Brett.")
+                            .font(BrettTypography.taskMeta)
+                            .foregroundStyle(BrettColors.textMeta)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                }
+            }
+
+            ForEach(store.accounts) { account in
+                BrettSettingsSection(account.googleEmail) {
+                    accountHeaderRow(account)
+
+                    ForEach(Array(account.calendars.enumerated()), id: \.element.id) { _, calendar in
+                        BrettSettingsDivider()
+                        calendarToggleRow(account: account, calendar: calendar)
+                    }
+                }
+            }
+
+            BrettSettingsSection {
+                Button {
+                    Task { await connect() }
+                } label: {
+                    HStack {
+                        if isConnecting {
+                            ProgressView().progressViewStyle(.circular).tint(BrettColors.gold)
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(BrettColors.gold)
+                        }
+                        Text("Connect Google Calendar")
+                            .foregroundStyle(BrettColors.textCardTitle)
+                    }
+                }
+                .disabled(isConnecting)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
         }
         .navigationTitle("Calendar")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task { await store.fetchAccounts() }
         .confirmationDialog(
             "Disconnect this calendar account?",
@@ -131,7 +129,8 @@ struct CalendarSettingsView: View {
             }
             .buttonStyle(.plain)
         }
-        .listRowBackground(glassRowBackground)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     @ViewBuilder
@@ -172,27 +171,11 @@ struct CalendarSettingsView: View {
             }
         }
         .tint(BrettColors.gold)
-        .listRowBackground(glassRowBackground)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     // MARK: - Helpers
-
-    @ViewBuilder
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(BrettTypography.sectionLabel)
-            .tracking(2.4)
-            .foregroundStyle(BrettColors.sectionLabelColor)
-    }
-
-    private var glassRowBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
-    }
 
     private func swatchColor(_ hex: String?) -> Color {
         guard let hex, let c = BrettColors.fromHex(hex) else { return BrettColors.gold }

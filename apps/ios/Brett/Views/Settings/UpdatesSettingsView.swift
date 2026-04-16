@@ -5,26 +5,25 @@ import SwiftUI
 /// current build info.
 struct UpdatesSettingsView: View {
     var body: some View {
-        ZStack {
-            BackgroundView()
-
-            Form {
-                Section {
+        BrettSettingsScroll {
+            VStack(alignment: .leading, spacing: 8) {
+                BrettSettingsSection("About") {
                     infoRow("Version", value: appVersion)
+                    BrettSettingsDivider()
                     infoRow("Build", value: buildNumber)
+                    BrettSettingsDivider()
                     infoRow("Platform", value: "iOS")
-                } header: {
-                    sectionHeader("About")
-                } footer: {
-                    Text("iOS updates are delivered through TestFlight or the App Store. The desktop app updates itself in place.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(BrettColors.textMeta)
                 }
+
+                Text("iOS updates are delivered through TestFlight or the App Store. The desktop app updates itself in place.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(BrettColors.textMeta)
+                    .padding(.horizontal, 4)
             }
-            .scrollContentBackground(.hidden)
         }
         .navigationTitle("About")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     @ViewBuilder
@@ -37,24 +36,8 @@ struct UpdatesSettingsView: View {
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(BrettColors.textCardTitle)
         }
-        .listRowBackground(glassRowBackground)
-    }
-
-    @ViewBuilder
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(BrettTypography.sectionLabel)
-            .tracking(2.4)
-            .foregroundStyle(BrettColors.sectionLabelColor)
-    }
-
-    private var glassRowBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     private var appVersion: String {

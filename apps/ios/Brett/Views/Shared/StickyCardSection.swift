@@ -2,13 +2,19 @@ import SwiftUI
 
 /// A card section with Apple Weather–style sticky headers.
 ///
-/// Each section manages its own material in two independent zones:
-///   - Header: topShape-clipped .thinMaterial (always rounded top corners)
-///   - Body: rectangle .thinMaterial masked to clip at the header boundary
+/// **Single-material composition.** ONE `.thinMaterial` layer on the
+/// outer card shape spans the whole card. The sticky header overlay is
+/// just content + a separator drawn on top — no second material layer
+/// of its own. This eliminates the "header looks brighter than the
+/// body" perception issue that the user flagged: stacking two
+/// independent `.thinMaterial` layers, even with identical opacity,
+/// produced a visible seam because each layer ran its own backdrop
+/// sample. One material = one sample = one uniform card.
 ///
-/// No card-level material means nothing leaks through the header's
-/// rounded corners. The body mask ensures content AND its material
-/// both vanish at the header's bottom edge during scroll.
+/// The body content carries a `.mask` that hides rows scrolling up
+/// behind the sticky header position, so we don't need extra material
+/// on the header to occlude scrolling content — rows are clipped
+/// before they ever reach that area.
 struct StickyCardSection<Header: View, Content: View>: View {
     var tint: Color? = nil
     @ViewBuilder var header: () -> Header
@@ -19,45 +25,50 @@ struct StickyCardSection<Header: View, Content: View>: View {
 
     var body: some View {
         let cardShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let topShape = UnevenRoundedRectangle(
-            topLeadingRadius: cornerRadius, bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0, topTrailingRadius: cornerRadius,
-            style: .continuous
-        )
 
-        VStack(spacing: 0) {
-            // Reserve space for the header + separator
-            Color.clear.frame(height: headerHeight + 0.5)
+        ZStack(alignment: .top) {
+            // Single material layer for the whole card. Header + body
+            // sit on top of this — no per-zone material means the two
+            // zones can't visually diverge.
+            cardShape.fill(.thinMaterial)
+            if let tint {
+                cardShape.fill(tint.opacity(0.10))
+            }
 
-            // Body: content + its own material, both masked at the header boundary.
-            // The mask clips content AND material together so nothing bleeds
-            // through the header's rounded corners.
-            content()
-                .background {
-                    Rectangle().fill(.thinMaterial)
-                }
-                .background {
-                    if let tint {
-                        Rectangle().fill(tint.opacity(0.10))
-                    }
-                }
-                .mask {
-                    GeometryReader { bodyGeo in
-                        let bodyMinY = bodyGeo.frame(in: .named("scroll")).minY
-                        let cardMinY = bodyMinY - (headerHeight + 0.5)
-                        let scrolledPast = max(0, -cardMinY)
+            // Body content. Leading Color.clear reserves the header's
+            // footprint so the first row sits below the sticky band.
+            // The mask hides rows that have scrolled past the header
+            // line during pinning so they never appear behind the
+            // sticky header overlay.
+            VStack(spacing: 0) {
+                Color.clear.frame(height: headerHeight + 0.5)
+                content()
+                    .mask {
+                        GeometryReader { bodyGeo in
+                            let bodyMinY = bodyGeo.frame(in: .named("scroll")).minY
+                            let cardMinY = bodyMinY - (headerHeight + 0.5)
+                            let scrolledPast = max(0, -cardMinY)
 
-                        VStack(spacing: 0) {
-                            // Hidden: body that has scrolled behind the header
-                            Color.clear.frame(height: scrolledPast)
-                            // Visible: everything below the header
-                            Color.black
+                            VStack(spacing: 0) {
+                                Color.clear.frame(height: scrolledPast)
+                                Color.black
+                            }
                         }
                     }
-                }
-        }
-        // Sticky header overlay with its own material
-        .overlay(alignment: .top) {
+            }
+
+            // Sticky header — content only (no own material). The
+            // card's single material below shows through; the body's
+            // mask keeps scrolled-up rows from peeking through.
+            //
+            // The GeometryReader is NOT constrained to headerHeight — it
+            // fills the full card ZStack so `geo.size.height` reflects the
+            // TOTAL card height. That gives `maxOffset` the right value:
+            // the header can travel from its natural top-of-card position
+            // all the way down to the card's bottom edge before fading.
+            // Previous version used `.frame(height: headerHeight + 0.5)`
+            // which made `maxOffset ≈ 0`, causing headers to instantly
+            // fade to invisible on the first pixel of scroll.
             GeometryReader { geo in
                 let frame = geo.frame(in: .named("scroll"))
                 let scrolledPast = max(0, -frame.minY)
@@ -80,27 +91,21 @@ struct StickyCardSection<Header: View, Content: View>: View {
                         .fill(Color.white.opacity(0.08))
                         .frame(height: 0.5)
                 }
-                .background {
-                    topShape.fill(.thinMaterial)
-                }
-                .background {
-                    // Extra fill so the header visually matches the body's
-                    // perceived opacity (body content adds its own layers).
-                    topShape.fill(Color.white.opacity(0.05))
-                }
-                .background {
-                    if let tint {
-                        topShape.fill(tint.opacity(0.10))
-                    }
-                }
-                .clipShape(topShape)
                 .offset(y: offset)
                 .opacity(opacity)
             }
         }
-        // Clip outer card shape (rounds bottom corners of body)
         .clipShape(cardShape)
-        .overlay { cardShape.strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5) }
+        // Border picks up the tint when one is provided so AI-surface
+        // cards (Brett's Take, Daily Briefing, Brett Chat) carry the
+        // signature cerulean rim — matches Electron's
+        // `border border-brett-cerulean/30` treatment.
+        .overlay {
+            cardShape.strokeBorder(
+                tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.10),
+                lineWidth: tint == nil ? 0.5 : 1
+            )
+        }
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
     }

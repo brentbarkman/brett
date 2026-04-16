@@ -30,110 +30,109 @@ struct AIProviderSettingsView: View {
     }
 
     var body: some View {
-        ZStack {
-            BackgroundView()
-
-            Form {
-                if let successMessage {
-                    Section {
-                        Text(successMessage)
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.success)
-                            .listRowBackground(glassRowBackground)
-                    }
-                }
-
-                if let errorMessage {
-                    Section {
-                        Text(errorMessage)
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.error)
-                            .listRowBackground(glassRowBackground)
-                    }
-                }
-
-                Section {
-                    if configs.isEmpty, !isLoading {
-                        Text("No providers configured yet.")
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.textMeta)
-                            .listRowBackground(glassRowBackground)
-                    } else {
-                        ForEach(configs) { config in
-                            providerRow(config)
-                                .listRowBackground(glassRowBackground)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        pendingDeleteId = config.id
-                                    } label: {
-                                        Label("Remove", systemImage: "trash")
-                                    }
-                                }
-                        }
-                    }
-                } header: {
-                    sectionHeader("Configured Providers")
-                }
-
-                Section {
-                    Picker("Provider", selection: $selectedProvider) {
-                        ForEach(AIProviderOption.allCases) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                    .foregroundStyle(BrettColors.textCardTitle)
-                    .listRowBackground(glassRowBackground)
-
-                    HStack {
-                        if showKey {
-                            TextField("sk-...", text: $newKey)
-                                .autocorrectionDisabled()
-                                .textInputAutocapitalization(.never)
-                                .foregroundStyle(.white)
-                        } else {
-                            SecureField("sk-...", text: $newKey)
-                                .foregroundStyle(.white)
-                        }
-                        Button {
-                            showKey.toggle()
-                        } label: {
-                            Image(systemName: showKey ? "eye.slash" : "eye")
-                                .foregroundStyle(BrettColors.gold)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .listRowBackground(glassRowBackground)
-
-                    Button {
-                        Task { await saveKey() }
-                    } label: {
-                        HStack {
-                            if isTesting {
-                                ProgressView().progressViewStyle(.circular).tint(BrettColors.gold)
-                            } else {
-                                Image(systemName: "checkmark.seal")
-                                    .foregroundStyle(BrettColors.gold)
-                            }
-                            Text(isTesting ? "Testing key..." : "Save & Activate")
-                                .foregroundStyle(BrettColors.textCardTitle)
-                            Spacer()
-                        }
-                    }
-                    .disabled(newKey.isEmpty || isTesting)
-                    .listRowBackground(glassRowBackground)
-                } header: {
-                    sectionHeader("Add Key")
-                } footer: {
-                    Text("Keys are validated with the provider before being saved. We never store the raw key locally.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(BrettColors.textMeta)
+        BrettSettingsScroll {
+            if let successMessage {
+                BrettSettingsSection {
+                    Text(successMessage)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.success)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .refreshable { await refresh() }
+
+            if let errorMessage {
+                BrettSettingsSection {
+                    Text(errorMessage)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.error)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                }
+            }
+
+            BrettSettingsSection("Configured Providers") {
+                if configs.isEmpty, !isLoading {
+                    Text("No providers configured yet.")
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.textMeta)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                } else {
+                    ForEach(Array(configs.enumerated()), id: \.element.id) { index, config in
+                        if index > 0 {
+                            BrettSettingsDivider()
+                        }
+                        providerRow(config)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                    }
+                }
+            }
+
+            BrettSettingsSection("Add Key") {
+                Picker("Provider", selection: $selectedProvider) {
+                    ForEach(AIProviderOption.allCases) { option in
+                        Text(option.displayName).tag(option)
+                    }
+                }
+                .foregroundStyle(BrettColors.textCardTitle)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+
+                BrettSettingsDivider()
+
+                HStack {
+                    if showKey {
+                        TextField("sk-...", text: $newKey)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .foregroundStyle(.white)
+                    } else {
+                        SecureField("sk-...", text: $newKey)
+                            .foregroundStyle(.white)
+                    }
+                    Button {
+                        showKey.toggle()
+                    } label: {
+                        Image(systemName: showKey ? "eye.slash" : "eye")
+                            .foregroundStyle(BrettColors.gold)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+
+                BrettSettingsDivider()
+
+                Button {
+                    Task { await saveKey() }
+                } label: {
+                    HStack {
+                        if isTesting {
+                            ProgressView().progressViewStyle(.circular).tint(BrettColors.gold)
+                        } else {
+                            Image(systemName: "checkmark.seal")
+                                .foregroundStyle(BrettColors.gold)
+                        }
+                        Text(isTesting ? "Testing key..." : "Save & Activate")
+                            .foregroundStyle(BrettColors.textCardTitle)
+                        Spacer()
+                    }
+                }
+                .disabled(newKey.isEmpty || isTesting)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+
+            Text("Keys are validated with the provider before being saved. We never store the raw key locally.")
+                .font(.system(size: 12))
+                .foregroundStyle(BrettColors.textMeta)
+                .padding(.top, -16)
         }
         .navigationTitle("AI Providers")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task { await refresh() }
         .confirmationDialog(
             "Remove this provider?",
@@ -186,23 +185,6 @@ struct AIProviderSettingsView: View {
                 .buttonStyle(.plain)
             }
         }
-    }
-
-    @ViewBuilder
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(BrettTypography.sectionLabel)
-            .tracking(2.4)
-            .foregroundStyle(BrettColors.sectionLabelColor)
-    }
-
-    private var glassRowBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
     }
 
     // MARK: - Networking

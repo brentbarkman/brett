@@ -7,6 +7,10 @@ import SwiftUI
 /// use the store's archive path; a full delete would require a new
 /// mutation type that's outside this scope. We surface "Archive" for
 /// active lists and "Unarchive" for archived ones.
+///
+/// The "Active" section keeps a `List` for drag-to-reorder (`onMove`)
+/// wrapped in a `BrettSettingsCard` for visual consistency with the
+/// rest of the settings screens.
 struct ListsSettingsView: View {
     @Bindable var store: ListStore
 
@@ -18,116 +22,149 @@ struct ListsSettingsView: View {
     @State private var showingColorPickerFor: String?
 
     var body: some View {
-        ZStack {
-            BackgroundView()
+        BrettSettingsScroll {
+            // Active lists — uses a List inside the card for onMove support
+            VStack(alignment: .leading, spacing: 8) {
+                BrettSectionHeader("Active")
 
-            Form {
-                Section {
-                    ForEach(activeLists, id: \.id) { list in
-                        row(list)
-                    }
-                    .onMove(perform: move)
-
-                    Button {
-                        addNewList()
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(BrettColors.gold)
-                            Text("New list")
-                                .foregroundStyle(BrettColors.textCardTitle)
-                            Spacer()
-                        }
-                    }
-                    .listRowBackground(glassRowBackground)
-                } header: {
-                    sectionHeader("Active")
-                }
-
-                if !archivedLists.isEmpty {
-                    Section {
-                        ForEach(archivedLists, id: \.id) { list in
+                BrettSettingsCard {
+                    List {
+                        ForEach(activeLists, id: \.id) { list in
                             row(list)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets())
                         }
-                    } header: {
-                        sectionHeader("Archived")
+                        .onMove(perform: move)
+
+                        Button {
+                            addNewList()
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundStyle(BrettColors.gold)
+                                Text("New list")
+                                    .foregroundStyle(BrettColors.textCardTitle)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollDisabled(true)
+                    .environment(\.editMode, .constant(.active))
+                    .frame(minHeight: CGFloat(activeLists.count + 1) * 52)
+                }
+            }
+
+            if !archivedLists.isEmpty {
+                BrettSettingsSection("Archived") {
+                    ForEach(Array(archivedLists.enumerated()), id: \.element.id) { index, list in
+                        if index > 0 {
+                            BrettSettingsDivider()
+                        }
+                        archivedRow(list)
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
-            .environment(\.editMode, .constant(.active))
         }
         .navigationTitle("Lists")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .id(refreshTick) // Force re-read after mutations
     }
 
-    // MARK: - Row
+    // MARK: - Row (active, inside List for reorder)
 
     @ViewBuilder
     private func row(_ list: ItemList) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                showingColorPickerFor = (showingColorPickerFor == list.id) ? nil : list.id
-            } label: {
-                Circle()
-                    .fill(swatchColor(list.colorClass))
-                    .frame(width: 18, height: 18)
-            }
-            .buttonStyle(.plain)
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Button {
+                    showingColorPickerFor = (showingColorPickerFor == list.id) ? nil : list.id
+                } label: {
+                    Circle()
+                        .fill(swatchColor(list.colorClass))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
 
-            if editingListId == list.id {
-                TextField("List name", text: $editBuffer, onCommit: {
-                    commitEdit(for: list)
-                })
-                .foregroundStyle(.white)
-                .submitLabel(.done)
-            } else {
-                Text(list.name)
-                    .foregroundStyle(BrettColors.textCardTitle)
-                    .onTapGesture(count: 2) {
+                if editingListId == list.id {
+                    TextField("List name", text: $editBuffer, onCommit: {
+                        commitEdit(for: list)
+                    })
+                    .foregroundStyle(.white)
+                    .submitLabel(.done)
+                } else {
+                    Text(list.name)
+                        .foregroundStyle(BrettColors.textCardTitle)
+                        .onTapGesture(count: 2) {
+                            beginEdit(list)
+                        }
+                }
+
+                Spacer()
+
+                if editingListId != list.id {
+                    Button {
                         beginEdit(list)
+                    } label: {
+                        Image(systemName: "pencil")
+                            .foregroundStyle(BrettColors.textMeta)
                     }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            if showingColorPickerFor == list.id {
+                colorPicker(for: list)
+                    .padding(.bottom, 8)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                store.archive(id: list.id)
+                bumpRefresh()
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+            .tint(BrettColors.textMeta)
+        }
+    }
+
+    // MARK: - Row (archived, static — no reorder needed)
+
+    @ViewBuilder
+    private func archivedRow(_ list: ItemList) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(swatchColor(list.colorClass))
+                .frame(width: 18, height: 18)
+
+            Text(list.name)
+                .foregroundStyle(BrettColors.textCardTitle)
 
             Spacer()
 
-            if editingListId != list.id {
-                Button {
-                    beginEdit(list)
-                } label: {
-                    Image(systemName: "pencil")
-                        .foregroundStyle(BrettColors.textMeta)
-                }
-                .buttonStyle(.plain)
+            Button {
+                store.unarchive(id: list.id)
+                bumpRefresh()
+            } label: {
+                Text("Restore")
+                    .font(BrettTypography.badge)
+                    .foregroundStyle(BrettColors.success)
             }
+            .buttonStyle(.plain)
         }
-        .listRowBackground(glassRowBackground)
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if list.isArchived {
-                Button {
-                    store.unarchive(id: list.id)
-                    bumpRefresh()
-                } label: {
-                    Label("Restore", systemImage: "tray.and.arrow.up")
-                }
-                .tint(BrettColors.success)
-            } else {
-                Button {
-                    store.archive(id: list.id)
-                    bumpRefresh()
-                } label: {
-                    Label("Archive", systemImage: "archivebox")
-                }
-                .tint(BrettColors.textMeta)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if showingColorPickerFor == list.id {
-                colorPicker(for: list)
-                    .padding(.top, 8)
-            }
-        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     @ViewBuilder
@@ -212,31 +249,16 @@ struct ListsSettingsView: View {
     }
 
     private func swatchColor(_ token: String) -> Color {
-        if token.contains("blue") { return BrettColors.cerulean }
-        if token.contains("purple") { return BrettColors.purple400 }
-        if token.contains("amber") || token.contains("yellow") { return BrettColors.gold }
-        if token.contains("emerald") || token.contains("green") { return BrettColors.emerald }
-        if token.contains("red") { return BrettColors.error }
-        if token.contains("gray") { return Color.gray }
-        return BrettColors.cerulean.opacity(0.8)
+        // Resolve via the canonical `ListColor` enum so swatch rendering
+        // matches every other list-color surface in the app. Falls back to
+        // slate (neutral) rather than cerulean — cerulean is Brett AI only,
+        // never a fallback.
+        if let color = ListColor(colorClass: token) {
+            return color.swiftUIColor
+        }
+        return ListColor.slate.swiftUIColor
     }
 
-    @ViewBuilder
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(BrettTypography.sectionLabel)
-            .tracking(2.4)
-            .foregroundStyle(BrettColors.sectionLabelColor)
-    }
-
-    private var glassRowBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
-    }
 }
 
 // MARK: - Color swatches
@@ -245,12 +267,11 @@ private struct ColorSwatch: Hashable {
     let token: String
     let color: Color
 
-    static let palette: [ColorSwatch] = [
-        .init(token: "bg-gray-500", color: .gray),
-        .init(token: "bg-blue-500", color: BrettColors.cerulean),
-        .init(token: "bg-purple-500", color: BrettColors.purple400),
-        .init(token: "bg-amber-500", color: BrettColors.gold),
-        .init(token: "bg-emerald-500", color: BrettColors.emerald),
-        .init(token: "bg-red-500", color: BrettColors.error),
-    ]
+    /// Palette shown in the list-color picker. Sourced from
+    /// `ListColor.pickerSwatches` so this one list is the canonical palette
+    /// — adding a new color or removing cerulean happens in one place, not
+    /// here too. Cerulean is intentionally excluded (Brett AI only).
+    static let palette: [ColorSwatch] = ListColor.pickerSwatches.map { color in
+        ColorSwatch(token: color.rawValue, color: color.swiftUIColor)
+    }
 }

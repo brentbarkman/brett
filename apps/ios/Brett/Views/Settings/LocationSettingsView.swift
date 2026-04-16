@@ -31,85 +31,94 @@ struct LocationSettingsView: View {
     }
 
     var body: some View {
-        ZStack {
-            BackgroundView()
+        BrettSettingsScroll {
+            if let errorMessage {
+                BrettSettingsSection {
+                    Text(errorMessage)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.error)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                }
+            }
 
-            Form {
-                if let errorMessage {
-                    Section {
-                        Text(errorMessage)
+            if let successMessage {
+                BrettSettingsSection {
+                    Text(successMessage)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.success)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                }
+            }
+
+            BrettSettingsSection("Timezone") {
+                Toggle(isOn: $timezoneAuto) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Auto-detect")
+                            .foregroundStyle(BrettColors.textCardTitle)
+                        Text("Use the device's current timezone")
                             .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.error)
-                            .listRowBackground(glassRowBackground)
+                            .foregroundStyle(BrettColors.textMeta)
                     }
                 }
+                .tint(BrettColors.gold)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
 
-                if let successMessage {
-                    Section {
-                        Text(successMessage)
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.success)
-                            .listRowBackground(glassRowBackground)
-                    }
-                }
+                if !timezoneAuto {
+                    BrettSettingsDivider()
 
-                Section {
-                    Toggle(isOn: $timezoneAuto) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Auto-detect")
+                    NavigationLink {
+                        timezonePickerScreen
+                    } label: {
+                        HStack {
+                            Text("Timezone")
                                 .foregroundStyle(BrettColors.textCardTitle)
-                            Text("Use the device's current timezone")
-                                .font(BrettTypography.taskMeta)
+                            Spacer()
+                            Text(selectedTimezone)
                                 .foregroundStyle(BrettColors.textMeta)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.30))
                         }
                     }
-                    .tint(BrettColors.gold)
-                    .listRowBackground(glassRowBackground)
-
-                    if !timezoneAuto {
-                        NavigationLink {
-                            timezonePickerScreen
-                        } label: {
-                            HStack {
-                                Text("Timezone")
-                                    .foregroundStyle(BrettColors.textCardTitle)
-                                Spacer()
-                                Text(selectedTimezone)
-                                    .foregroundStyle(BrettColors.textMeta)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                        }
-                        .listRowBackground(glassRowBackground)
-                    }
-                } header: {
-                    sectionHeader("Timezone")
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
                 }
+            }
 
-                Section {
+            VStack(alignment: .leading, spacing: 8) {
+                BrettSettingsSection("Locations") {
                     TextField("Home address", text: $homeAddress, axis: .vertical)
                         .foregroundStyle(.white)
                         .textInputAutocapitalization(.words)
                         .lineLimit(1...3)
-                        .listRowBackground(glassRowBackground)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+
+                    BrettSettingsDivider()
 
                     TextField("Work address", text: $workAddress, axis: .vertical)
                         .foregroundStyle(.white)
                         .textInputAutocapitalization(.words)
                         .lineLimit(1...3)
-                        .listRowBackground(glassRowBackground)
-                } header: {
-                    sectionHeader("Locations")
-                } footer: {
-                    Text("Addresses are geocoded once when you tap Save. We only store the coordinates for travel-time features.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(BrettColors.textMeta)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                 }
+
+                Text("Addresses are geocoded once when you tap Save. We only store the coordinates for travel-time features.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(BrettColors.textMeta)
+                    .padding(.horizontal, 4)
             }
-            .scrollContentBackground(.hidden)
         }
         .navigationTitle("Timezone & Location")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button {
@@ -149,11 +158,11 @@ struct LocationSettingsView: View {
                                 }
                             }
                         }
-                        .listRowBackground(glassRowBackground)
+                        .brettSettingsRowBackground()
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .brettSettingsForm()
             .searchable(text: $searchText, prompt: "Search timezones")
         }
         .navigationTitle("Timezone")
@@ -163,23 +172,6 @@ struct LocationSettingsView: View {
     private var filteredTimezones: [String] {
         guard !searchText.isEmpty else { return allTimezones }
         return allTimezones.filter { $0.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    @ViewBuilder
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(BrettTypography.sectionLabel)
-            .tracking(2.4)
-            .foregroundStyle(BrettColors.sectionLabelColor)
-    }
-
-    private var glassRowBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
     }
 
     private func hydrate() {

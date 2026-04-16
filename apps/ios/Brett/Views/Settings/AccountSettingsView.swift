@@ -13,88 +13,86 @@ struct AccountSettingsView: View {
     @State private var infoMessage: String?
 
     var body: some View {
-        ZStack {
-            BackgroundView()
-
-            Form {
-                if let infoMessage {
-                    Section {
-                        Text(infoMessage)
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.textCardTitle)
-                            .listRowBackground(glassRowBackground)
-                    }
-                }
-
-                Section {
-                    HStack {
-                        Text("Email")
-                            .foregroundStyle(BrettColors.textMeta)
-                        Spacer()
-                        Text(store.current?.email ?? "—")
-                            .foregroundStyle(BrettColors.textCardTitle)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .listRowBackground(glassRowBackground)
-
-                    if let userId = store.current?.id {
-                        HStack {
-                            Text("User ID")
-                                .foregroundStyle(BrettColors.textMeta)
-                            Spacer()
-                            Text(userId.prefix(8) + "…")
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(BrettColors.textSecondary)
-                        }
-                        .listRowBackground(glassRowBackground)
-                    }
-                } header: {
-                    sectionHeader("Account")
-                }
-
-                Section {
-                    Button {
-                        infoMessage = "Data export is available on desktop. We're adding it to iOS soon."
-                    } label: {
-                        HStack {
-                            Image(systemName: "square.and.arrow.up")
-                                .foregroundStyle(BrettColors.gold)
-                            Text("Export my data")
-                                .foregroundStyle(BrettColors.textCardTitle)
-                            Spacer()
-                        }
-                    }
-                    .listRowBackground(glassRowBackground)
-                } header: {
-                    sectionHeader("Data")
-                }
-
-                Section {
-                    Button(role: .destructive) {
-                        showDeleteDialog = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(BrettColors.error)
-                            Text("Delete account")
-                                .foregroundStyle(BrettColors.error)
-                            Spacer()
-                        }
-                    }
-                    .listRowBackground(glassRowBackground)
-                } header: {
-                    sectionHeader("Danger Zone")
-                } footer: {
-                    Text("Account deletion permanently removes your tasks, lists, and settings. This can't be undone.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(BrettColors.textMeta)
+        BrettSettingsScroll {
+            if let infoMessage {
+                BrettSettingsSection {
+                    Text(infoMessage)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.textCardTitle)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                 }
             }
-            .scrollContentBackground(.hidden)
+
+            BrettSettingsSection("Account") {
+                HStack {
+                    Text("Email")
+                        .foregroundStyle(BrettColors.textMeta)
+                    Spacer()
+                    Text(store.current?.email ?? "—")
+                        .foregroundStyle(BrettColors.textCardTitle)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+
+                if let userId = store.current?.id {
+                    BrettSettingsDivider()
+
+                    HStack {
+                        Text("User ID")
+                            .foregroundStyle(BrettColors.textMeta)
+                        Spacer()
+                        Text(userId.prefix(8) + "…")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(BrettColors.textSecondary)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                }
+            }
+
+            BrettSettingsSection("Data") {
+                Button {
+                    infoMessage = "Data export is available on desktop. We're adding it to iOS soon."
+                } label: {
+                    HStack {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundStyle(BrettColors.gold)
+                        Text("Export my data")
+                            .foregroundStyle(BrettColors.textCardTitle)
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+
+            BrettSettingsSection("Danger Zone") {
+                Button(role: .destructive) {
+                    showDeleteDialog = true
+                } label: {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(BrettColors.error)
+                        Text("Delete account")
+                            .foregroundStyle(BrettColors.error)
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+
+            Text("Account deletion permanently removes your tasks, lists, and settings. This can't be undone.")
+                .font(.system(size: 12))
+                .foregroundStyle(BrettColors.textMeta)
+                .padding(.top, -16)
         }
         .navigationTitle("Account")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .alert("Delete your account?", isPresented: $showDeleteDialog) {
             TextField("Type DELETE MY ACCOUNT", text: $confirmText)
                 .textInputAutocapitalization(.characters)
@@ -114,20 +112,4 @@ struct AccountSettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(BrettTypography.sectionLabel)
-            .tracking(2.4)
-            .foregroundStyle(BrettColors.sectionLabelColor)
-    }
-
-    private var glassRowBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
-    }
 }

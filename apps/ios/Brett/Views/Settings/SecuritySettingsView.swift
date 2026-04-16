@@ -11,50 +11,35 @@ struct SecuritySettingsView: View {
     @State private var biometryType: String = SecuritySettingsView.resolveBiometryLabel()
 
     var body: some View {
-        ZStack {
-            BackgroundView()
-
-            Form {
-                Section {
-                    Toggle(isOn: $faceIDEnabled) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(biometryAvailable ? "\(biometryType) app lock" : "Biometrics unavailable")
-                                .foregroundStyle(BrettColors.textCardTitle)
-                            Text(biometryAvailable
-                                 ? "Require \(biometryType) when opening Brett"
-                                 : "This device doesn't support biometric authentication.")
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta)
-                        }
+        BrettSettingsScroll {
+            BrettSettingsSection("App Lock") {
+                Toggle(isOn: $faceIDEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(biometryAvailable ? "\(biometryType) app lock" : "Biometrics unavailable")
+                            .foregroundStyle(BrettColors.textCardTitle)
+                        Text(biometryAvailable
+                             ? "Require \(biometryType) when opening Brett"
+                             : "This device doesn't support biometric authentication.")
+                            .font(BrettTypography.taskMeta)
+                            .foregroundStyle(BrettColors.textMeta)
                     }
-                    .tint(BrettColors.gold)
-                    .disabled(!biometryAvailable)
-                    .listRowBackground(glassRowBackground)
-                } header: {
-                    sectionHeader("App Lock")
                 }
+                .tint(BrettColors.gold)
+                .disabled(!biometryAvailable)
+                // Notify the lock manager when the toggle flips so it
+                // can unlock immediately on turn-off (otherwise the
+                // user would be stuck behind a prompt they just
+                // disabled until next app launch).
+                .onChange(of: faceIDEnabled) { _, _ in
+                    BiometricLockManager.shared.settingsDidChange()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             }
-            .scrollContentBackground(.hidden)
         }
         .navigationTitle("Security")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    @ViewBuilder
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(BrettTypography.sectionLabel)
-            .tracking(2.4)
-            .foregroundStyle(BrettColors.sectionLabelColor)
-    }
-
-    private var glassRowBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     // MARK: - Biometry label

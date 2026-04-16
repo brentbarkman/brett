@@ -25,68 +25,62 @@ struct ProfileSettingsView: View {
     }
 
     var body: some View {
-        ZStack {
-            BackgroundView()
+        BrettSettingsScroll {
+            avatarSection
 
-            Form {
-                avatarSection
+            BrettSettingsSection("Identity") {
+                TextField("Your name", text: $name)
+                    .foregroundStyle(.white)
+                    .submitLabel(.done)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
 
-                Section {
-                    TextField("Your name", text: $name)
-                        .foregroundStyle(.white)
-                        .submitLabel(.done)
-                        .listRowBackground(glassRowBackground)
+                BrettSettingsDivider()
 
-                    TextField("Assistant name", text: $assistantName)
-                        .foregroundStyle(.white)
-                        .submitLabel(.done)
-                        .listRowBackground(glassRowBackground)
-                } header: {
-                    Text("IDENTITY")
-                        .font(BrettTypography.sectionLabel)
-                        .tracking(2.4)
-                        .foregroundStyle(BrettColors.sectionLabelColor)
-                } footer: {
-                    Text("The assistant name is how Brett refers to itself. Pick anything up to 10 characters.")
-                        .font(.system(size: 12))
+                TextField("Assistant name", text: $assistantName)
+                    .foregroundStyle(.white)
+                    .submitLabel(.done)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+            }
+
+            Text("The assistant name is how Brett refers to itself. Pick anything up to 10 characters.")
+                .font(.system(size: 12))
+                .foregroundStyle(BrettColors.textMeta)
+                .padding(.top, -16)
+
+            BrettSettingsSection("Account") {
+                HStack {
+                    Text("Email")
                         .foregroundStyle(BrettColors.textMeta)
+                    Spacer()
+                    Text(store.current?.email ?? "—")
+                        .foregroundStyle(BrettColors.textCardTitle)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
 
-                Section {
-                    HStack {
-                        Text("Email")
-                            .foregroundStyle(BrettColors.textMeta)
-                        Spacer()
-                        Text(store.current?.email ?? "—")
-                            .foregroundStyle(BrettColors.textCardTitle)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .listRowBackground(glassRowBackground)
-                } header: {
-                    Text("ACCOUNT")
-                        .font(BrettTypography.sectionLabel)
-                        .tracking(2.4)
-                        .foregroundStyle(BrettColors.sectionLabelColor)
-                } footer: {
-                    Text("Email changes aren't supported yet. Contact support if you need to move your account to a new address.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(BrettColors.textMeta)
-                }
+            Text("Email changes aren't supported yet. Contact support if you need to move your account to a new address.")
+                .font(.system(size: 12))
+                .foregroundStyle(BrettColors.textMeta)
+                .padding(.top, -16)
 
-                if let errorMessage {
-                    Section {
-                        Text(errorMessage)
-                            .foregroundStyle(BrettColors.error)
-                            .font(BrettTypography.taskMeta)
-                            .listRowBackground(glassRowBackground)
-                    }
+            if let errorMessage {
+                BrettSettingsSection {
+                    Text(errorMessage)
+                        .foregroundStyle(BrettColors.error)
+                        .font(BrettTypography.taskMeta)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                 }
             }
-            .scrollContentBackground(.hidden)
         }
         .navigationTitle("Profile")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button {
@@ -108,38 +102,27 @@ struct ProfileSettingsView: View {
 
     @ViewBuilder
     private var avatarSection: some View {
-        Section {
-            HStack {
-                Spacer()
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [BrettColors.gold.opacity(0.40), BrettColors.cerulean.opacity(0.30)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+        HStack {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(
+                        // Monochrome gold fade — cerulean is reserved
+                        // for Brett AI, not user avatars.
+                        LinearGradient(
+                            colors: [BrettColors.gold.opacity(0.45), BrettColors.gold.opacity(0.15)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                        .frame(width: 88, height: 88)
-                    Text(avatarInitial)
-                        .font(.system(size: 34, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                Spacer()
+                    )
+                    .frame(width: 88, height: 88)
+                Text(avatarInitial)
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(.white)
             }
-            .padding(.vertical, 10)
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+            Spacer()
         }
-    }
-
-    private var glassRowBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
+        .padding(.vertical, 10)
     }
 
     private var avatarInitial: String {
