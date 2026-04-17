@@ -50,6 +50,8 @@ apps/ios/fastlane/*.log
 apps/ios/fastlane/test_output/
 apps/ios/fastlane/README.md
 apps/ios/build/
+apps/ios/vendor/
+apps/ios/.bundle/
 apps/ios/*.ipa
 apps/ios/*.app.dSYM.zip
 
