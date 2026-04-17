@@ -13,7 +13,6 @@ apps/
   api/            Hono + Prisma + better-auth — single deployable backend
   desktop/        Electron 28 + Vite + React 19 — primary client
   ios/            Native Swift / SwiftData / SwiftUI — iOS 18+, near dev-complete
-  mobile/         Expo 55 / React Native — secondary, full offline-first client
   admin/          React (Vite) admin dashboard (passkey auth)
   admin-api/      Hono admin backend (passkey, role-gated)
 packages/
@@ -27,8 +26,10 @@ evals/            Offline eval harness for AI features
 docs/             DESIGN_GUIDE, llm-call-audit, memory-system, specs, plans
 ```
 
+The native iOS app lives in the same repo but is an Xcode project; it shares no pnpm/Turbo tooling with the rest — it talks to `apps/api` over HTTP/SSE and re-implements domain types/rules in Swift.
+
 Package dependency graph is strictly acyclic:
-`types → utils → business → {ai, ui}`, `types → api-core → ai`, apps sit on top. Apps use `workspace:*`; Vite/Metro resolve to TS source at dev time (no pre-build needed on the hot path). `.npmrc` sets `node-linker=hoisted` for Expo/RN compatibility.
+`types → utils → business → {ai, ui}`, `types → api-core → ai`, apps sit on top. Apps use `workspace:*`; Vite resolves to TS source at dev time (no pre-build needed on the hot path). `.npmrc` sets `node-linker=hoisted` for simpler pnpm resolution across the workspace.
 
 **Release model.** Two-branch: `main` is dev (CI: typecheck + tests on every push); PR `main → release` runs the deploy workflow (`.github/workflows/release.yml`) — tests, Railway API deploy via `@railway/cli`, health check, Electron build, S3 upload. Migrations auto-apply via `prisma migrate deploy` in the Dockerfile `CMD`. **Never push directly to `release`. Never force-push either branch. No destructive migrations in a single step.**
 
@@ -40,9 +41,9 @@ Hono server, split `src/app.ts` (routes + middleware) vs. `src/index.ts` (entry)
 
 ### 2.1 Auth
 
-better-auth mounted at `/api/auth/*` with the `bearer` plugin (Electron + iOS/mobile can't rely on cross-origin cookies). Config in `src/lib/auth.ts`. Trusted origins include `app://.` (Electron prod), dev localhost, `BETTER_AUTH_URL` in prod. Passkeys supported.
+better-auth mounted at `/api/auth/*` with the `bearer` plugin (Electron + iOS can't rely on cross-origin cookies). Config in `src/lib/auth.ts`. Trusted origins include `app://.` (Electron prod), dev localhost, `BETTER_AUTH_URL` in prod. Passkeys supported.
 
-- Bearer token stored client-side in Electron `safeStorage` / iOS Keychain / Expo SecureStore.
+- Bearer token stored client-side in Electron `safeStorage` / iOS Keychain.
 - Protected routes use `authMiddleware` from `src/middleware/auth.ts`; `c.get("user")` + `c.get("session")`.
 - **iOS-native Google Sign-In** has its own endpoint at `/api/auth/ios/google/token` (`routes/auth-ios.ts`, `lib/ios-google-signin.ts`) — accepts the `idToken` from GoogleSignIn-iOS, verifies against Google JWKS with the iOS-specific `aud`, and mints a better-auth session. Rate-limited 10/60s per IP.
 - **Google OAuth (desktop):** POST-only `/sign-in/social` must happen from a browser context with cookies preserved. Desktop flow spins up an ephemeral `127.0.0.1:<port>` server, opens the system browser to `BETTER_AUTH_URL/api/auth/desktop/google?port=&state=`, the API serves an HTML page that POSTs `/sign-in/social`, then after OAuth it redirects back to the localhost callback with the token. HMAC-signed state prevents forgery.
@@ -60,7 +61,7 @@ better-auth mounted at `/api/auth/*` with the `bearer` plugin (Electron + iOS/mo
 - **Scouts:** `Scout` (goal, sensitivity, sources, budget, cadence), `ScoutRun` (mode `standard`/`bootstrap`), `ScoutFinding`, `ScoutActivity`, `ScoutMemory` (`factual`/`judgment`/`pattern`, with status), `ScoutConsolidation`.
 - **Knowledge graph:** `KnowledgeEntity`, `KnowledgeRelationship`.
 - **Newsletters:** `NewsletterSender`, `PendingNewsletter`.
-- **Sync / mobile:** `IdempotencyKey` (key-scoped by `${userId}:${clientKey}` in code — see §2.4), `DeviceToken`, `WeatherCache`.
+- **Sync / iOS:** `IdempotencyKey` (key-scoped by `${userId}:${clientKey}` in code — see §2.4), `DeviceToken`, `WeatherCache`.
 
 Soft-delete is handled by a Prisma extension that converts `delete` → `update(deletedAt)` for most models and auto-filters `deletedAt IS NULL` on reads. Sync pull queries explicitly include tombstones by `deletedAt: { not: null }` to bypass the extension.
 
@@ -95,7 +96,7 @@ Two endpoints, `src/routes/sync.ts`:
 
 ### 2.5 Background jobs (`src/jobs/cron.ts`)
 
-All guarded by a boolean flag (single-process exclusivity; see §7 on Railway horizontal scaling).
+All guarded by a boolean flag (single-process exclusivity; see §6 on Railway horizontal scaling).
 
 | Schedule | Job |
 |---|---|
@@ -164,29 +165,21 @@ XcodeGen (`project.yml`), iOS 18 minimum, Swift 6 strict concurrency, 4 targets 
 
 ---
 
-## 5. Mobile (Expo) — `apps/mobile`
-
-React Native 19 + Expo 55 (iOS only in `app.config.ts`). Expo Router file-based routes (`(auth)` / `(app)`). SQLite via Drizzle ORM, Zustand stores, identical offline-first pattern to the native iOS app but at a different level of the stack. Currently **production-grade but secondary**; the native iOS app is the primary mobile target. The Expo app is not deprecated — useful as a reference implementation and for cross-platform portability later.
-
-Metro has a custom resolver that maps `.js` imports to `.ts` for ESM monorepo compatibility. App Transport Security is loose in dev (`NSAllowsArbitraryLoads`) — must be tightened before any production submission.
-
----
-
-## 6. Shared packages
+## 5. Shared packages
 
 - **@brett/types** — pure interfaces. `ItemRecord`, `Thing`, `List`, `CalendarEvent`, `Scout*`, `ConversationMessageRecord`, `StreamChunk`, `DisplayHint`, etc. The `Task` alias is deprecated — use `ItemRecord` + `itemToThing()`.
 - **@brett/utils** — `detectContentType`, `isSafeUrl`, `googleColorToGlass`, `validatePassword`, weather conversions, `generateCuid`/`generateId`.
 - **@brett/business** — all domain math: `computeUrgency`, `getUserDayBounds`, `itemToThing`, `groupUpcomingThings`, `computeNextDueDate` (RRule), `getTimeSegment`/`getBusynessTier`/`selectImage` (wallpaper logic), validators (`validateCreateItem`, `validateRsvpInput`, `validateThings3Import`, …). **Any domain operation that crosses client boundaries belongs here, not in `apps/*`.**
 - **@brett/api-core** — Prisma singleton, better-auth factory, Hono base. Re-exports Prisma enums + models.
-- **@brett/ai** — see §8 for the full layout. Providers, skills, memory, embedding, graph, context, orchestrator.
-- **@brett/ui** — React components. Web-only. Desktop + admin consume it; Expo does not. Big components: `Omnibar`, `SpotlightModal`, `ThingsList`, `ThingCard`, `InboxView`, `CalendarTimeline`, `ScoutsRoster`, `DailyBriefing`, `BrettThread`, `TriagePopup`, `LivingBackground`. Hooks `useListKeyboardNav`, `useNextUpTimer`.
+- **@brett/ai** — see §7 for the full layout. Providers, skills, memory, embedding, graph, context, orchestrator.
+- **@brett/ui** — React components. Web-only. Desktop + admin consume it. Big components: `Omnibar`, `SpotlightModal`, `ThingsList`, `ThingCard`, `InboxView`, `CalendarTimeline`, `ScoutsRoster`, `DailyBriefing`, `BrettThread`, `TriagePopup`, `LivingBackground`. Hooks `useListKeyboardNav`, `useNextUpTimer`.
 
 ---
 
-## 7. Operating constraints
+## 6. Operating constraints
 
 - **Multi-user mindset everywhere.** Every query must be `userId`-scoped (either direct column or through a relation like `scout.userId` for `ScoutFinding`). Single-user shortcuts are violations.
-- **Backwards-compatible API.** Existing desktop and mobile clients may be on older versions. Additive only; breaking changes need a version bump or migration path.
+- **Backwards-compatible API.** Existing desktop and iOS clients may be on older versions. Additive only; breaking changes need a version bump or migration path.
 - **Migration safety.** Two-phase drops and renames; no `CREATE INDEX CONCURRENTLY` inside a transaction (Prisma wraps migrations); always test against production-shaped data.
 - **Rate limiter is in-process** — don't assume it's cluster-wide.
 - **SSE auth via ticket, never via raw Bearer in a URL.**
@@ -196,7 +189,7 @@ Metro has a custom resolver that maps `.js` imports to `.ts` for ESM monorepo co
 
 ---
 
-## 8. AI layer — `packages/ai` (surface)
+## 7. AI layer — `packages/ai` (surface)
 
 Treated separately in the AI deep-dive doc. Key shape:
 
@@ -212,7 +205,7 @@ Treated separately in the AI deep-dive doc. Key shape:
 
 ---
 
-## 9. Testing posture
+## 8. Testing posture
 
 | Surface | Framework | Notable coverage |
 |---|---|---|
@@ -226,7 +219,7 @@ Treated separately in the AI deep-dive doc. Key shape:
 
 ---
 
-## 10. Risks / known tech debt
+## 9. Risks / known tech debt
 
 - **In-memory rate limiter** (see §2.6) — effectively ~2× the per-user limit if we ever run multiple API replicas.
 - **Cross-model embedding mixing** — `Embedding.model` + `Embedding.dim` are persisted on every write, but hybrid search does not yet filter `WHERE model = <current>`. Add a filter at the query boundary before running any provider swap.

@@ -1,7 +1,8 @@
 # Wallpaper Integration (iOS)
 
-This doc describes how to consume the time-of-day wallpaper system from the
-iOS (Expo/React Native) app.
+This doc describes how the native iOS app (`apps/ios/`) consumes the
+time-of-day wallpaper system. The desktop side is in `@brett/business`;
+the iOS side re-implements the same selection logic in Swift.
 
 ## TL;DR
 
@@ -9,7 +10,7 @@ iOS (Expo/React Native) app.
 - **Portrait variants** at `backgrounds/photo-portrait/<segment>/<slot>.webp`,
   1290×2796 (iPhone 15 Pro Max 3x native).
 - Same storage base URL as desktop (`GET /config → storageBaseUrl`).
-- WebP — Expo `<Image>` / `expo-image` supports it natively.
+- WebP — `UIImage`/`ImageIO` support it on iOS 14+ natively.
 
 ## URL scheme
 

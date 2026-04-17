@@ -1,6 +1,6 @@
 # Brett — Features
 
-> Brett is a personal AI chief-of-staff. One unified surface for tasks, content, calendar, communications, and intelligence — with Claude doing the integration work so the human can focus on decisions and action. Desktop (Electron, primary), iOS (native Swift, near dev-complete), Expo (secondary), all backed by a single Hono API.
+> Brett is a personal AI chief-of-staff. One unified surface for tasks, content, calendar, communications, and intelligence — with Claude doing the integration work so the human can focus on decisions and action. Desktop (Electron, primary) and iOS (native Swift, near dev-complete), backed by a single Hono API.
 
 This document describes **what Brett does for the user**. For technical structure see [architecture.md](architecture.md).
 
@@ -112,7 +112,7 @@ Each Scout writes structured findings (article, insight, task) with relevance sc
 A unique per-user ingest email (e.g. `ingest+<token>@…`) captured by Postmark webhook. First-time senders go to a **PendingNewsletter** approval queue; approved senders auto-ingest. Newsletter content is parsed (Mozilla Readability), classified, and dropped into the inbox tagged with sender. Settings exposes the address, the approved senders list, and a per-sender disable toggle.
 
 ### Google Calendar
-OAuth connect (system-browser flow on desktop, native flow on iOS), multi-account, per-calendar visibility and meeting-notes scope. Real-time updates via Google's push-notifications webhook (auto-renewed every 6h). Events sync 90 days back / 90 days forward. Calendar event notes are first-class: edited inline, persisted server-side, synced to mobile.
+OAuth connect (system-browser flow on desktop, native flow on iOS), multi-account, per-calendar visibility and meeting-notes scope. Real-time updates via Google's push-notifications webhook (auto-renewed every 6h). Events sync 90 days back / 90 days forward. Calendar event notes are first-class: edited inline, persisted server-side, synced to iOS.
 
 ### Granola
 MCP-style integration with Granola's meeting notes service. Brett pulls meeting transcripts, summaries, and action items, then can auto-create tasks from action items (configurable). Token storage is AES-256-GCM encrypted. Working-hours gating prevents off-hours sync.
@@ -144,7 +144,7 @@ Every UI element that links to settings deep-links to the right tab via the URL 
 ## 7. Real-Time Sync & Offline
 
 - **Real-time** via Server-Sent Events (`/events/stream`, ticket-authenticated) — calendar changes, content extraction completion, scout findings, scout runs, item updates. The desktop and iOS clients both invalidate React Query / live `@Query` results on event receipt, so any change made anywhere shows up instantly everywhere.
-- **Offline-first (mobile/iOS)** — every write goes to local SQLite immediately, then through a mutation queue with field-level merge conflict resolution. Pull is cursor-based per table; push is batched (max 50 mutations / 1 MB body). Server-wins on field-level conflicts. Background poll every 30 s plus pull-to-refresh.
+- **Offline-first (iOS)** — every write goes to local SwiftData immediately, then through a mutation queue with field-level merge conflict resolution. Pull is cursor-based per table; push is batched (max 50 mutations / 1 MB body). Server-wins on field-level conflicts. Background poll every 30 s plus pull-to-refresh.
 - **Idempotency** — mutation IDs are deduped server-side via an `IdempotencyKey` table so retries on flaky networks are safe.
 
 ---
@@ -185,9 +185,6 @@ The iOS app mirrors the desktop. As of 2026-04-16: 27 of the desktop's features 
 - Liquid glass materials, atmospheric portrait backgrounds, full VoiceOver/Dynamic Type/High Contrast/Reduce Motion support
 
 **Known gaps vs. desktop**: APNs/FCM push (scaffold only), widgets, Siri Shortcuts, Spotlight indexing, persistent drag-to-reorder (UI works, server `sortOrder` not yet wired). Account delete & data export endpoints not yet on the server.
-
-### Mobile (Expo — secondary)
-A complete React Native mobile client also exists at `apps/mobile/` with the same offline-first sync engine pattern. It's production-grade but the native iOS app is the primary target now.
 
 ### Admin
 A small admin dashboard at `apps/admin/` (React) backed by `apps/admin-api/` (Hono). Passkey-only sign-in, no sign-up. Surfaces ops dashboards: user list, scout health, AI spend, knowledge-graph debugging.
