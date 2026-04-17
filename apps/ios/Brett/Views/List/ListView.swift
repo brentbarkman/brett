@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 /// A single list's detail view — pushed from the list drawer or any other
@@ -22,9 +23,15 @@ struct ListView: View {
 
     @State private var draftName: String = ""
     @State private var isEditingName = false
-    @State private var captureText: String = ""
     @FocusState private var nameFocused: Bool
-    @FocusState private var captureFocused: Bool
+
+    /// See TodayPage — used to decide skeleton-vs-empty-state when this
+    /// list has zero items on first render.
+    @Query private var syncHealthRows: [SyncHealth]
+
+    private var hasCompletedInitialSync: Bool {
+        syncHealthRows.first?.lastSuccessfulPullAt != nil
+    }
 
     private var realList: ItemList? {
         listStore.fetchById(listId)
@@ -75,27 +82,29 @@ struct ListView: View {
                         stickyHeaderContent()
                     } content: {
                         VStack(spacing: 0) {
-                            quickCapture()
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-
-                            if !items.isEmpty {
-                                Divider()
-                                    .background(BrettColors.hairline)
-                                    .padding(.horizontal, 16)
-                            }
+                            // Embedded quick-capture used to live here but
+                            // duplicated the always-visible Omnibar at the
+                            // bottom of the screen (two inputs for the same
+                            // "add to this list" action). The Omnibar is
+                            // now passed `listId: listId` so typing there
+                            // lands items in this list by default.
 
                             if items.isEmpty {
-                                VStack(spacing: 6) {
-                                    Text("No items yet")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundStyle(BrettColors.textBody)
-                                    Text("Capture your first one above.")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(BrettColors.textMeta)
+                                if hasCompletedInitialSync {
+                                    VStack(spacing: 6) {
+                                        Text("No items yet")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundStyle(BrettColors.textBody)
+                                        Text("Capture your first one below.")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(BrettColors.textMeta)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 32)
+                                } else {
+                                    TaskListPlaceholder()
+                                        .padding(.vertical, 16)
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 32)
                             } else {
                                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                     TaskRow(
@@ -134,7 +143,8 @@ struct ListView: View {
         }
         .overlay(alignment: .bottom) {
             OmnibarView(
-                placeholder: "Add to \(listName)..."
+                placeholder: "Add to \(listName)...",
+                listId: listId
             )
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -302,69 +312,21 @@ struct ListView: View {
 
     @ViewBuilder
     private func stickyHeaderContent() -> some View {
+        // Match TaskSection / InboxPage: no icon, neutral white label,
+        // count on the right. The list's color signal is already in the
+        // navigation toolbar's color dot — no need for a second cue here.
         HStack(spacing: 6) {
-            Image(systemName: "list.bullet")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(listColor.swiftUIColor.opacity(0.80))
-
             Text("ITEMS")
                 .font(BrettTypography.sectionLabel)
                 .tracking(2.4)
-                .foregroundStyle(Color.white.opacity(0.80))
+                .foregroundStyle(Color.white.opacity(0.60))
 
             Spacer()
 
             Text("\(items.count)")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.50))
+                .foregroundStyle(Color.white.opacity(0.40))
         }
-    }
-
-    @ViewBuilder
-    private func quickCapture() -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "plus")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(BrettColors.textMeta)
-
-            TextField("Add item...", text: $captureText)
-                .font(.system(size: 15))
-                .foregroundStyle(.white)
-                .tint(BrettColors.gold)
-                .focused($captureFocused)
-                .submitLabel(.done)
-                .onSubmit { commitCapture() }
-
-            if !captureText.trimmingCharacters(in: .whitespaces).isEmpty {
-                Button { commitCapture() } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 22, height: 22)
-                        .background(BrettColors.gold, in: Circle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background {
-            Capsule()
-                .fill(Color.white.opacity(0.06))
-                .overlay {
-                    Capsule()
-                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
-                }
-        }
-    }
-
-    private func commitCapture() {
-        let trimmed = captureText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let userId = authManager.currentUser?.id else { return }
-        HapticManager.light()
-        _ = itemStore.create(userId: userId, title: trimmed, listId: listId)
-        captureText = ""
-        captureFocused = false
     }
 
     private func unarchiveCurrentList() {

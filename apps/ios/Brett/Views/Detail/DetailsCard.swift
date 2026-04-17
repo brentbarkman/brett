@@ -83,7 +83,11 @@ struct DetailsCard: View {
         .glassCard()
         .sheet(item: $activeEditor) { editor in
             editorSheet(for: editor)
-                .presentationDetents(editor == .dueDate ? [.medium] : [.fraction(0.45)])
+                // 0.78 fits the header + 4 quick presets + DatePicker grid
+                // + Clear button without going edge-to-edge with the parent
+                // detail sheet. `.large` made the two sheets look like one
+                // continuous slab.
+                .presentationDetents(editor == .dueDate ? [.fraction(0.78)] : [.fraction(0.45)])
                 .presentationBackground(Color.black.opacity(0.92))
                 .presentationDragIndicator(.visible)
         }
@@ -237,8 +241,10 @@ private struct DueDateEditor: View {
     @Binding var date: Date?
     let dismiss: () -> Void
 
+    /// What the user is currently pointing at. Committed to `date` only on
+    /// the Done tap so a stray scroll through the calendar grid doesn't
+    /// produce an accidental date change. Cancel leaves `date` untouched.
     @State private var working: Date = Date()
-    @State private var hasDate: Bool = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -251,7 +257,8 @@ private struct DueDateEditor: View {
                     .foregroundStyle(.white)
                 Spacer()
                 Button("Done") {
-                    date = hasDate ? working : nil
+                    date = working
+                    HapticManager.light()
                     dismiss()
                 }
                 .foregroundStyle(BrettColors.gold)
@@ -260,33 +267,149 @@ private struct DueDateEditor: View {
             .padding(.horizontal, 20)
             .padding(.top, 18)
 
-            Toggle("Has due date", isOn: $hasDate)
-                .foregroundStyle(BrettColors.textBody)
-                .tint(BrettColors.gold)
+            // Quick presets — mirror the desktop `ScheduleRow` options
+            // (Today / Tomorrow / This weekend / Next week). Picking one
+            // commits immediately and dismisses; no extra Done tap. This
+            // is the common path — the calendar grid below is for the
+            // "I need a specific date" minority case.
+            quickOptions
+
+            Divider()
+                .background(BrettColors.hairline)
                 .padding(.horizontal, 20)
 
-            if hasDate {
-                DatePicker(
-                    "",
-                    selection: $working,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .datePickerStyle(.graphical)
-                .tint(BrettColors.gold)
-                .padding(.horizontal, 20)
-            }
+            DatePicker(
+                "",
+                selection: $working,
+                displayedComponents: [.date, .hourAndMinute]
+            )
+            .datePickerStyle(.graphical)
+            .tint(BrettColors.gold)
+            .padding(.horizontal, 20)
 
             Spacer(minLength: 0)
-        }
-        .onAppear {
-            if let date {
-                working = date
-                hasDate = true
-            } else {
-                working = Date()
-                hasDate = false
+
+            // Clear button replaces the old "Has due date" toggle. Clearer
+            // affordance + no layout cutoff on the medium detent.
+            if date != nil {
+                Button {
+                    date = nil
+                    HapticManager.medium()
+                    dismiss()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "xmark.circle")
+                        Text("Clear due date")
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(BrettColors.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(BrettColors.error.opacity(0.10))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(BrettColors.error.opacity(0.20), lineWidth: 0.5)
+                            }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
             }
         }
+        .onAppear {
+            // Seed the DatePicker from the current due date if any, else
+            // default to "today, morning" so the user doesn't land in an
+            // arbitrary future time.
+            if let date {
+                working = date
+            } else {
+                let calendar = Calendar.current
+                working = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
+            }
+        }
+    }
+
+    /// Four quick-preset buttons. Each commits its date immediately and
+    /// dismisses the sheet — the user typing "Today" on the omnibar is
+    /// the fast path, this is its sheet-surface equivalent. Mirrors the
+    /// desktop's ScheduleRow options.
+    private var quickOptions: some View {
+        HStack(spacing: 8) {
+            presetButton(label: "Today", date: presetDate(days: 0))
+            presetButton(label: "Tomorrow", date: presetDate(days: 1))
+            presetButton(label: "This week", date: endOfThisWeek())
+            presetButton(label: "Next week", date: nextMonday())
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func presetButton(label: String, date presetDate: Date) -> some View {
+        Button {
+            date = presetDate
+            HapticManager.light()
+            dismiss()
+        } label: {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(BrettColors.textBody)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background {
+                    Capsule()
+                        .fill(Color.white.opacity(0.06))
+                        .overlay {
+                            Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                        }
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// `days` days from today at 9am local. 0 = today.
+    private func presetDate(days: Int) -> Date {
+        let calendar = Calendar.current
+        let base = calendar.date(byAdding: .day, value: days, to: Date()) ?? Date()
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
+    }
+
+    /// "This week" → Sunday of the current week at 9am. If today is
+    /// already Sunday, returns Sunday this evening (still "this week").
+    /// Matches Things-style "this week" semantics: bucket somewhere
+    /// inside the current week.
+    private func endOfThisWeek() -> Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weekday = calendar.component(.weekday, from: today) // Sun=1 ... Sat=7
+        // Days remaining until Sunday (end of the current week, ISO/US).
+        // Sun=0, Mon=6, Tue=5, ..., Sat=1.
+        let offset = (8 - weekday) % 7
+        let base = calendar.date(byAdding: .day, value: offset, to: today) ?? today
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
+    }
+
+    /// "Next week" → next Monday at 9am. Always lands on the first
+    /// weekday of the upcoming week regardless of what today is.
+    private func nextMonday() -> Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weekday = calendar.component(.weekday, from: today) // Sun=1 ... Sat=7
+        // Mon offsets: Sun→1, Mon→7 (next Mon), Tue→6, Wed→5, Thu→4, Fri→3, Sat→2.
+        let offset: Int = {
+            switch weekday {
+            case 1: return 1
+            case 2: return 7
+            case 3: return 6
+            case 4: return 5
+            case 5: return 4
+            case 6: return 3
+            default: return 2
+            }
+        }()
+        let base = calendar.date(byAdding: .day, value: offset, to: today) ?? today
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
     }
 }
 

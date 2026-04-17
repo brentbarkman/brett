@@ -7,6 +7,11 @@ import Foundation
 enum APIError: Error, CustomStringConvertible {
     case offline
     case unauthorized
+    /// Sign-in attempt rejected because the email doesn't exist or the
+    /// password is wrong. Distinct from `.unauthorized` (which means "you
+    /// had a session and it expired") so the UI can offer "create account"
+    /// instead of "sign in again."
+    case invalidCredentials(detail: String? = nil)
     case rateLimited(retryAfter: Int?)
     case serverError(Int)
     case validation(String)
@@ -19,6 +24,8 @@ enum APIError: Error, CustomStringConvertible {
             return "You're offline. Check your connection and try again."
         case .unauthorized:
             return "Your session expired. Please sign in again."
+        case .invalidCredentials(let detail):
+            return detail ?? "Invalid email or password."
         case .rateLimited(let retry):
             if let retry {
                 return "Too many attempts. Try again in \(retry)s."
@@ -41,6 +48,8 @@ enum APIError: Error, CustomStringConvertible {
             return "APIError.offline"
         case .unauthorized:
             return "APIError.unauthorized"
+        case .invalidCredentials(let detail):
+            return "APIError.invalidCredentials(\(detail ?? "nil"))"
         case .rateLimited(let retry):
             return "APIError.rateLimited(retryAfter: \(retry.map(String.init) ?? "nil"))"
         case .serverError(let status):

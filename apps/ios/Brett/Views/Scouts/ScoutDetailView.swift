@@ -57,20 +57,13 @@ struct ScoutDetailView: View {
                 ProgressView().tint(BrettColors.gold)
             }
         }
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button { dismiss() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Scouts")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .foregroundStyle(BrettColors.gold)
-                }
-            }
-        }
+        // Default iOS back button; kept consistent with ListView +
+        // ScoutsRosterView (which also use the default now). Setting a
+        // `.navigationTitle` is required for SwiftUI to wire the
+        // interactive pop gesture — without it (or another navbar
+        // registrant), edge-swipe-to-go-back silently breaks.
+        .navigationTitle(scout?.name ?? "Scout")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await loadAll() }
         .onChange(of: findingsType) { _, _ in Task { await refreshFindings() } }
         .onChange(of: memoryFilter) { _, _ in Task { await refreshMemories() } }

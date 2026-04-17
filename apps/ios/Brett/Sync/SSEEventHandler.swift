@@ -28,6 +28,14 @@ extension SyncManager: SSESyncTrigger {}
 /// reconcile the full state, which is simpler and less error-prone than
 /// trying to apply a partial SSE payload into SwiftData directly.
 ///
+extension Notification.Name {
+    /// Fired when an SSE event indicates a scout's state changed
+    /// somewhere (created, paused, deleted, finding arrived). Listened
+    /// for by `ScoutsRosterView` so the user-facing roster refreshes
+    /// when the change happened on another client (web/another phone).
+    static let scoutStateChanged = Notification.Name("brett.scout.stateChanged")
+}
+
 /// For events that surface into live UI (scout findings, Brett chat
 /// messages), the handler could additionally poke a store; for now we just
 /// call the relevant store's `refresh` method if the store exposes one.
@@ -112,9 +120,13 @@ final class SSEEventHandler {
         case .scoutStatusChanged,
              .scoutFindingCreated,
              .scoutRunCompleted:
-            // Scouts land through the regular pull plus may have their own
-            // dedicated refresh path. Triggering a pull is always safe.
+            // Scout views render from the API-backed `ScoutStore.scouts`
+            // array, NOT from SwiftData (the scout table sync exists but
+            // the UI doesn't read it directly). A pull alone won't
+            // refresh the visible roster — broadcast a notification so
+            // any open ScoutsRosterView re-fetches via its own store.
             syncTrigger?.schedulePushDebounced()
+            NotificationCenter.default.post(name: .scoutStateChanged, object: nil)
 
         case .brettMessageCreated:
             // Chat messages are surfaced to any open chat window via the

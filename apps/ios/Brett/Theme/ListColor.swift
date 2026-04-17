@@ -81,7 +81,12 @@ enum ListColor: String, CaseIterable, Identifiable {
     static var `default`: ListColor { .slate }
 
     /// Swatches exposed in the color picker UI (no duplicates).
+    ///
+    /// `.cerulean` is deliberately omitted: per the design guide cerulean is
+    /// reserved for Brett AI surfaces. Existing lists that were created with
+    /// `bg-cerulean` still render correctly (the case above handles parsing),
+    /// but new lists can't opt into the Brett brand color.
     static var pickerSwatches: [ListColor] {
-        [.slate, .blue, .sky, .emerald, .amber, .orange, .rose, .violet, .cerulean]
+        [.slate, .blue, .sky, .emerald, .amber, .orange, .rose, .violet]
     }
 }

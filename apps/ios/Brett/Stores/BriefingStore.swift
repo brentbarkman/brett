@@ -55,8 +55,13 @@ final class BriefingStore {
 
     /// Fetch today's cached briefing. Safe to call repeatedly — the server
     /// returns whatever was last persisted; there's no autogeneration trigger.
+    ///
+    /// Failure mode: if the request errors out we DO NOT replace an existing
+    /// cached briefing with an error message — the user pulled to refresh
+    /// the inbox and ended up with a transient sync error overwriting their
+    /// briefing. A quiet retry on the next fetch is better than a loud
+    /// "something went wrong" replacing real content.
     func fetch() async {
-        lastError = nil
         do {
             let response: BriefingResponse = try await api.request(
                 BriefingResponse.self,
@@ -65,8 +70,21 @@ final class BriefingStore {
             )
             briefing = response.briefing?.content
             generatedAt = response.briefing?.generatedAt
+            lastError = nil
         } catch {
-            lastError = Self.describe(error)
+            // Only surface the error if there's no cached briefing to keep
+            // showing. Even then, only on regenerate (user-initiated) does
+            // the card render the error prominently — passive fetches that
+            // fail just leave the card in its "no briefing yet" state.
+            if briefing == nil {
+                #if DEBUG
+                print("[BriefingStore] fetch failed with no cache: \(error)")
+                #endif
+            } else {
+                #if DEBUG
+                print("[BriefingStore] fetch failed but cache preserved: \(error)")
+                #endif
+            }
         }
     }
 
@@ -136,6 +154,7 @@ final class BriefingStore {
             switch apiError {
             case .offline: return "You're offline."
             case .unauthorized: return "Sign in again to refresh your briefing."
+            case .invalidCredentials: return "Sign in again to refresh your briefing."
             case .rateLimited: return "Too many briefing requests — try again in a minute."
             case .validation(let message): return message
             case .serverError(let status): return "Server error (\(status))."

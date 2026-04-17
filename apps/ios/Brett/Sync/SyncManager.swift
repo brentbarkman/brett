@@ -371,23 +371,48 @@ enum SyncError: LocalizedError {
     }
 }
 
-// MARK: - Default engine placeholders
+// MARK: - Default engine adapters
 
-/// Temporary standalone placeholders so the singleton `SyncManager.shared`
-/// compiles even before W2-B's concrete engines land. Once the real types
-/// exist and conform to `PushEngineProtocol`/`PullEngineProtocol`, swap the
-/// `SyncManager.shared` wiring to point at them and delete these.
-///
-/// These engines are intentionally no-ops: they return empty outcomes without
-/// hitting the network. That's strictly safer than a half-implemented engine.
+/// Thin adapter so the real `PushEngine` satisfies `PushEngineProtocol` —
+/// the two share a name but carry different `PushOutcome` shapes (the
+/// richer one on `PushEngine` isn't needed by `SyncManager`, so we collapse
+/// it into the minimal protocol-level outcome here).
 @MainActor
 private final class DefaultPushEngine: PushEngineProtocol {
     static let shared = DefaultPushEngine()
-    func push() async throws -> PushOutcome { PushOutcome() }
+
+    private let real: PushEngine
+
+    private init() {
+        let context = PersistenceController.shared.mainContext
+        self.real = PushEngine(mutationQueue: MutationQueue(context: context))
+    }
+
+    func push() async throws -> PushOutcome {
+        let r = try await real.push()
+        // Roll the granular counts (applied / merged / conflicts / errors)
+        // into the simple applied/failed pair that SyncManager cares about.
+        return PushOutcome(
+            applied: r.applied + r.merged,
+            failed: r.errors + r.conflicts
+        )
+    }
 }
 
+/// Thin adapter so the real `PullEngine` satisfies `PullEngineProtocol`.
+/// Collapses the per-table upsert/delete maps into total counts for the
+/// protocol-level outcome.
 @MainActor
 private final class DefaultPullEngine: PullEngineProtocol {
     static let shared = DefaultPullEngine()
-    func pull() async throws -> PullOutcome { PullOutcome() }
+
+    private let real = PullEngine()
+
+    func pull() async throws -> PullOutcome {
+        let r = try await real.pull()
+        return PullOutcome(
+            upserted: r.tablesUpserted.values.reduce(0, +),
+            deleted: r.tablesDeleted.values.reduce(0, +)
+        )
+    }
 }

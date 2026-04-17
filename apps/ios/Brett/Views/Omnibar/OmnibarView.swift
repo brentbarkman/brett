@@ -7,8 +7,14 @@ import SwiftUI
 /// to voice mode (speech-to-text with a live waveform).
 struct OmnibarView: View {
     let placeholder: String
-    /// 0 = Inbox, 1 = Today, 2 = Calendar. Drives parser defaults.
-    var currentPage: Int = 1
+    /// 0=Lists, 1=Inbox, 2=Today, 3=Calendar. Drives parser defaults.
+    /// (`MainContainer.currentPage` is the source of truth — keep
+    /// these in sync if you re-order the tabs.)
+    var currentPage: Int = 2
+    /// When set (e.g. when the Omnibar is hosted inside ListView) new
+    /// items default to this list unless the user explicitly tags a
+    /// different list via `#name`.
+    var listId: String? = nil
     var onSelectList: ((String) -> Void)? = nil
 
     @Environment(AuthManager.self) private var authManager
@@ -21,7 +27,6 @@ struct OmnibarView: View {
     )
 
     @State private var inputText = ""
-    @State private var showListDrawer = false
     @State private var isVoiceMode = false
     @State private var submitPulse = false
     @State private var parseFailure = false
@@ -48,27 +53,16 @@ struct OmnibarView: View {
                     .zIndex(10)
                 }
             }
-            .sheet(isPresented: $showListDrawer) {
-                ListDrawer(onSelectList: onSelectList)
-                    .presentationDetents([.medium])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(.ultraThinMaterial)
-            }
     }
 
     // MARK: - Pill
 
     private var pill: some View {
         HStack(spacing: 8) {
-            // Left: list drawer button.
-            Button {
-                showListDrawer = true
-            } label: {
-                Image(systemName: "list.bullet")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.40))
-                    .frame(width: 28, height: 28)
-            }
+            // List-drawer button removed — Lists has its own tab at the
+            // leftmost position, so the omnibar doesn't need a list
+            // picker anymore. The `#listname` shortcut still works for
+            // power users who want to assign a list inline.
 
             // Text field.
             TextField("", text: $inputText, prompt:
@@ -81,13 +75,11 @@ struct OmnibarView: View {
             .submitLabel(.send)
             .onSubmit { submit() }
             .accessibilityIdentifier("omnibar.input")
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { isFocused = false }
-                        .foregroundStyle(BrettColors.gold)
-                }
-            }
+            // `.keyboard` Done button was here — removed because it
+            // visually overlapped the gold send button and created a
+            // dual-submit UX. Return key + send button are enough;
+            // tap-outside-to-dismiss (wired in MainContainer) handles
+            // the "get rid of the keyboard without submitting" case.
 
             // Right: send when text present, mic when empty.
             if hasText {
@@ -177,13 +169,39 @@ struct OmnibarView: View {
         }
 
         let itemType: ItemType = parsed.kind == .event ? .content : .task
+
+        // List context precedence: explicit `#list` in input > host view's
+        // `listId` prop > none. Inside ListView the hosting view passes
+        // its current listId so new items land in that list unless the
+        // user tagged a different one.
+        let resolvedListId = parsed.listId ?? listId
+
+        // Today-view default: new tasks captured from the Today page
+        // should land in Today, not Inbox. Parser output takes precedence
+        // — if the user typed a natural-language date (or none because
+        // they were on Inbox) we respect it. Mirrors the desktop omnibar
+        // behaviour in `apps/desktop/src/api/omnibar.ts`.
+        // Today is now page index 2 (Lists/Inbox/Today/Calendar).
+        let resolvedDueDate: Date? = {
+            if let parsedDue = parsed.dueDate { return parsedDue }
+            if currentPage == 2 && itemType == .task {
+                return Calendar.current.startOfDay(for: Date())
+            }
+            return nil
+        }()
+
         let created = itemStore.create(
             userId: userId,
             title: parsed.title,
             type: itemType,
-            dueDate: parsed.dueDate,
-            listId: parsed.listId
+            dueDate: resolvedDueDate,
+            listId: resolvedListId
         )
+
+        // Hand the new id to SelectionStore so the host page can scroll
+        // it into view. Without this, adding a task to a long list looks
+        // like nothing happened — the row appears off-screen.
+        SelectionStore.shared.lastCreatedItemId = created.id
 
         // Reminder mapping: apply as a follow-up mutation so ItemStore.create
         // doesn't need a reminder parameter. Uses the just-created item id

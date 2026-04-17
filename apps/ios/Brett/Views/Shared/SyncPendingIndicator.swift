@@ -22,6 +22,13 @@ struct SyncPendingIndicator: View {
     }
 
     var body: some View {
+        // The "N pending" pill is dev-facing telemetry — it surfaces the
+        // mutation queue depth so we can spot stuck pushes during
+        // development. In Release builds the existing offline banner +
+        // the gold/cerulean pulse on `SyncStatusIndicator` are enough
+        // signal for end users; the pill just adds noise and prompts
+        // questions like "what does '1 pending' mean?"
+        #if DEBUG
         if pendingCount > 0 {
             Button {
                 showDetails = true
@@ -63,6 +70,9 @@ struct SyncPendingIndicator: View {
                 .onAppear { startPolling() }
                 .onDisappear { stopPolling() }
         }
+        #else
+        Color.clear.frame(width: 0, height: 0)
+        #endif
     }
 
     // MARK: - Poll

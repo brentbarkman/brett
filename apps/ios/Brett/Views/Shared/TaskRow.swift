@@ -176,14 +176,18 @@ struct TaskRow: View {
 
                     if viewModel.isCompleted {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(BrettColors.success)
                     } else {
                         Image(systemName: "bolt.fill")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(BrettColors.gold.opacity(0.7))
                     }
                 }
+                // Both icon glyphs render at 13pt bold so completed and
+                // incomplete rows have visually identical leading anchors.
+                // Earlier 12pt vs 13pt + medium vs semibold made the
+                // checkmark look smaller and pull left.
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
                 .highPriorityGesture(

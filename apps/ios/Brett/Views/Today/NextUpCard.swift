@@ -23,15 +23,16 @@ struct NextUpCard: View {
 
         return AnyView(
             StickyCardSection(tint: BrettColors.cerulean) {
+                // Same treatment as DailyBriefing: drop the icon, use
+                // neutral white for the label. The card's cerulean rim
+                // (from `tint`) carries the AI-surface signal. Time-til
+                // copy on the right stays cerulean to flag urgency on
+                // the imminent path.
                 HStack(spacing: 6) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(BrettColors.cerulean.opacity(0.80))
-
                     Text("NEXT UP")
                         .font(BrettTypography.sectionLabel)
                         .tracking(2.4)
-                        .foregroundStyle(BrettColors.cerulean.opacity(0.80))
+                        .foregroundStyle(Color.white.opacity(0.60))
 
                     Spacer()
 

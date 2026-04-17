@@ -11,6 +11,7 @@ struct BrettChatSection: View {
     let itemId: String
 
     @State private var input: String = ""
+    @State private var aiStore = AIProviderStore.shared
     @FocusState private var isFocused: Bool
 
     private var messages: [ChatMessage] {
@@ -47,9 +48,54 @@ struct BrettChatSection: View {
                     .foregroundStyle(BrettColors.error)
             }
 
-            inputBar
+            // Hide the input behind a gate until we know there's an AI
+            // provider configured. `nil` means unchecked — we render the
+            // input anyway so the user isn't blocked by a probe round-
+            // trip; once the refresh lands we either keep the input or
+            // swap in the configure-CTA.
+            if aiStore.hasActiveProvider == false {
+                notConfiguredGate
+            } else {
+                inputBar
+            }
         }
         .glassCard(tint: BrettColors.cerulean)
+        .task {
+            // Refresh in the background; views react as `hasActiveProvider`
+            // resolves. Kept simple: no polling, just one check per mount.
+            await aiStore.refresh()
+        }
+    }
+
+    /// Shown in place of the input bar when the user hasn't set up an AI
+    /// provider yet. Short, friendly, points them at Settings.
+    private var notConfiguredGate: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "cpu")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(BrettColors.cerulean.opacity(0.70))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Add an AI provider to chat with Brett")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.85))
+                Text("Settings → AI Providers")
+                    .font(.system(size: 11))
+                    .foregroundStyle(BrettColors.textMeta)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Color.white.opacity(0.04),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(BrettColors.cerulean.opacity(0.25), lineWidth: 0.5)
+        }
     }
 
     // MARK: - Header
@@ -145,7 +191,19 @@ struct BrettChatSection: View {
 
     private var inputBar: some View {
         HStack(spacing: 8) {
-            TextField("Ask Brett about this task\u{2026}", text: $input, axis: .vertical)
+            // `prompt:` lets us style the placeholder independently of the
+            // field's foreground — the default SwiftUI behaviour of dimming
+            // the foreground produced low-contrast hint text on the glass
+            // tint. Cerulean caret stays (this IS a Brett AI surface) but
+            // the placeholder is neutral so it reads.
+            TextField(
+                text: $input,
+                prompt: Text("Ask Brett about this task\u{2026}")
+                    .foregroundStyle(BrettColors.textPlaceholder),
+                axis: .vertical
+            ) {
+                Text("Ask Brett")
+            }
                 .focused($isFocused)
                 .font(.system(size: 13))
                 .foregroundStyle(.white)

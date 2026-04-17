@@ -65,27 +65,42 @@ enum SmartParser {
     static func parse(_ input: String, context: ParseContext) -> ParsedInput {
         var working = input.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // 1. List tag
-        let (afterList, listId) = extractListTag(from: working, lists: context.lists)
-        working = afterList
-
-        // 2. Natural-language dates + times. Dates are extracted (removed
-        //    from the title) as we find them.
-        let (afterDate, dueDate, hasExplicitTime) = extractDate(from: working, context: context)
-        working = afterDate
-
-        // 3. Clean up the title — collapse whitespace, strip trailing
-        //    punctuation left by the date extractor.
-        let cleanedTitle = normalizeTitle(working)
-
-        // 4. Classify kind. Question detection runs against the ORIGINAL
-        //    input so trailing `?` isn't lost to date cleanup.
+        // Classify kind FIRST so we can short-circuit date extraction for
+        // questions. Without this, "what's most important today" had
+        // "today" stripped from the title, leaving "what's most important"
+        // and an unwanted dueDate. Questions are sentences, not date
+        // intents — the desktop omnibar doesn't run any natural-language
+        // date parser at all and we should match that for question-shaped
+        // input.
         let kind = classifyKind(
             originalInput: input.trimmingCharacters(in: .whitespacesAndNewlines),
             currentPage: context.currentPage
         )
 
-        // 5. Pick a reminder default. Only set one if we actually have a
+        // 1. List tag — always run, harmless on questions.
+        let (afterList, listId) = extractListTag(from: working, lists: context.lists)
+        working = afterList
+
+        // 2. Natural-language dates + times. Dates are extracted (removed
+        //    from the title) as we find them. Skipped entirely for
+        //    questions (see above).
+        let dueDate: Date?
+        let hasExplicitTime: Bool
+        if kind == .question {
+            dueDate = nil
+            hasExplicitTime = false
+        } else {
+            let (afterDate, parsedDue, parsedHasTime) = extractDate(from: working, context: context)
+            working = afterDate
+            dueDate = parsedDue
+            hasExplicitTime = parsedHasTime
+        }
+
+        // 3. Clean up the title — collapse whitespace, strip trailing
+        //    punctuation left by the date extractor.
+        let cleanedTitle = normalizeTitle(working)
+
+        // 4. Pick a reminder default. Only set one if we actually have a
         //    due date — otherwise there's nothing to remind about.
         let reminder: Reminder? = {
             guard dueDate != nil else { return nil }
@@ -538,7 +553,8 @@ enum SmartParser {
                 return .question
             }
         }
-        if currentPage == 2 {
+        // Calendar tab is now index 3 (Lists/Inbox/Today/Calendar).
+        if currentPage == 3 {
             return .event
         }
         return .task

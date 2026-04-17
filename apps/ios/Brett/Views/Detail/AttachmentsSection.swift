@@ -304,7 +304,10 @@ struct AttachmentsSection: View {
     }
 
     private func iconColor(_ mimeType: String) -> Color {
-        if mimeType.hasPrefix("image/") { return BrettColors.cerulean }
+        // Cerulean is Brett AI only — attachments are user content, not
+        // AI surfaces. Use the listBlue tint for images so they're still
+        // colour-coded without borrowing the brand signal.
+        if mimeType.hasPrefix("image/") { return BrettColors.listBlue }
         if mimeType.contains("pdf") { return BrettColors.error }
         if mimeType.hasPrefix("video/") { return BrettColors.purple400 }
         return BrettColors.textInactive

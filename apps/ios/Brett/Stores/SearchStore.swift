@@ -305,6 +305,7 @@ final class SearchStore {
         switch error {
         case .offline: return "You appear to be offline."
         case .unauthorized: return "Session expired. Sign in again."
+        case .invalidCredentials: return "Session expired. Sign in again."
         case .rateLimited: return "Too many requests. Give it a sec."
         case .validation(let m): return m
         case .serverError: return "Server error. Try again shortly."

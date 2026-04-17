@@ -265,15 +265,14 @@ struct TriagePopup: View {
     }
 
     private func listSwatch(_ list: ItemList) -> Color {
-        // Prefer the stored colorClass token like "bg-blue-500". Fall back to
-        // cerulean tint if we can't resolve it.
-        let token = list.colorClass
-        if token.contains("blue") { return BrettColors.cerulean }
-        if token.contains("purple") { return BrettColors.purple400 }
-        if token.contains("amber") || token.contains("yellow") { return BrettColors.gold }
-        if token.contains("emerald") || token.contains("green") { return BrettColors.emerald }
-        if token.contains("red") { return BrettColors.error }
-        return BrettColors.cerulean.opacity(0.8)
+        // Resolve the stored colorClass token like "bg-blue-500" via the
+        // canonical `ListColor` enum so we stay consistent with list pickers
+        // elsewhere. Falls back to slate (neutral) rather than cerulean —
+        // cerulean is Brett AI only, never a fallback for "some color."
+        if let color = ListColor(colorClass: list.colorClass) {
+            return color.swiftUIColor
+        }
+        return ListColor.slate.swiftUIColor
     }
 
     // MARK: - Commits

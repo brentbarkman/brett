@@ -7,88 +7,133 @@ import SwiftUI
 struct ConnectCalendarModal: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(AuthManager.self) private var authManager
 
     @Bindable var accountsStore: CalendarAccountsStore
 
+    /// Mirrors desktop's `useState(true)` default. Opting out drops the
+    /// Drive/Docs scopes; the server side reads the `meetingNotes`
+    /// query param.
+    @State private var includeMeetingNotes = true
     @State private var isConnecting = false
     @State private var errorMessage: String?
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Title
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Connect Google Calendar")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("Bring your meetings into Brett.")
-                    .font(BrettTypography.body)
-                    .foregroundStyle(Color.white.opacity(0.60))
-            }
+    private var assistantName: String {
+        authManager.currentUser?.assistantName ?? "Brett"
+    }
 
-            // Benefits
-            VStack(alignment: .leading, spacing: 14) {
-                benefitRow(systemImage: "calendar", title: "See your meetings next to your tasks")
-                benefitRow(systemImage: "sparkles", title: "Tap events for Brett's prep")
-                benefitRow(systemImage: "note.text", title: "Meeting notes sync back to Brett")
+    var body: some View {
+        VStack(spacing: 20) {
+            // Header — mirrors desktop copy. Calendar glyph in a neutral
+            // glass chip, centered title/subtitle.
+            VStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                        }
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "calendar")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.60))
+                }
+
+                Text("Connect your Google Calendar")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Text("\(assistantName) will sync your events and keep them up to date")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
             }
-            .padding(.top, 4)
+            .padding(.top, 6)
+
+            // Meeting-notes toggle — same framing as desktop: a card with
+            // the toggle and an explanation that names the user's
+            // assistant, so the value prop is concrete.
+            meetingNotesCard
 
             if let errorMessage {
                 Text(errorMessage)
                     .font(BrettTypography.taskMeta)
                     .foregroundStyle(BrettColors.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            // Actions
-            VStack(spacing: 10) {
+            // Actions — matches desktop's "Cancel" + "Continue to Google
+            // →" pair. Cancel is the secondary; continue is the gold CTA.
+            HStack(spacing: 10) {
+                Button("Cancel") { dismiss() }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.60))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(
+                        Color.white.opacity(0.04),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+
                 Button {
                     Task { await connect() }
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         if isConnecting {
-                            ProgressView()
-                                .tint(.black)
+                            ProgressView().tint(.white).scaleEffect(0.85)
                         }
-                        Text(isConnecting ? "Connecting..." : "Connect")
-                            .font(.system(size: 15, weight: .semibold))
+                        Text(isConnecting ? "Connecting…" : "Continue to Google")
+                            .font(.system(size: 14, weight: .semibold))
+                        if !isConnecting {
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(height: 44)
+                    .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .disabled(isConnecting)
-
-                Button("Later") {
-                    dismiss()
-                }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.60))
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 28)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
         .padding(.bottom, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black.opacity(0.85))
     }
 
-    @ViewBuilder
-    private func benefitRow(systemImage: String, title: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(BrettColors.gold)
-                .frame(width: 22, height: 22)
-                .background(BrettColors.gold.opacity(0.15), in: Circle())
-            Text(title)
-                .font(BrettTypography.body)
-                .foregroundStyle(Color.white.opacity(0.85))
-            Spacer()
+    private var meetingNotesCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Include meeting notes")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.90))
+
+                    Text("\(assistantName) reads your Meet transcripts to extract action items and build a richer picture of your work. Less note-taking, fewer dropped balls.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.50))
+                        .lineSpacing(2)
+                }
+
+                Toggle("", isOn: $includeMeetingNotes)
+                    .labelsHidden()
+                    .tint(BrettColors.gold)
+            }
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                }
         }
     }
 
@@ -97,7 +142,7 @@ struct ConnectCalendarModal: View {
         errorMessage = nil
         defer { isConnecting = false }
         do {
-            let url = try await accountsStore.connect()
+            let url = try await accountsStore.connect(meetingNotes: includeMeetingNotes)
             openURL(url)
             dismiss()
         } catch {

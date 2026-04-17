@@ -22,7 +22,13 @@ struct SignInView: View {
 
                 if isSignUp {
                     labeledField("NAME") {
-                        TextField("Your name", text: $name)
+                        TextField(
+                            text: $name,
+                            prompt: Text("Your name")
+                                .foregroundStyle(BrettColors.textPlaceholder)
+                        ) {
+                            Text("Name")
+                        }
                             .textFieldStyle(.plain)
                             .foregroundStyle(.white)
                             .textContentType(.name)
@@ -31,7 +37,13 @@ struct SignInView: View {
                 }
 
                 labeledField("EMAIL") {
-                    TextField("you@example.com", text: $email)
+                    TextField(
+                        text: $email,
+                        prompt: Text("you@example.com")
+                            .foregroundStyle(BrettColors.textPlaceholder)
+                    ) {
+                        Text("Email")
+                    }
                         .textFieldStyle(.plain)
                         .foregroundStyle(.white)
                         .textContentType(.emailAddress)
@@ -41,14 +53,23 @@ struct SignInView: View {
                 }
 
                 labeledField("PASSWORD") {
-                    SecureField("••••••••", text: $password)
+                    SecureField(
+                        text: $password,
+                        prompt: Text("••••••••")
+                            .foregroundStyle(BrettColors.textPlaceholder)
+                    ) {
+                        Text("Password")
+                    }
                         .textFieldStyle(.plain)
                         .foregroundStyle(.white)
                         .textContentType(isSignUp ? .newPassword : .password)
                         .accessibilityIdentifier("signin.password")
                 }
 
-                if let error = authManager.errorMessage {
+                if authManager.errorIsNoAccount {
+                    noAccountBanner
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else if let error = authManager.errorMessage {
                     errorBanner(error)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -150,6 +171,53 @@ struct SignInView: View {
                             .strokeBorder(BrettColors.error.opacity(0.25), lineWidth: 0.5)
                     }
             }
+    }
+
+    /// Shown when the sign-in attempt failed because there's no account
+    /// matching the email. Replaces the generic error banner with an
+    /// explainer + gold "Create account" CTA that flips the form into
+    /// sign-up mode (keeping the email/password the user already typed).
+    private var noAccountBanner: some View {
+        VStack(spacing: 10) {
+            Text("No account matches that email.")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text("Create one with these details?")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.white.opacity(0.60))
+                .multilineTextAlignment(.center)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isSignUp = true
+                    authManager.clearError()
+                }
+            } label: {
+                Text("Create account")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(BrettColors.gold)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("signin.no_account.create")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(BrettColors.gold.opacity(0.30), lineWidth: 0.5)
+                }
+        }
     }
 
     /// Primary CTA. Matches desktop: solid gold background + **white** text.

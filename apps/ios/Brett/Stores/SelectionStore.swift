@@ -22,6 +22,12 @@ final class SelectionStore {
     /// surfaces can inspect "what's focused right now".
     var selectedEventId: String?
 
+    /// Id of the most-recently-created item — set by the Omnibar after a
+    /// successful `itemStore.create()`. Pages observe this via `.onChange`
+    /// to scroll the new row into view; users adding to a long list
+    /// otherwise can't tell whether the create happened.
+    var lastCreatedItemId: String?
+
     static let shared = SelectionStore()
 
     init() {}
@@ -30,5 +36,6 @@ final class SelectionStore {
     func clear() {
         selectedTaskId = nil
         selectedEventId = nil
+        lastCreatedItemId = nil
     }
 }

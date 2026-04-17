@@ -49,16 +49,20 @@ struct EmptyState: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             if let heading {
                 Text(heading)
                     .font(BrettTypography.emptyHeading)
-                    .foregroundStyle(Color.white)
+                    // Electron uses text-white/90 for the heading. Pure
+                    // white was too loud against the muted body copy.
+                    .foregroundStyle(Color.white.opacity(0.90))
                     .multilineTextAlignment(.center)
             }
             Text(message)
                 .font(BrettTypography.emptyCopy)
-                .foregroundStyle(Color.white.opacity(0.50))
+                // text-white/40 in Electron — slightly subtler than the
+                // /0.50 we had, helps the heading land first.
+                .foregroundStyle(Color.white.opacity(0.40))
                 .multilineTextAlignment(.center)
 
             if let action, let actionLabel {

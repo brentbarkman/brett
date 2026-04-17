@@ -5,6 +5,11 @@ enum BrettColors {
     static let gold = Color(red: 232/255, green: 185/255, blue: 49/255)       // #E8B931
     static let cerulean = Color(red: 70/255, green: 130/255, blue: 195/255)   // #4682C3
 
+    // Regular blue — for user-pickable "blue" list-color tokens, NOT a Brett
+    // AI signal. Distinct from cerulean so lists don't accidentally carry the
+    // Brett brand. Matches ListColor.blue (Tailwind blue-400, #60A5FA).
+    static let listBlue = Color(red: 96/255, green: 165/255, blue: 250/255)   // #60A5FA
+
     // Semantic
     static let success = Color(red: 72/255, green: 187/255, blue: 160/255)    // #48BBA0 (teal)
     static let error = Color(red: 230/255, green: 85/255, blue: 75/255)       // #E6554B
@@ -28,8 +33,10 @@ enum BrettColors {
     static let cardBorder = Color.white.opacity(0.10)       // Default card/divider borders
     static let hairline = Color.white.opacity(0.05)         // Very subtle grid lines
 
-    // Section label color — always white/40
-    static let sectionLabelColor = Color.white.opacity(0.40)
+    // Section label color — gold at /50 per design guide (§ Electric Gold:
+    // "Section header text | At /50 opacity"). Previously white/40, which
+    // users flagged as illegible. Gold/50 is on-brand AND higher contrast.
+    static let sectionLabelColor = gold.opacity(0.50)
 
     // Emerald (scout active status, positive feedback) — matches Tailwind emerald-400
     static let emerald = Color(red: 52/255, green: 211/255, blue: 153/255)     // #34D399

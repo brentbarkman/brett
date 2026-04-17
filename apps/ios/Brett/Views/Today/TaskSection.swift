@@ -27,49 +27,76 @@ struct TaskSection: View {
     @ViewBuilder
     var body: some View {
         if !items.isEmpty {
+            // `id` exposed for ScrollViewReader so callers can
+            // `proxy.scrollTo("section_today")` etc. when content lands
+            // here. Lowercased to match the convention TodayPage scrolls to.
             StickyCardSection {
+                // Icon dropped — Electron section headers don't have one,
+                // and the user wants iOS to match. The label text +
+                // (optional) accentColor stripe on the rows already
+                // signal what kind of section this is.
                 HStack(spacing: 6) {
-                    Image(systemName: icon)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(labelColor.opacity(0.80))
-
                     Text(label.uppercased())
                         .font(BrettTypography.sectionLabel)
                         .tracking(2.4)
-                        .foregroundStyle(labelColor.opacity(0.80))
+                        // Always neutral white — matches Electron's
+                        // `text-white/40` for ALL sections (Overdue
+                        // included). Per-section accent now lives only
+                        // on the row stripe.
+                        .foregroundStyle(Color.white.opacity(0.60))
 
                     Spacer()
 
                     Text("\(items.count)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(labelColor.opacity(0.50))
+                        .foregroundStyle(Color.white.opacity(0.40))
                 }
             } content: {
                 VStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        if let accent = accentColor {
-                            HStack(spacing: 0) {
-                                Rectangle()
-                                    .fill(accent)
-                                    .frame(width: 3)
-                                    .clipShape(RoundedRectangle(cornerRadius: 1.5))
-                                    .padding(.vertical, 4)
+                        Group {
+                            if let accent = accentColor {
+                                HStack(spacing: 0) {
+                                    Rectangle()
+                                        .fill(accent)
+                                        .frame(width: 3)
+                                        .clipShape(RoundedRectangle(cornerRadius: 1.5))
+                                        .padding(.vertical, 4)
 
+                                    taskRow(for: item)
+                                        .padding(.leading, 8)
+                                }
+                            } else {
                                 taskRow(for: item)
-                                    .padding(.leading, 8)
                             }
-                        } else {
-                            taskRow(for: item)
-                        }
 
-                        if index < items.count - 1 {
-                            Divider().background(BrettColors.hairline)
-                                .padding(.horizontal, 16)
+                            if index < items.count - 1 {
+                                Divider().background(BrettColors.hairline)
+                                    .padding(.horizontal, 16)
+                            }
                         }
+                        // Per-row transition: rows fade + slide in from
+                        // the top on insert, fade + slightly collapse on
+                        // removal. Completing a task now visibly slides
+                        // it out of this section instead of popping.
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .top)),
+                                removal: .opacity.combined(with: .scale(scale: 0.92))
+                            )
+                        )
                     }
                 }
                 .padding(.bottom, 8)
+                // Drives the row enter/exit animations above. Keyed on
+                // the id list so only insertions/removals animate, not
+                // every property mutation inside an item.
+                .animation(
+                    .spring(response: 0.45, dampingFraction: 0.85),
+                    value: items.map(\.id)
+                )
             }
+            .id("section_\(label.lowercased().replacingOccurrences(of: " ", with: "_"))")
         }
     }
 

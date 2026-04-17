@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 /// Inbox page wired to live sync data from `ItemStore`.
@@ -33,6 +34,14 @@ struct InboxPage: View {
     /// just avoids sheet-scroll edge cases.)
     @State private var refreshTick: Int = 0
 
+    /// Used to decide skeleton-vs-empty-state when the inbox has zero
+    /// items. See TodayPage for the same pattern.
+    @Query private var syncHealthRows: [SyncHealth]
+
+    private var hasCompletedInitialSync: Bool {
+        syncHealthRows.first?.lastSuccessfulPullAt != nil
+    }
+
     private var allInboxItems: [Item] {
         _ = refreshTick
         return itemStore.fetchInbox()
@@ -43,24 +52,47 @@ struct InboxPage: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                header
+        // Wrapped in a ScrollViewReader so a freshly-captured task can
+        // be scrolled into view. Without this, the new row appears at
+        // the top of the inbox card but the user might be scrolled
+        // halfway down a long inbox and miss it entirely.
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
 
-                TypeFilterPills(selected: $selectedFilter)
+                    TypeFilterPills(selected: $selectedFilter)
 
-                if filteredItems.isEmpty {
-                    EmptyState(heading: "Your inbox", copy: "Everything worth doing starts here.")
-                        .padding(.top, 48)
-                } else {
-                    inboxCard
+                    if filteredItems.isEmpty {
+                        if hasCompletedInitialSync {
+                            EmptyState(heading: "Your inbox", copy: "Everything worth doing starts here.")
+                                .padding(.top, 48)
+                        } else {
+                            TaskListPlaceholder()
+                                .padding(.top, 24)
+                        }
+                    } else {
+                        inboxCard
+                            .id("inbox_top")
+                    }
+                }
+                .padding(.bottom, isSelectMode ? 140 : 70)
+            }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .coordinateSpace(name: "scroll")
+            .onChange(of: SelectionStore.shared.lastCreatedItemId) { _, newId in
+                guard newId != nil else { return }
+                // Inbox is sorted newest-first, so the new row lives at
+                // the top of the card. Scroll there with a soft spring.
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    proxy.scrollTo("inbox_top", anchor: .top)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    SelectionStore.shared.lastCreatedItemId = nil
                 }
             }
-            .padding(.bottom, isSelectMode ? 140 : 70)
         }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        .coordinateSpace(name: "scroll")
         // Multi-select toolbar rides above the omnibar via a safeAreaInset.
         // Using an overlay would fight the global OmnibarView placement, so
         // we mount the toolbar inline so both can coexist without layout shift.
@@ -111,7 +143,10 @@ struct InboxPage: View {
 
             Text("\(allInboxItems.count) to triage")
                 .font(BrettTypography.stats)
-                .foregroundStyle(Color.white.opacity(0.35))
+                // Bumped from /0.35 (per user "hard to see"). Aligns
+                // with Today's stats line which renders at the same
+                // brightness for the same role.
+                .foregroundStyle(Color.white.opacity(0.55))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -123,15 +158,14 @@ struct InboxPage: View {
 
     private var inboxCard: some View {
         StickyCardSection {
+            // Match TaskSection: neutral white label, count on the right
+            // (after the Spacer). The gold "INBOX" + count-next-to-title
+            // diverged from every other section in the app.
             HStack(spacing: 6) {
                 Text("INBOX")
                     .font(BrettTypography.sectionLabel)
-                    .tracking(1.5)
-                    .foregroundStyle(BrettColors.gold.opacity(0.50))
-
-                Text("\(filteredItems.count)")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.35))
+                    .tracking(2.4)
+                    .foregroundStyle(Color.white.opacity(0.60))
 
                 Spacer()
 
@@ -142,6 +176,10 @@ struct InboxPage: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(BrettColors.gold)
                 }
+
+                Text("\(filteredItems.count)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.40))
             }
         } content: {
             VStack(spacing: 0) {

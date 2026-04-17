@@ -40,12 +40,29 @@ final class ChatStore {
 
     init(
         apiClient: APIClient = .shared,
-        session: URLSession = .shared,
+        session: URLSession = ChatStore.makeStreamingSession(),
         persistence: PersistenceController? = .shared
     ) {
         self.apiClient = apiClient
         self.session = session
         self.persistence = persistence
+    }
+
+    /// Build a URLSession tuned for SSE streaming. The default
+    /// `URLSession.shared` aggressively buffers responses on iOS — chunks
+    /// arrive in big bursts (or never) for `text/event-stream` traffic
+    /// over LAN HTTP. A dedicated configuration with a long resource
+    /// timeout + disabled cookie/cache machinery streams reliably.
+    private static func makeStreamingSession() -> URLSession {
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 120         // wait up to 2 min for FIRST byte
+        cfg.timeoutIntervalForResource = 600        // total stream lifetime cap
+        cfg.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        cfg.urlCache = nil
+        cfg.httpCookieStorage = nil
+        cfg.httpShouldUsePipelining = false
+        cfg.waitsForConnectivity = false
+        return URLSession(configuration: cfg)
     }
 
     // MARK: - Public API
@@ -137,31 +154,87 @@ final class ChatStore {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         do {
+            #if DEBUG
+            print("[ChatStore] POST \(url) — opening stream")
+            #endif
             let (bytes, response) = try await session.bytes(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
-                lastError[key] = "Chat request failed"
+            guard let http = response as? HTTPURLResponse else {
+                lastError[key] = "Chat request returned a non-HTTP response"
+                markAssistantComplete(key: key, index: assistantIndex)
+                return
+            }
+            guard (200...299).contains(http.statusCode) else {
+                #if DEBUG
+                print("[ChatStore] HTTP \(http.statusCode) — abandoning stream")
+                #endif
+                // Try to read whatever JSON the server returned so the
+                // user gets a useful message instead of "Chat request
+                // failed". Particularly important for 403 (no AI key)
+                // and 429 (rate limit). Drained via a manual for-await
+                // loop because `AsyncSequence.reduce(into:)` takes a
+                // non-`@Sendable` closure that Swift 6 strict
+                // concurrency rejects in this `Task`-isolated context.
+                var bodyData = Data()
+                if let drained = try? await drainBytes(from: bytes) {
+                    bodyData = drained
+                }
+                let bodyText = String(data: bodyData, encoding: .utf8) ?? ""
+                if let json = bodyText.data(using: .utf8).flatMap({ try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any],
+                   let msg = json["message"] as? String {
+                    lastError[key] = msg
+                } else {
+                    lastError[key] = "Chat request failed (HTTP \(http.statusCode))"
+                }
+                markAssistantComplete(key: key, index: assistantIndex)
                 return
             }
 
+            #if DEBUG
+            print("[ChatStore] HTTP 200 — streaming…")
+            // Reference-type counter so the @Sendable closure passed to
+            // parseSSE can mutate it under Swift 6 strict concurrency.
+            // (parseSSE invokes the closure sequentially per line, but
+            // the compiler can't prove that — the box keeps the data race
+            // checker happy without us pulling in an actor.)
+            let chunkCount = ChunkBox()
+            #endif
+
             try await Self.parseSSE(lines: bytes.lines) { [weak self] event in
                 guard let self else { return }
+                #if DEBUG
+                if case .chunk = event { chunkCount.increment() }
+                #endif
                 await MainActor.run {
                     self.handle(event: event, key: key, assistantIndex: assistantIndex)
                 }
             }
 
+            #if DEBUG
+            print("[ChatStore] stream closed after \(chunkCount.value) chunks")
+            #endif
+
             // Finalise: persist the assistant text to BrettMessage + mark
             // the UI bubble as no-longer streaming.
             if let final = messages[key]?[safe: assistantIndex] {
                 markAssistantComplete(key: key, index: assistantIndex)
-                persistAssistant(
-                    content: final.content,
-                    itemId: itemId,
-                    calendarEventId: calendarEventId
-                )
+                if final.content.isEmpty {
+                    // Stream finished but produced nothing. Keeping a
+                    // blank assistant bubble is a worse failure than
+                    // surfacing what happened — leave a soft message so
+                    // the user knows to retry.
+                    lastError[key] = lastError[key] ?? "No response — try again."
+                } else {
+                    persistAssistant(
+                        content: final.content,
+                        itemId: itemId,
+                        calendarEventId: calendarEventId
+                    )
+                }
             }
         } catch {
+            #if DEBUG
+            print("[ChatStore] stream error: \(error)")
+            #endif
             lastError[key] = (error as? APIError)?.userFacingMessage ?? error.localizedDescription
             markAssistantComplete(key: key, index: assistantIndex)
         }
@@ -269,6 +342,20 @@ final class ChatStore {
         try? context.save()
     }
 
+    /// Drain an `URLSession.AsyncBytes` sequence into a `Data` buffer.
+    /// Used to read the body of error responses (4xx/5xx) so we can
+    /// surface the server's message text to the user. The manual
+    /// for-await loop avoids `AsyncSequence.reduce`'s non-`@Sendable`
+    /// closure parameter, which Swift 6 won't let us pass from a
+    /// `Task`-isolated context.
+    private func drainBytes(from bytes: URLSession.AsyncBytes) async throws -> Data {
+        var buffer = Data()
+        for try await byte in bytes {
+            buffer.append(byte)
+        }
+        return buffer
+    }
+
     // MARK: - SSE parser (internal so tests can exercise it)
 
     enum StreamEvent: Equatable {
@@ -366,3 +453,15 @@ private extension Array {
         indices.contains(index) ? self[index] : nil
     }
 }
+
+#if DEBUG
+/// Reference-type counter for use inside `@Sendable` closures under Swift
+/// 6 strict concurrency. Mutating a `var Int` from a sendable closure is
+/// rejected because the compiler can't prove sequential access; boxing
+/// the count in a class side-steps that without forcing us to pull in an
+/// actor or `Atomics`. Only used in DEBUG (chunk-count log line).
+private final class ChunkBox: @unchecked Sendable {
+    private(set) var value: Int = 0
+    func increment() { value += 1 }
+}
+#endif

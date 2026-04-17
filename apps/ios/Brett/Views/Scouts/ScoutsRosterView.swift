@@ -4,8 +4,10 @@ import SwiftUI
 /// `antenna.radiowaves.left.and.right` icon in `MainContainer`.
 struct ScoutsRosterView: View {
     @State private var scoutStore = ScoutStore()
+    @State private var aiStore = AIProviderStore.shared
     @State private var statusFilter: StatusFilter = .all
     @State private var isPresentingNewScout = false
+    @State private var showNoAIAlert = false
     @State private var pendingAction: PendingAction?
     @Environment(\.dismiss) private var dismiss
 
@@ -33,6 +35,23 @@ struct ScoutsRosterView: View {
         }
     }
 
+    /// Client-side filter. Cheaper than refetching for every segment
+    /// tap AND avoids the "empty state flashes in between filter
+    /// changes" problem (audit item #18).
+    private var filteredScouts: [APIClient.ScoutDTO] {
+        switch statusFilter {
+        case .all:
+            return scoutStore.scouts
+        case .active:
+            return scoutStore.scouts.filter { $0.status == "active" }
+        case .paused:
+            return scoutStore.scouts.filter { $0.status == "paused" }
+        case .archived:
+            // "archived" UI maps to server-side "completed" status.
+            return scoutStore.scouts.filter { $0.status == "completed" || $0.status == "archived" }
+        }
+    }
+
     var body: some View {
         ZStack {
             BackgroundView()
@@ -44,7 +63,11 @@ struct ScoutsRosterView: View {
 
                     if scoutStore.isLoading && scoutStore.scouts.isEmpty {
                         loadingState
-                    } else if scoutStore.scouts.isEmpty {
+                    } else if filteredScouts.isEmpty {
+                        // Only show the emptyState when the user genuinely
+                        // has nothing for this filter — not while we're
+                        // mid-fetch. The isLoading guard above handles
+                        // the initial cold-start case.
                         emptyState
                     } else {
                         grid
@@ -58,28 +81,48 @@ struct ScoutsRosterView: View {
 
             fab
         }
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button { dismiss() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Back")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .foregroundStyle(BrettColors.gold)
-                }
-            }
-        }
+        // Uses iOS's default back button for consistency with ListView and
+        // the rest of the app. Previously had a custom gold "Back" button
+        // which diverged from ScoutDetailView's "Scouts" label and from
+        // every other pushed screen's default chrome.
+        // `.navigationTitle("Scouts")` is required: without it (or some
+        // other navbar registrant like a `.principal` toolbar item),
+        // SwiftUI doesn't wire the interactive pop gesture, so the user
+        // can't swipe-from-the-edge to go back. Slight visual
+        // redundancy with the big in-page "Scouts" header is the price.
+        .navigationTitle("Scouts")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
-            await scoutStore.refreshScouts(status: statusFilter.serverValue)
+            // One fetch of all scouts; the segmented picker filters them
+            // client-side so switching filters is instant and never shows
+            // the "no scouts yet" card while the network round-trips.
+            await scoutStore.refreshScouts(status: nil)
+            // Check whether the user has an AI provider configured so we
+            // can gate the "+ new scout" affordance. Background task —
+            // UI waits for neither.
+            await aiStore.refresh()
         }
         .refreshable {
-            await scoutStore.refreshScouts(status: statusFilter.serverValue)
+            await scoutStore.refreshScouts(status: nil)
         }
-        .onChange(of: statusFilter) { _, newValue in
-            Task { await scoutStore.refreshScouts(status: newValue.serverValue) }
+        // SSE-driven live refresh. When a scout is deleted/paused on
+        // another client (web), the server fires `scout.status.changed`
+        // and `SSEEventHandler` rebroadcasts it as a local notification.
+        // Without this, the roster would show the deleted scout until
+        // the user navigated away and back.
+        .onReceive(NotificationCenter.default.publisher(for: .scoutStateChanged)) { _ in
+            Task { await scoutStore.refreshScouts(status: nil) }
+        }
+        .alert("Configure an AI provider", isPresented: $showNoAIAlert) {
+            Button("Cancel", role: .cancel) {}
+            // We don't have a direct NavigationLink from here to the
+            // settings sub-view, so surface the path inline. Tapping
+            // "Open Settings" dismisses the alert and tells the user
+            // where to go — a direct push would require threading path
+            // state up to `MainContainer`.
+            Button("Got it") {}
+        } message: {
+            Text("You'll need to add an AI provider key before scouts can run. Open Settings → AI Providers to add one.")
         }
         .sheet(isPresented: $isPresentingNewScout) {
             NewScoutSheet { payload in
@@ -148,7 +191,7 @@ struct ScoutsRosterView: View {
             columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
             spacing: 12
         ) {
-            ForEach(scoutStore.scouts, id: \.id) { scout in
+            ForEach(filteredScouts, id: \.id) { scout in
                 NavigationLink(value: NavDestination.scoutDetail(id: scout.id)) {
                     ScoutCard(scout: scout)
                 }
@@ -214,7 +257,7 @@ struct ScoutsRosterView: View {
                     .foregroundStyle(BrettColors.textInactive)
                     .multilineTextAlignment(.center)
                 Button {
-                    isPresentingNewScout = true
+                    presentNewScout()
                 } label: {
                     Text("Create your first scout")
                         .font(.system(size: 14, weight: .semibold))
@@ -231,6 +274,17 @@ struct ScoutsRosterView: View {
         .padding(.horizontal, 16)
     }
 
+    /// Gate for every "create scout" entry point. A scout without an AI
+    /// provider can't actually run, so we intercept and route the user
+    /// to Settings instead of letting them fill in a form they can't use.
+    private func presentNewScout() {
+        if aiStore.hasActiveProvider == false {
+            showNoAIAlert = true
+        } else {
+            isPresentingNewScout = true
+        }
+    }
+
     @ViewBuilder
     private var fab: some View {
         VStack {
@@ -238,7 +292,7 @@ struct ScoutsRosterView: View {
             HStack {
                 Spacer()
                 Button {
-                    isPresentingNewScout = true
+                    presentNewScout()
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 22, weight: .semibold))

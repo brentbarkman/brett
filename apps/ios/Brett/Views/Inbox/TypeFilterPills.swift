@@ -58,11 +58,15 @@ struct TypeFilterPills: View {
             }
         } label: {
             Text(option.title)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 13, weight: .semibold))
+                // Unselected was white/0.40 + medium weight — too low
+                // contrast on the dark glass background. /0.70 +
+                // semibold makes the pills readable without competing
+                // with the selected pill's gold treatment.
                 .foregroundStyle(
                     isSelected
                         ? BrettColors.gold
-                        : Color.white.opacity(0.40)
+                        : Color.white.opacity(0.70)
                 )
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -71,7 +75,7 @@ struct TypeFilterPills: View {
                         .fill(
                             isSelected
                                 ? BrettColors.gold.opacity(0.20)
-                                : Color.white.opacity(0.05)
+                                : Color.white.opacity(0.08)
                         )
                         .overlay {
                             if isSelected {

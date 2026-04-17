@@ -49,12 +49,33 @@ struct CalendarPage: View {
     }
 
     private var monthHeader: some View {
-        Text(selectedDate.formatted(.dateTime.month(.wide).year()))
-            .font(BrettTypography.dateHeader)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(selectedDate.formatted(.dateTime.month(.wide).year()))
+                .font(BrettTypography.dateHeader)
+                .foregroundStyle(.white)
+
+            // Subtitle matches Inbox + Today — gives the page a consistent
+            // header silhouette during side-swipes. Counts events in the
+            // currently-selected day so the user knows what they're
+            // looking at.
+            Text(eventsSubtitle)
+                .font(BrettTypography.stats)
+                .foregroundStyle(Color.white.opacity(0.55))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+
+    private var eventsSubtitle: String {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: selectedDate)
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+        let count = events.filter { $0.startTime >= dayStart && $0.startTime < dayEnd }.count
+        if count == 0 {
+            return "Nothing scheduled"
+        }
+        return count == 1 ? "1 event" : "\(count) events"
     }
 
     private var connectCTA: some View {

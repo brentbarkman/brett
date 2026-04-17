@@ -8,22 +8,22 @@ import SwiftUI
 /// in-app in `SafariView` so the user never loses their place.
 struct DailyBriefing: View {
     @Bindable var store: BriefingStore
-    @State private var isCollapsed: Bool = false
     @State private var externalURL: IdentifiedURL?
 
     @ViewBuilder
     var body: some View {
         if !store.isDismissedToday {
             StickyCardSection(tint: BrettColors.cerulean) {
+                // Icon dropped — Electron's daily briefing doesn't have
+                // one in the header, just the label. The cerulean rim on
+                // the card (added when `tint` is set on
+                // StickyCardSection) carries the "Brett AI surface"
+                // signal instead of an icon.
                 HStack(spacing: 6) {
-                    Image(systemName: "text.quote")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(BrettColors.cerulean.opacity(0.80))
-
                     Text("DAILY BRIEFING")
                         .font(BrettTypography.sectionLabel)
                         .tracking(2.4)
-                        .foregroundStyle(BrettColors.cerulean.opacity(0.80))
+                        .foregroundStyle(Color.white.opacity(0.60))
 
                     Spacer()
 
@@ -47,25 +47,32 @@ struct DailyBriefing: View {
                     .buttonStyle(.plain)
                     .disabled(store.isGenerating)
 
+                    // Dismiss-for-today: drops the briefing card from
+                    // Today until tomorrow morning. Backed by
+                    // `BriefingStore.isDismissedToday` (UserDefaults
+                    // keyed on yyyy-MM-dd). Replaces the old chevron
+                    // collapse button — the page-level scroll-collapse
+                    // already gives users a way to reduce the card's
+                    // footprint, and a separate "hide it" affordance
+                    // matches the desktop's behaviour.
                     Button {
                         HapticManager.light()
                         withAnimation(.easeOut(duration: 0.25)) {
-                            isCollapsed.toggle()
+                            store.dismiss()
                         }
                     } label: {
-                        Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                        Image(systemName: "xmark")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.30))
+                            .foregroundStyle(Color.white.opacity(0.40))
                             .frame(width: 28, height: 28)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss briefing for today")
                 }
             } content: {
-                if !isCollapsed {
-                    bodyContent
-                        .padding(16)
-                }
+                bodyContent
+                    .padding(16)
             }
             .sheet(item: $externalURL) { identified in
                 SafariView(url: identified.url)

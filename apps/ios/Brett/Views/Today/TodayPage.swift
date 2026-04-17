@@ -44,6 +44,17 @@ struct TodayPage: View {
         sort: \CalendarEvent.startTime
     ) private var allEvents: [CalendarEvent]
 
+    /// 0 or 1 row. Used to distinguish "empty because the user has
+    /// nothing" from "empty because the first sync hasn't landed yet" —
+    /// the latter case shows a skeleton placeholder instead of the
+    /// empty-state copy so the page doesn't briefly declare inbox-zero
+    /// during startup.
+    @Query private var syncHealthRows: [SyncHealth]
+
+    private var hasCompletedInitialSync: Bool {
+        syncHealthRows.first?.lastSuccessfulPullAt != nil
+    }
+
     // MARK: - UI state
 
     @State private var completionPulse: Bool = false
@@ -53,39 +64,68 @@ struct TodayPage: View {
     /// with the live data and the completed items slide into Done.
     @State private var reflowSnapshotKey: Int = 0
 
+    /// Item IDs that were just marked done but should visually stay in
+    /// their original section until the debounce window expires. Without
+    /// this, completing a task causes the section to immediately re-flow
+    /// and the user's next tap lands on the wrong row. Cleared 4s after
+    /// the last completion (any new tap resets the clock).
+    @State private var pendingDoneIDs: Set<String> = []
+
     /// Ticker driving NextUpCard's relative-time copy.
     @State private var tickerNow: Date = Date()
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                collapsingHeader
-                    .padding(.top, 8)
-                    .padding(.bottom, 8)
+        // ScrollViewReader so we can scroll the user to the Today section
+        // when a new task lands there. Without this, adding a task to a
+        // long Today list looks like nothing happened — the row is below
+        // the fold.
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    collapsingHeader
+                        .padding(.top, 8)
+                        .padding(.bottom, 8)
 
-                if hasNextUpEvent {
-                    NextUpCard(event: nextUpcomingEvent, now: tickerNow)
+                    if hasNextUpEvent {
+                        NextUpCard(event: nextUpcomingEvent, now: tickerNow)
+                    }
+
+                    DailyBriefing(store: briefingStore)
+
+                    taskSections
+
+                    emptyState
                 }
-
-                DailyBriefing(store: briefingStore)
-
-                taskSections
-
-                emptyState
+                .padding(.bottom, 70)
+                // Inner VStack surfaces more reliably as an accessibility
+                // element than the outer ScrollView — XCUITest identifier
+                // lookups on ScrollView inconsistently resolve.
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("today.page")
             }
-            .padding(.bottom, 70)
-            // Inner VStack surfaces more reliably as an accessibility
-            // element than the outer ScrollView — XCUITest identifier
-            // lookups on ScrollView inconsistently resolve.
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("today.page")
-        }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        .coordinateSpace(name: "scroll")
-        .refreshable {
-            try? await SyncManager.shared.pullToRefresh()
-            await briefingStore.fetch()
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .coordinateSpace(name: "scroll")
+            .refreshable {
+                try? await SyncManager.shared.pullToRefresh()
+                await briefingStore.fetch()
+            }
+            .onChange(of: SelectionStore.shared.lastCreatedItemId) { _, newId in
+                guard newId != nil else { return }
+                // Today section is the canonical landing zone for new tasks
+                // captured from this page (the omnibar injects dueDate=today
+                // when host is currentPage == 2 — Today's tab index after
+                // the Lists tab moved to position 0). Scroll to its anchor
+                // with a small spring so the user's eye follows the new row.
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    proxy.scrollTo("section_today", anchor: .top)
+                }
+                // Clear the trigger so subsequent identical creates still
+                // fire onChange. (Same id wouldn't otherwise re-trigger.)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    SelectionStore.shared.lastCreatedItemId = nil
+                }
+            }
         }
         .task {
             // Initial briefing fetch — only when the user hasn't already
@@ -98,30 +138,27 @@ struct TodayPage: View {
         }
     }
 
-    // MARK: - Collapsing header
+    // MARK: - Header
 
+    /// Static page header — was previously a collapsing GeometryReader
+    /// that scaled the date from 18pt to 28pt as the user scrolled. The
+    /// resize made Today's header look smaller than Inbox's fixed 28pt
+    /// header during side-swipes between pages, which the user flagged as
+    /// jarring. Now matches the Inbox/Calendar treatment: 28pt date +
+    /// muted subtitle, no scroll-driven resize.
     private var collapsingHeader: some View {
-        GeometryReader { geo in
-            let minY = geo.frame(in: .named("scroll")).minY
-            let progress = min(max(minY / 60, 0), 1)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(DateHelpers.formatDayHeader(Date()))
+                .font(BrettTypography.dateHeader)
+                .foregroundStyle(.white)
 
-            VStack(alignment: .leading, spacing: 4 * progress) {
-                Text(DateHelpers.formatDayHeader(Date()))
-                    .font(.system(size: 18 + (10 * progress), weight: .bold))
-                    .foregroundStyle(.white)
-
-                if progress > 0.3 {
-                    Text(statsLine)
-                        .font(BrettTypography.stats)
-                        .foregroundStyle(completionPulse ? BrettColors.gold : BrettColors.textInactive)
-                        .opacity(Double(progress))
-                        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: completionPulse)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
+            Text(statsLine)
+                .font(BrettTypography.stats)
+                .foregroundStyle(completionPulse ? BrettColors.gold : Color.white.opacity(0.55))
+                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: completionPulse)
         }
-        .frame(height: 56)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Section computation
@@ -129,7 +166,8 @@ struct TodayPage: View {
     private var sections: TodaySections {
         TodaySections.bucket(
             items: allItems,
-            reflowKey: reflowSnapshotKey
+            reflowKey: reflowSnapshotKey,
+            pendingDoneIDs: pendingDoneIDs
         )
     }
 
@@ -149,11 +187,16 @@ struct TodayPage: View {
     @ViewBuilder
     private var taskSections: some View {
         TaskSection(
+            // Header treatment matches the rest of the Today sections —
+            // Electron differentiates "overdue" via per-card urgency
+            // styling, not by colouring the section header red. The
+            // exclamation icon + "Overdue" word carry enough signal.
+            // The red accent bar was iOS-only and the user pushed back
+            // on it being noisy.
             label: "Overdue",
             icon: "exclamationmark.triangle",
             items: sections.overdue,
-            labelColor: BrettColors.error,
-            accentColor: BrettColors.error,
+            labelColor: .white,
             listNameProvider: listName(for:),
             onToggle: toggle,
             onSelect: select,
@@ -220,22 +263,30 @@ struct TodayPage: View {
     @ViewBuilder
     private var emptyState: some View {
         if sections.isEveryActiveSectionEmpty {
-            VStack(spacing: 6) {
-                Text(sections.hasDoneToday ? "Cleared." : "Nothing on the books today.")
-                    .font(BrettTypography.emptyHeading)
-                    .foregroundStyle(BrettColors.textCardTitle)
-                    .multilineTextAlignment(.center)
+            if hasCompletedInitialSync {
+                VStack(spacing: 8) {
+                    Text(sections.hasDoneToday ? "Cleared." : "Nothing on the books today.")
+                        .font(BrettTypography.emptyHeading)
+                        .foregroundStyle(Color.white.opacity(0.90))
+                        .multilineTextAlignment(.center)
 
-                Text(sections.hasDoneToday
-                    ? "Nothing left. Go build something or enjoy the quiet."
-                    : "A rare opening — use it well.")
-                    .font(BrettTypography.emptyCopy)
-                    .foregroundStyle(BrettColors.textInactive)
-                    .multilineTextAlignment(.center)
+                    Text(sections.hasDoneToday
+                        ? "Nothing left. Go build something or enjoy the quiet."
+                        : "A rare opening — use it well.")
+                        .font(BrettTypography.emptyCopy)
+                        .foregroundStyle(Color.white.opacity(0.40))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 32)
+                .padding(.top, 48)
+            } else {
+                // Initial pull hasn't landed — skeleton instead of empty
+                // state so we don't flash "Nothing on the books today."
+                // before the real data arrives.
+                TaskListPlaceholder()
+                    .padding(.top, 24)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 32)
-            .padding(.top, 48)
         }
     }
 
@@ -309,12 +360,20 @@ struct TodayPage: View {
             completionPulse = false
         }
 
-        // Debounced reflow into Done Today.
+        // Hold the row in its current section until the debounce window
+        // expires. The user's `isCompleted` toggle is reflected in the
+        // checkbox + strikethrough immediately (TaskRow reads
+        // `item.isCompleted` live from SwiftData), but the row doesn't
+        // *move* until 4 seconds after the user stops tapping. This
+        // prevents the "list jumps and I tap the wrong thing" pattern.
+        pendingDoneIDs.insert(id)
+
         pendingReflowTask?.cancel()
         pendingReflowTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
             if Task.isCancelled { return }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                pendingDoneIDs.removeAll()
                 reflowSnapshotKey &+= 1
             }
         }
@@ -395,7 +454,14 @@ struct TodaySections {
     /// based on local-calendar date math. `reflowKey` is unused here but
     /// participates in the computed identity so SwiftUI re-derives the
     /// sections when the parent bumps it (debounced completion cascade).
-    static func bucket(items: [Item], reflowKey: Int) -> TodaySections {
+    /// `pendingDoneIDs` lists items the user just marked done — we keep
+    /// them in their original active section until the debounce expires
+    /// so the user can keep tapping nearby rows without the list jumping.
+    static func bucket(
+        items: [Item],
+        reflowKey: Int,
+        pendingDoneIDs: Set<String> = []
+    ) -> TodaySections {
         _ = reflowKey // force re-derivation on change; see toggle() in the parent
         let calendar = Calendar.current
         let now = Date()
@@ -417,7 +483,13 @@ struct TodaySections {
         for item in items {
             if item.itemStatus == .archived { continue }
 
-            if item.itemStatus == .done {
+            // If this item is being held in its previous section, override
+            // its effective status. The TaskRow still reads `isCompleted`
+            // from the live model so the checkbox + strikethrough still
+            // show as done — only the section assignment is delayed.
+            let effectiveStatus: ItemStatus = pendingDoneIDs.contains(item.id) ? .active : item.itemStatus
+
+            if effectiveStatus == .done {
                 if let completed = item.completedAt,
                    completed >= startOfToday && completed < endOfToday {
                     doneToday.append(item)
@@ -426,7 +498,7 @@ struct TodaySections {
             }
 
             // Active tasks only from here on out.
-            if item.itemStatus != .active { continue }
+            if effectiveStatus != .active { continue }
             guard let due = item.dueDate else { continue }
 
             if due < startOfToday {
