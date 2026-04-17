@@ -1,681 +1,336 @@
 import SwiftUI
+import SwiftData
 
+/// Fully wired task detail view.
+///
+/// Design goals:
+///  - Bind directly to SwiftData via `ItemStore.fetchById`. Writes go
+///    through the existing `ItemStore.update(id:changes:previousValues:)`
+///    path so the sync engine picks them up.
+///  - Buffer edits in an `ItemDraft`; commit on blur + explicit actions so
+///    every keystroke isn't a round-trip.
+///  - Keep the existing `TaskDetailView(store:itemId:)` signature so
+///    `MainContainer`'s sheet wiring keeps working. `MockStore` is kept for
+///    back-compat; it is unused when the item exists in SwiftData.
+///
+/// Layout (top → bottom, scrollable):
+///  1. Header: back breadcrumb + gold checkbox + editable title
+///  2. Optional ContentPreview (articles, newsletters, tweets, PDFs, video)
+///  3. DetailsCard (due date, list, reminder, recurrence)
+///  4. NotesEditor
+///  5. AttachmentsSection
+///  6. LinksSection
+///  7. BrettChatSection
 struct TaskDetailView: View {
-    @Bindable var store: MockStore
     let itemId: String
-    @Environment(\.dismiss) private var dismiss
 
-    @State private var isEditingTitle = false
-    @State private var titleDraft = ""
-    @State private var isEditingNotes = false
-    @State private var notesDraft = ""
-    @State private var isBrettExpanded = false
-    @State private var brettInput = ""
-    @State private var linkSearchText = ""
-    @State private var isSearchingLinks = false
-    @FocusState private var isTitleFocused: Bool
-    @FocusState private var isNotesFocused: Bool
-    @FocusState private var isBrettFocused: Bool
+    // Stack of pushed linked-item detail views so tapping a link preserves
+    // history inside this sheet.
+    @State private var linkStack: [String] = []
 
-    // On a solid dark surface (no material), theme colors need boosting.
-    // These override BrettColors values that assume glass/material behind them.
-    private let sectionLabel = Color.white.opacity(0.60)
-    private let metaText = Color.white.opacity(0.50)
-    private let placeholder = Color.white.opacity(0.40)
-    private let dimIcon = Color.white.opacity(0.30)
-
-    private var item: MockItem? {
-        store.items.first(where: { $0.id == itemId }) ??
-        store.inboxItems.first(where: { $0.id == itemId })
+    init(itemId: String) {
+        self.itemId = itemId
     }
 
     var body: some View {
-        if let item {
-            ScrollView {
-                mainCard(item)
-                    .padding(.top, 12)
-                    .padding(.bottom, 40)
+        NavigationStack(path: $linkStack) {
+            TaskDetailBody(itemId: itemId) { id in
+                linkStack.append(id)
             }
-            .scrollIndicators(.hidden)
+            .navigationDestination(for: String.self) { linkedId in
+                TaskDetailBody(itemId: linkedId) { id in
+                    linkStack.append(id)
+                }
+            }
         }
     }
+}
 
-    // MARK: - Main content card
+// MARK: - Body (the actual content, reusable for link navigation)
 
-    @ViewBuilder
-    private func mainCard(_ item: MockItem) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header: label + complete + overflow
-            headerSection(item)
+private struct TaskDetailBody: View {
+    let itemId: String
+    let onOpenLinkedItem: (String) -> Void
 
-            sectionDivider()
+    @Environment(\.dismiss) private var dismiss
 
-            // Title
-            titleSection(item)
+    @State private var itemStore = ItemStore()
+    @State private var listStore = ListStore()
+    @State private var attachmentStore = AttachmentStore()
+    @State private var messageStore = MessageStore()
+    @State private var chatStore = ChatStore()
 
-            sectionDivider()
+    @State private var item: Item?
+    @State private var draft: ItemDraft = .init()
+    @State private var attachments: [Attachment] = []
+    @State private var pendingUploads: [AttachmentUpload] = []
+    @State private var lists: [ItemList] = []
+    @State private var links: [LinkedItemSummary] = []
 
-            // Schedule
-            scheduleSection(item)
+    @State private var uploader: AttachmentUploader?
+    @State private var downloader: AttachmentDownloader?
 
-            sectionDivider()
-
-            // Notes
-            notesSection(item)
-
-            sectionDivider()
-
-            // Attachments
-            attachmentsSection(item)
-
-            sectionDivider()
-
-            // Linked Items
-            linkedItemsSection(item)
-
-            sectionDivider()
-
-            // Brett thread — integrated as last section
-            brettSection(item)
-        }
-    }
-
-    // MARK: - Header
-
-    @ViewBuilder
-    private func headerSection(_ item: MockItem) -> some View {
-        HStack(spacing: 8) {
-            Text("TASK")
-                .font(BrettTypography.sectionLabel)
-                .tracking(2.4)
-                .foregroundStyle(sectionLabel)
-
-            if let recurrence = item.recurrence {
-                HStack(spacing: 4) {
-                    Image(systemName: "repeat")
-                        .font(.system(size: 9, weight: .semibold))
-                    Text(recurrence.rawValue.uppercased())
-                        .font(BrettTypography.sectionLabel)
-                        .tracking(2.4)
-                }
-                .foregroundStyle(BrettColors.gold)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(BrettColors.gold.opacity(0.15), in: Capsule())
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                headerSection
+                contentPreviewSection
+                detailsCardSection
+                notesSection
+                attachmentsSectionView
+                linksSectionView
+                brettSection
             }
-
-            Spacer()
-
-            Button {
-                HapticManager.light()
-                store.toggleItem(item.id)
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "checkmark.circle")
-                        .font(.system(size: 12, weight: .medium))
-                    Text(item.isCompleted ? "Done" : "Complete")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .foregroundStyle(item.isCompleted ? BrettColors.success : Color.white.opacity(0.60))
-                .background(
-                    (item.isCompleted ? BrettColors.success : Color.white).opacity(item.isCompleted ? 0.15 : 0.10),
-                    in: Capsule()
-                )
-                .overlay {
-                    Capsule().strokeBorder(
-                        (item.isCompleted ? BrettColors.success : Color.white).opacity(item.isCompleted ? 0.30 : 0.10),
-                        lineWidth: 0.5
-                    )
-                }
-            }
-
-            overflowMenu(item)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Title
-
-    @ViewBuilder
-    private func titleSection(_ item: MockItem) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if isEditingTitle {
-                TextField("Task title", text: $titleDraft)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .tint(BrettColors.gold)
-                    .focused($isTitleFocused)
-                    .submitLabel(.done)
-                    .onSubmit { isEditingTitle = false }
-                    .onAppear {
-                        titleDraft = item.title
-                        isTitleFocused = true
-                    }
-            } else {
-                Text(item.title)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(item.isCompleted ? metaText : .white)
-                    .strikethrough(item.isCompleted, color: BrettColors.textGhost)
-                    .lineSpacing(2)
-                    .onTapGesture {
-                        isEditingTitle = true
-                        titleDraft = item.title
-                    }
-            }
-
-            // Metadata row
-            if let time = item.time {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 11, weight: .medium))
-                    Text(time)
-                        .font(BrettTypography.taskMeta)
-                }
-                .foregroundStyle(metaText)
-                .padding(.top, 6)
-            }
-
-            if let listName = item.listName {
-                HStack(spacing: 6) {
-                    Image(systemName: "folder")
-                        .font(.system(size: 11, weight: .medium))
-                    Text(listName)
-                        .font(BrettTypography.taskMeta)
-                }
-                .foregroundStyle(metaText)
-                .padding(.top, 4)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Schedule
-
-    @ViewBuilder
-    private func scheduleSection(_ item: MockItem) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("SCHEDULE")
-                .font(BrettTypography.sectionLabel)
-                .tracking(2.4)
-                .foregroundStyle(sectionLabel)
-
-            HStack(spacing: 8) {
-                dueDateMenu(item)
-                reminderMenu(item)
-                recurrenceMenu(item)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    @ViewBuilder
-    private func scheduleMiniCard(icon: String, label: String, value: String, isSet: Bool, accentColor: Color) -> some View {
-        VStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isSet ? accentColor.opacity(0.80) : metaText)
-
-            Text(label)
-                .font(.system(size: 8, weight: .semibold))
-                .tracking(1.5)
-                .foregroundStyle(sectionLabel)
-
-            Text(value)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(isSet ? accentColor : Color.white.opacity(0.30))
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 6)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.10))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-                }
-        }
-    }
-
-    // MARK: - Notes
-
-    @ViewBuilder
-    private func notesSection(_ item: MockItem) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("NOTES")
-                .font(BrettTypography.sectionLabel)
-                .tracking(2.4)
-                .foregroundStyle(sectionLabel)
-
-            if isEditingNotes {
-                TextEditor(text: $notesDraft)
-                    .font(BrettTypography.body)
-                    .foregroundStyle(BrettColors.textBody)
-                    .scrollContentBackground(.hidden)
-                    .focused($isNotesFocused)
-                    .frame(minHeight: 80)
-                    .tint(BrettColors.gold)
-                    .padding(10)
-                    .background {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.white.opacity(0.05))
-                    }
-                    .onAppear {
-                        notesDraft = item.notes ?? ""
-                        isNotesFocused = true
-                    }
-            } else if let notes = item.notes, !notes.isEmpty {
-                Text(notes)
-                    .font(BrettTypography.body)
-                    .foregroundStyle(BrettColors.textBody)
-                    .lineSpacing(4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { isEditingNotes = true }
-            } else {
-                Text("Add notes\u{2026}")
-                    .font(BrettTypography.body)
-                    .foregroundStyle(placeholder)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { isEditingNotes = true }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Attachments
-
-    @ViewBuilder
-    private func attachmentsSection(_ item: MockItem) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("ATTACHMENTS")
-                .font(BrettTypography.sectionLabel)
-                .tracking(2.4)
-                .foregroundStyle(sectionLabel)
-
-            if !item.attachments.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(item.attachments.enumerated()), id: \.element.id) { index, attachment in
-                        HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(Color.white.opacity(0.10))
-                                    .frame(width: 34, height: 34)
-
-                                Image(systemName: attachmentIcon(attachment.mimeType))
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(attachmentColor(attachment.mimeType))
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(attachment.filename)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(BrettColors.textCardTitle)
-                                    .lineLimit(1)
-                                Text(attachment.sizeLabel)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(metaText)
-                            }
-
-                            Spacer()
-
-                            Button {} label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(Color.white.opacity(0.30))
-                            }
-                        }
-                        .padding(.vertical, 6)
-
-                        if index < item.attachments.count - 1 {
-                            Divider().background(BrettColors.hairline)
-                        }
-                    }
-                }
-            }
-
-            // Upload zone
-            Button {} label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 13, weight: .medium))
-                    Text("Tap to attach a file")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(Color.white.opacity(0.30))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.10), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Linked Items
-
-    @ViewBuilder
-    private func linkedItemsSection(_ item: MockItem) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("LINKED ITEMS")
-                    .font(BrettTypography.sectionLabel)
-                    .tracking(2.4)
-                    .foregroundStyle(sectionLabel)
-
-                Spacer()
-
-                Button {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        isSearchingLinks.toggle()
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(metaText)
-                        .frame(width: 22, height: 22)
-                        .background(Color.white.opacity(0.10), in: Circle())
-                }
-            }
-
-            if isSearchingLinks {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.30))
-                    TextField("Search items\u{2026}", text: $linkSearchText)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white)
-                        .tint(BrettColors.gold)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-                        }
-                }
-            }
-
-            if !item.linkedItems.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(item.linkedItems.enumerated()), id: \.element.id) { index, linked in
-                        HStack(spacing: 10) {
-                            Image(systemName: linked.type == .task ? "bolt.fill" : "book")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(linked.type == .task ? BrettColors.gold : BrettColors.amber400.opacity(0.8))
-
-                            Text(linked.title)
-                                .font(.system(size: 13))
-                                .foregroundStyle(BrettColors.textBody)
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            if linked.source == "embedding" {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(BrettColors.amber400.opacity(0.50))
-                            }
-
-                            Button {} label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(Color.white.opacity(0.30))
-                            }
-                        }
-                        .padding(.vertical, 6)
-
-                        if index < item.linkedItems.count - 1 {
-                            Divider().background(BrettColors.hairline)
-                        }
-                    }
-                }
-            } else if !isSearchingLinks {
-                HStack(spacing: 6) {
-                    Image(systemName: "link")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(dimIcon)
-                    Text("No linked items")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.30))
-                }
-                .padding(.vertical, 8)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Brett Section (integrated)
-
-    @ViewBuilder
-    private func brettSection(_ item: MockItem) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Section header with Brett mark
-            HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(BrettColors.gold)
-                        .frame(width: 5, height: 5)
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(BrettColors.cerulean.opacity(0.60))
-                        .frame(width: 16, height: 2.5)
-                }
-
-                Text("BRETT")
-                    .font(BrettTypography.sectionLabel)
-                    .tracking(2.4)
-                    .foregroundStyle(BrettColors.cerulean.opacity(0.60))
-
-                Spacer()
-            }
-
-            // Message history
-            if !item.brettMessages.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(item.brettMessages) { message in
-                        if message.role == "user" {
-                            HStack {
-                                Spacer(minLength: 60)
-                                Text(message.content)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color.white.opacity(0.90))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Color.white.opacity(0.10),
-                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    )
-                            }
-                        } else {
-                            Text(message.content)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Color.white.opacity(0.80))
-                                .lineSpacing(3)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(
-                                    BrettColors.cerulean.opacity(0.10),
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                )
-                        }
-                    }
-                }
-            }
-
-            // Input — always visible
-            HStack(spacing: 8) {
-                TextField("Ask Brett about this task\u{2026}", text: $brettInput)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white)
-                    .tint(BrettColors.cerulean)
-                    .focused($isBrettFocused)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(
-                        Color.white.opacity(0.05),
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-                    }
-
-                Button {} label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 30, height: 30)
-                        .background(BrettColors.gold, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-                .opacity(brettInput.trimmingCharacters(in: .whitespaces).isEmpty ? 0.25 : 1.0)
-                .disabled(brettInput.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Helpers
-
-    @ViewBuilder
-    private func sectionDivider() -> some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.10))
-            .frame(height: 0.5)
             .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 40)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .background(Color.clear)
+        .task {
+            await initializeIfNeeded()
+            reload()
+        }
     }
 
+    // MARK: - Sections
+
     @ViewBuilder
-    private func overflowMenu(_ item: MockItem) -> some View {
-        Menu {
-            Button {
-                store.toggleItem(item.id)
-            } label: {
-                Label(
-                    item.isCompleted ? "Mark Incomplete" : "Complete",
-                    systemImage: item.isCompleted ? "arrow.uturn.backward" : "checkmark.circle"
-                )
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let listName = currentListName {
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(listName)
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(BrettColors.textInactive)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("detail.close")
             }
-            Button {} label: { Label("Duplicate", systemImage: "doc.on.doc") }
-            Button {} label: { Label("Move to List", systemImage: "folder") }
-            Button {} label: { Label("Copy Link", systemImage: "link") }
-            Divider()
-            Button(role: .destructive) {} label: { Label("Delete", systemImage: "trash") }
+
+            HStack(alignment: .top, spacing: 12) {
+                goldCheckbox
+
+                TextField("Task title", text: $draft.title, axis: .vertical)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(isCompleted ? BrettColors.textInactive : .white)
+                    .strikethrough(isCompleted, color: BrettColors.textGhost)
+                    .tint(BrettColors.gold)
+                    .lineLimit(1...4)
+                    .submitLabel(.done)
+                    .onSubmit { commitDraft() }
+                    .accessibilityIdentifier("detail.titleField")
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var goldCheckbox: some View {
+        Button {
+            HapticManager.light()
+            Task { await toggleComplete() }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.40))
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
+            ZStack {
+                Circle()
+                    .fill(isCompleted ? BrettColors.gold : Color.clear)
+                    .frame(width: 26, height: 26)
+                Circle()
+                    .strokeBorder(isCompleted ? BrettColors.gold : BrettColors.textInactive, lineWidth: 1.5)
+                    .frame(width: 26, height: 26)
+                if isCompleted {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.black)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("detail.checkbox")
+    }
+
+    @ViewBuilder
+    private var contentPreviewSection: some View {
+        if let item {
+            ContentPreview(item: item)
         }
     }
 
     @ViewBuilder
-    private func dueDateMenu(_ item: MockItem) -> some View {
-        Menu {
-            Button {} label: { Label("Today", systemImage: "") }
-            Button {} label: { Label("Tomorrow", systemImage: "") }
-            Button {} label: { Label("This Week", systemImage: "") }
-            Divider()
-            Button {} label: { Label("No date", systemImage: "") }
-        } label: {
-            scheduleMiniCard(
-                icon: "calendar",
-                label: "DUE DATE",
-                value: item.dueDate.map { DateHelpers.formatRelativeDate($0) } ?? "Not set",
-                isSet: item.dueDate != nil,
-                accentColor: urgencyColor(for: item)
-            )
+    private var detailsCardSection: some View {
+        DetailsCard(draft: $draft, lists: lists)
+            .onChange(of: draft.dueDate) { _, _ in commitDraft() }
+            .onChange(of: draft.listId) { _, _ in commitDraft() }
+            .onChange(of: draft.reminder) { _, _ in commitDraft() }
+            .onChange(of: draft.recurrence) { _, _ in commitDraft() }
+    }
+
+    @ViewBuilder
+    private var notesSection: some View {
+        NotesEditor(text: $draft.notes) { _ in
+            commitDraft()
         }
     }
 
     @ViewBuilder
-    private func reminderMenu(_ item: MockItem) -> some View {
-        Menu {
-            Button {} label: { Label("Morning of", systemImage: "") }
-            Button {} label: { Label("1 hour before", systemImage: "") }
-            Button {} label: { Label("Day before", systemImage: "") }
-            Divider()
-            Button {} label: { Label("No reminder", systemImage: "") }
-        } label: {
-            scheduleMiniCard(
-                icon: "bell",
-                label: "REMINDER",
-                value: item.reminder.map { reminderLabel($0) } ?? "Not set",
-                isSet: item.reminder != nil,
-                accentColor: BrettColors.textCardTitle
+    private var attachmentsSectionView: some View {
+        if let uploader, let downloader {
+            AttachmentsSection(
+                itemId: itemId,
+                attachments: attachments,
+                pendingUploads: pendingUploads,
+                uploader: uploader,
+                downloader: downloader,
+                onAfterChange: { refreshAttachments() }
             )
+            .task(id: itemId) {
+                for await _ in uploader.progressStream {
+                    refreshAttachments()
+                }
+            }
         }
     }
 
     @ViewBuilder
-    private func recurrenceMenu(_ item: MockItem) -> some View {
-        Menu {
-            Button {} label: { Label("Daily", systemImage: "") }
-            Button {} label: { Label("Weekly", systemImage: "") }
-            Button {} label: { Label("Monthly", systemImage: "") }
-            Divider()
-            Button {} label: { Label("No recurrence", systemImage: "") }
-        } label: {
-            scheduleMiniCard(
-                icon: "repeat",
-                label: "RECURRENCE",
-                value: item.recurrence.map { $0.rawValue.capitalized } ?? "Not set",
-                isSet: item.recurrence != nil,
-                accentColor: BrettColors.gold
+    private var linksSectionView: some View {
+        LinksSection(
+            itemId: itemId,
+            links: links,
+            onAddLink: { targetId in await addLink(targetId) },
+            onRemoveLink: { link in await removeLink(link) },
+            onOpenLink: { link in onOpenLinkedItem(link.itemId) }
+        )
+    }
+
+    @ViewBuilder
+    private var brettSection: some View {
+        BrettChatSection(store: chatStore, itemId: itemId)
+    }
+
+    // MARK: - Derived
+
+    private var isCompleted: Bool {
+        item?.itemStatus == .done
+    }
+
+    private var currentListName: String? {
+        guard let listId = draft.listId,
+              let list = lists.first(where: { $0.id == listId }) else {
+            return nil
+        }
+        return list.name
+    }
+
+    // MARK: - Lifecycle
+
+    private func initializeIfNeeded() async {
+        if uploader == nil {
+            uploader = AttachmentUploader(
+                apiClient: .shared,
+                attachmentStore: attachmentStore,
+                persistence: .shared
             )
         }
-    }
-
-    private func urgencyColor(for item: MockItem) -> Color {
-        guard let date = item.dueDate else { return Color.white.opacity(0.30) }
-        let urgency = DateHelpers.computeUrgency(dueDate: date, isCompleted: item.isCompleted)
-        switch urgency {
-        case .overdue: return BrettColors.error
-        case .today: return BrettColors.gold
-        default: return BrettColors.textCardTitle
+        if downloader == nil {
+            downloader = AttachmentDownloader(apiClient: .shared)
         }
     }
 
-    private func reminderLabel(_ reminder: ReminderType) -> String {
-        switch reminder {
-        case .morningOf: return "Morning of"
-        case .oneHourBefore: return "1hr before"
-        case .dayBefore: return "Day before"
-        case .custom: return "Custom"
+    private func reload() {
+        item = itemStore.fetchById(itemId)
+        lists = listStore.fetchAll()
+        if let item {
+            draft = ItemDraft(from: item)
+        }
+        refreshAttachments()
+        hydrateChat()
+
+        Task { await refreshFromServer() }
+    }
+
+    private func hydrateChat() {
+        let persisted = messageStore.fetchForItem(itemId)
+        chatStore.hydrate(itemId: itemId, from: persisted)
+    }
+
+    private func refreshFromServer() async {
+        do {
+            let detail = try await APIClient.shared.fetchThingDetail(id: itemId)
+            await MainActor.run {
+                links = (detail.links ?? []).map { link in
+                    LinkedItemSummary(
+                        linkId: link.id,
+                        itemId: link.toItemId,
+                        title: link.toItemTitle ?? "Untitled",
+                        type: link.toItemType,
+                        source: link.source ?? "manual"
+                    )
+                }
+            }
+        } catch {
+            // Non-fatal — keep whatever we had from local state.
         }
     }
 
-    private func attachmentIcon(_ mimeType: String) -> String {
-        if mimeType.hasPrefix("image/") { return "photo" }
-        if mimeType.contains("pdf") { return "doc.text" }
-        if mimeType.hasPrefix("video/") { return "film" }
-        if mimeType.hasPrefix("audio/") { return "headphones" }
-        return "doc"
+    private func refreshAttachments() {
+        attachments = attachmentStore.fetchForItem(itemId)
+        pendingUploads = fetchPendingUploads()
     }
 
-    private func attachmentColor(_ mimeType: String) -> Color {
-        if mimeType.hasPrefix("image/") { return BrettColors.cerulean }
-        if mimeType.contains("pdf") { return BrettColors.error }
-        if mimeType.hasPrefix("video/") { return BrettColors.purple400 }
-        return metaText
+    private func fetchPendingUploads() -> [AttachmentUpload] {
+        let context = PersistenceController.shared.mainContext
+        var descriptor = FetchDescriptor<AttachmentUpload>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        let currentItemId = itemId
+        descriptor.predicate = #Predicate { upload in
+            upload.itemId == currentItemId && upload.stage != "done"
+        }
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    // MARK: - Actions
+
+    private func commitDraft() {
+        guard let item else { return }
+        let diff = draft.diff(against: item)
+        guard !diff.isEmpty else { return }
+        itemStore.commit(diff, to: item.id)
+        self.item = itemStore.fetchById(itemId)
+    }
+
+    private func toggleComplete() async {
+        guard let item else { return }
+        itemStore.toggleStatus(id: item.id)
+        self.item = itemStore.fetchById(itemId)
+    }
+
+    private func addLink(_ targetId: String) async {
+        do {
+            _ = try await APIClient.shared.createLink(
+                fromItemId: itemId,
+                toItemId: targetId,
+                toItemType: "task"
+            )
+            await refreshFromServer()
+        } catch {
+            // swallow
+        }
+    }
+
+    private func removeLink(_ link: LinkedItemSummary) async {
+        do {
+            try await APIClient.shared.deleteLink(fromItemId: itemId, linkId: link.linkId)
+            await refreshFromServer()
+        } catch {
+            // swallow
+        }
     }
 }

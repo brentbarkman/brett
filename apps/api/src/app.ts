@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authRouter } from "./routes/auth.js";
+import { authIOS } from "./routes/auth-ios.js";
 import { users } from "./routes/users.js";
 import { things } from "./routes/things.js";
 import { lists } from "./routes/lists.js";
@@ -23,6 +24,7 @@ import { weather } from "./routes/weather.js";
 import { importRoutes } from "./routes/import.js";
 import { download } from "./routes/download.js";
 import { config } from "./routes/config.js";
+import { wellKnown } from "./routes/well-known.js";
 import { scouts } from "./routes/scouts.js";
 import { devices } from "./routes/devices.js";
 import { sync } from "./routes/sync.js";
@@ -74,8 +76,16 @@ app.route("/download", download);
 app.route("/config", config);
 app.route("/public", storageProxy);
 app.route("/releases", releaseProxy);
+// Apple / Google / web platform well-known endpoints. Apple fetches the
+// AASA file from here directly to verify associated domains for passkeys.
+app.route("/.well-known", wellKnown);
 
 // Routes
+// Native-mobile Google sign-in: iOS client posts an ID token minted by
+// GoogleSignIn-iOS; server verifies + exchanges for a Brett session.
+// Must be mounted BEFORE authRouter because authRouter has a `/*` catch-all
+// that forwards to better-auth, which would otherwise swallow this path.
+app.route("/api/auth/ios", authIOS);
 app.route("/api/auth", authRouter);
 app.route("/users", users);
 app.route("/things", things);

@@ -5,9 +5,14 @@ import { getUserDayBounds } from "@brett/business";
 // ─── Mock system prompts ───
 
 vi.mock("../system-prompts.js", () => ({
-  BRETT_SYSTEM_PROMPT: "BRETT_SYSTEM_PROMPT",
-  BRIEFING_SYSTEM_PROMPT: "BRIEFING_SYSTEM_PROMPT",
-  BRETTS_TAKE_SYSTEM_PROMPT: "BRETTS_TAKE_SYSTEM_PROMPT",
+  // The assembler now calls these as functions that take an assistantName
+  // string; return a stable string so tests can assert on prompt contents
+  // without pulling in the real prompt bodies.
+  getSystemPrompt: () => "BRETT_SYSTEM_PROMPT",
+  getBriefingPrompt: () => "BRIEFING_SYSTEM_PROMPT daily briefing",
+  getBrettsTakePrompt: () => "BRETTS_TAKE_SYSTEM_PROMPT",
+  getFactExtractionPrompt: () => "FACT_EXTRACTION_PROMPT",
+  SCOUT_CREATION_PROMPT: "SCOUT_CREATION_PROMPT",
 }));
 
 vi.mock("@brett/business", () => ({
@@ -182,7 +187,7 @@ describe("assembleContext", () => {
       expect(ctx.toolMode).toBe("contextual");
     });
 
-    it('returns "medium" + "all" tools for brett_thread', async () => {
+    it('returns "medium" + "contextual" tools for brett_thread', async () => {
       const input: AssemblerInput = {
         type: "brett_thread",
         userId: "user-1",
@@ -190,17 +195,20 @@ describe("assembleContext", () => {
       };
       const ctx = await assembleContext(input, mockPrisma);
       expect(ctx.modelTier).toBe("medium");
-      expect(ctx.toolMode).toBe("all");
+      expect(ctx.toolMode).toBe("contextual");
     });
 
-    it('returns "small" for briefing (pure text, no tools needed)', async () => {
+    it('returns "medium" for briefing (pure text, no tools needed)', async () => {
+      // Briefing is once per day per user — the marginal cost of `medium`
+      // over `small` is trivial and evals showed `small` produced flatter,
+      // more hallucination-prone briefings.
       const input: AssemblerInput = {
         type: "briefing",
         userId: "user-1",
         timezone: "UTC",
       };
       const ctx = await assembleContext(input, mockPrisma);
-      expect(ctx.modelTier).toBe("small");
+      expect(ctx.modelTier).toBe("medium");
       expect(ctx.toolMode).toBe("none");
     });
 

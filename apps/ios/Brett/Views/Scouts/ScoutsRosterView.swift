@@ -1,158 +1,313 @@
 import SwiftUI
 
+/// Full-screen roster of the user's scouts. Pushes from the masthead
+/// `antenna.radiowaves.left.and.right` icon in `MainContainer`.
 struct ScoutsRosterView: View {
-    @Bindable var store: MockStore
+    @State private var scoutStore = ScoutStore()
+    @State private var aiStore = AIProviderStore.shared
+    @State private var statusFilter: StatusFilter = .all
+    @State private var isPresentingNewScout = false
+    @State private var showNoAIAlert = false
+    @State private var pendingAction: PendingAction?
     @Environment(\.dismiss) private var dismiss
+
+    enum StatusFilter: String, CaseIterable, Identifiable {
+        case all, active, paused, archived
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
+
+        var serverValue: String {
+            switch self {
+            case .all: return "all"
+            case .active: return "active"
+            case .paused: return "paused"
+            case .archived: return "completed"   // archived maps to completed server-side
+            }
+        }
+    }
+
+    enum PendingAction: Identifiable {
+        case delete(id: String, name: String)
+        var id: String {
+            switch self {
+            case .delete(let id, _): return "delete-\(id)"
+            }
+        }
+    }
+
+    /// Client-side filter. Cheaper than refetching for every segment
+    /// tap AND avoids the "empty state flashes in between filter
+    /// changes" problem (audit item #18).
+    private var filteredScouts: [APIClient.ScoutDTO] {
+        switch statusFilter {
+        case .all:
+            return scoutStore.scouts
+        case .active:
+            return scoutStore.scouts.filter { $0.status == "active" }
+        case .paused:
+            return scoutStore.scouts.filter { $0.status == "paused" }
+        case .archived:
+            // "archived" UI maps to server-side "completed" status.
+            return scoutStore.scouts.filter { $0.status == "completed" || $0.status == "archived" }
+        }
+    }
 
     var body: some View {
         ZStack {
             BackgroundView()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Header
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Scouts")
-                            .font(BrettTypography.dateHeader)
-                            .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 16) {
+                    header
+                    statusPicker
 
-                        Text("\(store.scouts.filter { $0.status == .active }.count) active · \(store.scouts.reduce(0) { $0 + $1.findingsCount }) findings")
-                            .font(BrettTypography.stats)
-                            .foregroundStyle(BrettColors.textInactive)
+                    if scoutStore.isLoading && scoutStore.scouts.isEmpty {
+                        loadingState
+                    } else if filteredScouts.isEmpty {
+                        // Only show the emptyState when the user genuinely
+                        // has nothing for this filter — not while we're
+                        // mid-fetch. The isLoading guard above handles
+                        // the initial cold-start case.
+                        emptyState
+                    } else {
+                        grid
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
 
-                    // Scout cards
-                    VStack(spacing: 12) {
-                        ForEach(store.scouts) { scout in
-                            NavigationLink(value: NavDestination.scoutDetail(id: scout.id)) {
-                                ScoutCard(scout: scout)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 80)
                 }
+                .padding(.top, 12)
             }
             .scrollIndicators(.hidden)
+
+            fab
         }
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    dismiss()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Back")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .foregroundStyle(BrettColors.gold)
+        // Uses iOS's default back button for consistency with ListView and
+        // the rest of the app. Previously had a custom gold "Back" button
+        // which diverged from ScoutDetailView's "Scouts" label and from
+        // every other pushed screen's default chrome.
+        // `.navigationTitle("Scouts")` is required: without it (or some
+        // other navbar registrant like a `.principal` toolbar item),
+        // SwiftUI doesn't wire the interactive pop gesture, so the user
+        // can't swipe-from-the-edge to go back. Slight visual
+        // redundancy with the big in-page "Scouts" header is the price.
+        .navigationTitle("Scouts")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            // One fetch of all scouts; the segmented picker filters them
+            // client-side so switching filters is instant and never shows
+            // the "no scouts yet" card while the network round-trips.
+            await scoutStore.refreshScouts(status: nil)
+            // Check whether the user has an AI provider configured so we
+            // can gate the "+ new scout" affordance. Background task —
+            // UI waits for neither.
+            await aiStore.refresh()
+        }
+        .refreshable {
+            await scoutStore.refreshScouts(status: nil)
+        }
+        // SSE-driven live refresh. When a scout is deleted/paused on
+        // another client (web), the server fires `scout.status.changed`
+        // and `SSEEventHandler` rebroadcasts it as a local notification.
+        // Without this, the roster would show the deleted scout until
+        // the user navigated away and back.
+        .onReceive(NotificationCenter.default.publisher(for: .scoutStateChanged)) { _ in
+            Task { await scoutStore.refreshScouts(status: nil) }
+        }
+        .alert("Configure an AI provider", isPresented: $showNoAIAlert) {
+            Button("Cancel", role: .cancel) {}
+            // We don't have a direct NavigationLink from here to the
+            // settings sub-view, so surface the path inline. Tapping
+            // "Open Settings" dismisses the alert and tells the user
+            // where to go — a direct push would require threading path
+            // state up to `MainContainer`.
+            Button("Got it") {}
+        } message: {
+            Text("You'll need to add an AI provider key before scouts can run. Open Settings → AI Providers to add one.")
+        }
+        .sheet(isPresented: $isPresentingNewScout) {
+            NewScoutSheet { payload in
+                do {
+                    _ = try await scoutStore.create(payload: payload)
+                } catch {
+                    // error already surfaced via store.errorMessage after refresh
                 }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .alert(item: $pendingAction) { action in
+            switch action {
+            case .delete(let id, let name):
+                return Alert(
+                    title: Text("Delete \(name)?"),
+                    message: Text("This will remove the scout and all its findings. Promoted items are preserved."),
+                    primaryButton: .destructive(Text("Delete")) {
+                        Task {
+                            try? await scoutStore.delete(id: id)
+                        }
+                    },
+                    secondaryButton: .cancel()
+                )
             }
         }
     }
-}
 
-// MARK: - Scout Card
+    // MARK: - Sections
 
-struct ScoutCard: View {
-    let scout: MockScout
+    @ViewBuilder
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Scouts")
+                .font(BrettTypography.dateHeader)
+                .foregroundStyle(.white)
 
-    var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 12) {
-                // Top: avatar + name + status
-                HStack(spacing: 12) {
-                    // Avatar — gradient circle with first letter
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: avatarGradient,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 40, height: 40)
+            Text(subtitle)
+                .font(BrettTypography.stats)
+                .foregroundStyle(BrettColors.textInactive)
+        }
+        .padding(.horizontal, 20)
+    }
 
-                        Text(String(scout.name.prefix(1)))
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
+    private var subtitle: String {
+        let active = scoutStore.scouts.filter { $0.status == "active" }.count
+        let findings = scoutStore.scouts.reduce(0) { $0 + ($1.findingsCount ?? 0) }
+        return "\(active) active · \(findings) finding\(findings == 1 ? "" : "s")"
+    }
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(scout.name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
+    @ViewBuilder
+    private var statusPicker: some View {
+        Picker("Status", selection: $statusFilter) {
+            ForEach(StatusFilter.allCases) { filter in
+                Text(filter.title).tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+    }
 
-                        statusBadge
-                    }
-
-                    Spacer()
-
-                    // Chevron
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(BrettColors.textGhost)
+    @ViewBuilder
+    private var grid: some View {
+        LazyVGrid(
+            columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+            spacing: 12
+        ) {
+            ForEach(filteredScouts, id: \.id) { scout in
+                NavigationLink(value: NavDestination.scoutDetail(id: scout.id)) {
+                    ScoutCard(scout: scout)
                 }
-
-                // Goal preview
-                Text(scout.goal)
-                    .font(BrettTypography.body)
-                    .foregroundStyle(BrettColors.textBody)
-                    .lineLimit(2)
-
-                // Metadata row
-                HStack(spacing: 12) {
-                    metaItem(text: scout.lastRunAgo, icon: "clock")
-                    metaItem(text: "\(scout.findingsCount) findings", icon: "sparkle")
-                    metaItem(text: scout.cadence, icon: "repeat")
+                .buttonStyle(.plain)
+                .contextMenu {
+                    contextActions(for: scout)
                 }
             }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func contextActions(for scout: APIClient.ScoutDTO) -> some View {
+        if scout.status == "active" {
+            Button {
+                Task { _ = try? await scoutStore.pause(id: scout.id) }
+            } label: {
+                Label("Pause", systemImage: "pause.circle")
+            }
+        } else if scout.status == "paused" {
+            Button {
+                Task { _ = try? await scoutStore.resume(id: scout.id) }
+            } label: {
+                Label("Resume", systemImage: "play.circle")
+            }
+        }
+        Button {
+            Task { _ = try? await scoutStore.archive(id: scout.id) }
+        } label: {
+            Label("Archive", systemImage: "archivebox")
+        }
+        Button(role: .destructive) {
+            pendingAction = .delete(id: scout.id, name: scout.name)
+        } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 
     @ViewBuilder
-    private var statusBadge: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 6, height: 6)
-            Text(scout.status.rawValue.capitalized)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(statusColor)
+    private var loadingState: some View {
+        HStack {
+            Spacer()
+            ProgressView()
+                .tint(BrettColors.gold)
+            Spacer()
+        }
+        .padding(.vertical, 40)
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        GlassCard {
+            VStack(spacing: 12) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 36, weight: .thin))
+                    .foregroundStyle(BrettColors.textGhost)
+                Text("No scouts yet")
+                    .font(BrettTypography.emptyHeading)
+                    .foregroundStyle(.white)
+                Text("Scouts monitor the internet for things you care about.")
+                    .font(BrettTypography.emptyCopy)
+                    .foregroundStyle(BrettColors.textInactive)
+                    .multilineTextAlignment(.center)
+                Button {
+                    presentNewScout()
+                } label: {
+                    Text("Create your first scout")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(BrettColors.gold, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// Gate for every "create scout" entry point. A scout without an AI
+    /// provider can't actually run, so we intercept and route the user
+    /// to Settings instead of letting them fill in a form they can't use.
+    private func presentNewScout() {
+        if aiStore.hasActiveProvider == false {
+            showNoAIAlert = true
+        } else {
+            isPresentingNewScout = true
         }
     }
 
-    private var statusColor: Color {
-        switch scout.status {
-        case .active: return BrettColors.emerald // emerald
-        case .paused: return BrettColors.textMeta
-        case .completed: return BrettColors.textMeta
-        case .expired: return BrettColors.textMeta
+    @ViewBuilder
+    private var fab: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    presentNewScout()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 56, height: 56)
+                        .background(
+                            Circle()
+                                .fill(BrettColors.gold)
+                                .shadow(color: BrettColors.gold.opacity(0.6), radius: 12)
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
+            }
         }
-    }
-
-    private var avatarGradient: [Color] {
-        switch scout.status {
-        case .active: return [BrettColors.gold.opacity(0.6), BrettColors.cerulean.opacity(0.4)]
-        case .paused: return [Color.white.opacity(0.15), Color.white.opacity(0.08)]
-        default: return [Color.white.opacity(0.1), Color.white.opacity(0.05)]
-        }
-    }
-
-    private func metaItem(text: String, icon: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .medium))
-            Text(text)
-                .font(BrettTypography.taskMeta)
-        }
-        .foregroundStyle(BrettColors.textMeta)
     }
 }

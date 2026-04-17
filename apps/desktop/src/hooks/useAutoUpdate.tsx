@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import { apiFetch } from "../api/client";
 
@@ -64,12 +64,15 @@ export function AutoUpdateProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Guard against concurrent ensureUpdateTask calls
-  let ensureInFlight = false;
+  // Guard against concurrent ensureUpdateTask calls. This must be a ref —
+  // a plain `let` in the component body would reset to false on every
+  // render, defeating the guard and allowing duplicate "Update Brett to
+  // v..." tasks if ensureUpdateTask is invoked twice in quick succession.
+  const ensureInFlightRef = useRef(false);
 
   async function ensureUpdateTask(newVersion: string) {
-    if (!api || ensureInFlight) return;
-    ensureInFlight = true;
+    if (!api || ensureInFlightRef.current) return;
+    ensureInFlightRef.current = true;
 
     try {
       const existingTaskId = await api.getUpdateTaskId();
@@ -104,7 +107,7 @@ export function AutoUpdateProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("[AutoUpdate] Failed to create update task:", err);
     } finally {
-      ensureInFlight = false;
+      ensureInFlightRef.current = false;
     }
   }
 

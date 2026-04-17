@@ -1,0 +1,104 @@
+import SwiftUI
+
+/// Switchboard for content-type-specific previews inside `TaskDetailView`.
+///
+/// The prior implementation did all the variant rendering inline. This file
+/// now only dispatches to a dedicated `*Preview` view per `contentType`
+/// — each lives in `Views/Content/` and handles its own layout, tap
+/// gestures, and external URL routing.
+///
+/// State owned here:
+///  - `externalURL`: the target of any tapped link; presented in `SafariView`.
+///  - `readerItem`: the newsletter/article the user tapped into; pushed via
+///    a programmatic nav link so the reader renders full-screen.
+struct ContentPreview: View {
+    let item: Item
+
+    @State private var externalURL: IdentifiedURL?
+    @State private var isPresentingReader: Bool = false
+
+    var body: some View {
+        // No meaningful content → render nothing at all. Keeps the detail
+        // view visually tight for plain tasks.
+        if hasRenderableContent {
+            variant
+                .sheet(item: $externalURL) { identified in
+                    SafariView(url: identified.url)
+                        .ignoresSafeArea()
+                }
+                .fullScreenCover(isPresented: $isPresentingReader) {
+                    NavigationStack {
+                        ArticleReaderView(item: item)
+                    }
+                }
+        }
+    }
+
+    // MARK: - Dispatch
+
+    @ViewBuilder
+    private var variant: some View {
+        switch resolvedType {
+        case .newsletter, .article:
+            NewsletterPreview(item: item) {
+                isPresentingReader = true
+            }
+        case .tweet:
+            TweetPreview(item: item) { url in
+                externalURL = IdentifiedURL(url: url)
+            }
+        case .pdf:
+            PDFPreview(item: item, onOpen: openPDF)
+        case .video:
+            VideoPreview(item: item) { url in
+                externalURL = IdentifiedURL(url: url)
+            }
+        case .podcast:
+            PodcastPreview(item: item) { url in
+                externalURL = IdentifiedURL(url: url)
+            }
+        case .webPage:
+            WebPagePreview(item: item) { url in
+                externalURL = IdentifiedURL(url: url)
+            }
+        case .none:
+            // Has content fields (title/description) but no type — treat
+            // it as a generic web page card.
+            WebPagePreview(item: item) { url in
+                externalURL = IdentifiedURL(url: url)
+            }
+        }
+    }
+
+    // MARK: - Derived state
+
+    /// Rule for "should this component render at all":
+    /// Either the server told us what type it is, OR we have any of
+    /// title / description / body / image / domain to show.
+    private var hasRenderableContent: Bool {
+        item.contentType != nil
+            || (item.contentTitle?.isEmpty == false)
+            || (item.contentDescription?.isEmpty == false)
+            || (item.contentBody?.isEmpty == false)
+            || (item.contentImageUrl?.isEmpty == false)
+            || (item.contentDomain?.isEmpty == false)
+    }
+
+    /// Public for tests — lets us verify the dispatch table without
+    /// touching SwiftUI.
+    var resolvedType: ContentType? {
+        ContentType(rawValue: item.contentType ?? "")
+    }
+
+    // MARK: - Actions
+
+    private func openPDF() {
+        // For the W4 pass, PDFs that came from a remote `sourceUrl` open in
+        // Safari. Locally-cached PDFs (attachment downloads) get Quick Look
+        // via `AttachmentsSection`. A future pass can hoist that handling
+        // up here by injecting the downloader — out of scope for this polish.
+        if let raw = item.sourceUrl, let url = URL(string: raw) {
+            externalURL = IdentifiedURL(url: url)
+        }
+    }
+}

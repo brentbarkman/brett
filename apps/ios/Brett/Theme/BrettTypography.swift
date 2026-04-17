@@ -18,9 +18,12 @@ enum BrettTypography {
     // Omnibar
     static let omnibarPlaceholder: Font = .system(size: 15, weight: .regular)
 
-    // Empty states
-    static let emptyHeading: Font = .system(size: 26, weight: .bold)
-    static let emptyCopy: Font = .system(size: 15, weight: .regular)
+    // Empty states — match Electron's restrained sizing. Earlier 26pt bold
+    // looked dramatic against the otherwise quiet UI. Electron's
+    // `text-base font-semibold` (16pt) + `text-sm` (14pt) is what the
+    // "match the desktop empty state" feedback was after.
+    static let emptyHeading: Font = .system(size: 16, weight: .semibold)
+    static let emptyCopy: Font = .system(size: 14, weight: .regular)
 
     // Detail
     static let detailTitle: Font = .system(size: 22, weight: .semibold)

@@ -68,7 +68,49 @@ function mapMessages(
     });
   }
 
+  // Multi-round tool orchestration re-sends the full running history on each
+  // request. The system prompt + tools already have a cache breakpoint (see
+  // mapTools / `params.system`), but the accumulating messages don't — so
+  // round N pays full price for the tool_results written in rounds 1..N-1.
+  //
+  // Add a cache breakpoint on the last content block of the last message so
+  // each round's response creates a cache entry covering all prior messages.
+  // The next round (which re-sends the same prefix) reads it at ~10% price.
+  //
+  // Anthropic allows up to 4 breakpoints; we use 2 (tools/system + last msg).
+  if (result.length >= 2) {
+    const last = result[result.length - 1];
+    const block = toCacheableLastBlock(last.content);
+    if (block) last.content = block;
+  }
+
   return result;
+}
+
+/**
+ * Ensure the final message's content is a content-block array with
+ * `cache_control` on the last block. Returns the new content, or null if
+ * the message can't be marked (e.g. already a primitive that's unsafe to
+ * wrap).
+ */
+function toCacheableLastBlock(
+  content: Anthropic.Messages.MessageParam["content"],
+): Anthropic.Messages.MessageParam["content"] | null {
+  if (typeof content === "string") {
+    if (content.length === 0) return null;
+    return [{ type: "text", text: content, cache_control: { type: "ephemeral" } }];
+  }
+  if (!Array.isArray(content) || content.length === 0) return null;
+  const copy = content.slice();
+  const lastIdx = copy.length - 1;
+  const last = copy[lastIdx];
+  // Cache breakpoints are not valid on `thinking` content blocks in the
+  // SDK's type union. We never emit those from this provider (thinking is
+  // a server-side concept we don't relay), so skip marking if we somehow
+  // see one rather than producing an invalid request.
+  if (last.type === "thinking" || last.type === "redacted_thinking") return copy;
+  copy[lastIdx] = { ...last, cache_control: { type: "ephemeral" } } as typeof last;
+  return copy;
 }
 
 export class AnthropicProvider implements AIProvider {

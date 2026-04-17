@@ -370,7 +370,7 @@ app.whenReady().then(() => {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            "default-src 'self' app:; script-src 'self' app:; style-src 'self' app: 'unsafe-inline'; img-src 'self' app: data: https:; media-src 'self' app: https://*.railway.app https://*.brentbarkman.com; connect-src 'self' app: https://*.railway.app https://*.brentbarkman.com; font-src 'self' app:; frame-src https://www.youtube.com https://open.spotify.com https://embed.podcasts.apple.com https://*.railway.app;"
+            "default-src 'self' app:; script-src 'self' app:; style-src 'self' app: 'unsafe-inline'; img-src 'self' app: data: https:; media-src 'self' app: https://*.railway.app https://*.brentbarkman.com; connect-src 'self' app: https://*.railway.app https://*.brentbarkman.com; font-src 'self' app: data:; frame-src https://www.youtube.com https://open.spotify.com https://embed.podcasts.apple.com https://*.railway.app;"
           ],
         },
       });

@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Reference docs
+
+Consult the relevant doc(s) for your task — no need to read all of them every time.
+
+- [`features.md`](features.md) — what the product does, in user language. Fastest way to understand what every surface (Today, Inbox, Calendar, Lists, Scouts, Chat, Briefing, Settings, Omnibar) actually does. Read when you need product context.
+- [`architecture.md`](architecture.md) — technical structure: monorepo layout, API routes + data model, desktop / iOS clients, sync engine, operating constraints, tech debt. Skim the ToC; deep-read the section for your task.
+- [`ai-deep-dive.md`](ai-deep-dive.md) — the AI layer specifically. Orchestrator, skills, memory/facts, embeddings, prompt caching. Consult before changing anything under `packages/ai/`.
+- [`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md) — consult before any UI work. Glass-over-chrome system, typography, color, spacing, animations, anti-patterns. iOS and desktop must look like the same product — see the parity rules in the Rules section below.
+- [`docs/llm-call-audit.md`](docs/llm-call-audit.md) — every LLM invocation in the codebase with model tier, streaming flag, frequency. Consult when adding a new LLM call site; the shared Security block at the top gets appended to every user-facing prompt.
+- [`docs/memory-system.md`](docs/memory-system.md) — how facts, embeddings, and the knowledge graph fit together. Consult when working on memory/retrieval.
+
+**If you update any of these files**, keep them evergreen: no references to a specific chat/session, no "recently fixed" language, no first-person. State what the code does now and why.
+
 ## Build & Dev Commands
 
 ```bash
@@ -9,9 +22,6 @@ pnpm dev                    # Run all apps in parallel (Turborepo)
 pnpm dev:full               # Start everything: Postgres + migrations + API + desktop
 pnpm dev:api                # API server only
 pnpm dev:desktop            # Desktop only
-pnpm dev:mobile             # Mobile Metro bundler only
-pnpm dev:mobile:simulator   # Full mobile dev: Postgres + API + iOS Simulator
-pnpm dev:mobile:device      # Full mobile dev: Postgres + API + ngrok + physical iPhone
 pnpm build                  # Build all packages and apps
 pnpm typecheck              # Type-check all packages
 pnpm lint                   # Lint all packages
@@ -22,11 +32,13 @@ pnpm db:migrate             # Run Prisma migrations
 pnpm db:studio              # Open Prisma Studio (DB GUI)
 ```
 
+The native iOS app lives at `apps/ios/` (Xcode project; not driven by pnpm). See `apps/ios/BUILD_LOG.md` for its build setup.
+
 ## Stack
 - **Monorepo:** pnpm workspaces + Turborepo
 - **API:** Hono + Prisma + better-auth (deployed on Railway)
 - **Desktop:** Electron + Vite + React + TypeScript
-- **Mobile:** Expo 55 / React Native + TypeScript (iOS, offline-first with SQLite sync engine)
+- **iOS:** Native Swift / SwiftUI / SwiftData (offline-first with local SQLite sync engine)
 - **UI:** shadcn/ui
 - **Database:** Postgres (Docker Compose locally, Railway in prod)
 - **Auth:** better-auth (email/password + Google OAuth + Sign in with Apple, JWT bearer tokens)
@@ -44,7 +56,7 @@ pnpm db:studio              # Open Prisma Studio (DB GUI)
 
 ## Architecture
 
-pnpm workspaces + Turborepo monorepo with three apps sharing four packages.
+pnpm workspaces + Turborepo monorepo. The TypeScript side is the API, desktop, admin, and shared packages. The native iOS app (`apps/ios/`) lives in the same repo but is an Xcode project — it talks to the same API and shares no build tooling.
 
 ### Dependency Graph
 
@@ -57,25 +69,28 @@ pnpm workspaces + Turborepo monorepo with three apps sharing four packages.
   ↑
 @brett/api            ← Hono + Prisma + better-auth (imports types, utils, business)
 @brett/desktop        ← Electron + Vite + React (imports all 4 packages + better-auth client)
-@brett/mobile         ← Expo 55 + React Native (imports types, utils, business — NOT ui)
-                        Offline-first: SQLite + Drizzle ORM, sync engine, Zustand stores
 
-@brett/ui             ← web-only React components — used by desktop only
+@brett/ui             ← web-only React components — used by desktop + admin
+
+apps/ios/             ← native Swift app. Re-implements types/business rules in Swift;
+                        talks to @brett/api over HTTP + SSE. Not a workspace package.
 ```
 
-### Mobile Sync
+### Sync (API ↔ iOS)
 
-The mobile app syncs with the API via two endpoints:
+iOS writes are offline-first. Local SwiftData → mutation queue → push to the API when online.
+
+Two endpoints:
 - `POST /sync/pull` — incremental pull with per-table cursors, returns upserted + deleted records
 - `POST /sync/push` — batched mutations with field-level merge (previousValues comparison)
 
-Mobile writes are offline-first: SQLite → mutation queue → push when online. See `apps/mobile/CLAUDE.md` for details.
+The Swift side of this lives under `apps/ios/Brett/Sync/` (`SyncManager`, `PushEngine`, `PullEngine`, `ConflictResolver`, `MutationQueue`, `SSEClient`). See `architecture.md` §4 for the full breakdown.
 
-All workspace dependencies use the `workspace:*` protocol.
+All TS workspace dependencies use the `workspace:*` protocol.
 
 ### Key Config Decisions
 
-- `.npmrc` sets `node-linker=hoisted` — required for Expo/React Native compatibility with pnpm
+- `.npmrc` sets `node-linker=hoisted` — simplifies monorepo resolution under pnpm for tools that don't cope well with symlinked `node_modules`
 - `.nvmrc` pins Node 20 — required by Prisma (>= 18.18)
 - `tsconfig.base.json` uses `composite: true` with project references for incremental builds
 - Turbo caches build outputs (`dist/`, `.next/`, `build/`) and invalidates on `.env.*local` changes
@@ -175,6 +190,8 @@ It contains the full design system: surface patterns, color system, typography, 
 - When doing deployment/infra work, do a full security review pass before committing
 - When modifying the Docker build, mentally trace the full layer chain — what's copied, what's missing, what symlinks expect
 - **List behavior consistency:** When changing how any list view works (Inbox, Today, Upcoming, custom lists), the same behavior MUST apply to ALL list views. There are three list components: `InboxView` (uses `InboxItemRow`), `ThingsList` (uses `ThingCard`, powers Today + custom lists), and `UpcomingView` (uses `ThingCard`). If you're not sure whether a change makes sense across all views, ask before implementing.
+- **List container chrome consistency (iOS + desktop):** The visual chrome of list containers — header treatment (icon? color? count placement?), background material, border, corner radius — MUST be identical across every list-bearing surface. On iOS that's `TaskSection` (Today), `InboxPage.inboxCard` (Inbox), `ListView.stickyHeaderContent` (custom lists), `DailyBriefing`, `NextUpCard`, `ScoutsRosterView`, etc. On desktop it's `ThingsList`, `InboxView`, `UpcomingView`, `DailyBriefing`. If you're tweaking ONE container's header/background/border, apply the same tweak to ALL containers, OR explicitly justify why this one is different.
+- **iOS ↔ Desktop visual parity:** The two clients should look like the same product. Before adding a visual flourish to either platform, check whether the OTHER platform does it too. If desktop has it and iOS doesn't (or vice versa), align them. Common drift points: section-header icons (desktop has none, iOS used to have them), card borders (desktop tints AI-surface borders cerulean, iOS now matches), title color (desktop uses neutral white/40 for ALL section labels, iOS used to use gold/colored). Reference the relevant desktop component before designing an iOS one.
 - **Omnibar + ⌘K Spotlight consistency:** The Omnibar (`packages/ui/src/Omnibar.tsx`) and ⌘K Spotlight (`packages/ui/src/SpotlightModal.tsx`) are two surfaces for the same feature. When editing either one, you MUST apply the same change to the other. If you're not sure whether a change makes sense in both, ask before implementing. They share the same hook (`apps/desktop/src/api/omnibar.ts`) but have separate rendering — keep them in sync.
 - **Settings deep-links:** Any UI element that sends the user to Settings MUST deep-link to the correct settings tab using the hash fragment (e.g., `/settings#ai-providers`, `/settings#calendar`, `/settings#timezone-location`). Never link to bare `/settings` when the intent is a specific section. Valid tab hashes: `#profile`, `#security`, `#calendar`, `#ai-providers`, `#newsletters`, `#timezone-location`, `#import`, `#updates`, `#account`.
 

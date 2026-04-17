@@ -6,6 +6,16 @@
 
 <p align="center">Personal productivity OS — tasks, calendar, AI briefings, and scouts.<br>Desktop (Electron) · iOS (SwiftUI) · API (Hono + Prisma)</p>
 
+## Reference docs
+
+Consult whichever are relevant for your task — no need to read all of them every time.
+
+- [`features.md`](features.md) — what Brett does, in user language.
+- [`architecture.md`](architecture.md) — technical overview: monorepo, API, clients, sync, tech debt.
+- [`ai-deep-dive.md`](ai-deep-dive.md) — the AI layer (orchestrator, skills, memory, embeddings, prompt caching).
+- [`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md) — consult before any UI work.
+- [`CLAUDE.md`](CLAUDE.md) — project conventions and operating rules.
+
 ## Prerequisites
 
 - **Node.js 20+** (`.nvmrc` included — run `nvm use`)

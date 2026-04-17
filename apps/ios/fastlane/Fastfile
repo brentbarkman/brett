@@ -1,0 +1,63 @@
+default_platform(:ios)
+
+# App Store Connect API key — generated at appstoreconnect.apple.com →
+# Users and Access → Integrations → App Store Connect API.
+# The .p8 file is gitignored; drop it at the path below before running `beta`.
+API_KEY_ID      = "6H9C24ZV75"
+API_ISSUER_ID   = "0d35d4e0-0e53-48fc-9935-77027198f8d2"
+API_KEY_PATH    = File.expand_path("AuthKey_#{API_KEY_ID}.p8", __dir__)
+
+XCODEPROJ       = "Brett.xcodeproj"
+SCHEME          = "Brett"
+APP_TARGET      = "Brett"
+EXTENSION       = "BrettShareExtension"
+
+platform :ios do
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    unless File.exist?(API_KEY_PATH)
+      UI.user_error!("Missing #{API_KEY_PATH}. Download the .p8 from App Store Connect and place it there.")
+    end
+
+    # Make sure the .xcodeproj matches project.yml before any Xcode work.
+    sh("cd .. && xcodegen generate")
+
+    app_store_connect_api_key(
+      key_id: API_KEY_ID,
+      issuer_id: API_ISSUER_ID,
+      key_filepath: API_KEY_PATH,
+      in_house: false,
+    )
+
+    # Bump CURRENT_PROJECT_VERSION (build number) to one above the highest
+    # build already on TestFlight for this MARKETING_VERSION. Works across
+    # machines without committing a counter back to the repo.
+    latest = latest_testflight_build_number(
+      app_identifier: "com.brett.app",
+      initial_build_number: 0,
+    )
+    new_build = latest + 1
+    increment_build_number(
+      xcodeproj: XCODEPROJ,
+      build_number: new_build.to_s,
+    )
+
+    build_app(
+      project: XCODEPROJ,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      clean: true,
+      output_directory: "build",
+      output_name: "Brett.ipa",
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      distribute_external: false,
+    )
+
+    UI.success("Uploaded build #{new_build} to TestFlight")
+  end
+end

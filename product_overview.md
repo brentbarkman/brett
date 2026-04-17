@@ -1,6 +1,6 @@
 # Brett — Product Overview
 
-> **Brett** is a personal AI chief of staff: a desktop + mobile application that acts as a unified command center for tasks, calendar events, communications, and intelligence, with agentic AI workflows at its core.
+> **Brett** is a personal AI chief of staff: a desktop + iOS application that acts as a unified command center for tasks, calendar events, communications, and intelligence, with agentic AI workflows at its core.
 
 ---
 
@@ -90,8 +90,8 @@ The primary interface. A full-featured command center with a daily view combinin
 
 **Aesthetic direction:** dark glass / premium / editorial — semi-transparent panels over full-bleed wallpaper. Not opaque SaaS chrome.
 
-### Mobile App (Expo / React Native)
-A companion to the desktop app optimized for inbox triage and quick capture on the go. Full feature parity is a longer-term goal; the initial focus is inbox review and task management.
+### iOS App (Native Swift / SwiftUI)
+A companion to the desktop app optimized for inbox triage and quick capture on the go. Offline-first via SwiftData + a mutation-queue sync engine; full feature parity with desktop is the target.
 
 ### Backend Service (Hono on Railway)
 A unified API layer handling data persistence, authentication, and integration orchestration. Postgres is the primary data store. All apps communicate through this service.
@@ -104,7 +104,7 @@ A unified API layer handling data persistence, authentication, and integration o
 |---|---|
 | Monorepo | pnpm workspaces + Turborepo, TypeScript throughout |
 | Desktop | Electron |
-| Mobile | Expo (React Native) |
+| iOS | Native Swift / SwiftUI / SwiftData |
 | Backend | Hono on Railway |
 | Database | Postgres (Railway) |
 | Auth | Better Auth (JWT-based, running inside Hono service) |
@@ -122,7 +122,7 @@ A unified API layer handling data persistence, authentication, and integration o
 
 - **AI-native, not AI-bolted-on.** Claude's API is the execution engine, not a feature. Every Scout, every agentic action, every inbox summarization runs through it.
 - **Source provenance as a first-class concern.** Every Thing knows where it came from. This enables trust signals, filtering, and attribution throughout the UI.
-- **Cross-platform by design.** Business logic lives once in shared packages and is consumed by both Electron and Expo.
+- **Cross-platform by design.** Domain logic lives once in the shared TypeScript packages for the desktop client, and is re-implemented in Swift for iOS. Both consume the same API.
 - **UI-first iteration.** Development starts with the frontend and works toward backend integration, not the other way around.
 
 ---
@@ -138,6 +138,6 @@ A unified API layer handling data persistence, authentication, and integration o
 
 ## Current Status
 
-The monorepo architecture is established. The backend service is in progress. The desktop app UI is being built iteratively with Claude Code. Mobile development follows desktop. MCP integrations and full agentic workflow execution are planned but not yet implemented.
+The monorepo architecture is established. The backend service is in progress. The desktop app UI is being built iteratively with Claude Code. The native iOS app follows desktop in feature parity. MCP integrations and full agentic workflow execution are planned but not yet implemented.
 
 Development sequence: UI-first → backend integration → agentic capability layered on top.

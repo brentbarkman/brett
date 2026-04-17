@@ -15,6 +15,7 @@ function createMockRerankProvider(
 describe("hybridSearch with reranking", () => {
   const mockEmbeddingProvider: EmbeddingProvider = {
     dimensions: 3,
+    modelId: "mock-test",
     embed: vi.fn().mockResolvedValue([1, 0, 0]),
     embedBatch: vi.fn().mockResolvedValue([[1, 0, 0]]),
   };

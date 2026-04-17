@@ -1,68 +1,97 @@
 import Foundation
 import SwiftData
 
+/// Mirrors `Item` in `apps/api/prisma/schema.prisma`.
+/// Sync-aware: tracks `_syncStatus` / `_baseUpdatedAt` / `_lastError` for
+/// the offline-first mutation queue + pull engine.
 @Model
 final class Item {
+    // MARK: - Identity / ownership
     @Attribute(.unique) var id: String
-    var type: String = "task"        // ItemType raw value
-    var status: String = "active"    // ItemStatus raw value
+    var userId: String
+
+    // MARK: - Core fields
+    var type: String                 // ItemType raw value ("task" | "content")
+    var status: String               // ItemStatus raw value
     var title: String
-    var itemDescription: String?     // `description` is reserved in Swift
+    var itemDescription: String?     // Prisma: description (reserved in Swift)
     var notes: String?
-    var source: String = "Brett"
+    var source: String
     var sourceId: String?
     var sourceUrl: String?
     var dueDate: Date?
-    var dueDatePrecision: String?
+    var dueDatePrecision: String?    // "day" | "week" | nil
     var completedAt: Date?
     var snoozedUntil: Date?
-    var brettObservation: String?
     var reminder: String?
     var recurrence: String?
     var recurrenceRule: String?
-    var listId: String?
+    var brettObservation: String?
+    var brettTakeGeneratedAt: Date?
+
+    // MARK: - Content (link / article / etc.)
     var contentType: String?
     var contentStatus: String?
     var contentTitle: String?
-    var contentBody: String?
     var contentDescription: String?
     var contentImageUrl: String?
+    var contentBody: String?
     var contentFavicon: String?
     var contentDomain: String?
-    var userId: String
+    var contentMetadata: String?     // JSON string
+
+    // MARK: - Relations (denormalised as foreign-key IDs — no FK enforcement)
+    var listId: String?
+    var meetingNoteId: String?       // Prisma Item.meetingNoteId (maps to GranolaMeeting)
+
+    // MARK: - Timestamps
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
 
-    // Sync metadata
-    var syncStatus: String = "synced"
-    var baseUpdatedAt: Date?
-    var lastError: String?
+    // MARK: - Sync metadata (prefix `_` matches RN mobile and spec §2.2)
+    var _syncStatus: String = SyncStatus.synced.rawValue
+    var _baseUpdatedAt: String?      // ISO-8601 server updatedAt at last pull
+    var _lastError: String?
+    var _provisionalParentId: String?
 
     init(
         id: String = UUID().uuidString,
+        userId: String,
         type: ItemType = .task,
         status: ItemStatus = .active,
         title: String,
-        userId: String,
+        source: String = "Brett",
         dueDate: Date? = nil,
         listId: String? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
     ) {
         self.id = id
+        self.userId = userId
         self.type = type.rawValue
         self.status = status.rawValue
         self.title = title
-        self.userId = userId
+        self.source = source
         self.dueDate = dueDate
         self.listId = listId
         self.notes = notes
-        self.createdAt = Date()
-        self.updatedAt = Date()
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 
-    // Computed helpers
+    // MARK: - Typed helpers (computed, not persisted)
     var itemType: ItemType { ItemType(rawValue: type) ?? .task }
     var itemStatus: ItemStatus { ItemStatus(rawValue: status) ?? .active }
     var isCompleted: Bool { itemStatus == .done }
+
+    var syncStatusEnum: SyncStatus {
+        SyncStatus(rawValue: _syncStatus) ?? .synced
+    }
+
+    var contentMetadataDecoded: [String: Any]? {
+        guard let json = contentMetadata?.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: json) as? [String: Any]
+    }
 }

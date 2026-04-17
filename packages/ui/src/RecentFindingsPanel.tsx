@@ -26,7 +26,7 @@ export function RecentFindingsPanel({
 }: RecentFindingsPanelProps) {
   if (isLoading) {
     return (
-      <div className="w-[280px] flex-shrink-0 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+      <div className="w-[280px] flex-shrink-0 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4">
         <div className="text-[9px] uppercase tracking-[1px] text-white/40 font-semibold mb-4">
           Recent Findings
         </div>
@@ -47,7 +47,7 @@ export function RecentFindingsPanel({
 
   if (findings.length === 0) {
     return (
-      <div className="w-[280px] flex-shrink-0 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+      <div className="w-[280px] flex-shrink-0 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4">
         <div className="text-[9px] uppercase tracking-[1px] text-white/40 font-semibold mb-4">
           Recent Findings
         </div>
@@ -59,7 +59,7 @@ export function RecentFindingsPanel({
   }
 
   return (
-    <div className="w-[280px] flex-shrink-0 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4 overflow-y-auto scrollbar-hide">
+    <div className="w-[280px] flex-shrink-0 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4 overflow-y-auto scrollbar-hide">
       <div className="text-[9px] uppercase tracking-[1px] text-white/40 font-semibold mb-4">
         Recent Findings
       </div>

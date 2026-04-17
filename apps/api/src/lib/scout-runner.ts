@@ -1295,10 +1295,15 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
     return;
   }
 
-  // Atomically claim the bootstrap slot to prevent concurrent bootstraps
+  // Atomically claim the bootstrap slot to prevent concurrent bootstraps.
+  // Setting bootstrapped=true in the WHERE-guarded update means only the first
+  // writer succeeds; a second concurrent claim finds no matching row and gets
+  // count=0. (A prior version wrote `false` here, which was a semantic no-op —
+  // Postgres still returns count=1 for every caller, so both racing runners
+  // would proceed and double-bootstrap the scout.)
   const claimed = await prisma.scout.updateMany({
     where: { id: scoutId, bootstrapped: false },
-    data: { bootstrapped: false }, // no-op data, just testing the WHERE
+    data: { bootstrapped: true },
   });
   if (claimed.count === 0) {
     console.warn(`[scout-runner] Bootstrap: Scout ${scoutId} claimed by another runner`);

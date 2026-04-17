@@ -134,7 +134,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
 
     return (
       <div className="flex flex-col flex-1 min-w-0 h-full p-4">
-        <div className="flex-1 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden relative">
+        <div className="flex-1 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden relative">
           {/* Week header — ghost with real dates */}
           <div className="flex border-b border-white/10">
             <div className="w-14 flex-shrink-0" />
@@ -250,7 +250,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
         }
       />
 
-      <div className="flex-1 min-h-0 bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
+      <div className="flex-1 min-h-0 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
         {view === "day" && (
           <CalendarDayView
             date={currentDate}

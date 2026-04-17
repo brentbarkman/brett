@@ -4,8 +4,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/client";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { Image, Sparkles, Circle, Pin, RotateCcw } from "lucide-react";
-import type { BackgroundManifest, TimeSegment, BusynessTier } from "@brett/business";
-import manifest from "../data/background-manifest.json";
+import {
+  backgroundManifest as manifest,
+  type BackgroundManifest,
+  type TimeSegment,
+  type BusynessTier,
+} from "@brett/business";
 import { solidColors } from "../data/solid-colors";
 
 type Style = "photography" | "abstract" | "solid";

@@ -1,116 +1,356 @@
 import SwiftUI
+import SwiftData
 
+/// Half-sheet surfaced from the omnibar's ≡ button. Renders the user's
+/// lists as glass pills with a colored dot + count, an inline "New list"
+/// form, and an expandable "Archived" disclosure. Tap a pill → the drawer
+/// dismisses and the caller pushes via `onSelectList`.
+///
+/// Data flows through the real `ListStore` + a `@Query` on `Item` so the
+/// pill counts stay accurate without manual invalidation.
 struct ListDrawer: View {
-    @Bindable var store: MockStore
+    var onSelectList: ((String) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(AuthManager.self) private var authManager
+
+    @State private var listStore = ListStore()
+
+    /// Live read of all non-deleted lists. Sorted by sortOrder; archived vs
+    /// active are split in Swift since `@Query` can't dynamically filter on
+    /// a nil/non-nil `archivedAt`.
+    @Query(
+        filter: #Predicate<ItemList> { $0.deletedAt == nil },
+        sort: \ItemList.sortOrder
+    ) private var allLists: [ItemList]
+
+    /// Item counts per list — computed off the live item set so pill counts
+    /// refresh automatically when items are created/toggled/moved.
+    @Query(filter: #Predicate<Item> { $0.deletedAt == nil })
+    private var allItems: [Item]
+
+    @State private var isCreating = false
+    @State private var draftName: String = ""
+    @State private var draftColor: ListColor = .slate
+    @State private var showArchived = false
+    @State private var colorPickerListId: String? = nil
+    @FocusState private var nameFieldFocused: Bool
+
+    private var activeLists: [PillModel] {
+        pillModels(from: allLists.filter { $0.archivedAt == nil })
+    }
+
+    private var archivedLists: [PillModel] {
+        pillModels(from: allLists.filter { $0.archivedAt != nil })
+    }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("LISTS")
-                        .font(.system(size: 11, weight: .semibold))
-                        .tracking(1.5)
-                        .foregroundStyle(BrettColors.textTertiary)
-                        .padding(.horizontal, 20)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                sectionHeader("YOUR LISTS")
 
-                    // List pills
-                    FlowLayout(spacing: 10) {
-                        ForEach(store.lists) { list in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(activeLists) { model in
+                            pillButton(for: model)
+                        }
+                        newListControl()
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .scrollClipDisabled()
+
+                if isCreating {
+                    newListForm()
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                if !archivedLists.isEmpty {
+                    archivedSection()
+                }
+
+                Spacer(minLength: 20)
+            }
+            .padding(.top, 12)
+        }
+        .scrollIndicators(.hidden)
+        .animation(.easeOut(duration: 0.2), value: isCreating)
+        .animation(.easeOut(duration: 0.2), value: showArchived)
+        .animation(.easeOut(duration: 0.2), value: archivedLists.map(\.id))
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(BrettTypography.sectionLabel)
+            .tracking(2.4)
+            .foregroundStyle(BrettColors.textMeta)
+            .padding(.horizontal, 20)
+    }
+
+    @ViewBuilder
+    private func pillButton(for model: PillModel) -> some View {
+        Button {
+            HapticManager.light()
+            onSelectList?(model.id)
+            dismiss()
+        } label: {
+            ListRow(name: model.name, color: model.color, count: model.itemCount)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                colorPickerListId = model.id
+            } label: {
+                Label("Change color", systemImage: "paintpalette")
+            }
+            Button(role: .destructive) {
+                archive(model.id)
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                archive(model.id)
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+        }
+        .popover(isPresented: Binding(
+            get: { colorPickerListId == model.id },
+            set: { if !$0 { colorPickerListId = nil } }
+        )) {
+            ListColorPicker(selected: model.color) { newColor in
+                recolor(model.id, to: newColor)
+                colorPickerListId = nil
+                HapticManager.light()
+            }
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    @ViewBuilder
+    private func newListControl() -> some View {
+        if !isCreating {
+            Button {
+                HapticManager.light()
+                isCreating = true
+                draftName = ""
+                draftColor = .slate
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    nameFieldFocused = true
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("New list")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundStyle(BrettColors.gold)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background {
+                    Capsule()
+                        .strokeBorder(BrettColors.gold.opacity(0.35), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func newListForm() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(draftColor.swiftUIColor)
+                    .frame(width: 10, height: 10)
+
+                TextField("List name", text: $draftName)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white)
+                    .tint(BrettColors.gold)
+                    .focused($nameFieldFocused)
+                    .submitLabel(.done)
+                    .onSubmit { commitDraft() }
+
+                Button {
+                    cancelDraft()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.white.opacity(0.25))
+                }
+                .buttonStyle(.plain)
+            }
+
+            ListColorPicker(selected: draftColor) { picked in
+                draftColor = picked
+            }
+            .frame(maxWidth: .infinity)
+
+            HStack {
+                Spacer()
+                Button {
+                    commitDraft()
+                } label: {
+                    Text("Create")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(
+                            draftName.trimmingCharacters(in: .whitespaces).isEmpty
+                                ? Color.white.opacity(0.3) : .white
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background {
+                            Capsule()
+                                .fill(
+                                    draftName.trimmingCharacters(in: .whitespaces).isEmpty
+                                        ? Color.white.opacity(0.10) : BrettColors.gold
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
+                .disabled(draftName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.white.opacity(0.06))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func archivedSection() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                showArchived.toggle()
+                HapticManager.light()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showArchived ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("ARCHIVED (\(archivedLists.count))")
+                        .font(BrettTypography.sectionLabel)
+                        .tracking(2.4)
+                }
+                .foregroundStyle(BrettColors.textMeta)
+                .padding(.horizontal, 20)
+            }
+            .buttonStyle(.plain)
+
+            if showArchived {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(archivedLists) { model in
                             Button {
+                                HapticManager.light()
+                                onSelectList?(model.id)
                                 dismiss()
-                                // Navigate to list detail — will be wired via navigation
                             } label: {
-                                HStack(spacing: 8) {
-                                    Circle()
-                                        .fill(Color(hex: list.colorHex) ?? BrettColors.gold)
-                                        .frame(width: 8, height: 8)
-
-                                    Text(list.name)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundStyle(BrettColors.textPrimary)
-
-                                    Text("\(store.itemsForList(list.id).count)")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(BrettColors.textSecondary)
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                                .background {
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.10))
-                                        .overlay {
-                                            Capsule()
-                                                .strokeBorder(Color.white.opacity(0.05), lineWidth: 0.5)
-                                        }
-                                }
+                                ListRow(
+                                    name: model.name,
+                                    color: model.color,
+                                    count: model.itemCount,
+                                    isArchived: true
+                                )
                             }
                             .buttonStyle(.plain)
-                        }
-
-                        // Add list button
-                        Button {
-                            // Create list — placeholder
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("New List")
-                                    .font(.system(size: 14, weight: .medium))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    unarchive(model.id)
+                                } label: {
+                                    Label("Restore", systemImage: "tray.and.arrow.up")
+                                }
+                                .tint(BrettColors.gold)
                             }
-                            .foregroundStyle(BrettColors.gold)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background {
-                                Capsule()
-                                    .strokeBorder(BrettColors.gold.opacity(0.3), lineWidth: 1)
+                            .contextMenu {
+                                Button {
+                                    unarchive(model.id)
+                                } label: {
+                                    Label("Unarchive", systemImage: "tray.and.arrow.up")
+                                }
                             }
                         }
-                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 20)
                 }
-                .padding(.top, 20)
             }
         }
     }
-}
 
-// Simple flow layout for list pills
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = layout(proposal: proposal, subviews: subviews)
-        return result.size
+    private func pillModels(from lists: [ItemList]) -> [PillModel] {
+        lists.map { list in
+            let count = allItems.filter { $0.listId == list.id && $0.itemStatus != .done }.count
+            return PillModel(
+                id: list.id,
+                name: list.name,
+                color: ListColor(colorClass: list.colorClass) ?? .slate,
+                itemCount: count,
+                sortOrder: list.sortOrder
+            )
+        }
+        .sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = layout(proposal: proposal, subviews: subviews)
-        for (index, position) in result.positions.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
-        }
+    // MARK: - Mutations
+
+    private func archive(_ id: String) {
+        listStore.archive(id: id)
+        HapticManager.success()
     }
 
-    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
-        var positions: [CGPoint] = []
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
+    private func unarchive(_ id: String) {
+        listStore.unarchive(id: id)
+        HapticManager.success()
+    }
 
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth && x > 0 {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            positions.append(CGPoint(x: x, y: y))
-            rowHeight = max(rowHeight, size.height)
-            x += size.width + spacing
+    private func recolor(_ id: String, to color: ListColor) {
+        guard let list = listStore.fetchById(id) else { return }
+        listStore.update(
+            id: id,
+            changes: ["colorClass": color.rawValue],
+            previousValues: ["colorClass": list.colorClass]
+        )
+    }
+
+    private func commitDraft() {
+        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        // Require a signed-in user to create. For preview / unauthenticated
+        // the drawer is still visible but "Create" is effectively a no-op.
+        guard let userId = authManager.currentUser?.id else {
+            cancelDraft()
+            return
         }
+        _ = listStore.create(
+            userId: userId,
+            name: trimmed,
+            colorClass: draftColor.rawValue
+        )
+        HapticManager.success()
+        isCreating = false
+        draftName = ""
+        draftColor = .slate
+    }
 
-        return (CGSize(width: maxWidth, height: y + rowHeight), positions)
+    private func cancelDraft() {
+        isCreating = false
+        draftName = ""
+        draftColor = .slate
+    }
+
+    private struct PillModel: Identifiable {
+        let id: String
+        let name: String
+        let color: ListColor
+        let itemCount: Int
+        let sortOrder: Int
     }
 }

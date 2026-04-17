@@ -23,6 +23,20 @@
          </BuildActionEntry>
          <BuildActionEntry
             buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "9B356E87F03CB846F3E8EA8C"
+               BuildableName = "BrettShareExtension.appex"
+               BlueprintName = "BrettShareExtension"
+               ReferencedContainer = "container:Brett.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
             buildForRunning = "NO"
             buildForProfiling = "NO"
             buildForArchiving = "NO"
@@ -32,6 +46,20 @@
                BlueprintIdentifier = "4B72560AC660F3001873E768"
                BuildableName = "BrettTests.xctest"
                BlueprintName = "BrettTests"
+               ReferencedContainer = "container:Brett.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "186595853033417F72BC6F1E"
+               BuildableName = "BrettUITests.xctest"
+               BlueprintName = "BrettUITests"
                ReferencedContainer = "container:Brett.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -61,6 +89,17 @@
                BlueprintIdentifier = "4B72560AC660F3001873E768"
                BuildableName = "BrettTests.xctest"
                BlueprintName = "BrettTests"
+               ReferencedContainer = "container:Brett.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "186595853033417F72BC6F1E"
+               BuildableName = "BrettUITests.xctest"
+               BlueprintName = "BrettUITests"
                ReferencedContainer = "container:Brett.xcodeproj">
             </BuildableReference>
          </TestableReference>

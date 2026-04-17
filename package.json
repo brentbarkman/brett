@@ -7,9 +7,6 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "dev:desktop": "turbo run dev --filter=@brett/desktop",
-    "dev:mobile": "turbo run dev --filter=@brett/mobile",
-    "dev:mobile:simulator": "./apps/mobile/scripts/dev-simulator.sh",
-    "dev:mobile:device": "./apps/mobile/scripts/dev-device.sh",
     "dev:api": "turbo run dev --filter=@brett/api",
     "dev:admin": "turbo run dev --filter=@brett/admin-api --filter=@brett/admin",
     "dev:full": "./scripts/dev.sh",
@@ -25,10 +22,18 @@
     "eval": "pnpm --filter @brett/evals eval",
     "eval:compare": "pnpm --filter @brett/evals eval:compare",
     "upload:videos": "npx tsx scripts/upload-videos.ts",
+    "delete:awakening-videos": "npx tsx scripts/delete-awakening-videos.ts",
     "upload:backgrounds": "npx tsx scripts/upload-backgrounds.ts",
-    "release": "npx tsx scripts/release.ts"
+    "audit:backgrounds": "npx tsx scripts/backgrounds/audit-cli.ts",
+    "source:backgrounds": "npx tsx scripts/backgrounds/unsplash-source.ts",
+    "process:backgrounds": "npx tsx scripts/backgrounds/process-images.ts",
+    "portraits:backgrounds": "npx tsx scripts/backgrounds/generate-portraits.ts",
+    "release": "./scripts/release.sh"
   },
   "devDependencies": {
+    "@brett/business": "workspace:*",
+    "dotenv": "^17.4.1",
+    "sharp": "^0.34.5",
     "turbo": "^2.8.20",
     "typescript": "^5.3.3"
   },

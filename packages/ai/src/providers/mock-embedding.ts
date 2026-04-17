@@ -234,6 +234,7 @@ function generateEmbedding(text: string): number[] {
  */
 export class MockEmbeddingProvider implements EmbeddingProvider {
   readonly dimensions = DIMENSIONS;
+  readonly modelId = "mock-v1";
 
   private cache = new Map<string, number[]>();
 

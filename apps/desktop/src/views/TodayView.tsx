@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Omnibar,
   DailyBriefing,
@@ -23,11 +23,12 @@ import {
 import { useBriefing, useBriefingSummary } from "../api/briefing";
 import { usePreference } from "../api/preferences";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
+import { useTodayKey } from "../hooks/useTodayKey";
 
 interface TodayViewProps {
   lists: NavList[];
   onItemClick: (item: Thing | CalendarEventDisplay) => void;
-  onTriageOpen: (mode: "list-first" | "date-first", ids: string[]) => void;
+  onTriageOpen: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   onFocusChange?: (thing: Thing) => void;
   omnibarProps: OmnibarProps;
   nextUpEvent?: CalendarEventDisplay | null;
@@ -70,9 +71,12 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   const briefing = useBriefing();
   const summary = useBriefingSummary();
 
-  // Stable date boundaries for the day
-  const [dueBefore] = useState(() => getEndOfWeekUTC().toISOString());
-  const [completedAfter] = useState(() => getTodayUTC().toISOString());
+  // Date boundaries — recomputed when the UTC day rolls over so tasks coming
+  // due today become visible without requiring an app reload.
+  const todayKey = useTodayKey();
+  const dueBefore = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
+  // todayKey is already `getTodayUTC().toISOString()`, so use it directly.
+  const completedAfter = todayKey;
 
   // Two explicit queries: active items due this week or earlier, done items from today
   const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);
@@ -187,17 +191,19 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
         </div>
       )}
 
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4">
-        <div className="pb-3">
+      <div className="flex-1 min-h-0 flex flex-col bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
+        <div className="flex-shrink-0 px-4 pt-4 pb-3">
           <FilterPills
             activeFilter={activeFilter}
             onSelectFilter={setActiveFilter}
           />
         </div>
 
-        <CrossFade stateKey={thingsStateKey} exitMs={180} enterMs={280}>
-          {thingsContent}
-        </CrossFade>
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-4 pb-4">
+          <CrossFade stateKey={thingsStateKey} exitMs={180} enterMs={280}>
+            {thingsContent}
+          </CrossFade>
+        </div>
       </div>
 
     </>

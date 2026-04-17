@@ -15,6 +15,9 @@ const DEFAULT_MODEL = "voyage-4-large";
 
 export class VoyageEmbeddingProvider implements EmbeddingProvider {
   readonly dimensions = 1024;
+  // Documents (the indexed side) determine what's stored; we record the
+  // doc-side model as the canonical identifier for the row.
+  readonly modelId = "voyage-4-large";
   private apiKey: string;
 
   constructor(apiKey: string) {

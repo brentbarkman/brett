@@ -592,12 +592,12 @@ function NavItem({
             {label}
           </span>
           {tag && (
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-400/70 bg-amber-400/10 border border-amber-400/15 rounded-full px-1.5 py-0.5">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-brett-gold/70 bg-brett-gold/10 border border-brett-gold/15 rounded-full px-1.5 py-0.5">
               {tag}
             </span>
           )}
           {badge !== undefined && badge > 0 && (
-            <span className="bg-brett-gold-dark text-white text-[11px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-tight">
+            <span className="bg-brett-gold/10 text-brett-gold/70 border border-brett-gold/15 text-[11px] font-semibold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-tight">
               {badge}
             </span>
           )}

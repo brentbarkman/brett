@@ -6,6 +6,10 @@ import SwiftUI
 struct TaskCheckbox: View {
     let isChecked: Bool
     var contentType: ContentType? = nil
+    /// Optional task title — when provided, lets us produce richer VoiceOver
+    /// labels like "Mark Buy groceries complete" instead of a bare
+    /// "Not completed". Callers without a title may omit it.
+    var title: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -51,8 +55,23 @@ struct TaskCheckbox: View {
         .buttonStyle(.plain)
         .frame(width: 44, height: 44)
         .contentShape(Rectangle())
-        .accessibilityLabel(isChecked ? "Completed" : "Not completed")
-        .accessibilityHint("Double-tap to toggle")
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            HapticManager.light()
+            action()
+        }
+    }
+
+    /// VoiceOver speaks the *action* the user is about to take. When we know
+    /// the task title ("Mark Buy groceries complete") it's far clearer than
+    /// a bare "Not completed". Fall back to the generic phrase when the
+    /// title isn't wired through.
+    private var accessibilityLabel: String {
+        if let title, !title.isEmpty {
+            return AccessibilityLabels.checkbox(title: title, isCompleted: isChecked)
+        }
+        return isChecked ? "Mark incomplete" : "Mark complete"
     }
 
     private func contentTypeIcon(_ type: ContentType) -> String {

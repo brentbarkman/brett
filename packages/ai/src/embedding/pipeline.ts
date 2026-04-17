@@ -236,14 +236,16 @@ export async function embedEntity(params: EmbedEntityParams): Promise<void> {
   }
 
   // 4. Upsert each chunk into the Embedding table (store contentHash on chunk 0 for change detection)
+  const modelId = provider.modelId;
+  const dim = provider.dimensions;
   for (let i = 0; i < chunks.length; i++) {
     const vectorStr = `[${allVectors[i].join(",")}]`;
     const chunkHash = i === 0 ? hash : null;
     await prisma.$executeRaw`
-      INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "contentHash", "createdAt", "updatedAt")
-      VALUES (gen_random_uuid(), ${userId}, ${entityType}, ${entityId}, ${i}, ${chunks[i]}, ${vectorStr}::vector, ${chunkHash}, NOW(), NOW())
+      INSERT INTO "Embedding" (id, "userId", "entityType", "entityId", "chunkIndex", "chunkText", embedding, "contentHash", "model", "dim", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid(), ${userId}, ${entityType}, ${entityId}, ${i}, ${chunks[i]}, ${vectorStr}::vector, ${chunkHash}, ${modelId}, ${dim}, NOW(), NOW())
       ON CONFLICT ("entityType", "entityId", "chunkIndex")
-      DO UPDATE SET "chunkText" = EXCLUDED."chunkText", embedding = EXCLUDED.embedding, "contentHash" = EXCLUDED."contentHash", "updatedAt" = NOW()
+      DO UPDATE SET "chunkText" = EXCLUDED."chunkText", embedding = EXCLUDED.embedding, "contentHash" = EXCLUDED."contentHash", "model" = EXCLUDED."model", "dim" = EXCLUDED."dim", "updatedAt" = NOW()
     `;
   }
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Must match Brett.entitlements. Both the main app and this extension
+	     share the same App Group + keychain-access-group so the extension
+	     can read the Bearer token the main app wrote. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.brett.app</string>
+	</array>
+
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.brett.app.auth</string>
+	</array>
+</dict>
+</plist>

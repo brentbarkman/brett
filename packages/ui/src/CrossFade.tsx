@@ -74,12 +74,12 @@ export function CrossFade({
       </div>
       <style>{`
         @keyframes crossFadeOut {
-          from { opacity: 1; transform: translateY(0) scale(1); }
-          to   { opacity: 0; transform: translateY(6px) scale(0.985); }
+          from { opacity: 1; }
+          to   { opacity: 0; }
         }
         @keyframes crossFadeIn {
-          from { opacity: 0; transform: translateY(10px) scale(0.985); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
       `}</style>
     </>

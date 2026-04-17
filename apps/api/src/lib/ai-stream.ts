@@ -43,6 +43,33 @@ export function buildStream(
 ): { stream: ReadableStream; assistantContentRef: { value: string } } {
   const encoder = new TextEncoder();
   const assistantContentRef = { value: "" };
+  // Flipped true when the client disconnects (ReadableStream cancel fires, or
+  // enqueue throws ERR_INVALID_STATE because the controller is already closed).
+  // When true, we stop forwarding to the controller and bail out of the
+  // orchestrator loop — partial assistant content still persists so the
+  // session can be resumed.
+  let clientDisconnected = false;
+
+  // Safe wrappers around controller.enqueue/close that swallow the
+  // ERR_INVALID_STATE thrown when the client has already disconnected.
+  const safeEnqueue = (controller: ReadableStreamDefaultController, data: Uint8Array): boolean => {
+    if (clientDisconnected) return false;
+    try {
+      controller.enqueue(data);
+      return true;
+    } catch {
+      clientDisconnected = true;
+      return false;
+    }
+  };
+  const safeClose = (controller: ReadableStreamDefaultController): void => {
+    if (clientDisconnected) return;
+    try {
+      controller.close();
+    } catch {
+      /* already closed */
+    }
+  };
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -51,12 +78,13 @@ export function buildStream(
 
       try {
         for await (const chunk of orchestrate(params)) {
+          if (clientDisconnected) break;
           // Intercept error chunks from the orchestrator — never forward raw error details to the client
           if (chunk.type === "error") {
             console.error("[ai-stream] Orchestrator error chunk:", chunk.message);
             hadError = true;
             const safeError = { type: "error", message: "Something went wrong. Please try again." };
-            controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify(safeError)}\n\n`));
+            if (!safeEnqueue(controller, encoder.encode(`event: error\ndata: ${JSON.stringify(safeError)}\n\n`))) break;
             continue;
           }
           if (chunk.type === "text") {
@@ -75,9 +103,9 @@ export function buildStream(
             }
           }
           const data = `event: chunk\ndata: ${JSON.stringify(chunk)}\n\n`;
-          controller.enqueue(encoder.encode(data));
+          if (!safeEnqueue(controller, encoder.encode(data))) break;
         }
-        controller.close();
+        safeClose(controller);
 
         // Update session with the actual model used
         if (streamModel) {
@@ -139,6 +167,12 @@ export function buildStream(
             .catch(() => {});
         }
       } catch (err) {
+        // If the client disconnected, this isn't a stream error — it's a
+        // normal cancellation. Log at debug level and don't corrupt the
+        // session with an error reason.
+        if (clientDisconnected) {
+          return;
+        }
         console.error("[ai-stream] Stream error:", err);
 
         // Mark session as failed with error reason
@@ -155,17 +189,16 @@ export function buildStream(
           type: "error",
           message: "Something went wrong. Please try again.",
         };
-        try {
-          controller.enqueue(
-            encoder.encode(
-              `event: error\ndata: ${JSON.stringify(errorChunk)}\n\n`,
-            ),
-          );
-          controller.close();
-        } catch {
-          /* controller already closed */
-        }
+        safeEnqueue(controller, encoder.encode(`event: error\ndata: ${JSON.stringify(errorChunk)}\n\n`));
+        safeClose(controller);
       }
+    },
+    // Fires when the client disconnects (fetch abort, tab close, etc).
+    // Marking disconnected early lets the async start() loop bail out of
+    // the orchestrator at the next iteration instead of fighting a closed
+    // controller on enqueue.
+    cancel() {
+      clientDisconnected = true;
     },
   });
 

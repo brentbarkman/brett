@@ -84,6 +84,7 @@ export async function extractFacts(
   const facts = validateFacts(parsed);
 
   // 6. Upsert each validated fact
+  let failures = 0;
   for (const fact of facts) {
     // 7. Temporal upsert — wrapped in a transaction to prevent race conditions on concurrent extractions
     try {
@@ -127,8 +128,22 @@ export async function extractFacts(
           });
         }
       });
-    } catch {
-      // Silent fail on individual fact errors
+    } catch (err) {
+      // Don't let a single fact take down the whole extraction batch, but do
+      // emit — silent swallowing hid a constraint violation for weeks.
+      failures++;
+      console.error("[fact-extraction] upsert failed", {
+        userId,
+        sessionId,
+        key: fact.key,
+        category: fact.category,
+        err: err instanceof Error ? err.message : String(err),
+      });
     }
+  }
+  if (failures > 0) {
+    console.warn(
+      `[fact-extraction] ${failures}/${facts.length} facts failed to upsert for user ${userId}`,
+    );
   }
 }

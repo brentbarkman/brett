@@ -101,10 +101,6 @@ export type { ExtractedEntity, ExtractedRelationship, ExtractionResult } from ".
 export { VALID_GRAPH_ENTITY_TYPES, VALID_RELATIONSHIP_TYPES } from "./graph/types.js";
 export { findConnected, findEntitiesBySimilarity, buildGraphContext } from "./graph/query.js";
 
-// MCP
-export type { MCPClient } from "./mcp/client.js";
-export { createGranolaClient } from "./mcp/granola.js";
-
 // Retrieval
 export { unifiedRetrieve } from "./retrieval/router.js";
 export type { RetrievalContext, RetrievalResult } from "./retrieval/types.js";

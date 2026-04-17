@@ -58,7 +58,18 @@ export function getCalendarReauthUrl(state: string, loginHint: string): string {
 /** Exchange auth code for tokens */
 export async function exchangeCalendarCode(code: string) {
   const oauth2Client = getOAuthClient();
-  const { tokens } = await oauth2Client.getToken(code);
+  // Bounded timeout — Google's token endpoint normally responds in <1s.
+  // Without this, a Google outage or DNS flake would hang the OAuth
+  // callback request indefinitely. googleapis doesn't accept an
+  // AbortSignal, so race with a timeout promise.
+  const tokenPromise = oauth2Client.getToken(code);
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(
+      () => reject(new Error("Google token exchange timed out after 10s")),
+      10_000,
+    );
+  });
+  const { tokens } = await Promise.race([tokenPromise, timeoutPromise]);
   return tokens;
 }
 
