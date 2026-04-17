@@ -80,14 +80,29 @@ async function uploadRelease() {
 
   await uploadFile(ymlPath, "releases/latest-mac.yml", "text/yaml", "latest-mac.yml");
 
-  // latest.json points the download page at the preferred first-install artifact:
-  // DMG if we produced one, otherwise the ZIP. Autoupdate reads latest-mac.yml,
-  // not this file, so it's safe to prefer DMG here.
-  const downloadArtifact = dmgs[0] ?? zips[0];
+  // Classify each DMG by architecture from its electron-builder filename.
+  // Convention: `Brett-<version>-arm64.dmg` / `Brett-<version>-x64.dmg`.
+  // Bare `Brett-<version>.dmg` is electron-builder's x64 default — treat as x64.
+  const downloads: Record<"arm64" | "x64", string> = { arm64: "", x64: "" };
+  for (const f of dmgs) {
+    const arch = f.includes("arm64") ? "arm64" : "x64";
+    if (downloads[arch]) {
+      throw new Error(
+        `Multiple ${arch} DMGs found (${downloads[arch]} and ${f}). Build output is ambiguous.`,
+      );
+    }
+    downloads[arch] = `releases/${f}`;
+  }
+
+  // Fallback for any client still reading the legacy `artifact` field — prefer
+  // Apple Silicon since that's ~95% of Macs sold in the last several years.
+  const fallbackArtifact = downloads.arm64 || downloads.x64 || `releases/${zips[0]}`;
+
   const latestKey = "releases/latest.json";
   const latestBody = JSON.stringify({
     version,
-    artifact: `releases/${downloadArtifact}`,
+    downloads,
+    artifact: fallbackArtifact,
   });
   console.log(`Uploading latest.json → ${latestKey}`);
   await releaseS3.send(

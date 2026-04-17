@@ -12,24 +12,37 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// Validates electron-builder release filenames. Accepts multi-segment arch
+// suffixes like `-arm64` or `-arm64-mac` (the `-` is in the character class
+// explicitly). Must stay in sync with ALLOWED_RELEASE_PATTERNS in release-proxy.ts.
+const FILENAME_PATTERN = /^Brett-[\d.]+(?:-[\w.-]+)?\.(zip|dmg)$/;
+
+function pickFilename(rawKey: string | undefined, fallback: string): string {
+  if (!rawKey) return fallback;
+  const stripped = rawKey.replace(/^releases\//, "");
+  return FILENAME_PATTERN.test(stripped) ? stripped : fallback;
+}
+
 download.get("/", async (c) => {
   const { releasesUrl, videoFiles } = getStorageUrls();
   const latest = await getLatestVersion();
   const version = latest.version;
-  // artifact key from latest.json includes "releases/" prefix — strip it for the proxy URL
-  const rawKey = latest.artifact || latest.dmg || `releases/Brett-${version}-mac.zip`;
-  let filename = rawKey.replace(/^releases\//, "");
-  // Validate filename to prevent open redirect via poisoned latest.json.
-  // Pattern matches electron-builder outputs: "Brett-X.Y.Z.zip", "Brett-X.Y.Z-mac.zip",
-  // "Brett-X.Y.Z-arm64-mac.dmg", etc. Must stay in sync with ALLOWED_RELEASE_PATTERNS
-  // in release-proxy.ts.
-  if (!/^Brett-[\d.]+(?:-[\w.]+)?\.(zip|dmg)$/.test(filename)) {
-    filename = `Brett-${version}-mac.zip`;
-  }
+
+  // Per-arch DMG URLs. Falls back to the legacy `artifact` field for the
+  // primary button if `downloads` is missing (e.g. latest.json from an older
+  // release). If both are missing, we still link to the autoupdate ZIP by
+  // convention so the page never 404s the user.
+  const arm64Key = latest.downloads?.arm64;
+  const x64Key = latest.downloads?.x64;
+  const legacyKey = latest.artifact || latest.dmg;
+
+  const arm64File = pickFilename(arm64Key ?? legacyKey, `Brett-${version}-arm64.dmg`);
+  const x64File = pickFilename(x64Key, `Brett-${version}-x64.dmg`);
 
   // Escape all interpolated values for safe HTML embedding
   const safeVersion = escapeHtml(version);
-  const safeDownloadHref = escapeHtml(`${releasesUrl}/${filename}`);
+  const safeArm64Href = escapeHtml(`${releasesUrl}/${arm64File}`);
+  const safeX64Href = escapeHtml(`${releasesUrl}/${x64File}`);
   // Escape </script> in JSON to prevent early script tag termination
   const safeVideoJson = JSON.stringify(videoFiles).replace(/<\//g, "<\\/");
 
@@ -102,16 +115,23 @@ download.get("/", async (c) => {
       font-size: 16px;
       margin-bottom: 32px;
     }
+    .downloads {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+    }
     .download-btn {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 10px;
-      padding: 14px 32px;
+      padding: 14px 24px;
       background: #3b82f6;
       border: none;
       border-radius: 10px;
       color: white;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       cursor: pointer;
       transition: all 200ms ease;
@@ -122,9 +142,31 @@ download.get("/", async (c) => {
       transform: translateY(-1px);
       box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
     }
+    .download-btn.secondary {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.85);
+    }
+    .download-btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: none;
+    }
+    .download-btn .btn-sub {
+      font-size: 12px;
+      font-weight: 500;
+      opacity: 0.7;
+      margin-left: 4px;
+    }
     .download-btn svg {
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+    .arch-hint {
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 12px;
+      margin-top: 12px;
+      line-height: 1.5;
     }
     .version-info {
       color: rgba(255, 255, 255, 0.3);
@@ -221,14 +263,26 @@ download.get("/", async (c) => {
   <div class="app-name">Brett</div>
   <div class="tagline">Your day, handled.</div>
 
-  <a href="${safeDownloadHref}" class="download-btn" id="download-link">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="7 10 12 15 17 10"/>
-      <line x1="12" y1="15" x2="12" y2="3"/>
-    </svg>
-    <span id="download-text">Download for macOS</span>
-  </a>
+  <div class="downloads">
+    <a href="${safeArm64Href}" class="download-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <span>Apple Silicon</span>
+      <span class="btn-sub">M1 and later</span>
+    </a>
+    <a href="${safeX64Href}" class="download-btn secondary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <span>Intel</span>
+    </a>
+  </div>
+  <div class="arch-hint">Not sure? Pick Apple Silicon if your Mac is from late 2020 or later.</div>
   <div class="version-info">v${safeVersion} · macOS 12+</div>
 
   <div class="platform-note" id="platform-note" style="display:none">

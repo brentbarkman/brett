@@ -25,9 +25,13 @@ function getReleaseStorage(): Promise<{ s3: S3Client; bucket: string }> {
   return _initPromise;
 }
 
-// Allowed files in releases/ — whitelist specific patterns
+// Allowed files in releases/ — whitelist specific patterns.
+// The suffix group accepts multi-segment arch markers like `-arm64-mac`
+// because electron-builder produces e.g. `Brett-1.2.3-arm64-mac.zip` for
+// per-arch update ZIPs. Traversal is still blocked by the `..` / `/` /
+// `%` rejection in the handler, and the anchored regex prevents path escape.
 const ALLOWED_RELEASE_PATTERNS = [
-  /^releases\/Brett-[\d.]+(?:-[\w.]+)?\.(zip|dmg)$/,
+  /^releases\/Brett-[\d.]+(?:-[\w.-]+)?\.(zip|dmg)$/,
   /^releases\/latest-mac\.yml$/,
   /^releases\/latest\.json$/,
 ];
