@@ -17,5 +17,20 @@
 	<array>
 		<string>$(AppIdentifierPrefix)com.brett.app.auth</string>
 	</array>
+
+	<!-- Associated domains — required for platform passkeys. `webcredentials:`
+	     tells iOS which domain's passkeys this app participates in.
+
+	     SERVER-SIDE REQUIREMENT: api.brett.brentbarkman.com must serve
+	     /.well-known/apple-app-site-association with:
+	         { "webcredentials": { "apps": ["<TeamID>.com.brett.app"] } }
+
+	     Without the AASA file, ASAuthorization passkey registration will
+	     fail at runtime (the UI surfaces "Passkey setup required..." in
+	     that case). -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>webcredentials:api.brett.brentbarkman.com</string>
+	</array>
 </dict>
 </plist>

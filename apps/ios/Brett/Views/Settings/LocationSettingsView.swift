@@ -1,13 +1,15 @@
 import SwiftUI
 import CoreLocation
 
-/// Assistant, timezone, weather, and location preferences.
+/// Assistant, memory, timezone, weather, and location preferences.
 ///
 /// API endpoints:
 /// - `PATCH /users/me`        — `{ assistantName }`
 /// - `PATCH /users/timezone`  — `{ timezone, auto }`
 /// - `PATCH /users/location`  — `{ city?, countryCode?, latitude?, longitude?, tempUnit?, weatherEnabled? }`
 /// - `GET  /weather/geocode?q=query` — server-side city search
+/// - `GET  /brett/memory/facts` — list of facts Brett has learned
+/// - `DELETE /brett/memory/facts/:id` — delete a single fact
 ///
 /// Briefing preference is local-only (`@AppStorage`).
 struct LocationSettingsView: View {
@@ -19,6 +21,13 @@ struct LocationSettingsView: View {
 
     // ── Briefing ──
     @AppStorage("briefing.enabled") private var briefingEnabled: Bool = true
+
+    // ── Memory ──
+    @State private var memoryFacts: [MemoryFact] = []
+    @State private var isLoadingMemory = true
+    @State private var memoryErrorMessage: String?
+    @State private var factIdPendingConfirm: String?
+    @State private var factIdDeleting: String?
 
     // ── Timezone ──
     @State private var timezoneAuto: Bool = true
@@ -72,6 +81,9 @@ struct LocationSettingsView: View {
             // ═══ Assistant ═══
             assistantSection
 
+            // ═══ Memory ═══
+            memorySection
+
             // ═══ Timezone ═══
             timezoneSection
 
@@ -98,6 +110,7 @@ struct LocationSettingsView: View {
             }
         }
         .onAppear { hydrate() }
+        .task { await loadMemory() }
     }
 
     // MARK: - Assistant section
@@ -169,6 +182,181 @@ struct LocationSettingsView: View {
             .tint(BrettColors.gold)
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - Memory section
+
+    @ViewBuilder
+    private var memorySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            BrettSettingsSection("Memory") {
+                if isLoadingMemory {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(BrettColors.gold)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 16)
+                } else if let memoryErrorMessage {
+                    Text(memoryErrorMessage)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.error)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                } else if memoryFacts.isEmpty {
+                    Text("No memories yet. Brett learns as you chat.")
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.textMeta)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                } else {
+                    ForEach(Array(memoryFacts.enumerated()), id: \.element.id) { index, fact in
+                        if index > 0 {
+                            BrettSettingsDivider()
+                        }
+                        memoryRow(for: fact)
+                    }
+                }
+            }
+
+            Text("Brett stores facts it picks up from chat (preferences, habits, context). Tap the trash icon to forget one.")
+                .font(.system(size: 12))
+                .foregroundStyle(BrettColors.textMeta)
+                .padding(.horizontal, 4)
+        }
+    }
+
+    @ViewBuilder
+    private func memoryRow(for fact: MemoryFact) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(fact.category.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(categoryColor(for: fact.category))
+
+            HStack(alignment: .top, spacing: 10) {
+                Text(fact.value)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if factIdPendingConfirm == fact.id {
+                    HStack(spacing: 6) {
+                        Button {
+                            Task { await deleteFact(fact) }
+                        } label: {
+                            Text("Yes")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(BrettColors.error)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(BrettColors.error.opacity(0.15))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(factIdDeleting == fact.id)
+
+                        Button {
+                            factIdPendingConfirm = nil
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(BrettColors.textCardTitle)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(Color.white.opacity(0.08))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(factIdDeleting == fact.id)
+                    }
+                } else {
+                    Button {
+                        factIdPendingConfirm = fact.id
+                    } label: {
+                        if factIdDeleting == fact.id {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(BrettColors.textMeta)
+                                .frame(width: 16, height: 16)
+                        } else {
+                            Image(systemName: "trash")
+                                .font(.system(size: 13))
+                                .foregroundStyle(BrettColors.textMeta)
+                                .frame(width: 28, height: 28)
+                                .contentShape(Rectangle())
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private func categoryColor(for category: String) -> Color {
+        switch category.lowercased() {
+        case "preference":
+            return BrettColors.gold
+        case "context":
+            return Color(red: 0.37, green: 0.83, blue: 0.77)
+        case "relationship":
+            return Color.purple.opacity(0.8)
+        case "habit":
+            return Color(red: 0.98, green: 0.75, blue: 0.14)
+        default:
+            return Color.white.opacity(0.40)
+        }
+    }
+
+    // MARK: - Memory networking
+
+    private func loadMemory() async {
+        isLoadingMemory = true
+        memoryErrorMessage = nil
+        defer { isLoadingMemory = false }
+
+        do {
+            let response: MemoryFactsResponse = try await client.request(
+                path: "/brett/memory/facts",
+                method: "GET"
+            )
+            memoryFacts = response.facts
+        } catch let apiError as APIError {
+            memoryErrorMessage = apiError.userFacingMessage
+        } catch {
+            memoryErrorMessage = "Couldn't load memories."
+        }
+    }
+
+    private func deleteFact(_ fact: MemoryFact) async {
+        factIdDeleting = fact.id
+        defer {
+            factIdDeleting = nil
+            factIdPendingConfirm = nil
+        }
+
+        do {
+            struct GenericResponse: Decodable {}
+            let _: GenericResponse = try await client.request(
+                path: "/brett/memory/facts/\(fact.id)",
+                method: "DELETE"
+            )
+            memoryFacts.removeAll { $0.id == fact.id }
+        } catch let apiError as APIError {
+            memoryErrorMessage = apiError.userFacingMessage
+        } catch {
+            memoryErrorMessage = "Couldn't remove that memory."
         }
     }
 
@@ -665,4 +853,22 @@ private struct GeocodeCityResult: Decodable {
     let longitude: Double
     let timezone: String
     let displayName: String
+}
+
+// MARK: - Memory response models
+
+private struct MemoryFactsResponse: Decodable {
+    let facts: [MemoryFact]
+}
+
+private struct MemoryFact: Decodable, Identifiable {
+    let id: String
+    let category: String
+    let key: String?
+    let value: String
+    let confidence: Double?
+    let sourceType: String?
+    let validFrom: Date?
+    let createdAt: Date?
+    let updatedAt: Date?
 }

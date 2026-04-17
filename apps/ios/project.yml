@@ -44,6 +44,13 @@ targets:
         excludes:
           - "**/*.xcassets"
       - path: Brett/Assets.xcassets
+      # Bundled resources — non-code payloads we want copied into the
+      # .app at build time (e.g. `background-manifest.json` for the
+      # wallpaper picker). `buildPhase: resources` tells xcodegen to
+      # route these through "Copy Bundle Resources" instead of trying
+      # to compile them as Swift.
+      - path: Brett/Resources
+        buildPhase: resources
       # Share-extension-shared files — SharePayload and SharedConfig are
       # used by both the main app (for ShareIngestor reconciliation and
       # the URL mirror) and the extension (for payload building + queue

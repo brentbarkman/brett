@@ -114,6 +114,10 @@ enum MessageRole: String, Codable {
 
 enum BackgroundStyle: String, Codable {
     case photography
+    case abstract
+    case solid
+    // Legacy — accepted on decode for older server responses but not
+    // surfaced in the UI. Treated as "photography" everywhere else.
     case gradient
 }
 

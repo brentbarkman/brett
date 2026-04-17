@@ -31,6 +31,16 @@ final class CalendarAccountsStore {
         let id: String
         let googleEmail: String
         let connectedAt: Date
+        /// Whether the account has granted the Docs/Drive scopes needed to
+        /// read Google Meet transcripts. False means the user can re-auth
+        /// to add the scope; true means we can surface the meeting-notes
+        /// toggle.
+        var hasMeetingNotesScope: Bool
+        /// Per-account preference for whether Brett should sync meeting
+        /// transcripts / surface Google Meet notes. Defaults to the value
+        /// of `hasMeetingNotesScope` on the initial connection and is
+        /// preserved across re-auths.
+        var meetingNotesEnabled: Bool
         var calendars: [CalendarInfo]
     }
 
@@ -73,6 +83,11 @@ final class CalendarAccountsStore {
                     id: acc.id,
                     googleEmail: acc.googleEmail,
                     connectedAt: acc.connectedAt,
+                    // Servers older than the meeting-notes rollout don't
+                    // include these fields. Treat missing as "no scope /
+                    // disabled" so the UI shows the upgrade affordance.
+                    hasMeetingNotesScope: acc.hasMeetingNotesScope ?? false,
+                    meetingNotesEnabled: acc.meetingNotesEnabled ?? false,
                     calendars: acc.calendars.map {
                         CalendarInfo(
                             id: $0.id,
@@ -139,6 +154,48 @@ final class CalendarAccountsStore {
         }
         let previous = accounts[accIdx].calendars[calIdx].isVisible
         accounts[accIdx].calendars[calIdx].isVisible = isVisible
+        return previous
+    }
+
+    // MARK: - Meeting notes (per-account)
+
+    /// Request an incremental-consent OAuth URL to upgrade an existing
+    /// account's scopes to include Docs/Drive (so Brett can read Google
+    /// Meet transcripts). Caller runs the returned URL in
+    /// `ASWebAuthenticationSession` then re-fetches accounts.
+    func reauthAccount(accountId: String) async throws -> URL {
+        try await api.reauthCalendarAccount(accountId: accountId)
+    }
+
+    /// Toggle the per-account `meetingNotesEnabled` flag. Updates local
+    /// state optimistically and reverts on error. Server returns 409 if
+    /// attempting to enable without the Docs scope — caller should
+    /// surface the re-auth prompt in that case.
+    func toggleMeetingNotesEnabled(
+        accountId: String,
+        enabled: Bool
+    ) async throws {
+        let previous = applyMeetingNotesEnabled(accountId: accountId, enabled: enabled)
+        do {
+            _ = try await api.setCalendarMeetingNotesEnabled(
+                accountId: accountId,
+                enabled: enabled
+            )
+        } catch {
+            if let previous {
+                _ = applyMeetingNotesEnabled(accountId: accountId, enabled: previous)
+            }
+            throw error
+        }
+    }
+
+    @discardableResult
+    private func applyMeetingNotesEnabled(accountId: String, enabled: Bool) -> Bool? {
+        guard let idx = accounts.firstIndex(where: { $0.id == accountId }) else {
+            return nil
+        }
+        let previous = accounts[idx].meetingNotesEnabled
+        accounts[idx].meetingNotesEnabled = enabled
         return previous
     }
 }

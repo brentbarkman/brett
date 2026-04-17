@@ -35,11 +35,21 @@ extension APIClient {
         let id: String
         let googleEmail: String
         let connectedAt: Date
+        let hasMeetingNotesScope: Bool?
+        let meetingNotesEnabled: Bool?
         let calendars: [CalendarInfoResponse]
     }
 
     struct CalendarConnectResponse: Decodable, Sendable {
         let url: URL
+    }
+
+    struct CalendarReauthResponse: Decodable, Sendable {
+        let url: URL
+    }
+
+    struct CalendarMeetingNotesResponse: Decodable, Sendable {
+        let meetingNotesEnabled: Bool
     }
 
     // MARK: - Event detail shapes
@@ -143,6 +153,38 @@ extension APIClient {
             path: "/calendar/accounts/\(accountId)/calendars/\(calendarId)",
             method: "PATCH",
             body: Body(isVisible: isVisible)
+        )
+    }
+
+    /// POST /calendar/accounts/:accountId/reauth — Kick off an incremental
+    /// OAuth to upgrade the account's granted scopes (specifically the
+    /// Docs/Drive scopes needed to read Google Meet transcripts). Returns
+    /// the URL to present in `ASWebAuthenticationSession`. After the user
+    /// finishes the consent flow, re-fetch `listCalendarAccounts()` to
+    /// pick up the new `hasMeetingNotesScope` value.
+    func reauthCalendarAccount(accountId: String) async throws -> URL {
+        let response: CalendarReauthResponse = try await request(
+            CalendarReauthResponse.self,
+            path: "/calendar/accounts/\(accountId)/reauth",
+            method: "POST"
+        )
+        return response.url
+    }
+
+    /// PATCH /calendar/accounts/:accountId/meeting-notes — Toggle the
+    /// per-account `meetingNotesEnabled` flag. Server rejects with 409
+    /// when enabling without the Docs scope granted.
+    @discardableResult
+    func setCalendarMeetingNotesEnabled(
+        accountId: String,
+        enabled: Bool
+    ) async throws -> CalendarMeetingNotesResponse {
+        struct Body: Encodable { let enabled: Bool }
+        return try await request(
+            CalendarMeetingNotesResponse.self,
+            path: "/calendar/accounts/\(accountId)/meeting-notes",
+            method: "PATCH",
+            body: Body(enabled: enabled)
         )
     }
 
