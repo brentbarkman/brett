@@ -61,4 +61,52 @@ for (const dep of ELECTRON_DEPS) {
   copyDep(dep);
 }
 
+// Post-pass: `cpSync` brings along nested node_modules for packages that
+// had them in the root (pnpm pins older versions nested under their
+// parent). Those nested packages reference deps that the initial pass
+// missed — e.g. `p-locate/node_modules/p-limit@2` requires `p-try`, but
+// the hoisted `p-limit@3` we copied from root doesn't declare p-try, so
+// the recursion never sees it. Walk every package.json under the copy
+// target and make sure each declared dep is resolvable (either nested
+// next to the consumer or flat at the top of localModules).
+function ensureDepsResolvable(dir) {
+  if (!fs.existsSync(dir)) return;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    // Handle scoped packages (@foo/bar) — recurse one level
+    if (entry.name.startsWith("@")) {
+      ensureDepsResolvable(path.join(dir, entry.name));
+      continue;
+    }
+    const pkgRoot = path.join(dir, entry.name);
+    const pkgPath = path.join(pkgRoot, "package.json");
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        for (const dep of Object.keys(pkg.dependencies || {})) {
+          if (dep.startsWith("@types/")) continue;
+          const nestedPath = path.join(pkgRoot, "node_modules", dep);
+          const topPath = path.join(localModules, dep);
+          if (!fs.existsSync(nestedPath) && !fs.existsSync(topPath)) {
+            copyDep(dep);
+          }
+        }
+      } catch {
+        // Malformed package.json — skip
+      }
+    }
+    // Recurse into any nested node_modules
+    const nested = path.join(pkgRoot, "node_modules");
+    if (fs.existsSync(nested)) ensureDepsResolvable(nested);
+  }
+}
+
+// Iterate until stable — a newly copied dep may itself have missing
+// transitives that the previous pass couldn't see.
+let prevCount = -1;
+while (copied.size !== prevCount) {
+  prevCount = copied.size;
+  ensureDepsResolvable(localModules);
+}
+
 console.log(`Copied ${copied.size} packages`);
