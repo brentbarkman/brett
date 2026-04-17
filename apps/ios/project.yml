@@ -22,8 +22,7 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    DEVELOPMENT_TEAM: ""
-    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: FQUJNV9M6S
     CODE_SIGN_STYLE: Automatic
     INFOPLIST_FILE: Brett/Info.plist
     PRODUCT_BUNDLE_IDENTIFIER: com.brett.app
@@ -34,6 +33,11 @@ settings:
     DEVELOPMENT_LANGUAGE: en
     INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+  configs:
+    Debug:
+      CODE_SIGN_IDENTITY: "Apple Development"
+    Release:
+      CODE_SIGN_IDENTITY: "Apple Distribution"
 
 targets:
   Brett:

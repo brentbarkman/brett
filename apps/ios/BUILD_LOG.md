@@ -115,4 +115,42 @@
 
 **Simulator screenshot:** `/tmp/brett-overnight-final.png` (sign-in), `/tmp/brett-today.png` (Today page with daily briefing card + seeded "Review design spec" task over atmospheric background).
 
+---
+
+## TestFlight release (Fastlane)
+
+Releases go out via Fastlane from your local Mac — no CI, no shared secrets.
+
+**One-time setup:**
+
+1. Install Ruby bundler + Fastlane deps:
+   ```bash
+   gem install bundler
+   cd apps/ios && bundle install
+   ```
+2. Generate an App Store Connect API key at https://appstoreconnect.apple.com
+   (Users and Access → Integrations → App Store Connect API → Team Keys).
+   Role: **App Manager**. Download the `.p8` (only offered once) and drop it at:
+   ```
+   apps/ios/fastlane/AuthKey_6H9C24ZV75.p8
+   ```
+   Gitignored — do not commit.
+3. Ensure Xcode is signed into the team (`FQUJNV9M6S`) so automatic signing
+   can fetch the `Apple Distribution` cert + provisioning profile on first run.
+
+**Cut a TestFlight build:**
+
+```bash
+scripts/release.sh ios
+```
+
+What the `beta` lane does:
+- Regenerates `Brett.xcodeproj` from `project.yml` (so any tweaks are picked up).
+- Authenticates to App Store Connect using the API key.
+- Queries the latest TestFlight build number for this `MARKETING_VERSION` and bumps by 1 — works across machines without a committed counter.
+- Builds the `Release` configuration, signs with `Apple Distribution`, exports an `app-store` IPA.
+- Uploads to TestFlight without waiting for processing (fire-and-forget).
+
+**Version policy:** `MARKETING_VERSION` in `project.yml` is bumped manually when you want a new user-visible version (e.g. `1.0.0` → `1.1.0`). `CURRENT_PROJECT_VERSION` (build number) auto-increments on every `beta` run.
+
 

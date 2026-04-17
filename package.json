@@ -28,7 +28,7 @@
     "source:backgrounds": "npx tsx scripts/backgrounds/unsplash-source.ts",
     "process:backgrounds": "npx tsx scripts/backgrounds/process-images.ts",
     "portraits:backgrounds": "npx tsx scripts/backgrounds/generate-portraits.ts",
-    "release": "npx tsx scripts/release.ts"
+    "release": "./scripts/release.sh"
   },
   "devDependencies": {
     "@brett/business": "workspace:*",

@@ -39,3 +39,25 @@ scripts/backgrounds/downloads-portrait-src/
 scripts/awakening-videos/sources.json
 scripts/awakening-videos/downloads/
 apps/desktop/public/videos/awakening/
+
+# App Store Connect API keys — never commit. The .p8 is downloadable
+# exactly once from Apple, so a leak can't be revoked-and-replaced quickly.
+apps/ios/fastlane/AuthKey_*.p8
+apps/ios/fastlane/report.xml
+apps/ios/fastlane/*.log
+apps/ios/fastlane/test_output/
+apps/ios/fastlane/README.md
+apps/ios/build/
+apps/ios/*.ipa
+apps/ios/*.app.dSYM.zip
+
+# Provisioning profiles — Xcode's automatic signing fetches these on demand.
+apps/desktop/build/*.provisionprofile
+*.mobileprovision
+
+# Desktop build/ is gitignored globally (root `build` rule) but we need
+# the hardened-runtime entitlements file checked in for electron-builder.
+# Explicitly re-ignore legacy icon duplicates — real icons live in resources/.
+!apps/desktop/build/
+!apps/desktop/build/entitlements.mac.plist
+apps/desktop/build/icon.*

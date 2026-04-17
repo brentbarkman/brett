@@ -74,8 +74,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for git-based versioning
 
       - uses: pnpm/action-setup@v4
         with:
@@ -88,22 +86,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      # Compute version from base version + commit count (e.g. 0.1.812)
-      # Never committed — no push back to main
-      - name: Compute version
-        run: |
-          BASE=$(node -p "require('./apps/desktop/package.json').version.split('.').slice(0,2).join('.')")
-          PATCH=$(git rev-list --count HEAD)
-          VERSION="${BASE}.${PATCH}"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Desktop version: $VERSION"
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('apps/desktop/package.json', 'utf-8'));
-            pkg.version = '$VERSION';
-            fs.writeFileSync('apps/desktop/package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
 
       - name: Generate Prisma client
         run: pnpm --filter @brett/api exec prisma generate
@@ -127,34 +109,7 @@ jobs:
           echo "API failed to become healthy after 5 minutes"
           exit 1
 
-      - name: Build desktop
-        run: |
-          pnpm build
-          cd apps/desktop
-          node -e "
-            const fs = require('fs');
-            fs.writeFileSync('dist/electron/api-config.json', JSON.stringify({
-              apiURL: process.env.VITE_API_URL || 'http://localhost:3001',
-              storageEndpoint: process.env.STORAGE_ENDPOINT || '',
-              storageBucket: process.env.STORAGE_BUCKET || 'brett',
-              releaseStorageEndpoint: process.env.RELEASE_STORAGE_ENDPOINT || '',
-              releaseStorageBucket: process.env.RELEASE_STORAGE_BUCKET || 'brett-releases'
-            }));
-          "
-          # Copy electron main process deps from hoisted root node_modules
-          node scripts/copy-electron-deps.js
-          npx electron-builder --mac --publish never
-        env:
-          VITE_API_URL: https://api.brett.brentbarkman.com
-          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
-          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
-          RELEASE_STORAGE_ENDPOINT: ${{ secrets.RELEASE_STORAGE_ENDPOINT }}
-          RELEASE_STORAGE_BUCKET: ${{ secrets.RELEASE_STORAGE_BUCKET }}
-
-      - name: Upload release artifacts to S3
-        run: npx tsx scripts/upload-release.ts
-        env:
-          RELEASE_STORAGE_ENDPOINT: ${{ secrets.RELEASE_STORAGE_ENDPOINT }}
-          RELEASE_STORAGE_ACCESS_KEY: ${{ secrets.RELEASE_STORAGE_ACCESS_KEY }}
-          RELEASE_STORAGE_SECRET_KEY: ${{ secrets.RELEASE_STORAGE_SECRET_KEY }}
-          RELEASE_STORAGE_BUCKET: ${{ secrets.RELEASE_STORAGE_BUCKET }}
+      # Desktop and iOS releases are built and published locally on macOS —
+      # see scripts/release.sh. GitHub's Mac runners are paid for private
+      # repos, and the Developer ID cert / notarytool profile / App Store
+      # Connect API key all live in the login keychain anyway.

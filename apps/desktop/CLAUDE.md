@@ -105,9 +105,44 @@ Vite resolves these directly to source (`main: "./src/index.ts"` in each package
 ### Production Build
 
 ```bash
-pnpm electron:build          # Full build → .dmg in dist/
+pnpm electron:build          # Full build → signed .dmg + .zip in dist/
 npx electron dist/electron/main.js   # Run built app without packaging (faster iteration)
 ```
+
+### Release (signing + notarization + publish)
+
+Releases are built locally on macOS (not in CI — GitHub's Mac runners cost money on
+private repos, and the Developer ID cert lives in the login keychain anyway).
+
+One-time setup:
+
+```bash
+# 1. Store notarization credentials in the login keychain.
+#    Generate an app-specific password at appleid.apple.com → Sign-In and Security.
+xcrun notarytool store-credentials "brett-notarize" \
+  --apple-id brentbarkman@gmail.com \
+  --team-id FQUJNV9M6S \
+  --password <app-specific-password>
+
+# 2. Put Railway release creds at ~/.config/brett/release.env (see scripts/release.sh).
+```
+
+Cut a release:
+
+```bash
+scripts/release.sh desktop
+```
+
+Output: `Brett-<version>-arm64.dmg`, `Brett-<version>-arm64-mac.zip`, `Brett-<version>.dmg`, `Brett-<version>-mac.zip`, and `latest-mac.yml`, all uploaded to `brett-releases`.
+
+**Why both DMG and ZIP:** Squirrel.Mac (the engine under `electron-updater`) can't mount
+a DMG — it needs a ZIP to swap the `.app` bundle in-place. DMG is the first-install
+download; ZIP is consumed by the autoupdater. Ship one without the other and either
+first-install or autoupdate breaks.
+
+**Hardened runtime entitlements** live in `build/entitlements.mac.plist`. Electron
+needs `allow-jit` and `allow-unsigned-executable-memory` for V8; notarization rejects
+the build without them.
 
 ### Electron Gotchas
 
