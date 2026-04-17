@@ -228,8 +228,9 @@ final class BackgroundService {
         if style == Style.solid.rawValue { return nil }
 
         // A pinned image that isn't a solid sentinel is a direct path.
+        // Use the portrait crop for full-screen display.
         if let pinned, !pinned.hasPrefix("solid:") {
-            return url(for: pinned)
+            return url(for: pinned, portrait: true)
         }
 
         // Auto mode: pick a path from the manifest for the current
@@ -245,17 +246,31 @@ final class BackgroundService {
         let tier = Self.tier(for: segment, in: segments).light
 
         guard let path = tier.randomElement() else { return nil }
-        return url(for: path)
+        return url(for: path, portrait: true)
     }
 
     /// Resolve a full image URL for a manifest-relative path (e.g.
     /// `"photo/evening/light-2.webp"`). Returns `nil` if the base URL
     /// isn't loaded yet.
-    func url(for path: String) -> URL? {
+    ///
+    /// - Parameter portrait: When `true`, swaps `photo/` → `photo-portrait/`
+    ///   so the URL points at the 1290×2796 portrait crop optimized for
+    ///   iPhone screens. Pass `false` (default) for settings gallery
+    ///   thumbnails where landscape is fine.
+    func url(for path: String, portrait: Bool = false) -> URL? {
         guard let storageBaseUrl else { return nil }
+        let effectivePath = portrait ? Self.portraitPath(for: path) : path
         return storageBaseUrl
             .appendingPathComponent("backgrounds")
-            .appendingPathComponent(path)
+            .appendingPathComponent(effectivePath)
+    }
+
+    /// Convert a landscape manifest path to its portrait variant.
+    /// Only `photo/` slots have portrait counterparts — abstract and
+    /// other sets pass through unchanged.
+    private static func portraitPath(for path: String) -> String {
+        guard path.hasPrefix("photo/") else { return path }
+        return "photo-portrait/" + String(path.dropFirst("photo/".count))
     }
 
     // MARK: - Segment helpers
