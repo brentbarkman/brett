@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Read these first
+
+When you're coming into Brett cold, read these before touching code:
+
+- [`features.md`](features.md) — what the product does, in user language. The fastest way to understand what Brett is and what every surface (Today, Inbox, Calendar, Lists, Scouts, Chat, Briefing, Settings, Omnibar) actually does.
+- [`architecture.md`](architecture.md) — technical structure for engineering: monorepo layout, API routes + data model, desktop / iOS / mobile clients, sync engine, operating constraints, tech debt. Skim the ToC, deep-read the section relevant to your task.
+- [`ai-deep-dive.md`](ai-deep-dive.md) — the AI layer specifically. Orchestrator, skills, memory/facts, embeddings, prompt caching, what's good, where the leverage is. Read before changing anything under `packages/ai/`.
+- [`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md) — required reading before any UI work. Glass-over-chrome system, typography, color, spacing, animations, anti-patterns. iOS and desktop must look like the same product — see the parity rules in the Rules section below.
+- [`docs/llm-call-audit.md`](docs/llm-call-audit.md) — every LLM invocation in the codebase with model tier, streaming flag, frequency. The shared Security block at the top is appended to all user-facing prompts — follow that pattern if you add a new call site.
+- [`docs/memory-system.md`](docs/memory-system.md) — how facts, embeddings, and the knowledge graph fit together.
+
+**If you update any of these files**, keep them evergreen: no references to a specific chat/session, no "recently fixed" language, no first-person. State what the code does now and why.
+
 ## Build & Dev Commands
 
 ```bash
