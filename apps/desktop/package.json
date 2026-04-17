@@ -33,6 +33,15 @@
       "entitlementsInherit": "build/entitlements.mac.plist",
       "notarize": true
     },
+    "dmg": {
+      "iconSize": 160,
+      "iconTextSize": 13,
+      "window": { "width": 540, "height": 380 },
+      "contents": [
+        { "x": 140, "y": 200, "type": "file" },
+        { "x": 400, "y": 200, "type": "link", "path": "/Applications" }
+      ]
+    },
     "publish": {
       "provider": "generic",
       "url": "https://placeholder.invalid/releases"
