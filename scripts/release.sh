@@ -89,8 +89,10 @@ release_desktop() {
   "
 
   # Guarantee we revert the version bump even if the build fails, so
-  # git history stays clean across iterations.
-  trap 'git checkout -- apps/desktop/package.json' EXIT
+  # git history stays clean across iterations. The trap runs from whatever
+  # cwd we're in at exit time (likely apps/desktop/ after pushd), so use
+  # `git -C "$ROOT_DIR"` to pin the path resolution to the repo root.
+  trap "git -C '$ROOT_DIR' checkout -- apps/desktop/package.json" EXIT
 
   pnpm --filter @brett/api exec prisma generate
   pnpm build
