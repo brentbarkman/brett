@@ -226,6 +226,241 @@ describe("useOmnibar", () => {
     });
   });
 
+  describe("minimize", () => {
+    it("sets isMinimized without clearing messages", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+      mockStream.mockImplementation(async function* () {
+        yield { type: "text" as const, content: "hello" };
+        yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.send("hi");
+      });
+
+      expect(result.current.messages.length).toBeGreaterThan(0);
+      const messagesBefore = result.current.messages;
+
+      act(() => {
+        result.current.minimize();
+      });
+
+      expect(result.current.isMinimized).toBe(true);
+      expect(result.current.messages).toBe(messagesBefore); // identity unchanged
+    });
+
+    it("open() clears isMinimized", () => {
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      act(() => {
+        result.current.minimize();
+      });
+      expect(result.current.isMinimized).toBe(true);
+
+      act(() => {
+        result.current.open("bar");
+      });
+      expect(result.current.isMinimized).toBe(false);
+    });
+
+    it("reset() clears isMinimized", () => {
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      act(() => {
+        result.current.minimize();
+      });
+
+      act(() => {
+        result.current.reset();
+      });
+      expect(result.current.isMinimized).toBe(false);
+    });
+
+    it("is a no-op while streaming", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+      // Infinite generator — send() stays in-flight (isStreaming === true) throughout
+      mockStream.mockImplementation(async function* () {
+        yield { type: "text" as const, content: "still streaming..." };
+        // Never yield "done" — simulate a stream in progress
+        await new Promise<void>(() => {}); // hang indefinitely
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      // Kick off send() without awaiting — it'll hang on the infinite generator.
+      act(() => {
+        void result.current.send("hi");
+      });
+
+      // Let the text chunk settle and isStreaming flip to true
+      await waitFor(() => {
+        expect(result.current.isStreaming).toBe(true);
+      });
+
+      // Now try to minimize — should be a no-op
+      act(() => {
+        result.current.minimize();
+      });
+
+      expect(result.current.isMinimized).toBe(false);
+
+      // Clean up — abort the hanging stream so the test exits cleanly
+      act(() => {
+        result.current.cancel();
+      });
+    });
+  });
+
+  describe("streaming text batching", () => {
+    it("coalesces multiple text chunks into the final message content", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+      mockStream.mockImplementation(async function* () {
+        yield { type: "text" as const, content: "A" };
+        yield { type: "text" as const, content: "B" };
+        yield { type: "text" as const, content: "C" };
+        yield { type: "text" as const, content: "D" };
+        yield { type: "text" as const, content: "E" };
+        yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.send("hello");
+      });
+
+      const lastMsg = result.current.messages[result.current.messages.length - 1];
+      expect(lastMsg.role).toBe("assistant");
+      expect(lastMsg.content).toBe("ABCDE");
+    });
+
+    it("flushes buffered text synchronously on done", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+      mockStream.mockImplementation(async function* () {
+        yield { type: "text" as const, content: "final" };
+        yield { type: "done" as const, sessionId: "s2", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.send("hi");
+      });
+
+      // After `done`, isStreaming must be false AND the text must be visible —
+      // proving the pending rAF buffer flushed before the streaming lifecycle ended.
+      expect(result.current.isStreaming).toBe(false);
+      const lastMsg = result.current.messages[result.current.messages.length - 1];
+      expect(lastMsg.content).toBe("final");
+    });
+  });
+
+  describe("query invalidation batching", () => {
+    it("defers scout invalidations until stream end", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+      let midStreamScoutCalls = -1;
+
+      mockStream.mockImplementation(async function* () {
+        yield { type: "tool_call" as const, id: "t1", name: "create_scout", args: {} };
+        yield {
+          type: "tool_result" as const,
+          id: "t1",
+          data: { ok: true },
+          // No displayHint → should route through pendingInvalidations.add("scouts")
+        };
+        // Snapshot mid-stream — BEFORE done is emitted
+        midStreamScoutCalls = invalidateSpy.mock.calls.filter(
+          (c) => Array.isArray((c[0] as any)?.queryKey) && (c[0] as any).queryKey[0] === "scouts"
+        ).length;
+        yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(QueryClientProvider, { client: queryClient }, children);
+      const { result } = renderHook(() => useOmnibar(), { wrapper });
+
+      await act(async () => {
+        await result.current.send("create a scout");
+      });
+
+      // Mid-stream, no invalidation for scouts (deferred)
+      expect(midStreamScoutCalls).toBe(0);
+
+      // Post-stream, exactly one invalidation for scouts (flushed from Set)
+      const postStreamScoutCalls = invalidateSpy.mock.calls.filter(
+        (c) => Array.isArray((c[0] as any)?.queryKey) && (c[0] as any).queryKey[0] === "scouts"
+      ).length;
+      expect(postStreamScoutCalls).toBe(1);
+    });
+
+    it("invalidates immediately on confirmation displayHint", async () => {
+      const { streamingFetch } = await import("../streaming");
+      const mockStream = vi.mocked(streamingFetch);
+
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+      mockStream.mockImplementation(async function* () {
+        yield { type: "tool_call" as const, id: "t1", name: "create_task", args: {} };
+        yield {
+          type: "tool_result" as const,
+          id: "t1",
+          data: { ok: true },
+          displayHint: { type: "task_created" as const, taskId: "task-001" },
+        };
+        yield { type: "done" as const, sessionId: "s1", usage: { input: 1, output: 1 } };
+      });
+
+      mockUseAIConfigs.mockReturnValue({
+        data: { configs: [{ isActive: true, isValid: true, provider: "anthropic" }] },
+      } as any);
+
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(QueryClientProvider, { client: queryClient }, children);
+      const { result } = renderHook(() => useOmnibar(), { wrapper });
+
+      await act(async () => {
+        await result.current.send("make a task");
+      });
+
+      const thingsCalls = invalidateSpy.mock.calls.filter(
+        (c) => Array.isArray((c[0] as any)?.queryKey) && (c[0] as any).queryKey[0] === "things"
+      );
+      expect(thingsCalls.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe("close and reset", () => {
     it("close clears search results", async () => {
       mockApiFetch.mockResolvedValue([{ id: "1", title: "Test", status: "active" }]);

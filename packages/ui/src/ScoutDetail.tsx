@@ -154,7 +154,7 @@ export function ScoutDetail({
   return (
     <div className="flex flex-1 min-w-0 h-full gap-4 py-2 pr-4">
       {/* Scout List Panel */}
-      <div className="w-[260px] flex-shrink-0 bg-black/30 backdrop-blur-xl rounded-2xl border border-white/10 overflow-y-auto scrollbar-hide p-5 space-y-4">
+      <div className="w-[260px] flex-shrink-0 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10 overflow-y-auto scrollbar-hide p-5 space-y-4">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-sm font-semibold text-white/50 hover:text-white transition-colors"
@@ -176,7 +176,7 @@ export function ScoutDetail({
       </div>
 
       {/* Detail Panel */}
-      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/30 backdrop-blur-xl rounded-2xl border border-white/10">
+      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10">
         {/* Header */}
         <div className="relative overflow-hidden">
           {!isCompleted && (

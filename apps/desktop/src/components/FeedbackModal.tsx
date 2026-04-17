@@ -44,7 +44,13 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
     }
   }, [isOpen]);
 
-  // Reset state on close
+  // Reset state on close.
+  //
+  // submitFeedback is intentionally OMITTED from deps: useMutation's observer
+  // produces a new object reference whenever its internal state changes, and
+  // submitFeedback.reset() itself triggers a state change. Including it here
+  // creates an infinite render loop (reset → new ref → effect re-runs → reset
+  // → ...). reset() is stable enough to call directly without dep tracking.
   useEffect(() => {
     if (!isOpen) {
       setType("bug");
@@ -56,7 +62,13 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
       setShowScreenshotPreview(false);
       submitFeedback.reset();
     }
-  }, [isOpen, submitFeedback]);
+  // submitFeedback is a useMutation result — its identity changes every
+  // render by design, so listing it would re-run this effect every render.
+  // The reset is only meaningful when isOpen flips to false; the
+  // setState/reset calls are idempotent on equal values, so worst case is
+  // one wasted call when isOpen is already false. Effectively gated by isOpen.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Escape to close
   useEffect(() => {

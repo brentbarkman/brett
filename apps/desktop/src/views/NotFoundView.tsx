@@ -20,7 +20,7 @@ export function NotFoundView({ assistantName = "Brett" }: NotFoundViewProps) {
 
   return (
     <div className="flex-1 flex items-center justify-center min-h-[60vh]">
-      <div className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-8 text-center max-w-sm">
+      <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-8 text-center max-w-sm">
         <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4">
           <span className="text-white/30 text-sm font-mono">404</span>
         </div>

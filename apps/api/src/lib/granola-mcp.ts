@@ -227,10 +227,14 @@ async function refreshGranolaTokens(refreshToken: string): Promise<{
     params.client_secret = client.client_secret;
   }
 
+  // Bounded timeout — Granola's OAuth endpoint normally responds in <1s.
+  // Without this, a Granola outage would hang every MCP-dependent
+  // background job indefinitely.
   let resp = await fetch("https://mcp-auth.granola.ai/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(params),
+    signal: AbortSignal.timeout(10_000),
   });
 
   // If 401, client creds may be stale — re-register and retry once
@@ -247,6 +251,7 @@ async function refreshGranolaTokens(refreshToken: string): Promise<{
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(params),
+      signal: AbortSignal.timeout(10_000),
     });
   }
 

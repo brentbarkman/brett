@@ -84,12 +84,21 @@ export function SpotlightModal({
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
+  const scrollFrameRef = useRef<number | null>(null);
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
   const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
 
   // Intercept input changes to detect shortcut prefixes
+  const handleScroll = () => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    userScrolledUpRef.current = !nearBottom;
+  };
+
   const handleInputChange = (value: string) => {
     if (!forcedAction && value === "s ") {
       setForcedAction("search");
@@ -120,16 +129,38 @@ export function SpotlightModal({
 
   // Focus input when opening
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!isOpen) return;
+    const raf = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
   }, [isOpen]);
 
-  // Auto-scroll chat
+  // Auto-scroll chat — skip if the user has scrolled up to read history
   useEffect(() => {
-    const container = chatContainerRef.current;
-    if (container) container.scrollTop = container.scrollHeight;
+    if (userScrolledUpRef.current) return;
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      // Re-check: the user may have scrolled up during the ~16ms between
+      // scheduling and firing — we don't want to yank them back.
+      if (userScrolledUpRef.current) return;
+      const el = chatContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
   }, [messages]);
+
+  // Using messages.length (not messages) is intentional: we only want this
+  // to fire when a new message is added (user send), not on every stream
+  // token update that mutates the last message's content. A `messages` dep
+  // would reset the scroll flag during every AI response token, defeating it.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last?.role === "user") userScrolledUpRef.current = false;
+  }, [messages.length]);
+
+  // Cleanup pending rAF on unmount
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+  }, []);
 
   // Reset suggestion selection when input changes
   useEffect(() => {
@@ -319,6 +350,9 @@ export function SpotlightModal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" data-spotlight-modal>
       {/* Backdrop */}
+      {/* Backdrop click closes the modal but preserves conversation state
+          (messages + sessionId). Reopening Spotlight via ⌘K restores the
+          session. Streaming blocks dismiss. */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-2xl"
         onClick={() => !isStreaming && onClose()}
@@ -411,7 +445,7 @@ export function SpotlightModal({
 
         {/* Conversation */}
         {hasConversation && (
-          <div ref={chatContainerRef} className="max-h-[45vh] overflow-y-auto scrollbar-hide p-5 space-y-4">
+          <div ref={chatContainerRef} onScroll={handleScroll} className="max-h-[45vh] overflow-y-auto scrollbar-hide p-5 space-y-4">
             {messages.map((msg, i) => (
               <SpotlightMessageBubble
                 key={i}

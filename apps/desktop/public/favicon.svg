@@ -35,19 +35,22 @@
   <rect width="32" height="32" rx="7" fill="url(#bg)"/>
   <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="url(#borderGold)" stroke-width="0.5"/>
 
-  <!-- Row 1: full -->
-  <circle cx="8.5" cy="9.5" r="2.5" fill="url(#sphere1)"/>
-  <rect x="12.5" y="8.25" width="13" height="2.5" rx="1.25" fill="url(#gold)"/>
+  <!-- Mark content, scaled 1.15x about center for a fuller-bleed logo at tab size -->
+  <g transform="translate(16 16) scale(1.15) translate(-16 -16)">
+    <!-- Row 1: full -->
+    <circle cx="8.5" cy="9.5" r="2.5" fill="url(#sphere1)"/>
+    <rect x="12.5" y="8.25" width="13" height="2.5" rx="1.25" fill="url(#gold)"/>
 
-  <!-- Row 2: 75% -->
-  <g opacity="0.75">
-    <circle cx="8.5" cy="16" r="2.5" fill="url(#sphere2)"/>
-    <rect x="12.5" y="14.75" width="10" height="2.5" rx="1.25" fill="url(#gold)"/>
-  </g>
+    <!-- Row 2: 75% -->
+    <g opacity="0.75">
+      <circle cx="8.5" cy="16" r="2.5" fill="url(#sphere2)"/>
+      <rect x="12.5" y="14.75" width="10" height="2.5" rx="1.25" fill="url(#gold)"/>
+    </g>
 
-  <!-- Row 3: 45% -->
-  <g opacity="0.45">
-    <circle cx="8.5" cy="22.5" r="2.5" fill="url(#sphere3)"/>
-    <rect x="12.5" y="21.25" width="7" height="2.5" rx="1.25" fill="url(#gold)"/>
+    <!-- Row 3: 45% -->
+    <g opacity="0.45">
+      <circle cx="8.5" cy="22.5" r="2.5" fill="url(#sphere3)"/>
+      <rect x="12.5" y="21.25" width="7" height="2.5" rx="1.25" fill="url(#gold)"/>
+    </g>
   </g>
 </svg>

@@ -54,7 +54,7 @@ module.exports = {
           'gold-dark': '#D4A62B',
           cerulean: '#4682C3',
           teal: '#48BBA0',
-          red: '#E6554B',
+          red: '#F87171',
           bg: '#0C0F15',
         },
       },

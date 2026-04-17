@@ -1075,4 +1075,16 @@ export {
   type BusynessTier,
   type BackgroundStyle,
   type BackgroundManifest,
+  type CropFocus,
+  type ImageAttribution,
+  type ImageAttributions,
 } from "./background";
+
+// Default wallpaper manifest + attribution data. Both desktop and mobile
+// consume these — moved here from apps/desktop so the mobile package
+// (@brett/mobile) can import without cross-app dependency.
+import defaultBackgroundManifest from "./data/background-manifest.json";
+import imageAttributionsJson from "./data/image-attributions.json";
+import type { BackgroundManifest as _BM, ImageAttributions as _IA } from "./background";
+export const backgroundManifest: _BM = defaultBackgroundManifest as _BM;
+export const imageAttributions: _IA = imageAttributionsJson as _IA;

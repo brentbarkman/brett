@@ -13,6 +13,7 @@ process.env.BETTER_AUTH_SECRET = "test-secret-at-least-32-characters-long";
 process.env.BETTER_AUTH_URL = "http://localhost:3001";
 process.env.GOOGLE_CLIENT_ID = "test-google-client-id";
 process.env.GOOGLE_CLIENT_SECRET = "test-google-client-secret";
+process.env.TOKEN_ENCRYPTION_KEY = "a".repeat(64); // 64-char hex for AES-256-GCM
 
 // Clear rate limits before each test to prevent cross-test 429s
 beforeEach(() => {

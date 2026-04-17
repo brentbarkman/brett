@@ -53,6 +53,14 @@ releaseProxy.get("/*", async (c) => {
     return c.json({ error: "Not found" }, 404);
   }
 
+  // Short-circuit when no storage is configured. Without this guard the
+  // AWS SDK falls back to its real AWS defaults and retries/backoff can
+  // stall for 10+ seconds before failing — long enough to wedge a CI
+  // test (same class of bug as getLatestVersion in storage-urls.ts).
+  if (!process.env.RELEASE_STORAGE_ENDPOINT && !process.env.STORAGE_ENDPOINT) {
+    return c.json({ error: "Release storage not configured" }, 503);
+  }
+
   try {
     const { s3, bucket } = await getReleaseStorage();
     const result = await s3.send(

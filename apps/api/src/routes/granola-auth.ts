@@ -56,6 +56,10 @@ export async function ensureClientRegistered(): Promise<{ client_id: string; cli
   }
 
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
+  // Bounded timeout — Granola's OAuth endpoint normally responds in <1s.
+  // Without this, a Granola outage or DNS flake would hang the request
+  // until the client gives up (also blocks any future test that imports
+  // this code path).
   const resp = await fetch(GRANOLA_REGISTER_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -66,6 +70,7 @@ export async function ensureClientRegistered(): Promise<{ client_id: string; cli
       response_types: ["code"],
       token_endpoint_auth_method: "client_secret_post",
     }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!resp.ok) {
@@ -340,6 +345,12 @@ granolaAuth.delete("/", authMiddleware, async (c) => {
   });
   // Cascade delete: GranolaAccount -> MeetingNote
   await prisma.granolaAccount.delete({ where: { id: account.id } });
+
+  // Resolve any existing re-link task — user is in a valid state now (account removed)
+  await resolveRelinkTask(user.id, "granola").catch((e) =>
+    console.error("[granola-auth] Failed to resolve re-link task:", e),
+  );
+
   return c.json({ ok: true });
 });
 

@@ -5,7 +5,7 @@ import type { TimeSegment, BusynessTier } from "@brett/business";
  *
  * Design principle: macOS Sonoma energy. Bold, saturated, VISIBLE.
  * Each gradient should be immediately distinguishable from its neighbors.
- * The glass surfaces (bg-black/30 backdrop-blur-xl) provide readability —
+ * The glass surfaces (bg-black/40 backdrop-blur-xl) provide readability —
  * the gradients don't need to be dark to work.
  */
 

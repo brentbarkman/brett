@@ -295,6 +295,11 @@ calendarAccounts.delete("/:id", async (c) => {
   // Cascade delete (GoogleAccount -> CalendarList -> CalendarEvent, etc.)
   await prisma.googleAccount.delete({ where: { id: account.id } });
 
+  // Resolve any existing re-link task — user is in a valid state now (account removed)
+  await resolveRelinkTask(user.id, "google-calendar").catch((e) =>
+    console.error("[calendar-accounts] Failed to resolve re-link task:", e),
+  );
+
   return c.json({ ok: true });
 });
 

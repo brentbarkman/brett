@@ -4,12 +4,12 @@ import {
   getTimeSegment,
   getBusynessTier,
   selectImage,
+  backgroundManifest as manifest,
   type TimeSegment,
   type BusynessTier,
   type BackgroundStyle,
   type BackgroundManifest,
 } from "@brett/business";
-import manifest from "../data/background-manifest.json";
 import { solidColors } from "../data/solid-colors";
 import { useAppConfig } from "./useAppConfig";
 import fallbackBg from "../assets/fallback-bg.webp";
@@ -40,6 +40,10 @@ interface UseBackgroundOutput {
   /** CSS background value for abstract mode, null for photography */
   gradient: string | null;
   nextGradient: string | null;
+  /** True once the first image (or gradient, for abstract/solid modes) is
+   *  ready to render. Awakening gates its Ken Burns start on this — no
+   *  point running the zoom on a placeholder/fallback. */
+  hasLoadedImage: boolean;
   /** Dev only: cycle to the next image/gradient sequentially */
   devNext: () => void;
   /** Dev only: label for current background (segment/tier/index) */
@@ -58,27 +62,24 @@ export function useBackground({
   const isAbstract = backgroundStyle === "abstract";
   const isSolid = backgroundStyle === "solid";
 
-  // Awakening effect: on launch, briefly show the PREVIOUS time segment's
-  // image, then crossfade to the current one — like the app is waking up.
+  // Always start at the current time segment. (The App-level Ken Burns
+  // reveal IS the cold-launch awakening now — no need to show the previous
+  // segment and crossfade.) The lastSegmentKey is still written below so
+  // other systems that read it (if any) keep working.
   const currentSegment = getTimeSegment(new Date().getHours());
   const lastSegmentKey = "brett-last-segment";
-  const [segment, setSegment] = useState<TimeSegment>(() => {
-    try {
-      const stored = localStorage.getItem(lastSegmentKey);
-      if (stored && SEGMENTS.includes(stored as TimeSegment) && stored !== currentSegment) {
-        return stored as TimeSegment;
-      }
-    } catch { /* localStorage unavailable */ }
-    return currentSegment;
-  });
-  const hasAwokenRef = useRef(false);
+  const [segment, setSegment] = useState<TimeSegment>(currentSegment);
   const [busynessTier, setBusynessTier] = useState<BusynessTier>(() =>
     getBusynessTier(meetingCount, taskCount, avgBusynessScore)
   );
 
-  // Image state (photography)
-  const [currentImage, setCurrentImage] = useState<string>(fallbackBg);
+  // Image state (photography). Empty until the first real image loads —
+  // LivingBackground treats empty as "don't render an img yet" so the user
+  // sees black instead of fallbackBg flashing before the real wallpaper.
+  const [currentImage, setCurrentImage] = useState<string>("");
   const [nextImage, setNextImage] = useState<string | null>(null);
+  const [hasLoadedImage, setHasLoadedImage] = useState(false);
+  const hasLoadedImageRef = useRef(false);
 
   const [isTransitioning, setIsTransitioning] = useState(false);
 
@@ -141,6 +142,15 @@ export function useBackground({
 
       const img = new Image();
       img.onload = () => {
+        // First load: atomic swap, no crossfade. Lets the App-level
+        // awakening (Ken Burns) run on the real image without a
+        // fallback-to-real crossfade stomping on it.
+        if (!hasLoadedImageRef.current) {
+          hasLoadedImageRef.current = true;
+          setCurrentImage(fullUrl);
+          setHasLoadedImage(true);
+          return;
+        }
         setNextImage(fullUrl);
         startCrossfade(() => {
           setCurrentImage(fullUrl);
@@ -164,27 +174,12 @@ export function useBackground({
   const rotateImageRef = useRef(rotateImage);
   rotateImageRef.current = rotateImage;
 
-  // Initial load when config becomes available
-  // If awakening (previous segment differs), load that first, then
-  // after a short delay crossfade to the current segment.
+  // Initial load when config becomes available — fetch the current segment
+  // image directly. (Previous-segment-crossfade awakening was removed in
+  // favor of the App-level Ken Burns reveal.)
   useEffect(() => {
     if (baseUrl) {
       rotateImageRef.current();
-
-      // Awakening: if we started with the previous segment, schedule
-      // a second rotation to the current segment after 1.5s
-      if (!hasAwokenRef.current && segment !== currentSegment) {
-        hasAwokenRef.current = true;
-        const awakeTimer = setTimeout(() => {
-          // Force segment to current and rotate
-          setSegment(currentSegment);
-          categoryRef.current.segment = currentSegment;
-          shownRef.current = [];
-          rotateImageRef.current();
-        }, 1500);
-        return () => clearTimeout(awakeTimer);
-      }
-      hasAwokenRef.current = true;
     }
   }, [baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: only run once when baseUrl becomes available; rotateImageRef.current always reads the latest
 
@@ -324,6 +319,7 @@ export function useBackground({
         busynessTier,
         gradient: solid?.color ?? color,
         nextGradient: null,
+        hasLoadedImage: true,
         devNext,
         devLabel,
       };
@@ -338,6 +334,7 @@ export function useBackground({
       busynessTier,
       gradient: null,
       nextGradient: null,
+      hasLoadedImage: Boolean(baseUrl),
       devNext,
       devLabel,
     };
@@ -353,6 +350,7 @@ export function useBackground({
       busynessTier,
       gradient: solidColors[0].color,
       nextGradient: null,
+      hasLoadedImage: true,
       devNext,
       devLabel,
     };
@@ -366,6 +364,7 @@ export function useBackground({
     busynessTier,
     gradient: null,
     nextGradient: null,
+    hasLoadedImage,
     devNext,
     devLabel,
   };

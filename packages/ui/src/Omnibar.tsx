@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { Send, Search, Plus, X, Square, Check, Radar, MessageSquare } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import { useClickOutside } from "./useClickOutside";
@@ -62,6 +62,8 @@ export interface OmnibarProps {
   placeholder?: string;
   showScoutAction?: boolean;
   assistantName?: string;
+  isMinimized?: boolean;
+  onMinimize?: () => void;
 }
 
 type Suggestion = {
@@ -105,9 +107,12 @@ export function Omnibar({
   placeholder: placeholderOverride,
   showScoutAction,
   assistantName = "Brett",
+  isMinimized,
+  onMinimize,
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // chatEndRef removed — use chatContainerRef.scrollTop instead to avoid page jumping
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
@@ -115,17 +120,40 @@ export function Omnibar({
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
 
+  // Mirror isClosing into a ref so animateClose can read it without listing
+  // it as a dep (which would rotate the callback's identity every time
+  // isClosing flipped, destabilizing any useEffect that deps on animateClose
+  // — e.g. the confirmedTask auto-dismiss effect).
+  const isClosingRef = useRef(isClosing);
+  isClosingRef.current = isClosing;
   // Animated close — fade out then unmount
-  const animateClose = () => {
-    if (isClosing) return;
+  const animateClose = useCallback(() => {
+    if (isClosingRef.current) return;
     setIsClosing(true);
-    setTimeout(() => {
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
       setIsClosing(false);
       setForcedAction(null);
       setConfirmedTask(null);
       onClose();
     }, 150);
-  };
+  }, [onClose]);
+
+  // Cancel any pending close animation when the omnibar is reopened. Without
+  // this, a rapid close → reopen leaves isClosing true and the old timer
+  // eventually clears it, producing a visible flicker.
+  useEffect(() => {
+    if (isOpen && closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+      setIsClosing(false);
+    }
+  }, [isOpen]);
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+  }, []);
 
   // Intercept input changes to detect shortcut prefixes
   const handleInputChange = (value: string) => {
@@ -147,29 +175,64 @@ export function Omnibar({
   };
 
   useClickOutside(containerRef, () => {
-    // Don't close on click-outside when there's an active conversation —
-    // user might be clicking on a task or elsewhere and wants to come back.
-    // Only suggestions/search dropdowns should close on click-outside.
-    if (isOpen && !isStreaming && messages.length === 0) {
+    if (!isOpen || isStreaming) return;
+    if (messages.length === 0) {
       animateClose();
+    } else if (onMinimize) {
+      // Preserve conversation state but collapse to bar form. The next open()
+      // (or click-to-focus the bar) restores the conversation.
+      onMinimize();
     }
   }, isOpen);
 
   // Focus input when opening
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!isOpen) return;
+    const raf = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
   }, [isOpen]);
 
   // Auto-scroll chat container to bottom (not the page)
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
+  const scrollFrameRef = useRef<number | null>(null);
+
+  const handleScroll = () => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    userScrolledUpRef.current = !nearBottom;
+  };
+
   useEffect(() => {
-    const container = chatContainerRef.current;
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
+    if (userScrolledUpRef.current) return;
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      // Re-check: the user may have scrolled up during the ~16ms between
+      // scheduling and firing — we don't want to yank them back.
+      if (userScrolledUpRef.current) return;
+      const el = chatContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
   }, [messages]);
+
+  // Reset scroll-to-bottom when the user sends a new message — their own
+  // message should always be visible, and we assume they want to see the
+  // response that follows.
+  // Using messages.length (not messages) is intentional: we only want this
+  // to fire when a new message is added (user send), not on every stream
+  // token update that mutates the last message's content. A `messages` dep
+  // would reset the scroll flag during every AI response token, defeating it.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last?.role === "user") userScrolledUpRef.current = false;
+  }, [messages.length]);
+
+  // Cleanup pending rAF on unmount
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+  }, []);
 
   // Reset suggestion selection when input changes
   useEffect(() => {
@@ -191,6 +254,12 @@ export function Omnibar({
   }, [confirmedTask, animateClose]);
 
   const hasConversation = messages.length > 0;
+  // Conversation area only replaces the top bar when the omnibar is actively
+  // open. If messages exist but isOpen is false (e.g. the user escaped out of
+  // mid-compose, or dismissed Spotlight while a stream was in flight), we
+  // still render the top bar so the surface remains interactive. Clicking
+  // the bar re-opens and restores the conversation via the hook's state.
+  const showConversation = isOpen && hasConversation && !isMinimized;
 
   const showSuggestions = isOpen && (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
   const showSearchResults = isOpen && !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));
@@ -370,13 +439,13 @@ export function Omnibar({
       {/* Top Pill / Input Area */}
       <div
         className={`
-          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-all duration-300 ease-in-out overflow-hidden
-          ${isOpen ? "border-brett-cerulean/50 shadow-[0_0_20px_rgba(70,130,195,0.15)]" : "border-white/10 hover:border-white/20"}
+          relative bg-black/40 backdrop-blur-xl border rounded-2xl transition-[border-color,box-shadow] duration-300 ease-in-out overflow-hidden
+          ${isOpen ? "border-brett-cerulean/70 shadow-[0_0_24px_rgba(70,130,195,0.25)]" : "border-white/10 hover:border-white/20"}
           ${hasConversation && isOpen ? "rounded-b-2xl" : ""}
         `}
       >
         {/* Top Bar — visible when collapsed or when open without conversation */}
-        {!hasConversation && (
+        {!showConversation && (
           <div
             className="flex items-center h-12 px-4 cursor-text"
             onClick={() => !isOpen && onOpen()}
@@ -388,9 +457,9 @@ export function Omnibar({
               }`}
             />
             <input
-              ref={!hasConversation ? inputRef : undefined}
+              ref={!showConversation ? inputRef : undefined}
               type="text"
-              placeholder={placeholderOverride ?? (forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? `Ask ${assistantName} anything...` : "Create a task or search...")}
+              placeholder={placeholderOverride ?? (hasConversation && isMinimized ? "Resume conversation..." : forcedAction === "search" ? "Search..." : forcedAction === "create" ? "New task..." : hasAI ? `Ask ${assistantName} anything...` : "Create a task or search...")}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
@@ -420,7 +489,7 @@ export function Omnibar({
         )}
 
         {/* Expanded content — animates out on close */}
-        <div className={`transition-all duration-150 ease-out origin-top ${
+        <div className={`transition-[opacity,transform] duration-150 ease-out origin-top ${
           isClosing ? "opacity-0 scale-y-95 -translate-y-1" : ""
         }`}>
           {/* Suggestions — inline */}
@@ -486,15 +555,15 @@ export function Omnibar({
             </div>
           )}
 
-          {/* Task Created — inline confirmation */}
+          {/* Task Created — inline confirmation. Matches SkillResultCard's
+              task_created style: small check icon + muted text, no colored
+              accent bars. "Whisper, don't shout." */}
           {confirmedTask && (
-            <div className="border-t border-white/10">
-              <div className="flex items-center gap-3 px-4 py-3 border-l-2 border-brett-teal/40 ml-4">
-                <Check size={14} className="text-brett-teal flex-shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-sm text-white/85 font-medium truncate">{confirmedTask}</div>
-                  <div className="text-[11px] text-white/40">Added to Inbox</div>
-                </div>
+            <div className="border-t border-white/10 px-4 py-3 flex items-start gap-2">
+              <Check size={14} className="text-brett-teal/70 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-sm text-white/70 truncate">{confirmedTask}</div>
+                <div className="text-[11px] text-white/30">Added to Inbox</div>
               </div>
             </div>
           )}
@@ -530,10 +599,10 @@ export function Omnibar({
         </div>
 
         {/* Conversation Area — replaces the top bar entirely */}
-        {isOpen && hasConversation && (
+        {showConversation && (
           <div>
             {/* Messages */}
-            <div ref={chatContainerRef} className="max-h-[450px] overflow-y-auto scrollbar-hide p-4 space-y-4">
+            <div ref={chatContainerRef} onScroll={handleScroll} className="max-h-[450px] overflow-y-auto scrollbar-hide p-4 space-y-4">
               {messages.map((msg, i) => (
                 <MessageBubble
                   key={i}

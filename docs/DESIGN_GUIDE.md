@@ -36,8 +36,8 @@ All containers use the glass morphism pattern. Never use solid opaque background
 
 | Surface | Classes | Use |
 |---------|---------|-----|
-| **Card** | `bg-black/30 backdrop-blur-xl rounded-xl border border-white/10` | Primary containers (ThingsList, Calendar) |
-| **Elevated card** | `bg-black/40 backdrop-blur-md border-{color}-500/30` | Accent cards (DailyBriefing, UpNextCard) |
+| **Card** | `bg-black/40 backdrop-blur-xl rounded-xl border border-white/10` | Primary containers (ThingsList, Calendar) |
+| **Elevated card** | `bg-black/40 backdrop-blur-md border-{color}-500/30` | Accent cards (DailyBriefing, UpNextCard) — distinguished by colored border + blur level, not opacity |
 | **Overlay** | `bg-black/60 backdrop-blur-2xl` | Panels over content (DetailPanel) |
 | **Inline input** | `bg-transparent` or `bg-white/5` | Inputs within cards |
 | **Hover surface** | `hover:bg-white/10` | Interactive list items, buttons |
@@ -91,7 +91,7 @@ When users see this color, they know Brett is involved. This creates instant vis
 | Role | Color | Hex | Usage |
 |------|-------|-----|-------|
 | **Success/complete** | Teal | `#48BBA0` | Completion checkmarks, "done" states |
-| **Error/danger** | Warm red | `#E6554B` | Overdue badges, errors, destructive confirms |
+| **Error/danger** | Red | `#F87171` | Overdue badges, errors, destructive confirms |
 | **Warning** | Amber (lighter gold) | — | Approaching deadlines, caution states |
 | **Calendar accents** | Teal, violet, coral, blue | Various | Event color coding (each at /20 bg, /50 border) |
 
@@ -352,7 +352,7 @@ className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40"
 
 ### Glass Card
 ```jsx
-className="bg-black/30 backdrop-blur-xl rounded-xl border border-white/10 p-4"
+className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4"
 ```
 
 ### Inline Input (inside cards)
@@ -744,7 +744,7 @@ The native iOS app (`apps/ios/`) must maintain visual consistency with the Elect
 | Brand gold | `#E8B931` | `BrettColors.gold` | |
 | Brett cerulean | `#4682C3` | `BrettColors.cerulean` | Reserved for AI surfaces only |
 | Success/teal | `#48BBA0` | `BrettColors.success` | Checkmarks, completion |
-| Error/red | `#E6554B` | `BrettColors.error` | Overdue, destructive |
+| Error/red | `#F87171` | `BrettColors.error` | Overdue, destructive |
 | Emerald | `#34D399` | `BrettColors.emerald` | Scout active status |
 | Purple-400 | `#C084FC` | `BrettColors.purple400` | Insight findings |
 | Amber-400 | `#FBBF24` | `BrettColors.amber400` | Task findings |
@@ -765,8 +765,8 @@ Never use non-standard stops like `/8`, `/12`, `/25`, `/35`, `/55`. If you find 
 
 | Surface | Material | Desktop Equivalent |
 |---------|----------|--------------------|
-| Section cards | `.thinMaterial` | `bg-black/30 backdrop-blur-xl` |
-| Omnibar | `.ultraThinMaterial` | `bg-black/30 backdrop-blur-xl` |
+| Section cards | `.thinMaterial` | `bg-black/40 backdrop-blur-xl` |
+| Omnibar | `.ultraThinMaterial` | `bg-black/40 backdrop-blur-xl` |
 | Sheets/modals | `.regularMaterial` | `bg-black/60 backdrop-blur-2xl` |
 | Calendar event chips | `.ultraThinMaterial` | `bg-black/20 backdrop-blur-lg` |
 
