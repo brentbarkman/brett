@@ -118,7 +118,8 @@ async function uploadRelease() {
 
   const endpoint = process.env.RELEASE_STORAGE_ENDPOINT || process.env.STORAGE_ENDPOINT;
   console.log(`\n✓ Release v${version} uploaded!`);
-  console.log(`  Download: ${endpoint}/${RELEASE_BUCKET}/releases/${downloadArtifact}`);
+  // fallbackArtifact already includes the `releases/` prefix
+  console.log(`  Download: ${endpoint}/${RELEASE_BUCKET}/${fallbackArtifact}`);
 }
 
 uploadRelease().catch((err) => {
