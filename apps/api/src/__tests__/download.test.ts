@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { app } from "../app.js";
 
 // Mock the storage-urls module so tests don't need S3
@@ -13,7 +13,14 @@ vi.mock("../lib/storage-urls.js", () => ({
       "https://api.example.com/public/videos/login-bg-2.mp4",
     ],
   }),
-  getLatestVersion: vi.fn().mockResolvedValue({ version: "1.2.3", artifact: "releases/Brett-1.2.3-mac.zip" }),
+  getLatestVersion: vi.fn().mockResolvedValue({
+    version: "1.2.3",
+    downloads: {
+      arm64: "releases/Brett-1.2.3-arm64.dmg",
+      x64: "releases/Brett-1.2.3-x64.dmg",
+    },
+    artifact: "releases/Brett-1.2.3-arm64.dmg",
+  }),
 }));
 
 describe("GET /download", () => {
@@ -36,26 +43,62 @@ describe("GET /download", () => {
     expect(html).toContain("v1.2.3");
   });
 
-  it("contains a download link pointing to the release proxy", async () => {
+  it("renders both Apple Silicon and Intel download buttons", async () => {
     const res = await app.request("/download");
     const html = await res.text();
-    // electron-builder produces "Brett-{version}-mac.zip"; latest-mac.yml references
-    // that exact name, so the download link MUST match it or the auto-updater 404s.
-    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-mac.zip");
-    expect(html).toContain("Download for macOS");
+    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-arm64.dmg");
+    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-x64.dmg");
+    expect(html).toContain("Apple Silicon");
+    expect(html).toContain("Intel");
   });
 
   it("rejects poisoned artifact keys and falls back to a safe default", async () => {
     const { getLatestVersion } = await import("../lib/storage-urls.js");
     (getLatestVersion as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       version: "1.2.3",
-      artifact: "releases/../../etc/passwd",
+      downloads: {
+        arm64: "releases/../../etc/passwd",
+        x64: "releases/../../etc/shadow",
+      },
     });
 
     const res = await app.request("/download");
     const html = await res.text();
     expect(html).not.toContain("etc/passwd");
+    expect(html).not.toContain("etc/shadow");
+    // Falls back to the per-arch default filenames the uploader produces.
+    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-arm64.dmg");
+    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-x64.dmg");
+  });
+
+  it("falls back to legacy artifact field when downloads map is missing", async () => {
+    const { getLatestVersion } = await import("../lib/storage-urls.js");
+    (getLatestVersion as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      version: "1.2.3",
+      artifact: "releases/Brett-1.2.3-mac.zip",
+    });
+
+    const res = await app.request("/download");
+    const html = await res.text();
+    // Arm64 button reads the legacy artifact, x64 falls back to default per-arch name.
     expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-mac.zip");
+    expect(html).toContain("https://api.example.com/releases/Brett-1.2.3-x64.dmg");
+  });
+
+  it("accepts multi-segment arch suffixes like -arm64-mac", async () => {
+    const { getLatestVersion } = await import("../lib/storage-urls.js");
+    (getLatestVersion as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      version: "1.2.3",
+      downloads: {
+        arm64: "releases/Brett-1.2.3-arm64-mac.zip",
+        x64: "releases/Brett-1.2.3-x64-mac.zip",
+      },
+    });
+
+    const res = await app.request("/download");
+    const html = await res.text();
+    expect(html).toContain("Brett-1.2.3-arm64-mac.zip");
+    expect(html).toContain("Brett-1.2.3-x64-mac.zip");
   });
 
   it("contains video URLs in the script", async () => {
@@ -74,7 +117,10 @@ describe("GET /download", () => {
     const { getLatestVersion } = await import("../lib/storage-urls.js");
     (getLatestVersion as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       version: '<script>alert("xss")</script>',
-      artifact: "releases/Brett-evil.zip",
+      downloads: {
+        arm64: "releases/Brett-evil.zip",
+        x64: "releases/Brett-evil.zip",
+      },
     });
 
     const res = await app.request("/download");
