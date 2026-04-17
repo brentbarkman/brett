@@ -151,22 +151,10 @@ download.get("/", async (c) => {
       background: rgba(255, 255, 255, 0.1);
       box-shadow: none;
     }
-    .download-btn .btn-sub {
-      font-size: 12px;
-      font-weight: 500;
-      opacity: 0.7;
-      margin-left: 4px;
-    }
     .download-btn svg {
       width: 16px;
       height: 16px;
       flex-shrink: 0;
-    }
-    .arch-hint {
-      color: rgba(255, 255, 255, 0.35);
-      font-size: 12px;
-      margin-top: 12px;
-      line-height: 1.5;
     }
     .version-info {
       color: rgba(255, 255, 255, 0.3);
@@ -271,7 +259,6 @@ download.get("/", async (c) => {
         <line x1="12" y1="15" x2="12" y2="3"/>
       </svg>
       <span>Apple Silicon</span>
-      <span class="btn-sub">M1 and later</span>
     </a>
     <a href="${safeX64Href}" class="download-btn secondary">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -282,7 +269,6 @@ download.get("/", async (c) => {
       <span>Intel</span>
     </a>
   </div>
-  <div class="arch-hint">Not sure? Pick Apple Silicon if your Mac is from late 2020 or later.</div>
   <div class="version-info">v${safeVersion} · macOS 12+</div>
 
   <div class="platform-note" id="platform-note" style="display:none">
