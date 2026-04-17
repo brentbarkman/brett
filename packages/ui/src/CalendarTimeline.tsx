@@ -442,17 +442,15 @@ export function CalendarTimeline({
             return (
               <div
                 key={`buffer-${buf.afterEventId}`}
-                className="absolute left-12 right-4 flex items-center justify-center z-10 pointer-events-none"
-                style={{ top: `${topPx}px`, height: "12px" }}
+                className="absolute left-12 right-4 flex items-center justify-center z-30 pointer-events-none -translate-y-1/2"
+                style={{ top: `${topPx}px` }}
               >
                 <span
-                  className={`text-[9px] font-medium ${
-                    buf.gapMinutes === 0 ? "text-red-400" : "text-amber-400/60"
+                  className={`text-[9px] font-medium leading-none px-1.5 py-0.5 rounded-full bg-black/70 backdrop-blur-sm ${
+                    buf.gapMinutes === 0 ? "text-red-400" : "text-amber-400/70"
                   }`}
                 >
-                  {buf.gapMinutes === 0
-                    ? "0 min buffer"
-                    : `${buf.gapMinutes} min`}
+                  {`${buf.gapMinutes}m`}
                 </span>
               </div>
             );
