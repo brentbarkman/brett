@@ -27,6 +27,8 @@ apps/desktop/public/videos/*.mp4
 *-firebase-adminsdk-*.json
 firebase-service-account.json
 .claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/*.lock
 .worktrees/
 
 # Background audit local artifacts (verdicts + sourced URLs)
