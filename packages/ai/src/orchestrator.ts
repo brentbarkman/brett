@@ -72,6 +72,20 @@ const FIRE_AND_FORGET_TOOLS = new Set([
   "update_item", "change_settings", "submit_feedback",
 ]);
 
+// Skills that do NO mutations — safe to execute concurrently with each other.
+// A multi-tool round like "what's on today AND what's in the inbox" fires
+// two reads we used to serialize. Parallelizing them roughly halves latency
+// on those rounds at zero cost. Anything NOT in this set runs serially to
+// preserve observable ordering for writes.
+const READ_ONLY_TOOLS = new Set([
+  "search_things", "get_item_detail",
+  "list_today", "list_upcoming", "list_inbox", "get_list_items",
+  "get_calendar_events", "get_next_event", "up_next", "get_stats",
+  "list_scouts", "recall_memory",
+  "get_meeting_notes", "get_meeting_action_items",
+  "explain_feature",
+]);
+
 function shouldEscalate(pendingToolCalls: Array<{ name: string }>): boolean {
   // Don't escalate if all tool calls are simple lookups/creates
   if (pendingToolCalls.every((tc) => SIMPLE_TOOLS.has(tc.name))) return false;
@@ -199,60 +213,88 @@ export async function* orchestrate(
                 })),
               });
 
-              // Execute each tool call
-              for (const tc of pendingToolCalls) {
+              // Resolve each tool call to either a validation error (string)
+              // or a pending execution (skill + validated args). We build
+              // this up first so we can then run READ_ONLY_TOOLS in parallel.
+              type ToolPlan =
+                | { kind: "error"; tc: typeof pendingToolCalls[number]; message: string }
+                | { kind: "exec"; tc: typeof pendingToolCalls[number]; skill: ReturnType<typeof registry.get> & {} };
+
+              const plans: ToolPlan[] = pendingToolCalls.map((tc) => {
                 const skill = registry.get(tc.name);
-
-                if (!skill) {
-                  const errorResult = `Unknown skill: ${tc.name}`;
-                  yield {
-                    type: "tool_result",
-                    id: tc.id,
-                    data: null,
-                    message: errorResult,
-                  };
-                  messages.push({
-                    role: "tool_result",
-                    content: errorResult,
-                    toolCallId: tc.id,
-                  });
-                  continue;
-                }
-
-                // Validate args against skill's JSON schema
+                if (!skill) return { kind: "error", tc, message: `Unknown skill: ${tc.name}` };
                 const validation = validateSkillArgs(skill.parameters, tc.args);
                 if (!validation.valid) {
-                  const errorResult = `Invalid arguments: ${validation.errors}`;
+                  return { kind: "error", tc, message: `Invalid arguments: ${validation.errors}` };
+                }
+                return { kind: "exec", tc, skill };
+              });
+
+              const userId = "userId" in input ? (input.userId as string) : "";
+              const ctx = {
+                userId,
+                prisma,
+                provider,
+                embeddingProvider: params.embeddingProvider,
+                rerankProvider: params.rerankProvider,
+                onContentCreated: params.onContentCreated,
+                onScoutCreated: params.onScoutCreated,
+              };
+
+              // Pre-compute read-only execution in parallel. Everything else
+              // runs serially in plan order to preserve write ordering.
+              const parallelKeys = new Set<string>();
+              const parallelMap = new Map<string, Promise<{ success: boolean; data?: unknown; displayHint?: import("@brett/types").DisplayHint; message?: string }>>();
+              for (const plan of plans) {
+                if (plan.kind === "exec" && READ_ONLY_TOOLS.has(plan.tc.name)) {
+                  parallelKeys.add(plan.tc.id);
+                  parallelMap.set(
+                    plan.tc.id,
+                    plan.skill.execute(plan.tc.args, ctx).catch((err) => ({
+                      success: false,
+                      message: sanitizeError(err instanceof Error ? err.message : String(err)),
+                    })),
+                  );
+                }
+              }
+
+              // Walk the plans in original order. This keeps tool_result
+              // yields aligned with the LLM's tool_call order (important for
+              // Anthropic's transcript coherence).
+              for (const plan of plans) {
+                if (plan.kind === "error") {
                   yield {
                     type: "tool_result",
-                    id: tc.id,
+                    id: plan.tc.id,
                     data: null,
-                    message: errorResult,
+                    message: plan.message,
                   };
                   messages.push({
                     role: "tool_result",
-                    content: errorResult,
-                    toolCallId: tc.id,
+                    content: plan.message,
+                    toolCallId: plan.tc.id,
                   });
                   continue;
                 }
 
-                // Execute the skill
-                const userId =
-                  "userId" in input ? (input.userId as string) : "";
-                const result = await skill.execute(tc.args, {
-                  userId,
-                  prisma,
-                  provider,
-                  embeddingProvider: params.embeddingProvider,
-                  rerankProvider: params.rerankProvider,
-                  onContentCreated: params.onContentCreated,
-                  onScoutCreated: params.onScoutCreated,
-                });
+                const { tc, skill } = plan;
+                const result = parallelKeys.has(tc.id)
+                  ? await parallelMap.get(tc.id)!
+                  : await skill.execute(tc.args, ctx);
 
-                // Buffer fire-and-forget results; yield others immediately.
-                // Fire-and-forget confirmations are batched and yielded as a
-                // single summary at the end of the sequence.
+                // Invariant: a failure result MUST carry a message so the LLM
+                // (and the user) gets something actionable back. Without it,
+                // the model sees `{success:false}` and has no clue what went
+                // wrong, which usually produces either a retry loop or a
+                // blandly wrong response. Synthesize a generic failure
+                // message rather than trusting the skill to always set one.
+                if (!result.success && !result.message) {
+                  console.warn(
+                    `[orchestrator] Skill ${tc.name} returned success=false with no message`,
+                  );
+                  result.message = `The ${tc.name} action did not complete. Try again or ask me to help another way.`;
+                }
+
                 if (FIRE_AND_FORGET_TOOLS.has(tc.name)) {
                   bufferedConfirmations.push({
                     id: tc.id,
@@ -270,7 +312,6 @@ export async function* orchestrate(
                   };
                 }
 
-                // Truncate large results before adding to message history
                 const resultStr = JSON.stringify({
                   success: result.success,
                   data: result.data,

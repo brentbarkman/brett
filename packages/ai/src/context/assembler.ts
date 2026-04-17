@@ -516,7 +516,12 @@ async function assembleBriefing(
     },
   ];
 
-  return { system, messages, modelTier: "small", toolMode: "none" };
+  // Briefing runs at most once per day per user but sets the tone for every
+  // downstream interaction (chat context, dashboard). The per-request premium
+  // of `medium` over `small` is trivial at that frequency; the quality gap is
+  // not — `small` produced flatter, more hallucination-prone briefings in
+  // evals.
+  return { system, messages, modelTier: "medium", toolMode: "none" };
 }
 
 async function assembleBrettsTake(

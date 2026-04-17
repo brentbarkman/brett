@@ -52,6 +52,7 @@ describe("VALID_ENTITY_TYPES", () => {
 describe("vectorSearch", () => {
   const mockProvider = {
     dimensions: 3,
+    modelId: "mock-test",
     embed: vi.fn().mockResolvedValue([1, 0, 0]),
     embedBatch: vi.fn(),
   };

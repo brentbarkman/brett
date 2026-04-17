@@ -41,6 +41,37 @@ const MUTABLE_FIELDS: Record<PushableEntityType, readonly string[]> = {
   calendar_event_note: ["content"],
 };
 
+// Fields a client may set on CREATE. Wider than MUTABLE_FIELDS because a
+// brand-new row can legitimately set `type`, `source`, `sourceUrl`,
+// `calendarEventId`, etc. — they're immutable on the server after creation.
+// Keep this explicit: any column not listed here is dropped before the
+// Prisma insert. Prior behavior spread `mutation.payload` wholesale, which
+// let a client set `userId`, `createdAt`, or relation columns to anything.
+const CREATABLE_FIELDS: Record<PushableEntityType, readonly string[]> = {
+  item: [
+    "type", "source", "sourceId", "sourceUrl",
+    "title", "description", "notes",
+    "status", "dueDate", "dueDatePrecision", "completedAt", "snoozedUntil",
+    "reminder", "recurrence", "recurrenceRule",
+    "listId", "brettObservation",
+    "contentType", "contentStatus",
+  ],
+  list: ["name", "colorClass", "sortOrder", "archivedAt"],
+  calendar_event_note: ["calendarEventId", "content"],
+};
+
+function filterCreatePayload(
+  entityType: PushableEntityType,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const allowed = CREATABLE_FIELDS[entityType];
+  const out: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (key in payload) out[key] = payload[key];
+  }
+  return out;
+}
+
 const CURRENT_PROTOCOL_VERSION = 1;
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 1000;
@@ -148,9 +179,14 @@ export const sync = new Hono<AuthEnv>()
         tombstoneWhere.startTime = { gte: ninetyDaysAgo };
       }
 
+      // Include updatedAt on tombstones so we can advance the cursor past them.
+      // Otherwise a high-volume upsert window would "hide" tombstones that fall
+      // later in the timestamp sequence: the cursor would jump to the last
+      // upsert's updatedAt, skipping tombstones whose updatedAt was further in
+      // the future. Soft-deletes would then never propagate to mobile.
       const tombstones = await model.findMany({
         where: tombstoneWhere,
-        select: { id: true },
+        select: { id: true, updatedAt: true },
         take: limit,
         orderBy: { updatedAt: "asc" },
       });
@@ -160,13 +196,22 @@ export const sync = new Hono<AuthEnv>()
       const hasMore = upserted.length > limit;
       const records = hasMore ? upserted.slice(0, limit) : upserted;
 
-      // Compute new cursor from max updatedAt
-      if (records.length > 0) {
-        const lastRecord = records[records.length - 1];
-        const lastUpdatedAt = lastRecord.updatedAt instanceof Date
-          ? lastRecord.updatedAt.toISOString()
-          : String(lastRecord.updatedAt);
-        newCursors[table] = lastUpdatedAt;
+      // Compute new cursor from max(upserted, tombstones) so neither stream
+      // gets silently truncated on the next pull.
+      const toIso = (v: unknown) =>
+        v instanceof Date ? v.toISOString() : String(v);
+      const maxUpserted = records.length > 0
+        ? toIso(records[records.length - 1].updatedAt)
+        : null;
+      const maxTombstone = tombstones.length > 0
+        ? toIso(tombstones[tombstones.length - 1].updatedAt)
+        : null;
+      const advanced = [maxUpserted, maxTombstone]
+        .filter((v): v is string => v !== null)
+        .sort()
+        .pop();
+      if (advanced) {
+        newCursors[table] = advanced;
       } else if (cursor) {
         // Preserve existing cursor if no new records
         newCursors[table] = cursor;
@@ -224,9 +269,14 @@ export const sync = new Hono<AuthEnv>()
         continue;
       }
 
-      // Check idempotency key
+      // Check idempotency key. Scope to user.id so a malicious client can't
+      // craft a key that collides with another user's stored mutation and
+      // replay the cached response (which includes the full record payload).
+      // Keys are still client-generated, but namespaced by the authenticated
+      // user on the server side.
+      const scopedKey = `${user.id}:${mutation.idempotencyKey}`;
       const existing = await prisma.idempotencyKey.findUnique({
-        where: { key: mutation.idempotencyKey },
+        where: { key: scopedKey },
       });
       if (existing) {
         results.push(existing.response as unknown as SyncMutationResult);
@@ -267,7 +317,7 @@ export const sync = new Hono<AuthEnv>()
       try {
         await prisma.idempotencyKey.create({
           data: {
-            key: mutation.idempotencyKey,
+            key: scopedKey,
             response: result as any,
             statusCode: result.status === "error" ? 400 : 200,
           },
@@ -322,9 +372,14 @@ async function processCreate(
     };
   }
 
-  // R7: Inject userId from auth context. Client payload NEVER controls userId.
+  // R7: Inject userId from auth context, and filter the incoming payload
+  // through a per-entity allowlist so a client can't set relation columns or
+  // server-owned fields (createdAt, updatedAt, userId, syncStatus…) on
+  // create. We then add the server-owned fields back explicitly.
+  const entityType = mutation.entityType as PushableEntityType;
+  const filteredPayload = filterCreatePayload(entityType, mutation.payload);
   const data: Record<string, unknown> = {
-    ...mutation.payload,
+    ...filteredPayload,
     id: mutation.entityId,
     userId,
     createdAt: new Date(),

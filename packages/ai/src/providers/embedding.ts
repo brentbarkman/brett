@@ -3,6 +3,7 @@ import type { EmbeddingProvider } from "./types.js";
 
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   readonly dimensions = 1536;
+  readonly modelId = "text-embedding-3-small";
   private client: OpenAI;
 
   constructor(apiKey: string) {

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getToken } from "../auth/auth-client";
 
@@ -8,15 +8,24 @@ type EventHandler = (data: any) => void;
 const handlers = new Map<string, Set<EventHandler>>();
 
 export function useSSEHandler(eventType: string, handler: EventHandler): void {
+  // Callers typically pass an inline arrow function whose identity changes
+  // every render. If we put `handler` in the effect deps, we'd re-register
+  // on every parent re-render — and during streaming that means dozens per
+  // second — while the closed-over state goes stale. Store the latest
+  // callback in a ref and register a stable wrapper once per eventType.
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
   useEffect(() => {
+    const wrapper: EventHandler = (data) => handlerRef.current(data);
     const set = handlers.get(eventType) ?? new Set();
-    set.add(handler);
+    set.add(wrapper);
     handlers.set(eventType, set);
     return () => {
-      set.delete(handler);
+      set.delete(wrapper);
       if (set.size === 0) handlers.delete(eventType);
     };
-  }, [eventType, handler]);
+  }, [eventType]);
 }
 
 export function useEventStream(): void {

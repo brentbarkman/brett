@@ -539,6 +539,14 @@ model Embedding {
   chunkIndex  Int      @default(0)
   chunkText   String   @db.Text
   contentHash String?  // SHA-256 prefix of assembled text (chunk 0 only) — skip re-embedding if unchanged
+  /// Embedding model identifier (e.g. "voyage-4-large"). Nullable on legacy
+  /// rows written before this column existed. Use at query time to avoid
+  /// mixing vectors from different models when we add a second provider.
+  model       String?
+  /// Vector dimension count declared by the provider at write time.
+  /// Redundant with `Unsupported("vector(1024)")` today but lets us verify
+  /// consistency during a model transition.
+  dim         Int?
   /// pgvector column — Prisma cannot read/write this field via the ORM.
   /// All access MUST use raw SQL ($queryRaw / $executeRaw). See packages/ai/src/embedding/.
   embedding   Unsupported("vector(1024)")
@@ -547,6 +555,7 @@ model Embedding {
 
   @@unique([entityType, entityId, chunkIndex])
   @@index([userId])
+  @@index([userId, model])
 }
 
 model AIUsageLog {

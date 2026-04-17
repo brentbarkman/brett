@@ -238,6 +238,23 @@ export function startCronJobs(): void {
     }
   });
 
+  // IdempotencyKey cleanup — daily at 3:15am. The sync-push table grows on
+  // every mobile mutation and has no built-in expiry. Keep 30 days to comfortably
+  // outlive client retry windows.
+  cron.schedule("15 3 * * *", async () => {
+    try {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const { count } = await prisma.idempotencyKey.deleteMany({
+        where: { createdAt: { lt: cutoff } },
+      });
+      if (count > 0) {
+        console.log(`[cron] Cleaned up ${count} stale idempotency keys`);
+      }
+    } catch (err) {
+      console.error("[cron] Idempotency key cleanup failed:", err);
+    }
+  });
+
   // Pending newsletter cleanup — daily at 3am
   cron.schedule("0 3 * * *", async () => {
     if (newsletterCleanupRunning) return;

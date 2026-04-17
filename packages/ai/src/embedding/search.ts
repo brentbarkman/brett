@@ -273,6 +273,10 @@ export async function vectorSearch(
     similarity: number;
   }>;
 
+  // Recency-softened cosine: `adjusted = similarity * (0.5 + 0.5 * exp(-ageDays/90))`.
+  // Floor of 0.5× means very old docs can still surface if they're highly
+  // relevant, but an equally-similar fresh doc always wins. 90-day half of
+  // the decay knee matches typical personal-productivity horizons (quarters).
   if (safeTypes !== null && safeTypes.length > 0) {
     // Use Prisma.join() so each type becomes a separate parameterized value in the IN clause.
     // Plain string interpolation inside $queryRaw would be sent as a single parameter, breaking the query.
@@ -283,7 +287,10 @@ export async function vectorSearch(
           "entityType",
           "entityId",
           "chunkText",
-          1 - (embedding <=> ${vectorStr}::vector) AS similarity
+          (1 - (embedding <=> ${vectorStr}::vector))
+            * (0.5 + 0.5 * exp(
+                -GREATEST(0, EXTRACT(EPOCH FROM (NOW() - "updatedAt")) / 86400) / 90.0
+              )) AS similarity
         FROM "Embedding"
         WHERE "userId" = ${userId}
           AND "entityType" IN (${typeParams})
@@ -299,7 +306,10 @@ export async function vectorSearch(
           "entityType",
           "entityId",
           "chunkText",
-          1 - (embedding <=> ${vectorStr}::vector) AS similarity
+          (1 - (embedding <=> ${vectorStr}::vector))
+            * (0.5 + 0.5 * exp(
+                -GREATEST(0, EXTRACT(EPOCH FROM (NOW() - "updatedAt")) / 86400) / 90.0
+              )) AS similarity
         FROM "Embedding"
         WHERE "userId" = ${userId}
         ORDER BY "entityType", "entityId", embedding <=> ${vectorStr}::vector ASC

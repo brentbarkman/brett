@@ -48,6 +48,10 @@ export interface EmbeddingProvider {
   embed(text: string, inputType?: "query" | "document"): Promise<number[]>;
   embedBatch(texts: string[], inputType?: "query" | "document"): Promise<number[][]>;
   readonly dimensions: number;
+  /** Stable identifier of the embedding model for persisted rows (e.g.
+   *  "voyage-4-large"). Used to detect cross-model mixing when we upgrade
+   *  the provider. */
+  readonly modelId: string;
 }
 
 export interface RerankResult {

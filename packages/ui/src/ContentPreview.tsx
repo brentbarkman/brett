@@ -19,6 +19,20 @@ for (const instance of [tweetPurify, articlePurify, newsletterPurify]) {
   });
 }
 
+// Newsletters almost universally rely on inline `style=""` for layout, so we
+// can't strip the attribute wholesale without wrecking rendering. But CSS
+// `url(…)` inside a style attr (backgrounds, list-style-image, etc.) is a
+// tracker-pixel / exfiltration vector — the browser will fetch it on render
+// even though the iframe sandbox blocks scripts. Strip just those bits.
+const CSS_URL_PATTERN = /url\s*\(\s*['"]?[^)]*['"]?\s*\)/gi;
+newsletterPurify.addHook("uponSanitizeAttribute", (_node: Element, data) => {
+  if (data.attrName === "style" && typeof data.attrValue === "string") {
+    if (CSS_URL_PATTERN.test(data.attrValue)) {
+      data.attrValue = data.attrValue.replace(CSS_URL_PATTERN, "");
+    }
+  }
+});
+
 function isSafeHref(url?: string): boolean {
   if (!url) return false;
   try { return ["http:", "https:"].includes(new URL(url).protocol); }

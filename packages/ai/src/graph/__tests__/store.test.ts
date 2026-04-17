@@ -5,7 +5,11 @@ import type { ExtractionResult } from "../types.js";
 function createMockPrisma() {
   return {
     knowledgeEntity: {
+      // findFirst is the pre-dedupe lookup; returning null means no existing
+      // canonical match and the code falls through to upsert.
+      findFirst: vi.fn().mockResolvedValue(null),
       upsert: vi.fn().mockResolvedValue({ id: "ent-1" }),
+      update: vi.fn().mockResolvedValue({ id: "ent-1" }),
     },
     knowledgeRelationship: {
       findFirst: vi.fn().mockResolvedValue(null),

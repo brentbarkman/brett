@@ -149,9 +149,16 @@ things.use("*", authMiddleware);
 //   dueBefore=ISO   — items with dueDate <= value (inclusive)
 //   dueAfter=ISO    — items with dueDate > value (exclusive)
 //   completedAfter=ISO — items with completedAt >= value
+// Hard cap so a heavy-user load doesn't serialize the entire Item table on
+// every desktop open. `500` comfortably covers Today/Upcoming/Inbox working
+// sets; the clients paginate via the dueBefore/dueAfter/completedAfter filters
+// for historical data.
+const THINGS_LIST_DEFAULT_LIMIT = 500;
+const THINGS_LIST_MAX_LIMIT = 2000;
+
 things.get("/", async (c) => {
   const user = c.get("user");
-  const { listId, type, status, source, dueBefore, dueAfter, completedAfter, search } = c.req.query();
+  const { listId, type, status, source, dueBefore, dueAfter, completedAfter, search, limit } = c.req.query();
 
   const where: Record<string, unknown> = { userId: user.id };
   if (search) {
@@ -173,10 +180,16 @@ things.get("/", async (c) => {
   }
   if (completedAfter) where.completedAt = { gte: new Date(completedAfter) };
 
+  const parsedLimit = limit ? parseInt(limit, 10) : THINGS_LIST_DEFAULT_LIMIT;
+  const take = Number.isFinite(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, THINGS_LIST_MAX_LIMIT)
+    : THINGS_LIST_DEFAULT_LIMIT;
+
   const items = await prisma.item.findMany({
     where,
     include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } } },
     orderBy: [{ createdAt: "desc" }],
+    take,
   });
 
   const enriched = await enrichWithScoutNames(items);
