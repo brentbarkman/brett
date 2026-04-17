@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { PrismaClient } from "@prisma/client";
+import type { ExtendedPrismaClient } from "@brett/api-core";
 import { generateId } from "@brett/utils";
 import type { IOSGoogleClaims, IOSGoogleVerifier } from "./ios-google-verifier.js";
 
@@ -57,7 +57,7 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7; // 7 days
 export async function signInWithIOSGoogleIdToken(opts: {
   idToken: string;
   verifier: IOSGoogleVerifier;
-  prisma: PrismaClient;
+  prisma: ExtendedPrismaClient;
   now?: () => Date;
   ipAddress?: string | null;
   userAgent?: string | null;
@@ -197,7 +197,7 @@ function newSessionToken(): string {
 }
 
 async function createSession(opts: {
-  prisma: PrismaClient;
+  prisma: ExtendedPrismaClient;
   userId: string;
   now: Date;
   ipAddress?: string | null;
@@ -219,7 +219,7 @@ async function createSession(opts: {
   return token;
 }
 
-async function requireUser(prisma: PrismaClient, userId: string) {
+async function requireUser(prisma: ExtendedPrismaClient, userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
     // Account row exists but its user was deleted — abnormal, treat as auth
