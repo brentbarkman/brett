@@ -50,6 +50,11 @@ platform :ios do
       clean: true,
       output_directory: "build",
       output_name: "Brett.ipa",
+      # Disable xcpretty — it invokes system Ruby 2.6 (via PATH resolution
+      # in the xcodebuild-spawned subshell) which can't load the modern
+      # bundler we use for Fastlane. Raw xcodebuild output is verbose but
+      # works consistently across Ruby versions.
+      xcodebuild_formatter: "",
     )
 
     upload_to_testflight(
