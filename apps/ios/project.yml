@@ -33,11 +33,13 @@ settings:
     DEVELOPMENT_LANGUAGE: en
     INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
-  configs:
-    Debug:
-      CODE_SIGN_IDENTITY: "Apple Development"
-    Release:
-      CODE_SIGN_IDENTITY: "Apple Distribution"
+  # Don't set CODE_SIGN_IDENTITY explicitly when CODE_SIGN_STYLE is Automatic —
+  # Xcode picks Apple Development for Debug and Apple Distribution for Release
+  # on its own based on the build configuration. Setting the identity manually
+  # conflicts with automatic signing on extension targets (error: "has conflicting
+  # provisioning settings. ... is automatically signed for development, but a
+  # conflicting code signing identity Apple Distribution has been manually
+  # specified").
 
 targets:
   Brett:
