@@ -32,15 +32,30 @@ platform :ios do
     # Bump CURRENT_PROJECT_VERSION (build number) to one above the highest
     # build already on TestFlight for this MARKETING_VERSION. Works across
     # machines without committing a counter back to the repo.
+    #
+    # We update the xcodeproj build settings directly instead of calling
+    # `increment_build_number` — the built-in action uses agvtool, which
+    # *rewrites Info.plist files* by replacing the `$(CURRENT_PROJECT_VERSION)`
+    # variable with a literal. That hardcodes the value and makes every
+    # build show up as a tracked change. Direct pbxproj edit keeps the
+    # variable reference intact so Xcode resolves it at build time.
+    require "xcodeproj"
     latest = latest_testflight_build_number(
       app_identifier: "com.brett.app",
       initial_build_number: 0,
     )
     new_build = latest + 1
-    increment_build_number(
-      xcodeproj: XCODEPROJ,
-      build_number: new_build.to_s,
-    )
+    project = Xcodeproj::Project.open(XCODEPROJ)
+    project.build_configurations.each do |config|
+      config.build_settings["CURRENT_PROJECT_VERSION"] = new_build.to_s
+    end
+    project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings["CURRENT_PROJECT_VERSION"] = new_build.to_s
+      end
+    end
+    project.save
+    UI.message("Set CURRENT_PROJECT_VERSION to #{new_build}")
 
     build_app(
       project: XCODEPROJ,
