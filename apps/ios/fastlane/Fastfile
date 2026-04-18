@@ -73,6 +73,13 @@ platform :ios do
       # bundler we use for Fastlane. Raw xcodebuild output is verbose but
       # works consistently across Ruby versions.
       xcodebuild_formatter: "",
+      # -allowProvisioningUpdates lets xcodebuild fetch or create App Store
+      # distribution provisioning profiles on demand when automatic signing
+      # is on. Without it, export fails with "No profiles for 'com.brett.app'
+      # were found" because xcodebuild in non-interactive mode won't hit the
+      # Apple Developer portal unless explicitly authorized to.
+      xcargs: "-allowProvisioningUpdates",
+      export_xcargs: "-allowProvisioningUpdates",
     )
 
     upload_to_testflight(
