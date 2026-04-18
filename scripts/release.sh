@@ -134,7 +134,11 @@ release_ios() {
   fi
 
   pushd apps/ios > /dev/null
-  "$BUNDLE_BIN" exec fastlane ios beta
+  # Fastlane requires a UTF-8 locale or it crashes decoding xcodebuild
+  # output (Encoding::InvalidByteSequenceError on UTF-16 bytes). Non-
+  # interactive shells inherit the default POSIX/C locale, so set these
+  # explicitly regardless of the user's shell config.
+  LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 "$BUNDLE_BIN" exec fastlane ios beta
   popd > /dev/null
 
   echo "✓ iOS uploaded to TestFlight"
