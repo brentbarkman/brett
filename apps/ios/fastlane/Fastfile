@@ -45,7 +45,10 @@ platform :ios do
       initial_build_number: 0,
     )
     new_build = latest + 1
-    project = Xcodeproj::Project.open(XCODEPROJ)
+    # Fastlane runs with cwd=fastlane/, but xcodeproj lives one level up.
+    # Fastlane's own actions (build_app etc) auto-resolve this; our raw
+    # Xcodeproj.open does not, so expand the path explicitly.
+    project = Xcodeproj::Project.open(File.expand_path("../#{XCODEPROJ}", __dir__))
     project.build_configurations.each do |config|
       config.build_settings["CURRENT_PROJECT_VERSION"] = new_build.to_s
     end
