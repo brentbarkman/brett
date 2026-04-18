@@ -65,3 +65,5 @@ apps/desktop/build/*.provisionprofile
 !apps/desktop/build/
 !apps/desktop/build/entitlements.mac.plist
 apps/desktop/build/icon.*
+apps/ios/Brett.xcodeproj/project.pbxproj
+apps/ios/Brett.xcodeproj/xcuserdata/
