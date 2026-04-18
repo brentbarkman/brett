@@ -121,13 +121,20 @@ release_desktop() {
 release_ios() {
   echo "=== iOS release ==="
 
-  if ! command -v bundle > /dev/null; then
-    echo "bundler not installed. Run: gem install bundler" >&2
+  # Fastlane needs Ruby >= 3.0 but macOS system Ruby is 2.6 (EOL). Prefer
+  # Homebrew Ruby's bundle if available; fall back to PATH for custom setups.
+  local BUNDLE_BIN
+  if [[ -x /opt/homebrew/opt/ruby/bin/bundle ]]; then
+    BUNDLE_BIN="/opt/homebrew/opt/ruby/bin/bundle"
+  elif command -v bundle > /dev/null; then
+    BUNDLE_BIN="bundle"
+  else
+    echo "bundler not installed. Run: brew install ruby && /opt/homebrew/opt/ruby/bin/gem install bundler" >&2
     exit 1
   fi
 
   pushd apps/ios > /dev/null
-  bundle exec fastlane ios beta
+  "$BUNDLE_BIN" exec fastlane ios beta
   popd > /dev/null
 
   echo "✓ iOS uploaded to TestFlight"
