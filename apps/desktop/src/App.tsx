@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-
 import { slugify, getEventGlassColor } from "@brett/utils";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
 import { useTodayKey } from "./hooks/useTodayKey";
+import { usePinnedDate } from "./hooks/usePinnedDate";
 import { getEndOfWeekUTC } from "@brett/business";
 import type { BackgroundStyle } from "@brett/business";
 import {
@@ -357,15 +358,18 @@ export function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const todayBounds = useMemo(() => localDayBounds(new Date()), [todayKey]);
 
-  // Sidebar calendar date navigation
-  const [sidebarDate, setSidebarDate] = useState(() => new Date());
+  // Sidebar calendar date navigation. `usePinnedDate` keeps the anchor
+  // aligned with today when the user hasn't manually navigated — prevents
+  // the sidebar from going stale when the desktop app stays open past
+  // midnight or wakes from sleep into a new day.
+  const [sidebarDate, setSidebarDate] = usePinnedDate();
   const sidebarBounds = localDayBounds(sidebarDate);
 
   const handleSidebarPrevDay = () => {
-    setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
+    const n = new Date(sidebarDate); n.setDate(n.getDate() - 1); setSidebarDate(n);
   };
   const handleSidebarNextDay = () => {
-    setSidebarDate((d) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
+    const n = new Date(sidebarDate); n.setDate(n.getDate() + 1); setSidebarDate(n);
   };
   const handleSidebarToday = () => {
     setSidebarDate(new Date());
