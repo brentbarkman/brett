@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { Download, Check } from "lucide-react";
+import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 
 export function UpdatesSection() {
   const { updateReady, version, install } = useAutoUpdate();
@@ -21,18 +22,14 @@ export function UpdatesSection() {
 
   return (
     <div className="space-y-5">
-      {/* Current version */}
-      <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-        <h3 className="text-sm font-medium text-white mb-3">Version</h3>
-        <p className="text-sm text-white/60">
-          Brett v{currentVersion}
-        </p>
-      </div>
+      <SettingsCard>
+        <SettingsHeader>Version</SettingsHeader>
+        <p className="text-sm text-white/60">Brett v{currentVersion}</p>
+      </SettingsCard>
 
-      {/* Pending update */}
-      {updateReady && (
-        <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-          <h3 className="text-sm font-medium text-white mb-3">Update Available</h3>
+      {updateReady ? (
+        <SettingsCard>
+          <SettingsHeader>Update Available</SettingsHeader>
           <p className="text-sm text-white/60 mb-4">
             Version {version} is ready to install. Brett will restart to apply the update.
           </p>
@@ -43,41 +40,27 @@ export function UpdatesSection() {
             <Download size={14} />
             Install &amp; Restart
           </button>
-        </div>
-      )}
-
-      {!updateReady && (
-        <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+        </SettingsCard>
+      ) : (
+        <SettingsCard>
           <div className="flex items-center gap-2">
             <Check size={14} className="text-emerald-400" />
             <p className="text-sm text-white/60">You're up to date.</p>
           </div>
-        </div>
+        </SettingsCard>
       )}
 
-      {/* Auto-install setting */}
-      <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-        <div className="flex items-center justify-between">
+      <SettingsCard>
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-medium text-white">Auto-install on quit</h3>
             <p className="text-xs text-white/40 mt-1">
               Automatically install downloaded updates when you quit Brett.
             </p>
           </div>
-          <button
-            onClick={handleToggle}
-            className={`relative w-10 h-5 rounded-full transition-colors ${
-              autoInstall ? "bg-brett-gold" : "bg-white/20"
-            }`}
-          >
-            <div
-              className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                autoInstall ? "translate-x-5" : ""
-              }`}
-            />
-          </button>
+          <SettingsToggle checked={autoInstall} onChange={handleToggle} />
         </div>
-      </div>
+      </SettingsCard>
     </div>
   );
 }
