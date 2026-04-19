@@ -5,6 +5,7 @@ import { useCalendarEvents } from "../api/calendar";
 import { useCalendarAccounts, useConnectCalendar, useToggleCalendarVisibility } from "../api/calendar-accounts";
 import { CalendarConnectModal } from "../components/CalendarConnectModal";
 import { CalendarHeader, getSunday, type CalendarView, type CalendarInfo } from "../components/calendar/CalendarHeader";
+import { usePinnedDate } from "../hooks/usePinnedDate";
 import { CalendarDayView } from "../components/calendar/CalendarDayView";
 import { CalendarWeekView } from "../components/calendar/CalendarWeekView";
 import { CalendarMonthView } from "../components/calendar/CalendarMonthView";
@@ -41,7 +42,7 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
     const stored = localStorage.getItem("brett-calendar-view");
     return (["day", "5day", "week", "month"].includes(stored ?? "") ? stored : "week") as CalendarView;
   });
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = usePinnedDate();
 
   useEffect(() => {
     localStorage.setItem("brett-calendar-view", view);
