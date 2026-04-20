@@ -7,7 +7,7 @@
  *   pnpm eval                  # defaults to anthropic, all suites
  */
 
-import { getProvider, resolveModel, createRegistry } from "@brett/ai";
+import { getProvider, resolveModel, createRegistry, getSystemPrompt } from "@brett/ai";
 import type { AIProviderName, StreamChunk } from "@brett/types";
 import fs from "fs";
 import path from "path";
@@ -107,6 +107,13 @@ const model = resolveModel(providerName, "small");
 const registry = createRegistry();
 const tools = registry.toToolDefinitions();
 
+// Use the prod system prompt for intent classification so the eval reflects
+// what the live assistant actually sees. Skip the per-user sections (facts,
+// profile, embeddings) — they require a real user and aren't what this suite
+// tests. Append a fake current-date line to match the shape the assembler
+// produces. Drift on getSystemPrompt() now shows up here.
+const intentSystemPrompt = getSystemPrompt("Brett") + `\nCurrent date: ${new Date().toISOString().split("T")[0]}`;
+
 // ─── LLM call ────────────────────────────────────────────────────────────────
 
 async function classifyIntent(input: string): Promise<{ toolName: string | null; textResponse: string }> {
@@ -115,10 +122,7 @@ async function classifyIntent(input: string): Promise<{ toolName: string | null;
     model,
     messages: [{ role: "user", content: input }],
     tools,
-    system:
-      "You are Brett, a personal productivity assistant. " +
-      "For every user request, call the single most appropriate tool. " +
-      "Do not explain. Do not ask for clarification. Just call the tool.",
+    system: intentSystemPrompt,
     maxTokens: 256,
     temperature: 0,
   })) {
