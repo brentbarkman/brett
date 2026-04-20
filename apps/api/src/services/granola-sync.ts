@@ -33,6 +33,28 @@ function startOfDayInTimezone(timezone: string): Date {
   }
 }
 
+const CANDIDATE_WINDOW_PAD_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Compute the time range for fetching CalendarEvent candidates to match
+ * against a batch of Granola meetings. Padded by a full day on each side
+ * because Granola's `start_time` does not reliably line up with the
+ * Google Calendar event (observed offsets of 4-7h in production). Uses
+ * `start_time` only — Granola returns `end_time === start_time` for
+ * every row, so relying on end_time would collapse the upper bound.
+ */
+export function calendarCandidateWindow(
+  meetings: { start_time: string }[],
+): { gte: Date; lte: Date } {
+  const starts = meetings.map((m) => new Date(m.start_time).getTime());
+  const earliest = Math.min(...starts);
+  const latest = Math.max(...starts);
+  return {
+    gte: new Date(earliest - CANDIDATE_WINDOW_PAD_MS),
+    lte: new Date(latest + CANDIDATE_WINDOW_PAD_MS),
+  };
+}
+
 export function isWithinWorkingHours(timezone: string): boolean {
   try {
     const now = new Date();
@@ -210,18 +232,16 @@ async function syncMeetings(
     return { detailById, transcripts };
   });
 
-  // Load calendar events for matching (same day window)
-  const earliest = new Date(
-    Math.min(...newMeetings.map((m) => new Date(m.start_time).getTime())),
-  );
-  const latest = new Date(
-    Math.max(...newMeetings.map((m) => new Date(m.end_time).getTime())),
-  );
+  // Load calendar events for matching.
+  // Granola's reported times do not reliably align with Google Calendar's
+  // startTime (observed offsets of 4-7h in prod, and end_time === start_time
+  // on every row). The window must be padded generously so the real calendar
+  // event still falls inside it.
+  const { gte, lte } = calendarCandidateWindow(newMeetings);
   const calendarEvents = await prisma.calendarEvent.findMany({
     where: {
       userId,
-      startTime: { gte: new Date(earliest.getTime() - 60 * 60 * 1000) },
-      endTime: { lte: new Date(latest.getTime() + 60 * 60 * 1000) },
+      startTime: { gte, lte },
     },
     select: {
       id: true,
