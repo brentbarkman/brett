@@ -55,6 +55,28 @@ export function calendarCandidateWindow(
   };
 }
 
+const DEFAULT_MEETING_DURATION_MS = 30 * 60 * 1000;
+
+/**
+ * Resolve the authoritative start/end times for a synced Granola meeting.
+ * Granola's payload only carries a single human-readable `date` — no end
+ * time, no duration, no timezone indicator. The linked Google Calendar
+ * event is the source of truth when available; otherwise fall back to
+ * Granola's start + 30 min so durations aren't zero-width.
+ */
+export function resolveMeetingTimes(
+  granolaStart: Date,
+  matched: { startTime: Date; endTime: Date } | null,
+): { startedAt: Date; endedAt: Date } {
+  if (matched) {
+    return { startedAt: matched.startTime, endedAt: matched.endTime };
+  }
+  return {
+    startedAt: granolaStart,
+    endedAt: new Date(granolaStart.getTime() + DEFAULT_MEETING_DURATION_MS),
+  };
+}
+
 export function isWithinWorkingHours(timezone: string): boolean {
   try {
     const now = new Date();
@@ -283,9 +305,19 @@ async function syncMeetings(
         candidates,
       );
 
-      // Use list metadata for title/time/attendees, detail for notes/summary
+      // Use list metadata for title/attendees, detail for notes/summary.
+      // Times come from the matched calendar event (UTC-correct, real
+      // duration) when available — Granola's payload carries only a
+      // single naive local-time string, so we can't trust it.
       const summary = detail?.summary ?? detail?.notes ?? null;
+      const matchedCandidate = match
+        ? candidates.find((c) => c.id === match.id) ?? null
+        : null;
       const calendarEventId = match?.id ?? null;
+      const times = resolveMeetingTimes(
+        new Date(listItem.start_time),
+        matchedCandidate,
+      );
 
       // Create meeting record (action items processed separately to avoid long transactions)
       const meeting = await prisma.meetingNote.create({
@@ -298,8 +330,8 @@ async function syncMeetings(
           summary,
           transcript: transcript?.turns ?? undefined,
           attendees: listItem.attendees ?? undefined,
-          meetingStartedAt: new Date(listItem.start_time),
-          meetingEndedAt: new Date(listItem.end_time),
+          meetingStartedAt: times.startedAt,
+          meetingEndedAt: times.endedAt,
           rawData: (detail as any) ?? undefined,
         },
       });

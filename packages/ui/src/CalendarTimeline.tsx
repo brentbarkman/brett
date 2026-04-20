@@ -160,6 +160,44 @@ export function CalendarTimeline({
   assistantName = "Brett",
 }: CalendarTimelineProps) {
   useDemoMode();
+
+  // All hooks must be called unconditionally, before any early return.
+  // Otherwise React sees a different hook count between renders (e.g.
+  // events empty on first load → non-empty after fetch) and silently
+  // corrupts the fiber tree in prod, breaking unrelated subscriptions
+  // like the Router's useSyncExternalStore.
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const currentTimeRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (currentTimeRef.current) {
+      currentTimeRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, []);
+
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  useEffect(() => {
+    if (!contextMenu) return;
+    const clickHandler = () => setContextMenu(null);
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("click", clickHandler);
+    window.addEventListener("keydown", keyHandler);
+    return () => {
+      window.removeEventListener("click", clickHandler);
+      window.removeEventListener("keydown", keyHandler);
+    };
+  }, [contextMenu]);
+
   // Empty state: clean timeline grid + connect CTA — no fake events
   if (!isLoading && events.length === 0 && onConnect && onDismiss) {
     const now = new Date();
@@ -244,47 +282,10 @@ export function CalendarTimeline({
   const hourHeight = 60;
   const hours = Array.from({ length: totalHours + 1 }, (_, i) => startHour + i);
 
-  // Real-time current time
-  const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(interval);
-  }, []);
-
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
   const currentTimeOffset =
     (currentHour - startHour + currentMinute / 60) * hourHeight;
-
-  // Auto-scroll to current time on mount
-  const currentTimeRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (currentTimeRef.current) {
-      currentTimeRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  }, []);
-
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-
-  // Close context menu on click outside or Escape
-  useEffect(() => {
-    if (!contextMenu) return;
-    const clickHandler = () => setContextMenu(null);
-    const keyHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContextMenu(null);
-    };
-    window.addEventListener("click", clickHandler);
-    window.addEventListener("keydown", keyHandler);
-    return () => {
-      window.removeEventListener("click", clickHandler);
-      window.removeEventListener("keydown", keyHandler);
-    };
-  }, [contextMenu]);
 
   const handleContextMenu = (e: React.MouseEvent, event: CalendarEventDisplay) => {
     if (!onQuickRsvp) return;
