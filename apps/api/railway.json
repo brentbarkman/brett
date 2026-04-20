@@ -2,5 +2,11 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "dockerfilePath": "apps/api/Dockerfile"
+  },
+  "deploy": {
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
+    "overlapSeconds": 30,
+    "drainingSeconds": 30
   }
 }
