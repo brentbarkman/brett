@@ -64,6 +64,14 @@ export function InboxView({
   const isInitialLoadRef = useRef(true);
   const prevThingIdsRef = useRef<Set<string>>(new Set());
 
+  // Flips to true once the inbox has held at least one item this session.
+  // Lets the empty state distinguish "never seen the inbox" from "you just
+  // cleared it" — the latter deserves a confirmation, not a welcome mat.
+  const [hasEverHadItems, setHasEverHadItems] = useState(false);
+  useEffect(() => {
+    if (things.length > 0) setHasEverHadItems(true);
+  }, [things.length]);
+
   // Cleanup toggle timer
   useEffect(() => {
     return () => { if (toggleTimer.current) clearTimeout(toggleTimer.current); };
@@ -409,16 +417,22 @@ export function InboxView({
     <ItemListShell header={inboxHeader} hints={inboxHints}>
         <QuickAddInput ref={quickAddRef} placeholder="Add to inbox..." onAdd={onAdd} onAddContent={onAddContent} onFocusChange={setAddInputFocused} />
 
-        {/* Empty state */}
+        {/* Empty state — copy adapts to whether the user has ever had items
+            in the inbox this session. "Caught up" reads as a reward after
+            triage; the first-time copy is an invitation. */}
         {isEmpty && (
           <div className="flex flex-col items-center justify-center py-16 gap-4">
             <div className="w-12 h-12 rounded-full bg-brett-gold/10 border border-brett-gold/20 flex items-center justify-center">
               <Inbox size={22} className="text-brett-gold" />
             </div>
             <div className="text-center">
-              <h3 className="text-white font-semibold text-base mb-1">Inbox zero</h3>
+              <h3 className="text-white font-semibold text-base mb-1">
+                {hasEverHadItems ? "Caught up" : "Your inbox is ready"}
+              </h3>
               <p className="text-white/40 text-sm leading-relaxed max-w-xs">
-                Nothing to triage. Add something or let {assistantName} find things for you.
+                {hasEverHadItems
+                  ? "Nothing left to triage. Nice work."
+                  : `Add a thought or let ${assistantName} bring you things to triage.`}
               </p>
             </div>
           </div>
