@@ -44,15 +44,7 @@ The native iOS app lives at `apps/ios/` (Xcode project; not driven by pnpm). See
 - **Auth:** better-auth (email/password + Google OAuth + Sign in with Apple, JWT bearer tokens)
 - **Storage:** Railway Object Storage (S3-compatible)
 - **Notifications:** Firebase Cloud Messaging (planned — notifications only, not auth)
-- **React:** v19 with React Compiler enabled (desktop). Do NOT add `useMemo`/`useCallback`/`React.memo` for general optimization — the compiler handles memoization automatically.
-
-  **Narrow exception — custom hook return values that consumers depend on for stable identity.** When a custom hook (e.g. `useOmnibar`) returns an object literal whose identity matters to consumers (typically because they pass it as a `useEffect` dep), and the React Compiler bails on the hook (large async closures, complex switch statements, deep ref interaction), the consumer's effects will re-run every render and may infinite-loop. In those cases:
-  - Wrap the returned object in `useMemo` with all observable state in deps.
-  - Wrap public functions in `useCallback` so they have stable identity.
-  - For functions that read frequently-changing state, use a ref pattern (`stateRef.current = ...`) so `useCallback` deps stay minimal.
-  - Document at the top of the hook *why* the compiler bails (so future readers don't strip the manual memoization thinking it's redundant).
-
-  Component-level useMemo/useCallback in regular components is still discouraged — trust the compiler there.
+- **React:** v19. React Compiler is currently **disabled** for the desktop build (see `apps/desktop/vite.config.ts`). The compiler silently broke the packaged Electron bundle — React Router's popstate subscriber never fired re-renders, so clicks updated the URL but the view stayed put. Dev Electron was fine because the dev pipeline runs the compiler differently. Re-enable once the specific mis-optimized pattern is isolated. Until then, hand-written `useMemo`/`useCallback`/`React.memo` is fine where it helps — don't rely on automatic memoization.
 
 ## Architecture
 

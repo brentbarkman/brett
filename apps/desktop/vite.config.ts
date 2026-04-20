@@ -6,13 +6,23 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pkg = require("./package.json");
 
+// React Compiler disabled: the prod-mode minified bundle silently corrupted
+// the fiber tree so React Router's popstate subscriber never fired re-renders
+// (clicks updated URL but view stayed). Dev Electron was fine because the
+// dev build pipeline runs the compiler differently. Reproduced by running
+// `electron dist/electron/main.js` (prod mode, app:// protocol) with the
+// compiler on vs off — off worked, on broke. Re-enable once the specific
+// pattern it mis-optimizes is isolated.
 const ReactCompilerConfig = {};
+const REACT_COMPILER_ENABLED = false;
 
 export default defineConfig({
   plugins: [
     react({
       babel: {
-        plugins: [["babel-plugin-react-compiler", ReactCompilerConfig]],
+        plugins: REACT_COMPILER_ENABLED
+          ? [["babel-plugin-react-compiler", ReactCompilerConfig]]
+          : [],
       },
     }),
   ],
