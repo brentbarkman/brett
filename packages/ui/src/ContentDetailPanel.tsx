@@ -18,6 +18,7 @@ import type { SuggestionItem } from "./LinkedItemsList";
 import { BrettThread } from "./BrettThread";
 import type { BrettThreadMessage } from "./BrettThread";
 import { ContentPreview } from "./ContentPreview";
+import { useDisplayTitle, useDemoMode } from "./lib/demoMode";
 
 interface ContentDetailPanelProps {
   detail: ThingDetail;
@@ -103,6 +104,8 @@ export function ContentDetailPanel({
   onNavigate,
   assistantName = "Brett",
 }: ContentDetailPanelProps) {
+  const { enabled: demoOn } = useDemoMode();
+  const shownTitle = useDisplayTitle(detail.id, detail.title, "thing");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(detail.title);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -165,8 +168,8 @@ export function ContentDetailPanel({
             </div>
           </div>
 
-          {/* Editable title */}
-          {editingTitle ? (
+          {/* Editable title (read-only when demo mode is on) */}
+          {editingTitle && !demoOn ? (
             <input
               ref={titleRef}
               value={titleValue}
@@ -183,10 +186,12 @@ export function ContentDetailPanel({
             />
           ) : (
             <h2
-              onClick={() => setEditingTitle(true)}
-              className="text-2xl font-semibold text-white leading-tight cursor-text hover:border-b hover:border-white/20 pb-1 transition-colors"
+              onClick={demoOn ? undefined : () => setEditingTitle(true)}
+              className={`text-2xl font-semibold text-white leading-tight pb-1 transition-colors ${
+                demoOn ? "" : "cursor-text hover:border-b hover:border-white/20"
+              }`}
             >
-              {detail.title}
+              {shownTitle}
             </h2>
           )}
 
