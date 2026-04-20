@@ -42,44 +42,45 @@ struct FeedbackSheet: View {
     }
 
     var body: some View {
-        ZStack {
-            BackgroundView()
+        // Rely on the caller's .presentationBackground(Color.black) — don't
+        // render the photography wallpaper inside the sheet. The wallpaper
+        // dropped contrast under the inputs and made the labels/help text
+        // hard to read. Other sheets (TaskDetailView, SearchSheet) follow
+        // the same pattern.
+        VStack(spacing: 16) {
+            header
 
-            VStack(spacing: 16) {
-                header
-
-                Picker("Type", selection: $type) {
-                    ForEach(FeedbackType.allCases) { t in
-                        Text(t.label).tag(t)
-                    }
+            Picker("Type", selection: $type) {
+                ForEach(FeedbackType.allCases) { t in
+                    Text(t.label).tag(t)
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 20)
-
-                titleField
-                descriptionField
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.system(size: 13))
-                        .foregroundStyle(BrettColors.error)
-                        .padding(.horizontal, 20)
-                }
-
-                if let successMessage {
-                    Text(successMessage)
-                        .font(.system(size: 13))
-                        .foregroundStyle(BrettColors.success)
-                        .padding(.horizontal, 20)
-                }
-
-                Spacer(minLength: 0)
-
-                submitButton
             }
-            .padding(.top, 20)
-            .padding(.bottom, 24)
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 20)
+
+            titleField
+            descriptionField
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 13))
+                    .foregroundStyle(BrettColors.error)
+                    .padding(.horizontal, 20)
+            }
+
+            if let successMessage {
+                Text(successMessage)
+                    .font(.system(size: 13))
+                    .foregroundStyle(BrettColors.success)
+                    .padding(.horizontal, 20)
+            }
+
+            Spacer(minLength: 0)
+
+            submitButton
         }
+        .padding(.top, 20)
+        .padding(.bottom, 24)
     }
 
     private var header: some View {
