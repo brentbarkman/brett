@@ -78,11 +78,13 @@ export async function runEmbeddingBackfill(options?: { maxPerType?: number }): P
     await new Promise((r) => setTimeout(r, DELAY_MS));
   }
 
-  // MeetingNotes
+  // MeetingNotes — the Prisma model is `MeetingNote` but it's `@@map`'d
+  // to the `GranolaMeeting` table for historical reasons. Raw SQL bypasses
+  // the model-to-table mapping, so we must use the actual table name.
   const meetingNotes = await safeQuery("MeetingNote", () =>
     prisma.$queryRaw<Array<{ id: string; userId: string }>>`
       SELECT mn.id, mn."userId"
-      FROM "MeetingNote" mn
+      FROM "GranolaMeeting" mn
       LEFT JOIN "Embedding" e ON e."entityType" = 'meeting_note' AND e."entityId" = mn.id
       WHERE e.id IS NULL
       LIMIT ${limit}
