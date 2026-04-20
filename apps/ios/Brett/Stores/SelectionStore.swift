@@ -28,6 +28,11 @@ final class SelectionStore {
     /// otherwise can't tell whether the create happened.
     var lastCreatedItemId: String?
 
+    /// Pending Settings deep-link. `MainContainer` observes this and pushes
+    /// `NavDestination.settings` followed by the tab onto its nav path, then
+    /// clears it. Used by the TaskRow "Reconnect" pill on re-link tasks.
+    var pendingSettingsTab: SettingsTab?
+
     static let shared = SelectionStore()
 
     init() {}
@@ -37,5 +42,6 @@ final class SelectionStore {
         selectedTaskId = nil
         selectedEventId = nil
         lastCreatedItemId = nil
+        pendingSettingsTab = nil
     }
 }

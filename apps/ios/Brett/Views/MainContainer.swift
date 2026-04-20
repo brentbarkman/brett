@@ -196,6 +196,16 @@ struct MainContainer: View {
                     .presentationBackground(Color.black)
                     .presentationCornerRadius(20)
             }
+            // Settings deep-link from re-link task taps. `TaskRow`'s Reconnect
+            // pill sets `selection.pendingSettingsTab`; we push `.settings`
+            // plus the target tab onto the NavigationStack in one shot so the
+            // back button returns to the task list, not an empty Settings.
+            .onChange(of: selection.pendingSettingsTab) { _, tab in
+                guard let tab else { return }
+                path.append(NavDestination.settings)
+                path.append(tab)
+                selection.pendingSettingsTab = nil
+            }
         }
         // Brand tint on the NavigationStack so default toolbar items
         // (the iOS back chevron on ListView / ScoutsRosterView /

@@ -347,7 +347,11 @@ struct CalendarSettingsView: View {
 
     @ViewBuilder
     private func granolaConnectedRows(_ account: GranolaAccount) -> some View {
-        // Row 1 — identity + last sync
+        // Row 1 — identity + last sync + reconnect affordance.
+        // The Reconnect button is always visible when connected because the
+        // server doesn't expose a per-account "broken" flag. Users who land
+        // here from a re-link task need a way to re-run OAuth without first
+        // disconnecting; healthy users won't bother tapping it.
         HStack(spacing: 12) {
             Image(systemName: "note.text")
                 .foregroundStyle(BrettColors.gold)
@@ -360,6 +364,29 @@ struct CalendarSettingsView: View {
                     .foregroundStyle(BrettColors.textMeta)
             }
             Spacer()
+            Button {
+                Task { await connectGranola() }
+            } label: {
+                HStack(spacing: 4) {
+                    if isConnectingGranola {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(BrettColors.gold)
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    Text("Reconnect")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(BrettColors.gold)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(BrettColors.gold.opacity(0.15)))
+            }
+            .buttonStyle(.plain)
+            .disabled(isConnectingGranola)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

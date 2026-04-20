@@ -63,7 +63,8 @@ struct TaskRow: View {
             timeLabel: Self.timeLabel(for: item),
             capturedLabel: Self.capturedLabel(for: item),
             listName: listName,
-            contentDomain: item.contentDomain
+            contentDomain: item.contentDomain,
+            relinkTask: RelinkTask.parse(source: item.source, sourceId: item.sourceId)
         )
         self.onToggle = onToggle
         self.onSelect = onSelect
@@ -237,10 +238,51 @@ struct TaskRow: View {
                 }
 
                 Spacer()
+
+                // Reconnect pill — only rendered on re-link tasks from broken
+                // integrations. Mirrors desktop's gold pill in
+                // `packages/ui/src/ThingCard.tsx`. Tap deep-links to the
+                // matching Settings tab via `SelectionStore.pendingSettingsTab`.
+                if !viewModel.isCompleted, let relink = viewModel.relinkTask {
+                    reconnectPill(for: relink.type)
+                }
             }
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func reconnectPill(for type: RelinkType) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 11, weight: .semibold))
+            Text("Reconnect")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(BrettColors.gold)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule().fill(BrettColors.gold.opacity(0.15))
+        )
+        .contentShape(Capsule())
+        .highPriorityGesture(
+            TapGesture().onEnded {
+                HapticManager.light()
+                SelectionStore.shared.pendingSettingsTab = type.settingsTab
+            }
+        )
+        .accessibilityLabel("Reconnect \(accessibleName(for: type))")
+        .accessibilityHint("Opens Settings to re-link this integration.")
+    }
+
+    private func accessibleName(for type: RelinkType) -> String {
+        switch type {
+        case .googleCalendar: return "Google Calendar"
+        case .granola: return "Granola"
+        case .ai: return "AI provider"
+        }
     }
 
     /// Central landing for "a schedule action fired." Drives the haptic,
@@ -281,6 +323,7 @@ struct TaskRow: View {
         let capturedLabel: String?
         let listName: String?
         let contentDomain: String?
+        let relinkTask: RelinkTask?
     }
 
     /// Convert a task title into a stable, predictable accessibility-id token.
