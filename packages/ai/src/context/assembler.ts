@@ -269,10 +269,19 @@ async function assembleOmnibar(
   // Simple requests stay on small for speed/cost.
   // Multi-turn sessions escalate to medium — follow-up messages typically
   // need more context reasoning than standalone queries.
+  //
+  // Wh-questions (what/who/when/where/why/how) also go to medium. Haiku
+  // reliably pattern-matches short factual questions to a refusal when the
+  // topic sounds domain-adjacent (finance, real-time data), ignoring the
+  // in-context SEARCH BEFORE REFUSING rule. Sonnet follows the rule; the
+  // ~5x cost is worth it given how rarely these occur vs. how bad a
+  // false refusal feels. See prod regression 2026-04-20
+  // ("what is Function Health's strike price?").
   const lower = input.message.toLowerCase();
   const actionWords = lower.match(/\b(create|make|move|add|put|delete|remove|archive|update|change|snooze|complete|done|mark)\b/g);
   const hasSessionHistory = (input.sessionMessages?.length ?? 0) >= 2;
-  const isComplex = lower.length > 80 || (actionWords && actionWords.length >= 2) || hasSessionHistory;
+  const isWhQuestion = /^\s*(what|who|when|where|why|how)\b/.test(lower);
+  const isComplex = lower.length > 80 || (actionWords && actionWords.length >= 2) || hasSessionHistory || isWhQuestion;
   const tier = isComplex ? "medium" : "small";
 
   return { system, messages, modelTier: tier, toolMode: "contextual" };
