@@ -181,14 +181,12 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
       )}
 
       {showExpandedNextUp && nextUpEvent && nextUpTimer && (
-        <div className="animate-[fadeSlideIn_0.5s_ease-out]">
-          <NextUpCard
-            event={nextUpEvent}
-            timer={nextUpTimer}
-            variant="expanded"
-            onEventClick={() => onItemClick(nextUpEvent)}
-          />
-        </div>
+        <NextUpCard
+          event={nextUpEvent}
+          timer={nextUpTimer}
+          variant="expanded"
+          onEventClick={() => onItemClick(nextUpEvent)}
+        />
       )}
 
       <div className="flex-1 min-h-0 flex flex-col bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
