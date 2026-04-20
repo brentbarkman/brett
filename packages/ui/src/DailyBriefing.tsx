@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { X, RefreshCw, Loader2, Settings } from "lucide-react";
 import { displayTitle, useDemoMode } from "./lib/demoMode";
 
@@ -153,12 +153,6 @@ export function DailyBriefing({
   assistantName = "Brett",
 }: DailyBriefingProps) {
   useDemoMode();
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
 
   const titleMap = new Map(knownItems.map(item => [item.title.toLowerCase(), item]));
 
@@ -177,13 +171,7 @@ export function DailyBriefing({
     summary.todayEvents === 0;
 
   return (
-    <div
-      className={`
-        relative w-full bg-black/40 backdrop-blur-md border border-brett-cerulean/50 rounded-xl p-4
-        transition-all duration-500 ease-out transform
-        ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
-      `}
-    >
+    <div className="relative w-full bg-black/40 backdrop-blur-md border border-brett-cerulean/50 rounded-xl p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
