@@ -191,24 +191,23 @@ struct BrettChatSection: View {
 
     private var inputBar: some View {
         HStack(spacing: 8) {
-            // `prompt:` lets us style the placeholder independently of the
-            // field's foreground — the default SwiftUI behaviour of dimming
-            // the foreground produced low-contrast hint text on the glass
-            // tint. Cerulean caret stays (this IS a Brett AI surface) but
-            // the placeholder is neutral so it reads.
-            TextField(
-                text: $input,
-                prompt: Text("Ask Brett about this task\u{2026}")
-                    .foregroundStyle(BrettColors.textPlaceholder),
-                axis: .vertical
+            // Placeholder via NeutralPlaceholder: iOS renders `prompt:`
+            // Text in the system accent color, which on a Brett AI
+            // surface would clash with the cerulean caret by mis-tinting
+            // the hint. Neutral muted white keeps the hint readable.
+            // Cerulean caret stays — this IS a Brett AI surface.
+            NeutralPlaceholder(
+                "Ask Brett about this task\u{2026}",
+                isEmpty: input.isEmpty,
+                alignment: .topLeading
             ) {
-                Text("Ask Brett")
+                TextField("", text: $input, axis: .vertical)
+                    .focused($isFocused)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+                    .tint(BrettColors.cerulean)
+                    .lineLimit(1...4)
             }
-                .focused($isFocused)
-                .font(.system(size: 13))
-                .foregroundStyle(.white)
-                .tint(BrettColors.cerulean)
-                .lineLimit(1...4)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
                 .background(

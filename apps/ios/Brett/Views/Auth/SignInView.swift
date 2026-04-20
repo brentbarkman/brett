@@ -20,50 +20,41 @@ struct SignInView: View {
             VStack(spacing: 22) {
                 header
 
+                // Placeholders use `NeutralPlaceholder` instead of
+                // `TextField`'s built-in `prompt:` — see that file for
+                // why (short version: iOS renders prompt in system blue).
                 if isSignUp {
                     labeledField("NAME") {
-                        TextField(
-                            text: $name,
-                            prompt: Text("Your name")
-                                .foregroundStyle(BrettColors.textPlaceholder)
-                        ) {
-                            Text("Name")
+                        NeutralPlaceholder("Your name", isEmpty: name.isEmpty) {
+                            TextField("", text: $name)
+                                .textFieldStyle(.plain)
+                                .foregroundStyle(.white)
+                                .textContentType(.name)
+                                .autocapitalization(.words)
                         }
-                            .textFieldStyle(.plain)
-                            .foregroundStyle(.white)
-                            .textContentType(.name)
-                            .autocapitalization(.words)
                     }
                 }
 
                 labeledField("EMAIL") {
-                    TextField(
-                        text: $email,
-                        prompt: Text("you@example.com")
-                            .foregroundStyle(BrettColors.textPlaceholder)
-                    ) {
-                        Text("Email")
+                    NeutralPlaceholder("you@example.com", isEmpty: email.isEmpty) {
+                        TextField("", text: $email)
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(.white)
+                            .textContentType(.emailAddress)
+                            .autocapitalization(.none)
+                            .keyboardType(.emailAddress)
+                            .accessibilityIdentifier("signin.email")
                     }
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(.white)
-                        .textContentType(.emailAddress)
-                        .autocapitalization(.none)
-                        .keyboardType(.emailAddress)
-                        .accessibilityIdentifier("signin.email")
                 }
 
                 labeledField("PASSWORD") {
-                    SecureField(
-                        text: $password,
-                        prompt: Text("••••••••")
-                            .foregroundStyle(BrettColors.textPlaceholder)
-                    ) {
-                        Text("Password")
+                    NeutralPlaceholder("••••••••", isEmpty: password.isEmpty) {
+                        SecureField("", text: $password)
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(.white)
+                            .textContentType(isSignUp ? .newPassword : .password)
+                            .accessibilityIdentifier("signin.password")
                     }
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(.white)
-                        .textContentType(isSignUp ? .newPassword : .password)
-                        .accessibilityIdentifier("signin.password")
                 }
 
                 if authManager.errorIsNoAccount {

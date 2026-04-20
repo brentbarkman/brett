@@ -108,16 +108,12 @@ struct FeedbackSheet: View {
                 .tracking(1.5)
                 .foregroundStyle(Color.white.opacity(0.40))
 
-            TextField(
-                text: $title,
-                prompt: Text("One-liner")
-                    .foregroundStyle(BrettColors.textPlaceholder)
-            ) {
-                Text("Title")
+            NeutralPlaceholder("One-liner", isEmpty: title.isEmpty) {
+                TextField("", text: $title)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(.white)
+                    .tint(BrettColors.gold)
             }
-                .textFieldStyle(.plain)
-                .foregroundStyle(.white)
-                .tint(BrettColors.gold)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background {
@@ -139,18 +135,17 @@ struct FeedbackSheet: View {
                 .tracking(1.5)
                 .foregroundStyle(Color.white.opacity(0.40))
 
-            TextField(
-                text: $description,
-                prompt: Text(type.placeholder)
-                    .foregroundStyle(BrettColors.textPlaceholder),
-                axis: .vertical
+            NeutralPlaceholder(
+                type.placeholder,
+                isEmpty: description.isEmpty,
+                alignment: .topLeading
             ) {
-                Text("Details")
+                TextField("", text: $description, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(.white)
+                    .tint(BrettColors.gold)
+                    .lineLimit(4...10)
             }
-                .textFieldStyle(.plain)
-                .foregroundStyle(.white)
-                .tint(BrettColors.gold)
-                .lineLimit(4...10)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background {
