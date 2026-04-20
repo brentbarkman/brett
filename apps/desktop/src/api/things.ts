@@ -92,6 +92,34 @@ function provisionalThing(input: CreateItemInput, tempId: string): Thing {
   };
 }
 
+// Mirrors the server filter semantics in apps/api/src/routes/things.ts:
+//   dueBefore: dueDate <= value   dueAfter: dueDate > value
+//   completedAfter: completedAt >= value   (null sides fail the predicate)
+// Drift is bounded — onSettled invalidates and refetches from the server,
+// so at worst we briefly show a new item in the wrong cache.
+function thingMatchesFilters(thing: Thing, filters: ThingsFilters): boolean {
+  if (filters.listId && thing.listId !== filters.listId) return false;
+  if (filters.type && thing.type !== filters.type) return false;
+  if (filters.status && thing.status !== filters.status) return false;
+  if (filters.source && thing.source !== filters.source) return false;
+  if (filters.dueBefore) {
+    if (!thing.dueDate) return false;
+    if (new Date(thing.dueDate).getTime() > new Date(filters.dueBefore).getTime()) return false;
+  }
+  if (filters.dueAfter) {
+    if (!thing.dueDate) return false;
+    if (new Date(thing.dueDate).getTime() <= new Date(filters.dueAfter).getTime()) return false;
+  }
+  if (filters.completedAfter) {
+    // Provisional creates are never pre-completed, so they never belong in a
+    // completedAfter view.
+    return false;
+  }
+  return true;
+}
+
+export const __testing = { thingMatchesFilters };
+
 export function useCreateThing() {
   const qc = useQueryClient();
 
@@ -101,27 +129,45 @@ export function useCreateThing() {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    // Optimistically insert into the inbox cache so the row appears
-    // instantly. Bare items (no listId, no dueDate) are inbox-bound; for
-    // everything else we still wait for the server-side refetch, because
-    // predicting which filtered list queries the new item belongs to gets
-    // quickly unsafe.
+    // Optimistically prepend the new item into every cached view it
+    // belongs in: the inbox (when inbox-bound) and every ["things", ...]
+    // list-query cache whose filters the provisional thing satisfies.
+    // onSettled invalidates and refetches, so any client/server filter
+    // drift is self-correcting within one round-trip.
     onMutate: async (input) => {
       const isInboxBound = !input.listId && !input.dueDate;
-      if (!isInboxBound) return { prevInbox: undefined, tempId: undefined };
-
-      await qc.cancelQueries({ queryKey: ["inbox"] });
-      const prevInbox = qc.getQueryData<InboxResponse>(["inbox"]);
       const tempId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const provisional = provisionalThing(input, tempId);
-      qc.setQueryData<InboxResponse>(["inbox"], {
-        visible: [provisional, ...(prevInbox?.visible ?? [])],
-      });
-      return { prevInbox, tempId };
+
+      await qc.cancelQueries({ queryKey: ["inbox"] });
+      await qc.cancelQueries({ queryKey: ["things"] });
+
+      let prevInbox: InboxResponse | undefined;
+      if (isInboxBound) {
+        prevInbox = qc.getQueryData<InboxResponse>(["inbox"]);
+        qc.setQueryData<InboxResponse>(["inbox"], {
+          visible: [provisional, ...(prevInbox?.visible ?? [])],
+        });
+      }
+
+      const prevThingLists: Array<[readonly unknown[], Thing[] | undefined]> = [];
+      for (const [key, data] of qc.getQueriesData<Thing[]>({ queryKey: ["things"] })) {
+        const filters = (key[1] ?? {}) as ThingsFilters;
+        if (!thingMatchesFilters(provisional, filters)) continue;
+        prevThingLists.push([key, data]);
+        qc.setQueryData<Thing[]>(key, [provisional, ...(data ?? [])]);
+      }
+
+      return { prevInbox, prevThingLists, tempId };
     },
     onError: (_err, _input, ctx) => {
       if (ctx?.prevInbox !== undefined) {
         qc.setQueryData<InboxResponse>(["inbox"], ctx.prevInbox);
+      }
+      if (ctx?.prevThingLists) {
+        for (const [key, data] of ctx.prevThingLists) {
+          qc.setQueryData(key, data);
+        }
       }
     },
     onSuccess: () => {

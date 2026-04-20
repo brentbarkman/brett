@@ -3,7 +3,9 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { InboxResponse, Thing, ThingDetail } from "@brett/types";
-import { useCreateThing, useUpdateThing } from "../things";
+import { useCreateThing, useUpdateThing, __testing } from "../things";
+
+const { thingMatchesFilters } = __testing;
 
 vi.mock("../client", () => ({
   apiFetch: vi.fn(),
@@ -130,6 +132,177 @@ describe("useCreateThing optimistic insert", () => {
     });
 
     resolveServer(makeThing("server-id", "listed"));
+  });
+
+  // Follow-up from #62: Today quick-add passes dueDate=today, so it must
+  // land in the active-this-week cache (useActiveThings) immediately.
+  it("inserts a today-dated task into the active/dueBefore cache", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    const today = new Date("2026-04-20T00:00:00.000Z").toISOString();
+    const endOfWeek = new Date("2026-04-26T23:59:59.999Z").toISOString();
+    const activeFilters = { status: "active" as const, dueBefore: endOfWeek };
+
+    qc.setQueryData<Thing[]>(["things", activeFilters], []);
+
+    let resolveServer: (t: Thing) => void = () => {};
+    mockApiFetch.mockImplementation(
+      () => new Promise<Thing>((resolve) => { resolveServer = resolve; }),
+    );
+
+    const { result } = renderHook(() => useCreateThing(), { wrapper });
+
+    act(() => {
+      result.current.mutate({
+        type: "task",
+        title: "today task",
+        dueDate: today,
+        dueDatePrecision: "day",
+      });
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<Thing[]>(["things", activeFilters]);
+      expect(cache).toHaveLength(1);
+      expect(cache?.[0].title).toBe("today task");
+    });
+
+    resolveServer(makeThing("server-id", "today task"));
+  });
+
+  // Follow-up from #62: List-scoped add must land in the list's cache
+  // (useListThings → ["things", { listId }]) immediately.
+  it("inserts a list-scoped task into the matching ['things', { listId }] cache", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    qc.setQueryData<Thing[]>(["things", { listId: "list-abc" }], []);
+    qc.setQueryData<Thing[]>(["things", { listId: "other-list" }], []);
+
+    let resolveServer: (t: Thing) => void = () => {};
+    mockApiFetch.mockImplementation(
+      () => new Promise<Thing>((resolve) => { resolveServer = resolve; }),
+    );
+
+    const { result } = renderHook(() => useCreateThing(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ type: "task", title: "listed task", listId: "list-abc" });
+    });
+
+    await waitFor(() => {
+      const abc = qc.getQueryData<Thing[]>(["things", { listId: "list-abc" }]);
+      expect(abc).toHaveLength(1);
+      expect(abc?.[0].title).toBe("listed task");
+    });
+
+    // The other list's cache must stay empty.
+    const other = qc.getQueryData<Thing[]>(["things", { listId: "other-list" }]);
+    expect(other).toHaveLength(0);
+
+    resolveServer(makeThing("server-id", "listed task"));
+  });
+
+  // New creates are never pre-completed, so they must never land in a
+  // done/completedAfter view — guards against a Today view briefly showing
+  // a just-created item in its "done today" section.
+  it("does not insert into done/completedAfter caches", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    const today = new Date("2026-04-20T00:00:00.000Z").toISOString();
+    const doneFilters = { status: "done" as const, completedAfter: today };
+    qc.setQueryData<Thing[]>(["things", doneFilters], []);
+
+    let resolveServer: (t: Thing) => void = () => {};
+    mockApiFetch.mockImplementation(
+      () => new Promise<Thing>((resolve) => { resolveServer = resolve; }),
+    );
+
+    const { result } = renderHook(() => useCreateThing(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ type: "task", title: "fresh", dueDate: today });
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<Thing[]>(["things", doneFilters]);
+      expect(cache).toHaveLength(0);
+    });
+
+    resolveServer(makeThing("server-id", "fresh"));
+  });
+
+  it("rolls back every ['things', ...] cache it optimistically wrote on error", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    const today = new Date("2026-04-20T00:00:00.000Z").toISOString();
+    const endOfWeek = new Date("2026-04-26T23:59:59.999Z").toISOString();
+    const activeFilters = { status: "active" as const, dueBefore: endOfWeek };
+    const seed = makeThing("seed-1", "seeded");
+    qc.setQueryData<Thing[]>(["things", activeFilters], [seed]);
+
+    mockApiFetch.mockRejectedValue(new Error("boom"));
+
+    const { result } = renderHook(() => useCreateThing(), { wrapper });
+
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({
+          type: "task",
+          title: "will fail",
+          dueDate: today,
+        });
+      } catch {
+        /* expected */
+      }
+    });
+
+    const cache = qc.getQueryData<Thing[]>(["things", activeFilters]);
+    expect(cache).toEqual([seed]);
+  });
+});
+
+describe("thingMatchesFilters", () => {
+  const baseThing: Thing = {
+    id: "x",
+    type: "task",
+    title: "x",
+    list: "Inbox",
+    listId: null,
+    status: "active",
+    source: "manual",
+    urgency: "later",
+    isCompleted: false,
+  };
+
+  it("matches when all filters are empty", () => {
+    expect(thingMatchesFilters(baseThing, {})).toBe(true);
+  });
+
+  it("respects listId equality", () => {
+    const t = { ...baseThing, listId: "abc" };
+    expect(thingMatchesFilters(t, { listId: "abc" })).toBe(true);
+    expect(thingMatchesFilters(t, { listId: "xyz" })).toBe(false);
+    expect(thingMatchesFilters(baseThing, { listId: "abc" })).toBe(false);
+  });
+
+  it("treats dueBefore as inclusive and excludes null dueDate", () => {
+    const due = "2026-04-20T00:00:00.000Z";
+    const eow = "2026-04-26T00:00:00.000Z";
+    expect(thingMatchesFilters({ ...baseThing, dueDate: due }, { dueBefore: eow })).toBe(true);
+    expect(thingMatchesFilters({ ...baseThing, dueDate: eow }, { dueBefore: eow })).toBe(true);
+    expect(thingMatchesFilters({ ...baseThing, dueDate: "2026-05-01T00:00:00.000Z" }, { dueBefore: eow })).toBe(false);
+    expect(thingMatchesFilters(baseThing, { dueBefore: eow })).toBe(false);
+  });
+
+  it("treats dueAfter as exclusive and excludes null dueDate", () => {
+    const today = "2026-04-20T00:00:00.000Z";
+    expect(thingMatchesFilters({ ...baseThing, dueDate: today }, { dueAfter: today })).toBe(false);
+    expect(thingMatchesFilters({ ...baseThing, dueDate: "2026-04-21T00:00:00.000Z" }, { dueAfter: today })).toBe(true);
+    expect(thingMatchesFilters(baseThing, { dueAfter: today })).toBe(false);
+  });
+
+  it("never matches a completedAfter filter (new items aren't pre-completed)", () => {
+    expect(thingMatchesFilters(baseThing, { completedAfter: "2026-04-20T00:00:00.000Z" })).toBe(false);
   });
 });
 
