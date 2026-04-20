@@ -161,6 +161,15 @@ final class AuthManager {
     }
 
     /// Best-effort refresh of `currentUser` via `/users/me`.
+    ///
+    /// **401 handling is load-bearing:** the keychain access group
+    /// (`com.brett.app.auth`) survives app deletion, which means a token
+    /// can persist across reinstalls — including from a build that pointed
+    /// at a different API. If the stored token is invalid (expired, wrong
+    /// environment, revoked), we *must* sign out here. Otherwise the app
+    /// stays in a zombie state: `isAuthenticated == true`, UI past login,
+    /// every request 401s, sync fails silently, and there's no user-facing
+    /// escape hatch until Settings gets a sign-out button.
     func refreshCurrentUser() async {
         guard token != nil else { return }
         do {
@@ -171,8 +180,12 @@ final class AuthManager {
             if let userId = self.currentUser?.id {
                 SharedConfig.writeCurrentUserId(userId)
             }
+        } catch APIError.unauthorized {
+            // Token is no good — fall back to the login screen.
+            await signOut()
         } catch {
-            // Leave existing currentUser in place if the refresh fails.
+            // Other errors (network, timeout) are transient — leave the
+            // existing currentUser in place so the UI doesn't flicker out.
         }
     }
 
