@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>BrettAPIURL</key>
-	<string>https://api.brett.brentbarkman.com</string>
+	<string>$(BRETT_API_URL)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

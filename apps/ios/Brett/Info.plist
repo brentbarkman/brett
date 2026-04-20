@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>BrettAPIURL</key>
-	<string>http://192.168.50.242:3001</string>
+	<string>$(BRETT_API_URL)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>
