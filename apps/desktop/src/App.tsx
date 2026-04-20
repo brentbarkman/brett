@@ -638,13 +638,13 @@ export function App() {
     return () => document.removeEventListener("keydown", handleFeedbackShortcut);
   }, [feedbackOpen, electronVersion]);
 
-  // Cmd+Option+D toggles demo mode — swaps task + calendar titles for
+  // Cmd+Shift+D toggles demo mode — swaps task + calendar titles for
   // funny placeholders so screen-sharing doesn't leak real content.
-  // Using e.code so it fires regardless of OS key-remapping (on macOS,
-  // Cmd+Option+D reports e.key === "∂", but e.code is always "KeyD").
+  // Paired with Cmd+Shift+. (feedback) so the "Shift+letter" family is
+  // the mental model for meta shortcuts.
   useEffect(() => {
     const handleDemoToggle = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === "KeyD") {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyD") {
         e.preventDefault();
         demoMode.toggle();
       }
