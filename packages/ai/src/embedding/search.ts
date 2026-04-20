@@ -67,6 +67,13 @@ export function fuseResults(
     if (existing) {
       existing.score += add;
       existing.inVector = true;
+      // For meeting_notes, the vector snippet is the specific chunk that
+      // matched (e.g. a transcript passage), while the keyword snippet is
+      // the whole summary. Prefer the chunk — it's the actually-relevant
+      // excerpt the caller will surface back to the LLM.
+      if (r.entityType === "meeting_note") {
+        existing.result = { ...existing.result, snippet: r.snippet };
+      }
     } else {
       scores.set(key, { score: add, result: r, inKeyword: false, inVector: true });
     }
