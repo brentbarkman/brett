@@ -311,7 +311,68 @@ export function useBulkUpdateThings() {
         method: "PATCH",
         body: JSON.stringify(input),
       }),
-    onSuccess: () => {
+    // Drives drag-to-list, inbox triage, archive, bulk status changes. An
+    // in-place patch is good enough for all of those — if a cache's filter
+    // semantics shift (e.g. moving an item between lists), onSettled
+    // reconciles with the server.
+    onMutate: async ({ ids, updates }) => {
+      await qc.cancelQueries({ queryKey: ["things"] });
+      await qc.cancelQueries({ queryKey: ["inbox"] });
+
+      const idSet = new Set(ids);
+      const thingPatch = Object.fromEntries(
+        Object.entries(updates).map(([k, v]) => [k, v === null ? undefined : v]),
+      ) as Partial<Thing>;
+      if (updates.status) {
+        thingPatch.isCompleted = updates.status === "done";
+      }
+      const removeFromInbox = updates.status === "archived" || updates.status === "done";
+
+      const prevInbox = qc.getQueryData<InboxResponse>(["inbox"]);
+      if (prevInbox) {
+        const nextVisible = removeFromInbox
+          ? prevInbox.visible.filter((t) => !idSet.has(t.id))
+          : prevInbox.visible.map((t) => (idSet.has(t.id) ? { ...t, ...thingPatch } : t));
+        qc.setQueryData<InboxResponse>(["inbox"], { visible: nextVisible });
+      }
+
+      const prevThingLists: Array<[readonly unknown[], Thing[] | undefined]> = [];
+      for (const [key, data] of qc.getQueriesData<Thing[]>({ queryKey: ["things"] })) {
+        if (!data) continue;
+        prevThingLists.push([key, data]);
+        qc.setQueryData<Thing[]>(
+          key,
+          data.map((t) => (idSet.has(t.id) ? { ...t, ...thingPatch } : t)),
+        );
+      }
+
+      const prevDetails: Array<[string, ThingDetail | undefined]> = [];
+      for (const id of ids) {
+        const prev = qc.getQueryData<ThingDetail>(["thing-detail", id]);
+        if (prev) {
+          prevDetails.push([id, prev]);
+          qc.setQueryData<ThingDetail>(["thing-detail", id], { ...prev, ...thingPatch });
+        }
+      }
+
+      return { prevInbox, prevThingLists, prevDetails };
+    },
+    onError: (_err, _input, ctx) => {
+      if (ctx?.prevInbox !== undefined) {
+        qc.setQueryData<InboxResponse>(["inbox"], ctx.prevInbox);
+      }
+      if (ctx?.prevThingLists) {
+        for (const [key, data] of ctx.prevThingLists) {
+          qc.setQueryData(key, data);
+        }
+      }
+      if (ctx?.prevDetails) {
+        for (const [id, data] of ctx.prevDetails) {
+          qc.setQueryData(["thing-detail", id], data);
+        }
+      }
+    },
+    onSettled: () => {
       invalidateAllThings(qc);
     },
   });
@@ -362,8 +423,39 @@ export function useDeleteThing() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/things/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["inbox"] });
+      await qc.cancelQueries({ queryKey: ["things"] });
+
+      const prevInbox = qc.getQueryData<InboxResponse>(["inbox"]);
+      if (prevInbox) {
+        qc.setQueryData<InboxResponse>(["inbox"], {
+          visible: prevInbox.visible.filter((t) => t.id !== id),
+        });
+      }
+
+      const prevThingLists: Array<[readonly unknown[], Thing[] | undefined]> = [];
+      for (const [key, data] of qc.getQueriesData<Thing[]>({ queryKey: ["things"] })) {
+        if (!data) continue;
+        prevThingLists.push([key, data]);
+        qc.setQueryData<Thing[]>(key, data.filter((t) => t.id !== id));
+      }
+
+      return { prevInbox, prevThingLists };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prevInbox !== undefined) {
+        qc.setQueryData<InboxResponse>(["inbox"], ctx.prevInbox);
+      }
+      if (ctx?.prevThingLists) {
+        for (const [key, data] of ctx.prevThingLists) {
+          qc.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: (_data, _err, id) => {
       invalidateAllThings(qc);
+      qc.removeQueries({ queryKey: ["thing-detail", id] });
     },
   });
 }

@@ -3,7 +3,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { InboxResponse, Thing, ThingDetail } from "@brett/types";
-import { useCreateThing, useUpdateThing, __testing } from "../things";
+import { useCreateThing, useUpdateThing, useDeleteThing, useBulkUpdateThings, __testing } from "../things";
 
 const { thingMatchesFilters } = __testing;
 
@@ -258,6 +258,117 @@ describe("useCreateThing optimistic insert", () => {
 
     const cache = qc.getQueryData<Thing[]>(["things", activeFilters]);
     expect(cache).toEqual([seed]);
+  });
+});
+
+describe("useDeleteThing optimistic remove", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("removes the item from inbox and every ['things', ...] cache before the server responds", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    qc.setQueryData<InboxResponse>(["inbox"], {
+      visible: [makeThing("a", "keep"), makeThing("b", "gone")],
+    });
+    qc.setQueryData<Thing[]>(["things", { listId: "L1" }], [makeThing("b", "gone"), makeThing("c", "keep")]);
+    qc.setQueryData<Thing[]>(["things", { status: "active" }], [makeThing("b", "gone")]);
+
+    let resolveServer: (v: unknown) => void = () => {};
+    mockApiFetch.mockImplementation(
+      () => new Promise((resolve) => { resolveServer = resolve; }),
+    );
+
+    const { result } = renderHook(() => useDeleteThing(), { wrapper });
+
+    act(() => {
+      result.current.mutate("b");
+    });
+
+    await waitFor(() => {
+      const inbox = qc.getQueryData<InboxResponse>(["inbox"]);
+      expect(inbox?.visible.map((t) => t.id)).toEqual(["a"]);
+      expect(qc.getQueryData<Thing[]>(["things", { listId: "L1" }])?.map((t) => t.id)).toEqual(["c"]);
+      expect(qc.getQueryData<Thing[]>(["things", { status: "active" }])).toEqual([]);
+    });
+
+    resolveServer({});
+  });
+
+  it("rolls back every cache it touched on error", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    const inboxSeed = [makeThing("a", "keep"), makeThing("b", "will-fail")];
+    const listSeed = [makeThing("b", "will-fail")];
+    qc.setQueryData<InboxResponse>(["inbox"], { visible: inboxSeed });
+    qc.setQueryData<Thing[]>(["things", { listId: "L1" }], listSeed);
+
+    mockApiFetch.mockRejectedValue(new Error("boom"));
+
+    const { result } = renderHook(() => useDeleteThing(), { wrapper });
+
+    await act(async () => {
+      try {
+        await result.current.mutateAsync("b");
+      } catch { /* expected */ }
+    });
+
+    expect(qc.getQueryData<InboxResponse>(["inbox"])?.visible.map((t) => t.id)).toEqual(["a", "b"]);
+    expect(qc.getQueryData<Thing[]>(["things", { listId: "L1" }])?.map((t) => t.id)).toEqual(["b"]);
+  });
+});
+
+describe("useBulkUpdateThings optimistic patch/remove", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("removes archived items from the inbox immediately", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    qc.setQueryData<InboxResponse>(["inbox"], {
+      visible: [makeThing("a", "a"), makeThing("b", "b"), makeThing("c", "c")],
+    });
+
+    let resolveServer: (v: unknown) => void = () => {};
+    mockApiFetch.mockImplementation(
+      () => new Promise((resolve) => { resolveServer = resolve; }),
+    );
+
+    const { result } = renderHook(() => useBulkUpdateThings(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ ids: ["a", "c"], updates: { status: "archived" } });
+    });
+
+    await waitFor(() => {
+      expect(qc.getQueryData<InboxResponse>(["inbox"])?.visible.map((t) => t.id)).toEqual(["b"]);
+    });
+
+    resolveServer({ updated: 2 });
+  });
+
+  it("patches in place when updates don't change the inbox membership (drag-to-list)", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    qc.setQueryData<Thing[]>(["things", { listId: "L1" }], [
+      { ...makeThing("a", "a"), listId: "L1" },
+    ]);
+
+    let resolveServer: (v: unknown) => void = () => {};
+    mockApiFetch.mockImplementation(
+      () => new Promise((resolve) => { resolveServer = resolve; }),
+    );
+
+    const { result } = renderHook(() => useBulkUpdateThings(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ ids: ["a"], updates: { listId: "L2" } });
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<Thing[]>(["things", { listId: "L1" }]);
+      expect(cache?.[0].listId).toBe("L2");
+    });
+
+    resolveServer({ updated: 1 });
   });
 });
 

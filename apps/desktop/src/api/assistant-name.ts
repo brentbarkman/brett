@@ -26,7 +26,22 @@ export function useUpdateAssistantName() {
         body: JSON.stringify({ assistantName: trimmed }),
       });
     },
-    onSuccess: () => {
+    onMutate: async (name) => {
+      const trimmed = name.trim();
+      if (!trimmed || trimmed.length > 10) return { prev: undefined };
+      await queryClient.cancelQueries({ queryKey: ["user-me"] });
+      const prev = queryClient.getQueryData<{ assistantName: string }>(["user-me"]);
+      if (prev) {
+        queryClient.setQueryData(["user-me"], { ...prev, assistantName: trimmed });
+      }
+      return { prev };
+    },
+    onError: (_err, _name, ctx) => {
+      if (ctx?.prev !== undefined) {
+        queryClient.setQueryData(["user-me"], ctx.prev);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["user-me"] });
     },
   });
