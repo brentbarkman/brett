@@ -6,23 +6,27 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pkg = require("./package.json");
 
-// React Compiler disabled: the prod-mode minified bundle silently corrupted
-// the fiber tree so React Router's popstate subscriber never fired re-renders
-// (clicks updated URL but view stayed). Dev Electron was fine because the
-// dev build pipeline runs the compiler differently. Reproduced by running
-// `electron dist/electron/main.js` (prod mode, app:// protocol) with the
-// compiler on vs off — off worked, on broke. Re-enable once the specific
-// pattern it mis-optimizes is isolated.
-const ReactCompilerConfig = {};
-const REACT_COMPILER_ENABLED = false;
+// React Compiler v1.0.0 mis-optimizes the prod-mode minified bundle —
+// closure hoisting breaks useSyncExternalStore subscribers, which detaches
+// React Router's popstate listener so clicks update the URL but the view
+// stays put. Related upstream: facebook/react#35342, #36128, #34045, #35009.
+// Dev Electron was unaffected because Vite's dev pipeline runs the compiler
+// differently.
+//
+// Compromise: run the compiler in `annotation` mode. Only files that opt in
+// with a top-of-file `"use memo";` directive get compiled. Everything else
+// is skipped. We opt in leaf components that benefit from auto-memoization
+// and don't touch Router context (ThingCard, InboxItemRow to start).
+// Re-audit once a new compiler release ships with the hoisting fixes.
+const ReactCompilerConfig = {
+  compilationMode: "annotation" as const,
+};
 
 export default defineConfig({
   plugins: [
     react({
       babel: {
-        plugins: REACT_COMPILER_ENABLED
-          ? [["babel-plugin-react-compiler", ReactCompilerConfig]]
-          : [],
+        plugins: [["babel-plugin-react-compiler", ReactCompilerConfig]],
       },
     }),
   ],
