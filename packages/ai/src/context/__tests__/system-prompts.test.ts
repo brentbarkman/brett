@@ -32,4 +32,33 @@ describe("getSystemPrompt", () => {
   it("keeps meeting-notes retrieval in domain", () => {
     expect(prompt).toMatch(/meeting notes|get_meeting_notes/);
   });
+
+  // Haiku grabbed the phrase "real-time data the user hasn't discussed" as
+  // justification for refusing "what is Function Health's strike price?" in
+  // prod on 2026-04-20. That escape hatch can't be evaluated without first
+  // retrieving — which is exactly the step SEARCH BEFORE REFUSING requires.
+  // Don't reintroduce any variant of it.
+  it("does not list 'real-time data' as a decline category", () => {
+    expect(prompt).not.toMatch(/real-time data/i);
+    expect(prompt).not.toMatch(/real time data/i);
+  });
+
+  // The rule should be imperative, not conditional. "When a request is a
+  // factual question AND no other tool obviously matches" lets the model
+  // decide either premise is false and skip retrieval.
+  it("frames SEARCH BEFORE REFUSING as mandatory, not conditional", () => {
+    expect(prompt).toMatch(/factual question/i);
+    // Drop the softer conditional framing that lets the model opt out by
+    // deciding "no other tool obviously matches" is false.
+    expect(prompt).not.toMatch(/no other tool obviously matches/i);
+    // Must contain a strong imperative — "never", "must", or "always".
+    expect(prompt).toMatch(/never (say|refuse|decline|answer)|must (call|search|retrieve|trigger)|always (call|search|retrieve)/i);
+  });
+
+  // Finance/health/legal/personal — the topic doesn't matter. Retrieval
+  // decides. Haiku was refusing on topic alone; the prompt should tell it
+  // not to.
+  it("explicitly covers finance/health/legal topics in the retrieval rule", () => {
+    expect(prompt).toMatch(/finance|financial|health|legal/i);
+  });
 });
