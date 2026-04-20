@@ -7,6 +7,7 @@ import { SimpleMarkdown } from "./SimpleMarkdown";
 import { WeatherPill, WeatherPillSkeleton, WeatherPillEmpty } from "./WeatherPill";
 import { WeatherExpanded } from "./WeatherExpanded";
 import type { DisplayHint, WeatherData } from "@brett/types";
+import { useDisplayTitle } from "./lib/demoMode";
 
 export interface OmnibarMessage {
   role: "user" | "assistant";
@@ -740,6 +741,16 @@ export function SearchResultRow({
   px?: string;
 }) {
   const metaLabel = getMetaLabel(item);
+  const demoKind = item.entityType === "item"
+    ? "thing"
+    : item.entityType === "calendar_event"
+      ? "calendar"
+      : null;
+  const shownTitle = useDisplayTitle(
+    demoKind ? item.entityId : null,
+    item.title,
+    demoKind ?? "thing",
+  );
   return (
     <button
       className={`w-full flex items-center gap-3 ${px} py-2.5 text-sm text-left transition-colors ${
@@ -752,7 +763,7 @@ export function SearchResultRow({
       <span className="text-[10px] text-white/30 uppercase flex-shrink-0">
         {getEntityTypeLabel(item)}
       </span>
-      <span className="truncate">{item.title}</span>
+      <span className="truncate">{shownTitle}</span>
       {metaLabel && (
         <span className="ml-auto text-[10px] text-white/30 flex-shrink-0">
           {metaLabel}

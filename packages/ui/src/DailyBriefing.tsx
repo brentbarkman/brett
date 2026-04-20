@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { X, RefreshCw, Loader2, Settings } from "lucide-react";
+import { displayTitle, useDemoMode } from "./lib/demoMode";
 
 interface OverdueItem {
   title: string;
@@ -151,6 +152,7 @@ export function DailyBriefing({
   onItemClick,
   assistantName = "Brett",
 }: DailyBriefingProps) {
+  useDemoMode();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -277,20 +279,23 @@ export function DailyBriefing({
               </p>
               {summary.overdueItems.length > 0 && (
                 <ul className="space-y-1">
-                  {summary.overdueItems.map((item, idx) => (
-                    <li
-                      key={idx}
-                      className="flex items-start gap-2 text-sm text-white/60 leading-relaxed"
-                    >
-                      <span className="text-amber-500/50 mt-1">•</span>
-                      <span>
-                        {item.title}{" "}
-                        <span className="text-white/30">
-                          (due {item.dueDate})
+                  {summary.overdueItems.map((item, idx) => {
+                    const matchedId = titleMap.get(item.title.toLowerCase())?.id;
+                    return (
+                      <li
+                        key={idx}
+                        className="flex items-start gap-2 text-sm text-white/60 leading-relaxed"
+                      >
+                        <span className="text-amber-500/50 mt-1">•</span>
+                        <span>
+                          {displayTitle(matchedId ?? item.title, item.title, "thing")}{" "}
+                          <span className="text-white/30">
+                            (due {item.dueDate})
+                          </span>
                         </span>
-                      </span>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </>

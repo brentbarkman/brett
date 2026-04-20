@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Zap, BookOpen, Check, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
 import type { Thing } from "@brett/types";
 import { useDraggable } from "@dnd-kit/core";
+import { useDisplayTitle } from "./lib/demoMode";
 
 interface InboxItemRowProps {
   thing: Thing;
@@ -40,6 +41,7 @@ export function InboxItemRow({
   onInstallUpdate,
 }: InboxItemRowProps) {
   const [completing, setCompleting] = useState(false);
+  const shownTitle = useDisplayTitle(thing.id, thing.title, "thing");
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
     data: {
@@ -136,7 +138,7 @@ export function InboxItemRow({
       {/* Title + provenance */}
       <div className="flex-1 min-w-0">
         <span className="text-sm text-white/90 truncate block">
-          {thing.title}
+          {shownTitle}
         </span>
         {((thing.source === "scout" && thing.scoutName) ||
           (thing.source === "Granola" && thing.meetingNoteTitle)) && (
