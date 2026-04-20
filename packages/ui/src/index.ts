@@ -60,6 +60,3 @@ export { ScoutMemoryTab } from "./ScoutMemoryTab";
 export { WeatherPill, WeatherPillSkeleton, WeatherPillEmpty } from "./WeatherPill";
 export { WeatherExpanded } from "./WeatherExpanded";
 export { RecentFindingsPanel, type RecentFindingItem } from "./RecentFindingsPanel";
-export { DemoModeBadge } from "./DemoModeBadge";
-export { demoMode, useDemoMode, displayTitle, useDisplayTitle } from "./lib/demoMode";
-export type { DemoTitleKind } from "./lib/demoMode";

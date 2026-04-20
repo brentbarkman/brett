@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { ExternalLink, MapPin, Clock, Users } from "lucide-react";
 import type { CalendarEventDisplay } from "@brett/types";
 import type { NextUpTimerState } from "./useNextUpTimer";
-import { useDisplayTitle } from "./lib/demoMode";
 
 interface NextUpCardProps {
   event: CalendarEventDisplay;
@@ -29,7 +28,6 @@ function CompactCard({
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const isNow = timer.isHappening;
-  const shownTitle = useDisplayTitle(event.id, event.title, "calendar");
 
   return (
     <div
@@ -59,7 +57,7 @@ function CompactCard({
         </span>
       </div>
 
-      <div className="text-sm font-semibold text-white mb-1 truncate">{shownTitle}</div>
+      <div className="text-sm font-semibold text-white mb-1 truncate">{event.title}</div>
 
       <div className="text-[11px] text-white/50 truncate">
         {formatTimeRange(event.startTime, event.endTime)}
@@ -122,7 +120,6 @@ function ExpandedCard({
   timer: NextUpTimerState;
   onEventClick: () => void;
 }) {
-  const shownTitle = useDisplayTitle(event.id, event.title, "calendar");
   return (
     <div
       onClick={onEventClick}
@@ -152,7 +149,7 @@ function ExpandedCard({
       </div>
 
       <h3 className="text-xl font-semibold text-white mb-3 group-hover:text-amber-50 transition-colors">
-        {shownTitle}
+        {event.title}
       </h3>
 
       <div className="flex flex-wrap gap-4 text-xs text-white/50 mb-4">

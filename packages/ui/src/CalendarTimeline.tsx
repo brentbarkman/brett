@@ -4,7 +4,6 @@ import type {
   CalendarEventDisplay,
   CalendarRsvpStatus,
 } from "@brett/types";
-import { displayTitle, useDemoMode } from "./lib/demoMode";
 
 // TODO: Import EventHoverTooltip once available
 // import { EventHoverTooltip } from "./EventHoverTooltip";
@@ -159,7 +158,6 @@ export function CalendarTimeline({
   onToday,
   assistantName = "Brett",
 }: CalendarTimelineProps) {
-  useDemoMode();
   // Empty state: clean timeline grid + connect CTA — no fake events
   if (!isLoading && events.length === 0 && onConnect && onDismiss) {
     const now = new Date();
@@ -490,7 +488,7 @@ export function CalendarTimeline({
                 >
                   <div className="flex justify-between items-start">
                     <h4 className="text-xs font-semibold truncate pr-4">
-                      {displayTitle(event.id, event.title, "calendar")}
+                      {event.title}
                     </h4>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {event.meetingLink && (

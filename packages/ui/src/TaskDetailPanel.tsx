@@ -18,7 +18,6 @@ import { LinkedItemsList } from "./LinkedItemsList";
 import type { SuggestionItem } from "./LinkedItemsList";
 import { BrettThread } from "./BrettThread";
 import type { BrettThreadMessage } from "./BrettThread";
-import { useDisplayTitle, useDemoMode } from "./lib/demoMode";
 
 interface TaskDetailPanelProps {
   detail: ThingDetail;
@@ -114,8 +113,6 @@ export function TaskDetailPanel({
   const isApproval = isNewsletterApproval(detail.contentMetadata);
   const pendingNewsletterId = isApproval ? (detail.contentMetadata as any).pendingNewsletterId : undefined;
 
-  const { enabled: demoOn } = useDemoMode();
-  const shownTitle = useDisplayTitle(detail.id, detail.title, "thing");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(detail.title);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -184,8 +181,8 @@ export function TaskDetailPanel({
             </div>
           </div>
 
-          {/* Editable title (read-only when demo mode is on) */}
-          {editingTitle && !demoOn ? (
+          {/* Editable title */}
+          {editingTitle ? (
             <input
               ref={titleRef}
               value={titleValue}
@@ -202,12 +199,10 @@ export function TaskDetailPanel({
             />
           ) : (
             <h2
-              onClick={demoOn ? undefined : () => setEditingTitle(true)}
-              className={`text-2xl font-semibold text-white leading-tight pb-1 transition-colors ${
-                demoOn ? "" : "cursor-text hover:border-b hover:border-white/20"
-              }`}
+              onClick={() => setEditingTitle(true)}
+              className="text-2xl font-semibold text-white leading-tight cursor-text hover:border-b hover:border-white/20 pb-1 transition-colors"
             >
-              {shownTitle}
+              {detail.title}
             </h2>
           )}
 
