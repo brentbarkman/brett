@@ -71,6 +71,27 @@ export function useUpcomingThings() {
   return useThings({ status: "active", dueAfter: getTodayUTC().toISOString() });
 }
 
+/** Shape a CreateItemInput into a provisional Thing for optimistic caches. */
+function provisionalThing(input: CreateItemInput, tempId: string): Thing {
+  return {
+    id: tempId,
+    type: (input.type as Thing["type"]) ?? "task",
+    title: input.title,
+    list: "Inbox",
+    listId: input.listId ?? null,
+    status: (input.status as Thing["status"]) ?? "active",
+    source: input.source ?? "manual",
+    urgency: "later",
+    dueDate: input.dueDate,
+    dueDatePrecision: input.dueDatePrecision,
+    sourceUrl: input.sourceUrl,
+    isCompleted: false,
+    createdAt: new Date().toISOString(),
+    contentType: input.contentType,
+    sourceId: input.sourceId,
+  };
+}
+
 export function useCreateThing() {
   const qc = useQueryClient();
 
@@ -80,6 +101,29 @@ export function useCreateThing() {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    // Optimistically insert into the inbox cache so the row appears
+    // instantly. Bare items (no listId, no dueDate) are inbox-bound; for
+    // everything else we still wait for the server-side refetch, because
+    // predicting which filtered list queries the new item belongs to gets
+    // quickly unsafe.
+    onMutate: async (input) => {
+      const isInboxBound = !input.listId && !input.dueDate;
+      if (!isInboxBound) return { prevInbox: undefined, tempId: undefined };
+
+      await qc.cancelQueries({ queryKey: ["inbox"] });
+      const prevInbox = qc.getQueryData<InboxResponse>(["inbox"]);
+      const tempId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const provisional = provisionalThing(input, tempId);
+      qc.setQueryData<InboxResponse>(["inbox"], {
+        visible: [provisional, ...(prevInbox?.visible ?? [])],
+      });
+      return { prevInbox, tempId };
+    },
+    onError: (_err, _input, ctx) => {
+      if (ctx?.prevInbox !== undefined) {
+        qc.setQueryData<InboxResponse>(["inbox"], ctx.prevInbox);
+      }
+    },
     onSuccess: () => {
       invalidateAllThings(qc);
     },
@@ -95,7 +139,58 @@ export function useUpdateThing() {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
-    onSuccess: (_, variables) => {
+    // Patch cached views in place so edits (e.g. title) render instantly
+    // instead of flashing back to the server value while refetch completes.
+    onMutate: async ({ id, ...patch }) => {
+      await qc.cancelQueries({ queryKey: ["thing-detail", id] });
+      await qc.cancelQueries({ queryKey: ["inbox"] });
+      await qc.cancelQueries({ queryKey: ["things"] });
+
+      // `UpdateItemInput` permits `null` for clear-value semantics, but the
+      // view-model `Thing` uses `undefined` for absent fields. Normalise
+      // before merging into cache so optimistic entries stay well-typed.
+      const thingPatch = Object.fromEntries(
+        Object.entries(patch).map(([k, v]) => [k, v === null ? undefined : v]),
+      ) as Partial<Thing>;
+
+      const prevDetail = qc.getQueryData<ThingDetail>(["thing-detail", id]);
+      if (prevDetail) {
+        qc.setQueryData<ThingDetail>(["thing-detail", id], { ...prevDetail, ...thingPatch });
+      }
+
+      const prevInbox = qc.getQueryData<InboxResponse>(["inbox"]);
+      if (prevInbox) {
+        qc.setQueryData<InboxResponse>(["inbox"], {
+          visible: prevInbox.visible.map((t) => (t.id === id ? { ...t, ...thingPatch } : t)),
+        });
+      }
+
+      const prevThingLists: Array<[readonly unknown[], Thing[] | undefined]> = [];
+      for (const [key, data] of qc.getQueriesData<Thing[]>({ queryKey: ["things"] })) {
+        prevThingLists.push([key, data]);
+        if (!data) continue;
+        qc.setQueryData<Thing[]>(
+          key,
+          data.map((t) => (t.id === id ? { ...t, ...thingPatch } : t)),
+        );
+      }
+
+      return { prevDetail, prevInbox, prevThingLists };
+    },
+    onError: (_err, variables, ctx) => {
+      if (ctx?.prevDetail) {
+        qc.setQueryData<ThingDetail>(["thing-detail", variables.id], ctx.prevDetail);
+      }
+      if (ctx?.prevInbox !== undefined) {
+        qc.setQueryData<InboxResponse>(["inbox"], ctx.prevInbox);
+      }
+      if (ctx?.prevThingLists) {
+        for (const [key, data] of ctx.prevThingLists) {
+          qc.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: (_data, _err, variables) => {
       qc.invalidateQueries({ queryKey: ["things"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
       qc.invalidateQueries({ queryKey: ["thing-detail", variables.id] });
