@@ -8,6 +8,7 @@ const INTENT_GROUPS: Record<string, string[]> = {
     "search_things", "get_item_detail", "list_today", "list_upcoming",
     "list_inbox", "get_list_items", "get_calendar_events", "get_next_event",
     "up_next", "get_stats", "list_scouts",
+    "get_meeting_notes", "get_meeting_action_items", "analyze_meeting_pattern",
   ],
   create: [
     "create_task", "create_content", "create_list", "create_scout",

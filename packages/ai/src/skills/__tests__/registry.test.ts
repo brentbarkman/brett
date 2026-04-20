@@ -104,4 +104,33 @@ describe("SkillRegistry", () => {
     expect(registry.toToolDefinitions()).toHaveLength(0);
     expect(registry.getNoKeySkills()).toHaveLength(0);
   });
+
+  describe("toToolDefinitionsForMessage — intent-routed meeting queries", () => {
+    // Regression: the "query" intent group filters tools before they reach
+    // the LLM. Meeting-retrieval skills (get_meeting_notes, get_meeting_action_items)
+    // were omitted from the group, so the LLM never saw them for messages like
+    // "what were the notes from my Friday meeting with Yves" and fell back to
+    // wrong tools (get_item_detail / search_things), failing to retrieve notes
+    // that were already correctly stored and linked.
+    beforeEach(() => {
+      registry.register(makeSkill({ name: "get_meeting_notes" }));
+      registry.register(makeSkill({ name: "get_meeting_action_items" }));
+      registry.register(makeSkill({ name: "search_things" }));
+      registry.register(makeSkill({ name: "get_item_detail" }));
+    });
+
+    it("exposes get_meeting_notes to the LLM for a meeting-notes query", () => {
+      const tools = registry.toToolDefinitionsForMessage(
+        "what were the notes from my Friday meeting with Yves",
+      );
+      expect(tools.map((t) => t.name)).toContain("get_meeting_notes");
+    });
+
+    it("exposes get_meeting_action_items to the LLM for an action-items query", () => {
+      const tools = registry.toToolDefinitionsForMessage(
+        "show me the action items from my last meeting",
+      );
+      expect(tools.map((t) => t.name)).toContain("get_meeting_action_items");
+    });
+  });
 });
