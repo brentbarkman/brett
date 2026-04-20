@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { calendarCandidateWindow } from "../granola-sync.js";
+import {
+  calendarCandidateWindow,
+  resolveMeetingTimes,
+} from "../granola-sync.js";
 
 // Granola's meeting list API returns start/end times that do not reliably
 // line up with the corresponding Google Calendar event times. Observed offsets
@@ -64,5 +67,45 @@ describe("calendarCandidateWindow", () => {
       { start_time: "2026-04-17T10:00:00Z" },
     ]);
     expect(lte.getTime()).toBeGreaterThan(gte.getTime());
+  });
+});
+
+// Granola's list_meetings / get_meetings payload carries a single
+// human-readable `date` string — no end time, no duration, no timezone
+// indicator (confirmed via direct MCP probe, e.g. `date="Apr 17, 2026
+// 10:00 AM"`). Our ingest layer parses that with `new Date()` which
+// interprets it as server-local (UTC on Railway), producing times that
+// drift 4-7h from the real Google Calendar event depending on the
+// meeting's original organizer timezone. Separately, we synthesize
+// `end_time` = `start_time`, yielding zero-width intervals.
+//
+// Fix: when a calendar event matched, trust its startTime/endTime.
+// When nothing matched, keep Granola's start as a sort-key fallback
+// and default end = start + 30min so durations aren't zero.
+
+describe("resolveMeetingTimes", () => {
+  const granolaStart = new Date("2026-04-17T10:00:00Z");
+
+  it("uses the linked calendar event's times when matched", () => {
+    const matched = {
+      startTime: new Date("2026-04-17T17:00:00Z"),
+      endTime: new Date("2026-04-17T17:30:00Z"),
+    };
+    const result = resolveMeetingTimes(granolaStart, matched);
+    expect(result.startedAt).toEqual(matched.startTime);
+    expect(result.endedAt).toEqual(matched.endTime);
+  });
+
+  it("falls back to Granola start + 30min when nothing matched", () => {
+    const result = resolveMeetingTimes(granolaStart, null);
+    expect(result.startedAt).toEqual(granolaStart);
+    expect(result.endedAt.getTime() - result.startedAt.getTime()).toBe(
+      30 * 60 * 1000,
+    );
+  });
+
+  it("never returns a zero-width interval even if Granola provides one", () => {
+    const result = resolveMeetingTimes(granolaStart, null);
+    expect(result.endedAt.getTime()).toBeGreaterThan(result.startedAt.getTime());
   });
 });
