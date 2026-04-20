@@ -43,6 +43,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>GIDClientID</key>
 	<string>1055113004459-1go91rointqkletog9sc2o4t3ivfph6u.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
