@@ -72,4 +72,58 @@ final class UserProfileStore {
         context.delete(existing)
         try? context.save()
     }
+
+    /// Fetch `/users/me` and hydrate the local cache.
+    ///
+    /// Nothing populates the store on cold launch — it's only written by the
+    /// settings screens that edit a field. That meant a brand-new install
+    /// would open Settings and see `email: "—"` because `current` was nil
+    /// and `AuthManager.currentUser` hadn't necessarily refreshed yet.
+    /// Call this from any settings screen that displays profile fields.
+    func refresh(client: APIClient = .shared) async {
+        struct MeResponse: Decodable {
+            let id: String
+            let email: String
+            let name: String?
+            let avatarUrl: String?
+            let assistantName: String?
+            let timezone: String?
+            let timezoneAuto: Bool?
+            let city: String?
+            let countryCode: String?
+            let tempUnit: String?
+            let weatherEnabled: Bool?
+            let backgroundStyle: String?
+            let pinnedBackground: String?
+            let avgBusynessScore: Double?
+        }
+
+        do {
+            let me: MeResponse = try await client.request(
+                path: "/users/me",
+                method: "GET"
+            )
+            var payload: [String: Any] = [
+                "id": me.id,
+                "email": me.email,
+            ]
+            if let n = me.name { payload["name"] = n }
+            if let a = me.avatarUrl { payload["avatarUrl"] = a }
+            if let an = me.assistantName { payload["assistantName"] = an }
+            if let tz = me.timezone { payload["timezone"] = tz }
+            if let tza = me.timezoneAuto { payload["timezoneAuto"] = tza }
+            if let c = me.city { payload["city"] = c }
+            if let cc = me.countryCode { payload["countryCode"] = cc }
+            if let tu = me.tempUnit { payload["tempUnit"] = tu }
+            if let we = me.weatherEnabled { payload["weatherEnabled"] = we }
+            if let bs = me.backgroundStyle { payload["backgroundStyle"] = bs }
+            payload["pinnedBackground"] = me.pinnedBackground as Any
+            if let abs = me.avgBusynessScore { payload["avgBusynessScore"] = abs }
+            update(from: payload)
+        } catch {
+            // Transient network / 401 — leave existing profile in place so
+            // the UI doesn't flicker out. AuthManager handles real 401s
+            // (zombie token → sign out) on its own refresh path.
+        }
+    }
 }

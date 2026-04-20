@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { CalendarEventRecord } from "@brett/types";
 import { getEventGlassColor } from "@brett/utils";
+import { displayTitle, useDemoMode } from "@brett/ui";
 
 export interface CalendarMonthViewProps {
   month: Date;
@@ -51,6 +52,7 @@ function formatTime(isoStr: string): string {
 }
 
 export function CalendarMonthView({ month, events, onEventClick, onDayClick }: CalendarMonthViewProps) {
+  useDemoMode();
   const today = new Date();
   const weeks = getMonthGrid(month);
   const currentMonth = month.getMonth();
@@ -131,7 +133,7 @@ export function CalendarMonthView({ month, events, onEventClick, onDayClick }: C
                         {!event.isAllDay && (
                           <span className="opacity-60 mr-0.5">{formatTime(event.startTime)}</span>
                         )}
-                        {event.title}
+                        {displayTitle(event.id, event.title, "calendar")}
                       </button>
                       );
                     })}

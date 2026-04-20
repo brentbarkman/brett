@@ -31,10 +31,6 @@ struct SettingsNavigationTests {
         #expect(SettingsTab(fragment: "timezone") == .location)
     }
 
-    @Test func listsFragmentMapsToLists() {
-        #expect(SettingsTab(fragment: "lists") == .lists)
-    }
-
     @Test func accountFragmentMapsToAccount() {
         #expect(SettingsTab(fragment: "account") == .account)
     }

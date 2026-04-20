@@ -11,6 +11,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useClickOutside } from "./useClickOutside";
+import { DemoModeBadge } from "./DemoModeBadge";
 
 interface LeftNavUser {
   name: string | null;
@@ -110,6 +111,7 @@ export function LeftNav({
       ${isCollapsed ? "w-[68px] px-2" : "w-[220px] px-4"}
     `}
     >
+      <DemoModeBadge isCollapsed={isCollapsed} />
       {/* Main Links */}
       <div className="space-y-1 mb-8">
         <NavItem

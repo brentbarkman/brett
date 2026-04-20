@@ -83,15 +83,13 @@ struct SearchSheet: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(BrettColors.textSecondary)
 
-            TextField(
-                "",
-                text: $store.query,
-                prompt: Text("Search everything").foregroundStyle(BrettColors.textPlaceholder)
-            )
-            .font(.system(size: 17))
-            .foregroundStyle(.white)
-            .tint(BrettColors.gold)
-            .focused($isFocused)
+            NeutralPlaceholder("Search everything", isEmpty: store.query.isEmpty) {
+                TextField("", text: $store.query)
+                    .font(.system(size: 17))
+                    .foregroundStyle(.white)
+                    .tint(BrettColors.gold)
+                    .focused($isFocused)
+            }
             .submitLabel(.search)
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)

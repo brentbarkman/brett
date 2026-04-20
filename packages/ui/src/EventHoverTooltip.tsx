@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { MapPin, Users, RefreshCw, Check, HelpCircle, X } from "lucide-react";
 import type { CalendarEventDisplay, CalendarRsvpStatus } from "@brett/types";
+import { useDisplayTitle } from "./lib/demoMode";
 
 interface EventHoverTooltipProps {
   event: CalendarEventDisplay;
@@ -63,6 +64,7 @@ export function EventHoverTooltip({
   const triggerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const shownTitle = useDisplayTitle(event.id, event.title, "calendar");
 
   const updatePosition = () => {
     if (!triggerRef.current) return;
@@ -159,7 +161,7 @@ export function EventHoverTooltip({
             <div className="p-3">
               {/* Compact: always visible */}
               <h4 className="text-sm font-semibold text-white leading-tight mb-1">
-                {event.title}
+                {shownTitle}
               </h4>
               <div className="flex items-center gap-2 text-xs text-white/60 mb-1">
                 <span>

@@ -71,6 +71,15 @@ struct BrettApp: App {
                 .environment(authManager)
                 .environment(APIClient.shared)
                 .preferredColorScheme(.dark)
+                // Global accent = gold. Without this, iOS system chrome
+                // (TextField `prompt:` text, autofill suggestions, focus
+                // rings, picker accents, Link tint) renders in system
+                // blue — visually identical to cerulean. Cerulean is
+                // reserved for Brett AI surfaces, which opt in via
+                // explicit `foregroundStyle(BrettColors.cerulean)` or
+                // `StickyCardSection(tint: ...)` overrides — those aren't
+                // affected by this modifier.
+                .tint(BrettColors.gold)
                 // GoogleSignIn-iOS finishes its OAuth dance by redirecting to
                 // the reversed client-ID URL scheme. The SDK needs to see
                 // that redirect to complete the pending sign-in call, so we

@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// Account management: read-only email, export, and delete.
+/// Account management: read-only email + delete.
 ///
 /// Delete calls `DELETE /api/auth/delete-user` (bearer auth, no body). The
 /// user must type exactly "DELETE" to confirm — matching the desktop client's
 /// confirmation UX.
 ///
-/// Export is desktop-only (Electron file-save dialog); we surface a
-/// descriptive message here rather than a fake endpoint.
+/// Data export is intentionally absent here — it's a desktop-only surface
+/// (Electron file-save dialog), and the iOS settings shouldn't advertise
+/// a feature it can't deliver.
 struct AccountSettingsView: View {
     @Bindable var store: UserProfileStore
     @Environment(AuthManager.self) private var authManager
@@ -15,7 +16,6 @@ struct AccountSettingsView: View {
     @State private var confirmText: String = ""
     @State private var showDeleteDialog = false
     @State private var isDeleting = false
-    @State private var infoMessage: String?
     @State private var errorMessage: String?
 
     private let client: APIClient
@@ -27,16 +27,6 @@ struct AccountSettingsView: View {
 
     var body: some View {
         BrettSettingsScroll {
-            if let infoMessage {
-                BrettSettingsSection {
-                    Text(infoMessage)
-                        .font(BrettTypography.taskMeta)
-                        .foregroundStyle(BrettColors.textCardTitle)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                }
-            }
-
             if let errorMessage {
                 BrettSettingsSection {
                     Text(errorMessage)
@@ -74,22 +64,6 @@ struct AccountSettingsView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                 }
-            }
-
-            BrettSettingsSection("Data") {
-                Button {
-                    infoMessage = "Export is available on the desktop app."
-                } label: {
-                    HStack {
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundStyle(BrettColors.gold)
-                        Text("Export my data")
-                            .foregroundStyle(BrettColors.textCardTitle)
-                        Spacer()
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
             }
 
             BrettSettingsSection("Danger Zone") {
