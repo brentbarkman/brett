@@ -26,6 +26,19 @@ export function useDeleteUserFact() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/brett/memory/facts/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["user-facts"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["user-facts"] });
+      const prev = qc.getQueryData<UserFactsResponse>(["user-facts"]);
+      if (prev) {
+        qc.setQueryData<UserFactsResponse>(["user-facts"], {
+          facts: prev.facts.filter((f) => f.id !== id),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prev !== undefined) qc.setQueryData(["user-facts"], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["user-facts"] }),
   });
 }

@@ -59,7 +59,23 @@ export function useUpdateGranolaPreferences() {
         method: "PATCH",
         body: JSON.stringify(prefs),
       }),
-    onSuccess: () => {
+    onMutate: async (prefs) => {
+      await queryClient.cancelQueries({ queryKey: ["granola", "account"] });
+      const prev = queryClient.getQueryData<GranolaAccountStatus>(["granola", "account"]);
+      if (prev?.account) {
+        queryClient.setQueryData<GranolaAccountStatus>(["granola", "account"], {
+          ...prev,
+          account: { ...prev.account, ...prefs },
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _prefs, ctx) => {
+      if (ctx?.prev !== undefined) {
+        queryClient.setQueryData(["granola", "account"], ctx.prev);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["granola", "account"] });
     },
   });

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
-import type { Attachment } from "@brett/types";
+import type { Attachment, ThingDetail } from "@brett/types";
 
 export function useUploadAttachment() {
   const qc = useQueryClient();
@@ -40,7 +40,23 @@ export function useDeleteAttachment() {
       apiFetch(`/things/${itemId}/attachments/${attachmentId}`, {
         method: "DELETE",
       }),
-    onSuccess: (_, { itemId }) => {
+    onMutate: async ({ itemId, attachmentId }) => {
+      await qc.cancelQueries({ queryKey: ["thing-detail", itemId] });
+      const prev = qc.getQueryData<ThingDetail>(["thing-detail", itemId]);
+      if (prev) {
+        qc.setQueryData<ThingDetail>(["thing-detail", itemId], {
+          ...prev,
+          attachments: prev.attachments.filter((a) => a.id !== attachmentId),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, { itemId }, ctx) => {
+      if (ctx?.prev !== undefined) {
+        qc.setQueryData<ThingDetail>(["thing-detail", itemId], ctx.prev);
+      }
+    },
+    onSettled: (_data, _err, { itemId }) => {
       qc.invalidateQueries({ queryKey: ["thing-detail", itemId] });
     },
   });

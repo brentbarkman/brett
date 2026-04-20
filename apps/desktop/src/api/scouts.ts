@@ -101,6 +101,32 @@ export function useCreateScout() {
   });
 }
 
+/** Patch every cached scout list and the per-scout detail in place. */
+function patchScoutInCaches(qc: ReturnType<typeof useQueryClient>, id: string, patch: Partial<Scout>) {
+  const prevDetail = qc.getQueryData<Scout>(["scout", id]);
+  if (prevDetail) {
+    qc.setQueryData<Scout>(["scout", id], { ...prevDetail, ...patch });
+  }
+  const prevLists: Array<[readonly unknown[], Scout[] | undefined]> = [];
+  for (const [key, data] of qc.getQueriesData<Scout[]>({ queryKey: ["scouts"] })) {
+    if (!data) continue;
+    prevLists.push([key, data]);
+    qc.setQueryData<Scout[]>(key, data.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+  return { prevDetail, prevLists };
+}
+
+function restoreScoutCaches(
+  qc: ReturnType<typeof useQueryClient>,
+  id: string,
+  ctx: { prevDetail?: Scout; prevLists?: Array<[readonly unknown[], Scout[] | undefined]> } | undefined,
+) {
+  if (ctx?.prevDetail !== undefined) qc.setQueryData<Scout>(["scout", id], ctx.prevDetail);
+  if (ctx?.prevLists) {
+    for (const [key, data] of ctx.prevLists) qc.setQueryData(key, data);
+  }
+}
+
 export function useUpdateScout() {
   const qc = useQueryClient();
 
@@ -110,9 +136,15 @@ export function useUpdateScout() {
         method: "PUT",
         body: JSON.stringify(data),
       }),
-    onSuccess: (_, variables) => {
+    onMutate: async ({ id, ...patch }) => {
+      await qc.cancelQueries({ queryKey: ["scout", id] });
+      await qc.cancelQueries({ queryKey: ["scouts"] });
+      return patchScoutInCaches(qc, id, patch as Partial<Scout>);
+    },
+    onError: (_err, { id }, ctx) => restoreScoutCaches(qc, id, ctx),
+    onSettled: (_data, _err, { id }) => {
       qc.invalidateQueries({ queryKey: ["scouts"] });
-      qc.invalidateQueries({ queryKey: ["scout", variables.id] });
+      qc.invalidateQueries({ queryKey: ["scout", id] });
     },
   });
 }
@@ -123,7 +155,13 @@ export function usePauseScout() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<Scout>(`/scouts/${id}/pause`, { method: "POST" }),
-    onSuccess: (_, id) => {
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["scout", id] });
+      await qc.cancelQueries({ queryKey: ["scouts"] });
+      return patchScoutInCaches(qc, id, { status: "paused" });
+    },
+    onError: (_err, id, ctx) => restoreScoutCaches(qc, id, ctx),
+    onSettled: (_data, _err, id) => {
       qc.invalidateQueries({ queryKey: ["scouts"] });
       qc.invalidateQueries({ queryKey: ["scout", id] });
     },
@@ -136,7 +174,13 @@ export function useResumeScout() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<Scout>(`/scouts/${id}/resume`, { method: "POST" }),
-    onSuccess: (_, id) => {
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["scout", id] });
+      await qc.cancelQueries({ queryKey: ["scouts"] });
+      return patchScoutInCaches(qc, id, { status: "active" });
+    },
+    onError: (_err, id, ctx) => restoreScoutCaches(qc, id, ctx),
+    onSettled: (_data, _err, id) => {
       qc.invalidateQueries({ queryKey: ["scouts"] });
       qc.invalidateQueries({ queryKey: ["scout", id] });
     },
@@ -149,9 +193,25 @@ export function useDeleteScout() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/scouts/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["scouts"] });
+      const prevLists: Array<[readonly unknown[], Scout[] | undefined]> = [];
+      for (const [key, data] of qc.getQueriesData<Scout[]>({ queryKey: ["scouts"] })) {
+        if (!data) continue;
+        prevLists.push([key, data]);
+        qc.setQueryData<Scout[]>(key, data.filter((s) => s.id !== id));
+      }
+      return { prevLists };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prevLists) {
+        for (const [key, data] of ctx.prevLists) qc.setQueryData(key, data);
+      }
+    },
+    onSettled: (_data, _err, id) => {
       qc.invalidateQueries({ queryKey: ["scouts"] });
       qc.invalidateQueries({ queryKey: ["scout-budget"] });
+      qc.removeQueries({ queryKey: ["scout", id] });
     },
   });
 }
@@ -221,7 +281,22 @@ export function useDeleteScoutMemory() {
   return useMutation({
     mutationFn: ({ scoutId, memoryId }: { scoutId: string; memoryId: string }) =>
       apiFetch(`/scouts/${scoutId}/memories/${memoryId}`, { method: "DELETE" }),
-    onSuccess: (_, variables) => {
+    onMutate: async ({ scoutId, memoryId }) => {
+      await qc.cancelQueries({ queryKey: ["scout-memories", scoutId] });
+      const prevEntries: Array<[readonly unknown[], ScoutMemory[] | undefined]> = [];
+      for (const [key, data] of qc.getQueriesData<ScoutMemory[]>({ queryKey: ["scout-memories", scoutId] })) {
+        if (!data) continue;
+        prevEntries.push([key, data]);
+        qc.setQueryData<ScoutMemory[]>(key, data.filter((m) => m.id !== memoryId));
+      }
+      return { prevEntries };
+    },
+    onError: (_err, _input, ctx) => {
+      if (ctx?.prevEntries) {
+        for (const [key, data] of ctx.prevEntries) qc.setQueryData(key, data);
+      }
+    },
+    onSettled: (_data, _err, variables) => {
       qc.invalidateQueries({ queryKey: ["scout-memories", variables.scoutId] });
     },
   });

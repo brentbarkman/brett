@@ -108,7 +108,21 @@ export function useUpdateCalendarEventNotes() {
         method: "PUT",
         body: JSON.stringify({ content }),
       }),
-    onSuccess: (_, { eventId }) => {
+    // Prevents the same edit-flash as the task-title case: write the new
+    // content into cache before the server round-trip so the notes field
+    // stays rendered with what the user just typed.
+    onMutate: async ({ eventId, content }) => {
+      await qc.cancelQueries({ queryKey: ["calendar-event-notes", eventId] });
+      const prev = qc.getQueryData<CalendarEventNotesResponse>(["calendar-event-notes", eventId]);
+      qc.setQueryData<CalendarEventNotesResponse>(["calendar-event-notes", eventId], { content });
+      return { prev };
+    },
+    onError: (_err, { eventId }, ctx) => {
+      if (ctx?.prev !== undefined) {
+        qc.setQueryData<CalendarEventNotesResponse>(["calendar-event-notes", eventId], ctx.prev);
+      }
+    },
+    onSettled: (_data, _err, { eventId }) => {
       qc.invalidateQueries({ queryKey: ["calendar-event-notes", eventId] });
       qc.invalidateQueries({ queryKey: ["calendar-event-detail", eventId] });
     },

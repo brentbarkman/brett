@@ -91,7 +91,23 @@ export function useToggleMeetingNotes() {
           body: JSON.stringify({ enabled }),
         },
       ),
-    onSuccess: () => {
+    onMutate: async ({ accountId, enabled }) => {
+      await qc.cancelQueries({ queryKey: ["calendar-accounts"] });
+      const prev = qc.getQueryData<ConnectedCalendarAccount[]>(["calendar-accounts"]);
+      if (prev) {
+        qc.setQueryData<ConnectedCalendarAccount[]>(
+          ["calendar-accounts"],
+          prev.map((a) => (a.id === accountId ? { ...a, meetingNotesEnabled: enabled } : a)),
+        );
+      }
+      return { prev };
+    },
+    onError: (_err, _input, ctx) => {
+      if (ctx?.prev !== undefined) {
+        qc.setQueryData<ConnectedCalendarAccount[]>(["calendar-accounts"], ctx.prev);
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
     },
   });
@@ -116,7 +132,32 @@ export function useToggleCalendarVisibility() {
           body: JSON.stringify({ isVisible }),
         },
       ),
-    onSuccess: () => {
+    onMutate: async ({ accountId, calendarId, isVisible }) => {
+      await qc.cancelQueries({ queryKey: ["calendar-accounts"] });
+      const prev = qc.getQueryData<ConnectedCalendarAccount[]>(["calendar-accounts"]);
+      if (prev) {
+        qc.setQueryData<ConnectedCalendarAccount[]>(
+          ["calendar-accounts"],
+          prev.map((a) =>
+            a.id === accountId
+              ? {
+                  ...a,
+                  calendars: a.calendars.map((c) =>
+                    c.id === calendarId ? { ...c, isVisible } : c,
+                  ),
+                }
+              : a,
+          ),
+        );
+      }
+      return { prev };
+    },
+    onError: (_err, _input, ctx) => {
+      if (ctx?.prev !== undefined) {
+        qc.setQueryData<ConnectedCalendarAccount[]>(["calendar-accounts"], ctx.prev);
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
       qc.invalidateQueries({ queryKey: ["calendar-events"] });
     },
