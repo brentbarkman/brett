@@ -16,7 +16,7 @@ Brent demos Brett on calls. Real task titles and calendar events contain private
 
 ## UX
 
-**Trigger:** `Cmd+Option+D` toggles demo mode on/off.
+**Trigger:** `Cmd+Shift+D` toggles demo mode on/off.
 
 **Indicator:** A small gold pill labeled `DEMO MODE` in the top-right of the sidebar header. Clickable — toggles off. Prevents the two failure modes: "I forgot it was on" (embarrassing next time the app is opened in front of someone) and "I forgot it was off" (started a screenshare, titles are live).
 
@@ -55,7 +55,7 @@ Pool size rationale: with ~60 phrases and a good hash, collisions across a demo-
 
 ### Trigger wiring
 
-Register `Cmd+Option+D` in `apps/desktop/src/App.tsx` alongside the existing keyboard handlers. Match the existing pattern (`metaKey && altKey && e.key === 'd'`). Call `demoMode.toggle()`. No Electron `globalShortcut` — in-window only, which is what we want (shortcut only fires when Brett is focused).
+Register `Cmd+Shift+D` in `apps/desktop/src/App.tsx` alongside the existing keyboard handlers. Match the existing pattern (`metaKey && altKey && e.key === 'd'`). Call `demoMode.toggle()`. No Electron `globalShortcut` — in-window only, which is what we want (shortcut only fires when Brett is focused).
 
 ### Indicator placement
 
@@ -85,7 +85,7 @@ Everywhere a thing title or calendar event title is rendered today, replace `thi
 ## Data flow
 
 ```
-Cmd+Option+D
+Cmd+Shift+D
   → App.tsx keydown handler
   → demoMode.toggle()
   → localStorage write + listener fanout
@@ -107,7 +107,7 @@ Unit tests in `packages/ui/src/lib/demoMode.test.ts`:
 
 One integration test (desktop, if the existing test harness allows):
 - Render a ThingCard, assert real title is shown.
-- Fire Cmd+Option+D.
+- Fire Cmd+Shift+D.
 - Assert fake title is shown.
 - Fire again. Assert real title is back.
 
@@ -122,6 +122,6 @@ One integration test (desktop, if the existing test harness allows):
 ## Risks
 
 - **Forgetting to toggle off.** Mitigated by the always-visible gold `DEMO MODE` badge.
-- **Shortcut collision.** `Cmd+Option+D` is currently unused in Brett; confirm during implementation by grepping existing handlers.
+- **Shortcut collision.** `Cmd+Shift+D` is currently unused in Brett; confirm during implementation by grepping existing handlers.
 - **Performance.** `displayTitle` on the hot path for every list item. The `enabled === false` early return keeps this O(1) and allocation-free. The `enabled === true` path is one hash + one array index — also O(1).
 - **Test harness coverage.** The integration test assumes the desktop test setup renders `ThingCard` and can dispatch keyboard events. If that harness doesn't exist, ship the unit tests alone and verify the integration manually before merging.

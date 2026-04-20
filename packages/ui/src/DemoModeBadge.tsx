@@ -14,7 +14,7 @@ export function DemoModeBadge({ isCollapsed = false }: DemoModeBadgeProps) {
     <button
       type="button"
       onClick={toggle}
-      title="Demo mode is on — click to turn off (⌘⌥D)"
+      title="Demo mode is on — click to turn off (⌘⇧D)"
       aria-label="Demo mode on — click to turn off"
       className={`
         flex items-center gap-1.5 mb-3 rounded-md border transition-colors
