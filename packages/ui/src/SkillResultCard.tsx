@@ -2,7 +2,6 @@ import React from "react";
 import { Check, Calendar, Settings, List, ArrowRight } from "lucide-react";
 import { SimpleMarkdown } from "./SimpleMarkdown";
 import type { DisplayHint } from "@brett/types";
-import { displayTitle, useDemoMode } from "./lib/demoMode";
 
 interface SkillResultCardProps {
   displayHint: DisplayHint;
@@ -14,7 +13,6 @@ interface SkillResultCardProps {
 }
 
 export function SkillResultCard({ displayHint, data, message, onItemClick, onEventClick, onNavigate }: SkillResultCardProps) {
-  useDemoMode();
   switch (displayHint.type) {
     // ─── Action confirmations (create, complete, move, etc.) ───
     // Subtle inline confirmation — small check icon, text with links.
@@ -55,7 +53,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
                 }`}
               />
               <span className={`text-sm truncate ${onItemClick ? "text-white/70 hover:text-white/90" : "text-white/70"}`}>
-                {displayTitle(item.id, item.title, "thing")}
+                {item.title}
               </span>
               {onItemClick && (
                 <ArrowRight size={10} className="ml-auto text-white/20 flex-shrink-0" />
@@ -93,7 +91,7 @@ export function SkillResultCard({ displayHint, data, message, onItemClick, onEve
                   {time}
                 </span>
                 <span className="text-sm text-white/70 truncate">
-                  {displayTitle(event.id, event.title, "calendar")}
+                  {event.title}
                 </span>
               </div>
             );

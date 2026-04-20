@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { getEventGlassColor, isSafeUrl } from "@brett/utils";
-import { displayTitle, useDemoMode } from "@brett/ui";
 
 export interface CalendarDayViewProps {
   date: Date;
@@ -100,7 +99,6 @@ function layoutEvents(events: CalendarEventRecord[]): Map<string, LayoutInfo> {
 }
 
 export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewProps) {
-  useDemoMode();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -149,7 +147,7 @@ export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewP
                   color: ec.text,
                 }}
               >
-                {displayTitle(event.id, event.title, "calendar")}
+                {event.title}
               </button>
               );
             })}
@@ -221,7 +219,7 @@ export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewP
                 >
                   <div className="flex justify-between items-start">
                     <h4 className="text-xs font-semibold truncate pr-2">
-                      {displayTitle(event.id, event.title, "calendar")}
+                      {event.title}
                     </h4>
                     {event.meetingLink && isSafeUrl(event.meetingLink) && (
                       <button

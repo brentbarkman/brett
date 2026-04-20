@@ -3,7 +3,6 @@ import { StaleTooltip } from "./StaleTooltip";
 import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Thing } from "@brett/types";
-import { useDisplayTitle } from "./lib/demoMode";
 
 interface ThingCardProps {
   thing: Thing;
@@ -17,7 +16,6 @@ interface ThingCardProps {
 }
 
 export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending, onInstallUpdate }: ThingCardProps) {
-  const shownTitle = useDisplayTitle(thing.id, thing.title, "thing");
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
     data: {
@@ -160,7 +158,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
                 : "text-white"
             }`}
           >
-            {shownTitle}
+            {thing.title}
           </h4>
           {thing.stalenessDays && !thing.isCompleted && !completing && (
             <StaleTooltip days={thing.stalenessDays}>

@@ -1,6 +1,5 @@
 import React from "react";
 import type { CalendarEventDisplay } from "@brett/types";
-import { useDisplayTitle } from "./lib/demoMode";
 
 interface UpNextCardProps {
   event: CalendarEventDisplay;
@@ -8,7 +7,6 @@ interface UpNextCardProps {
 }
 
 export function UpNextCard({ event, onClick }: UpNextCardProps) {
-  const shownTitle = useDisplayTitle(event.id, event.title, "calendar");
   return (
     <div
       onClick={onClick}
@@ -27,7 +25,7 @@ export function UpNextCard({ event, onClick }: UpNextCardProps) {
       </div>
 
       <h3 className="text-xl font-semibold text-white mb-2 group-hover:text-amber-50 transition-colors">
-        {shownTitle}
+        {event.title}
       </h3>
 
       {event.brettObservation && (

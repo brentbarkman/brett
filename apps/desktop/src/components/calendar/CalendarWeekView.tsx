@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { getEventGlassColor } from "@brett/utils";
-import { displayTitle, useDemoMode } from "@brett/ui";
 
 export interface CalendarWeekViewProps {
   startDate: Date;
@@ -108,7 +107,6 @@ function layoutEventsForDay(events: CalendarEventRecord[]): Map<string, LayoutIn
 }
 
 export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick }: CalendarWeekViewProps) {
-  useDemoMode();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const today = new Date();
@@ -232,7 +230,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
                       color: ec.text,
                     }}
                   >
-                    {displayTitle(event.id, event.title, "calendar")}
+                    {event.title}
                   </button>
                   );
                 })}
@@ -327,7 +325,7 @@ export function CalendarWeekView({ startDate, daysPerWeek, events, onEventClick 
                         }}
                       >
                         <h4 className="text-[10px] font-semibold truncate leading-tight">
-                          {displayTitle(event.id, event.title, "calendar")}
+                          {event.title}
                         </h4>
                         {dur >= 45 && event.location && (
                           <p className="text-[9px] opacity-70 truncate mt-0.5">
