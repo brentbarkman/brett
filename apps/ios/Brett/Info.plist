@@ -37,7 +37,7 @@
 			<string>com.brett.app.googlesignin</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.1055113004459-1go91rointqkletog9sc2o4t3ivfph6u</string>
+				<string>$(GOOGLE_IOS_URL_SCHEME)</string>
 			</array>
 		</dict>
 	</array>
@@ -46,7 +46,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>GIDClientID</key>
-	<string>1055113004459-1go91rointqkletog9sc2o4t3ivfph6u.apps.googleusercontent.com</string>
+	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
