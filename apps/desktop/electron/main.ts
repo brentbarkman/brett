@@ -24,6 +24,12 @@ const API_URL = getApiURL();
 
 const isDev = process.env.NODE_ENV === "development";
 
+// Electron defaults to package.json "name" (@brett/desktop) for app.getName(),
+// which shows up in the macOS About menu and dock tooltip. Override to the
+// product name. electron-builder sets CFBundleName on the packaged app, but
+// Electron's runtime name is independent of that.
+app.setName("Brett");
+
 // In dev, give each worktree its own userData directory so multiple instances
 // don't share Chromium sessions, cookies, or electron-store data
 if (isDev) {
