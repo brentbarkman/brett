@@ -12,7 +12,6 @@ struct SettingsView: View {
     @Environment(AuthManager.self) private var authManager
 
     @State private var profileStore = UserProfileStore()
-    @State private var listStore = ListStore()
 
     @State private var showSignOutConfirm = false
     @State private var isSigningOut = false
@@ -29,7 +28,6 @@ struct SettingsView: View {
             accountCard
             integrationsCard
             preferencesCard
-            organizationCard
             systemCard
 
             signOutCard
@@ -41,6 +39,11 @@ struct SettingsView: View {
         .navigationDestination(for: SettingsTab.self) { tab in
             destination(for: tab)
         }
+        // Hydrate profile on open. Without this the header card falls back
+        // to `authManager.currentUser?.email`, which can be nil on a cold
+        // launch that hits Settings before `/users/me` resolves — hence
+        // the "email doesn't show" bug.
+        .task { await profileStore.refresh() }
     }
 
     // MARK: - Cards (one per section)
@@ -70,7 +73,7 @@ struct SettingsView: View {
             BrettSettingsDivider()
             navRow(tab: .security, icon: "lock.shield", label: "Security", detail: "Face ID & sessions")
             BrettSettingsDivider()
-            navRow(tab: .account, icon: "person.crop.circle.badge.exclamationmark", label: "Account", detail: "Export, delete")
+            navRow(tab: .account, icon: "person.crop.circle.badge.exclamationmark", label: "Account", detail: "Delete account")
         }
     }
 
@@ -119,18 +122,6 @@ struct SettingsView: View {
             return "\(style.display) · Pinned"
         }
         return "\(style.display) · Smart"
-    }
-
-    private var organizationCard: some View {
-        let count = listStore.fetchAll(includeArchived: true).count
-        return BrettSettingsSection("Organization") {
-            navRow(
-                tab: .lists,
-                icon: "list.bullet.rectangle",
-                label: "Lists",
-                detail: count == 1 ? "1 list" : "\(count) lists"
-            )
-        }
     }
 
     private var systemCard: some View {
@@ -230,8 +221,6 @@ struct SettingsView: View {
             LocationSettingsView(store: profileStore)
         case .background:
             BackgroundSettingsView(store: profileStore)
-        case .lists:
-            ListsSettingsView(store: listStore)
         case .account:
             AccountSettingsView(store: profileStore)
         case .updates:
@@ -338,7 +327,6 @@ enum SettingsTab: Hashable {
     case newsletters
     case location
     case background
-    case lists
     case account
     case updates
 
@@ -353,7 +341,6 @@ enum SettingsTab: Hashable {
         case "newsletters": self = .newsletters
         case "timezone-location", "location", "timezone": self = .location
         case "background", "wallpaper": self = .background
-        case "lists": self = .lists
         case "account": self = .account
         case "updates", "about": self = .updates
         default: return nil

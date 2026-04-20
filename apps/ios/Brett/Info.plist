@@ -62,6 +62,10 @@
 	<string>Brett needs microphone access for voice input.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Brett needs speech recognition to convert voice to text.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/PlusJakartaSans-ExtraBold.ttf</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

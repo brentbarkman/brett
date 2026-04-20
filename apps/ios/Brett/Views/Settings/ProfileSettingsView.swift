@@ -1,19 +1,18 @@
 import SwiftUI
 
-/// Edit the user's display name + Brett's assistant name.
+/// Edit the user's display name.
 ///
-/// Email is read-only — it lives in better-auth and can't be changed
-/// from here. Avatar upload is a v2 feature; we show the gradient
-/// initial for now.
+/// Email is read-only — it lives in better-auth and can't be changed from
+/// here. Avatar upload is a v2 feature; we show the gradient initial for now.
+/// The assistant name lives in Timezone & Location (Personalize) alongside
+/// the memory facts it's tied to — matches desktop.
 ///
-/// Name is persisted via `PATCH /users/me` (server accepts `name` and
-/// `assistantName`). We save eagerly on blur / save-tap so users don't
-/// lose their edits if they bail out of the screen.
+/// Name is persisted via `PATCH /users/me`. We save eagerly on the Save
+/// toolbar button so users don't lose edits if they bail out of the screen.
 struct ProfileSettingsView: View {
     @Bindable var store: UserProfileStore
 
     @State private var name: String = ""
-    @State private var assistantName: String = "Brett"
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -34,20 +33,7 @@ struct ProfileSettingsView: View {
                     .submitLabel(.done)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-
-                BrettSettingsDivider()
-
-                TextField("Assistant name", text: $assistantName)
-                    .foregroundStyle(.white)
-                    .submitLabel(.done)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
             }
-
-            Text("The assistant name is how Brett refers to itself. Pick anything up to 10 characters.")
-                .font(.system(size: 12))
-                .foregroundStyle(BrettColors.textMeta)
-                .padding(.top, -16)
 
             BrettSettingsSection("Account") {
                 HStack {
@@ -132,15 +118,12 @@ struct ProfileSettingsView: View {
 
     private var hasChanges: Bool {
         guard let current = store.current else { return !name.isEmpty }
-        let currentName = current.name ?? ""
-        let currentAssistant = current.assistantName
-        return currentName != name || currentAssistant != assistantName
+        return (current.name ?? "") != name
     }
 
     private func hydrate() {
         guard let profile = store.current else { return }
         name = profile.name ?? ""
-        assistantName = profile.assistantName
     }
 
     private func save() async {
@@ -149,17 +132,10 @@ struct ProfileSettingsView: View {
         defer { isSaving = false }
 
         do {
-            // PATCH /users/me — the server currently validates assistantName.
-            // We also send `name` optimistically; the server will ignore
-            // fields it doesn't know about.
             struct Payload: Encodable {
                 let name: String?
-                let assistantName: String?
             }
-            let payload = Payload(
-                name: name.isEmpty ? nil : name,
-                assistantName: assistantName.isEmpty ? nil : assistantName
-            )
+            let payload = Payload(name: name.isEmpty ? nil : name)
             let _: [String: String] = try await client.request(
                 path: "/users/me",
                 method: "PATCH",

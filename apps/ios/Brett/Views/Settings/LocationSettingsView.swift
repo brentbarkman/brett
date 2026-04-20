@@ -139,6 +139,14 @@ struct LocationSettingsView: View {
                             }
                         }
 
+                    // Live wordmark preview — matches desktop (LocationSection.tsx).
+                    BrettWordmark(
+                        name: assistantName.trimmingCharacters(in: .whitespaces).isEmpty
+                            ? "Brett"
+                            : assistantName,
+                        size: 16
+                    )
+
                     Text("\(assistantName.count)/10")
                         .font(.system(size: 11))
                         .foregroundStyle(BrettColors.textMeta)
