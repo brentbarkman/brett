@@ -187,6 +187,58 @@ describe("assembleContext", () => {
       expect(ctx.toolMode).toBe("contextual");
     });
 
+    // Short factual questions ("wh-questions") go to medium because small-tier
+    // models (Haiku) reliably pattern-match these to refusal when the topic
+    // sounds domain-adjacent (finance, real-time data) instead of following
+    // the in-context SEARCH BEFORE REFUSING rule. Prod regression 2026-04-20:
+    // "what is Function Health's strike price?" was refused on Haiku even
+    // though the answer was in a synced meeting note.
+    it('bumps short "what X?" questions to medium tier for omnibar', async () => {
+      const input: AssemblerInput = {
+        type: "omnibar",
+        userId: "user-1",
+        message: "what is Function Health's strike price?",
+      };
+      const ctx = await assembleContext(input, mockPrisma);
+      expect(ctx.modelTier).toBe("medium");
+    });
+
+    it('bumps short "who/when/where/why/how" questions to medium tier', async () => {
+      for (const msg of [
+        "who is Claire?",
+        "when does my cliff vest?",
+        "where did we land on pricing?",
+        "why is the Yves offer delayed?",
+        "how much did Function Health raise?",
+      ]) {
+        const input: AssemblerInput = {
+          type: "omnibar",
+          userId: "user-1",
+          message: msg,
+        };
+        const ctx = await assembleContext(input, mockPrisma);
+        expect(ctx.modelTier, `expected medium for "${msg}"`).toBe("medium");
+      }
+    });
+
+    it('keeps short non-question messages on small tier', async () => {
+      // Guard against over-bumping: short messages that aren't wh-questions
+      // stay on small — they're obvious tool calls Haiku handles fine.
+      for (const msg of [
+        "list today",
+        "show my inbox",
+        "snooze dentist",
+      ]) {
+        const input: AssemblerInput = {
+          type: "omnibar",
+          userId: "user-1",
+          message: msg,
+        };
+        const ctx = await assembleContext(input, mockPrisma);
+        expect(ctx.modelTier, `expected small for "${msg}"`).toBe("small");
+      }
+    });
+
     it('returns "medium" + "contextual" tools for brett_thread', async () => {
       const input: AssemblerInput = {
         type: "brett_thread",
