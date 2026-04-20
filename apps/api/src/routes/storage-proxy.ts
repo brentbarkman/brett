@@ -5,7 +5,9 @@ import { publicS3, PUBLIC_STORAGE_BUCKET } from "../lib/storage.js";
 const storageProxy = new Hono();
 
 // Allowed prefixes — only these paths are proxied. Anything else is 404.
-const ALLOWED_PREFIXES = ["videos/", "backgrounds/"];
+// feedback/ serves screenshots embedded in GitHub Issues created by
+// apps/api/src/routes/feedback.ts (keys are crypto.randomBytes(16).hex).
+const ALLOWED_PREFIXES = ["videos/", "backgrounds/", "feedback/"];
 
 // Content-type mapping
 const CONTENT_TYPES: Record<string, string> = {
