@@ -138,6 +138,8 @@ struct DayTimeline: View {
 
         let durationMin = max(Double(event.endTime.timeIntervalSince(event.startTime) / 60.0), 15)
         let height = CGFloat(durationMin / 60.0) * hourHeight
+        let meta = Self.metaLine(for: event)
+        let minHeight = Self.chipMinHeight(hasMeta: meta != nil)
 
         NavigationLink(value: NavDestination.eventDetail(id: event.id)) {
             HStack(spacing: 0) {
@@ -150,7 +152,7 @@ struct DayTimeline: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(BrettColors.textPrimary)
                         .lineLimit(1)
-                    if let meta = Self.metaLine(for: event) {
+                    if let meta {
                         Text(meta)
                             .font(.system(size: 11))
                             .foregroundStyle(BrettColors.textSecondary)
@@ -161,7 +163,7 @@ struct DayTimeline: View {
                 .padding(.vertical, 6)
                 Spacer()
             }
-            .frame(height: max(height - 4, 28), alignment: .top)
+            .frame(minHeight: max(height - 4, minHeight), alignment: .top)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.ultraThinMaterial)
@@ -176,6 +178,13 @@ struct DayTimeline: View {
         .padding(.leading, 58)
         .padding(.trailing, 16)
         .offset(y: offset)
+    }
+
+    /// Minimum vertical size a timed-event chip needs so all text lines stay
+    /// inside the background. A chip without a meta line only shows the title
+    /// (13pt, one line), while a chip with a meta line needs room for both.
+    static func chipMinHeight(hasMeta: Bool) -> CGFloat {
+        hasMeta ? 46 : 28
     }
 
     @ViewBuilder
