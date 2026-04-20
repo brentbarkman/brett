@@ -50,6 +50,16 @@ export const searchThingsSkill: Skill = {
       .filter((r) => r.entityType === "meeting_note")
       .map((r) => r.entityId);
 
+    // Carry the matched chunk snippet per meeting so we can surface the
+    // specific excerpt that matched — the summary alone often doesn't
+    // cover transcript details the user is asking about.
+    const meetingSnippetById = new Map<string, string>();
+    for (const r of searchResults) {
+      if (r.entityType === "meeting_note" && r.snippet) {
+        meetingSnippetById.set(r.entityId, r.snippet);
+      }
+    }
+
     // Fetch full item records for enrichment and post-filtering
     const itemWhere: Record<string, unknown> = {
       id: { in: itemIds },
@@ -92,11 +102,13 @@ export const searchThingsSkill: Skill = {
 
     const meetingResults = meetings.map((m) => {
       const tasks = linkedItems.filter((i) => i.meetingNoteId === m.id);
+      const matchedExcerpt = meetingSnippetById.get(m.id) ?? null;
       return {
         title: m.title,
         calendarEventId: m.calendarEventId,
         date: m.meetingStartedAt.toISOString().split("T")[0],
         summary: m.summary,
+        matchedExcerpt,
         tasks,
       };
     });
@@ -113,6 +125,10 @@ export const searchThingsSkill: Skill = {
           const parts = [`${titleLink} (${m.date}):`];
           if (m.summary) {
             parts.push(m.summary);
+          }
+          if (isDistinctExcerpt(m.matchedExcerpt, m.summary)) {
+            parts.push("**Matched excerpt:**");
+            parts.push(m.matchedExcerpt!);
           }
           if (m.tasks.length > 0) {
             parts.push("**Tasks:**");
@@ -150,3 +166,19 @@ export const searchThingsSkill: Skill = {
     };
   },
 };
+
+/**
+ * An excerpt is worth showing alongside the summary only when it's
+ * substantively different. If the chunk is just a slice of the summary
+ * (the keyword path returns the whole summary as snippet), showing it
+ * again is noise.
+ */
+function isDistinctExcerpt(
+  excerpt: string | null | undefined,
+  summary: string | null | undefined,
+): boolean {
+  if (!excerpt) return false;
+  if (!summary) return true;
+  const head = excerpt.slice(0, 80).trim();
+  return head.length > 0 && !summary.includes(head);
+}

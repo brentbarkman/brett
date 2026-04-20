@@ -34,6 +34,50 @@ describe("fuseResults", () => {
     const results = fuseResults(kw, vec, 2);
     expect(results).toHaveLength(2);
   });
+
+  it("prefers the vector chunk snippet over the keyword summary for meeting_notes", () => {
+    // For meetings the keyword path returns the full summary as snippet,
+    // while the vector path returns the specific chunk that matched the
+    // query. When both match, callers want the chunk — it's the reason
+    // for surfacing the meeting at all.
+    const meetingKw: RankedResult[] = [
+      {
+        entityType: "meeting_note",
+        entityId: "m1",
+        title: "Sync with Yves",
+        snippet: "Full summary covering Function Health company update.",
+        rank: 1,
+      },
+    ];
+    const meetingVec: RankedResult[] = [
+      {
+        entityType: "meeting_note",
+        entityId: "m1",
+        title: "Sync with Yves",
+        snippet:
+          "Transcript: Them: Hey, Brent. Me: Hey Yves. Them: We announced the GitLab acquisition this week.",
+        rank: 1,
+      },
+    ];
+
+    const [result] = fuseResults(meetingKw, meetingVec, 1);
+    expect(result.matchType).toBe("both");
+    expect(result.snippet).toContain("Transcript:");
+  });
+
+  it("does not swap snippets for non-meeting entity types", () => {
+    // Items have small uniform bodies — keyword snippet is already the
+    // whole body, swapping to the vector chunk (which is often identical)
+    // adds no value and could destabilize existing behavior.
+    const itemKw: RankedResult[] = [
+      { entityType: "item", entityId: "i1", title: "T", snippet: "keyword-body", rank: 1 },
+    ];
+    const itemVec: RankedResult[] = [
+      { entityType: "item", entityId: "i1", title: "T", snippet: "vector-chunk", rank: 1 },
+    ];
+    const [result] = fuseResults(itemKw, itemVec, 1);
+    expect(result.snippet).toBe("keyword-body");
+  });
 });
 
 // --- VALID_ENTITY_TYPES allowlist ---
