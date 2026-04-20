@@ -33,9 +33,38 @@ export const getMeetingNotesSkill: Skill = {
 
     // 1. Lookup by calendar event ID
     if (p.calendarEventId) {
-      const meeting = await ctx.prisma.meetingNote.findFirst({
+      let meeting = await ctx.prisma.meetingNote.findFirst({
         where: { calendarEventId: p.calendarEventId, userId: ctx.userId },
       });
+
+      // Fallback: the matcher may have missed linking this meeting to
+      // its CalendarEvent (zero-width intervals + drifted timezones in
+      // Granola's payload have broken this before). Look up the event
+      // itself and find an unlinked MeetingNote with a matching title
+      // within ±12h — enough to absorb any residual drift.
+      if (!meeting) {
+        const calEvent = await ctx.prisma.calendarEvent.findFirst({
+          where: { id: p.calendarEventId, userId: ctx.userId },
+          select: { title: true, startTime: true },
+        });
+        if (calEvent) {
+          const HALF_DAY_MS = 12 * 60 * 60 * 1000;
+          const candidates = await ctx.prisma.meetingNote.findMany({
+            where: {
+              userId: ctx.userId,
+              meetingStartedAt: {
+                gte: new Date(calEvent.startTime.getTime() - HALF_DAY_MS),
+                lte: new Date(calEvent.startTime.getTime() + HALF_DAY_MS),
+              },
+            },
+            orderBy: { meetingStartedAt: "asc" },
+          });
+          meeting =
+            candidates.find((m) =>
+              titleMatchesCalendarEvent(m.title, calEvent.title),
+            ) ?? null;
+        }
+      }
 
       if (!meeting) {
         return {
@@ -146,6 +175,21 @@ interface MeetingRow {
   title: string;
   summary: string | null;
   meetingStartedAt: Date;
+}
+
+/**
+ * Relaxed title match for the fallback path. Either side may contain
+ * the other — Granola's title sometimes trims the calendar event's
+ * prefix (e.g. "[VC] Intros: Brent x Swetha" vs "Intros: Brent x Swetha").
+ */
+export function titleMatchesCalendarEvent(
+  meetingTitle: string,
+  calendarEventTitle: string,
+): boolean {
+  const m = meetingTitle.trim().toLowerCase();
+  const c = calendarEventTitle.trim().toLowerCase();
+  if (!m || !c) return false;
+  return m === c || m.includes(c) || c.includes(m);
 }
 
 function formatMeeting(m: MeetingRow): string {
