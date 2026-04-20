@@ -13,6 +13,7 @@ import {
   Clock,
   CheckSquare,
 } from "lucide-react";
+import { displayTitle, useDemoMode } from "./lib/demoMode";
 import { SimpleMarkdown } from "./SimpleMarkdown";
 import { BrettMark } from "./BrettMark";
 import type {
@@ -202,6 +203,7 @@ export function CalendarEventDetailPanel({
   onNavigate,
   assistantName = "Brett",
 }: CalendarEventDetailPanelProps) {
+  useDemoMode();
   const [showAllAttendees, setShowAllAttendees] = useState(false);
   const [rsvpNote, setRsvpNote] = useState("");
   const [selectedRsvp, setSelectedRsvp] = useState<CalendarRsvpStatus>(
@@ -248,7 +250,7 @@ export function CalendarEventDetailPanel({
           <div className="pb-4">
             <div className="flex items-start justify-between gap-3 mb-2">
               <h2 className="text-2xl font-semibold text-white leading-tight">
-                {detail.title}
+                {displayTitle(detail.id, detail.title, "calendar")}
               </h2>
               <button
                 onClick={onClose}
@@ -461,7 +463,7 @@ export function CalendarEventDetailPanel({
                               isDone ? "text-white/30 line-through" : "text-white/70 hover:text-white/90"
                             }`}
                           >
-                            {item.title}
+                            {displayTitle(item.id, item.title, "thing")}
                           </span>
                           {item.dueDate && (
                             <span className="text-[10px] text-white/30 flex-shrink-0">
@@ -617,7 +619,7 @@ export function CalendarEventDetailPanel({
                             : "text-white/70 group-hover:text-white/90"
                         }`}
                       >
-                        {item.title}
+                        {displayTitle(item.entityId, item.title, "thing")}
                       </span>
                       {isDone && (
                         <CheckSquare size={12} className="text-white/20 flex-shrink-0" />
@@ -682,7 +684,7 @@ export function CalendarEventDetailPanel({
                             >
                               <div className="w-3 h-3 rounded border border-amber-500/40 flex-shrink-0" />
                               <span className="text-xs text-amber-300/70 truncate group-hover:text-amber-300/90">
-                                {item.title}
+                                {displayTitle(item.id, item.title, "thing")}
                               </span>
                             </div>
                           ))}

@@ -34,6 +34,7 @@ import {
   ScoutDetail,
   LivingBackground,
   BackgroundScrim,
+  demoMode,
 } from "@brett/ui";
 import { useAwakening } from "./hooks/useAwakening";
 import { useAppConfig } from "./hooks/useAppConfig";
@@ -636,6 +637,21 @@ export function App() {
     document.addEventListener("keydown", handleFeedbackShortcut);
     return () => document.removeEventListener("keydown", handleFeedbackShortcut);
   }, [feedbackOpen, electronVersion]);
+
+  // Cmd+Shift+D toggles demo mode — swaps task + calendar titles for
+  // funny placeholders so screen-sharing doesn't leak real content.
+  // Paired with Cmd+Shift+. (feedback) so the "Shift+letter" family is
+  // the mental model for meta shortcuts.
+  useEffect(() => {
+    const handleDemoToggle = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyD") {
+        e.preventDefault();
+        demoMode.toggle();
+      }
+    };
+    document.addEventListener("keydown", handleDemoToggle);
+    return () => document.removeEventListener("keydown", handleDemoToggle);
+  }, []);
 
   // Build omnibar props for the bar component
   const currentView = (() => {
