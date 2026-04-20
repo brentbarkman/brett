@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { Download, Check, Loader2, AlertCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { SettingsCard, SettingsHeader } from "./SettingsComponents";
 import type { Things3ScanResult, Things3ImportResult } from "@brett/types";
+import { invalidateAllThings } from "../api/invalidate";
 
 const electronAPI = (window as any).electronAPI as
   | {
@@ -44,6 +46,7 @@ function storeImportCompletion(userId: string, result: Things3ImportResult): str
 }
 
 export function ImportSection({ userId }: { userId: string }) {
+  const qc = useQueryClient();
   const [state, setState] = useState<ImportState>(() => {
     const stored = getStoredImport(userId);
     return stored
@@ -85,6 +88,7 @@ export function ImportSection({ userId }: { userId: string }) {
       } else {
         const importedAt = storeImportCompletion(userId, result);
         setState({ step: "done", result, importedAt });
+        invalidateAllThings(qc);
       }
     } catch (err: any) {
       setState({ step: "error", message: err.message || "Import failed" });
