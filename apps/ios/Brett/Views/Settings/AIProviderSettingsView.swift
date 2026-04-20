@@ -221,10 +221,27 @@ struct AIProviderSettingsView: View {
                             .background(BrettColors.success.opacity(0.15), in: Capsule())
                             .foregroundStyle(BrettColors.success)
                     }
+                    // Mirror desktop — the server marks a provider invalid
+                    // when a call fails auth. Without this badge, users who
+                    // tap a re-link task land here with no way to tell which
+                    // provider is the broken one.
+                    if !config.isValid {
+                        Text("Invalid key")
+                            .font(BrettTypography.badgeSmall)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(BrettColors.error.opacity(0.15), in: Capsule())
+                            .foregroundStyle(BrettColors.error)
+                    }
                 }
                 Text(config.maskedKey)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(BrettColors.textMeta)
+                if !config.isValid {
+                    Text("Re-enter the key below to restore this provider.")
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.error.opacity(0.85))
+                }
             }
             Spacer()
             if !config.isActive {

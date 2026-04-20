@@ -8,8 +8,6 @@ import SwiftUI
 /// the action fires immediately. Account deletion lives inside the Account
 /// screen behind a double-confirm dialog.
 struct SettingsView: View {
-    @AppStorage("settings.deeplink.tab") private var deepLinkTab: String = ""
-
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthManager.self) private var authManager
 
