@@ -6,6 +6,11 @@ declare global {
   interface Window {
     electronAPI?: {
       installUpdate: () => Promise<void>;
+      checkForUpdates: () => Promise<
+        | { status: "update-available"; version: string }
+        | { status: "up-to-date" }
+        | { status: "error"; message: string }
+      >;
       getDownloadedUpdateVersion: () => Promise<string | null>;
       getUpdateTaskId: () => Promise<string | null>;
       setUpdateTaskId: (taskId: string | null) => Promise<void>;
