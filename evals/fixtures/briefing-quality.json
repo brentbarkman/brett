@@ -1,62 +1,178 @@
 [
   {
     "name": "mixed_day",
-    "description": "Typical day with overdue, due today, and events",
-    "inputData": "Overdue tasks:\n- Q3 budget review (due 2026-03-23)\n- Reply to Sarah's proposal (due 2026-03-25)\n\nDue today:\n- Ship v2.1 release notes\n- Update team wiki\n\nToday's calendar:\n- 10:00 AM: Product sync with Design team (with Lena, Marcus)\n- 2:30 PM: 1:1 with Jordan\n- 4:00 PM: All-hands",
+    "description": "Today has 2 overdue tasks, 2 due-today tasks, and 3 calendar events",
+    "inputData": "Overdue tasks:\n- Q3 budget review (due {{today-4d}})\n- Reply to Sarah's proposal (due {{today-2d}})\n\nDue today:\n- Ship v2.1 release notes\n- Update team wiki\n\nToday's calendar:\n- 10:00 AM: Product sync with Design team (with Lena, Marcus)\n- 2:30 PM: 1:1 with Jordan\n- 4:00 PM: All-hands",
     "criteria": [
-      "Output is 3-7 bullet points, each 1-2 sentences",
+      "Output has 3-7 bullet points, each 1-2 sentences",
       "Total output is under 120 words",
-      "Mentions Q3 budget review and Sarah's proposal as overdue in **bold**, including how late they are",
-      "Mentions Ship v2.1 release notes as due today in **bold**",
-      "Mentions '10:00 AM' and 'Product sync' with attendees Lena and Marcus",
-      "Does NOT invent any tasks or events not in the input data",
+      "References Q3 budget review and Sarah's proposal as overdue in **bold**, including how many days late each is",
+      "References Ship v2.1 release notes as due today in **bold**",
+      "References '10:00 AM' and 'Product sync' with the attendees Lena and Marcus",
+      "Does NOT invent any tasks or events not in the input",
       "Ends with a prioritization or forward-looking suggestion"
     ]
   },
   {
     "name": "empty_day",
-    "description": "No tasks or events",
+    "description": "Today has no tasks due and no calendar events",
     "inputData": "No tasks due and no calendar events today.",
     "criteria": [
       "Output acknowledges the day is light or clear",
       "Does NOT invent any tasks or events",
-      "Total output is under 60 words",
-      "Suggests a productive action (e.g., tackling backlog, planning)"
+      "Total output is under 60 words"
     ]
   },
   {
     "name": "overdue_only",
-    "description": "Only overdue tasks, nothing else",
-    "inputData": "Overdue tasks:\n- Finish tax documents (due 2026-03-15)\n- Call dentist (due 2026-03-20)\n- Submit expense report (due 2026-03-24)",
+    "description": "Today has 3 overdue tasks and nothing else",
+    "inputData": "Overdue tasks:\n- Finish tax documents (due {{today-12d}})\n- Call dentist (due {{today-7d}})\n- Submit expense report (due {{today-3d}})",
     "criteria": [
-      "Lists all 3 overdue tasks by name",
-      "Mentions how late each task is (days overdue)",
-      "Does NOT mention any calendar events or 'due today' tasks",
-      "Total output is under 120 words",
-      "Does NOT invent tasks not in the input"
+      "Lists the 3 overdue tasks by name in **bold**",
+      "For at least one highlighted task, references either the number of days late OR the original due date",
+      "Does NOT mention any calendar events or due-today tasks",
+      "Total output is under 120 words"
     ]
   },
   {
     "name": "events_only",
-    "description": "Meeting-heavy day with no tasks",
+    "description": "Today has 5 calendar events and no tasks",
     "inputData": "Today's calendar:\n- 9:00 AM: Sprint planning (with Entire team)\n- 11:30 AM: Lunch with CEO (with Alexandra)\n- 1:00 PM: Design review\n- 3:00 PM: Interview — Senior Engineer candidate\n- 4:30 PM: Quick sync with VP Eng (with Chris)",
     "criteria": [
       "References all 5 meetings by name and time",
-      "Highlights the CEO lunch or interview as noteworthy",
-      "Does NOT mention any tasks",
+      "Highlights the CEO lunch or the interview as noteworthy",
+      "Does NOT invent a task the user should do — the input has no tasks, so no bullet should describe a task-to-be-completed (suggesting prep for one of the listed events is fine, that's event prep not a new task)",
       "Total output is under 120 words",
-      "Ends with a time management suggestion given the packed day"
+      "Ends with a time-management suggestion given the packed day"
     ]
   },
   {
     "name": "single_task",
-    "description": "Minimal day — one task, nothing else",
+    "description": "Today has one due task and nothing else",
     "inputData": "Due today:\n- Buy birthday cake for Sam",
     "criteria": [
-      "Mentions **Buy birthday cake for Sam** in bold",
-      "Acknowledges the day is light",
+      "References **Buy birthday cake for Sam** in bold",
       "Total output is under 60 words",
-      "Does NOT invent additional tasks or events"
+      "Does NOT invent additional tasks or events not in the input"
+    ]
+  },
+  {
+    "name": "many_overdue",
+    "description": "Today has 21 overdue tasks and no calendar events",
+    "inputData": "Overdue tasks:\n- Q3 budget review (due {{today-28d}})\n- Reply to Sarah's proposal (due {{today-26d}})\n- File expense report (due {{today-31d}})\n- Schedule dentist (due {{today-41d}})\n- Update team wiki (due {{today-23d}})\n- Draft board deck (due {{today-36d}})\n- Review PRs (due {{today-19d}})\n- Book flights for offsite (due {{today-21d}})\n- Finalize Q2 OKRs (due {{today-18d}})\n- Interview feedback for Alex (due {{today-15d}})\n- Renew passport (due {{today-60d}})\n- Reply to investor intro (due {{today-12d}})\n- Review contract amendment (due {{today-10d}})\n- Finalize hiring plan (due {{today-8d}})\n- Migrate data warehouse (due {{today-6d}})\n- Send offer letter to Sam (due {{today-5d}})\n- Book speaker for offsite (due {{today-4d}})\n- Draft investor update (due {{today-3d}})\n- Review product roadmap (due {{today-2d}})\n- Update website copy (due {{today-1d}})\n- Sync with legal on terms (due {{today-2d}})\n\nNo calendar events today.",
+    "criteria": [
+      "References the total count of overdue tasks (21 or a close number)",
+      "Names 2-3 specific overdue tasks — NOT all 21",
+      "The 2-3 highlighted tasks appear in **bold**",
+      "Every task title named in the response appears verbatim (case-insensitive) in the input list",
+      "Total output is under 120 words"
+    ]
+  },
+  {
+    "name": "packed_today",
+    "description": "Today has 7 tasks all due and one afternoon event",
+    "inputData": "Due today:\n- Ship release notes\n- Review Alex's PR\n- Draft investor update\n- Reply to Sarah\n- Book flights\n- Schedule 1:1s\n- Finalize pricing deck\n\nToday's calendar:\n- 2:00 PM: Design review",
+    "criteria": [
+      "All 7 due-today tasks are mentioned (not summarized as a count)",
+      "Each task name appears in **bold**",
+      "References the 2pm design review",
+      "Ends with a prioritization suggestion",
+      "Does NOT invent tasks or events"
+    ]
+  },
+  {
+    "name": "weather_actionable_rain",
+    "description": "Today has one task, one evening event, and a rain forecast that overlaps the event",
+    "inputData": "Due today:\n- Prep for client dinner\n\nToday's calendar:\n- 6:30 PM: Dinner with Acme Corp team\n\nWeather: San Francisco 54°F, heavy rain expected 5-8 PM",
+    "criteria": [
+      "References the dinner with Acme Corp",
+      "References the rain (since it overlaps the dinner timing)",
+      "Does NOT just list '54°F' without context",
+      "Total output is under 100 words"
+    ]
+  },
+  {
+    "name": "weather_skip_clear",
+    "description": "Today has one task, one morning event, and clear pleasant weather",
+    "inputData": "Due today:\n- Ship release notes\n\nToday's calendar:\n- 10:00 AM: Product sync\n\nWeather: San Francisco 68°F, clear skies",
+    "criteria": [
+      "Does NOT mention weather or temperature anywhere",
+      "References the release notes task in **bold**",
+      "References the 10am product sync"
+    ],
+    "bannedPhrases": [
+      "68°F",
+      "68 degrees",
+      "clear skies",
+      "pleasant",
+      "nice weather"
+    ]
+  },
+  {
+    "name": "weather_extreme_temp",
+    "description": "Today has one task, one outdoor event, and extreme heat with advisory",
+    "inputData": "Due today:\n- Prep for run with Jordan\n\nToday's calendar:\n- 12:00 PM: Team lunch outdoors\n\nWeather: Austin 104°F, heat advisory in effect",
+    "criteria": [
+      "References the heat advisory or extreme temperature",
+      "Notes potential impact on outdoor activities (team lunch or run)",
+      "References both the lunch and the prep task",
+      "Total output is under 120 words"
+    ]
+  },
+  {
+    "name": "air_quality_high",
+    "description": "Today has one outdoor task, one outdoor event, and AQI 147 (unhealthy)",
+    "inputData": "Due today:\n- Go for outdoor run\n\nToday's calendar:\n- 3:00 PM: Walking 1:1 with Alex\n\nAir quality: San Francisco AQI 147 (unhealthy for sensitive groups)",
+    "criteria": [
+      "References the elevated AQI or poor air quality",
+      "Connects it to outdoor activities (run or walking 1:1)",
+      "References both the task and the 3pm 1:1",
+      "Total output is under 120 words"
+    ]
+  },
+  {
+    "name": "only_content_items",
+    "description": "Today has 2 saved content items and nothing else",
+    "inputData": "Saved content due for review today:\n- Article: The Future of AI Agents (saved {{today-8d}})\n- Notes: Board meeting prep doc (saved {{today-5d}})\n\nNo tasks due. No calendar events.",
+    "criteria": [
+      "References the saved content items",
+      "Does NOT call them tasks or events",
+      "Acknowledges the day is light on tasks/meetings",
+      "Total output is under 80 words",
+      "Does NOT invent tasks"
+    ]
+  },
+  {
+    "name": "back_to_back_meetings",
+    "description": "Today has 8 back-to-back meetings and one task",
+    "inputData": "Due today:\n- Ship release notes\n\nToday's calendar:\n- 9:00 AM - 10:00 AM: Standup\n- 10:00 AM - 11:00 AM: Customer call\n- 11:00 AM - 12:00 PM: Design review\n- 12:00 PM - 1:00 PM: Lunch & Learn\n- 1:00 PM - 2:00 PM: 1:1 with Jordan\n- 2:00 PM - 3:00 PM: Interview\n- 3:00 PM - 4:00 PM: Product sync\n- 4:00 PM - 5:00 PM: All-hands",
+    "criteria": [
+      "Acknowledges the packed/back-to-back schedule",
+      "References the ship release notes task",
+      "Notes that finding time for the task will be challenging OR suggests when to fit it in",
+      "Total output is under 130 words"
+    ]
+  },
+  {
+    "name": "small_late_start",
+    "description": "Today has one prep task and the afternoon meeting it prepares for",
+    "inputData": "Due today:\n- Prep quarterly review\n\nToday's calendar:\n- 2:00 PM: Quarterly review with leadership",
+    "criteria": [
+      "References both the prep task and the 2pm meeting",
+      "Notes the connection between the prep and the meeting",
+      "Total output is under 80 words",
+      "Does NOT invent additional items"
+    ]
+  },
+  {
+    "name": "ambiguous_similar_tasks",
+    "description": "Today has two similar-sounding tasks that must not be merged",
+    "inputData": "Due today:\n- Review Q2 budget\n- Review Q3 budget",
+    "criteria": [
+      "Both tasks are mentioned as distinct items",
+      "Neither is dropped nor merged into the other",
+      "Both appear in **bold**",
+      "Total output is under 80 words"
     ]
   }
 ]

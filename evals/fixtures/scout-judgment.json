@@ -1,0 +1,309 @@
+[
+  {
+    "name": "all_noise_return_empty",
+    "description": "7-day window; 3 results all off-topic or stale relative to a TSLA bull-thesis goal",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "I hold a large TSLA position. Alert me when news challenges my bull thesis.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "Best electric cars of 2026 — buyer's guide", "url": "https://cnet.com/ev-guide", "snippet": "Our top picks for EVs you can buy.", "published": "{{today-50d}}" },
+      { "title": "Top 10 EV charging apps", "url": "https://lifehacker.com/ev-apps", "snippet": "Essential apps for every EV driver.", "published": "{{today-5d}}" },
+      { "title": "How to detail your Tesla at home", "url": "https://autoblog.com/tesla-detailing", "snippet": "DIY tips for a showroom shine.", "published": "{{today-6d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object with a findings array",
+      "findings array is empty",
+      "cadenceRecommendation is 'maintain' or 'relax'",
+      "If any finding is returned at all, the EV buyer's guide is NOT included (published outside the 7-day window)"
+    ]
+  },
+  {
+    "name": "high_signal_regulatory",
+    "description": "7-day window; one fresh Reuters result directly challenging the user's bull thesis",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "I hold a large TSLA position. Alert me when news challenges my bull thesis.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "NHTSA opens formal investigation into Tesla Autopilot after 12 crashes", "url": "https://reuters.com/nhtsa-tesla-investigation", "snippet": "Formal investigation announced after crash reports.", "published": "{{today-2d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array contains exactly 1 finding referencing the NHTSA investigation",
+      "That finding has relevanceScore >= 0.7",
+      "The finding's sourceUrl is reuters.com"
+    ]
+  },
+  {
+    "name": "stale_content_must_score_zero",
+    "description": "7-day window; a highly relevant but stale (>30 days) result — must score exactly 0.0",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track new model releases from Anthropic and OpenAI.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "Anthropic releases Claude Opus 4.7 with 1M context", "url": "https://anthropic.com/claude-4-7", "snippet": "New model announced.", "published": "{{today-36d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array is empty OR the Anthropic result appears with relevanceScore exactly 0.0",
+      "cadenceRecommendation is 'maintain' or 'relax'"
+    ]
+  },
+  {
+    "name": "duplicate_of_recent_finding",
+    "description": "7-day window; fresh result that is the same story as an already-reported finding",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track Federal Reserve rate decisions.",
+    "recentFindings": [
+      { "title": "Fed holds rates steady at March meeting", "url": "https://reuters.com/fed-march" }
+    ],
+    "memories": [],
+    "results": [
+      { "title": "Fed keeps interest rates unchanged after March FOMC", "url": "https://wsj.com/fed-fomc", "snippet": "Central bank holds rates.", "published": "{{today-5d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array does NOT include the WSJ article about the Fed March meeting",
+      "findings array is empty"
+    ]
+  },
+  {
+    "name": "grouped_multi_source_story",
+    "description": "7-day window; same GPT-5 launch story from 3 outlets — must dedupe to 1 finding",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Monitor Anthropic and OpenAI for pricing changes or model releases.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "OpenAI announces GPT-5 with new reasoning mode", "url": "https://techcrunch.com/openai-gpt5", "snippet": "GPT-5 announced.", "published": "{{today-3d}}" },
+      { "title": "OpenAI unveils GPT-5 at developer conference", "url": "https://theverge.com/gpt5", "snippet": "GPT-5 reveal.", "published": "{{today-3d}}" },
+      { "title": "GPT-5 launches with enhanced reasoning capabilities", "url": "https://venturebeat.com/gpt5-launch", "snippet": "GPT-5 launch details.", "published": "{{today-3d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array contains exactly 1 finding about the GPT-5 launch",
+      "That finding's sourceUrl is from one of the three provided sources",
+      "That finding has relevanceScore >= 0.7"
+    ]
+  },
+  {
+    "name": "tangentially_related_low_score",
+    "description": "7-day window; fresh on-topic but thesis-irrelevant result",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "I hold a large TSLA position. Alert me when news challenges my bull thesis.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "Tesla opens new showroom in Portugal", "url": "https://reuters.com/tesla-portugal", "snippet": "Tesla expands European retail.", "published": "{{today-4d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array is empty OR the Portugal showroom finding has relevanceScore <= 0.4"
+    ]
+  },
+  {
+    "name": "cadence_elevate_breaking",
+    "description": "7-day window; 3 fresh high-signal competitor developments in the window",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Monitor Anthropic and OpenAI for competitive moves affecting our build/buy decision.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "Anthropic cuts API prices by 40%", "url": "https://anthropic.com/pricing-update", "snippet": "Major price reduction.", "published": "{{today-3d}}" },
+      { "title": "OpenAI announces new enterprise tier", "url": "https://openai.com/enterprise", "snippet": "New tier with SLAs.", "published": "{{today-2d}}" },
+      { "title": "Anthropic extends context to 2M tokens", "url": "https://anthropic.com/2m-context", "snippet": "New long-context release.", "published": "{{today-1d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array contains 3 findings, each with relevanceScore >= 0.7",
+      "cadenceRecommendation is 'elevate'"
+    ]
+  },
+  {
+    "name": "cadence_relax_persistent_silence",
+    "description": "7-day window; broad goal with one only-tangentially-related industry roundup",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track news about my boutique consulting firm in the press.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "Top management consulting trends for 2026", "url": "https://forbes.com/consulting-trends", "snippet": "Industry roundup.", "published": "{{today-5d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array is empty",
+      "cadenceRecommendation is 'relax' or 'maintain'"
+    ]
+  },
+  {
+    "name": "primary_source_preferred_when_grouped",
+    "description": "7-day window; same FDA story from fda.gov and usatoday.com — must group and use primary source",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Monitor FDA drug approvals related to Alzheimer's treatment.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "FDA approves new Alzheimer's drug lecanemab-2", "url": "https://fda.gov/news/lecanemab-2-approval", "snippet": "FDA approves.", "published": "{{today-2d}}" },
+      { "title": "Pharma giant wins FDA nod for Alzheimer's pill", "url": "https://usatoday.com/health/alzheimers-drug", "snippet": "Pharma approval.", "published": "{{today-1d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array contains exactly 1 finding about the FDA approval",
+      "The finding's sourceUrl is on fda.gov (primary source preferred over usatoday.com)",
+      "The finding has relevanceScore >= 0.7"
+    ]
+  },
+  {
+    "name": "no_publish_date_old_context",
+    "description": "7-day window; result with no published date but title references 2023 events",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track Tesla regulatory news.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "Tesla faced early 2023 Autopilot scrutiny", "url": "https://wired.com/2023-tesla-recap", "snippet": "A look back at 2023 regulatory issues.", "published": null }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array is empty OR the finding has relevanceScore 0.0"
+    ]
+  },
+  {
+    "name": "classification_insight_vs_article",
+    "description": "7-day window; deep analysis piece with substantial original content",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track AI agent architecture trends relevant to our build decisions.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "The shift from chat to agents: a deep architectural analysis", "url": "https://latent.space/agent-architectures", "snippet": "Detailed breakdown of agent patterns with data from 50 teams.", "published": "{{today-3d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array contains 1 finding referencing the deep analysis article",
+      "That finding's type is 'article' or 'insight'",
+      "That finding has relevanceScore >= 0.5"
+    ]
+  },
+  {
+    "name": "memory_create_new_fact",
+    "description": "7-day window; fresh finding reveals a durable fact worth remembering",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track key executives at Anthropic and OpenAI.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "Anthropic hires former Google VP as CPO", "url": "https://techcrunch.com/anthropic-cpo-hire", "snippet": "Jane Doe joins as Chief Product Officer.", "published": "{{today-2d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object with a memoryUpdates array",
+      "At least 1 memoryUpdate has action 'create' recording the CPO hire",
+      "findings array includes the hire with relevanceScore >= 0.5"
+    ]
+  },
+  {
+    "name": "memory_strengthen_confirmed",
+    "description": "7-day window; new finding confirms an existing judgment memory",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track BYD's European expansion and its impact on Tesla.",
+    "recentFindings": [],
+    "memories": [
+      { "id": "mem_byd_europe_slow", "type": "judgment", "content": "BYD's European expansion has been slower than expected in impacting Tesla share", "confidence": 0.7 }
+    ],
+    "results": [
+      { "title": "BYD delays Hungarian plant opening by 6 months", "url": "https://bloomberg.com/byd-hungary-delay", "snippet": "Production timeline slips.", "published": "{{today-2d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "At least 1 memoryUpdate has action 'strengthen' targeting memoryId 'mem_byd_europe_slow'",
+      "The strengthen update's confidence is greater than 0.7",
+      "findings array includes the Hungarian plant delay with relevanceScore >= 0.6"
+    ]
+  },
+  {
+    "name": "memory_weaken_contradicted",
+    "description": "7-day window; new finding contradicts an existing judgment memory",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track Federal Reserve policy direction.",
+    "recentFindings": [],
+    "memories": [
+      { "id": "mem_fed_hawkish", "type": "judgment", "content": "Fed is leaning hawkish through Q2 2026", "confidence": 0.8 }
+    ],
+    "results": [
+      { "title": "Powell signals rate cuts possible as soon as June", "url": "https://reuters.com/powell-rate-cuts", "snippet": "Fed Chair suggests dovish pivot.", "published": "{{today-2d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "At least 1 memoryUpdate has action 'weaken' targeting memoryId 'mem_fed_hawkish'",
+      "The weaken update's confidence is less than 0.8",
+      "findings array includes the Powell statement with relevanceScore >= 0.7"
+    ]
+  },
+  {
+    "name": "empty_results_empty_findings",
+    "description": "7-day window; empty results list",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Track an obscure topic.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [],
+    "criteria": [
+      "Returns a valid JSON object with findings and memoryUpdates arrays",
+      "findings array is empty",
+      "memoryUpdates array has at most 1 entry (empty is preferred, one meta-observation acceptable)",
+      "cadenceRecommendation is 'maintain' or 'relax'"
+    ]
+  },
+  {
+    "name": "mixed_ages_same_story",
+    "description": "7-day window; same story appears fresh from one source and stale from another — must group using fresh source",
+    "today": "{{today}}",
+    "cutoffDate": "{{today-7d}}",
+    "searchDays": 7,
+    "userGoal": "Monitor regulatory action against Stripe.",
+    "recentFindings": [],
+    "memories": [],
+    "results": [
+      { "title": "Stripe hit with CFPB inquiry over dispute handling — original report", "url": "https://reuters.com/stripe-cfpb-inquiry", "snippet": "Consumer Financial Protection Bureau opens inquiry.", "published": "{{today-20d}}" },
+      { "title": "Stripe CFPB inquiry: what merchants need to know", "url": "https://bloomberg.com/stripe-cfpb-merchants", "snippet": "Follow-up coverage as new details emerge.", "published": "{{today-2d}}" }
+    ],
+    "criteria": [
+      "Returns a valid JSON object",
+      "findings array contains at most 1 finding about the Stripe CFPB inquiry",
+      "If a finding is returned, its sourceUrl is bloomberg.com (the fresh source within the 7-day window), not reuters.com (stale)",
+      "No finding has a relevanceScore > 0 for the reuters.com article"
+    ]
+  }
+]

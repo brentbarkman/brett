@@ -1,0 +1,98 @@
+[
+  {
+    "name": "complete_after_search_single",
+    "description": "User asks to complete a task; search finds exactly one matching task; model should call complete_task with that id",
+    "userMessage": "mark buy groceries as done",
+    "priorToolCall": {
+      "name": "search_things",
+      "args": { "query": "buy groceries" }
+    },
+    "priorToolResult": "{\"items\":[{\"id\":\"clxk8h000001grocery7z6a\",\"title\":\"Buy groceries\",\"status\":\"active\",\"listName\":\"Today\"}]}",
+    "expectedNextSkill": "complete_task",
+    "expectedNextArgsContain": { "id": "clxk8h000001grocery7z6a" }
+  },
+  {
+    "name": "move_after_search_single",
+    "description": "User asks to move a task to a list; search finds one matching task; model should call move_to_list with id + listName",
+    "userMessage": "move the NVDA research to the investing list",
+    "priorToolCall": {
+      "name": "search_things",
+      "args": { "query": "NVDA research" }
+    },
+    "priorToolResult": "{\"items\":[{\"id\":\"clxk8h000002nvdaresearch\",\"title\":\"NVDA research\",\"status\":\"active\",\"listName\":\"Inbox\"}]}",
+    "expectedNextSkill": "move_to_list",
+    "expectedNextArgsContain": { "id": "clxk8h000002nvdaresearch", "listName": "investing" }
+  },
+  {
+    "name": "snooze_after_search_single",
+    "description": "User asks to snooze a task with a specific when; search finds one match; model should call snooze_item with id + future date",
+    "userMessage": "snooze the gym task until next Monday",
+    "priorToolCall": {
+      "name": "search_things",
+      "args": { "query": "gym" }
+    },
+    "priorToolResult": "{\"items\":[{\"id\":\"clxk8h000003gymtask123\",\"title\":\"Gym session\",\"status\":\"active\",\"listName\":\"Personal\"}]}",
+    "expectedNextSkill": "snooze_item",
+    "expectedNextArgsContain": { "id": "clxk8h000003gymtask123" }
+  },
+  {
+    "name": "archive_list_direct",
+    "description": "User asks to archive a list; search_things returns list metadata; model should call archive_list (name-based, no id needed)",
+    "userMessage": "archive the old Q1 list",
+    "priorToolCall": {
+      "name": "search_things",
+      "args": { "query": "Q1 list" }
+    },
+    "priorToolResult": "{\"lists\":[{\"id\":\"clxk8h000004q1list7890\",\"name\":\"Q1 planning\",\"itemCount\":12,\"archivedAt\":null}]}",
+    "expectedNextSkill": "archive_list",
+    "expectedNextArgsContain": {}
+  },
+  {
+    "name": "get_detail_after_search",
+    "description": "User asks for details about a task; search finds one match; model should call get_item_detail with id",
+    "userMessage": "show me the details of my NVDA thesis",
+    "priorToolCall": {
+      "name": "search_things",
+      "args": { "query": "NVDA thesis" }
+    },
+    "priorToolResult": "{\"items\":[{\"id\":\"clxk8h000005nvdathesis8\",\"title\":\"NVDA investment thesis\",\"status\":\"active\",\"listName\":\"Investing\"}]}",
+    "expectedNextSkill": "get_item_detail",
+    "expectedNextArgsContain": { "id": "clxk8h000005nvdathesis8" }
+  },
+  {
+    "name": "update_after_search_single",
+    "description": "User asks to update notes on a task; search finds one match; model should call update_item with id",
+    "userMessage": "change my notes on the project plan to mention the Q3 budget reshuffle",
+    "priorToolCall": {
+      "name": "search_things",
+      "args": { "query": "project plan" }
+    },
+    "priorToolResult": "{\"items\":[{\"id\":\"clxk8h000006projectplan\",\"title\":\"Project plan\",\"status\":\"active\",\"listName\":\"Work\",\"notes\":\"initial draft\"}]}",
+    "expectedNextSkill": "update_item",
+    "expectedNextArgsContain": { "id": "clxk8h000006projectplan" }
+  },
+  {
+    "name": "ambiguous_multiple_matches",
+    "description": "User asks to complete a task; search returns multiple matches; model should NOT blindly pick one",
+    "userMessage": "complete the budget review task",
+    "priorToolCall": {
+      "name": "search_things",
+      "args": { "query": "budget review" }
+    },
+    "priorToolResult": "{\"items\":[{\"id\":\"clxk8h000007q2budget000\",\"title\":\"Q2 budget review\",\"status\":\"active\",\"listName\":\"Q2 Planning\"},{\"id\":\"clxk8h000008q3budget000\",\"title\":\"Q3 budget review\",\"status\":\"active\",\"listName\":\"Investing\"}]}",
+    "expectedNextSkill": null,
+    "expectedNextArgsContain": {}
+  },
+  {
+    "name": "empty_search_result",
+    "description": "User asks about a task; search returns no matches; model should NOT fabricate a tool call, should explain in text",
+    "userMessage": "mark the quarterly planning task as done",
+    "priorToolCall": {
+      "name": "search_things",
+      "args": { "query": "quarterly planning" }
+    },
+    "priorToolResult": "{\"items\":[]}",
+    "expectedNextSkill": null,
+    "expectedNextArgsContain": {}
+  }
+]

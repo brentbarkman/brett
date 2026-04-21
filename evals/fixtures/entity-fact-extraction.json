@@ -1,0 +1,109 @@
+[
+  {
+    "name": "task_no_user_facts",
+    "description": "Transient task content with no durable user facts",
+    "entityLabel": "task",
+    "content": "Review Q3 budget with finance team — Sarah mentioned we need to cut 15% from the design tools line item. Check Figma enterprise vs team pricing.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty"
+    ]
+  },
+  {
+    "name": "meeting_note_preference",
+    "description": "Meeting recap that contains one explicit user preference",
+    "entityLabel": "meeting note",
+    "content": "Standup recap: Jordan shared the roadmap. I said I prefer we move standups to async going forward — I find them more distracting than useful.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'preference' describes the async-standup preference",
+      "No fact restates the meeting recap itself as a fact"
+    ]
+  },
+  {
+    "name": "task_with_context_clue",
+    "description": "Task content that incidentally reveals the user's role",
+    "entityLabel": "task",
+    "content": "Draft CEO letter to investors — Q1 results. As CEO, this is one of my most important quarterly comms.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'context' identifies the user as CEO",
+      "No fact captures the draft-letter task itself as a user fact"
+    ]
+  },
+  {
+    "name": "meeting_relationship_mention",
+    "description": "Meeting note that reveals a manager relationship",
+    "entityLabel": "meeting note",
+    "content": "1:1 with my manager Jordan. Discussed my promotion case. Jordan agreed to put me up for Director at next calibration.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'relationship' identifies Jordan as the user's manager",
+      "No fact captures the one-time promotion discussion as a durable fact"
+    ]
+  },
+  {
+    "name": "empty_entity",
+    "description": "Minimal task content with no durable facts",
+    "entityLabel": "task",
+    "content": "Follow up with Sarah.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty"
+    ]
+  },
+  {
+    "name": "task_with_habit",
+    "description": "Task content that describes a recurring weekly routine",
+    "entityLabel": "task",
+    "content": "Friday shutdown routine: review the week, plan next week, clear inbox. Doing this every Friday at 4pm keeps me sane.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'habit' describes the Friday shutdown routine",
+      "No separate facts are extracted for the routine's sub-steps (review the week, plan next week, clear inbox)"
+    ]
+  },
+  {
+    "name": "meeting_note_multiple_facts",
+    "description": "Onboarding meeting note for a new direct report",
+    "entityLabel": "meeting note",
+    "content": "New hire onboarding: welcomed Priya Nair to the team. She's joining as Staff Engineer, reporting to me. She relocated from London to SF last month.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'relationship' identifies Priya as the user's direct report",
+      "No two facts share the same key"
+    ]
+  },
+  {
+    "name": "task_transient_only",
+    "description": "Task content that is entirely transient",
+    "entityLabel": "task",
+    "content": "Buy birthday cake for Sam by Saturday.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty"
+    ]
+  },
+  {
+    "name": "meeting_note_preference_inferred",
+    "description": "Meeting note where the user explicitly states a preference for daily standups",
+    "entityLabel": "meeting note",
+    "content": "Retro with the team. I mentioned I don't like when we skip daily standups — they're my only way to see what's happening. Team agreed to keep them.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'preference' captures the value placed on daily standups",
+      "No fact captures the team's agreement or the retro itself as a durable fact"
+    ]
+  },
+  {
+    "name": "content_with_no_user_fact",
+    "description": "Saved topical article with no user-specific information",
+    "entityLabel": "content",
+    "content": "Saved article: The state of AI coding assistants in 2026. Covers GitHub Copilot, Cursor, Windsurf, and Claude Code. Claude Code leads in long-context tasks.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty",
+      "No fact is fabricated (no 'user prefers Claude Code' inferred from the user having saved the article)"
+    ]
+  }
+]

@@ -1,0 +1,198 @@
+[
+  {
+    "name": "person_works_at_company",
+    "description": "Meeting recap mentioning one person and one company",
+    "content": "I had a meeting with Jordan Chen from Acme Corp about the Q3 roadmap. Jordan is the VP of Product there.",
+    "criteria": [
+      "Returns a valid JSON object with 'entities' and 'relationships' arrays",
+      "entities include a person named 'Jordan Chen'",
+      "entities include a company named 'Acme Corp'",
+      "At least 1 relationship has sourceName 'Jordan Chen', relationship 'works_at', targetName 'Acme Corp'",
+      "The entities array does NOT contain any user-referencing entry. Relationships may legitimately use targetName='user'."
+    ]
+  },
+  {
+    "name": "multiple_entities_and_tools",
+    "description": "Project description mentioning team members and tools",
+    "content": "The mobile launch project team is Lena Park (design), Marcus Chen (engineering), and me. We're using Figma for designs and Linear for project tracking.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include a project (e.g., 'Mobile Launch')",
+      "entities include persons 'Lena Park' and 'Marcus Chen'",
+      "entities include tools 'Figma' and 'Linear'",
+      "The entities array does NOT contain any user-referencing entry. Relationships may legitimately use targetName='user'.",
+      "At least 1 relationship connects the project to either Figma or Linear via 'uses'"
+    ]
+  },
+  {
+    "name": "reports_to_relationship",
+    "description": "New-hire announcement with explicit reporting relationship",
+    "content": "Sarah joined my team this month. She reports to me and will lead the pricing workstream.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include a person 'Sarah'",
+      "At least 1 relationship with type 'reports_to' has Sarah as the source",
+      "The entities array does NOT contain any user-referencing entry. Relationships may legitimately use targetName='user'."
+    ]
+  },
+  {
+    "name": "empty_content",
+    "description": "Journaling content with no entities or relationships",
+    "content": "Had a quiet morning. Drank coffee and thought about life.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities array is empty",
+      "relationships array is empty"
+    ]
+  },
+  {
+    "name": "canonical_naming",
+    "description": "Person referenced by both short and full name — should produce one entity with canonical form",
+    "content": "Dan (Dan Cole) just joined us as CRO. Dan reports directly to me and owns our entire revenue org.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "Exactly one person entity for Dan Cole — not separate entries for 'Dan' and 'Dan Cole'",
+      "The person entity uses the fuller name 'Dan Cole'",
+      "At least 1 relationship with type 'reports_to' has Dan Cole as the source",
+      "The entities array does NOT contain any user-referencing entry. Relationships may legitimately use targetName='user'."
+    ]
+  },
+  {
+    "name": "topic_entity",
+    "description": "Research session mentioning an abstract topic and specific tools",
+    "content": "Spent the afternoon researching vector databases for our RAG setup. Pinecone and Weaviate are the main options.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include at least one entry whose name contains 'vector database', 'RAG', or 'vector db' (case-insensitive) — acceptable types include topic, project, or tool",
+      "entities include tools 'Pinecone' and 'Weaviate'",
+      "The entities array does NOT contain any user-referencing entry. Relationships may legitimately use targetName='user'."
+    ]
+  },
+  {
+    "name": "location_entity",
+    "description": "Event planning note mentioning a city and hotel",
+    "content": "The team offsite is in Denver in May. Booked the Crawford Hotel downtown.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include 'Denver' as a location",
+      "No month-word like 'May' appears as an entity"
+    ]
+  },
+  {
+    "name": "blocks_relationship",
+    "description": "Project status note with explicit blocking relationship",
+    "content": "The API migration is blocking the mobile launch. We can't ship until the new endpoints are live.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include 'API Migration' and 'Mobile Launch' as projects",
+      "At least 1 relationship with type 'blocks' exists from API Migration to Mobile Launch"
+    ]
+  },
+  {
+    "name": "collaborates_with",
+    "description": "Content describing ongoing cross-team collaboration",
+    "content": "I've been pairing with Alex Rivera on the checkout redesign all week. He's the product lead on their side.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include a person 'Alex Rivera'",
+      "At least 1 relationship connects Alex Rivera to the checkout redesign project (any relationship type — collaborates_with, works_on, part_of)",
+      "The entities array does NOT contain any user-referencing entry. Relationships may legitimately use targetName='user'."
+    ]
+  },
+  {
+    "name": "no_fabrication_from_ambiguous",
+    "description": "Content with only vague/ambiguous mentions and no concrete entities",
+    "content": "Someone mentioned a new AI tool at the all-hands but I forgot the name.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "No entity has a name that was invented (no 'someone', no fabricated tool name, no fabricated person)",
+      "entities and relationships arrays are either empty or contain only explicitly-named items"
+    ]
+  },
+  {
+    "name": "discussed_in_relationship",
+    "description": "1:1 meeting note covering multiple topics",
+    "content": "In my 1:1 with Patricia, we discussed the Q3 roadmap, the hiring plan, and the new office in Austin.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include a person 'Patricia'",
+      "entities include 'Q3 Roadmap' (or similar), 'Hiring Plan' (or similar)",
+      "entities include 'Austin' as a location",
+      "The entities array does NOT contain any user-referencing entry. Relationships may legitimately use targetName='user'."
+    ]
+  },
+  {
+    "name": "multi_company_people",
+    "description": "Joint session with attendees from 3 different companies",
+    "content": "Joint session with Sarah Kim (Stripe), Marcus Chen (our team), and Priya Nair (Figma) about payment flow integration.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include persons Sarah Kim, Marcus Chen, and Priya Nair",
+      "entities include companies 'Stripe' and 'Figma'",
+      "At least 1 relationship with type 'works_at' connects Sarah Kim to Stripe",
+      "At least 1 relationship with type 'works_at' connects Priya Nair to Figma"
+    ]
+  },
+  {
+    "name": "manages_relationship",
+    "description": "Team listing with explicit management relationship",
+    "content": "My team: I manage Lena Park, Marcus Chen, and Alex Rivera.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include persons Lena Park, Marcus Chen, and Alex Rivera",
+      "Each of the three persons has a 'reports_to' or 'manages' relationship consistent with being on the user's team",
+      "The entities array does NOT contain any user-referencing entry. Relationships may legitimately use targetName='user'."
+    ]
+  },
+  {
+    "name": "owns_relationship",
+    "description": "Project ownership statement",
+    "content": "Kai Nakamura owns the launch marketing plan. He's driving it end to end.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include a person 'Kai Nakamura'",
+      "entities include a project or initiative corresponding to the launch marketing plan",
+      "At least 1 relationship with type 'owns' or 'produced_by' connects Kai to the plan"
+    ]
+  },
+  {
+    "name": "depends_on",
+    "description": "Project dependency statement",
+    "content": "The data warehouse migration depends on the auth service upgrade — we need the new tokens before we can run the backfill.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include projects for the data warehouse migration and the auth service upgrade",
+      "At least 1 relationship with type 'depends_on' or 'blocks' connects the two projects"
+    ]
+  },
+  {
+    "name": "uses_tool_relationship",
+    "description": "Statement about another person's tool usage",
+    "content": "Jen uses Claude for research and writing tasks. She swears by the long context.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "entities include a person 'Jen'",
+      "entities include a tool 'Claude'",
+      "At least 1 relationship with type 'uses' connects Jen to Claude"
+    ]
+  },
+  {
+    "name": "no_user_as_entity",
+    "description": "User describes own work, no external people mentioned",
+    "content": "I'm working on the pricing deck today. It's my main focus.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "The entities array does NOT contain any user-referencing entry (no person entity named user, me, I, or the user's name). Relationships may legitimately reference targetName='user'."
+    ]
+  },
+  {
+    "name": "plain_list_no_relationships",
+    "description": "Team roster with names only, no relational context",
+    "content": "Team roster: Lena, Marcus, Alex, Sarah, Priya.",
+    "criteria": [
+      "Returns a valid JSON object",
+      "All 5 persons (Lena, Marcus, Alex, Sarah, Priya) are extracted as entities",
+      "No invented company or project appears in entities"
+    ]
+  }
+]
