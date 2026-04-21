@@ -23,8 +23,20 @@
     ],
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["arm64", "x64"] },
-        { "target": "zip", "arch": ["arm64", "x64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ],
       "icon": "resources/icon.icns",
       "hardenedRuntime": true,
@@ -36,10 +48,22 @@
     "dmg": {
       "iconSize": 160,
       "iconTextSize": 13,
-      "window": { "width": 540, "height": 380 },
+      "window": {
+        "width": 540,
+        "height": 380
+      },
       "contents": [
-        { "x": 140, "y": 200, "type": "file" },
-        { "x": 400, "y": 200, "type": "link", "path": "/Applications" }
+        {
+          "x": 140,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "publish": {
@@ -59,7 +83,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@better-auth/passkey": "^1.5.6",
+    "@better-auth/passkey": "^1.6.6",
     "@brett/business": "workspace:*",
     "@brett/types": "workspace:*",
     "@brett/ui": "workspace:*",
@@ -67,12 +91,12 @@
     "@carrot-kpi/switzer-font": "^0.1.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
     "@tanstack/react-query": "^5.60.0",
-    "better-auth": "^1.2.7",
+    "better-auth": "^1.6.6",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.3",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^7.13.1",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-router-dom": "^7.14.2",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
