@@ -55,6 +55,7 @@ interface ContentPreviewProps {
   contentMetadata?: ContentMetadata;
   attachmentUrl?: string; // presigned S3 URL for drag-dropped PDFs
   onRetry?: () => void;
+  isRetrying?: boolean;
   assistantName?: string;
 }
 
@@ -84,7 +85,7 @@ function LoadingSkeleton({ contentType }: { contentType?: ContentType }) {
   );
 }
 
-function ErrorState({ sourceUrl, onRetry, assistantName = "Brett" }: { sourceUrl?: string; onRetry?: () => void; assistantName?: string }) {
+function ErrorState({ sourceUrl, onRetry, isRetrying, assistantName = "Brett" }: { sourceUrl?: string; onRetry?: () => void; isRetrying?: boolean; assistantName?: string }) {
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -105,10 +106,11 @@ function ErrorState({ sourceUrl, onRetry, assistantName = "Brett" }: { sourceUrl
         {onRetry && (
           <button
             onClick={onRetry}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            disabled={isRetrying}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-60 disabled:cursor-wait disabled:hover:bg-white/5 disabled:hover:text-white/60"
           >
-            <RefreshCw size={12} />
-            Try again
+            <RefreshCw size={12} className={isRetrying ? "animate-spin" : ""} />
+            {isRetrying ? "Retrying…" : "Try again"}
           </button>
         )}
         <span className="text-[10px] text-white/20">
@@ -504,6 +506,7 @@ export function ContentPreview({
   contentMetadata,
   attachmentUrl,
   onRetry,
+  isRetrying,
   assistantName = "Brett",
 }: ContentPreviewProps) {
   // Loading state
@@ -513,7 +516,7 @@ export function ContentPreview({
 
   // Error state
   if (contentStatus === "failed") {
-    return <ErrorState sourceUrl={sourceUrl} onRetry={onRetry} assistantName={assistantName} />;
+    return <ErrorState sourceUrl={sourceUrl} onRetry={onRetry} isRetrying={isRetrying} assistantName={assistantName} />;
   }
 
   // Render based on content type

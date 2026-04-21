@@ -5,6 +5,9 @@ import {
   buildApplePodcastEmbedUrl,
   extractYouTubeVideoId,
   extractArticle,
+  extractTweetId,
+  extractTweetAuthor,
+  computeSyndicationToken,
 } from "../lib/content-extractor.js";
 // cleanFilename is from @brett/ui — import directly since API doesn't depend on ui package
 function cleanFilename(filename: string): string {
@@ -124,6 +127,57 @@ describe("buildApplePodcastEmbedUrl", () => {
 
   it("returns null for non-podcast URL", () => {
     expect(buildApplePodcastEmbedUrl("https://example.com/not-a-podcast")).toBeNull();
+  });
+});
+
+describe("extractTweetId", () => {
+  it("extracts ID from x.com status URL", () => {
+    expect(extractTweetId("https://x.com/aiedge_/status/2046352285622731011")).toBe("2046352285622731011");
+  });
+
+  it("extracts ID from twitter.com status URL", () => {
+    expect(extractTweetId("https://twitter.com/vercel/status/1683920951807971329")).toBe("1683920951807971329");
+  });
+
+  it("ignores trailing query string", () => {
+    expect(extractTweetId("https://x.com/aiedge_/status/2046352285622731011?s=12&t=abc")).toBe("2046352285622731011");
+  });
+
+  it("handles /statuses/ legacy path form", () => {
+    expect(extractTweetId("https://twitter.com/user/statuses/123456789")).toBe("123456789");
+  });
+
+  it("returns null for non-tweet URLs", () => {
+    expect(extractTweetId("https://x.com/aiedge_")).toBeNull();
+    expect(extractTweetId("https://example.com/foo/status/123")).toBeNull();
+  });
+});
+
+describe("extractTweetAuthor", () => {
+  it("extracts @handle from x.com URL", () => {
+    expect(extractTweetAuthor("https://x.com/aiedge_/status/2046352285622731011")).toBe("aiedge_");
+  });
+
+  it("extracts @handle from twitter.com URL", () => {
+    expect(extractTweetAuthor("https://twitter.com/vercel/status/1683920951807971329")).toBe("vercel");
+  });
+
+  it("returns null for URLs without a handle", () => {
+    expect(extractTweetAuthor("https://x.com/i/status/123")).toBe("i"); // edge: "i" is technically the handle here
+    expect(extractTweetAuthor("https://example.com/something")).toBeNull();
+  });
+});
+
+describe("computeSyndicationToken", () => {
+  it("matches react-tweet's token derivation for known tweet IDs", () => {
+    // These values were verified by hitting cdn.syndication.twimg.com manually.
+    expect(computeSyndicationToken("2046352285622731011")).toBe("4ykszoetnf");
+    expect(computeSyndicationToken("1683920951807971329")).toBe("42y6zv7ufp");
+  });
+
+  it("is deterministic", () => {
+    const id = "1234567890123456789";
+    expect(computeSyndicationToken(id)).toBe(computeSyndicationToken(id));
   });
 });
 

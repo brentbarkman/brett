@@ -54,6 +54,7 @@ interface DetailPanelProps {
   onOpenSettings?: () => void;
   // Content extraction
   onRetryExtraction?: () => void;
+  isRetryingExtraction?: boolean;
   // Calendar event callbacks
   calendarEventDetail?: CalendarEventDetailResponse | null;
   isLoadingCalendarDetail?: boolean;
@@ -132,6 +133,7 @@ export function DetailPanel({
   brettAiConfigured,
   onOpenSettings,
   onRetryExtraction,
+  isRetryingExtraction,
   calendarEventDetail,
   isLoadingCalendarDetail,
   onUpdateRsvp,
@@ -289,6 +291,7 @@ export function DetailPanel({
             brettAiConfigured={brettAiConfigured}
             onOpenSettings={onOpenSettings}
             onRetryExtraction={onRetryExtraction}
+            isRetryingExtraction={isRetryingExtraction}
             onItemClick={onItemClick}
             onEventClick={onEventClick}
             onNavigateToScout={onNavigateToScout}

@@ -58,6 +58,7 @@ interface ContentDetailPanelProps {
   onOpenSettings?: () => void;
   // Content extraction retry
   onRetryExtraction?: () => void;
+  isRetryingExtraction?: boolean;
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigateToScout?: (scoutId: string) => void;
@@ -97,6 +98,7 @@ export function ContentDetailPanel({
   brettAiConfigured,
   onOpenSettings,
   onRetryExtraction,
+  isRetryingExtraction,
   onItemClick,
   onEventClick,
   onNavigateToScout,
@@ -268,6 +270,7 @@ export function ContentDetailPanel({
                 : undefined
             }
             onRetry={onRetryExtraction}
+            isRetrying={isRetryingExtraction}
             assistantName={assistantName}
           />
 
