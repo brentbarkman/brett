@@ -434,20 +434,26 @@ function NewsletterPreview({
       ALLOW_DATA_ATTR: false,
     });
 
+    // Render newsletters on a white surface like Gmail / Apple Mail. Newsletter
+    // HTML is designed for white backgrounds and frequently carries black (or no
+    // explicit) text color on its body — inheriting a dark default from us
+    // leaves paragraphs invisible on the newsletter's own white regions.
     return `<!DOCTYPE html>
 <html><head><style>
+  html, body {
+    background: #ffffff;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
     line-height: 1.6;
-    color: rgba(255,255,255,0.85);
-    background: transparent;
+    color: #1a1a1a;
     max-width: 680px;
     margin: 0 auto;
-    padding: 0;
+    padding: 16px;
     overflow-x: hidden;
   }
-  a { color: #D4AF37; }
+  a { color: #0B5FFF; }
   img { max-width: 100%; height: auto; }
   table { max-width: 100%; }
 </style></head><body>${sanitized}</body></html>`;
@@ -476,8 +482,7 @@ function NewsletterPreview({
           sandbox="allow-same-origin"
           srcDoc={iframeContent}
           title="Newsletter content"
-          className="w-full min-h-[300px] max-h-[60vh] rounded-lg border border-white/10 bg-transparent"
-          style={{ colorScheme: "dark" }}
+          className="w-full min-h-[480px] max-h-[80vh] rounded-lg border border-white/10 bg-white"
         />
       ) : (
         <p className="text-sm text-white/40 italic">Newsletter content unavailable</p>
