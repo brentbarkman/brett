@@ -80,6 +80,16 @@ struct EventFormattingTests {
         #expect(formatted.contains("–"))
     }
 
+    @Test func chipMinHeightAccommodatesMetaLine() {
+        // A chip with only a title (no location/meeting link) fits in the
+        // base minimum. A chip WITH a meta line (location + duration) needs
+        // more room so the second text line stays inside the background.
+        let bare = DayTimeline.chipMinHeight(hasMeta: false)
+        let withMeta = DayTimeline.chipMinHeight(hasMeta: true)
+        #expect(bare == 28)
+        #expect(withMeta >= 44)
+    }
+
     @Test func historyPluralsFlipAtOne() {
         let once = APIClient.MeetingHistoryResponse(
             recurringEventId: "rec-1",

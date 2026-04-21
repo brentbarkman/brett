@@ -1,0 +1,24 @@
+[
+  {
+    "suite": "bretts-take",
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5-20251001",
+    "timestamp": "2026-04-20T22:27:05.057Z",
+    "passed": 0,
+    "total": 1,
+    "score": 0,
+    "results": [
+      {
+        "input": "event_mid_meeting",
+        "expected": "all criteria pass",
+        "actual": "error",
+        "passed": false,
+        "note": "runtime error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011CaFowvdnB7RR9zkhzojEq\"}"
+      }
+    ],
+    "promptHash": "21e335b56b5d",
+    "fixtureHash": "bc15c6b8a584",
+    "tokensInput": 0,
+    "tokensOutput": 0
+  }
+]

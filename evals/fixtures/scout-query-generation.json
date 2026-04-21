@@ -1,0 +1,138 @@
+[
+  {
+    "name": "finance_stock_thesis",
+    "description": "TSLA investor goal with 1 recent finding already reported",
+    "userGoal": "I hold a large TSLA position. Alert me when news challenges my bull thesis — delivery misses, competitive threats from BYD/Rivian, regulatory risk, or insider selling.",
+    "recentFindings": [
+      { "title": "Tesla Q1 2026 delivery numbers beat estimates", "url": "https://reuters.com/tesla-q1-deliveries" }
+    ],
+    "sources": [],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array of 1 to 3 entries",
+      "Every query has 15 words or fewer",
+      "At least one query targets one of the stated angles (regulation, competition from BYD/Rivian, or insider selling)",
+      "No query duplicates the Q1 deliveries story already in recentFindings",
+      "At least one query includes a time marker (year, month, 'latest', or similar)"
+    ]
+  },
+  {
+    "name": "academic_research_with_sources",
+    "description": "Research goal with 2 preferred academic sources specified",
+    "userGoal": "Track new systematic reviews and meta-analyses on the effects of intermittent fasting on metabolic health.",
+    "recentFindings": [],
+    "sources": ["pubmed.gov", "nature.com"],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array of 1 to 3 entries",
+      "At least one query uses 'site:pubmed.gov' or 'site:nature.com'",
+      "At least one query uses academic terms like 'systematic review' or 'meta-analysis'",
+      "Every query has 15 words or fewer"
+    ]
+  },
+  {
+    "name": "competitor_tracking",
+    "description": "Anthropic + OpenAI competitive monitoring with 1 recent OpenAI announcement",
+    "userGoal": "Monitor Anthropic and OpenAI for any pricing changes, new model releases, or reliability incidents that affect our build vs buy decision.",
+    "recentFindings": [
+      { "title": "OpenAI o4 announcement", "url": "https://openai.com/news/o4" }
+    ],
+    "sources": [],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array of 1 to 3 entries",
+      "At least one query references Anthropic or OpenAI by name",
+      "At least one query targets pricing, a release, or an incident",
+      "No query duplicates the OpenAI o4 announcement already in recentFindings",
+      "Every query has 15 words or fewer"
+    ]
+  },
+  {
+    "name": "news_broad_topic",
+    "description": "Broad geopolitical news monitoring goal",
+    "userGoal": "Track developments in US-China tech decoupling — chip export controls, tariffs, and company-level responses.",
+    "recentFindings": [],
+    "sources": [],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array of 1 to 3 entries",
+      "No query uses an academic site filter (no site:pubmed.gov, no site:arxiv.org)",
+      "At least one query references chip exports, tariffs, or semiconductor policy",
+      "Every query has 15 words or fewer"
+    ]
+  },
+  {
+    "name": "avoid_recent_findings",
+    "description": "Fed rate goal with 3 recent findings spanning multiple angles already reported",
+    "userGoal": "Track Federal Reserve interest rate decisions and their impact on tech stock valuations.",
+    "recentFindings": [
+      { "title": "Fed holds rates steady at March meeting", "url": "https://reuters.com/fed-march" },
+      { "title": "Powell signals patience on cuts", "url": "https://ft.com/powell-patience" },
+      { "title": "Tech stocks rebound post-Fed", "url": "https://wsj.com/tech-rebound" }
+    ],
+    "sources": [],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array of 1 to 3 entries",
+      "No query duplicates any of the three recent findings (the March Fed meeting, Powell's patience signal, or the post-Fed tech rebound)",
+      "Every query has 15 words or fewer"
+    ]
+  },
+  {
+    "name": "minimum_one_query",
+    "description": "Narrow goal with no recent findings",
+    "userGoal": "Notify me if any Function Health investors publicly discuss their positions.",
+    "recentFindings": [],
+    "sources": [],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array containing at least 1 query",
+      "At least one query references Function Health or its investors",
+      "Every query has 15 words or fewer"
+    ]
+  },
+  {
+    "name": "single_preferred_source",
+    "description": "Research goal with one preferred academic source (arxiv)",
+    "userGoal": "Track new research papers on diffusion models and their applications in video generation.",
+    "recentFindings": [],
+    "sources": ["arxiv.org"],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array of 1 to 3 entries",
+      "At least one query uses 'site:arxiv.org'",
+      "At least one query is open-ended (does not use any site: filter)",
+      "At least one query references diffusion models or video generation",
+      "Every query has 15 words or fewer"
+    ]
+  },
+  {
+    "name": "query_length_limits",
+    "description": "Narrow regulatory-news goal",
+    "userGoal": "Monitor breaking news on regulatory actions against Stripe.",
+    "recentFindings": [],
+    "sources": [],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array",
+      "Every query has 15 words or fewer",
+      "At least one query references Stripe and a regulatory angle"
+    ]
+  },
+  {
+    "name": "max_three_queries",
+    "description": "Overloaded user goal listing 5 sub-topics — should still collapse to 1-3 queries",
+    "userGoal": "Track for me: (1) Tesla regulatory news, (2) BYD earnings, (3) Rivian production milestones, (4) broader EV industry consolidation, and (5) battery supply chain disruptions.",
+    "recentFindings": [],
+    "sources": [],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array containing at most 3 entries",
+      "Every query has 15 words or fewer"
+    ]
+  },
+  {
+    "name": "specific_company_no_news",
+    "description": "Niche company goal with no recent findings",
+    "userGoal": "Alert me when Mercor (the recruiting company) publicly reveals new enterprise customers or product pivots.",
+    "recentFindings": [],
+    "sources": [],
+    "criteria": [
+      "Returns a valid JSON object with a 'queries' array of 1 to 3 entries",
+      "At least one query references Mercor by name",
+      "At least one query targets enterprise customers or product pivots",
+      "Every query has 15 words or fewer"
+    ]
+  }
+]

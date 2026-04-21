@@ -1,0 +1,45 @@
+[
+  {
+    "name": "task_link_format",
+    "description": "User message describes results from a just-completed list_today tool call; assistant must link tasks by cuid",
+    "userInput": "I ran list_today. Tool returned two tasks:\n- id=clxk8h2j50001abc3def7g9i2 title=\"Ship v2 release notes\" due=today\n- id=clxk8h2j50002abc3def7g9i3 title=\"Review Q3 budget\" due=overdue by 2 days\n\nWrite me a two-line summary of these using Brett's link format so the task titles are clickable.",
+    "criteria": [
+      "Response references both tasks by title",
+      "Response contains the exact markdown substring [Ship v2 release notes](brett-item:clxk8h2j50001abc3def7g9i2)",
+      "Response contains the exact markdown substring [Review Q3 budget](brett-item:clxk8h2j50002abc3def7g9i3)",
+      "Response does not include either cuid outside a markdown link"
+    ]
+  },
+  {
+    "name": "calendar_event_link_format",
+    "description": "User message describes a just-retrieved calendar event with its cuid",
+    "userInput": "I ran get_next_event. Tool returned: id=clxk8h3k60001evtx1y2z3w4 title=\"Product sync with Design\" start=10:00am.\n\nTell me about this event using Brett's link format so the event title is clickable.",
+    "criteria": [
+      "Response references the meeting",
+      "Response contains the exact markdown substring [Product sync with Design](brett-event:clxk8h3k60001evtx1y2z3w4)",
+      "Response does not use brett-item: prefix for this event"
+    ]
+  },
+  {
+    "name": "no_quoted_task_names",
+    "description": "User message describes a just-retrieved task by cuid and title",
+    "userInput": "I ran get_item_detail. Tool returned: id=clxk8h4l70001tskmom9m8a7z6 title=\"Call Mom\".\n\nTell me briefly why this task matters, using Brett's link format for the task title.",
+    "criteria": [
+      "Response references the task",
+      "Response contains the exact markdown substring [Call Mom](brett-item:clxk8h4l70001tskmom9m8a7z6)",
+      "Response does not contain the bare double-quoted string \"Call Mom\""
+    ]
+  },
+  {
+    "name": "mixed_item_types_correct_prefixes",
+    "description": "User message describes a just-completed tool call that returned one task and one event",
+    "userInput": "I ran up_next. Tool returned:\n- task: id=clxk8h5m80001tskdeck4q2w1 title=\"Finalize deck\" due=today\n- event: id=clxk8h5m90002evtbrd5r6t8u7 title=\"Board meeting\" start=3:00pm\n\nTell me what order to tackle these in, using Brett's link format for each item.",
+    "criteria": [
+      "Response references both items",
+      "Response contains the exact substring [Finalize deck](brett-item:clxk8h5m80001tskdeck4q2w1)",
+      "Response contains the exact substring [Board meeting](brett-event:clxk8h5m90002evtbrd5r6t8u7)",
+      "Response does NOT contain brett-event:clxk8h5m80001tskdeck4q2w1 (no wrong prefix for the task)",
+      "Response does NOT contain brett-item:clxk8h5m90002evtbrd5r6t8u7 (no wrong prefix for the event)"
+    ]
+  }
+]

@@ -8,7 +8,7 @@ import { logUsage } from "../memory/usage.js";
 import { INJECTION_PATTERN, TAG_INJECTION_PATTERN } from "../memory/validation.js";
 import { SECURITY_BLOCK } from "../context/system-prompts.js";
 
-const EXTRACTION_PROMPT = `${SECURITY_BLOCK}
+export const GRAPH_EXTRACTION_PROMPT = `${SECURITY_BLOCK}
 
 Extract entities and relationships from this content. Return a JSON object with two arrays.
 
@@ -21,12 +21,20 @@ works_at, manages, owns, blocks, related_to, discussed_in, produced_by, reports_
 ## Output Format
 {"entities": [{"type": "person", "name": "Jordan Chen"}], "relationships": [{"sourceType": "person", "sourceName": "Jordan Chen", "relationship": "works_at", "targetType": "company", "targetName": "Acme Corp"}]}
 
+## User-centric relationships
+The user is implicit and NEVER appears in \`entities\`. But the user CAN appear as a target in relationships where someone is connected to the user. For those, use the reserved form:
+- {"targetType": "person", "targetName": "user"}
+
+Example: content "Sarah reports to me" →
+  entities: [{"type": "person", "name": "Sarah"}]
+  relationships: [{"sourceType": "person", "sourceName": "Sarah", "relationship": "reports_to", "targetType": "person", "targetName": "user"}]
+
 ## Rules
-- Only extract entities and relationships explicitly stated or directly implied
-- Use canonical names (full names, official company names)
-- Do NOT extract the user themselves as an entity
-- If nothing worth extracting, return {"entities": [], "relationships": []}
-- No markdown fences, no commentary — only the raw JSON object`;
+- Only extract entities and relationships explicitly stated or directly implied.
+- Use canonical names (full names, official company names) — Pascal-Case for projects (e.g., "Mobile Launch" not "mobile launch").
+- Do NOT put the user in \`entities\`. They are implicit. Refer to them only as the reserved target "user" in relationships.
+- If nothing worth extracting, return {"entities": [], "relationships": []}.
+- No markdown fences, no commentary — only the raw JSON object.`;
 
 export async function extractGraph(
   text: string,
@@ -49,7 +57,7 @@ export async function extractGraph(
         content: `<user_data label="content">\n${text.slice(0, 4000)}\n</user_data>`,
       },
     ],
-    system: EXTRACTION_PROMPT,
+    system: GRAPH_EXTRACTION_PROMPT,
     temperature: 0.1,
     maxTokens: 1024,
   })) {

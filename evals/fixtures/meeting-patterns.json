@@ -1,0 +1,63 @@
+[
+  {
+    "name": "stale_action_item_series",
+    "description": "4 instances of a weekly 1:1 where one action item persists across 3 meetings before being descoped",
+    "inputData": "Analyze patterns across these 4 instances of 'Weekly 1:1 with Jordan':\n\n## Weekly 1:1 with Jordan ({{today-28d}})\nDiscussed team structure. Brent to draft a reorg proposal.\n**Action items:** Draft reorg proposal\n\n---\n\n## Weekly 1:1 with Jordan ({{today-21d}})\nFollowed up on reorg proposal — Brent hasn't gotten to it yet. Quick update on hiring.\n**Action items:** Draft reorg proposal (carried over), Schedule interviews\n\n---\n\n## Weekly 1:1 with Jordan ({{today-14d}})\nJordan asked about the reorg proposal again. Still not done. Discussed sprint velocity.\n**Action items:** Draft reorg proposal (carried over again)\n\n---\n\n## Weekly 1:1 with Jordan ({{today-7d}})\nLonger discussion on career growth. Reorg proposal still pending — agreed to descope it.\n**Action items:** Follow up with hiring manager",
+    "criteria": [
+      "Response identifies the 'Draft reorg proposal' as a stale or persistent action item across the series",
+      "Response references that it appeared in at least 3 meetings",
+      "Total output is under 200 words",
+      "Does NOT invent action items that were not in the input"
+    ]
+  },
+  {
+    "name": "recurring_topic_theme",
+    "description": "4 Product Sync meetings showing navigation as a progressing recurring theme",
+    "inputData": "Analyze patterns across these 4 instances of 'Product Sync':\n\n## Product Sync ({{today-45d}})\nDiscussed user feedback on the new navigation. Users are confused by the sidebar.\n\n## Product Sync ({{today-38d}})\nDeep dive into navigation metrics. Drop-off rate at the sidebar menu is 35%.\n\n## Product Sync ({{today-31d}})\nDesign reviewed 3 alternative navigation concepts. Team split on direction.\n\n## Product Sync ({{today-24d}})\nDecided to ship the simplified top-nav variant in the next sprint. Navigation work will continue into April.",
+    "criteria": [
+      "Response identifies 'navigation' as a recurring topic across all 4 meetings",
+      "Response traces the progression from feedback to metrics to alternatives to decision",
+      "Total output is under 200 words"
+    ]
+  },
+  {
+    "name": "notable_shift",
+    "description": "4 engineering standups showing a priority shift from feature work to reliability",
+    "inputData": "Analyze patterns across these 4 instances of 'Weekly Eng Standup':\n\n## Weekly Eng Standup ({{today-49d}})\nFocus: feature shipping for the mobile launch. Velocity strong.\n\n## Weekly Eng Standup ({{today-42d}})\nFocus: mobile launch polish. Bug count stable.\n\n## Weekly Eng Standup ({{today-35d}})\nShifted focus to infrastructure reliability — three recent outages flagged. Mobile work deprioritized.\n\n## Weekly Eng Standup ({{today-28d}})\nFocus entirely on reliability work. New SLO dashboards, on-call rotation revamp. Mobile launch pushed to Q2.",
+    "criteria": [
+      "Response identifies the shift from feature work to reliability/infra",
+      "Response notes the mobile launch being pushed out",
+      "Total output is under 200 words",
+      "Does NOT fabricate outage numbers or metrics beyond the input"
+    ]
+  },
+  {
+    "name": "sparse_data",
+    "description": "3 very short quick-check-in meetings with almost no content",
+    "inputData": "Analyze patterns across these 3 instances of 'Quick check-in':\n\n## Quick check-in ({{today-28d}})\n(no summary)\n\n## Quick check-in ({{today-21d}})\nBrief sync, nothing major.\n\n## Quick check-in ({{today-14d}})\n5 minute catch-up.",
+    "criteria": [
+      "Response explicitly notes the data is sparse or minimal",
+      "Response does NOT fabricate topics, action items, or trends not in the input",
+      "Total output is under 100 words"
+    ]
+  },
+  {
+    "name": "attendance_trend",
+    "description": "4 architecture reviews showing steadily declining attendance",
+    "inputData": "Analyze patterns across these 4 instances of 'Architecture Review':\n\n## Architecture Review ({{today-49d}})\nAttendees: 12 engineers. Discussed service boundaries.\n\n## Architecture Review ({{today-42d}})\nAttendees: 8 engineers. Service boundaries continued.\n\n## Architecture Review ({{today-35d}})\nAttendees: 5 engineers. Core team only. Deep dive on auth service.\n\n## Architecture Review ({{today-28d}})\nAttendees: 3 engineers. Working session. Productivity up.",
+    "criteria": [
+      "Response identifies that attendance is declining, from around 12 down to around 3",
+      "Total output is under 170 words"
+    ]
+  },
+  {
+    "name": "no_meaningful_patterns",
+    "description": "3 1:1s covering entirely different topics",
+    "inputData": "Analyze patterns across these 3 instances of '1:1 with Alex':\n\n## 1:1 with Alex ({{today-21d}})\nDiscussed Alex's promotion readiness. Agreed on goals for Q2.\n\n## 1:1 with Alex ({{today-14d}})\nAlex shared feedback on the new hiring process. Suggested changes.\n\n## 1:1 with Alex ({{today-7d}})\nVacation planning discussion. Alex is going to Japan in May.",
+    "criteria": [
+      "Response acknowledges the meetings cover varied topics",
+      "Response does NOT force-fit a pattern that isn't in the input",
+      "Total output is under 120 words"
+    ]
+  }
+]

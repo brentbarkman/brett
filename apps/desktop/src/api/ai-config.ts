@@ -31,7 +31,20 @@ export function useActivateAIConfig() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/ai/config/${id}/activate`, { method: "PUT" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-config"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["ai-config"] });
+      const prev = qc.getQueryData<AIConfigResponse>(["ai-config"]);
+      if (prev) {
+        qc.setQueryData<AIConfigResponse>(["ai-config"], {
+          configs: prev.configs.map((c) => ({ ...c, isActive: c.id === id })),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prev !== undefined) qc.setQueryData(["ai-config"], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["ai-config"] }),
   });
 }
 
@@ -40,6 +53,19 @@ export function useDeleteAIConfig() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/ai/config/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-config"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["ai-config"] });
+      const prev = qc.getQueryData<AIConfigResponse>(["ai-config"]);
+      if (prev) {
+        qc.setQueryData<AIConfigResponse>(["ai-config"], {
+          configs: prev.configs.filter((c) => c.id !== id),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prev !== undefined) qc.setQueryData(["ai-config"], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["ai-config"] }),
   });
 }

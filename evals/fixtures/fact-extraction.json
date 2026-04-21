@@ -1,0 +1,203 @@
+[
+  {
+    "name": "preference_communication_style",
+    "description": "Conversation where user states async-comms preference alongside a task action",
+    "conversation": "User: Can you schedule a sync with Sarah for tomorrow?\n\nBrett: Want me to book a meeting or just send her a note?\n\nUser: Just send a note. I try to avoid meetings when a Slack message would do.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact is extracted with category 'preference'",
+      "A preference fact's value describes avoiding meetings or preferring async / messages / Slack",
+      "The preference fact's key is snake_case",
+      "Does NOT extract the one-time 'schedule a sync with Sarah' request as a fact"
+    ]
+  },
+  {
+    "name": "preference_no_morning_meetings",
+    "description": "Conversation where user states a morning-block preference while handling one-off rescheduling",
+    "conversation": "User: Move my 9am standup to later, please.\n\nBrett: To what time?\n\nUser: 10:30. I don't take meetings before 10am — I need that morning block for deep work.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'preference' references morning, 10am, or deep work blocks",
+      "Does NOT extract the one-time 'move the 9am standup' request as a fact"
+    ]
+  },
+  {
+    "name": "context_job_role",
+    "description": "Conversation where user mentions their job role in passing",
+    "conversation": "User: Add a task to review the pricing deck for the Monday leadership meeting.\n\nBrett: Done. Any other prep for the meeting?\n\nUser: Not really. As a VP of Product, I just skim it and ask hard questions.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'context' identifies the user's role as VP of Product",
+      "Does NOT extract the pricing deck task as a fact"
+    ]
+  },
+  {
+    "name": "context_company",
+    "description": "Conversation where user names their company in an operational aside",
+    "conversation": "User: Block my calendar next week for the all-hands.\n\nBrett: Which days?\n\nUser: Monday and Tuesday afternoons. At Acme Corp we do two half-days for all-hands.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'context' identifies Acme Corp as the user's company",
+      "At least one fact's key is snake_case and stable (e.g., 'company_acme' or 'works_at_acme')"
+    ]
+  },
+  {
+    "name": "context_timezone",
+    "description": "Conversation where user states their own timezone while discussing another person",
+    "conversation": "User: What time is it for Jordan right now?\n\nBrett: Where is Jordan based?\n\nUser: London. I'm in Pacific, so he's 8 hours ahead.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'context' identifies the user's timezone (Pacific, PT, or PST)",
+      "No fact claims Jordan's location as a fact about the user (Jordan's London location is about Jordan, not the user)"
+    ]
+  },
+  {
+    "name": "relationship_manager",
+    "description": "Conversation where user states manager relationship and another person's preference",
+    "conversation": "User: Reschedule my 1:1 with Jordan to Thursday.\n\nBrett: Confirmed.\n\nUser: Thanks. Jordan is my manager and he prefers afternoon slots.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'relationship' identifies Jordan as the user's manager",
+      "At least one fact's key is snake_case and stable (e.g., 'manager_jordan' or 'jordan_is_manager')"
+    ]
+  },
+  {
+    "name": "relationship_direct_report",
+    "description": "Conversation where user states a new direct-report relationship",
+    "conversation": "User: Schedule a 1:1 with Priya for this Friday.\n\nBrett: Weekly or one-off?\n\nUser: Weekly going forward. She's my new direct report.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'relationship' identifies Priya as the user's direct report",
+      "At least one fact's key is snake_case"
+    ]
+  },
+  {
+    "name": "habit_morning_review",
+    "description": "Conversation where user describes a recurring morning behavior alongside a task action",
+    "conversation": "User: Add 'review PRs' to my daily list.\n\nBrett: Done.\n\nUser: Thanks. I like to do code reviews first thing every morning before meetings start.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'habit' describes the user's morning code-review routine",
+      "At least one fact's key is stable snake_case (e.g., 'morning_code_reviews')",
+      "No fact simply restates the 'review PRs' task creation as if it were a user fact (the habit is about morning reviews generally, not this specific task)"
+    ]
+  },
+  {
+    "name": "habit_weekly_planning",
+    "description": "Conversation where user describes a recurring Sunday routine while creating a calendar event",
+    "conversation": "User: Set up a recurring event for Sunday evening at 7pm called 'weekly planning'.\n\nBrett: Created.\n\nUser: Perfect. I do this every Sunday to look at the week ahead.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'habit' describes the Sunday evening planning routine",
+      "Does NOT extract the recurring event creation itself as a fact"
+    ]
+  },
+  {
+    "name": "multiple_facts_one_turn",
+    "description": "Dense conversation with multiple durable facts about a new person",
+    "conversation": "User: Book a dinner with Dan Cole for next week.\n\nBrett: Any preferred day?\n\nUser: Thursday works. Dan's our new CRO — he joined from Salesforce last month. He's vegetarian.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array has between 2 and 4 facts total",
+      "At least 1 fact identifies Dan as CRO with category 'relationship'",
+      "No duplicate keys across facts",
+      "Does NOT extract the 'book dinner with Dan on Thursday' task as a fact"
+    ]
+  },
+  {
+    "name": "negative_task_mutation",
+    "description": "Conversation with only task-mutation actions, no durable facts",
+    "conversation": "User: Mark that task done.\n\nBrett: Done — completed 'Ship release notes'.\n\nUser: Thanks.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty"
+    ]
+  },
+  {
+    "name": "negative_transient_state",
+    "description": "Conversation where user mentions a transient mood alongside task actions",
+    "conversation": "User: What's on my plate today?\n\nBrett: You have 3 tasks due and a 2pm meeting.\n\nUser: Ugh, I'm exhausted today. Can you snooze the less urgent stuff to tomorrow?",
+    "criteria": [
+      "Returns a valid JSON array",
+      "No fact describes a transient mood or state (no 'exhausted', 'tired', etc.)",
+      "Array is either empty OR contains only stable, durable facts"
+    ]
+  },
+  {
+    "name": "negative_one_time_action",
+    "description": "Conversation that is only a one-off task creation",
+    "conversation": "User: Remind me to buy milk tomorrow.\n\nBrett: Task added.\n\nUser: Thanks.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty"
+    ]
+  },
+  {
+    "name": "negative_meta_conversation",
+    "description": "Conversation with only small-talk / meta turns",
+    "conversation": "User: Thanks Brett.\n\nBrett: Anytime.\n\nUser: You're helpful.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty"
+    ]
+  },
+  {
+    "name": "negative_ambiguous",
+    "description": "Conversation with a vague venting statement and no clear fact",
+    "conversation": "User: Things are crazy at work lately.\n\nBrett: Want to walk through your list?\n\nUser: Maybe later.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "Array is empty"
+    ]
+  },
+  {
+    "name": "preference_tool",
+    "description": "Conversation where user names a preferred tool while setting up a task",
+    "conversation": "User: Add a task to set up project tracking for the new initiative.\n\nBrett: What tool are you using?\n\nUser: Linear. I switched from Jira last year and never looking back.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'preference' identifies Linear as the preferred tool",
+      "Does NOT extract the project tracking task itself as a fact"
+    ]
+  },
+  {
+    "name": "context_current_project",
+    "description": "Conversation where user names their main current project as weighty",
+    "conversation": "User: What's my next meeting?\n\nBrett: 2pm: Design review with Lena.\n\nUser: Cool. That's for the mobile launch — it's the biggest thing I'm working on right now.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'context' identifies the mobile launch as the user's main current project"
+    ]
+  },
+  {
+    "name": "relationship_peer",
+    "description": "Conversation where user describes a close product-partner relationship",
+    "conversation": "User: Add a meeting with Alex Rivera for Friday.\n\nBrett: Topic?\n\nUser: Weekly partner check. Alex leads product on their side and we pair on everything.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'relationship' identifies Alex Rivera as a close collaborator or partner",
+      "At least one fact's key is snake_case"
+    ]
+  },
+  {
+    "name": "preference_communication_format",
+    "description": "Conversation where user explicitly states a briefing-format preference",
+    "conversation": "User: Can you make my briefings shorter? Just bullets, no intro.\n\nBrett: Got it — I'll keep them tight.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At least 1 fact with category 'preference' captures preference for short, bullet-only briefings",
+      "At least one fact's key is stable snake_case"
+    ]
+  },
+  {
+    "name": "dedupe_similar_facts",
+    "description": "Conversation where user reiterates the same fact across multiple turns",
+    "conversation": "User: Add a task to prep for the board meeting.\n\nBrett: Done. When is it?\n\nUser: Next Thursday. I'm the CEO so these always take a lot of prep.\n\nBrett: I can block some focus time.\n\nUser: Yeah. Being CEO means I can't wing these.",
+    "criteria": [
+      "Returns a valid JSON array",
+      "At most 2 facts are extracted",
+      "No two facts share the same key (CEO role should appear exactly once)",
+      "At least 1 fact has category 'context' and describes the CEO role"
+    ]
+  }
+]

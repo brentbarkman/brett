@@ -1,0 +1,279 @@
+[
+  {
+    "name": "task_overdue_3_days",
+    "description": "Active task, due 3 days ago, has prior context in notes",
+    "inputData": "Item type: task\nTitle: Reply to Sarah's proposal\nStatus: active\nCreated: {{today-10d}}\nDue: {{today-3d}}\nNotes: Sarah sent revised terms last week.",
+    "criteria": [
+      "Response indicates the task is overdue by about 3 days",
+      "Response suggests prioritizing or completing the task",
+      "Response is under 80 words total",
+      "Response does not restate the title 'Reply to Sarah's proposal' as a sentence"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important",
+      "this is noteworthy",
+      "worth noting"
+    ]
+  },
+  {
+    "name": "task_stale_12_days",
+    "description": "Active task, created 12 days ago, no due date, no notes",
+    "inputData": "Item type: task\nTitle: Research new CRM options\nStatus: active\nCreated: {{today-12d}}\nDue: none\nNotes: (empty)",
+    "criteria": [
+      "Response flags the task as stale or sitting without updates",
+      "Response references that it has been sitting for around 12 days",
+      "Response suggests either doing it or removing/archiving it",
+      "Response is under 100 words total"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important",
+      "worth noting"
+    ]
+  },
+  {
+    "name": "task_due_tomorrow",
+    "description": "Active task, due in 1 day, has meaningful notes",
+    "inputData": "Item type: task\nTitle: Finalize board deck\nStatus: active\nCreated: {{today-2d}}\nDue: {{today+1d}}\nNotes: Include Q1 metrics and Q2 outlook.",
+    "criteria": [
+      "Response notes the urgency — due within a day or tomorrow",
+      "Response is under 80 words total",
+      "Response does not restate the title 'Finalize board deck' verbatim as a sentence"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important",
+      "worth noting",
+      "vague"
+    ]
+  },
+  {
+    "name": "task_normal_with_notes",
+    "description": "Active task, due in 25 days, notes describe venue and attendees",
+    "inputData": "Item type: task\nTitle: Plan Q3 offsite\nStatus: active\nCreated: {{today-2d}}\nDue: {{today+25d}}\nNotes: Likely Portland or Denver. Need to book venue and flights for 12 people.",
+    "criteria": [
+      "Response suggests a concrete, specific next step grounded in the notes (e.g., book venue, survey team for dates, compare cities)",
+      "Response is under 80 words total",
+      "Response does not restate the title 'Plan Q3 offsite' as a sentence"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important",
+      "worth noting"
+    ]
+  },
+  {
+    "name": "task_multistep_due_soon",
+    "description": "Active complex task, due in 3 days, notes list multiple workstreams",
+    "inputData": "Item type: task\nTitle: Migrate data warehouse from Redshift to Snowflake\nStatus: active\nCreated: {{today-5d}}\nDue: {{today+3d}}\nNotes: Requires schema migration, data backfill, dashboard updates, team training.",
+    "criteria": [
+      "Response acknowledges the multi-step nature of the migration",
+      "Response suggests starting with a specific piece named in the notes (schema migration, data backfill, dashboard updates, or team training)",
+      "Response references the 3-day timeline or urgency",
+      "Response is under 80 words total"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important"
+    ]
+  },
+  {
+    "name": "task_empty_notes_interview",
+    "description": "Active task, due in 3 days, empty notes, title references an interview",
+    "inputData": "Item type: task\nTitle: Interview candidate for VP Eng role\nStatus: active\nCreated: {{today-1d}}\nDue: {{today+3d}}\nNotes: (empty)",
+    "criteria": [
+      "Response suggests a concrete next step (review resume, prep questions, or check calendar)",
+      "Response is under 80 words total",
+      "Response does not invent details not in the input (no fabricated candidate name, no fabricated company)"
+    ],
+    "bannedPhrases": [
+      "prepare for the interview",
+      "This looks interesting",
+      "This seems important"
+    ]
+  },
+  {
+    "name": "event_small_1on1_soon",
+    "description": "Calendar event, starts in 4 hours, 1 other attendee, short description",
+    "inputData": "Item type: calendar event\nTitle: 1:1 with Jordan\nStart: today at 2:30 PM (in about 4 hours)\nAttendees: Jordan Chen\nDescription: weekly check-in",
+    "criteria": [
+      "Response correctly identifies it as a 1:1, small meeting, or check-in",
+      "Response is under 80 words total",
+      "Response does not fabricate agenda items beyond 'weekly check-in'"
+    ],
+    "bannedPhrases": [
+      "larger meeting",
+      "large meeting",
+      "This looks interesting"
+    ]
+  },
+  {
+    "name": "event_large_tomorrow",
+    "description": "Calendar event tomorrow, 6 attendees, description names Q3 planning and OKRs",
+    "inputData": "Item type: calendar event\nTitle: Q3 Planning Kickoff\nStart: tomorrow at 10:00 AM\nAttendees: Jordan Chen, Lena Park, Marcus Chen, Alex Rivera, Sarah Kim, Dan Cole\nDescription: Review OKRs and discuss team priorities for Q3.",
+    "criteria": [
+      "Response notes this is a larger meeting OR references the 6-person attendee count",
+      "Response references Q3 planning or OKRs",
+      "Response is under 80 words total"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important"
+    ]
+  },
+  {
+    "name": "event_imminent_with_agenda",
+    "description": "Calendar event starts in about 90 minutes, has a linked agenda doc, 2 external attendees",
+    "inputData": "Item type: calendar event\nTitle: Customer QBR with Acme Corp\nStart: today at 11:00 AM (in about 90 minutes)\nAttendees: Alexandra Liu, Tom Patel\nDescription: Review Q1 usage metrics. Agenda doc: https://docs.google.com/document/d/abc123. Discuss renewal.",
+    "criteria": [
+      "Response references prep work or the linked agenda doc",
+      "Response notes the imminent timing (within 2 hours, very soon, or similar)",
+      "Response is under 80 words total"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important"
+    ]
+  },
+  {
+    "name": "event_interview_tomorrow",
+    "description": "Calendar event tomorrow, product sense round, resume attached",
+    "inputData": "Item type: calendar event\nTitle: Interview — Senior PM candidate Alex Rivera\nStart: tomorrow at 3:00 PM\nAttendees: Alex Rivera, Jordan Chen\nDescription: Product sense round. Resume attached.",
+    "criteria": [
+      "Response suggests at least one specific prep action (review resume, prepare product sense questions, or coordinate with Jordan)",
+      "Response is under 80 words total"
+    ],
+    "bannedPhrases": [
+      "prepare for the interview",
+      "This looks interesting"
+    ]
+  },
+  {
+    "name": "event_no_description_large_group",
+    "description": "Calendar event tomorrow, 15 attendees, empty description",
+    "inputData": "Item type: calendar event\nTitle: Team sync\nStart: tomorrow at 9:00 AM\nAttendees: Entire team (15 people)\nDescription: (empty)",
+    "criteria": [
+      "Response acknowledges the limited info OR the 15-person attendee count",
+      "Response is under 80 words total",
+      "Response does not invent an agenda"
+    ],
+    "bannedPhrases": [
+      "This looks interesting"
+    ]
+  },
+  {
+    "name": "content_article",
+    "description": "Saved web article about AI coding assistants, no user notes",
+    "inputData": "Item type: content\nTitle: How AI coding assistants are changing junior engineer workflows\nSource: https://arstechnica.com/ai/2026/03/...\nSaved: {{today-5d}}\nNotes: (empty)",
+    "criteria": [
+      "Response gives a concrete reason this might be worth reading",
+      "Response is under 80 words total",
+      "Response does not simply restate the article title"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important",
+      "worth noting"
+    ]
+  },
+  {
+    "name": "content_investor_notes",
+    "description": "Saved content item with the user's own notes on a specific company's investor thesis",
+    "inputData": "Item type: content\nTitle: Function Health investor thesis\nSource: internal notes\nSaved: {{today-10d}}\nNotes: Strike price, cap table, risks, and bull case.",
+    "criteria": [
+      "Response gives a concrete reason revisiting the notes might be useful",
+      "Response references at least one element from the notes (thesis, cap table, risks, or bull case)",
+      "Response is under 80 words total"
+    ],
+    "bannedPhrases": [
+      "This looks interesting",
+      "This seems important"
+    ]
+  },
+  {
+    "name": "task_completed_recently",
+    "description": "Completed task, finished today, has a note about where announcement posted",
+    "inputData": "Item type: task\nTitle: Ship v2.1 release notes\nStatus: completed\nCreated: {{today-5d}}\nCompleted: {{today}}\nDue: {{today}}\nNotes: Posted to #announcements.",
+    "criteria": [
+      "Response does not urge the user to do the task — it is already completed",
+      "Response either acknowledges it is done OR makes a brief observation about the shipped work",
+      "Response is under 60 words total"
+    ],
+    "bannedPhrases": [
+      "prioritize",
+      "This looks interesting"
+    ]
+  },
+  {
+    "name": "task_no_due_date_today",
+    "description": "Active task created today, no due date, notes describe a trend",
+    "inputData": "Item type: task\nTitle: Explore Snowflake cost optimization\nStatus: active\nCreated: {{today}}\nDue: none\nNotes: Current spend trending up 20% MoM.",
+    "criteria": [
+      "Response suggests a concrete starting point (audit top queries, review storage costs, or similar grounded in cost optimization)",
+      "Response does not state a specific invented deadline as if it were a fact (suggesting the user set a deadline is fine; fabricating 'Due: Friday' is not)",
+      "Response is under 100 words total"
+    ],
+    "bannedPhrases": [
+      "overdue",
+      "stale",
+      "This looks interesting"
+    ]
+  },
+  {
+    "name": "event_distant_evening",
+    "description": "Calendar event 8 days out in the evening, 1 attendee, empty description",
+    "inputData": "Item type: calendar event\nTitle: Dinner with board member\nStart: {{today+8d}} at 7:00 PM\nAttendees: Patricia Wang\nDescription: (empty)",
+    "criteria": [
+      "Response does not call the event imminent or urgent",
+      "Response does not fabricate a dinner agenda",
+      "Response is under 60 words total"
+    ],
+    "bannedPhrases": [
+      "imminent",
+      "urgent",
+      "This looks interesting"
+    ]
+  },
+  {
+    "name": "task_vague_title",
+    "description": "Active task with a very vague title, no due date, no notes",
+    "inputData": "Item type: task\nTitle: Think about pricing\nStatus: active\nCreated: {{today-2d}}\nDue: none\nNotes: (empty)",
+    "criteria": [
+      "Response suggests a concrete next step (e.g., gather competitor pricing, define pricing models to compare, talk to X)",
+      "Response is under 80 words total"
+    ],
+    "bannedPhrases": [
+      "Think about pricing",
+      "This looks interesting"
+    ]
+  },
+  {
+    "name": "event_recurring_standup",
+    "description": "Calendar event tomorrow, recurring weekly, entire eng team, round-robin format",
+    "inputData": "Item type: calendar event\nTitle: Weekly engineering standup\nStart: tomorrow at 9:00 AM\nAttendees: Entire eng team\nDescription: Recurring weekly. Round-robin updates.",
+    "criteria": [
+      "Response acknowledges the recurring or routine nature of the meeting",
+      "Response does not fabricate a unique agenda beyond the round-robin format",
+      "Response is under 60 words total"
+    ],
+    "bannedPhrases": [
+      "This looks interesting"
+    ]
+  },
+  {
+    "name": "event_mid_meeting",
+    "description": "Calendar event happening right now (user opens take while in the meeting), 4 attendees, has a description",
+    "inputData": "Item type: calendar event\nTitle: Weekly Product Sync\nStart: started 15 minutes ago (in progress now)\nAttendees: Jordan Chen, Lena Park, Marcus Chen, Alex Rivera\nDescription: Review user research insights from the new navigation test.",
+    "criteria": [
+      "Response acknowledges the meeting is currently in progress OR offers something useful to the user right now (e.g., reference the user research topic)",
+      "Response does not suggest preparing for the meeting (it is already happening)",
+      "Response is under 60 words total"
+    ],
+    "bannedPhrases": [
+      "prepare for",
+      "prep for",
+      "This looks interesting"
+    ]
+  }
+]

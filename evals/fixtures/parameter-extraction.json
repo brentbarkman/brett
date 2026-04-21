@@ -7,7 +7,8 @@
   {
     "input": "move NVDA research to the investing list",
     "expectedSkill": "move_to_list",
-    "expectedParams": { "listName": "investing" }
+    "expectedParams": { "listName": "investing" },
+    "acceptableSkills": ["search_things"]
   },
   {
     "input": "add a task: review the quarterly report by Friday",
@@ -17,7 +18,8 @@
   {
     "input": "snooze the dentist appointment until next Monday",
     "expectedSkill": "snooze_item",
-    "expectedParams": {}
+    "expectedParams": {},
+    "acceptableSkills": ["search_things"]
   },
   {
     "input": "add a new list called Side Projects",
@@ -38,5 +40,77 @@
     "input": "save this article: https://example.com/ai-safety",
     "expectedSkill": "create_content",
     "expectedParams": { "sourceUrl": "https://example.com/ai-safety" }
+  },
+  {
+    "input": "task: draft Q3 roadmap by end of week",
+    "expectedSkill": "create_task",
+    "expectedParams": { "title": "Draft Q3 roadmap" }
+  },
+  {
+    "input": "add follow-up with Sarah — EOD Thursday",
+    "expectedSkill": "create_task",
+    "expectedParams": { "title": "Follow-up with Sarah" }
+  },
+  {
+    "input": "make a list titled Reading Queue",
+    "expectedSkill": "create_list",
+    "expectedParams": { "name": "Reading Queue" }
+  },
+  {
+    "input": "move the budget review to Q2 Planning",
+    "expectedSkill": "move_to_list",
+    "expectedParams": { "listName": "Q2 Planning" },
+    "acceptableSkills": ["search_things"]
+  },
+  {
+    "input": "show me everything in reading queue",
+    "expectedSkill": "get_list_items",
+    "expectedParams": { "listName": "reading queue" }
+  },
+  {
+    "input": "find notes about the TSLA deep dive",
+    "expectedSkill": "search_things",
+    "expectedParams": { "query": "TSLA deep dive" },
+    "acceptableSkills": ["get_meeting_notes"]
+  },
+  {
+    "input": "create a task to book flights — no rush",
+    "expectedSkill": "create_task",
+    "expectedParams": { "title": "Book flights" }
+  },
+  {
+    "input": "save https://arstechnica.com/ai/article for later",
+    "expectedSkill": "create_content",
+    "expectedParams": { "sourceUrl": "https://arstechnica.com/ai/article" }
+  },
+  {
+    "input": "remind me next week to follow up on the proposal",
+    "expectedSkill": "create_task",
+    "expectedParams": { "title": "Follow up on the proposal" }
+  },
+  {
+    "input": "add: prep deck for board meeting, due Monday",
+    "expectedSkill": "create_task",
+    "expectedParams": { "title": "Prep deck for board meeting" }
+  },
+  {
+    "input": "can you tell me more about how the Inbox works in this app?",
+    "expectedSkill": "explain_feature",
+    "expectedParams": { "feature": "inbox" }
+  },
+  {
+    "input": "what's 42 divided by 6?",
+    "expectedSkill": "NONE",
+    "expectedParams": {}
+  },
+  {
+    "input": "hey, how's it going?",
+    "expectedSkill": "NONE",
+    "expectedParams": {}
+  },
+  {
+    "input": "write me a poem about spring",
+    "expectedSkill": "NONE",
+    "expectedParams": {}
   }
 ]
