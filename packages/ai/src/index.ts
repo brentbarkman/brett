@@ -116,3 +116,18 @@ export {
 } from "./context/system-prompts.js";
 export { assembleContext } from "./context/assembler.js";
 export type { AssemblerInput, AssembledContext } from "./context/assembler.js";
+
+// Prompts — extracted from their call sites so the eval harness can import
+// the same text production uses.
+export { GRAPH_EXTRACTION_PROMPT } from "./graph/extractor.js";
+export { getEntityFactExtractionPrompt } from "./memory/entity-facts.js";
+export { MEETING_PATTERN_PROMPT } from "./skills/analyze-meeting-pattern.js";
+export {
+  buildScoutQueryPrompt,
+  buildScoutJudgmentPrompt,
+  SCOUT_QUERY_SCHEMA,
+  SCOUT_JUDGMENT_SCHEMA,
+} from "./prompts/scout.js";
+export type { ScoutQueryPromptOpts, ScoutJudgmentPromptOpts } from "./prompts/scout.js";
+export { buildActionItemsPrompt, ACTION_ITEMS_SCHEMA } from "./prompts/action-items.js";
+export type { ActionItemsPromptInput } from "./prompts/action-items.js";
