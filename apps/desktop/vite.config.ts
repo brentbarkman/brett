@@ -41,5 +41,13 @@ export default defineConfig({
   },
   build: {
     outDir: "dist/renderer",
+    // esbuild's minifier mangles something in React Router v7's useSyncExternalStore
+    // subscribe closure — the popstate listener never attaches in the packaged
+    // `app://` bundle, so clicks update the URL but the view doesn't re-render.
+    // Dev works because Vite's dev pipeline doesn't minify. Disabling minify here
+    // trades ~3 MB of bundle size for a working router. Revisit with a targeted
+    // minification config (exclude react-router-dom / history, or switch to terser
+    // with safer options) once we have time to isolate the exact rule that breaks.
+    minify: false,
   },
 });
