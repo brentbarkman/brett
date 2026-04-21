@@ -1,13 +1,9 @@
+import React from "react";
+
 /**
- * Brett's Mark — the single bullet (gold dot + cerulean line).
- * Used as Brett's AI avatar across all surfaces.
- *
- * Also exports ProductMark (stacked brief) for the app logo.
- *
- * In-app marks use brighter, tighter gradient ranges than the app icon
- * because they render at 12–36px on variable backgrounds (including
- * bright sky/ocean through glass). Deep amber shadows that work at
- * 512px on navy look muddy at small sizes on light glass.
+ * Brett's Mark — gold-dot + cerulean-line brief.
+ * Single component used as the AI avatar across all surfaces.
+ * Product icon uses the same geometry at larger sizes.
  */
 
 interface BrettMarkProps {
@@ -17,130 +13,113 @@ interface BrettMarkProps {
 }
 
 /**
- * Brett's AI mark: gold sphere dot + cerulean line.
- *
- * When `thinking` is true, the cerulean line shoots out from the dot
- * and retracts repeatedly — a visible signal pulse.
+ * Brett's AI mark. Three gold dots + three cerulean lines, cascading in
+ * length + opacity (the "brief" metaphor). When `thinking` is true, the
+ * cerulean lines draw left-to-right in staggered succession — a summary
+ * being composed in real time.
  */
 export function BrettMark({ size = 16, className = "", thinking = false }: BrettMarkProps) {
-  const strokeWidth = size <= 14 ? 5 : 4.5;
-  const lineLen = 25;
+  const uid = React.useId();
+  const gradId = `bm-${uid}-gold`;
 
-  return (
-    <svg
-      width={size}
-      height={size * 0.55}
-      viewBox="0 0 52 28"
-      className={className}
-    >
-      <defs>
-        <radialGradient id="bm-sphere" cx="38%" cy="35%" r="55%">
-          <stop offset="0%" stopColor="#FCE878" />
-          <stop offset="50%" stopColor="#E8B931" />
-          <stop offset="100%" stopColor="#D4A020" />
-        </radialGradient>
-      </defs>
-      {thinking && (
-        <style>
-          {`
-            @keyframes brettSignalPulse {
-              0% {
-                stroke-dashoffset: ${lineLen};
-                opacity: 0.4;
-              }
-              40% {
-                stroke-dashoffset: 0;
-                opacity: 1;
-              }
-              70% {
-                stroke-dashoffset: 0;
-                opacity: 1;
-              }
-              100% {
-                stroke-dashoffset: ${lineLen};
-                opacity: 0.4;
-              }
-            }
-          `}
-        </style>
-      )}
-      <circle cx="10" cy="14" r="6.5" fill="url(#bm-sphere)" />
-      {thinking && (
-        <circle cx="10" cy="14" r="9.5" fill="none" stroke="#E8B931" strokeWidth="1.5" opacity="0.25" />
-      )}
-      <line
-        x1="22"
-        y1="14"
-        x2="46"
-        y2="14"
-        stroke="#4682C3"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        style={thinking ? {
-          strokeDasharray: `${lineLen}`,
-          strokeDashoffset: `${lineLen}`,
-          animation: "brettSignalPulse 1.4s ease-in-out infinite",
-        } : undefined}
-      />
-    </svg>
-  );
-}
+  const rows = [
+    { y: 5, end: 21 }, // full
+    { y: 12, end: 18 }, // medium
+    { y: 19, end: 14 }, // short
+  ] as const;
 
-/**
- * Product mark: gold stacked brief (3 dot+line rows, cascade fade).
- * Bright gradient range for legibility at small sizes on any background.
- */
-export function ProductMark({ size = 24, className = "" }: BrettMarkProps) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 40 40"
+      viewBox="0 0 24 24"
       className={className}
+      role="img"
+      aria-label="Brett"
     >
       <defs>
-        <linearGradient id="pm-gold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#F5D96B" />
-          <stop offset="50%" stopColor="#E8B931" />
-          <stop offset="100%" stopColor="#D4A020" />
-        </linearGradient>
-        <radialGradient id="pm-sphere" cx="38%" cy="35%" r="55%">
+        <radialGradient id={gradId} cx="35%" cy="32%" r="60%">
           <stop offset="0%" stopColor="#FCE878" />
-          <stop offset="50%" stopColor="#E8B931" />
+          <stop offset="55%" stopColor="#E8B931" />
           <stop offset="100%" stopColor="#D4A020" />
         </radialGradient>
       </defs>
 
-      {/* Row 1: full strength */}
-      <circle cx="8" cy="10" r="4" fill="url(#pm-sphere)" />
-      <rect x="16" y="7.5" width="20" height="5" rx="2.5" fill="url(#pm-gold)" />
+      {thinking && (
+        <style>{`
+          @keyframes brett-brief-draw-0 {
+            0%, 8%   { stroke-dashoffset: var(--L0); opacity: 0.3; }
+            38%, 68% { stroke-dashoffset: 0;        opacity: 1; }
+            100%     { stroke-dashoffset: calc(-1 * var(--L0)); opacity: 0.3; }
+          }
+          @keyframes brett-brief-draw-1 {
+            0%, 8%   { stroke-dashoffset: var(--L1); opacity: 0.3; }
+            38%, 68% { stroke-dashoffset: 0;        opacity: 1; }
+            100%     { stroke-dashoffset: calc(-1 * var(--L1)); opacity: 0.3; }
+          }
+          @keyframes brett-brief-draw-2 {
+            0%, 8%   { stroke-dashoffset: var(--L2); opacity: 0.3; }
+            38%, 68% { stroke-dashoffset: 0;        opacity: 1; }
+            100%     { stroke-dashoffset: calc(-1 * var(--L2)); opacity: 0.3; }
+          }
+        `}</style>
+      )}
 
-      {/* Row 2: 75% */}
-      <g opacity="0.75">
-        <circle cx="8" cy="20" r="4" fill="url(#pm-sphere)" />
-        <rect x="16" y="17.5" width="15" height="5" rx="2.5" fill="url(#pm-gold)" />
-      </g>
-
-      {/* Row 3: 45% */}
-      <g opacity="0.45">
-        <circle cx="8" cy="30" r="4" fill="url(#pm-sphere)" />
-        <rect x="16" y="27.5" width="10" height="5" rx="2.5" fill="url(#pm-gold)" />
-      </g>
+      {rows.map((row, i) => {
+        const len = row.end - 8;
+        const baseOpacity = [1, 0.7, 0.45][i];
+        return (
+          <g key={i}>
+            <circle cx={4} cy={row.y} r={2.4} fill={`url(#${gradId})`} opacity={baseOpacity} />
+            <line
+              x1={8}
+              y1={row.y}
+              x2={row.end}
+              y2={row.y}
+              stroke="#4682C3"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              opacity={thinking ? 0.18 : baseOpacity * 0.85}
+            />
+            {thinking && (
+              <line
+                x1={8}
+                y1={row.y}
+                x2={row.end}
+                y2={row.y}
+                stroke="#4682C3"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                style={{
+                  ["--L" + i]: len,
+                  strokeDasharray: len,
+                  strokeDashoffset: len,
+                  animation: `brett-brief-draw-${i} 1.8s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.15}s infinite`,
+                } as React.CSSProperties}
+              />
+            )}
+          </g>
+        );
+      })}
     </svg>
   );
 }
 
 /**
- * Styled wordmark: assistant name in Plus Jakarta Sans ExtraBold,
- * metallic gold gradient, with cerulean underline bar.
- * Bar breathes when isWorking=true (1.4s cycle, matches BrettMark pulse).
+ * Product mark — same geometry, used as dock/splash/app icon.
+ * Kept as a separate export so future divergence stays cheap.
  */
+export function ProductMark({ size = 24, className = "" }: BrettMarkProps) {
+  return <BrettMark size={size} className={className} />;
+}
+
 interface WordmarkProps {
   name: string;
   isWorking?: boolean;
   size?: number;
 }
 
+/** Wordmark — gold gradient text + cerulean underline. */
 export function Wordmark({ name, isWorking = false, size = 19 }: WordmarkProps) {
   return (
     <div className="flex flex-col">
