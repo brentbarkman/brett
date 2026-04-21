@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   things3Scan: () => ipcRenderer.invoke("things3:scan"),
   things3Import: () => ipcRenderer.invoke("things3:import"),
   installUpdate: () => ipcRenderer.invoke("install-update"),
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
   getDownloadedUpdateVersion: () => ipcRenderer.invoke("get-update-version"),
   getUpdateTaskId: () => ipcRenderer.invoke("get-update-task-id"),
   setUpdateTaskId: (taskId: string | null) => ipcRenderer.invoke("set-update-task-id", taskId),

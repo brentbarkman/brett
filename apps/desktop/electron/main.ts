@@ -5,7 +5,7 @@ import path from "path";
 import { pathToFileURL } from "url";
 import Store from "electron-store";
 import { scanThings3, readThings3 } from "./things3";
-import { initAutoUpdater, quitAndInstall, isUpdateReady, getDownloadedVersion, setAutoInstallOnQuit } from "./updater";
+import { initAutoUpdater, quitAndInstall, isUpdateReady, getDownloadedVersion, setAutoInstallOnQuit, checkForUpdatesNow } from "./updater";
 
 // #3: Load API URL from main process config — never accept from renderer
 // Reads from api-config.json generated at build time, falls back to env var
@@ -91,6 +91,14 @@ ipcMain.handle("install-update", () => {
     throw new Error("No update downloaded");
   }
   quitAndInstall();
+});
+
+ipcMain.handle("check-for-updates", async () => {
+  try {
+    return await checkForUpdatesNow();
+  } catch (err: any) {
+    return { status: "error" as const, message: err?.message || "Check failed" };
+  }
 });
 
 ipcMain.handle("get-update-version", () => {
@@ -385,6 +393,12 @@ app.whenReady().then(() => {
 
   createWindow();
   initAutoUpdater(store);
+});
+
+app.on("before-quit", () => {
+  // Fire-and-forget. Unlikely to complete before exit, but if it does, any newer
+  // version is queued for install-on-quit on the next run.
+  checkForUpdatesNow().catch(() => {});
 });
 
 app.on("window-all-closed", () => {
