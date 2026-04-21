@@ -29,8 +29,12 @@ struct BrettApp: App {
             Self.seedUITestFixtures(userId: AuthUser.testUser.id)
         }
         self._authManager = State(wrappedValue: manager)
+        // Route user-scoped UserDefaults reads through the live AuthManager.
+        UserScopedStorage.configure { [weak manager] in manager?.currentUser?.id }
         #else
-        self._authManager = State(wrappedValue: AuthManager())
+        let manager = AuthManager()
+        self._authManager = State(wrappedValue: manager)
+        UserScopedStorage.configure { [weak manager] in manager?.currentUser?.id }
         #endif
     }
 

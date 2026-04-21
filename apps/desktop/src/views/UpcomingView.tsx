@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Clock } from "lucide-react";
-import { ThingCard, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
+import { ThingCard, ItemListShell, useListKeyboardNav, useDeferredToggle, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
 import type { Thing, FilterType } from "@brett/types";
 import { groupUpcomingThings } from "@brett/business";
 import { useUpcomingThings, useToggleThing } from "../api/things";
@@ -30,9 +30,9 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
   const sections = groupUpcomingThings(filteredThings);
   const allItems = sections.flatMap((s) => s.things);
 
-  const handleToggle = (id: string) => {
-    toggleThing.mutate(id);
-  };
+  // Deferred batch toggle — matches ThingsList + InboxView so rapid-fire
+  // clicks in Upcoming don't fire one API mutation per tap.
+  const handleToggle = useDeferredToggle((id: string) => toggleThing.mutate(id));
 
   const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
     items: allItems,

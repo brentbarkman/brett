@@ -825,62 +825,78 @@ enum SyncEntityMapper {
         id: String,
         in context: ModelContext
     ) -> T? {
-        // Generic fetch by "id" — every synced @Model has @Attribute(.unique) var id.
-        // Must materialize the predicate separately because PersistentModel
-        // generics interact oddly with #Predicate captures.
-        let predicate = #Predicate<T> { _ in true }
-        var descriptor = FetchDescriptor<T>(predicate: predicate)
-        descriptor.fetchLimit = 10_000
-        let all = (try? context.fetch(descriptor)) ?? []
-        return all.first { extractId($0) == id }
-    }
-
-    /// Extract `id` from any of our `@Model` types without an inheritance
-    /// hierarchy. Every synced model declares a `var id: String`; we dispatch
-    /// on the concrete type rather than relying on KVC, which isn't wired on
-    /// SwiftData's generated `@Model` classes under Swift 6.
-    private static func extractId(_ model: Any) -> String? {
-        switch model {
-        case let m as Item: return m.id
-        case let m as ItemList: return m.id
-        case let m as CalendarEvent: return m.id
-        case let m as CalendarEventNote: return m.id
-        case let m as Scout: return m.id
-        case let m as ScoutFinding: return m.id
-        case let m as BrettMessage: return m.id
-        case let m as Attachment: return m.id
-        default: return nil
+        // Dispatch to a typed predicate per model so SwiftData uses the
+        // unique-id index instead of materialising every row. SwiftData's
+        // #Predicate can't be written generically over an `id` key path, so
+        // we route through a concrete switch; the cast back to T is safe
+        // because each branch fetches the exact type.
+        switch type {
+        case is Item.Type:
+            let pred = #Predicate<Item> { $0.id == id }
+            var d = FetchDescriptor<Item>(predicate: pred); d.fetchLimit = 1
+            return (try? context.fetch(d).first) as? T
+        case is ItemList.Type:
+            let pred = #Predicate<ItemList> { $0.id == id }
+            var d = FetchDescriptor<ItemList>(predicate: pred); d.fetchLimit = 1
+            return (try? context.fetch(d).first) as? T
+        case is CalendarEvent.Type:
+            let pred = #Predicate<CalendarEvent> { $0.id == id }
+            var d = FetchDescriptor<CalendarEvent>(predicate: pred); d.fetchLimit = 1
+            return (try? context.fetch(d).first) as? T
+        case is CalendarEventNote.Type:
+            let pred = #Predicate<CalendarEventNote> { $0.id == id }
+            var d = FetchDescriptor<CalendarEventNote>(predicate: pred); d.fetchLimit = 1
+            return (try? context.fetch(d).first) as? T
+        case is Scout.Type:
+            let pred = #Predicate<Scout> { $0.id == id }
+            var d = FetchDescriptor<Scout>(predicate: pred); d.fetchLimit = 1
+            return (try? context.fetch(d).first) as? T
+        case is ScoutFinding.Type:
+            let pred = #Predicate<ScoutFinding> { $0.id == id }
+            var d = FetchDescriptor<ScoutFinding>(predicate: pred); d.fetchLimit = 1
+            return (try? context.fetch(d).first) as? T
+        case is BrettMessage.Type:
+            let pred = #Predicate<BrettMessage> { $0.id == id }
+            var d = FetchDescriptor<BrettMessage>(predicate: pred); d.fetchLimit = 1
+            return (try? context.fetch(d).first) as? T
+        case is Attachment.Type:
+            let pred = #Predicate<Attachment> { $0.id == id }
+            var d = FetchDescriptor<Attachment>(predicate: pred); d.fetchLimit = 1
+            return (try? context.fetch(d).first) as? T
+        default:
+            return nil
         }
     }
 
     // MARK: - Date / JSON helpers
 
-    /// ISO-8601 formatter configured for Prisma's default output
-    /// (`YYYY-MM-DDTHH:mm:ss.sssZ`). Instantiated per-call to stay Sendable-safe
-    /// under Swift 6 minimal concurrency — `ISO8601DateFormatter` doesn't
-    /// claim thread-safety, and the allocation cost is negligible compared
-    /// to the HTTP round-trip around every sync call.
-    private static func makeISOFormatter() -> ISO8601DateFormatter {
+    /// ISO-8601 formatters configured for Prisma's default output
+    /// (`YYYY-MM-DDTHH:mm:ss.sssZ`). Cached because sync churns through
+    /// hundreds of calls per pull — ISO8601DateFormatter's init is not
+    /// free. Its configuration is immutable after init; Apple's docs note
+    /// that reading a configured formatter is thread-safe in practice, but
+    /// every caller here is @MainActor so we don't rely on that.
+    private static let sharedISOFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
-    }
+    }()
 
-    private static func makeISOFormatterNoFraction() -> ISO8601DateFormatter {
+    private static let sharedISOFormatterNoFraction: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f
-    }
+    }()
 
     static func isoString(_ date: Date?) -> String? {
         guard let date else { return nil }
-        return makeISOFormatter().string(from: date)
+        return sharedISOFormatter.string(from: date)
     }
 
     static func parseDate(_ raw: Any?) -> Date? {
         guard let str = raw as? String else { return nil }
-        if let d = makeISOFormatter().date(from: str) { return d }
-        return makeISOFormatterNoFraction().date(from: str)
+        if let d = sharedISOFormatter.date(from: str) { return d }
+        return sharedISOFormatterNoFraction.date(from: str)
     }
 
     /// Decode a JSON string (as stored on-device) back into a dict/array so

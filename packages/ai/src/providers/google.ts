@@ -148,10 +148,13 @@ export class GoogleProvider implements AIProvider {
       generationConfig.responseMimeType = "application/json";
     }
 
-    const streamResult = await model.generateContentStream({
-      contents,
-      generationConfig,
-    });
+    // 2-minute per-call timeout — mirrors the Anthropic/OpenAI providers.
+    // Without this, a stalled Google stream hangs the orchestrator generator
+    // until the client disconnects.
+    const streamResult = await model.generateContentStream(
+      { contents, generationConfig },
+      { timeout: 120_000 },
+    );
 
     let totalInputTokens = 0;
     let totalOutputTokens = 0;

@@ -52,10 +52,6 @@ interface ScoutDetailProps {
   onUpdate: (data: UpdateScoutInput) => void;
   onTriggerRun?: () => void;
   isRunning?: boolean;
-  onClearHistory?: () => void;
-  isClearing?: boolean;
-  onConsolidate?: () => void;
-  isConsolidating?: boolean;
   onDelete?: () => void;
   onClickFindingItem?: (itemId: string) => void;
   memories: ScoutMemory[];
@@ -78,10 +74,6 @@ export function ScoutDetail({
   onUpdate,
   onTriggerRun,
   isRunning,
-  onClearHistory,
-  isClearing,
-  onConsolidate,
-  isConsolidating,
   onDelete,
   onClickFindingItem,
   memories,
@@ -243,26 +235,6 @@ export function ScoutDetail({
                   >
                     {isRunning ? <Loader2 size={12} className="animate-spin" /> : <span>▶</span>}
                     <span>{isRunning ? "Running..." : "Run Now"}</span>
-                  </button>
-                )}
-                {onConsolidate && (
-                  <button
-                    onClick={onConsolidate}
-                    disabled={isConsolidating}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                  >
-                    {isConsolidating ? <Loader2 size={12} className="animate-spin" /> : <span>🧠</span>}
-                    <span>{isConsolidating ? "Consolidating..." : "Consolidate"}</span>
-                  </button>
-                )}
-                {onClearHistory && (
-                  <button
-                    onClick={onClearHistory}
-                    disabled={isClearing}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                  >
-                    {isClearing ? <Loader2 size={12} className="animate-spin" /> : <span>✕</span>}
-                    <span>{isClearing ? "Clearing..." : "Clear History"}</span>
                   </button>
                 )}
                 {!isCompleted && (

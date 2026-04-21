@@ -27,12 +27,12 @@ final class BiometricLockManager {
     private(set) var isEvaluating: Bool = false
     private(set) var lastError: String?
 
-    /// Mirrors `@AppStorage("security.faceid.enabled")`. Read via UserDefaults
+    /// Mirrors the per-user Face ID toggle in Settings. Read via UserDefaults
     /// because the manager isn't a View. When the toggle flips off in
     /// Settings we eagerly unlock — no point holding the user behind a
     /// prompt they just disabled.
     private var isEnabledInSettings: Bool {
-        UserDefaults.standard.bool(forKey: "security.faceid.enabled")
+        UserDefaults.standard.bool(forKey: UserScopedStorage.key("security.faceid.enabled"))
     }
 
     private var context: LAContext?

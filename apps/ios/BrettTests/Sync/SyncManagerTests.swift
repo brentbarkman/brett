@@ -174,6 +174,47 @@ struct SyncManagerTests {
         #expect(fixture.pull.callCount == 1)
         #expect(fixture.sut.lastSyncedAt != nil)
     }
+
+    // MARK: - fullSyncRequired
+
+    /// Server reports `fullSyncRequired` → client must re-pull in the same
+    /// session. Before this was wired, the server-side cursor wipe landed but
+    /// the current session stayed frozen until the next app launch.
+    @MainActor
+    @Test func syncRePullsWhenFullSyncRequired() async {
+        let fixture = await TestHarness.make()
+        fixture.pull.outcomesToReturn = [
+            PullEngine.PullOutcome(tablesUpserted: [:], tablesDeleted: [:], fullResync: true),
+            PullEngine.PullOutcome.empty,
+        ]
+
+        await fixture.sut.sync()
+
+        #expect(fixture.pull.callCount == 2, "pull must run twice when the first outcome signals fullResync")
+    }
+
+    @MainActor
+    @Test func pullToRefreshRePullsWhenFullSyncRequired() async throws {
+        let fixture = await TestHarness.make()
+        fixture.pull.outcomesToReturn = [
+            PullEngine.PullOutcome(tablesUpserted: [:], tablesDeleted: [:], fullResync: true),
+            PullEngine.PullOutcome.empty,
+        ]
+
+        try await fixture.sut.pullToRefresh()
+
+        #expect(fixture.pull.callCount == 2)
+    }
+
+    @MainActor
+    @Test func syncRunsPullOnceWhenFullResyncFlagIsFalse() async {
+        let fixture = await TestHarness.make()
+        // Default mock returns `PullOutcome.empty` (fullResync=false) → no retry.
+
+        await fixture.sut.sync()
+
+        #expect(fixture.pull.callCount == 1)
+    }
 }
 
 // MARK: - Test harness
@@ -247,11 +288,11 @@ final class MockPushEngine: PushEngineProtocol {
 
     var errorToThrow: Error?
 
-    func push() async throws -> PushOutcome {
+    func push() async throws -> PushEngine.PushOutcome {
         callCount += 1
         callOrder = CallSequence.bump()
         if let errorToThrow { throw errorToThrow }
-        return PushOutcome()
+        return PushEngine.PushOutcome.empty
     }
 
     func calledBefore(_ other: MockPullEngine) -> Bool {
@@ -266,11 +307,17 @@ final class MockPullEngine: PullEngineProtocol {
 
     var errorToThrow: Error?
 
-    func pull() async throws -> PullOutcome {
+    /// Set by tests that want to exercise the `fullResync` re-pull path.
+    var outcomesToReturn: [PullEngine.PullOutcome] = []
+
+    func pull() async throws -> PullEngine.PullOutcome {
         callCount += 1
         callOrder = CallSequence.bump()
         if let errorToThrow { throw errorToThrow }
-        return PullOutcome()
+        if !outcomesToReturn.isEmpty {
+            return outcomesToReturn.removeFirst()
+        }
+        return PullEngine.PullOutcome.empty
     }
 }
 

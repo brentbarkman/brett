@@ -92,6 +92,12 @@ struct NotesEditor: View {
         .onAppear {
             lastCommittedValue = text
         }
+        .onDisappear {
+            // Cancel the pending debounce Task so we don't leak work after
+            // the view is torn down. Commits on blur already happen above.
+            debounceTask?.cancel()
+            debounceTask = nil
+        }
     }
 
     // MARK: - Markdown rendering

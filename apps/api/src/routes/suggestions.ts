@@ -168,37 +168,51 @@ suggestions.get("/events/:id/meeting-history", async (c) => {
       },
     });
 
-    // Collect meeting note IDs and load linked items from tasks created from those notes
-    const pastOccurrences = await Promise.all(
-      pastEvents.map(async (pe) => {
-        // Find items created from meeting notes of this event
-        const linkedItems = await prisma.item.findMany({
+    // Single batched query across all past-event meeting notes to avoid
+    // N+1 (was one `item.findMany` per past event).
+    const allNoteIds = pastEvents.flatMap((pe) =>
+      pe.meetingNotes.map((n: { id: string }) => n.id),
+    );
+    const allLinkedItems = allNoteIds.length > 0
+      ? await prisma.item.findMany({
           where: {
             userId: user.id,
-            meetingNoteId: { in: pe.meetingNotes.map((n: { id: string }) => n.id) },
+            meetingNoteId: { in: allNoteIds },
           },
-          select: { id: true, title: true, type: true, completedAt: true },
-        });
+          select: { id: true, title: true, type: true, completedAt: true, meetingNoteId: true },
+        })
+      : [];
+    const itemsByNoteId = new Map<string, typeof allLinkedItems>();
+    for (const item of allLinkedItems) {
+      if (!item.meetingNoteId) continue;
+      const bucket = itemsByNoteId.get(item.meetingNoteId) ?? [];
+      bucket.push(item);
+      itemsByNoteId.set(item.meetingNoteId, bucket);
+    }
 
-        return {
-          eventId: pe.id,
-          title: pe.title,
-          startTime: pe.startTime.toISOString(),
-          endTime: pe.endTime.toISOString(),
-          meetingNotes: pe.meetingNotes.map((n: { id: string; title: string; summary: string | null }) => ({
-            id: n.id,
-            title: n.title,
-            summary: n.summary,
-          })),
-          linkedItems: linkedItems.map((i) => ({
-            id: i.id,
-            title: i.title,
-            type: i.type,
-            status: i.completedAt ? "completed" : "active",
-          })),
-        };
-      })
-    );
+    const pastOccurrences = pastEvents.map((pe) => {
+      const linkedItems = pe.meetingNotes.flatMap((n: { id: string }) =>
+        itemsByNoteId.get(n.id) ?? [],
+      );
+
+      return {
+        eventId: pe.id,
+        title: pe.title,
+        startTime: pe.startTime.toISOString(),
+        endTime: pe.endTime.toISOString(),
+        meetingNotes: pe.meetingNotes.map((n: { id: string; title: string; summary: string | null }) => ({
+          id: n.id,
+          title: n.title,
+          summary: n.summary,
+        })),
+        linkedItems: linkedItems.map((i) => ({
+          id: i.id,
+          title: i.title,
+          type: i.type,
+          status: i.completedAt ? "completed" : "active",
+        })),
+      };
+    });
 
     // Also find semantically related items via embeddings
     let relatedItems: Array<{ entityId: string; title: string; type: string; status: string; similarity: number }> = [];

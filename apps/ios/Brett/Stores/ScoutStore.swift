@@ -175,14 +175,6 @@ final class ScoutStore {
         try await client.triggerScoutRun(id: id)
     }
 
-    func triggerConsolidation(id: String) async throws {
-        try await client.triggerScoutConsolidation(id: id)
-    }
-
-    func clearHistory(id: String) async throws {
-        try await client.clearScoutHistory(id: id)
-    }
-
     @discardableResult
     func submitFeedback(
         scoutId: String,

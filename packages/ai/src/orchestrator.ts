@@ -17,8 +17,11 @@ const MAX_TOOL_RESULT_SIZE = AI_CONFIG.orchestrator.maxToolResultSize;
 
 // Matches common API key patterns (Bearer tokens, sk-*, key-*, etc.)
 const API_KEY_PATTERN = /(?:sk-|key-|bearer\s+)[a-zA-Z0-9_-]{20,}/gi;
-// Catches long alphanumeric strings that look like tokens/secrets (32+ chars, mixed case/digits)
-const HIGH_ENTROPY_PATTERN = /\b[a-zA-Z0-9_-]{40,}\b/g;
+// Catches long alphanumeric strings that look like tokens/secrets. Threshold
+// was bumped from 40 to 50 to avoid false-positives on Prisma CUIDs / UUIDs
+// embedded in error messages, which made real logs look like they were
+// wall-to-wall [REDACTED].
+const HIGH_ENTROPY_PATTERN = /\b[a-zA-Z0-9_-]{50,}\b/g;
 
 // ─── Types ───
 

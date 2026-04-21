@@ -659,21 +659,6 @@ export function computeTriageResult(
   }
 }
 
-export function computeRelativeAge(
-  createdAt: Date,
-  now: Date = new Date()
-): string {
-  const diffMs = now.getTime() - createdAt.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
-}
-
 /** Tailwind colorClass → hex value map (used by LeftNav, ListView, etc.) */
 export const COLOR_MAP: Record<string, string> = {
   "bg-blue-400": "#60a5fa",
@@ -883,22 +868,6 @@ export function validateCreateItemLink(
   }
   const source = typeof obj.source === "string" ? obj.source : undefined;
   return { ok: true, data: { toItemId: obj.toItemId, toItemType: obj.toItemType, source } };
-}
-
-export function validateCreateBrettMessage(
-  input: unknown
-): { ok: true; data: { content: string } } | { ok: false; error: string } {
-  if (!input || typeof input !== "object") {
-    return { ok: false, error: "Request body is required" };
-  }
-  const obj = input as Record<string, unknown>;
-  if (!obj.content || typeof obj.content !== "string" || obj.content.trim() === "") {
-    return { ok: false, error: "content is required" };
-  }
-  if (obj.content.trim().length > 10_000) {
-    return { ok: false, error: "content must be 10KB or less" };
-  }
-  return { ok: true, data: { content: obj.content.trim() } };
 }
 
 // ── URL detection ──

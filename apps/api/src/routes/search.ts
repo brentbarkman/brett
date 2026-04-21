@@ -59,7 +59,7 @@ search.get("/search", authMiddleware, async (c) => {
     meetingIds.length > 0
       ? prisma.meetingNote.findMany({
           where: { id: { in: meetingIds }, userId: user.id },
-          select: { id: true, title: true, meetingStartedAt: true },
+          select: { id: true, title: true, meetingStartedAt: true, calendarEventId: true },
         })
       : [],
     findingIds.length > 0
@@ -68,6 +68,7 @@ search.get("/search", authMiddleware, async (c) => {
           select: {
             id: true,
             title: true,
+            scoutId: true,
             scout: { select: { name: true } },
           },
         })
@@ -120,6 +121,7 @@ search.get("/search", authMiddleware, async (c) => {
         base.metadata = {
           ...base.metadata,
           meetingDate: meeting.meetingStartedAt?.toISOString() ?? null,
+          calendarEventId: meeting.calendarEventId ?? null,
         };
       }
     } else if (r.entityType === "scout_finding") {
@@ -129,6 +131,7 @@ search.get("/search", authMiddleware, async (c) => {
         base.metadata = {
           ...base.metadata,
           scoutName: finding.scout?.name ?? null,
+          scoutId: finding.scoutId ?? null,
         };
       }
     }

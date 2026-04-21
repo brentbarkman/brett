@@ -11,7 +11,9 @@ struct BrettChatSection: View {
     let itemId: String
 
     @State private var input: String = ""
-    @State private var aiStore = AIProviderStore.shared
+    // Reference the @Observable singleton directly — wrapping it in @State
+    // would snapshot it once and hide subsequent changes from SwiftUI.
+    private var aiStore: AIProviderStore { AIProviderStore.shared }
     @FocusState private var isFocused: Bool
 
     private var messages: [ChatMessage] {

@@ -27,8 +27,9 @@ struct AIProviderSettingsView: View {
     @State private var usageSummary: UsageSummary?
     @State private var expandedPeriod: UsageTimePeriod?
 
-    // Token usage display preference
-    @AppStorage("ai.showTokenUsage") private var showTokenUsage: Bool = false
+    // Token usage display preference — scoped per-user; @State + explicit
+    // UserDefaults because @AppStorage keys must be compile-time constants.
+    @State private var showTokenUsage: Bool = false
 
     private let client: APIClient
 
@@ -72,6 +73,9 @@ struct AIProviderSettingsView: View {
                     }
                 }
                 .tint(BrettColors.gold)
+                .onChange(of: showTokenUsage) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: UserScopedStorage.key("ai.showTokenUsage"))
+                }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
@@ -183,6 +187,9 @@ struct AIProviderSettingsView: View {
         .navigationTitle("AI Providers")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .onAppear {
+            showTokenUsage = UserDefaults.standard.bool(forKey: UserScopedStorage.key("ai.showTokenUsage"))
+        }
         .task { await refresh() }
         .task { await fetchUsage() }
         .confirmationDialog(

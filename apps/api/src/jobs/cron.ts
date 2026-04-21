@@ -141,8 +141,25 @@ export function startCronJobs(): void {
       const windowEnd = new Date(now.getTime() - 5 * 60 * 1000);
       const windowStart = new Date(now.getTime() - 15 * 60 * 1000);
 
+      // Scope to users who have meeting-notes providers wired up — there's
+      // no reason to pull events for users who can't act on them, and
+      // pulling all users' events unfiltered scales poorly.
+      const [granolaUsers, googleUsers] = await Promise.all([
+        prisma.granolaAccount.findMany({ select: { userId: true } }),
+        prisma.googleAccount.findMany({
+          where: { hasMeetingNotesScope: true },
+          select: { userId: true },
+        }),
+      ]);
+      const eligibleUserIds = [...new Set([
+        ...granolaUsers.map((a) => a.userId),
+        ...googleUsers.map((a) => a.userId),
+      ])];
+      if (eligibleUserIds.length === 0) return;
+
       const recentlyEnded = await prisma.calendarEvent.findMany({
         where: {
+          userId: { in: eligibleUserIds },
           endTime: { gte: windowStart, lte: windowEnd },
           isAllDay: false,
         },

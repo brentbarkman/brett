@@ -466,6 +466,10 @@ model UserAIConfig {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider     String
   encryptedKey String   @db.Text
+  /// First few characters of the original plaintext key, captured at
+  /// encryption time, used for a human-readable mask in settings.
+  /// Nullable for rows created before this was tracked.
+  keyPrefix    String?
   isValid      Boolean  @default(true)
   isActive     Boolean  @default(false)
   createdAt    DateTime @default(now())

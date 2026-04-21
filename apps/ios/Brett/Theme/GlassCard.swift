@@ -10,7 +10,7 @@ private func glassCardBorder(tint: Color?) -> some View {
     RoundedRectangle(cornerRadius: 14, style: .continuous)
         .strokeBorder(
             tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.10),
-            lineWidth: tint == nil ? 1 : 1
+            lineWidth: 1
         )
 }
 

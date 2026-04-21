@@ -93,6 +93,7 @@ export async function extractEntityFacts(
   if (!parsed) return;
   const facts = validateFacts(parsed);
 
+  let failedCount = 0;
   for (const fact of facts) {
     try {
       await prisma.$transaction(async (tx: any) => {
@@ -132,8 +133,20 @@ export async function extractEntityFacts(
           });
         }
       });
-    } catch {
-      // Silent fail on individual fact errors — don't break the pipeline
+    } catch (err) {
+      // One-at-a-time — one bad fact should not kill the batch. Count +
+      // log enough context to debug without PII (the fact value itself
+      // may contain user data).
+      failedCount++;
+      console.error(
+        `[entity-facts] upsert failed for user=${userId} entity=${entityType}:${entityId} key=${fact.key}:`,
+        err instanceof Error ? err.message : err,
+      );
     }
+  }
+  if (failedCount > 0) {
+    console.warn(
+      `[entity-facts] ${failedCount}/${facts.length} facts failed to upsert for user=${userId} entity=${entityType}:${entityId}`,
+    );
   }
 }
