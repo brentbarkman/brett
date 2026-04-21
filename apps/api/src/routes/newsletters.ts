@@ -228,26 +228,34 @@ senderRouter.delete("/:id", authMiddleware, async (c) => {
   }
 });
 
-// Approve pending sender
-senderRouter.post("/:pendingId/approve", authMiddleware, async (c) => {
+// Approve sender by email (idempotent)
+senderRouter.post("/approve", authMiddleware, async (c) => {
   const user = c.get("user");
-  const pendingId = c.req.param("pendingId");
+  const body = await c.req.json<{ senderEmail?: string }>();
+  const senderEmail = body.senderEmail?.trim();
+  if (!senderEmail) {
+    return c.json({ error: "senderEmail required" }, 400);
+  }
 
   try {
-    const result = await approveSender(user.id, pendingId);
+    const result = await approveSender(user.id, senderEmail);
     return c.json(result);
   } catch (err: any) {
     return c.json({ error: err.message }, 404);
   }
 });
 
-// Block pending sender
-senderRouter.post("/:pendingId/block", authMiddleware, async (c) => {
+// Block sender by email (idempotent)
+senderRouter.post("/block", authMiddleware, async (c) => {
   const user = c.get("user");
-  const pendingId = c.req.param("pendingId");
+  const body = await c.req.json<{ senderEmail?: string }>();
+  const senderEmail = body.senderEmail?.trim();
+  if (!senderEmail) {
+    return c.json({ error: "senderEmail required" }, 400);
+  }
 
   try {
-    await blockSender(user.id, pendingId);
+    await blockSender(user.id, senderEmail);
     return c.json({ ok: true });
   } catch (err: any) {
     return c.json({ error: err.message }, 404);

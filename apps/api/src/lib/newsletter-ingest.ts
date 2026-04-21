@@ -249,7 +249,6 @@ export async function createPendingNewsletter(params: {
       userId: params.userId,
       contentMetadata: {
         newsletterApproval: true,
-        pendingNewsletterId: pending.id,
         senderEmail: senderEmailLower,
         senderName: params.senderName,
       },
@@ -269,34 +268,45 @@ export async function createPendingNewsletter(params: {
 
 const MAX_RETROACTIVE_INGEST = 10;
 
-export async function approveSender(userId: string, pendingId: string): Promise<{ senderId: string; ingestedCount: number }> {
-  const pending = await prisma.pendingNewsletter.findFirst({
-    where: { id: pendingId, userId },
-  });
-  if (!pending) throw new Error("Pending newsletter not found");
-
-  // Create or reactivate the sender record
-  const sender = await prisma.newsletterSender.upsert({
-    where: { userId_email: { userId, email: pending.senderEmail } },
-    create: {
+async function markApprovalTaskDone(userId: string, senderEmail: string): Promise<void> {
+  await prisma.item.updateMany({
+    where: {
       userId,
-      name: pending.senderName,
-      email: pending.senderEmail, // already lowercase
-      active: true,
+      sourceId: `newsletter-approve:${senderEmail}`,
+      status: "active",
     },
-    update: { active: true, name: pending.senderName },
+    data: { status: "done", completedAt: new Date() },
   });
+}
 
-  // Retroactively ingest pending newsletters from this sender (most recent first, capped)
+export async function approveSender(userId: string, senderEmail: string): Promise<{ senderId: string; ingestedCount: number }> {
+  const email = senderEmail.toLowerCase();
+
   const allPending = await prisma.pendingNewsletter.findMany({
-    where: { userId, senderEmail: pending.senderEmail },
+    where: { userId, senderEmail: email },
     orderBy: { receivedAt: "desc" },
     take: MAX_RETROACTIVE_INGEST,
   });
 
+  const existing = await prisma.newsletterSender.findUnique({
+    where: { userId_email: { userId, email } },
+  });
+
+  // Idempotency guard: nothing to approve and no prior record.
+  if (!existing && allPending.length === 0) {
+    throw new Error("Unknown sender");
+  }
+
+  const displayName = existing?.name ?? allPending[0]?.senderName ?? email.split("@")[0];
+
+  const sender = await prisma.newsletterSender.upsert({
+    where: { userId_email: { userId, email } },
+    create: { userId, name: displayName, email, active: true },
+    update: { active: true }, // keep existing name — user may have renamed
+  });
+
   let ingestedCount = 0;
   for (const p of allPending) {
-    // Dedup: skip if item with this messageId already exists
     const exists = await prisma.item.findFirst({
       where: { userId, sourceId: p.postmarkMessageId },
     });
@@ -315,60 +325,51 @@ export async function approveSender(userId: string, pendingId: string): Promise<
     }
   }
 
-  // Log if we're discarding old pending records beyond the cap
   const totalPending = await prisma.pendingNewsletter.count({
-    where: { userId, senderEmail: pending.senderEmail },
+    where: { userId, senderEmail: email },
   });
   if (totalPending > MAX_RETROACTIVE_INGEST) {
-    console.warn(`[newsletter] ${totalPending - MAX_RETROACTIVE_INGEST} pending newsletters from ${pending.senderEmail} exceeded retroactive cap, discarded`);
+    console.warn(`[newsletter] ${totalPending - MAX_RETROACTIVE_INGEST} pending newsletters from ${email} exceeded retroactive cap, discarded`);
   }
 
-  // Clean up all pending records from this sender
   await prisma.pendingNewsletter.deleteMany({
-    where: { userId, senderEmail: pending.senderEmail },
+    where: { userId, senderEmail: email },
   });
 
-  // Complete the approval task
-  if (pending.approvalItemId) {
-    await prisma.item.update({
-      where: { id: pending.approvalItemId },
-      data: { status: "done", completedAt: new Date() },
-    });
-  }
+  await markApprovalTaskDone(userId, email);
 
   return { senderId: sender.id, ingestedCount };
 }
 
-export async function blockSender(userId: string, pendingId: string): Promise<void> {
-  const pending = await prisma.pendingNewsletter.findFirst({
-    where: { id: pendingId, userId },
-  });
-  if (!pending) throw new Error("Pending newsletter not found");
+export async function blockSender(userId: string, senderEmail: string): Promise<void> {
+  const email = senderEmail.toLowerCase();
 
-  // Create blocked sender record (active: false)
+  const allPending = await prisma.pendingNewsletter.findMany({
+    where: { userId, senderEmail: email },
+    take: 1,
+  });
+
+  const existing = await prisma.newsletterSender.findUnique({
+    where: { userId_email: { userId, email } },
+  });
+
+  if (!existing && allPending.length === 0) {
+    throw new Error("Unknown sender");
+  }
+
+  const displayName = existing?.name ?? allPending[0]?.senderName ?? email.split("@")[0];
+
   await prisma.newsletterSender.upsert({
-    where: { userId_email: { userId, email: pending.senderEmail } },
-    create: {
-      userId,
-      name: pending.senderName,
-      email: pending.senderEmail,
-      active: false,
-    },
+    where: { userId_email: { userId, email } },
+    create: { userId, name: displayName, email, active: false },
     update: { active: false },
   });
 
-  // Delete all pending from this sender
   await prisma.pendingNewsletter.deleteMany({
-    where: { userId, senderEmail: pending.senderEmail },
+    where: { userId, senderEmail: email },
   });
 
-  // Complete the approval task
-  if (pending.approvalItemId) {
-    await prisma.item.update({
-      where: { id: pending.approvalItemId },
-      data: { status: "done", completedAt: new Date() },
-    });
-  }
+  await markApprovalTaskDone(userId, email);
 }
 
 // ── Cleanup ──

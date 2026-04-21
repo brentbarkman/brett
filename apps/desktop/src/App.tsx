@@ -106,6 +106,7 @@ import {
   useSubmitScoutFeedback,
   useRecentFindings,
 } from "./api/scouts";
+import { useApproveNewsletterSender, useBlockNewsletterSender } from "./api/newsletters";
 import type { RecentFindingItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
@@ -203,6 +204,8 @@ export function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const approveNewsletter = useApproveNewsletterSender();
+  const blockNewsletter = useBlockNewsletterSender();
 
   // Initialize SSE for real-time updates
   useEventStream();
@@ -1358,16 +1361,18 @@ export function App() {
           onScoutFeedback={(scoutId, findingId, useful) =>
             submitFeedback.mutate({ scoutId, findingId, useful })
           }
-          onApproveNewsletter={async (pendingId) => {
-            await apiFetch(`/newsletters/senders/${pendingId}/approve`, { method: "POST" });
-            queryClient.invalidateQueries({ queryKey: ["things"] });
-            queryClient.invalidateQueries({ queryKey: ["inbox"] });
+          onApproveNewsletter={(senderEmail) => {
+            approveNewsletter.mutate(senderEmail, {
+              onSettled: () => handleCloseDetail(),
+            });
           }}
-          onBlockNewsletter={async (pendingId) => {
-            await apiFetch(`/newsletters/senders/${pendingId}/block`, { method: "POST" });
-            queryClient.invalidateQueries({ queryKey: ["things"] });
-            queryClient.invalidateQueries({ queryKey: ["inbox"] });
+          onBlockNewsletter={(senderEmail) => {
+            blockNewsletter.mutate(senderEmail, {
+              onSettled: () => handleCloseDetail(),
+            });
           }}
+          isApprovingNewsletter={approveNewsletter.isPending}
+          isBlockingNewsletter={blockNewsletter.isPending}
           onItemClick={(id) => {
             const thing = allActiveThings.find((t) => t.id === id);
             if (thing) handleDetailDrillDown(thing);

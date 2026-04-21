@@ -59,16 +59,18 @@ interface TaskDetailPanelProps {
   onNavigateToCalendarEvent?: (calendarEventId: string) => void;
   onNavigateToScout?: (scoutId: string) => void;
   onScoutFeedback?: (scoutId: string, findingId: string, useful: boolean | null) => void;
-  onApproveNewsletter?: (pendingId: string) => void;
-  onBlockNewsletter?: (pendingId: string) => void;
+  onApproveNewsletter?: (senderEmail: string) => void;
+  onBlockNewsletter?: (senderEmail: string) => void;
+  isApprovingNewsletter?: boolean;
+  isBlockingNewsletter?: boolean;
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
   assistantName?: string;
 }
 
-function isNewsletterApproval(meta: unknown): meta is { newsletterApproval: true; pendingNewsletterId: string; senderEmail: string; senderName: string } {
-  return !!meta && typeof meta === "object" && (meta as any).newsletterApproval === true && typeof (meta as any).pendingNewsletterId === "string";
+function isNewsletterApproval(meta: unknown): meta is { newsletterApproval: true; senderEmail: string; senderName: string } {
+  return !!meta && typeof meta === "object" && (meta as any).newsletterApproval === true && typeof (meta as any).senderEmail === "string";
 }
 
 export function TaskDetailPanel({
@@ -106,13 +108,15 @@ export function TaskDetailPanel({
   onScoutFeedback,
   onApproveNewsletter,
   onBlockNewsletter,
+  isApprovingNewsletter,
+  isBlockingNewsletter,
   onItemClick,
   onEventClick,
   onNavigate,
   assistantName,
 }: TaskDetailPanelProps) {
   const isApproval = isNewsletterApproval(detail.contentMetadata);
-  const pendingNewsletterId = isApproval ? (detail.contentMetadata as any).pendingNewsletterId : undefined;
+  const approvalSenderEmail = isApproval ? (detail.contentMetadata as any).senderEmail : undefined;
 
   const { enabled: demoOn } = useDemoMode();
   const shownTitle = useDisplayTitle(detail.id, detail.title, "thing");
@@ -268,19 +272,21 @@ export function TaskDetailPanel({
           )}
 
           {/* Newsletter approval actions */}
-          {isApproval && pendingNewsletterId && (
+          {isApproval && approvalSenderEmail && (
             <div className="flex items-center gap-2 pt-3 border-t border-white/10">
               <button
-                onClick={() => onApproveNewsletter?.(pendingNewsletterId)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-brett-gold/20 text-brett-gold border border-brett-gold/30 hover:bg-brett-gold/30 transition-colors"
+                onClick={() => onApproveNewsletter?.(approvalSenderEmail)}
+                disabled={isApprovingNewsletter || isBlockingNewsletter}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-brett-gold/20 text-brett-gold border border-brett-gold/30 hover:bg-brett-gold/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Approve Sender
+                {isApprovingNewsletter ? "Approving…" : "Approve Sender"}
               </button>
               <button
-                onClick={() => onBlockNewsletter?.(pendingNewsletterId)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-white/50 border border-white/10 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors"
+                onClick={() => onBlockNewsletter?.(approvalSenderEmail)}
+                disabled={isApprovingNewsletter || isBlockingNewsletter}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-white/50 border border-white/10 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Block Sender
+                {isBlockingNewsletter ? "Blocking…" : "Block Sender"}
               </button>
             </div>
           )}

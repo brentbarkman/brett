@@ -74,56 +74,64 @@ export function useDeleteSender() {
   });
 }
 
-export function useApprovePendingSender() {
+export function useApproveNewsletterSender() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (pendingId: string) =>
-      apiFetch<NewsletterSender>(`/newsletters/senders/${pendingId}/approve`, {
+    mutationFn: (senderEmail: string) =>
+      apiFetch<{ senderId: string; ingestedCount: number }>("/newsletters/senders/approve", {
         method: "POST",
+        body: JSON.stringify({ senderEmail }),
       }),
-    onMutate: async (pendingId) => {
+    onMutate: async (senderEmail) => {
       await qc.cancelQueries({ queryKey: ["newsletter-pending"] });
       const prev = qc.getQueryData<PendingNewsletterSummary[]>(["newsletter-pending"]);
       if (prev) {
         qc.setQueryData<PendingNewsletterSummary[]>(
           ["newsletter-pending"],
-          prev.filter((p) => p.id !== pendingId),
+          prev.filter((p) => p.senderEmail !== senderEmail),
         );
       }
       return { prev };
     },
-    onError: (_err, _id, ctx) => {
+    onError: (_err, _email, ctx) => {
       if (ctx?.prev !== undefined) qc.setQueryData(["newsletter-pending"], ctx.prev);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["newsletter-pending"] });
       qc.invalidateQueries({ queryKey: ["newsletter-senders"] });
+      qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
     },
   });
 }
 
-export function useBlockPendingSender() {
+export function useBlockNewsletterSender() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (pendingId: string) =>
-      apiFetch(`/newsletters/senders/${pendingId}/block`, { method: "POST" }),
-    onMutate: async (pendingId) => {
+    mutationFn: (senderEmail: string) =>
+      apiFetch("/newsletters/senders/block", {
+        method: "POST",
+        body: JSON.stringify({ senderEmail }),
+      }),
+    onMutate: async (senderEmail) => {
       await qc.cancelQueries({ queryKey: ["newsletter-pending"] });
       const prev = qc.getQueryData<PendingNewsletterSummary[]>(["newsletter-pending"]);
       if (prev) {
         qc.setQueryData<PendingNewsletterSummary[]>(
           ["newsletter-pending"],
-          prev.filter((p) => p.id !== pendingId),
+          prev.filter((p) => p.senderEmail !== senderEmail),
         );
       }
       return { prev };
     },
-    onError: (_err, _id, ctx) => {
+    onError: (_err, _email, ctx) => {
       if (ctx?.prev !== undefined) qc.setQueryData(["newsletter-pending"], ctx.prev);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["newsletter-pending"] });
       qc.invalidateQueries({ queryKey: ["newsletter-senders"] });
+      qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
     },
   });
 }

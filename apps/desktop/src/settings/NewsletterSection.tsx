@@ -7,8 +7,8 @@ import {
   useNewsletterPending,
   useUpdateSender,
   useDeleteSender,
-  useApprovePendingSender,
-  useBlockPendingSender,
+  useApproveNewsletterSender,
+  useBlockNewsletterSender,
 } from "../api/newsletters";
 import type { NewsletterSender, PendingNewsletterSummary } from "@brett/types";
 
@@ -68,8 +68,8 @@ interface PendingRowProps {
 }
 
 function PendingRow({ pending }: PendingRowProps) {
-  const approve = useApprovePendingSender();
-  const block = useBlockPendingSender();
+  const approve = useApproveNewsletterSender();
+  const block = useBlockNewsletterSender();
   const isBusy = approve.isPending || block.isPending;
 
   return (
@@ -87,14 +87,14 @@ function PendingRow({ pending }: PendingRowProps) {
       </div>
       <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
         <button
-          onClick={() => approve.mutate(pending.id)}
+          onClick={() => approve.mutate(pending.senderEmail)}
           disabled={isBusy}
           className="text-xs text-brett-gold hover:text-brett-gold/80 font-medium transition-colors disabled:opacity-40"
         >
           {approve.isPending ? "Approving…" : "Approve"}
         </button>
         <button
-          onClick={() => block.mutate(pending.id)}
+          onClick={() => block.mutate(pending.senderEmail)}
           disabled={isBusy}
           className="text-xs text-white/40 hover:text-red-400 transition-colors disabled:opacity-40"
         >

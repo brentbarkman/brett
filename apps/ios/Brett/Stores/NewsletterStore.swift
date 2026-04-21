@@ -5,14 +5,14 @@ import Observation
 /// engine — settings flow through their own REST endpoints, same pattern as
 /// `UserProfileStore`.
 ///
-/// Endpoints (under `/newsletters` on the API):
-/// - GET  /newsletters/ingest-address — auto-generates a per-user token
-/// - GET  /newsletters — list of approved senders
-/// - PATCH /newsletters/:id — toggle active/rename
-/// - DELETE /newsletters/:id — remove
-/// - GET  /newsletters/pending — unconfirmed senders
-/// - POST /newsletters/:pendingId/approve — promote to active sender
-/// - POST /newsletters/:pendingId/block — blocklist
+/// Endpoints (under `/newsletters/senders` on the API):
+/// - GET  /newsletters/senders/ingest-address — auto-generates a per-user token
+/// - GET  /newsletters/senders — list of approved senders
+/// - PATCH /newsletters/senders/:id — toggle active/rename
+/// - DELETE /newsletters/senders/:id — remove
+/// - GET  /newsletters/senders/pending — unconfirmed senders
+/// - POST /newsletters/senders/approve — promote sender (by email, idempotent)
+/// - POST /newsletters/senders/block — blocklist sender (by email, idempotent)
 @MainActor
 @Observable
 final class NewsletterStore {
@@ -38,15 +38,15 @@ final class NewsletterStore {
 
         // Fire all three in parallel — they're independent.
         async let addressTask: IngestAddressResponse = client.request(
-            path: "/newsletters/ingest-address",
+            path: "/newsletters/senders/ingest-address",
             method: "GET"
         )
         async let sendersTask: [NewsletterSender] = client.request(
-            path: "/newsletters",
+            path: "/newsletters/senders",
             method: "GET"
         )
         async let pendingTask: [PendingNewsletterSender] = client.request(
-            path: "/newsletters/pending",
+            path: "/newsletters/senders/pending",
             method: "GET"
         )
 
@@ -73,7 +73,7 @@ final class NewsletterStore {
         struct Payload: Encodable { let active: Bool }
         do {
             let _: NewsletterSender = try await client.request(
-                path: "/newsletters/\(id)",
+                path: "/newsletters/senders/\(id)",
                 method: "PATCH",
                 body: Payload(active: active)
             )
@@ -88,7 +88,7 @@ final class NewsletterStore {
 
         do {
             let _: [String: Bool] = try await client.request(
-                path: "/newsletters/\(id)",
+                path: "/newsletters/senders/\(id)",
                 method: "DELETE"
             )
         } catch {
@@ -96,17 +96,20 @@ final class NewsletterStore {
         }
     }
 
-    func approvePending(id: String) async {
+    func approvePending(senderEmail: String) async {
         let backup = pending
-        pending.removeAll { $0.id == id }
+        pending.removeAll { $0.senderEmail == senderEmail }
 
+        struct Payload: Encodable { let senderEmail: String }
         struct ApproveResponse: Decodable {
-            // Shape is {sender, item} — we only need to refresh senders afterward.
+            let senderId: String
+            let ingestedCount: Int
         }
         do {
             let _: ApproveResponse = try await client.request(
-                path: "/newsletters/\(id)/approve",
-                method: "POST"
+                path: "/newsletters/senders/approve",
+                method: "POST",
+                body: Payload(senderEmail: senderEmail)
             )
             // Refresh to pick up the new sender + any new items.
             await fetch()
@@ -115,14 +118,16 @@ final class NewsletterStore {
         }
     }
 
-    func blockPending(id: String) async {
+    func blockPending(senderEmail: String) async {
         let backup = pending
-        pending.removeAll { $0.id == id }
+        pending.removeAll { $0.senderEmail == senderEmail }
 
+        struct Payload: Encodable { let senderEmail: String }
         do {
             let _: [String: Bool] = try await client.request(
-                path: "/newsletters/\(id)/block",
-                method: "POST"
+                path: "/newsletters/senders/block",
+                method: "POST",
+                body: Payload(senderEmail: senderEmail)
             )
         } catch {
             pending = backup
