@@ -82,11 +82,6 @@ export function displayTitle(
 /**
  * Render-path variant: subscribes to the demo mode store so the component
  * re-renders when it flips, then returns the displayed title.
- *
- * Uses the `enabled` value from useDemoMode() directly (rather than delegating
- * to displayTitle() which reads module state). React Compiler memoizes based
- * on tracked data flow — if the return value didn't visibly depend on the
- * subscription, the compiler could cache a stale title after the store flipped.
  */
 export function useDisplayTitle(
   id: string | undefined | null,

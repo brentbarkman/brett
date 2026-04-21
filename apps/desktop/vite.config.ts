@@ -6,30 +6,20 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pkg = require("./package.json");
 
-// React Compiler v1.0.0 mis-optimizes the prod-mode minified bundle —
-// closure hoisting breaks useSyncExternalStore subscribers, which detaches
-// React Router's popstate listener so clicks update the URL but the view
-// stays put. Related upstream: facebook/react#35342, #36128, #34045, #35009.
-// Dev Electron was unaffected because Vite's dev pipeline runs the compiler
-// differently.
+// React Compiler disabled. v1.0.0 mis-optimizes the packaged prod bundle
+// (minified, served over app://): closure hoisting detaches
+// useSyncExternalStore subscribers, silently killing React Router's popstate
+// listener so clicks update the URL but the view never re-renders. Console
+// stays clean, which makes this a nightmare to catch.
 //
-// Compromise: run the compiler in `annotation` mode. Only files that opt in
-// with a top-of-file `"use memo";` directive get compiled. Everything else
-// is skipped. We opt in leaf components that benefit from auto-memoization
-// and don't touch Router context (ThingCard, InboxItemRow to start).
-// Re-audit once a new compiler release ships with the hoisting fixes.
-const ReactCompilerConfig = {
-  compilationMode: "annotation" as const,
-};
-
+// We tried `compilationMode: "annotation"` as a compromise — only files with
+// `"use memo";` get compiled — and it still broke navigation in the packaged
+// build even with no files annotated. The plugin is not a no-op just because
+// nothing opts in. Until upstream ships fixes for facebook/react#35342,
+// #36128, #34045, #35009, the compiler stays off entirely. Hand-written
+// useMemo / useCallback / React.memo is fine where it measurably helps.
 export default defineConfig({
-  plugins: [
-    react({
-      babel: {
-        plugins: [["babel-plugin-react-compiler", ReactCompilerConfig]],
-      },
-    }),
-  ],
+  plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
