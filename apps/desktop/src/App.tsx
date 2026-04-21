@@ -121,7 +121,7 @@ const AWAKENING_KENBURNS_MS = 2500;
  *  the UI emerge together. Because UI shell stays at opacity 1
  *  throughout, glass cards' backdrop-filter renders continuously with no
  *  pop. */
-const AWAKENING_COVER_FADE_MS = 1500;
+const AWAKENING_COVER_FADE_MS = 1800;
 
 function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer, assistantName }: {
   children: React.ReactNode;
@@ -447,7 +447,7 @@ export function App() {
   // Today badge count — active items due this week or earlier. Recomputed
   // when the UTC day rolls over (via shared todayKey above).
   const endOfWeekISO = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
-  const { data: activeThingsForCount = [] } = useActiveThings(endOfWeekISO);
+  const { data: activeThingsForCount = [], isSuccess: todayQuerySuccess } = useActiveThings(endOfWeekISO);
 
   // Upcoming badge count
   const { data: upcomingThings = [] } = useUpcomingThings();
@@ -533,30 +533,31 @@ export function App() {
   });
 
   // Awakening — plays once per session on cold launch.
+  // Ready when: CDN base URL resolved, the real wallpaper has painted, AND
+  // the Today query has landed its first success. Each of these prevents a
+  // different kind of pop: base-url → image-url is valid, imageReady →
+  // LivingBackground is showing the real photo under the zoom, todayReady →
+  // the most-visible panel isn't empty-to-populated while the cover lifts.
+  // useAwakening caps this wait at 2.2s so a slow query can't strand us.
   const { data: appConfig } = useAppConfig();
-  const awakening = useAwakening({
-    baseUrl: appConfig?.storageBaseUrl ?? "",
-  });
-  // Awakening: LivingBackground image starts at scale(1.15) and transitions
-  // to scale(1.0) over AWAKENING_KENBURNS_MS. A black cover above the UI
-  // (z-30) is opaque at mount and fades to transparent over
-  // AWAKENING_COVER_FADE_MS — the cover fading IS the UI reveal. Because
-  // the UI shell stays at opacity 1 the whole time, glass cards'
-  // backdrop-filter renders continuously (no "pop" at opacity === 1).
+  const revealReady =
+    Boolean(appConfig?.storageBaseUrl) && background.hasLoadedImage && todayQuerySuccess;
+  const awakening = useAwakening({ ready: revealReady });
+  // LivingBackground image starts at scale(1.15) and transitions to scale(1.0)
+  // over AWAKENING_KENBURNS_MS. A black cover above the UI (z-30) is opaque
+  // at mount and fades to transparent over AWAKENING_COVER_FADE_MS — the
+  // cover fading IS the UI reveal. Because the UI shell stays at opacity 1
+  // throughout, glass cards' backdrop-filter renders continuously.
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading">("playing");
   const [coverFaded, setCoverFaded] = useState(() => awakening.status === "skip");
 
   useEffect(() => {
     if (awakening.status === "skip") {
-      // Session already played / reduced motion — no animation, UI instant.
       setAwakeningPhase("fading");
       setCoverFaded(true);
       return;
     }
-    // Wait for the real wallpaper to load before kicking off. If we started
-    // on the empty (black) state and the image loaded mid-zoom, the user
-    // would see an abrupt image pop-in.
-    if (!background.hasLoadedImage) return;
+    if (awakening.status !== "play") return; // "pending": no-op
     // Double rAF ensures the initial frame (scale(1.15), cover opaque) has
     // painted before we flip state — so the browser runs real transitions
     // rather than short-circuiting to the final values.
@@ -571,7 +572,7 @@ export function App() {
       cancelAnimationFrame(raf1);
       if (raf2) cancelAnimationFrame(raf2);
     };
-  }, [awakening.status, background.hasLoadedImage]);
+  }, [awakening.status]);
 
   // Track whether spotlight should open with search pre-selected (Cmd+F)
   const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);

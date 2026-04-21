@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 // MARK: - Navigation value types
@@ -8,6 +9,37 @@ enum NavDestination: Hashable {
     case scoutDetail(id: String)
     case eventDetail(id: String)
     case listView(id: String)
+}
+
+// MARK: - Awakening tokens
+//
+// Cold-launch reveal: on first launch of each app process the wallpaper zooms
+// from `startScale` → 1.0 (Ken Burns) while a black cover above the UI fades
+// out. Gated on the caller's readiness signal (sync hydrated) with a hard cap
+// so a slow or offline launch never strands the user on black. Plays exactly
+// once per process; subsequent MainContainer re-renders skip.
+//
+// Mirrors `apps/desktop/src/hooks/useAwakening.ts` — keep durations in sync
+// across platforms so the two clients feel like the same product.
+
+enum Awakening {
+    /// Flipped once the reveal has started for this process. Not reset —
+    /// a fresh app launch is the only way to see it again. Main-actor
+    /// isolated because every reader is a SwiftUI View.
+    @MainActor static var sessionPlayed = false
+
+    /// Image scale at mount. Eases to 1.0 over `kenBurnsDuration`.
+    static let startScale: CGFloat = 1.15
+
+    /// Ken-Burns zoom-out duration.
+    static let kenBurnsDuration: Double = 2.5
+
+    /// Black-cover fade-out duration.
+    static let coverFadeDuration: Double = 1.8
+
+    /// Hard cap from mount on how long we hold the cover opaque while
+    /// waiting on the readiness signal.
+    static let maxWaitSeconds: Double = 2.2
 }
 
 struct MainContainer: View {
@@ -22,6 +54,23 @@ struct MainContainer: View {
     @State private var showSearch = false
     @State private var showFeedback = false
 
+    // MARK: - Awakening (cold-launch reveal)
+    //
+    // On first launch of each app process, the wallpaper zooms from 1.15 → 1.0
+    // (Ken Burns) while a black cover above the UI fades out — so the content
+    // hydrates under the cover and the user sees a single, settled image.
+    // Gated on `hasCompletedInitialSync` with a hard cap at `maxWaitSeconds`.
+    // See `Views/Shared/AwakeningModifier.swift` for the tokens and rationale.
+
+    @Query private var syncHealthRows: [SyncHealth]
+    private var hasCompletedInitialSync: Bool {
+        syncHealthRows.first?.lastSuccessfulPullAt != nil
+    }
+
+    @State private var kenBurnsScale: CGFloat = Awakening.sessionPlayed ? 1.0 : Awakening.startScale
+    @State private var coverOpacity: Double = Awakening.sessionPlayed ? 0.0 : 1.0
+    @State private var awakeningTriggered: Bool = Awakening.sessionPlayed
+
     private let pages = ["Lists", "Inbox", "Today", "Calendar"]
 
     var body: some View {
@@ -31,6 +80,7 @@ struct MainContainer: View {
         NavigationStack(path: $path) {
             ZStack {
                 BackgroundView()
+                    .scaleEffect(kenBurnsScale, anchor: .center)
 
                 // Shake detection is now handled by `ShakeMonitor.shared`
                 // which polls CoreMotion at the app level — no in-tree
@@ -52,6 +102,12 @@ struct MainContainer: View {
                         .tag(3)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+            }
+            .task { await runAwakeningIfNeeded() }
+            .onChange(of: hasCompletedInitialSync) { _, ready in
+                if ready && !awakeningTriggered {
+                    fireAwakening()
+                }
             }
             // Tap-to-dismiss the keyboard. `simultaneousGesture` runs in
             // parallel with TabView's swipe + every button's own tap so
@@ -211,6 +267,71 @@ struct MainContainer: View {
         // (the iOS back chevron on ListView / ScoutsRosterView /
         // ScoutDetailView) render in gold instead of system blue.
         .tint(BrettColors.gold)
+        // Cold-launch cover. Sits above the whole NavigationStack — including
+        // safeAreaInset chrome (page indicator, settings gear) — so the
+        // UI reveals as one piece rather than top-toolbar-first.
+        // `allowsHitTesting(false)` lets stray taps pass through even if
+        // opacity rounding leaves a pixel of alpha.
+        .overlay {
+            if coverOpacity > 0 {
+                Color.black
+                    .ignoresSafeArea()
+                    .opacity(coverOpacity)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    // MARK: - Awakening
+
+    /// Decide whether to play the cold-launch reveal and, if so, arm the
+    /// cap timer. The reveal itself fires from `fireAwakening()` — either
+    /// from the `.onChange(hasCompletedInitialSync)` observer or from
+    /// this timer when the sync is slow / offline. Reduce Motion and a
+    /// prior session in this process both short-circuit to the skipped
+    /// state (scale 1, cover opacity 0).
+    private func runAwakeningIfNeeded() async {
+        guard !awakeningTriggered else { return }
+
+        if BrettAnimation.isReduceMotionEnabled {
+            Awakening.sessionPlayed = true
+            awakeningTriggered = true
+            kenBurnsScale = 1.0
+            coverOpacity = 0.0
+            return
+        }
+
+        // If sync already landed (cache hit from a prior session), fire
+        // almost immediately — one tick so the initial frame paints at
+        // the start scale first, so the Ken Burns motion is visible.
+        if hasCompletedInitialSync {
+            try? await Task.sleep(for: .milliseconds(50))
+            fireAwakening()
+            return
+        }
+
+        // Cap: don't hold the cover longer than `maxWaitSeconds` from
+        // mount. If the `.onChange` observer beats us, `fireAwakening`
+        // is a no-op on the second call.
+        try? await Task.sleep(for: .seconds(Awakening.maxWaitSeconds))
+        if !awakeningTriggered {
+            fireAwakening()
+        }
+    }
+
+    /// Kick off the zoom-out and cover fade. Idempotent — safe to call
+    /// from both the readiness observer and the cap timer.
+    private func fireAwakening() {
+        guard !awakeningTriggered else { return }
+        Awakening.sessionPlayed = true
+        awakeningTriggered = true
+
+        withAnimation(.easeOut(duration: Awakening.kenBurnsDuration)) {
+            kenBurnsScale = 1.0
+        }
+        withAnimation(.easeOut(duration: Awakening.coverFadeDuration)) {
+            coverOpacity = 0.0
+        }
     }
 
     /// Per-page omnibar placeholder copy. Lists/Inbox use generic capture,

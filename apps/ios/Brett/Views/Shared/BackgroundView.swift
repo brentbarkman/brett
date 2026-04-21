@@ -27,11 +27,14 @@ struct BackgroundView: View {
     /// Image key currently being rendered. Drives the crossfade via
     /// `.animation(_, value:)`. For remote images the key is the URL
     /// string; for assets it's the image name; for solids it's the hex.
-    @State private var displayedKey: String = ""
+    /// Seeded from the last-wallpaper cache so cold-launch paints the
+    /// previous image immediately from URLCache — no asset→remote swap.
+    @State private var displayedKey: String = BackgroundService.cachedRemoteURL?.absoluteString ?? ""
 
     /// URL of the current remote image, if any. Held alongside the key
-    /// so we don't rebuild the URL on every render.
-    @State private var remoteURL: URL?
+    /// so we don't rebuild the URL on every render. Seeded from the
+    /// last-URL cache — see `displayedKey`.
+    @State private var remoteURL: URL? = BackgroundService.cachedRemoteURL
 
     /// Parsed color for the solid-style path. `nil` unless the user
     /// picked a solid.
@@ -159,6 +162,15 @@ struct BackgroundView: View {
         }
     }
 
+    /// Set `displayedKey` without the view-level crossfade animation.
+    /// Used on the first resolution after launch so cold-launch never
+    /// fades from one image to another — the user sees one image settle
+    /// in under the awakening cover.
+    private func setDisplayedKeyWithoutAnimation(_ newKey: String) {
+        var tx = Transaction(animation: nil)
+        withTransaction(tx) { displayedKey = newKey }
+    }
+
     /// Recompute `solidColor`, `remoteURL`, and `displayedKey` from
     /// whatever the profile currently says. `initial` suppresses the
     /// crossfade on the first call so the app doesn't fade in from
@@ -168,7 +180,7 @@ struct BackgroundView: View {
         if let imageName {
             if initial {
                 fallbackAsset = imageName
-                displayedKey = imageName
+                setDisplayedKeyWithoutAnimation(imageName)
             } else if displayedKey != imageName {
                 displayedKey = imageName
             }
@@ -191,7 +203,9 @@ struct BackgroundView: View {
                 remoteURL = nil
                 solidColor = color
                 let key = "solid:\(hex)"
-                if initial || displayedKey != key {
+                if initial {
+                    setDisplayedKeyWithoutAnimation(key)
+                } else if displayedKey != key {
                     displayedKey = key
                 }
                 return
@@ -210,8 +224,11 @@ struct BackgroundView: View {
         if let url = service.currentImageURL(style: effectiveStyle, pinned: pinned) {
             solidColor = nil
             remoteURL = url
+            BackgroundService.cachedRemoteURL = url
             let key = url.absoluteString
-            if initial || displayedKey != key {
+            if initial {
+                setDisplayedKeyWithoutAnimation(key)
+            } else if displayedKey != key {
                 displayedKey = key
             }
             return
@@ -223,7 +240,9 @@ struct BackgroundView: View {
         fallbackAsset = asset
         solidColor = nil
         remoteURL = nil
-        if initial || displayedKey != asset {
+        if initial {
+            setDisplayedKeyWithoutAnimation(asset)
+        } else if displayedKey != asset {
             displayedKey = asset
         }
     }

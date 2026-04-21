@@ -306,6 +306,32 @@ final class BackgroundService {
         }
     }
 
+    // MARK: - Last URL cache
+    //
+    // Persisted in UserDefaults so a cold launch can paint the user's last
+    // wallpaper immediately from URLCache, while `/config` + manifest
+    // resolve in the background. This is what kills the "asset → remote"
+    // crossfade jank at startup: when the cache is seeded, BackgroundView
+    // starts directly in the remote branch and the first service resolution
+    // is usually a no-op (same URL) or at worst a deliberate segment
+    // crossfade. `nonisolated` so View property initializers can read it.
+
+    nonisolated private static let lastRemoteURLKey = "brett.background.lastRemoteURL"
+
+    nonisolated static var cachedRemoteURL: URL? {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: lastRemoteURLKey) else { return nil }
+            return URL(string: raw)
+        }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue.absoluteString, forKey: lastRemoteURLKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: lastRemoteURLKey)
+            }
+        }
+    }
+
     // MARK: - Hex parsing
 
     /// Parse `"#RRGGBB"` (or `"RRGGBB"`) into a SwiftUI `Color`. Returns
