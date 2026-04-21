@@ -1,5 +1,3 @@
-"use memo";
-
 import React, { useState, useEffect, useRef } from "react";
 import { Zap, BookOpen, Check, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
 import type { Thing } from "@brett/types";
