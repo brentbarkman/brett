@@ -10,13 +10,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@better-auth/passkey": "^1.5.6",
+    "@better-auth/passkey": "^1.6.6",
     "@brett/api-core": "workspace:*",
     "@brett/types": "workspace:*",
     "@brett/utils": "workspace:*",
     "@hono/node-server": "^1.13.7",
     "@prisma/client": "^7.6.0",
-    "better-auth": "^1.2.7",
+    "better-auth": "^1.6.6",
     "hono": "^4.7.4"
   },
   "devDependencies": {
