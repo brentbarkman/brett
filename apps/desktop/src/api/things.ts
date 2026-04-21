@@ -400,7 +400,24 @@ export function useRetryExtraction() {
       });
       return res;
     },
-    onSuccess: (_data, itemId) => {
+    onMutate: async (itemId) => {
+      // Optimistically flip to "pending" so the LoadingSkeleton shows immediately.
+      // Without this the button click feels like a no-op: the server returns 202
+      // fast, background extraction often finishes before the refetch settles,
+      // and the UI flashes through pending too quickly to perceive.
+      await qc.cancelQueries({ queryKey: ["thing-detail", itemId] });
+      const prev = qc.getQueryData<unknown>(["thing-detail", itemId]);
+      qc.setQueryData<any>(["thing-detail", itemId], (old: any) =>
+        old ? { ...old, contentStatus: "pending" } : old
+      );
+      return { prev };
+    },
+    onError: (_err, itemId, context) => {
+      if (context?.prev !== undefined) {
+        qc.setQueryData(["thing-detail", itemId], context.prev);
+      }
+    },
+    onSettled: (_data, _err, itemId) => {
       qc.invalidateQueries({ queryKey: ["thing-detail", itemId] });
     },
   });

@@ -85,6 +85,142 @@ async function fetchOEmbed(
   }
 }
 
+export function extractTweetId(url: string): string | null {
+  // Matches twitter.com/<user>/status/<id> and x.com/<user>/statuses/<id>.
+  // The /statuses/ form is legacy but still appears in the wild.
+  const match = url.match(/(?:twitter\.com|x\.com)\/[^/]+\/status(?:es)?\/(\d+)/i);
+  return match?.[1] ?? null;
+}
+
+export function extractTweetAuthor(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (!/(?:^|\.)(twitter\.com|x\.com)$/i.test(parsed.hostname)) return null;
+    const match = parsed.pathname.match(/^\/([^/]+)\/status/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Token derivation matches vercel/react-tweet (MIT): the syndication CDN
+// requires a token keyed off the tweet ID. It's a one-way transform, not a
+// secret — the endpoint is public and returns the same data to anyone who
+// computes the token correctly.
+export function computeSyndicationToken(id: string): string {
+  return ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, "");
+}
+
+interface TweetSyndicationResult {
+  handle: string;               // screen_name, e.g. "aiedge_"
+  displayName: string | null;   // user.name, e.g. "AI Edge"
+  text: string;                 // raw tweet text
+  createdAt: string | null;
+  article: {
+    title: string;
+    previewText: string | null;
+    coverImageUrl: string | null;
+  } | null;
+  mediaImageUrl: string | null; // first media photo if any
+}
+
+async function fetchTweetSyndication(url: string): Promise<TweetSyndicationResult | null> {
+  const id = extractTweetId(url);
+  if (!id) return null;
+  const token = computeSyndicationToken(id);
+  const endpoint = `https://cdn.syndication.twimg.com/tweet-result?id=${id}&token=${token}&lang=en`;
+  try {
+    const res = await safeFetch(endpoint, { timeoutMs: 5000, maxSizeBytes: 500_000 });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Record<string, any>;
+    const handle = data?.user?.screen_name as string | undefined;
+    if (!handle) return null;
+
+    const article = (() => {
+      const a = data?.article;
+      if (!a || typeof a !== "object") return null;
+      const title = a.title as string | undefined;
+      if (!title) return null;
+      return {
+        title,
+        previewText: (a.preview_text as string | undefined) ?? null,
+        coverImageUrl: (a?.cover_media?.media_info?.original_img_url as string | undefined) ?? null,
+      };
+    })();
+
+    const mediaDetails = Array.isArray(data?.mediaDetails) ? data.mediaDetails : [];
+    const photo = mediaDetails.find((m: any) => m?.type === "photo");
+    const mediaImageUrl = (photo?.media_url_https as string | undefined) ?? null;
+
+    return {
+      handle,
+      displayName: (data?.user?.name as string | undefined) ?? null,
+      text: (data?.text as string | undefined) ?? "",
+      createdAt: (data?.created_at as string | undefined) ?? null,
+      article,
+      mediaImageUrl,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function extractTweet(url: string): Promise<ExtractionResult> {
+  const parsed = new URL(url);
+  const domain = parsed.hostname.replace(/^www\./, "");
+  const favicon = `${parsed.origin}/favicon.ico`;
+
+  const syndication = await fetchTweetSyndication(url);
+  if (syndication) {
+    // For "X Article" tweets, the article card is the meaningful content;
+    // data.text is just a t.co shortlink, so prefer the article fields.
+    const isArticle = syndication.article !== null;
+    const effectiveText = isArticle
+      ? syndication.article?.previewText ?? syndication.text
+      : syndication.text;
+    const title = syndication.article?.title ?? `Tweet by @${syndication.handle}`;
+    const imageUrl = syndication.article?.coverImageUrl ?? syndication.mediaImageUrl ?? null;
+
+    return {
+      contentType: "tweet",
+      contentStatus: "extracted",
+      contentTitle: title,
+      contentDescription: effectiveText?.trim() || null,
+      contentImageUrl: imageUrl,
+      contentBody: null,
+      contentFavicon: favicon,
+      contentDomain: domain,
+      contentMetadata: {
+        type: "tweet",
+        author: syndication.handle,
+        tweetText: effectiveText?.trim() || undefined,
+      },
+      title,
+    };
+  }
+
+  // Syndication failed (deleted, rate-limited, or CDN hiccup) — still return a
+  // usable card with the handle derived from the URL path so the panel doesn't
+  // show the raw URL as the title.
+  const urlAuthor = extractTweetAuthor(url);
+  const fallbackTitle = urlAuthor ? `Tweet by @${urlAuthor}` : null;
+  return {
+    contentType: "tweet",
+    contentStatus: "extracted",
+    contentTitle: fallbackTitle,
+    contentDescription: null,
+    contentImageUrl: null,
+    contentBody: null,
+    contentFavicon: favicon,
+    contentDomain: domain,
+    contentMetadata: {
+      type: "tweet",
+      author: urlAuthor ?? undefined,
+    },
+    title: fallbackTitle ?? undefined,
+  };
+}
+
 export function buildSpotifyEmbedUrl(url: string): string | null {
   // https://open.spotify.com/episode/abc → https://open.spotify.com/embed/episode/abc
   const match = url.match(/open\.spotify\.com\/(episode\/[^?#]+)/);
@@ -143,6 +279,13 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
       contentMetadata: { type: "pdf" },
       needsPdfDownload: true,
     };
+  }
+
+  // Tweet: skip x.com page fetch — cdn.syndication.twimg.com/tweet-result
+  // returns structured JSON for any public tweet. X.com serves a JS shell to
+  // non-crawler User-Agents, so scraping its HTML is a dead end.
+  if (contentType === "tweet") {
+    return extractTweet(url);
   }
 
   // YouTube: skip page fetch entirely — oEmbed API is faster and more reliable.
@@ -209,25 +352,6 @@ export async function extractContent(url: string): Promise<ExtractionResult> {
   };
 
   switch (contentType) {
-    case "tweet": {
-      const oembed = await fetchOEmbed("https://publish.twitter.com/oembed", url);
-      const author = oembed?.author_name as string | undefined;
-      return {
-        ...base,
-        contentType: "tweet",
-        // Use oEmbed author for title when OG tags are blocked (common with X)
-        title: base.title ?? (author ? `Tweet by ${author}` : undefined),
-        contentTitle: base.contentTitle ?? (author ? `Tweet by ${author}` : null),
-        contentBody: null,
-        contentMetadata: {
-          type: "tweet",
-          embedHtml: oembed?.html as string | undefined,
-          author,
-          tweetText: ogTags.description ?? undefined,
-        },
-      };
-    }
-
     case "video": {
       const videoId = extractYouTubeVideoId(url);
       const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : undefined;

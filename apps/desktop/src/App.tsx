@@ -1282,6 +1282,7 @@ export function App() {
           onRetryExtraction={() => {
             if (selectedId) retryExtraction.mutate(selectedId);
           }}
+          isRetryingExtraction={retryExtraction.isPending}
           calendarEventDetail={calendarEventDetail ?? null}
           isLoadingCalendarDetail={isLoadingCalendarDetail}
           onUpdateRsvp={(status, comment) => {
