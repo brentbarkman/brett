@@ -102,14 +102,7 @@ struct BrettChatSection: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(BrettColors.gold)
-                    .frame(width: 5, height: 5)
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(BrettColors.cerulean.opacity(0.60))
-                    .frame(width: 16, height: 2.5)
-            }
+            BrettsMark(size: 18, thinking: isStreaming)
 
             Text("BRETT")
                 .font(BrettTypography.sectionLabel)
@@ -119,14 +112,9 @@ struct BrettChatSection: View {
             Spacer()
 
             if isStreaming {
-                HStack(spacing: 4) {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .tint(BrettColors.cerulean)
-                    Text("thinking")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(BrettColors.cerulean.opacity(0.60))
-                }
+                Text("thinking")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(BrettColors.cerulean.opacity(0.60))
             }
         }
     }

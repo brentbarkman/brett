@@ -54,6 +54,7 @@ interface DetailPanelProps {
   onOpenSettings?: () => void;
   // Content extraction
   onRetryExtraction?: () => void;
+  isRetryingExtraction?: boolean;
   // Calendar event callbacks
   calendarEventDetail?: CalendarEventDetailResponse | null;
   isLoadingCalendarDetail?: boolean;
@@ -88,8 +89,10 @@ interface DetailPanelProps {
   onNavigateToCalendarEvent?: (calendarEventId: string) => void;
   onNavigateToScout?: (scoutId: string) => void;
   onScoutFeedback?: (scoutId: string, findingId: string, useful: boolean | null) => void;
-  onApproveNewsletter?: (pendingId: string) => void;
-  onBlockNewsletter?: (pendingId: string) => void;
+  onApproveNewsletter?: (senderEmail: string) => void;
+  onBlockNewsletter?: (senderEmail: string) => void;
+  isApprovingNewsletter?: boolean;
+  isBlockingNewsletter?: boolean;
   onBack?: () => void;
   canGoBack?: boolean;
   onItemClick?: (id: string) => void;
@@ -130,6 +133,7 @@ export function DetailPanel({
   brettAiConfigured,
   onOpenSettings,
   onRetryExtraction,
+  isRetryingExtraction,
   calendarEventDetail,
   isLoadingCalendarDetail,
   onUpdateRsvp,
@@ -155,6 +159,8 @@ export function DetailPanel({
   onScoutFeedback,
   onApproveNewsletter,
   onBlockNewsletter,
+  isApprovingNewsletter,
+  isBlockingNewsletter,
   onBack,
   canGoBack,
   onItemClick,
@@ -236,6 +242,8 @@ export function DetailPanel({
             onScoutFeedback={onScoutFeedback}
             onApproveNewsletter={onApproveNewsletter}
             onBlockNewsletter={onBlockNewsletter}
+            isApprovingNewsletter={isApprovingNewsletter}
+            isBlockingNewsletter={isBlockingNewsletter}
             onItemClick={onItemClick}
             onEventClick={onEventClick}
             onNavigate={onNavigate}
@@ -283,6 +291,7 @@ export function DetailPanel({
             brettAiConfigured={brettAiConfigured}
             onOpenSettings={onOpenSettings}
             onRetryExtraction={onRetryExtraction}
+            isRetryingExtraction={isRetryingExtraction}
             onItemClick={onItemClick}
             onEventClick={onEventClick}
             onNavigateToScout={onNavigateToScout}

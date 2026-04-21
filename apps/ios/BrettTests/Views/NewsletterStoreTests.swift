@@ -21,19 +21,19 @@ struct NewsletterStoreTests {
     }
 
     private func ingestURL(client: APIClient) -> URL {
-        client.baseURL.appendingPathComponent("newsletters/ingest-address")
+        client.baseURL.appendingPathComponent("newsletters/senders/ingest-address")
     }
 
     private func sendersURL(client: APIClient) -> URL {
-        client.baseURL.appendingPathComponent("newsletters")
+        client.baseURL.appendingPathComponent("newsletters/senders")
     }
 
     private func pendingURL(client: APIClient) -> URL {
-        client.baseURL.appendingPathComponent("newsletters/pending")
+        client.baseURL.appendingPathComponent("newsletters/senders/pending")
     }
 
     private func senderPatchURL(client: APIClient, id: String) -> URL {
-        client.baseURL.appendingPathComponent("newsletters/\(id)")
+        client.baseURL.appendingPathComponent("newsletters/senders/\(id)")
     }
 
     private func stubFetchAll(
@@ -202,12 +202,12 @@ struct NewsletterStoreTests {
         #expect(store.pending.count == 1)
 
         MockURLProtocol.stub(
-            url: client.baseURL.appendingPathComponent("newsletters/p1/block"),
+            url: client.baseURL.appendingPathComponent("newsletters/senders/block"),
             statusCode: 200,
             body: Data("{\"ok\":true}".utf8)
         )
 
-        await store.blockPending(id: "p1")
+        await store.blockPending(senderEmail: "n@x.com")
 
         #expect(store.pending.isEmpty)
     }

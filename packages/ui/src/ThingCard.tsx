@@ -1,5 +1,3 @@
-"use memo";
-
 import React, { useState, useEffect, useRef } from "react";
 import { StaleTooltip } from "./StaleTooltip";
 import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";

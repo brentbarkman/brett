@@ -345,8 +345,8 @@ describe("newsletter webhook + sender management", () => {
       expect(pendingId).toBeTruthy();
       expect(taskId).toBeTruthy();
 
-      // Approve
-      const result = await approveSender(userId, pendingId);
+      // Approve by sender email (idempotent)
+      const result = await approveSender(userId, senderEmail);
       expect(result.senderId).toBeTruthy();
       expect(result.ingestedCount).toBe(1);
 
@@ -372,6 +372,35 @@ describe("newsletter webhook + sender management", () => {
       expect(item).toBeTruthy();
       expect(item!.contentType).toBe("newsletter");
     });
+
+    it("is idempotent — approving a second time after all pending drained returns success", async () => {
+      const senderEmail = "idempotent-approve@newsletters.com";
+
+      await createPendingNewsletter({
+        userId,
+        senderName: "Idempotent",
+        senderEmail,
+        subject: "First",
+        htmlBody: "<p>one</p>",
+        textBody: null,
+        messageId: `msg-idem-${generateId()}`,
+        receivedAt: new Date().toISOString(),
+      });
+
+      const first = await approveSender(userId, senderEmail);
+      expect(first.ingestedCount).toBe(1);
+
+      // Second call — no pending left, but sender already exists. Should succeed.
+      const second = await approveSender(userId, senderEmail);
+      expect(second.senderId).toBe(first.senderId);
+      expect(second.ingestedCount).toBe(0);
+    });
+
+    it("rejects approval of a sender that has never been seen", async () => {
+      await expect(
+        approveSender(userId, "never-existed@example.com"),
+      ).rejects.toThrow("Unknown sender");
+    });
   });
 
   // ── Library: Block Flow ──
@@ -393,8 +422,8 @@ describe("newsletter webhook + sender management", () => {
         receivedAt: new Date().toISOString(),
       });
 
-      // Block
-      await blockSender(userId, pendingId);
+      // Block by sender email (idempotent)
+      await blockSender(userId, senderEmail);
 
       // Sender should exist but be inactive
       const sender = await prisma.newsletterSender.findFirst({

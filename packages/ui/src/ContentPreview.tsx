@@ -55,6 +55,7 @@ interface ContentPreviewProps {
   contentMetadata?: ContentMetadata;
   attachmentUrl?: string; // presigned S3 URL for drag-dropped PDFs
   onRetry?: () => void;
+  isRetrying?: boolean;
   assistantName?: string;
 }
 
@@ -84,7 +85,7 @@ function LoadingSkeleton({ contentType }: { contentType?: ContentType }) {
   );
 }
 
-function ErrorState({ sourceUrl, onRetry, assistantName = "Brett" }: { sourceUrl?: string; onRetry?: () => void; assistantName?: string }) {
+function ErrorState({ sourceUrl, onRetry, isRetrying, assistantName = "Brett" }: { sourceUrl?: string; onRetry?: () => void; isRetrying?: boolean; assistantName?: string }) {
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -105,10 +106,11 @@ function ErrorState({ sourceUrl, onRetry, assistantName = "Brett" }: { sourceUrl
         {onRetry && (
           <button
             onClick={onRetry}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            disabled={isRetrying}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-60 disabled:cursor-wait disabled:hover:bg-white/5 disabled:hover:text-white/60"
           >
-            <RefreshCw size={12} />
-            Try again
+            <RefreshCw size={12} className={isRetrying ? "animate-spin" : ""} />
+            {isRetrying ? "Retrying…" : "Try again"}
           </button>
         )}
         <span className="text-[10px] text-white/20">
@@ -434,20 +436,26 @@ function NewsletterPreview({
       ALLOW_DATA_ATTR: false,
     });
 
+    // Render newsletters on a white surface like Gmail / Apple Mail. Newsletter
+    // HTML is designed for white backgrounds and frequently carries black (or no
+    // explicit) text color on its body — inheriting a dark default from us
+    // leaves paragraphs invisible on the newsletter's own white regions.
     return `<!DOCTYPE html>
 <html><head><style>
+  html, body {
+    background: #ffffff;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
     line-height: 1.6;
-    color: rgba(255,255,255,0.85);
-    background: transparent;
+    color: #1a1a1a;
     max-width: 680px;
     margin: 0 auto;
-    padding: 0;
+    padding: 16px;
     overflow-x: hidden;
   }
-  a { color: #D4AF37; }
+  a { color: #0B5FFF; }
   img { max-width: 100%; height: auto; }
   table { max-width: 100%; }
 </style></head><body>${sanitized}</body></html>`;
@@ -476,8 +484,7 @@ function NewsletterPreview({
           sandbox="allow-same-origin"
           srcDoc={iframeContent}
           title="Newsletter content"
-          className="w-full min-h-[300px] max-h-[60vh] rounded-lg border border-white/10 bg-transparent"
-          style={{ colorScheme: "dark" }}
+          className="w-full min-h-[480px] max-h-[80vh] rounded-lg border border-white/10 bg-white"
         />
       ) : (
         <p className="text-sm text-white/40 italic">Newsletter content unavailable</p>
@@ -499,6 +506,7 @@ export function ContentPreview({
   contentMetadata,
   attachmentUrl,
   onRetry,
+  isRetrying,
   assistantName = "Brett",
 }: ContentPreviewProps) {
   // Loading state
@@ -508,7 +516,7 @@ export function ContentPreview({
 
   // Error state
   if (contentStatus === "failed") {
-    return <ErrorState sourceUrl={sourceUrl} onRetry={onRetry} assistantName={assistantName} />;
+    return <ErrorState sourceUrl={sourceUrl} onRetry={onRetry} isRetrying={isRetrying} assistantName={assistantName} />;
   }
 
   // Render based on content type

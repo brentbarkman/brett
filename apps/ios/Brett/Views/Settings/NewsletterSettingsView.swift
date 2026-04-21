@@ -105,7 +105,7 @@ struct NewsletterSettingsView: View {
 
                         HStack(spacing: 8) {
                             Button {
-                                Task { await store.approvePending(id: p.id) }
+                                Task { await store.approvePending(senderEmail: p.senderEmail) }
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "checkmark.circle.fill")
@@ -120,7 +120,7 @@ struct NewsletterSettingsView: View {
                             .buttonStyle(.plain)
 
                             Button {
-                                Task { await store.blockPending(id: p.id) }
+                                Task { await store.blockPending(senderEmail: p.senderEmail) }
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "xmark.circle.fill")
