@@ -51,7 +51,7 @@ export interface OmnibarProps {
   onNavigate?: (path: string) => void;
   searchResults?: SearchResultItem[] | null;
   isSearching?: boolean;
-  onSearchResultClick?: (id: string) => void;
+  onSearchResultClick?: (item: SearchResultItem) => void;
   sessionId?: string | null;
   showTokenUsage?: boolean;
   sessionUsage?: { totalTokens: number } | null;
@@ -411,7 +411,7 @@ export function Omnibar({
           } else if (r.entityType === "item" && onItemClick) {
             onItemClick(r.entityId);
           } else {
-            onSearchResultClick?.(r.entityId);
+            onSearchResultClick?.(r);
           }
           return;
         }
@@ -544,7 +544,7 @@ export function Omnibar({
                         } else if (item.entityType === "item" && onItemClick) {
                           onItemClick(item.entityId);
                         } else {
-                          onSearchResultClick?.(item.entityId);
+                          onSearchResultClick?.(item);
                         }
                       }}
                       onMouseEnter={() => setSelectedSearchIdx(i)}

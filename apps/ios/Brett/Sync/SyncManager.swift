@@ -2,44 +2,22 @@ import Foundation
 import Observation
 import SwiftData
 
-// MARK: - Local protocol stubs for parallel Wave-2 agents
+// MARK: - Engine protocols
 
-/// Shape of a push result. Kept minimal so the concrete `PushEngine` from
-/// W2-B can drop in without any call-site changes. Real fields (successCount,
-/// errors, etc.) can be added without breaking the SyncManager contract.
-struct PushOutcome: Sendable {
-    var applied: Int
-    var failed: Int
-
-    init(applied: Int = 0, failed: Int = 0) {
-        self.applied = applied
-        self.failed = failed
-    }
-}
-
-/// Shape of a pull result. See `PushOutcome`.
-struct PullOutcome: Sendable {
-    var upserted: Int
-    var deleted: Int
-
-    init(upserted: Int = 0, deleted: Int = 0) {
-        self.upserted = upserted
-        self.deleted = deleted
-    }
-}
-
-/// The `PushEngine` surface SyncManager depends on. Defined here so this file
-/// compiles even when the real `PushEngine.swift` hasn't landed yet. When it
-/// does land, make `PushEngine` conform to this protocol.
+/// The push engine surface that `SyncManager` depends on. Returns the
+/// engine's rich `PushOutcome` (applied / merged / conflicts / errors /
+/// remaining) directly — no adapter shim.
 @MainActor
 protocol PushEngineProtocol: AnyObject {
-    func push() async throws -> PushOutcome
+    func push() async throws -> PushEngine.PushOutcome
 }
 
-/// The `PullEngine` surface SyncManager depends on. See `PushEngineProtocol`.
+/// The pull engine surface `SyncManager` depends on. Returns the engine's
+/// rich `PullOutcome` (per-table upsert/delete maps + `fullResync` flag) so
+/// `SyncManager` can react to a server-side cursor wipe by re-pulling.
 @MainActor
 protocol PullEngineProtocol: AnyObject {
-    func pull() async throws -> PullOutcome
+    func pull() async throws -> PullEngine.PullOutcome
 }
 
 // MARK: - Sync state
@@ -210,10 +188,15 @@ final class SyncManager {
         }
 
         // Phase 2: pull. Always attempted so the server has the final say on
-        // state even if our push stalled.
+        // state even if our push stalled. When the server signals
+        // `fullResync`, cursors were just wiped — run one more pull so the
+        // current session reflects server state instead of frozen local data.
         state = .pulling
         do {
-            _ = try await pullEngine.pull()
+            let first = try await pullEngine.pull()
+            if first.fullResync {
+                _ = try await pullEngine.pull()
+            }
             lastSyncedAt = Date()
         } catch {
             // Preserve the push error if we had one — it's the more actionable
@@ -252,7 +235,10 @@ final class SyncManager {
 
         state = .pulling
         do {
-            _ = try await pullEngine.pull()
+            let first = try await pullEngine.pull()
+            if first.fullResync {
+                _ = try await pullEngine.pull()
+            }
             state = .idle
             lastSyncedAt = Date()
         } catch {
@@ -373,10 +359,9 @@ enum SyncError: LocalizedError {
 
 // MARK: - Default engine adapters
 
-/// Thin adapter so the real `PushEngine` satisfies `PushEngineProtocol` —
-/// the two share a name but carry different `PushOutcome` shapes (the
-/// richer one on `PushEngine` isn't needed by `SyncManager`, so we collapse
-/// it into the minimal protocol-level outcome here).
+/// Singleton adapter so the production `PushEngine` satisfies
+/// `PushEngineProtocol` without forcing the real engine to care about the
+/// protocol itself. Tests inject a `MockPushEngine` directly.
 @MainActor
 private final class DefaultPushEngine: PushEngineProtocol {
     static let shared = DefaultPushEngine()
@@ -388,31 +373,19 @@ private final class DefaultPushEngine: PushEngineProtocol {
         self.real = PushEngine(mutationQueue: MutationQueue(context: context))
     }
 
-    func push() async throws -> PushOutcome {
-        let r = try await real.push()
-        // Roll the granular counts (applied / merged / conflicts / errors)
-        // into the simple applied/failed pair that SyncManager cares about.
-        return PushOutcome(
-            applied: r.applied + r.merged,
-            failed: r.errors + r.conflicts
-        )
+    func push() async throws -> PushEngine.PushOutcome {
+        try await real.push()
     }
 }
 
-/// Thin adapter so the real `PullEngine` satisfies `PullEngineProtocol`.
-/// Collapses the per-table upsert/delete maps into total counts for the
-/// protocol-level outcome.
+/// Singleton adapter — see `DefaultPushEngine`.
 @MainActor
 private final class DefaultPullEngine: PullEngineProtocol {
     static let shared = DefaultPullEngine()
 
     private let real = PullEngine()
 
-    func pull() async throws -> PullOutcome {
-        let r = try await real.pull()
-        return PullOutcome(
-            upserted: r.tablesUpserted.values.reduce(0, +),
-            deleted: r.tablesDeleted.values.reduce(0, +)
-        )
+    func pull() async throws -> PullEngine.PullOutcome {
+        try await real.pull()
     }
 }

@@ -138,7 +138,7 @@ struct ListView: View {
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "scroll")
             .refreshable {
-                try? await Task.sleep(nanoseconds: 400_000_000)
+                try? await SyncManager.shared.pullToRefresh()
             }
         }
         .overlay(alignment: .bottom) {

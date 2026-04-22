@@ -19,7 +19,10 @@ import UIKit
 /// with the verify request — `URLSession.shared`'s default cookie storage
 /// carries it automatically.
 struct SecuritySettingsView: View {
-    @AppStorage("security.faceid.enabled") private var faceIDEnabled: Bool = false
+    // Scoped per-user so two accounts on the same device don't share the
+    // Face ID toggle — @State + explicit UserDefaults bridge because
+    // @AppStorage keys must be compile-time constants.
+    @State private var faceIDEnabled: Bool = false
     @State private var biometryAvailable: Bool = LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
     @State private var biometryType: String = SecuritySettingsView.resolveBiometryLabel()
 
@@ -79,7 +82,8 @@ struct SecuritySettingsView: View {
                 }
                 .tint(BrettColors.gold)
                 .disabled(!biometryAvailable)
-                .onChange(of: faceIDEnabled) { _, _ in
+                .onChange(of: faceIDEnabled) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: UserScopedStorage.key("security.faceid.enabled"))
                     BiometricLockManager.shared.settingsDidChange()
                 }
                 .padding(.horizontal, 14)
@@ -140,6 +144,9 @@ struct SecuritySettingsView: View {
         .navigationTitle("Security")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .onAppear {
+            faceIDEnabled = UserDefaults.standard.bool(forKey: UserScopedStorage.key("security.faceid.enabled"))
+        }
         .task { await loadAccounts() }
         .task { await loadPasskeys() }
     }

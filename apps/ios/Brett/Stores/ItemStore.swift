@@ -11,6 +11,9 @@ import SwiftData
 @Observable
 final class ItemStore {
     private let context: ModelContext
+    // Lazy so tests/previews that never enqueue don't pay the allocation,
+    // and so the queue always shares the store's ModelContext.
+    private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
     init(context: ModelContext) {
         self.context = context
@@ -315,17 +318,17 @@ final class ItemStore {
             "updatedAt": item.updatedAt.iso8601String(),
         ]
 
-        let entry = MutationQueueEntry(
+        // Route through MutationQueue so eager compaction runs — direct
+        // context.insert bypasses it and leaves the push engine to see
+        // redundant rows.
+        mutationQueue.enqueue(
             entityType: "item",
             entityId: item.id,
             action: .create,
             endpoint: "/things",
             method: .post,
-            payload: JSONCodec.encode(payload),
-            baseUpdatedAt: nil,
-            beforeSnapshot: nil
+            payload: JSONCodec.encode(payload)
         )
-        context.insert(entry)
     }
 
     private func enqueueUpdate(
@@ -450,10 +453,17 @@ extension Optional: OptionalProtocol {
 }
 
 extension Date {
+    // Cached because this extension is called for every mutation payload
+    // (ItemStore.enqueue*, ListStore.enqueue*, JSONCodec.normaliseScalar).
+    // Immutable after init → safe to share.
+    private static let sharedISO8601Formatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
     /// ISO-8601 with fractional seconds — matches the server wire format.
     func iso8601String() -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: self)
+        Date.sharedISO8601Formatter.string(from: self)
     }
 }

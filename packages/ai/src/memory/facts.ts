@@ -3,6 +3,7 @@ import type { AIProviderName } from "@brett/types";
 import type { ExtendedPrismaClient } from "@brett/api-core";
 import { resolveModel } from "../router.js";
 import { getFactExtractionPrompt } from "../context/system-prompts.js";
+import { wrapUserData } from "../context/assembler.js";
 import { logUsage } from "./usage.js";
 import { validateFacts, parseLLMFactResponse } from "./validation.js";
 
@@ -42,9 +43,13 @@ export async function extractFacts(
   if (userText.length < MIN_USER_TEXT_LENGTH) return;
 
   const contextPrefix = itemContext ? `[Context: ${itemContext}]\n\n` : "";
-  const conversationText = contextPrefix + relevant
+  const rawConversation = contextPrefix + relevant
     .map((m) => `${m.role}: ${m.content}`)
     .join("\n\n");
+  // Wrap in <user_data> tags and escape any closing tags so a crafted
+  // user message can't break out and inject instructions into the trusted
+  // prompt space.
+  const conversationText = wrapUserData("conversation", rawConversation);
 
   // 4. Call LLM (small model) with FACT_EXTRACTION_PROMPT
   const model = resolveModel(providerName, "small");

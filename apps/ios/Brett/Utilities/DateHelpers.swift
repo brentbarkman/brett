@@ -33,6 +33,20 @@ enum DateHelpers {
         return .later
     }
 
+    // Cached formatters — list rendering calls formatRelativeDate once per
+    // row, and allocating a DateFormatter each call shows up in Instruments.
+    private static let weekdayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE"
+        return f
+    }()
+
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
+
     static func formatRelativeDate(_ date: Date) -> String {
         let calendar = Calendar.current
         let now = Date()
@@ -41,16 +55,12 @@ enum DateHelpers {
         if calendar.isDateInTomorrow(date) { return "Tomorrow" }
         if calendar.isDateInYesterday(date) { return "Yesterday" }
 
-        let formatter = DateFormatter()
         // Within the same week
         let dayDiff = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
         if dayDiff > 0 && dayDiff < 7 {
-            formatter.dateFormat = "EEEE"  // "Wednesday"
-            return formatter.string(from: date)
+            return weekdayFormatter.string(from: date)
         }
-
-        formatter.dateFormat = "MMM d"     // "Apr 11"
-        return formatter.string(from: date)
+        return monthDayFormatter.string(from: date)
     }
 
     static func formatTime(_ date: Date) -> String {

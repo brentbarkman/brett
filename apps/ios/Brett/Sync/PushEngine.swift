@@ -370,9 +370,13 @@ final class PushEngine {
     /// depending on a new `MutationQueueProtocol` method so we stay decoupled
     /// from W2-A's implementation.
     private func deadCount() -> Int {
-        let descriptor = FetchDescriptor<MutationQueueEntry>()
-        let all = (try? context.fetch(descriptor)) ?? []
-        return all.filter { $0.status == MutationStatus.dead.rawValue }.count
+        // Predicated fetchCount so SwiftData counts on its side instead of
+        // loading every queue entry into memory.
+        let deadRaw = MutationStatus.dead.rawValue
+        let descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate { $0.status == deadRaw }
+        )
+        return (try? context.fetchCount(descriptor)) ?? 0
     }
 
     /// Singleton SyncHealth row. Created lazily on first access.

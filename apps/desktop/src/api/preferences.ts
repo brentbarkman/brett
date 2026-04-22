@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { userStorage } from "../lib/userScopedStorage";
 
 const PREFS_KEY = "brett_preferences";
 const PREFS_EVENT = "brett_preferences_changed";
@@ -19,7 +20,7 @@ const DEFAULTS: Preferences = {
 
 export function getPreferences(): Preferences {
   try {
-    const stored = localStorage.getItem(PREFS_KEY);
+    const stored = userStorage.getItem(PREFS_KEY);
     return stored ? { ...DEFAULTS, ...JSON.parse(stored) } : DEFAULTS;
   } catch {
     return DEFAULTS;
@@ -29,7 +30,7 @@ export function getPreferences(): Preferences {
 export function setPreference<K extends keyof Preferences>(key: K, value: Preferences[K]): void {
   const current = getPreferences();
   current[key] = value;
-  localStorage.setItem(PREFS_KEY, JSON.stringify(current));
+  userStorage.setItem(PREFS_KEY, JSON.stringify(current));
   // Notify other components that preferences changed
   window.dispatchEvent(new CustomEvent(PREFS_EVENT));
 }

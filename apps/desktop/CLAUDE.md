@@ -82,8 +82,8 @@ This app imports all four workspace packages:
 ```typescript
 import { Button } from "@brett/ui";
 import { createTask } from "@brett/business";
-import { formatDate } from "@brett/utils";
-import type { Task } from "@brett/types";
+import { formatRelativeTime } from "@brett/utils";
+import type { ItemRecord } from "@brett/types";
 ```
 
 Vite resolves these directly to source (`main: "./src/index.ts"` in each package.json) — no pre-build step needed during dev.

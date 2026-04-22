@@ -29,14 +29,18 @@ final class BriefingStore {
     /// user gets something better than a silent empty state.
     private(set) var lastError: String?
 
-    private let defaultsKey: String = {
+    /// Computed every access so the "dismissed today" bit rolls over the
+    /// moment the local date changes — otherwise a briefing dismissed yesterday
+    /// stayed hidden after midnight because the stored key was frozen at init.
+    /// Scoped per-user so two accounts on the same device don't share state.
+    private var defaultsKey: String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
-        return "briefing.dismissed.\(formatter.string(from: Date()))"
-    }()
+        return UserScopedStorage.key("briefing.dismissed.\(formatter.string(from: Date()))")
+    }
 
     /// Whether the user has dismissed today's briefing. Backed by
     /// `UserDefaults` so dismissal persists across app launches.

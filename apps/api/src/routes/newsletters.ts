@@ -173,19 +173,31 @@ senderRouter.get("/", authMiddleware, async (c) => {
   return c.json(senders);
 });
 
-// List pending newsletters — MUST be before /:id routes
+// List pending newsletters — MUST be before /:id routes.
+// Projects metadata only (NOT `htmlBody` / `textBody`, which can be megabytes
+// each) — matches the `PendingNewsletterSummary` shape the client expects.
 senderRouter.get("/pending", authMiddleware, async (c) => {
   const user = c.get("user");
   const pending = await prisma.pendingNewsletter.findMany({
     where: { userId: user.id },
     orderBy: { receivedAt: "desc" },
+    select: {
+      id: true,
+      senderEmail: true,
+      senderName: true,
+      subject: true,
+      receivedAt: true,
+    },
   });
-  // Serialize receivedAt to ISO string
-  const serialized = pending.map((p) => ({
-    ...p,
-    receivedAt: p.receivedAt.toISOString(),
-  }));
-  return c.json(serialized);
+  return c.json(
+    pending.map((p) => ({
+      id: p.id,
+      senderEmail: p.senderEmail,
+      senderName: p.senderName,
+      subject: p.subject,
+      receivedAt: p.receivedAt.toISOString(),
+    }))
+  );
 });
 
 // Update sender (name or active flag)

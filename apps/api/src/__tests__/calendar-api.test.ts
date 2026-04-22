@@ -197,32 +197,6 @@ describe("Calendar API routes", () => {
     expect(body.attendees[0].comment).toBe("Running late");
   });
 
-  // ── BrettMessage userId scoping ──
-
-  it("user B cannot see user A's brett messages via GET /events/:id/brett", async () => {
-    // Create a brett message for user A's event
-    await prisma.brettMessage.create({
-      data: {
-        id: generateId(),
-        calendarEventId: eventWithNullAttendees,
-        userId,
-        role: "user",
-        content: "Private message from user A",
-      },
-    });
-
-    // Create user B
-    const userB = await createTestUser("User B");
-
-    // User B tries to access user A's event brett messages
-    const res = await authRequest(
-      `/calendar/events/${eventWithNullAttendees}/brett`,
-      userB.token,
-    );
-    // Should get 404 because the event doesn't belong to user B
-    expect(res.status).toBe(404);
-  });
-
   // ── fetch-range date cap ──
 
   it("rejects date ranges over 366 days", async () => {

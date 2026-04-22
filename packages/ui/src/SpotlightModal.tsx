@@ -3,7 +3,7 @@ import { Send, Square, X, Search, Plus, Check, Radar, MessageSquare } from "luci
 import { BrettMark } from "./BrettMark";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
-import { SearchResultRow } from "./Omnibar";
+import { SearchResultRow, type SearchResultItem } from "./Omnibar";
 import type { DisplayHint } from "@brett/types";
 
 export interface SpotlightMessage {
@@ -17,15 +17,8 @@ export interface SpotlightMessage {
   }>;
 }
 
-export interface SpotlightSearchResult {
-  entityType: string;
-  entityId: string;
-  title: string;
-  snippet: string;
-  score: number;
-  matchType: "keyword" | "semantic" | "both";
-  metadata: Record<string, unknown>;
-}
+/** Re-exported for backwards compat — identical to `SearchResultItem` */
+export type SpotlightSearchResult = SearchResultItem;
 
 export interface SpotlightModalProps {
   isOpen: boolean;
@@ -43,7 +36,7 @@ export interface SpotlightModalProps {
   onNavigateToSettings?: () => void;
   searchResults?: SpotlightSearchResult[] | null;
   isSearching?: boolean;
-  onSearchResultClick?: (id: string) => void;
+  onSearchResultClick?: (item: SpotlightSearchResult) => void;
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
@@ -322,7 +315,7 @@ export function SpotlightModal({
           } else if (r.entityType === "item" && onItemClick) {
             onItemClick(r.entityId);
           } else {
-            onSearchResultClick?.(r.entityId);
+            onSearchResultClick?.(r);
           }
           return;
         }
@@ -539,7 +532,7 @@ export function SpotlightModal({
                       } else if (item.entityType === "item" && onItemClick) {
                         onItemClick(item.entityId);
                       } else {
-                        onSearchResultClick?.(item.entityId);
+                        onSearchResultClick?.(item);
                       }
                     }}
                     onMouseEnter={() => setSelectedSearchIdx(i)}

@@ -16,93 +16,24 @@ export interface MeetingSearchResult {
 }
 
 /**
- * Search for a Granola meeting by title, attendee name, or linked calendar event.
- * Tries multiple strategies in order:
- * 1. Direct title contains
- * 2. Title contains with filler words stripped
- * 3. Calendar event title search (follows link to meeting)
- * 4. Attendee name search (in-memory filter on recent meetings)
- * 5. Individual word search on title
+ * Shared strategy cascade that returns up to `take` meetings matching the
+ * query. Tries in order:
+ *  1. Direct title contains the query
+ *  2. Title contains the query with filler words stripped
+ *  3. Follow a calendar event title search to linked meetings
+ *  4. Attendee name/email match across the 50 most recent meetings
+ *  5. Individual significant words from the cleaned query
+ *
+ * The singular and plural public helpers are thin wrappers on this cascade
+ * so a fix to any strategy lands in both places (previously they drifted —
+ * the singular version fell back to the raw `query` for calendar events
+ * while the plural used `searchTerms`).
  */
-export async function findMeetingByQuery(
+async function searchMeetings(
   prisma: ExtendedPrismaClient,
   userId: string,
   query: string,
-): Promise<MeetingSearchResult | null> {
-  console.log("[meeting-search] query:", JSON.stringify(query));
-
-  // 1. Direct title contains
-  const exact = await prisma.meetingNote.findFirst({
-    where: { userId, title: { contains: query, mode: "insensitive" } },
-    orderBy: { meetingStartedAt: "desc" },
-  });
-  if (exact) { console.log("[meeting-search] found via direct title:", exact.title); return exact; }
-
-  // 2. Strip filler words and retry
-  const cleaned = cleanQuery(query);
-  console.log("[meeting-search] cleaned query:", JSON.stringify(cleaned));
-  if (cleaned && cleaned !== query) {
-    const fuzzy = await prisma.meetingNote.findFirst({
-      where: { userId, title: { contains: cleaned, mode: "insensitive" } },
-      orderBy: { meetingStartedAt: "desc" },
-    });
-    if (fuzzy) return fuzzy;
-  }
-
-  const searchTerms = cleaned || query;
-
-  // 3. Search calendar events by title, then follow the link to meeting
-  const calendarEvent = await prisma.calendarEvent.findFirst({
-    where: { userId, title: { contains: searchTerms, mode: "insensitive" } },
-    orderBy: { startTime: "desc" },
-    select: { id: true },
-  });
-  if (calendarEvent) {
-    const linked = await prisma.meetingNote.findFirst({
-      where: { userId, calendarEventId: calendarEvent.id },
-    });
-    if (linked) return linked;
-  }
-
-  // 4. Attendee name search — fetch recent meetings and filter by attendee names
-  const recent = await prisma.meetingNote.findMany({
-    where: { userId },
-    orderBy: { meetingStartedAt: "desc" },
-    take: 50,
-  });
-  const lowerSearch = searchTerms.toLowerCase();
-  const byAttendee = recent.find((m) => {
-    if (!Array.isArray(m.attendees)) return false;
-    return (m.attendees as { name: string; email: string }[]).some(
-      (a) =>
-        a.name.toLowerCase().includes(lowerSearch) ||
-        a.email.toLowerCase().includes(lowerSearch),
-    );
-  });
-  if (byAttendee) return byAttendee;
-
-  // 5. Individual significant words on title
-  const words = searchTerms.split(" ").filter((w) => w.length > 2);
-  for (const word of words) {
-    const byWord = await prisma.meetingNote.findFirst({
-      where: { userId, title: { contains: word, mode: "insensitive" } },
-      orderBy: { meetingStartedAt: "desc" },
-    });
-    if (byWord) return byWord;
-  }
-
-  return null;
-}
-
-/**
- * Search for multiple meetings matching a query.
- * Same strategy cascade as findMeetingByQuery but returns up to `take` results.
- */
-export async function findMeetingsByQuery(
-  prisma: ExtendedPrismaClient,
-  userId: string,
-  query: string,
-  take = 5,
+  take: number,
 ): Promise<MeetingSearchResult[]> {
   // 1. Direct title contains
   let meetings = await prisma.meetingNote.findMany({
@@ -125,7 +56,7 @@ export async function findMeetingsByQuery(
 
   const searchTerms = cleaned || query;
 
-  // 3. Calendar event title search
+  // 3. Calendar event title search → linked meetings
   const calendarEvents = await prisma.calendarEvent.findMany({
     where: { userId, title: { contains: searchTerms, mode: "insensitive" } },
     orderBy: { startTime: "desc" },
@@ -136,11 +67,12 @@ export async function findMeetingsByQuery(
     meetings = await prisma.meetingNote.findMany({
       where: { userId, calendarEventId: { in: calendarEvents.map((e) => e.id) } },
       orderBy: { meetingStartedAt: "desc" },
+      take,
     });
     if (meetings.length > 0) return meetings;
   }
 
-  // 4. Attendee name search
+  // 4. Attendee name/email match across recent meetings
   const recent = await prisma.meetingNote.findMany({
     where: { userId },
     orderBy: { meetingStartedAt: "desc" },
@@ -157,7 +89,7 @@ export async function findMeetingsByQuery(
   });
   if (byAttendee.length > 0) return byAttendee.slice(0, take);
 
-  // 5. Individual words on title
+  // 5. Individual significant words from the cleaned query
   const words = searchTerms.split(" ").filter((w) => w.length > 2);
   for (const word of words) {
     meetings = await prisma.meetingNote.findMany({
@@ -169,4 +101,30 @@ export async function findMeetingsByQuery(
   }
 
   return [];
+}
+
+/**
+ * Find a single meeting matching the query. See `searchMeetings` for the
+ * strategy cascade.
+ */
+export async function findMeetingByQuery(
+  prisma: ExtendedPrismaClient,
+  userId: string,
+  query: string,
+): Promise<MeetingSearchResult | null> {
+  const [match] = await searchMeetings(prisma, userId, query, 1);
+  return match ?? null;
+}
+
+/**
+ * Find multiple meetings matching the query. See `searchMeetings` for the
+ * strategy cascade.
+ */
+export async function findMeetingsByQuery(
+  prisma: ExtendedPrismaClient,
+  userId: string,
+  query: string,
+  take = 5,
+): Promise<MeetingSearchResult[]> {
+  return searchMeetings(prisma, userId, query, take);
 }

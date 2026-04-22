@@ -73,7 +73,9 @@ export class OpenAIProvider implements AIProvider {
   private client: OpenAI;
 
   constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey, maxRetries: 3 });
+    // 2-minute timeout — mirrors the Anthropic provider. Prevents a hung
+    // stream from holding the orchestrator generator open indefinitely.
+    this.client = new OpenAI({ apiKey, maxRetries: 3, timeout: 120_000 });
   }
 
   async *chat(params: ChatParams): AsyncIterable<StreamChunk> {

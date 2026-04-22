@@ -1,10 +1,9 @@
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type {
   CalendarEventsResponse,
   CalendarEventDetailResponse,
   RsvpInput,
-  BrettMessageRecord,
 } from "@brett/types";
 
 interface CalendarEventParams {
@@ -24,18 +23,6 @@ function buildCalendarQuery(params: CalendarEventParams): string {
 
 interface CalendarEventNotesResponse {
   content: string | null;
-}
-
-interface CalendarBrettMessagesResponse {
-  messages: BrettMessageRecord[];
-  hasMore: boolean;
-  cursor: string | null;
-  totalCount: number;
-}
-
-interface CalendarBrettSendResponse {
-  userMessage: BrettMessageRecord;
-  brettMessage: BrettMessageRecord;
 }
 
 export function useCalendarEvents(params: CalendarEventParams) {
@@ -124,49 +111,6 @@ export function useUpdateCalendarEventNotes() {
     },
     onSettled: (_data, _err, { eventId }) => {
       qc.invalidateQueries({ queryKey: ["calendar-event-notes", eventId] });
-      qc.invalidateQueries({ queryKey: ["calendar-event-detail", eventId] });
-    },
-  });
-}
-
-export function useCalendarEventBrettMessages(eventId: string | null) {
-  const query = useInfiniteQuery({
-    queryKey: ["calendar-brett-messages", eventId],
-    queryFn: ({ pageParam }) => {
-      const url = pageParam
-        ? `/calendar/events/${eventId}/brett?cursor=${encodeURIComponent(pageParam)}`
-        : `/calendar/events/${eventId}/brett`;
-      return apiFetch<CalendarBrettMessagesResponse>(url);
-    },
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.cursor,
-    enabled: !!eventId,
-  });
-
-  const messages = query.data?.pages.flatMap((p) => p.messages) ?? [];
-
-  const totalCount = query.data?.pages[0]?.totalCount ?? 0;
-
-  return {
-    messages,
-    totalCount,
-    hasMore: query.hasNextPage ?? false,
-    isLoadingMore: query.isFetchingNextPage,
-    loadMore: query.fetchNextPage,
-    isLoading: query.isLoading,
-  };
-}
-
-export function useSendCalendarBrettMessage() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ eventId, content }: { eventId: string; content: string }) =>
-      apiFetch<CalendarBrettSendResponse>(`/calendar/events/${eventId}/brett`, {
-        method: "POST",
-        body: JSON.stringify({ content }),
-      }),
-    onSuccess: (_, { eventId }) => {
-      qc.invalidateQueries({ queryKey: ["calendar-brett-messages", eventId] });
       qc.invalidateQueries({ queryKey: ["calendar-event-detail", eventId] });
     },
   });

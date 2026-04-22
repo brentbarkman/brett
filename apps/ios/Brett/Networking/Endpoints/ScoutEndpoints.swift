@@ -17,8 +17,6 @@ import Foundation
 /// - The update endpoint is `PUT /scouts/:id`, not `PATCH`. We expose
 ///   `update(id:changes:)` as PATCH-style semantics (merge only provided
 ///   fields) but the wire method is PUT to match the server.
-/// - Consolidation endpoint is `POST /scouts/:id/consolidate` (not
-///   `/consolidation`).
 @MainActor
 extension APIClient {
     // MARK: - Request bodies
@@ -218,18 +216,6 @@ extension APIClient {
             path: "/scouts/\(id)/run",
             method: "POST"
         )
-    }
-
-    func triggerScoutConsolidation(id: String) async throws {
-        _ = try await request(
-            OKResponse.self,
-            path: "/scouts/\(id)/consolidate",
-            method: "POST"
-        )
-    }
-
-    func clearScoutHistory(id: String) async throws {
-        _ = try await rawRequest(path: "/scouts/\(id)/history", method: "DELETE")
     }
 
     // MARK: - Endpoints — findings

@@ -6,6 +6,9 @@ import SwiftData
 @Observable
 final class ListStore {
     private let context: ModelContext
+    // Lazy so tests/previews that never enqueue don't pay the allocation,
+    // and so the queue always shares the store's ModelContext.
+    private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
     init(context: ModelContext) {
         self.context = context
@@ -147,7 +150,8 @@ final class ListStore {
             "createdAt": list.createdAt.iso8601String(),
             "updatedAt": list.updatedAt.iso8601String(),
         ]
-        let entry = MutationQueueEntry(
+        // Route through MutationQueue so eager compaction runs.
+        mutationQueue.enqueue(
             entityType: "list",
             entityId: list.id,
             action: .create,
@@ -155,7 +159,6 @@ final class ListStore {
             method: .post,
             payload: JSONCodec.encode(payload)
         )
-        context.insert(entry)
     }
 
     private func enqueueUpdate(

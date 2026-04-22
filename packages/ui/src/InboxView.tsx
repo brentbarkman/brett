@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Inbox } from "lucide-react";
 import type { Thing, NavList, FilterType } from "@brett/types";
-import { computeRelativeAge } from "@brett/business";
+import { formatRelativeTime } from "@brett/utils";
 import { InboxItemRow } from "./InboxItemRow";
 import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
 import { ItemListShell } from "./ItemListShell";
@@ -488,7 +488,7 @@ export function InboxView({
                           hideSource={allSameSource}
                           relativeAge={
                             thing.createdAt
-                              ? computeRelativeAge(new Date(thing.createdAt), now.current)
+                              ? formatRelativeTime(new Date(thing.createdAt), now.current)
                               : ""
                           }
                           onClick={() => onItemClick(thing)}

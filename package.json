@@ -17,7 +17,7 @@
     "setup": "pnpm db:up && sleep 2 && pnpm db:migrate",
     "test": "pnpm --filter @brett/api run test",
     "test:unit": "pnpm --filter @brett/api run test -- --testPathPattern=health",
-    "test:ci": "pnpm --filter @brett/api run test && pnpm --filter @brett/business run test && pnpm --filter @brett/utils run test",
+    "test:ci": "pnpm --filter @brett/api run test && pnpm --filter @brett/business run test && pnpm --filter @brett/utils run test && pnpm --filter @brett/ui run test && pnpm --filter @brett/ai run test",
     "test:all": "turbo run test",
     "eval": "pnpm --filter @brett/evals eval",
     "eval:compare": "pnpm --filter @brett/evals eval:compare",

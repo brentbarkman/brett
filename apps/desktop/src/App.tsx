@@ -42,6 +42,7 @@ import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
+import { setStorageUser, userStorage } from "./lib/userScopedStorage";
 import {
   useActiveThings,
   useUpcomingThings,
@@ -100,14 +101,12 @@ import {
   useResumeScout,
   useUpdateScout,
   useTriggerScoutRun,
-  useTriggerConsolidation,
-  useClearScoutHistory,
   useDeleteScout,
   useSubmitScoutFeedback,
   useRecentFindings,
 } from "./api/scouts";
 import { useApproveNewsletterSender, useBlockNewsletterSender } from "./api/newsletters";
-import type { RecentFindingItem } from "@brett/ui";
+import type { RecentFindingItem, SearchResultItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
@@ -206,6 +205,12 @@ export function App() {
   const queryClient = useQueryClient();
   const approveNewsletter = useApproveNewsletterSender();
   const blockNewsletter = useBlockNewsletterSender();
+
+  // Thread the current user ID into the scoped storage wrapper so preferences
+  // don't bleed across accounts that sign in on the same device.
+  useEffect(() => {
+    setStorageUser(user?.id ?? null);
+  }, [user?.id]);
 
   // Initialize SSE for real-time updates
   useEventStream();
@@ -320,7 +325,7 @@ export function App() {
   const connectCalendar = useConnectCalendar();
   const hasCalendarAccounts = calendarAccounts.length > 0;
   const [sidebarDismissed, setSidebarDismissed] = useState(
-    () => localStorage.getItem(SIDEBAR_DISMISSED_KEY) === "true",
+    () => userStorage.getItem(SIDEBAR_DISMISSED_KEY) === "true",
   );
   const showCalendarSidebar = hasCalendarAccounts || !sidebarDismissed;
 
@@ -332,16 +337,22 @@ export function App() {
 
   const handleDismissSidebar = () => {
     setSidebarDismissed(true);
-    localStorage.setItem(SIDEBAR_DISMISSED_KEY, "true");
+    userStorage.setItem(SIDEBAR_DISMISSED_KEY, "true");
   };
 
   // Clear dismissed state when accounts are connected
   useEffect(() => {
     if (hasCalendarAccounts && sidebarDismissed) {
       setSidebarDismissed(false);
-      localStorage.removeItem(SIDEBAR_DISMISSED_KEY);
+      userStorage.removeItem(SIDEBAR_DISMISSED_KEY);
     }
   }, [hasCalendarAccounts, sidebarDismissed]);
+
+  // Re-read sidebar dismissal after user changes — `setStorageUser` updates
+  // the scoped key and the stored value may differ per account.
+  useEffect(() => {
+    setSidebarDismissed(userStorage.getItem(SIDEBAR_DISMISSED_KEY) === "true");
+  }, [user?.id]);
 
   // Local day boundaries as ISO timestamps for API queries.
   // Always send full ISO strings — never date-only strings like "2026-03-29" —
@@ -470,8 +481,6 @@ export function App() {
   const resumeScout = useResumeScout();
   const updateScout = useUpdateScout();
   const triggerRun = useTriggerScoutRun();
-  const triggerConsolidation = useTriggerConsolidation();
-  const clearHistory = useClearScoutHistory();
   const deleteScout = useDeleteScout();
   const submitFeedback = useSubmitScoutFeedback();
   const { data: scoutMemories = [], isLoading: isLoadingMemories } = useScoutMemories(selectedScoutId ?? undefined);
@@ -701,8 +710,36 @@ export function App() {
     },
     searchResults: omnibar.searchResults ?? null,
     isSearching: omnibar.isSearching,
-    onSearchResultClick: (id: string) => {
-      // Fallback click handler for entity types not handled by onItemClick/onEventClick
+    onSearchResultClick: (item: SearchResultItem) => {
+      // Fallback for entity types not handled by onItemClick/onEventClick.
+      // meeting_note → open the calendar event that owns it.
+      // scout_finding → open the scout detail with that finding focused.
+      // Unknown type falls through to /inbox as a safe default.
+      if (item.entityType === "meeting_note") {
+        const calendarEventId = typeof item.metadata?.calendarEventId === "string"
+          ? item.metadata.calendarEventId
+          : null;
+        if (calendarEventId) {
+          const event = sidebarCalendarEvents.find((e) => e.id === calendarEventId);
+          if (event) {
+            handleItemClick(event);
+          } else {
+            setSelectedItem({ id: calendarEventId, googleEventId: "", title: item.title, startTime: "", endTime: "", durationMinutes: 0, color: "blue", hasBrettContext: false, isAllDay: false, myResponseStatus: "needsAction" } as any);
+            setIsDetailOpen(true);
+          }
+          omnibar.close();
+          return;
+        }
+      }
+      if (item.entityType === "scout_finding") {
+        const scoutId = typeof item.metadata?.scoutId === "string" ? item.metadata.scoutId : null;
+        if (scoutId) {
+          setSelectedScoutId(scoutId);
+          navigate("/scouts");
+          omnibar.close();
+          return;
+        }
+      }
       navigate("/inbox");
       omnibar.close();
     },
@@ -855,7 +892,12 @@ export function App() {
   const [newScoutId, setNewScoutId] = useState<string | null>(null);
   const newScoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Detect successful scout creation in the omnibar and navigate to the new scout
+  // Detect successful scout creation in the omnibar and navigate to the new scout.
+  // `omnibar.messages` is the one slice we actually care about — depending on the
+  // full `omnibar` object would re-fire on every stream token (the parent memo
+  // changes whenever `messages` does). `processedScoutIds` makes the side effect
+  // idempotent in case a message is seen in multiple runs.
+  const processedScoutIdsRef = useRef(new Set<string>());
   useEffect(() => {
     for (const msg of omnibar.messages) {
       if (msg.role !== "assistant") continue;
@@ -864,10 +906,10 @@ export function App() {
           const result = tc.result as { success?: boolean; data?: { id?: string } };
           if (result.success && result.data?.id) {
             const scoutId = result.data.id;
+            if (processedScoutIdsRef.current.has(scoutId)) continue;
+            processedScoutIdsRef.current.add(scoutId);
             setSelectedScoutId(scoutId);
-            // Collapse omnibar back to bar on the scouts page
             omnibar.reset();
-            // Show "NEW" badge that fades after 5 seconds
             setNewScoutId(scoutId);
             if (newScoutTimerRef.current) clearTimeout(newScoutTimerRef.current);
             newScoutTimerRef.current = setTimeout(() => setNewScoutId(null), 5000);
@@ -875,7 +917,16 @@ export function App() {
         }
       }
     }
-  }, [omnibar]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [omnibar.messages]);
+
+  // Clean up the deferred "NEW" badge timer on unmount so it can't fire on a
+  // torn-down tree during fast account switching.
+  useEffect(() => {
+    return () => {
+      if (newScoutTimerRef.current) clearTimeout(newScoutTimerRef.current);
+    };
+  }, []);
 
   const handleInboxAddContent = (url: string) => {
     createThing.mutate(
@@ -1131,10 +1182,6 @@ export function App() {
                   onUpdate={(data) => updateScout.mutate({ id: selectedScoutId, ...data })}
                   onTriggerRun={import.meta.env.DEV ? () => { triggerRun.mutate(selectedScoutId!); setScoutRunning(true); } : undefined}
                   isRunning={scoutRunning}
-                  onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}
-                  isClearing={clearHistory.isPending}
-                  onConsolidate={import.meta.env.DEV ? () => triggerConsolidation.mutate(selectedScoutId!) : undefined}
-                  isConsolidating={triggerConsolidation.isPending}
                   onDelete={() => { deleteScout.mutate(selectedScoutId!); setSelectedScoutId(null); }}
                   onClickFindingItem={(itemId) => {
                     const thing = allActiveThings.find((t) => t.id === itemId);
@@ -1457,10 +1504,7 @@ export function App() {
           onSearch={omnibar.searchThings}
           searchResults={omnibar.searchResults ?? null}
           isSearching={omnibar.isSearching}
-          onSearchResultClick={(id: string) => {
-            navigate("/inbox");
-            omnibar.close();
-          }}
+          onSearchResultClick={omnibarProps.onSearchResultClick}
           onClose={() => { setSpotlightInitialAction(null); omnibar.close(); }}
           onCancel={omnibar.cancel}
           onReset={omnibar.reset}
