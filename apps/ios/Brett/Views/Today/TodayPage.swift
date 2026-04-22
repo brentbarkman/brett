@@ -171,21 +171,28 @@ struct TodayPage: View {
         )
     }
 
-    /// `id`-based lookup so we can show the list name as metadata without
-    /// threading ListStore into every TaskRow.
-    private var listsById: [String: ItemList] {
-        Dictionary(uniqueKeysWithValues: allLists.map { ($0.id, $0) })
-    }
-
-    private func listName(for item: Item) -> String? {
-        guard let listId = item.listId else { return nil }
-        return listsById[listId]?.name
+    /// List-name lookup closure that captures the per-list-id index once.
+    /// Passed into every `TaskSection` as its `listNameProvider`, so each
+    /// row does an O(1) dictionary read instead of triggering a rebuild of
+    /// the full `[listId: name]` map per lookup.
+    private func makeListNameProvider() -> (Item) -> String? {
+        let index = Dictionary(uniqueKeysWithValues: allLists.map { ($0.id, $0.name) })
+        return { item in
+            guard let listId = item.listId else { return nil }
+            return index[listId]
+        }
     }
 
     // MARK: - Task sections
 
     @ViewBuilder
     private var taskSections: some View {
+        // Compute the bucket and list-name lookup once per builder pass
+        // so the five section reads share one `TodaySections.bucket(...)`
+        // call and every row reuses the same captured lookup closure.
+        let s = sections
+        let nameProvider = makeListNameProvider()
+
         TaskSection(
             // Header treatment matches the rest of the Today sections —
             // Electron differentiates "overdue" via per-card urgency
@@ -195,9 +202,9 @@ struct TodayPage: View {
             // on it being noisy.
             label: "Overdue",
             icon: "exclamationmark.triangle",
-            items: sections.overdue,
+            items: s.overdue,
             labelColor: .white,
-            listNameProvider: listName(for:),
+            listNameProvider: nameProvider,
             onToggle: toggle,
             onSelect: select,
             onSchedule: schedule,
@@ -208,9 +215,9 @@ struct TodayPage: View {
         TaskSection(
             label: "Today",
             icon: "sun.max",
-            items: sections.today,
+            items: s.today,
             labelColor: .white,
-            listNameProvider: listName(for:),
+            listNameProvider: nameProvider,
             onToggle: toggle,
             onSelect: select,
             onSchedule: schedule,
@@ -221,9 +228,9 @@ struct TodayPage: View {
         TaskSection(
             label: "This Week",
             icon: "calendar",
-            items: sections.thisWeek,
+            items: s.thisWeek,
             labelColor: .white,
-            listNameProvider: listName(for:),
+            listNameProvider: nameProvider,
             onToggle: toggle,
             onSelect: select,
             onSchedule: schedule,
@@ -234,9 +241,9 @@ struct TodayPage: View {
         TaskSection(
             label: "Next Week",
             icon: "arrow.right.circle",
-            items: sections.nextWeek,
+            items: s.nextWeek,
             labelColor: .white,
-            listNameProvider: listName(for:),
+            listNameProvider: nameProvider,
             onToggle: toggle,
             onSelect: select,
             onSchedule: schedule,
@@ -247,9 +254,9 @@ struct TodayPage: View {
         TaskSection(
             label: "Done Today",
             icon: "checkmark.circle",
-            items: sections.doneToday,
+            items: s.doneToday,
             labelColor: BrettColors.textInactive,
-            listNameProvider: listName(for:),
+            listNameProvider: nameProvider,
             onToggle: toggle,
             onSelect: select,
             onSchedule: schedule,
@@ -262,15 +269,18 @@ struct TodayPage: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        if sections.isEveryActiveSectionEmpty {
+        // Hoist the bucket so the three `sections.*` reads below share one
+        // `TodaySections.bucket(...)` call.
+        let s = sections
+        if s.isEveryActiveSectionEmpty {
             if hasCompletedInitialSync {
                 VStack(spacing: 8) {
-                    Text(sections.hasDoneToday ? "Cleared." : "Nothing on the books today.")
+                    Text(s.hasDoneToday ? "Cleared." : "Nothing on the books today.")
                         .font(BrettTypography.emptyHeading)
                         .foregroundStyle(Color.white.opacity(0.90))
                         .multilineTextAlignment(.center)
 
-                    Text(sections.hasDoneToday
+                    Text(s.hasDoneToday
                         ? "Nothing left. Go build something or enjoy the quiet."
                         : "A rare opening — use it well.")
                         .font(BrettTypography.emptyCopy)
@@ -293,12 +303,27 @@ struct TodayPage: View {
     // MARK: - Stats
 
     private var statsLine: String {
-        let total = sections.activeCount + sections.doneToday.count
-        let done = sections.doneToday.count
+        // Hoist the bucket and the day-filtered event list so the three
+        // `sections.*` reads share one bucket and the two event accesses
+        // (count + duration sum) share one filter pass.
+        let s = sections
+        let events = todaysEvents
+        let total = s.activeCount + s.doneToday.count
+        let done = s.doneToday.count
         let base = "\(done) of \(total) done"
-        guard hasCalendarData else { return base }
+        guard !allEvents.isEmpty else { return base }
+        let meetingCount = events.count
         let suffix = meetingCount == 1 ? "meeting" : "meetings"
-        return "\(base) · \(meetingCount) \(suffix) (\(meetingDurationText))"
+        return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: events)))"
+    }
+
+    private static func formatMeetingDuration(events: [CalendarEvent]) -> String {
+        let total = events.reduce(0) { $0 + $1.durationMinutes }
+        let hours = total / 60
+        let mins = total % 60
+        if hours > 0 && mins > 0 { return "\(hours)h \(mins)m" }
+        if hours > 0 { return "\(hours)h" }
+        return "\(mins)m"
     }
 
     // MARK: - Calendar helpers
@@ -309,22 +334,6 @@ struct TodayPage: View {
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
         return allEvents.filter { $0.startTime >= start && $0.startTime < end }
     }
-
-    private var meetingCount: Int { todaysEvents.count }
-
-    private var meetingDurationText: String {
-        let total = todaysEvents.reduce(0) { $0 + $1.durationMinutes }
-        let hours = total / 60
-        let mins = total % 60
-        if hours > 0 && mins > 0 { return "\(hours)h \(mins)m" }
-        if hours > 0 { return "\(hours)h" }
-        return "\(mins)m"
-    }
-
-    /// Whether the user has any connected calendar data at all. If there are
-    /// zero events on _any_ day, we treat calendars as un-connected and hide
-    /// the meeting chunk of the stats line.
-    private var hasCalendarData: Bool { !allEvents.isEmpty }
 
     private var nextUpcomingEvent: CalendarEvent? {
         allEvents.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
