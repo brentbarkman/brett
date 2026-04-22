@@ -91,11 +91,9 @@ jobs:
         run: pnpm --filter @brett/api exec prisma generate
 
       - name: Deploy API to Railway
-        run: npx @railway/cli up --service "$RAILWAY_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT_ID"
+        run: npx @railway/cli up --service 885a5f01-827b-4b29-a15f-3e9fee4fcb4e --environment 628d3da3-9677-4c8c-a151-52e8e9992f94
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_API_SERVICE_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_PRODUCTION_ENVIRONMENT_ID }}
 
       - name: Wait for API to be healthy
         run: |
