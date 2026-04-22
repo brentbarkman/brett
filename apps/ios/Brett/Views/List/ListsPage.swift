@@ -36,6 +36,17 @@ struct ListsPage: View {
         return listStore.fetchAll(includeArchived: false)
     }
 
+    /// Counts bucketed by `listId` in a single pass over every item, so
+    /// rendering N list cards triggers one SwiftData fetch instead of N.
+    /// `ItemStore.fetchAll()` reads every non-deleted row and filters in
+    /// memory, which is why this must not run per card. See
+    /// `ListCounts.groupByListId` for the grouping rules.
+    private var countsByList: [String: ListCounts.Entry] {
+        _ = refreshTick
+        let items = itemStore.fetchAll()
+        return ListCounts.groupByListId(items)
+    }
+
     var body: some View {
         ZStack {
             ScrollView {
@@ -96,10 +107,11 @@ struct ListsPage: View {
     // MARK: - Cards
 
     private var listCards: some View {
-        VStack(spacing: 8) {
+        let counts = countsByList
+        return VStack(spacing: 8) {
             ForEach(lists, id: \.id) { list in
                 NavigationLink(value: NavDestination.listView(id: list.id)) {
-                    listCard(list)
+                    listCard(list, counts: counts[list.id] ?? .empty)
                 }
                 .buttonStyle(.plain)
             }
@@ -107,9 +119,8 @@ struct ListsPage: View {
         .padding(.horizontal, 16)
     }
 
-    private func listCard(_ list: ItemList) -> some View {
+    private func listCard(_ list: ItemList, counts: ListCounts.Entry) -> some View {
         let color = ListColor(colorClass: list.colorClass)?.swiftUIColor ?? ListColor.slate.swiftUIColor
-        let counts = itemCounts(for: list.id)
 
         return HStack(spacing: 14) {
             // Progress ring fills clockwise as items are completed —
@@ -209,13 +220,6 @@ struct ListsPage: View {
         refreshTick &+= 1
     }
 
-    private func itemCounts(for listId: String) -> (active: Int, completed: Int, total: Int) {
-        let items = itemStore.fetchAll(listId: listId, status: nil)
-            .filter { $0.itemStatus != .archived }
-        let active = items.filter { $0.itemStatus != .done }.count
-        let completed = items.filter { $0.itemStatus == .done }.count
-        return (active: active, completed: completed, total: items.count)
-    }
 }
 
 /// Tiny progress ring that fills clockwise as items in a list are
