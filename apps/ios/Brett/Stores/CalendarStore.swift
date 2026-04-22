@@ -19,12 +19,17 @@ final class CalendarStore {
 
     // MARK: - Events (read-only)
 
-    func fetchEvents(startDate: Date, endDate: Date) -> [CalendarEvent] {
+    /// Events owned by `userId` intersecting `[startDate, endDate)`. Scoping
+    /// here is defense in depth on top of `PersistenceController.wipeAllData`
+    /// clearing the store on sign-out — any stale row that survives the wipe
+    /// (e.g. from a new `@Model` that wasn't added to the wipe list) still
+    /// can't render against a different user's identity.
+    func fetchEvents(userId: String, startDate: Date, endDate: Date) -> [CalendarEvent] {
         var descriptor = FetchDescriptor<CalendarEvent>(
             sortBy: [SortDescriptor(\.startTime)]
         )
         descriptor.predicate = #Predicate { event in
-            event.deletedAt == nil
+            event.userId == userId && event.deletedAt == nil
         }
         let events = (try? context.fetch(descriptor)) ?? []
         return events.filter { event in

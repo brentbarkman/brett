@@ -25,13 +25,17 @@ final class ItemStore {
 
     // MARK: - Fetch
 
-    /// All non-deleted items for the current user, newest first.
-    func fetchAll(listId: String? = nil, status: ItemStatus? = nil) -> [Item] {
+    /// All non-deleted items owned by `userId`, newest first. The predicate
+    /// pins the fetch to the signed-in user so a stale row left behind by an
+    /// earlier session can't leak into the current one — defense in depth on
+    /// top of `PersistenceController.wipeAllData` clearing the store on
+    /// sign-out.
+    func fetchAll(userId: String, listId: String? = nil, status: ItemStatus? = nil) -> [Item] {
         var descriptor = FetchDescriptor<Item>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         descriptor.predicate = #Predicate { item in
-            item.deletedAt == nil
+            item.userId == userId && item.deletedAt == nil
         }
         let items = (try? context.fetch(descriptor)) ?? []
         return items.filter { item in
@@ -42,16 +46,16 @@ final class ItemStore {
     }
 
     /// Inbox = items with no list assigned and no due date (spec §UI).
-    func fetchInbox() -> [Item] {
-        let items = fetchAll()
+    func fetchInbox(userId: String) -> [Item] {
+        let items = fetchAll(userId: userId)
         return items.filter { $0.listId == nil && $0.dueDate == nil && $0.itemStatus == .active }
     }
 
     /// Today = due today or overdue, not yet done.
-    func fetchToday() -> [Item] {
+    func fetchToday(userId: String) -> [Item] {
         let calendar = Calendar.current
         let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date()) ?? Date()
-        let items = fetchAll()
+        let items = fetchAll(userId: userId)
         return items.filter { item in
             guard let due = item.dueDate, item.itemStatus != .done, item.itemStatus != .archived else { return false }
             return due <= endOfToday
@@ -59,10 +63,10 @@ final class ItemStore {
     }
 
     /// Upcoming = due after today, not yet done.
-    func fetchUpcoming() -> [Item] {
+    func fetchUpcoming(userId: String) -> [Item] {
         let calendar = Calendar.current
         let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date()) ?? Date()
-        let items = fetchAll()
+        let items = fetchAll(userId: userId)
         return items
             .filter { item in
                 guard let due = item.dueDate else { return false }

@@ -49,7 +49,8 @@ struct ListView: View {
     }
 
     private var items: [Item] {
-        itemStore.fetchAll(listId: listId, status: nil)
+        guard let userId = authManager.currentUser?.id else { return [] }
+        return itemStore.fetchAll(userId: userId, listId: listId, status: nil)
             .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
     }
 

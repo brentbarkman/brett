@@ -33,7 +33,8 @@ struct ListsPage: View {
 
     private var lists: [ItemList] {
         _ = refreshTick
-        return listStore.fetchAll(includeArchived: false)
+        guard let userId = authManager.currentUser?.id else { return [] }
+        return listStore.fetchAll(userId: userId, includeArchived: false)
     }
 
     var body: some View {
@@ -210,7 +211,10 @@ struct ListsPage: View {
     }
 
     private func itemCounts(for listId: String) -> (active: Int, completed: Int, total: Int) {
-        let items = itemStore.fetchAll(listId: listId, status: nil)
+        guard let userId = authManager.currentUser?.id else {
+            return (active: 0, completed: 0, total: 0)
+        }
+        let items = itemStore.fetchAll(userId: userId, listId: listId, status: nil)
             .filter { $0.itemStatus != .archived }
         let active = items.filter { $0.itemStatus != .done }.count
         let completed = items.filter { $0.itemStatus == .done }.count

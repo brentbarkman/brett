@@ -20,12 +20,16 @@ final class ListStore {
 
     // MARK: - Fetch
 
-    func fetchAll(includeArchived: Bool = false) -> [ItemList] {
+    /// All non-deleted lists owned by `userId`, ordered by sortOrder. Pins
+    /// the fetch to the signed-in user so any stale row left by an earlier
+    /// session can't leak in — defense in depth on top of
+    /// `PersistenceController.wipeAllData`.
+    func fetchAll(userId: String, includeArchived: Bool = false) -> [ItemList] {
         var descriptor = FetchDescriptor<ItemList>(
             sortBy: [SortDescriptor(\.sortOrder)]
         )
         descriptor.predicate = #Predicate { list in
-            list.deletedAt == nil
+            list.userId == userId && list.deletedAt == nil
         }
         let lists = (try? context.fetch(descriptor)) ?? []
         return lists.filter { includeArchived || $0.archivedAt == nil }
@@ -47,7 +51,7 @@ final class ListStore {
             userId: userId,
             name: name,
             colorClass: colorClass,
-            sortOrder: nextSortOrder(),
+            sortOrder: nextSortOrder(userId: userId),
             createdAt: now,
             updatedAt: now
         )
@@ -120,8 +124,8 @@ final class ListStore {
 
     // MARK: - Helpers
 
-    private func nextSortOrder() -> Int {
-        let existing = fetchAll(includeArchived: true)
+    private func nextSortOrder(userId: String) -> Int {
+        let existing = fetchAll(userId: userId, includeArchived: true)
         return (existing.map(\.sortOrder).max() ?? -1) + 1
     }
 

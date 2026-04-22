@@ -53,6 +53,7 @@ private struct TaskDetailBody: View {
     let onOpenLinkedItem: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AuthManager.self) private var authManager
 
     @State private var itemStore = ItemStore()
     @State private var listStore = ListStore()
@@ -245,7 +246,11 @@ private struct TaskDetailBody: View {
 
     private func reload() {
         item = itemStore.fetchById(itemId)
-        lists = listStore.fetchAll()
+        if let userId = authManager.currentUser?.id {
+            lists = listStore.fetchAll(userId: userId)
+        } else {
+            lists = []
+        }
         if let item {
             draft = ItemDraft(from: item)
         }

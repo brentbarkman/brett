@@ -144,7 +144,17 @@ struct OmnibarView: View {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let realLists = listStore.fetchAll()  // excludes archived by default
+        // Without a signed-in user the omnibar shouldn't be reachable (root
+        // is gated by SignInView), but if we somehow end up here anyway,
+        // bail with a haptic. Hoisted above the list fetch so we can scope
+        // that fetch to the current user.
+        guard let userId = authManager.currentUser?.id else {
+            HapticManager.error()
+            flashParseFailure()
+            return
+        }
+
+        let realLists = listStore.fetchAll(userId: userId)  // excludes archived by default
         let lists = realLists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
         let parsed = SmartParser.parse(
             trimmed,
@@ -154,15 +164,6 @@ struct OmnibarView: View {
         guard !parsed.title.isEmpty else {
             // Nothing meaningful left after stripping tokens — treat as a
             // parse failure and flash the border red.
-            HapticManager.error()
-            flashParseFailure()
-            return
-        }
-
-        // Route through ItemStore (sync-backed). Without a signed-in user
-        // the omnibar shouldn't be reachable (root is gated by SignInView),
-        // but if we somehow end up here anyway, just bail with a haptic.
-        guard let userId = authManager.currentUser?.id else {
             HapticManager.error()
             flashParseFailure()
             return

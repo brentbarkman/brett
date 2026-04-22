@@ -32,7 +32,8 @@ struct TriagePopup: View {
     @State private var creatingList: Bool = false
 
     private var lists: [ItemList] {
-        listStore.fetchAll()
+        guard let userId, !userId.isEmpty else { return [] }
+        return listStore.fetchAll(userId: userId)
     }
 
     var body: some View {

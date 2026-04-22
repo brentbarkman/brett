@@ -12,6 +12,7 @@ struct CalendarPage: View {
     @State private var calendarStore = CalendarStore()
     @State private var accountsStore = CalendarAccountsStore()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(AuthManager.self) private var authManager
 
     @State private var events: [CalendarEvent] = []
     @State private var isShowingConnectSheet = false
@@ -152,10 +153,14 @@ struct CalendarPage: View {
     }
 
     private func loadEventsFromCache() {
+        guard let userId = authManager.currentUser?.id else {
+            events = []
+            return
+        }
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: selectedDate)
         let windowStart = calendar.date(byAdding: .day, value: -windowDays, to: dayStart) ?? dayStart
         let windowEnd = calendar.date(byAdding: .day, value: windowDays, to: dayStart) ?? dayStart
-        events = calendarStore.fetchEvents(startDate: windowStart, endDate: windowEnd)
+        events = calendarStore.fetchEvents(userId: userId, startDate: windowStart, endDate: windowEnd)
     }
 }
