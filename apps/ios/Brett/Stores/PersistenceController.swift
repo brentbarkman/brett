@@ -76,6 +76,8 @@ final class PersistenceController {
     // MARK: - Registered types
 
     /// Every `@Model` class the app uses. Keep in sync with `BrettApp`'s container.
+    /// When adding a new @Model here, also add it to `wipeAllData()` so sign-out
+    /// clears it on account switch.
     static let modelTypes: [any PersistentModel.Type] = [
         // Domain
         Item.self,
@@ -95,6 +97,51 @@ final class PersistenceController {
         SyncHealth.self,
         AttachmentUpload.self,
     ]
+
+    // MARK: - Sign-out wipe
+
+    /// Deletes every row from the shared model context and commits. Called
+    /// from `AuthManager.signOut` so a subsequent sign-in on the same
+    /// device starts with an empty local database — without this, views
+    /// that read live `@Query` results would briefly render the prior
+    /// user's rows before the sync engine overwrites them, and sync
+    /// cursors would falsely report "I already have everything up to X".
+    func wipeAllData() {
+        Self.wipeAllData(in: mainContext)
+    }
+
+    /// Static form exposed for tests — callers in production should use
+    /// the instance method against the shared `mainContext`.
+    static func wipeAllData(in context: ModelContext) {
+        deleteAll(Item.self, in: context)
+        deleteAll(ItemList.self, in: context)
+        deleteAll(CalendarEvent.self, in: context)
+        deleteAll(CalendarEventNote.self, in: context)
+        deleteAll(Scout.self, in: context)
+        deleteAll(ScoutFinding.self, in: context)
+        deleteAll(BrettMessage.self, in: context)
+        deleteAll(Attachment.self, in: context)
+        deleteAll(UserProfile.self, in: context)
+        deleteAll(MutationQueueEntry.self, in: context)
+        deleteAll(SyncCursor.self, in: context)
+        deleteAll(ConflictLogEntry.self, in: context)
+        deleteAll(SyncHealth.self, in: context)
+        deleteAll(AttachmentUpload.self, in: context)
+        do {
+            try context.save()
+        } catch {
+            #if DEBUG
+            print("[PersistenceController] wipeAllData: save failed — \(error)")
+            #endif
+        }
+    }
+
+    private static func deleteAll<T: PersistentModel>(_ type: T.Type, in context: ModelContext) {
+        let rows = (try? context.fetch(FetchDescriptor<T>())) ?? []
+        for row in rows {
+            context.delete(row)
+        }
+    }
 
     // MARK: - Reset helper
 

@@ -103,12 +103,24 @@ final class AuthManager {
     /// server (best effort). The local clear happens first so a server error
     /// can't leave the user stuck in a signed-in UI.
     func signOut() async {
+        // Flip auth state before touching SwiftData so the UI transitions to
+        // the sign-in screen immediately; the wipe happens under a view tree
+        // that's already unmounting the data-bound surfaces.
         token = nil
         currentUser = nil
         try? KeychainStore.deleteToken()
         // Clear the mirrored user-id in the App Group so a pending share
         // from this user can't leak into the next sign-in's account.
         SharedConfig.writeCurrentUserId(nil)
+
+        // Wipe the local SwiftData store. Without this, the next user to
+        // sign in on the same device sees the prior user's items / events /
+        // scouts until the next sync lands (and stale sync cursors cause
+        // an incremental pull that may never fetch some older rows the new
+        // account actually has). Runs after the auth-state clear so any
+        // view still reading SwiftData during the transition resolves to
+        // an anon state first.
+        PersistenceController.shared.wipeAllData()
 
         do {
             try await endpoints.signOut()
