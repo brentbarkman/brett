@@ -1,4 +1,4 @@
-import type { CalendarGlassColor, ContentType } from "@brett/types";
+import type { CalendarGlassColor, ContentType, NavList } from "@brett/types";
 
 // ── URL content type detection ──
 
@@ -162,6 +162,28 @@ export function humanizeCadence(hours: number): string {
 
 export { resolveTempUnit, convertTemp } from "./weather.js";
 export { generateCuid } from "./cuid.js";
+
+/**
+ * Where a new task created from the current view will actually land.
+ * Keep aligned with `useOmnibar.createTask(currentView)` in
+ * `apps/desktop/src/api/omnibar.ts`: Today adds a due date, `list:<id>` sets
+ * `listId`, everything else falls through to inbox. The label must reflect
+ * the destination, not the screen the user is on.
+ */
+export function getTaskDestinationLabel(
+  currentView: string | undefined,
+  lists: ReadonlyArray<Pick<NavList, "id" | "name">>,
+): string {
+  if (currentView === "today") return "Today";
+  if (currentView?.startsWith("list:")) {
+    const listId = currentView.slice(5);
+    if (listId) {
+      const match = lists.find((l) => l.id === listId);
+      if (match) return match.name;
+    }
+  }
+  return "Inbox";
+}
 
 // ── Password validation ──
 
