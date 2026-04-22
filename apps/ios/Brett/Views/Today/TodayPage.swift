@@ -67,7 +67,7 @@ struct TodayPage: View {
     /// Item IDs that were just marked done but should visually stay in
     /// their original section until the debounce window expires. Without
     /// this, completing a task causes the section to immediately re-flow
-    /// and the user's next tap lands on the wrong row. Cleared 4s after
+    /// and the user's next tap lands on the wrong row. Cleared 2s after
     /// the last completion (any new tap resets the clock).
     @State private var pendingDoneIDs: Set<String> = []
 
@@ -344,7 +344,7 @@ struct TodayPage: View {
     /// Toggle a task's status. Fires the completion cascade:
     /// 1. Haptic success
     /// 2. Header stats pulse gold (spring animation on `completionPulse`)
-    /// 3. After ~1.5s idle, the item moves into Done Today — implemented by
+    /// 3. After 2s idle, the item moves into Done Today — implemented by
     ///    bumping `reflowSnapshotKey` which invalidates the cached sections.
     ///    Each fresh toggle cancels the previous reflow so a burst of quick
     ///    completions all settle together.
@@ -364,13 +364,13 @@ struct TodayPage: View {
         // expires. The user's `isCompleted` toggle is reflected in the
         // checkbox + strikethrough immediately (TaskRow reads
         // `item.isCompleted` live from SwiftData), but the row doesn't
-        // *move* until 4 seconds after the user stops tapping. This
+        // *move* until 2 seconds after the user stops tapping. This
         // prevents the "list jumps and I tap the wrong thing" pattern.
         pendingDoneIDs.insert(id)
 
         pendingReflowTask?.cancel()
         pendingReflowTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             if Task.isCancelled { return }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 pendingDoneIDs.removeAll()
