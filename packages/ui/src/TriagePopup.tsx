@@ -9,8 +9,17 @@ interface ListSuggestion {
   similarity: number;
 }
 
+/**
+ * mode:
+ *   - "list-first" / "date-first": two-step flow (Inbox triage). Primary step
+ *     selects one field, then the popup advances to the other, letting the
+ *     user set both in one gesture.
+ *   - "list-only" / "date-only": single-step flow (Today, Upcoming, list
+ *     views). Used when the item already has both fields and the user is
+ *     adjusting one — selecting confirms immediately without advancing.
+ */
 interface TriagePopupProps {
-  mode: "list-first" | "date-first";
+  mode: "list-first" | "date-first" | "list-only" | "date-only";
   lists: NavList[];
   /** Current values from the thing being triaged — used to pre-select on secondary step */
   currentListId?: string | null;
@@ -47,8 +56,11 @@ export function TriagePopup({
   onConfirm,
   onCancel,
 }: TriagePopupProps) {
-  const primaryStep: Step = mode === "list-first" ? "list" : "date";
-  const secondaryStep: Step = mode === "list-first" ? "date" : "list";
+  const primaryStep: Step =
+    mode === "list-first" || mode === "list-only" ? "list" : "date";
+  const secondaryStep: Step =
+    mode === "list-first" || mode === "list-only" ? "date" : "list";
+  const singleStep = mode === "list-only" || mode === "date-only";
 
   const [currentStep, setCurrentStep] = useState<Step>(primaryStep);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
@@ -82,9 +94,19 @@ export function TriagePopup({
     }
   }, [filteredLists.length, focusedIndex, currentStep]);
 
-  const advanceOrConfirm = 
+  const advanceOrConfirm =
     (listId: string | null, date: string | null, precision: DueDatePrecision | null) => {
-      // If we're on the primary step, advance to secondary
+      // Single-step modes confirm on first selection; only include the field
+      // the user picked so the other one isn't clobbered with null.
+      if (singleStep) {
+        if (primaryStep === "list") {
+          onConfirm({ listId });
+        } else {
+          onConfirm({ dueDate: date, dueDatePrecision: precision });
+        }
+        return;
+      }
+      // Two-step: if we're on the primary step, advance to secondary
       if (currentStep === primaryStep) {
         setCurrentStep(secondaryStep);
         setFilterText("");
@@ -139,6 +161,12 @@ export function TriagePopup({
 
         // Nothing focused (-1) → skip this step
         if (focusedIndex === -1) {
+          if (singleStep) {
+            // Single-step modes have nothing to skip to — treat Enter-on-empty
+            // as a cancel so the popup doesn't silently do nothing.
+            onCancel();
+            return;
+          }
           if (currentStep === primaryStep) {
             setCurrentStep(secondaryStep);
             setFilterText("");
@@ -213,25 +241,29 @@ export function TriagePopup({
           "triagePopupEnter 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
       }}
     >
-      {/* Step indicator */}
+      {/* Step indicator — single-step modes only show the active field */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
-        <div
-          className={`flex items-center gap-1.5 text-[11px] font-medium ${
-            currentStep === "list" ? "text-brett-gold" : "text-white/40"
-          }`}
-        >
-          <List size={12} />
-          <span>List</span>
-        </div>
-        <span className="text-white/20 text-[10px]">+</span>
-        <div
-          className={`flex items-center gap-1.5 text-[11px] font-medium ${
-            currentStep === "date" ? "text-brett-gold" : "text-white/40"
-          }`}
-        >
-          <Calendar size={12} />
-          <span>Date</span>
-        </div>
+        {(!singleStep || primaryStep === "list") && (
+          <div
+            className={`flex items-center gap-1.5 text-[11px] font-medium ${
+              currentStep === "list" ? "text-brett-gold" : "text-white/40"
+            }`}
+          >
+            <List size={12} />
+            <span>List</span>
+          </div>
+        )}
+        {!singleStep && <span className="text-white/20 text-[10px]">+</span>}
+        {(!singleStep || primaryStep === "date") && (
+          <div
+            className={`flex items-center gap-1.5 text-[11px] font-medium ${
+              currentStep === "date" ? "text-brett-gold" : "text-white/40"
+            }`}
+          >
+            <Calendar size={12} />
+            <span>Date</span>
+          </div>
+        )}
         <div className="flex-1" />
         <span className="text-[10px] text-white/20">
           esc cancel
@@ -361,7 +393,11 @@ export function TriagePopup({
 
       {/* Footer hint */}
       <div className="px-3 py-1.5 border-t border-white/5 text-[10px] text-white/20 text-center">
-        {focusedIndex === -1 ? "enter to skip" : "enter to select"}
+        {focusedIndex === -1
+          ? singleStep
+            ? "select to apply"
+            : "enter to skip"
+          : "enter to select"}
       </div>
 
       <style>{`

@@ -19,7 +19,7 @@ interface InboxViewProps {
     ids: string[],
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   onFocusChange?: (thing: Thing) => void;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;

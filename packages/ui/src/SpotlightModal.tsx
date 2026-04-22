@@ -84,7 +84,6 @@ export function SpotlightModal({
   const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
 
-  // Intercept input changes to detect shortcut prefixes
   const handleScroll = () => {
     const el = chatContainerRef.current;
     if (!el) return;
@@ -92,18 +91,33 @@ export function SpotlightModal({
     userScrolledUpRef.current = !nearBottom;
   };
 
+  const hasConversation = messages.length > 0;
+
+  // Intercept input changes to detect shortcut prefixes. See Omnibar.tsx for
+  // the full preview-model rationale — kept in sync with that surface.
   const handleInputChange = (value: string) => {
-    if (!forcedAction && value === "s ") {
-      setForcedAction("search");
-      onInputChange("");
+    if (hasConversation) {
+      onInputChange(value);
       return;
     }
-    if (!forcedAction && value === "t ") {
-      setForcedAction("create");
-      onInputChange("");
+
+    const inPreview = forcedAction !== null && (input === "t" || input === "s");
+    if (inPreview) {
+      if (value === input + " ") {
+        onInputChange("");
+        return;
+      }
+      setForcedAction(null);
+      onInputChange(value);
       return;
     }
-    // Backspace to empty clears the forced mode
+
+    if (!forcedAction && input === "" && (value === "t" || value === "s")) {
+      setForcedAction(value === "t" ? "create" : "search");
+      onInputChange(value);
+      return;
+    }
+
     if (forcedAction && value === "") {
       setForcedAction(null);
     }
@@ -179,8 +193,6 @@ export function SpotlightModal({
       setConfirmedTask(null);
     }
   }, [isOpen]);
-
-  const hasConversation = messages.length > 0;
 
   const showSuggestions = (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
   const showSearchResults = !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));

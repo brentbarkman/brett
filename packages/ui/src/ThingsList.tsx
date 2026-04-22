@@ -13,7 +13,7 @@ interface ThingsListProps {
   onToggle?: (id: string) => void;
   onAdd: (title: string, listId: string | null) => void;
   onAddContent?: (url: string) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   /** Called when keyboard nav changes focused item (for live detail panel updates) */
   onFocusChange?: (thing: Thing) => void;
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
@@ -54,12 +54,12 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
       if (!focusedThing || !onTriageOpen) return false;
       if (e.key === "l") {
         e.preventDefault();
-        onTriageOpen("list-first", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        onTriageOpen("list-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
-        onTriageOpen("date-first", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        onTriageOpen("date-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
         return true;
       }
       return false;

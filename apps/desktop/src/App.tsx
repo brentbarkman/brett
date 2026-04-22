@@ -253,7 +253,7 @@ export function App() {
 
   // Triage popup state
   const [triageState, setTriageState] = useState<{
-    mode: "list-first" | "date-first";
+    mode: "list-first" | "date-first" | "list-only" | "date-only";
     ids: string[];
     currentListId?: string | null;
     currentDueDate?: string | null;
@@ -969,7 +969,7 @@ export function App() {
     handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
   };
 
-  const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {
+  const handleTriageOpen = (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {
     setTriageState({ mode, ids, currentListId: thing?.listId, currentDueDate: thing?.dueDate, currentDueDatePrecision: thing?.dueDatePrecision });
   };
 
