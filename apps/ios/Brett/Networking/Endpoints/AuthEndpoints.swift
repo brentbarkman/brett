@@ -42,6 +42,23 @@ struct AuthEndpoints {
         struct IDTokenPayload: Encodable {
             let token: String
         }
+
+        // Custom encoding so the optional `idToken` and `nonce` fields
+        // are OMITTED when nil rather than encoded as `null`. Sending
+        // `"nonce": null` to a better-auth endpoint that doesn't know
+        // about the field could cause strict schemas to reject the
+        // request; omitting is the safer wire shape for a forward-
+        // compatible client change.
+        enum CodingKeys: String, CodingKey {
+            case provider, idToken, nonce
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(provider, forKey: .provider)
+            try c.encodeIfPresent(idToken, forKey: .idToken)
+            try c.encodeIfPresent(nonce, forKey: .nonce)
+        }
     }
 
     // MARK: - Response shapes

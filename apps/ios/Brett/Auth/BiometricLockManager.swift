@@ -50,11 +50,50 @@ final class BiometricLockManager {
     private var context: LAContext?
 
     private init() {
+        // One-shot migration from the previous user-scoped key. Before
+        // device-scoping, the toggle lived at
+        // `security.faceid.enabled.user=<id>` so every signed-in account
+        // had its own preference. Users who had FaceID on under that
+        // scheme would silently lose the protection after the device-
+        // scoping change if we didn't forward it. Runs once per install
+        // (the UserDefaults flag is wiped on uninstall, so reinstall also
+        // runs it again — harmless, since it only sets a bool).
+        Self.migrateFaceIDPreferenceIfNeeded()
+
         // Face ID policy is known synchronously at init (device-scoped key)
         // so cold launch locks immediately — no gap between first render
         // and the scene-phase hook where the main UI would otherwise be
         // visible in the app switcher.
         isLocked = isEnabledInSettings
+    }
+
+    /// UserDefaults sentinel so the migration only runs once per install.
+    private static let migrationSentinelKey = "security.faceid.enabled.migratedFromUserScope.v1"
+
+    private static func migrateFaceIDPreferenceIfNeeded() {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: migrationSentinelKey) {
+            return
+        }
+        // The legacy key format was `security.faceid.enabled.user=<id>`.
+        // Scan UserDefaults for any matching key and OR its value — if
+        // ANY user had FaceID enabled on this device, carry that forward
+        // as the device-level default. Users who don't want it can flip
+        // the toggle off in Settings.
+        let legacyPrefix = "security.faceid.enabled.user="
+        var anyEnabled = false
+        for (key, value) in defaults.dictionaryRepresentation()
+            where key.hasPrefix(legacyPrefix) {
+            if let boolValue = value as? Bool, boolValue {
+                anyEnabled = true
+                break
+            }
+        }
+
+        if anyEnabled {
+            defaults.set(true, forKey: faceIDEnabledKey)
+        }
+        defaults.set(true, forKey: migrationSentinelKey)
     }
 
     // MARK: - Lifecycle hooks
