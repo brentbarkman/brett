@@ -13,10 +13,11 @@ import UIKit
 /// hidden bridge controller approach is fragile: zero-size frames,
 /// responder-chain timing, etc.
 ///
-/// CoreMotion polls the accelerometer directly (~10Hz) and detects
-/// shakes purely from acceleration magnitude — no responder chain, no
-/// view layout, just physics. Works regardless of focus, sheet state,
-/// or what view is on top.
+/// CoreMotion polls the accelerometer directly (5Hz with two-peak
+/// temporal persistence — see `sampleInterval` + `persistenceWindow`)
+/// and detects shakes purely from acceleration magnitude. No responder
+/// chain, no view layout, just physics. Works regardless of focus,
+/// sheet state, or what view is on top.
 extension Notification.Name {
     static let deviceDidShake = Notification.Name("brett.device.shake")
 }

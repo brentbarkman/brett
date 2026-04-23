@@ -28,11 +28,20 @@ struct SyncHealthSettingsView: View {
     @Environment(\.modelContext) private var modelContext
 
     // SyncHealth is a singleton row keyed on "singleton" id, so any sort
-    // works. ConflictLogEntry sorts by resolvedAt (descending) so the most
-    // recent conflicts are surfaced first.
+    // works. ConflictLogEntry.resolvedAt is Optional<Date> which isn't
+    // Comparable in the way @Query's sort: parameter expects, so we
+    // fetch unsorted and order in Swift via `conflictRowsSorted`.
     @Query private var healthRows: [SyncHealth]
     @Query(sort: \MutationQueueEntry.createdAt, order: .forward) private var queueRows: [MutationQueueEntry]
-    @Query(sort: \ConflictLogEntry.resolvedAt, order: .reverse) private var conflictRows: [ConflictLogEntry]
+    @Query private var conflictRowsUnsorted: [ConflictLogEntry]
+
+    private var conflictRows: [ConflictLogEntry] {
+        // Newest first; rows with no resolvedAt (still pending / in-flight
+        // conflicts, rare) sink to the bottom via `.distantPast`.
+        conflictRowsUnsorted.sorted {
+            ($0.resolvedAt ?? .distantPast) > ($1.resolvedAt ?? .distantPast)
+        }
+    }
 
     private var health: SyncHealth? { healthRows.first }
     private var deadRows: [MutationQueueEntry] {

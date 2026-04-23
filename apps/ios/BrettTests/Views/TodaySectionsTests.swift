@@ -121,14 +121,16 @@ struct TodaySectionsTests {
         let ctx = try makeContext()
         let today = Calendar.current.startOfDay(for: Date())
         let early = itemDue(today.addingTimeInterval(3600))
-        early.id = "early"
         let late = itemDue(today.addingTimeInterval(7200))
-        late.id = "late"
         ctx.insert(early)
         ctx.insert(late)
 
+        // Input order is reversed on purpose — bucket() must re-sort by
+        // dueDate ascending. Comparing on dueDate avoids mutating
+        // SwiftData-managed `id` after construction (safer across
+        // @Model macro quirks than explicitly overwriting the UUID).
         let sections = TodaySections.bucket(items: [late, early], reflowKey: 0)
 
-        #expect(sections.today.map(\.id) == ["early", "late"])
+        #expect(sections.today.map(\.dueDate) == [early.dueDate, late.dueDate])
     }
 }
