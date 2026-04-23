@@ -642,20 +642,34 @@ async function registerWebhook(
   }
 }
 
-/** Strip PII from raw Google event before storing. Keep structure for debugging. */
+/**
+ * Strip PII from raw Google event before storing.
+ *
+ * `rawGoogleEvent` is a debugging breadcrumb — the canonical data lives in
+ * typed columns on CalendarEvent. So we only keep fields useful for
+ * troubleshooting sync issues (IDs, timing, statuses) and drop everything
+ * that would leak sensitive content if logs/backups were ever exposed.
+ */
 function scrubRawEvent(event: calendar_v3.Schema$Event): Record<string, unknown> {
-  const { attendees, creator, organizer, description, conferenceData, extendedProperties, ...safe } = event;
   return {
-    ...safe,
-    attendees: attendees?.map((a) => ({
-      responseStatus: a.responseStatus,
-      self: a.self,
-      organizer: a.organizer,
-    })),
-    organizer: organizer ? { self: organizer.self } : undefined,
-    creator: creator ? { self: creator.self } : undefined,
-    // Strip description — may contain sensitive content like dial-in PINs
-    description: description ? "[redacted]" : undefined,
+    id: event.id,
+    iCalUID: event.iCalUID,
+    etag: event.etag,
+    status: event.status,
+    created: event.created,
+    updated: event.updated,
+    start: event.start,
+    end: event.end,
+    recurringEventId: event.recurringEventId,
+    eventType: event.eventType,
+    visibility: event.visibility,
+    transparency: event.transparency,
+    attendeeCount: event.attendees?.length ?? 0,
+    hasLocation: Boolean(event.location),
+    hasDescription: Boolean(event.description),
+    hasConferenceData: Boolean(event.conferenceData),
+    organizerSelf: event.organizer?.self ?? false,
+    creatorSelf: event.creator?.self ?? false,
   };
 }
 

@@ -59,12 +59,17 @@ export async function findSimilarItems(
 ): Promise<SimilarityMatch[]> {
   const { targetEntityType, limit = AI_CONFIG.embedding.searchResultLimit, excludeIds = [] } =
     options;
+  // Cosine distances only make sense within one model's vector space. Pin
+  // every similarity query to the current model so a half-migrated corpus
+  // (old rows from model A, new rows from model B) doesn't return garbage.
+  const currentModel = AI_CONFIG.embedding.documentModel;
 
   // Load the source entity's chunk 0 embedding
   const sourceRows = await prisma.$queryRaw<Array<{ embedding: string }>>`
     SELECT embedding::text AS embedding
     FROM "Embedding"
     WHERE "userId" = ${userId}
+      AND "model" = ${currentModel}
       AND "entityType" = ${entityType}
       AND "entityId" = ${entityId}
       AND "chunkIndex" = 0
@@ -89,6 +94,7 @@ export async function findSimilarItems(
           1 - (embedding <=> ${vectorStr}::vector) AS similarity
         FROM "Embedding"
         WHERE "userId" = ${userId}
+          AND "model" = ${currentModel}
           AND "entityType" = ${targetEntityType}
           AND "entityId" != ALL(${allExcluded})
         ORDER BY "entityId", embedding <=> ${vectorStr}::vector ASC
@@ -104,6 +110,7 @@ export async function findSimilarItems(
           1 - (embedding <=> ${vectorStr}::vector) AS similarity
         FROM "Embedding"
         WHERE "userId" = ${userId}
+          AND "model" = ${currentModel}
           AND "entityId" != ALL(${allExcluded})
         ORDER BY "entityId", embedding <=> ${vectorStr}::vector ASC
       ) sub

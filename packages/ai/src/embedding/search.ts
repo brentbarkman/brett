@@ -272,6 +272,10 @@ export async function vectorSearch(
 
   const queryVector = await provider.embed(query, "query");
   const vectorStr = `[${queryVector.join(",")}]`;
+  // Pin to the current embedding model. Cosine similarity on vectors from
+  // different models is nonsense — the geometry doesn't agree. If a provider
+  // swap leaves old rows in the table, they're silently ignored here.
+  const currentModel = AI_CONFIG.embedding.documentModel;
 
   let rows: Array<{
     entityType: string;
@@ -300,6 +304,7 @@ export async function vectorSearch(
               )) AS similarity
         FROM "Embedding"
         WHERE "userId" = ${userId}
+          AND "model" = ${currentModel}
           AND "entityType" IN (${typeParams})
         ORDER BY "entityType", "entityId", embedding <=> ${vectorStr}::vector ASC
       ) sub
@@ -319,6 +324,7 @@ export async function vectorSearch(
               )) AS similarity
         FROM "Embedding"
         WHERE "userId" = ${userId}
+          AND "model" = ${currentModel}
         ORDER BY "entityType", "entityId", embedding <=> ${vectorStr}::vector ASC
       ) sub
       ORDER BY similarity DESC

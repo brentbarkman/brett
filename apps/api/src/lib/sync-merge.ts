@@ -4,6 +4,20 @@ export interface MergeResult {
   hasChanges: boolean;
 }
 
+/**
+ * List fields the client declared as changed but for which it supplied no
+ * `previousValues[field]` baseline. These are unmergeable — we can't tell
+ * whether the client's edit is ahead of or stale against the server.
+ * Returned so the caller can reject the mutation cleanly instead of silently
+ * treating them as conflicts (server-wins), which historically lost edits.
+ */
+export function findMissingBaselines(
+  changedFields: string[],
+  previousValues: Record<string, unknown>,
+): string[] {
+  return changedFields.filter((field) => !(field in previousValues));
+}
+
 export function fieldLevelMerge(
   currentRecord: Record<string, unknown>,
   changedFields: string[],

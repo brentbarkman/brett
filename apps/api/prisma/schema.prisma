@@ -137,6 +137,9 @@ model List {
   updatedAt  DateTime @updatedAt
 
   @@unique([userId, name])
+  // Sync pull queries lists by (userId, updatedAt > cursor); without this
+  // composite index that query falls back to a seq-scan on the unique index.
+  @@index([userId, updatedAt])
 }
 
 model Item {
@@ -237,6 +240,9 @@ model Attachment {
   updatedAt  DateTime @updatedAt
 
   @@index([itemId])
+  // Used if/when attachments are added to sync pull, and by any direct
+  // per-user attachment listing.
+  @@index([userId, updatedAt])
 }
 
 model ItemLink {
@@ -376,6 +382,8 @@ model CalendarEventNote {
 
   @@unique([calendarEventId, userId])
   @@index([userId])
+  // Sync pull for calendar notes filters by (userId, updatedAt > cursor).
+  @@index([userId, updatedAt])
 }
 
 // ── Granola tables ──
@@ -703,6 +711,8 @@ model Scout {
 
   @@index([userId, status])
   @@index([status, nextRunAt])
+  // Sync pull + tombstone pull for scouts.
+  @@index([userId, updatedAt])
 }
 
 model ScoutRun {
@@ -878,4 +888,19 @@ model DeviceToken {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// Lease-based leader lock for cron jobs. Only one replica at a time holds
+/// a given jobName. Lease renews on each tick; expired leases are reclaimed.
+/// Without this, a second API replica would happily run the same 6-hour
+/// webhook renewal / calendar sync job in parallel, duplicating work and
+/// (more dangerously) racing on syncToken state.
+model CronLock {
+  jobName    String   @id
+  holder     String   // instance id — identifies which process holds the lease
+  acquiredAt DateTime @default(now())
+  expiresAt  DateTime
+  updatedAt  DateTime @updatedAt
+
+  @@index([expiresAt])
 }

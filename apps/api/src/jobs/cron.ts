@@ -4,13 +4,21 @@ import { prisma } from "../lib/prisma.js";
 import { getCalendarClient, watchCalendar, stopWatch } from "../lib/google-calendar.js";
 import { generateId } from "@brett/utils";
 import { createHmac } from "crypto";
+import { withCronLock } from "../lib/cron-lock.js";
 
-let webhookRenewalRunning = false;
-let reconciliationRunning = false;
-let granolaSyncRunning = false;
-let granolaSweepRunning = false;
-let scoutTickRunning = false;
-let newsletterCleanupRunning = false;
+// Per-job lease windows. The lease must outlive the job's actual runtime
+// but should be short enough that a crashed replica's lease expires before
+// the next scheduled tick. All values are conservative upper bounds.
+const LEASE = {
+  webhookRenewal: 30 * 60_000, // 30 min
+  reconciliation: 30 * 60_000,
+  granolaPerEvent: 10 * 60_000,
+  granolaSweep: 20 * 60_000,
+  scoutTick: 10 * 60_000,
+  verificationCleanup: 5 * 60_000,
+  idempotencyCleanup: 5 * 60_000,
+  newsletterCleanup: 5 * 60_000,
+} as const;
 
 export function startCronJobs(): void {
   // SSE heartbeat — every 30 seconds
@@ -25,12 +33,7 @@ export function startCronJobs(): void {
   // Webhook renewal — every 6 hours
   // Renew watches expiring within the next 24 hours
   cron.schedule("0 */6 * * *", async () => {
-    if (webhookRenewalRunning) {
-      console.log("[cron] Webhook renewal already running, skipping");
-      return;
-    }
-    webhookRenewalRunning = true;
-    try {
+    await withCronLock("webhookRenewal", LEASE.webhookRenewal, async () => {
       const cutoff = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const expiring = await prisma.calendarList.findMany({
         where: {
@@ -91,22 +94,13 @@ export function startCronJobs(): void {
           console.error(`[cron] Failed to renew watch for calendar ${cal.id}:`, err);
         }
       }
-    } catch (err) {
-      console.error("[cron] Webhook renewal failed:", err);
-    } finally {
-      webhookRenewalRunning = false;
-    }
+    });
   });
 
   // Periodic reconciliation — every 4 hours
   // Run incremental sync for all connected accounts
   cron.schedule("0 */4 * * *", async () => {
-    if (reconciliationRunning) {
-      console.log("[cron] Reconciliation already running, skipping");
-      return;
-    }
-    reconciliationRunning = true;
-    try {
+    await withCronLock("reconciliation", LEASE.reconciliation, async () => {
       const accounts = await prisma.googleAccount.findMany({
         select: { id: true },
       });
@@ -123,18 +117,12 @@ export function startCronJobs(): void {
           console.error(`[cron] Reconciliation sync failed for account ${account.id}:`, err);
         }
       }
-    } catch (err) {
-      console.error("[cron] Reconciliation sync failed:", err);
-    } finally {
-      reconciliationRunning = false;
-    }
+    });
   });
 
   // Meeting notes: calendar-event-driven sync — every 5 minutes
   cron.schedule("*/5 * * * *", async () => {
-    if (granolaSyncRunning) return;
-    granolaSyncRunning = true;
-    try {
+    await withCronLock("granolaSync", LEASE.granolaPerEvent, async () => {
       const { meetingCoordinator } = await import("../services/meeting-providers/registry.js");
 
       const now = new Date();
@@ -172,18 +160,12 @@ export function startCronJobs(): void {
           console.error(`[cron] Meeting sync failed for event ${event.id}:`, err);
         }
       }
-    } catch (err) {
-      console.error("[cron] Post-meeting sync failed:", err);
-    } finally {
-      granolaSyncRunning = false;
-    }
+    });
   });
 
   // Meeting notes: periodic sweep — every 30 minutes
   cron.schedule("*/30 * * * *", async () => {
-    if (granolaSweepRunning) return;
-    granolaSweepRunning = true;
-    try {
+    await withCronLock("granolaSweep", LEASE.granolaSweep, async () => {
       const { meetingCoordinator } = await import("../services/meeting-providers/registry.js");
       const { isWithinWorkingHours } = await import("../services/granola-sync.js");
 
@@ -217,76 +199,57 @@ export function startCronJobs(): void {
           console.error(`[cron] Meeting sweep failed for ${userId}:`, err);
         }
       }
-    } catch (err) {
-      console.error("[cron] Meeting sweep failed:", err);
-    } finally {
-      granolaSweepRunning = false;
-    }
+    });
   });
 
   // Scout tick — every 5 minutes
   cron.schedule("*/5 * * * *", async () => {
-    if (scoutTickRunning) {
-      console.log("[cron] Scout tick already running, skipping");
-      return;
-    }
-    scoutTickRunning = true;
-    try {
+    await withCronLock("scoutTick", LEASE.scoutTick, async () => {
       const { tickScouts } = await import("../lib/scout-runner.js");
       await tickScouts();
-    } catch (err) {
-      console.error("[cron] Scout tick failed:", err);
-    } finally {
-      scoutTickRunning = false;
-    }
+    });
   });
 
   // Clean up expired Verification records (PKCE verifiers, email tokens, etc.) — every hour
   cron.schedule("0 * * * *", async () => {
-    try {
+    await withCronLock("verificationCleanup", LEASE.verificationCleanup, async () => {
       const { count } = await prisma.verification.deleteMany({
         where: { expiresAt: { lt: new Date() } },
       });
       if (count > 0) {
         console.log(`[cron] Cleaned up ${count} expired verification records`);
       }
-    } catch (err) {
-      console.error("[cron] Verification cleanup failed:", err);
-    }
+    });
   });
 
   // IdempotencyKey cleanup — daily at 3:15am. The sync-push table grows on
-  // every mobile mutation and has no built-in expiry. Keep 30 days to comfortably
-  // outlive client retry windows.
+  // every mobile mutation. 7 days is a generous buffer over the actual client
+  // retry window (a mobile client sends + retries within seconds or minutes)
+  // and is far shorter than the previous 30 days — a device returning after
+  // a full 30 days offline could otherwise see its cached mutation IDs
+  // collide with someone else's keys or, worse, re-apply the same op if the
+  // row had been cleaned up just before it came back online.
   cron.schedule("15 3 * * *", async () => {
-    try {
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await withCronLock("idempotencyCleanup", LEASE.idempotencyCleanup, async () => {
+      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const { count } = await prisma.idempotencyKey.deleteMany({
         where: { createdAt: { lt: cutoff } },
       });
       if (count > 0) {
         console.log(`[cron] Cleaned up ${count} stale idempotency keys`);
       }
-    } catch (err) {
-      console.error("[cron] Idempotency key cleanup failed:", err);
-    }
+    });
   });
 
   // Pending newsletter cleanup — daily at 3am
   cron.schedule("0 3 * * *", async () => {
-    if (newsletterCleanupRunning) return;
-    newsletterCleanupRunning = true;
-    try {
+    await withCronLock("newsletterCleanup", LEASE.newsletterCleanup, async () => {
       const { cleanupExpiredPending } = await import("../lib/newsletter-ingest.js");
       const cleaned = await cleanupExpiredPending();
       if (cleaned > 0) {
         console.log(`[cron] Cleaned up ${cleaned} expired pending newsletters`);
       }
-    } catch (err) {
-      console.error("[cron] Pending newsletter cleanup failed:", err);
-    } finally {
-      newsletterCleanupRunning = false;
-    }
+    });
   });
 
   console.log("[cron] Started: Scout tick (5m)");
