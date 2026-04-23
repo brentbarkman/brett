@@ -131,7 +131,7 @@ final class ItemStore {
 
         enqueueCreate(item)
         save()
-        SyncManager.shared.schedulePushDebounced()
+        ActiveSession.syncManager?.schedulePushDebounced()
         return item
     }
 
@@ -191,7 +191,7 @@ final class ItemStore {
             beforeSnapshot: beforeSnapshot
         )
         save()
-        SyncManager.shared.schedulePushDebounced()
+        ActiveSession.syncManager?.schedulePushDebounced()
     }
 
     /// Toggle the done/active state of an item (common Inbox + Today action).
@@ -217,7 +217,7 @@ final class ItemStore {
 
         enqueueDelete(item, beforeSnapshot: before)
         save()
-        SyncManager.shared.schedulePushDebounced()
+        ActiveSession.syncManager?.schedulePushDebounced()
     }
 
     // MARK: - Bulk mutate

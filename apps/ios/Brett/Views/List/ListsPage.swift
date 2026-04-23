@@ -76,7 +76,7 @@ struct ListsPage: View {
             }
             .scrollIndicators(.hidden)
             .refreshable {
-                try? await SyncManager.shared.pullToRefresh()
+                try? await ActiveSession.syncManager?.pullToRefresh()
                 refreshTick &+= 1
             }
 

@@ -49,9 +49,11 @@ final class ShareIngestor {
     private let failedDirectoryProvider: () -> URL?
 
     /// Invoked after a successful drain run that enqueued new mutations —
-    /// production path triggers `SyncManager.shared.schedulePushDebounced()`
-    /// so the mutation leaves the device promptly; tests pass a no-op to
-    /// avoid exercising the sync manager's network layer.
+    /// production path triggers the active session's
+    /// `schedulePushDebounced()` so the mutation leaves the device promptly.
+    /// No-op when no session is active (nothing to push yet; next sign-in's
+    /// debounced push will flush on its first mutation). Tests pass a no-op
+    /// to avoid exercising the sync manager's network layer.
     private let onMutationsEnqueued: () -> Void
 
     /// Optional user-id override used by tests. When set, `drain()` uses
@@ -65,7 +67,7 @@ final class ShareIngestor {
         auth: AuthManager?,
         queueDirectoryProvider: @escaping () -> URL?,
         failedDirectoryProvider: @escaping () -> URL?,
-        onMutationsEnqueued: @escaping () -> Void = { SyncManager.shared.schedulePushDebounced() }
+        onMutationsEnqueued: @escaping () -> Void = { ActiveSession.syncManager?.schedulePushDebounced() }
     ) {
         self.context = context
         self.authManager = auth

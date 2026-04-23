@@ -1,18 +1,19 @@
 import SwiftUI
 
-/// Tiny inline indicator that reflects `SyncManager.shared.state`.
+/// Tiny inline indicator that reflects `ActiveSession.syncManager.state`.
 ///
 /// States:
-/// - `idle`      → invisible 8x8 dot (kept in layout so other icons don't shift).
-/// - `pushing`   → gold dot with a subtle pulse (local changes → server).
-/// - `pulling`   → cerulean dot with a subtle pulse (server changes → local).
-/// - `error`     → red dot, tappable; opens a sheet with the underlying message.
+/// - `idle` / no session → invisible 8x8 dot (kept in layout so other
+///   icons don't shift when state flips).
+/// - `pushing`           → gold dot with a subtle pulse (local → server).
+/// - `pulling`           → cerulean dot with a subtle pulse (server → local).
+/// - `error`             → red dot, tappable; opens a sheet with the message.
 ///
 /// Mount inside the top bar next to the settings / scouts / search icons.
 struct SyncStatusIndicator: View {
-    /// Bind to the shared singleton by default; tests can inject a different
-    /// instance via the parameterised initialiser.
-    private let syncManager: SyncManager
+    /// Bind to the active session's manager by default; tests inject a
+    /// concrete instance. Optional because no session exists pre-auth.
+    private let syncManager: SyncManager?
 
     /// Toggled when a tappable error is showing and the user taps it.
     @State private var showErrorDetails = false
@@ -20,13 +21,17 @@ struct SyncStatusIndicator: View {
     /// Drives the pulse animation for pushing/pulling states.
     @State private var isPulsing = false
 
-    init(syncManager: SyncManager = .shared) {
+    init(syncManager: SyncManager? = ActiveSession.syncManager) {
         self.syncManager = syncManager
+    }
+
+    private var state: SyncState {
+        syncManager?.state ?? .idle
     }
 
     var body: some View {
         Group {
-            switch syncManager.state {
+            switch state {
             case .idle:
                 dot(color: .clear, isInteractive: false, pulse: false)
 
@@ -42,8 +47,8 @@ struct SyncStatusIndicator: View {
             }
         }
         .frame(width: 12, height: 12, alignment: .center) // 12pt hit target, 8pt dot
-        .animation(.easeInOut(duration: 0.2), value: syncManager.state)
-        .onChange(of: syncManager.state) { _, newValue in
+        .animation(.easeInOut(duration: 0.2), value: state)
+        .onChange(of: state) { _, newValue in
             switch newValue {
             case .pushing, .pulling:
                 isPulsing = true
@@ -54,7 +59,7 @@ struct SyncStatusIndicator: View {
         .alert("Sync error", isPresented: $showErrorDetails) {
             Button("OK", role: .cancel) {}
         } message: {
-            if case .error(let message) = syncManager.state {
+            if case .error(let message) = state {
                 Text(message)
             }
         }
@@ -82,7 +87,7 @@ struct SyncStatusIndicator: View {
     }
 
     private var accessibilityLabel: String {
-        switch syncManager.state {
+        switch state {
         case .idle: return ""
         case .pushing: return "Sync: sending changes"
         case .pulling: return "Sync: receiving changes"

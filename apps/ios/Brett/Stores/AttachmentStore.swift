@@ -94,7 +94,7 @@ final class AttachmentStore {
         // Upload path is handled by the uploader, but we still nudge the
         // sync manager so any other pending mutations (e.g. the parent item's
         // attachment list) flush promptly.
-        SyncManager.shared.schedulePushDebounced()
+        ActiveSession.syncManager?.schedulePushDebounced()
     }
 
     func markFailed(uploadId: String, error: String) {

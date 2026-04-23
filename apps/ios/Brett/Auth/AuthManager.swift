@@ -53,6 +53,9 @@ final class AuthManager {
         // treat it as "not signed in" (no need to surface the error).
         if let stored = try? KeychainStore.readToken() {
             self.token = stored
+            // We don't have a user record yet (`/users/me` hasn't returned),
+            // but we know there's a valid token. `refreshCurrentUser` hydrates
+            // the user and, on success, installs the session.
             Task { await self.refreshCurrentUser() }
         }
     }
@@ -100,15 +103,23 @@ final class AuthManager {
     // MARK: - Sign-out
 
     /// Clears local state and the Keychain entry, then attempts to notify the
-    /// server (best effort). The local clear happens first so a server error
-    /// can't leave the user stuck in a signed-in UI.
+    /// server (best effort). Order is important:
+    ///
+    ///  1. End the active `Session` first. Cancels the SyncManager's tasks
+    ///     (push, pull, poll, debounce) and disconnects SSE so no in-flight
+    ///     network completion can race the wipe below and write old-user
+    ///     rows into the new user's empty store.
+    ///  2. Clear non-data state (token, currentUser, SelectionStore, App
+    ///     Group mirror) so the UI gates back to SignInView.
+    ///  3. Wipe SwiftData. Safe now that no sync task is still running.
+    ///  4. Best-effort server sign-out.
     func signOut() async {
-        // Flip auth state before touching SwiftData so the UI transitions to
-        // the sign-in screen immediately; the wipe happens under a view tree
-        // that's already unmounting the data-bound surfaces.
+        ActiveSession.end()
+
         token = nil
         currentUser = nil
         try? KeychainStore.deleteToken()
+        SelectionStore.shared.clear()
         // Clear the mirrored user-id in the App Group so a pending share
         // from this user can't leak into the next sign-in's account.
         SharedConfig.writeCurrentUserId(nil)
@@ -117,9 +128,7 @@ final class AuthManager {
         // sign in on the same device sees the prior user's items / events /
         // scouts until the next sync lands (and stale sync cursors cause
         // an incremental pull that may never fetch some older rows the new
-        // account actually has). Runs after the auth-state clear so any
-        // view still reading SwiftData during the transition resolves to
-        // an anon state first.
+        // account actually has).
         PersistenceController.shared.wipeAllData()
 
         do {
@@ -154,9 +163,9 @@ final class AuthManager {
         }
     }
 
-    /// Saves the token to Keychain, updates in-memory state, and hydrates the
-    /// user record from /users/me so we have the full profile (timezone,
-    /// assistantName, etc.).
+    /// Saves the token to Keychain, updates in-memory state, hydrates the
+    /// user record from /users/me, and installs a fresh `Session` so the
+    /// mutation queue + sync engine + SSE come alive for this account only.
     private func persist(session: AuthSession) async throws {
         try KeychainStore.writeToken(session.token)
         self.token = session.token
@@ -167,9 +176,22 @@ final class AuthManager {
         // prevents cross-user contamination on account switches.
         SharedConfig.writeCurrentUserId(session.user.id)
 
+        installSession(for: session.user.id)
+
         // Hydrate full user profile. Non-fatal if it fails — we already have
         // a minimal user from the sign-in response.
         await refreshCurrentUser()
+    }
+
+    /// Build and install a fresh `Session`. Called from `persist(session:)`
+    /// and from the keychain-hydrate path in `refreshCurrentUser()` once
+    /// we've confirmed the stored token is valid.
+    private func installSession(for userId: String) {
+        let session = Session(
+            userId: userId,
+            persistence: PersistenceController.shared
+        )
+        ActiveSession.begin(session)
     }
 
     /// Best-effort refresh of `currentUser` via `/users/me`.
@@ -185,12 +207,17 @@ final class AuthManager {
     func refreshCurrentUser() async {
         guard token != nil else { return }
         do {
-            self.currentUser = try await endpoints.getMe()
+            let me = try await endpoints.getMe()
+            self.currentUser = me
             // Mirror to the App Group so the share extension sees the
             // right user-id even on the "already signed in at launch"
             // path (where `persist(session:)` wasn't called this run).
-            if let userId = self.currentUser?.id {
-                SharedConfig.writeCurrentUserId(userId)
+            SharedConfig.writeCurrentUserId(me.id)
+            // Install a session if this is the keychain-hydrate path
+            // (persist() already installed one on fresh sign-in; the call
+            // is idempotent because ActiveSession.begin replaces any prior).
+            if ActiveSession.userId != me.id {
+                installSession(for: me.id)
             }
         } catch APIError.unauthorized {
             // Token is no good — fall back to the login screen.

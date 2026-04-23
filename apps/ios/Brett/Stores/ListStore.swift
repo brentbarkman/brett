@@ -68,7 +68,7 @@ final class ListStore {
         context.insert(list)
         enqueueCreate(list)
         save()
-        SyncManager.shared.schedulePushDebounced()
+        ActiveSession.syncManager?.schedulePushDebounced()
         return list
     }
 
@@ -113,7 +113,7 @@ final class ListStore {
             beforeSnapshot: beforeSnapshot
         )
         save()
-        SyncManager.shared.schedulePushDebounced()
+        ActiveSession.syncManager?.schedulePushDebounced()
     }
 
     func archive(id: String) {

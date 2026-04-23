@@ -43,15 +43,16 @@ enum SyncState: Equatable, Sendable {
 ///  - On app launch, reset any mutations left in `in_flight` status from a
 ///    prior crash so they get retried.
 ///  - Run a best-effort 30s background poll while the app is in foreground.
+///
+/// Lifecycle: owned by `Session` (see `ActiveSession.swift`). A new instance
+/// is created on sign-in; `stop()` is called deterministically on sign-out
+/// before the underlying SwiftData store is wiped. Call sites reach the
+/// active instance via `ActiveSession.syncManager` — when nil, callers
+/// silently no-op (mutations still persist via the store and flush on the
+/// next session's first push).
 @MainActor
 @Observable
 final class SyncManager {
-    // MARK: - Shared instance
-
-    /// Default singleton wired to the real engines. Tests should construct a
-    /// fresh instance with their own doubles rather than touching `.shared`.
-    static let shared = SyncManager()
-
     // MARK: - Observable state
 
     private(set) var state: SyncState = .idle
@@ -92,19 +93,6 @@ final class SyncManager {
     private var hasStarted = false
 
     // MARK: - Init
-
-    /// Production initialiser — wires to real engines and the shared network
-    /// monitor. Tests should use the parameterised initialiser instead.
-    convenience init() {
-        self.init(
-            pushEngine: DefaultPushEngine.shared,
-            pullEngine: DefaultPullEngine.shared,
-            networkMonitor: NetworkMonitor.shared,
-            modelContext: PersistenceController.shared.mainContext,
-            pollInterval: 30,
-            debounceInterval: 1.0
-        )
-    }
 
     init(
         pushEngine: PushEngineProtocol,
@@ -357,35 +345,8 @@ enum SyncError: LocalizedError {
     }
 }
 
-// MARK: - Default engine adapters
+// Engine adapters moved to `ActiveSession.swift` where they're constructed
+// per-session. Keeping them out of this file prevents the temptation to
+// bring back a process-wide singleton — `SyncManager` must always be
+// created with explicit engine instances bound to the current session.
 
-/// Singleton adapter so the production `PushEngine` satisfies
-/// `PushEngineProtocol` without forcing the real engine to care about the
-/// protocol itself. Tests inject a `MockPushEngine` directly.
-@MainActor
-private final class DefaultPushEngine: PushEngineProtocol {
-    static let shared = DefaultPushEngine()
-
-    private let real: PushEngine
-
-    private init() {
-        let context = PersistenceController.shared.mainContext
-        self.real = PushEngine(mutationQueue: MutationQueue(context: context))
-    }
-
-    func push() async throws -> PushEngine.PushOutcome {
-        try await real.push()
-    }
-}
-
-/// Singleton adapter — see `DefaultPushEngine`.
-@MainActor
-private final class DefaultPullEngine: PullEngineProtocol {
-    static let shared = DefaultPullEngine()
-
-    private let real = PullEngine()
-
-    func pull() async throws -> PullEngine.PullOutcome {
-        try await real.pull()
-    }
-}

@@ -131,7 +131,7 @@ struct TodayPage: View {
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "scroll")
             .refreshable {
-                try? await SyncManager.shared.pullToRefresh()
+                try? await ActiveSession.syncManager?.pullToRefresh()
                 await briefingStore.fetch()
             }
             .onChange(of: SelectionStore.shared.lastCreatedItemId) { _, newId in
