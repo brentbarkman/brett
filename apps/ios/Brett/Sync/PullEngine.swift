@@ -126,6 +126,16 @@ final class PullEngine {
             var pendingUpsertsThisRound: [String: Int] = [:]
             var pendingDeletesThisRound: [String: Int] = [:]
 
+            // Yield every `yieldBatch` rows so a big pull doesn't lock up
+            // the main actor. SyncEntityMapper.upsert is @MainActor, and on
+            // a 500-item page each row takes ~200-500µs — which sums to
+            // ~100-250ms of contiguous main-thread work without yields.
+            // `Task.yield()` lets UI gestures, @Query refreshes, and other
+            // main-actor tasks interleave. `isSyncing` in SyncManager
+            // prevents another pull from racing in.
+            let yieldBatch = 100
+            var sinceYield = 0
+
             for table in SyncProtocol.tables {
                 guard let slice = response.changes[table] else { continue }
 
@@ -138,6 +148,11 @@ final class PullEngine {
                         respectLocalPending: true
                     )
                     inserted += 1
+                    sinceYield += 1
+                    if sinceYield >= yieldBatch {
+                        sinceYield = 0
+                        await Task.yield()
+                    }
                 }
 
                 var deleted = 0
@@ -148,6 +163,11 @@ final class PullEngine {
                         context: context
                     )
                     deleted += 1
+                    sinceYield += 1
+                    if sinceYield >= yieldBatch {
+                        sinceYield = 0
+                        await Task.yield()
+                    }
                 }
 
                 pendingUpsertsThisRound[table] = inserted

@@ -220,8 +220,12 @@ struct InboxPage: View {
                         .padding(.vertical, 4)
                 }
 
-                InboxItemRow(
+                TaskRow(
                     item: item,
+                    listName: nil,
+                    allowSwipeRight: false,
+                    allowSwipeLeft: false,
+                    allowDrag: false,
                     isSelectMode: isSelectMode,
                     isSelected: selectedIDs.contains(item.id),
                     onToggle: {
@@ -242,6 +246,11 @@ struct InboxPage: View {
                 )
                 .padding(.leading, isNewsletter ? 6 : 0)
             }
+            // Inbox owns the row-level swipe actions — TaskRow's default
+            // Today/Lists swipe set (schedule leading, delete/archive
+            // trailing) is turned off above via the allowSwipe* = false
+            // flags. Replaced with Inbox's triage-flavoured actions:
+            // Select (enter multi-select) + Delete.
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button {
                     enterSelectMode(selecting: item.id)
@@ -303,129 +312,3 @@ struct InboxPage: View {
     }
 }
 
-// MARK: - Row
-
-/// Inbox-specific row bound directly to `Item`. Lives here rather than in
-/// `Shared/TaskRow.swift` because `TaskRow` is still tied to `MockItem` and is
-/// shared with Today/Calendar during the mobile migration. Keeping the Inbox
-/// row local avoids a cross-page ripple and lets us add the selection-mode
-/// affordance without touching the mock-driven rows.
-private struct InboxItemRow: View {
-    let item: Item
-    let isSelectMode: Bool
-    let isSelected: Bool
-    let onToggle: () -> Void
-    let onSelect: () -> Void
-
-    var body: some View {
-        Button {
-            onSelect()
-        } label: {
-            HStack(spacing: 12) {
-                if isSelectMode {
-                    selectionCircle
-                } else {
-                    leadingGlyph
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title)
-                        .font(BrettTypography.taskTitle)
-                        .foregroundStyle(BrettColors.textCardTitle)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    HStack(spacing: 6) {
-                        Text("Captured \(capturedAgo)")
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.textMeta)
-
-                        if let domain = item.contentDomain {
-                            Text("·")
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textGhost)
-                            Text(domain)
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.cerulean.opacity(0.6))
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.title), captured \(capturedAgo)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var leadingGlyph: some View {
-        ZStack {
-            Circle()
-                .fill(Color.black.opacity(0.20))
-                .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                }
-                .frame(width: 30, height: 30)
-
-            Image(systemName: item.itemType == .content ? "doc.text" : "bolt.fill")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(
-                    item.itemType == .content
-                        ? BrettColors.cerulean.opacity(0.7)
-                        : BrettColors.gold.opacity(0.7)
-                )
-        }
-        .frame(width: 34, height: 34)
-        .contentShape(Rectangle())
-        .highPriorityGesture(
-            TapGesture().onEnded {
-                onToggle()
-            }
-        )
-    }
-
-    private var selectionCircle: some View {
-        ZStack {
-            Circle()
-                .strokeBorder(
-                    isSelected ? BrettColors.gold : Color.white.opacity(0.25),
-                    lineWidth: 1.5
-                )
-                .background {
-                    Circle().fill(
-                        isSelected
-                            ? BrettColors.gold.opacity(0.25)
-                            : Color.clear
-                    )
-                }
-                .frame(width: 22, height: 22)
-
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(BrettColors.gold)
-            }
-        }
-        .frame(width: 34, height: 34)
-        .contentShape(Rectangle())
-        .highPriorityGesture(
-            TapGesture().onEnded { onToggle() }
-        )
-        .transition(.scale.combined(with: .opacity))
-    }
-
-    private var capturedAgo: String {
-        let interval = Date().timeIntervalSince(item.createdAt)
-        let hours = Int(interval / 3_600)
-        let days = hours / 24
-        if days >= 1 { return days == 1 ? "yesterday" : "\(days)d ago" }
-        if hours >= 1 { return "\(hours)h ago" }
-        let minutes = max(1, Int(interval / 60))
-        return "\(minutes)m ago"
-    }
-}
