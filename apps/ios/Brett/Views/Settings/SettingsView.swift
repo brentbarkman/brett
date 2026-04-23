@@ -144,6 +144,14 @@ struct SettingsView: View {
 
             BrettSettingsDivider()
             navRow(
+                tab: .syncHealth,
+                icon: "arrow.triangle.2.circlepath",
+                label: "Sync Health",
+                detail: "Queue + conflict log"
+            )
+
+            BrettSettingsDivider()
+            navRow(
                 tab: .updates,
                 icon: "arrow.down.circle",
                 label: "About",
@@ -225,6 +233,8 @@ struct SettingsView: View {
             AccountSettingsView(store: profileStore)
         case .updates:
             UpdatesSettingsView()
+        case .syncHealth:
+            SyncHealthSettingsView()
         }
     }
 
@@ -329,6 +339,7 @@ enum SettingsTab: Hashable {
     case background
     case account
     case updates
+    case syncHealth
 
     /// Matches the desktop's URL hash fragments (`#profile`, `#calendar`, etc.)
     /// so we can share deep-link targets between platforms.
@@ -343,6 +354,7 @@ enum SettingsTab: Hashable {
         case "background", "wallpaper": self = .background
         case "account": self = .account
         case "updates", "about": self = .updates
+        case "sync", "sync-health", "synchealth": self = .syncHealth
         default: return nil
         }
     }

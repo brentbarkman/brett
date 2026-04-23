@@ -76,8 +76,31 @@ extension APIClient {
         // One-shot session per upload so the delegate forwards *our* progress
         // closure. URLSessionDelegate is retained strongly by the session, so
         // we `finishTasksAndInvalidate()` after the upload completes.
+        //
+        // Config choice: `.default` (not `.ephemeral`) so the session has the
+        // URL cache + connection pooling the OS uses for regular transfers,
+        // then tuned for the large-file upload case:
+        //
+        //   - waitsForConnectivity = true: if the user drops off Wi-Fi
+        //     mid-upload we pause and resume instead of failing instantly.
+        //   - timeoutIntervalForResource = 600s: a 20 MB video on 3G can take
+        //     multiple minutes; the default 7-day resource timeout is fine
+        //     but we cap explicitly so a stuck upload eventually gives up.
+        //   - allowsExpensiveNetworkAccess / allowsConstrainedNetworkAccess
+        //     = true: users sharing a file after a Low Data Mode toggle
+        //     should still succeed.
+        //
+        // TODO(WAVE-B-follow-up): migrate to a true background URLSession
+        // (URLSessionConfiguration.background(withIdentifier:)) so uploads
+        // survive app termination. Requires plumbing through the app
+        // delegate's `application(_:handleEventsForBackgroundURLSession:)`
+        // handler plus persisting in-flight uploadTask state across launches.
         let delegate = UploadProgressDelegate(progress: progress)
-        let config = URLSessionConfiguration.ephemeral
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForResource = 600
+        config.allowsExpensiveNetworkAccess = true
+        config.allowsConstrainedNetworkAccess = true
         // Piggy-back on the shared-session's protocol classes so tests using
         // MockURLProtocol on the APIClient-owned session still get intercepted.
         config.protocolClasses = APIClient.testProtocolClasses ?? config.protocolClasses
