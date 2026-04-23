@@ -185,11 +185,20 @@ export const sync = new Hono<AuthEnv>()
       const cursor = cursors[table] ?? null;
 
       // Build base where clause for active records.
-      // Most models have a direct userId column. ScoutFinding is the exception:
-      // ownership goes through scout.userId (a relation filter).
+      // Most models have a direct userId column. ScoutFinding now has one
+      // too (nullable during the rollout — release A of the two-release
+      // flow that ends with NOT NULL). Prefer the direct column when
+      // present so the query hits the new `(userId, updatedAt)` composite
+      // index, but fall back to the relation filter for any legacy row
+      // whose `userId` isn't backfilled yet. Release B drops the OR.
       const ownershipFilter: any =
         table === "scout_findings"
-          ? { scout: { userId: user.id } }
+          ? {
+              OR: [
+                { userId: user.id },
+                { userId: null, scout: { userId: user.id } },
+              ],
+            }
           : { userId: user.id };
 
       // Normal query — soft-delete extension auto-filters deletedAt IS NULL

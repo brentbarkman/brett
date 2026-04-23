@@ -1031,6 +1031,7 @@ export async function runScout(scoutId: string): Promise<void> {
         data: {
           scoutId: scout.id,
           scoutRunId: run.id,
+          userId: scout.userId,
           type: finding.type,
           title: finding.title,
           description: finding.description,
@@ -1420,6 +1421,7 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
         data: {
           scoutId: scout.id,
           scoutRunId: run.id,
+          userId: scout.userId,
           type: finding.type,
           title: finding.title,
           description: finding.description,

@@ -747,6 +747,14 @@ model ScoutFinding {
   scout          Scout       @relation(fields: [scoutId], references: [id], onDelete: Cascade)
   scoutRunId     String
   scoutRun       ScoutRun    @relation(fields: [scoutRunId], references: [id], onDelete: Cascade)
+  // Denormalized owner. Ownership already flows through scout.userId, but
+  // having it on the row directly (a) lets sync pull hit a composite
+  // `(userId, updatedAt)` index without a join through Scout, and (b) is
+  // a defense-in-depth scoping key if any future query forgets the
+  // `scout: { userId }` filter. Nullable for now so existing rows don't
+  // block the deploy; NOT NULL flip happens in a follow-up release after
+  // backfill + every call site is writing it.
+  userId         String?
   deletedAt      DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -765,6 +773,7 @@ model ScoutFinding {
   feedbackAt     DateTime?
 
   @@index([scoutId, createdAt])
+  @@index([userId, updatedAt])
 }
 
 model ScoutActivity {
