@@ -8,6 +8,12 @@ struct BrettApp: App {
     /// so SignInView (and anything else that needs sign-out) can read it.
     @State private var authManager: AuthManager
 
+    /// Bridges iOS's UIApplicationDelegate callbacks into SwiftUI. Today
+    /// its only job is `handleEventsForBackgroundURLSession` so the
+    /// `BackgroundUploadService` can finish attachment transfers that
+    /// completed while the app was suspended.
+    @UIApplicationDelegateAdaptor(BrettAppDelegate.self) private var appDelegate
+
     init() {
         #if DEBUG
         // UI-test launch-arg interception: run BEFORE AuthManager/APIClient

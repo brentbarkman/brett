@@ -50,7 +50,8 @@ struct AttachmentRetryTests {
                 apiClient: apiClient,
                 attachmentStore: attachmentStore,
                 persistence: persistence,
-                stagingDirectory: stagingDir
+                stagingDirectory: stagingDir,
+                useBackgroundSession: false
             )
 
             let src = tempRoot.appendingPathComponent("source.bin")

@@ -52,7 +52,12 @@ struct AttachmentUploaderTests {
                 apiClient: apiClient,
                 attachmentStore: attachmentStore,
                 persistence: persistence,
-                stagingDirectory: stagingDir
+                stagingDirectory: stagingDir,
+                // Tests drive HTTP through MockURLProtocol on the
+                // APIClient's URLSession. The production background
+                // URLSession (owned by BackgroundUploadService) bypasses
+                // that, so opt into the legacy in-process path here.
+                useBackgroundSession: false
             )
 
             // Write a source file with deterministic bytes.
