@@ -1,4 +1,4 @@
-import { authClient, getToken } from "../auth/auth-client";
+import { authClient, clearStoredToken, getToken } from "../auth/auth-client";
 import { recordFailedApiCall } from "../lib/diagnostics";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
@@ -43,6 +43,14 @@ export async function apiFetch<T = unknown>(
       init?.method || "GET",
       res.status,
     );
+    // The stored bearer is dead (revoked or expired). Clearing it flips
+    // AuthGuard to LoginPage on the next render instead of letting every
+    // subsequent request hammer the API with an invalid token. Skip for
+    // auth routes themselves so a wrong-password 401 doesn't nuke the
+    // session before the user sees the error message.
+    if (res.status === 401 && !path.startsWith("/api/auth/")) {
+      await clearStoredToken().catch(() => {});
+    }
     const body = await res.json().catch(() => ({}));
     throw new Error((body as any).message || (body as any).error || `API error ${res.status}`);
   }

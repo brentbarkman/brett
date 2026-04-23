@@ -1,8 +1,15 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getToken } from "../auth/auth-client";
+import { clearStoredToken, getToken } from "../auth/auth-client";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
+// Upper bound on reconnection attempts. 20 tries with exponential backoff
+// capped at 30s totals roughly 9 minutes — plenty for transient network
+// blips, short enough to stop draining the battery if the server is just
+// gone. When we stop, the user can always re-trigger by reloading / signing
+// in again; a silent forever-retry loop was worse UX.
+const MAX_RETRIES = 20;
 
 type EventHandler = (data: any) => void;
 const handlers = new Map<string, Set<EventHandler>>();
@@ -41,8 +48,21 @@ export function useEventStream(): void {
     // app. Keep this effect with empty deps.
     let cancelled = false;
     let retryDelay = 1000;
+    let retryCount = 0;
     let eventSource: EventSource | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRetry = () => {
+      if (cancelled) return;
+      if (retryCount >= MAX_RETRIES) {
+        console.warn("[sse] giving up after", retryCount, "retries");
+        return;
+      }
+      retryCount += 1;
+      const delay = retryDelay;
+      retryDelay = Math.min(delay * 2, 30000);
+      retryTimer = setTimeout(connect, delay);
+    };
 
     const connect = async () => {
       if (cancelled) return;
@@ -57,13 +77,18 @@ export function useEventStream(): void {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         });
+        // If the bearer itself is rejected, retrying with the same token
+        // just burns cycles. Clear stored token so the auth layer can
+        // surface the sign-in flow instead of quietly looping.
+        if (res.status === 401 || res.status === 403) {
+          await clearStoredToken();
+          return;
+        }
         if (!res.ok) throw new Error(`ticket fetch failed: ${res.status}`);
         const { ticket } = await res.json();
         ticketParam = `ticket=${encodeURIComponent(ticket)}`;
       } catch {
-        const delay = retryDelay;
-        retryDelay = Math.min(delay * 2, 30000);
-        retryTimer = setTimeout(connect, delay);
+        scheduleRetry();
         return;
       }
 
@@ -75,6 +100,7 @@ export function useEventStream(): void {
 
       es.onopen = () => {
         retryDelay = 1000;
+        retryCount = 0;
         qc.invalidateQueries({ queryKey: ["calendar-events"] });
         qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
       };
@@ -83,9 +109,7 @@ export function useEventStream(): void {
         es.close();
         eventSource = null;
         if (cancelled) return;
-        const delay = retryDelay;
-        retryDelay = Math.min(delay * 2, 30000);
-        retryTimer = setTimeout(connect, delay);
+        scheduleRetry();
       };
 
       const calendarHandler = (e: MessageEvent) => {

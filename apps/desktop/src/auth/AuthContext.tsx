@@ -3,7 +3,9 @@ import React, {
   useContext,
 } from "react";
 import type { AuthUser } from "@brett/types";
+import type { QueryClient } from "@tanstack/react-query";
 import { authClient, clearStoredToken, startGoogleOAuth } from "./auth-client";
+import { diagnostics } from "../lib/diagnostics";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -20,6 +22,15 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+// The QueryClient is registered by main.tsx on module init. signOut() uses
+// it to wipe all user-scoped cached data on the way out so a subsequent
+// sign-in as a different account can't briefly render the previous user's
+// lists / inbox / calendar before refetches complete.
+let registeredQueryClient: QueryClient | null = null;
+export function setQueryClient(qc: QueryClient): void {
+  registeredQueryClient = qc;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: sessionData, isPending: loading, refetch } =
@@ -61,6 +72,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     await authClient.signOut();
     await clearStoredToken();
+    // Wipe in-memory state that outlives the AuthGuard unmount — the query
+    // cache (so user A's data can't flash on user B's sign-in) and the
+    // diagnostics ring buffer (which would otherwise attach one user's
+    // recent failed API calls to another user's next feedback submission).
+    registeredQueryClient?.clear();
+    diagnostics.clear();
   };
 
   return (
