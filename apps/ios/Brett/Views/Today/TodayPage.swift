@@ -462,102 +462,10 @@ struct TodayPage: View {
     }
 }
 
-// MARK: - Section bucketing
-
-/// Value type carrying the bucketed sections for the Today page.
-///
-/// Keeping the bucketing logic off the view makes it trivially testable in
-/// previews with fixture items (see the #Preview at the bottom of this file).
-struct TodaySections {
-    let overdue: [Item]
-    let today: [Item]
-    let thisWeek: [Item]
-    let nextWeek: [Item]
-    let doneToday: [Item]
-
-    var activeCount: Int {
-        overdue.count + today.count + thisWeek.count + nextWeek.count
-    }
-
-    var hasDoneToday: Bool { !doneToday.isEmpty }
-
-    var isEveryActiveSectionEmpty: Bool { activeCount == 0 }
-
-    /// Bucket items into Overdue / Today / This Week / Next Week / Done Today
-    /// based on local-calendar date math. `reflowKey` is unused here but
-    /// participates in the computed identity so SwiftUI re-derives the
-    /// sections when the parent bumps it (debounced completion cascade).
-    /// `pendingDoneIDs` lists items the user just marked done — we keep
-    /// them in their original active section until the debounce expires
-    /// so the user can keep tapping nearby rows without the list jumping.
-    static func bucket(
-        items: [Item],
-        reflowKey: Int,
-        pendingDoneIDs: Set<String> = []
-    ) -> TodaySections {
-        _ = reflowKey // force re-derivation on change; see toggle() in the parent
-        let calendar = Calendar.current
-        let now = Date()
-        let startOfToday = calendar.startOfDay(for: now)
-        let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday.addingTimeInterval(86_400)
-
-        // End of this week = next Sunday midnight local time.
-        let weekday = calendar.component(.weekday, from: now)
-        let daysUntilEndOfWeek = max(0, 8 - weekday) // Sunday = 1, Saturday = 7
-        let endOfThisWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday) ?? endOfToday
-        let endOfNextWeek = calendar.date(byAdding: .day, value: 7, to: endOfThisWeek) ?? endOfThisWeek.addingTimeInterval(7 * 86_400)
-
-        var overdue: [Item] = []
-        var today: [Item] = []
-        var thisWeek: [Item] = []
-        var nextWeek: [Item] = []
-        var doneToday: [Item] = []
-
-        for item in items {
-            if item.itemStatus == .archived { continue }
-
-            // If this item is being held in its previous section, override
-            // its effective status. The TaskRow still reads `isCompleted`
-            // from the live model so the checkbox + strikethrough still
-            // show as done — only the section assignment is delayed.
-            let effectiveStatus: ItemStatus = pendingDoneIDs.contains(item.id) ? .active : item.itemStatus
-
-            if effectiveStatus == .done {
-                if let completed = item.completedAt,
-                   completed >= startOfToday && completed < endOfToday {
-                    doneToday.append(item)
-                }
-                continue
-            }
-
-            // Active tasks only from here on out.
-            if effectiveStatus != .active { continue }
-            guard let due = item.dueDate else { continue }
-
-            if due < startOfToday {
-                overdue.append(item)
-            } else if due < endOfToday {
-                today.append(item)
-            } else if due < endOfThisWeek {
-                thisWeek.append(item)
-            } else if due < endOfNextWeek {
-                nextWeek.append(item)
-            }
-        }
-
-        return TodaySections(
-            overdue: overdue.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            today: today.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            thisWeek: thisWeek.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            nextWeek: nextWeek.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            doneToday: doneToday.sorted {
-                ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
-            }
-        )
-    }
-}
-
 // MARK: - Preview
+//
+// The `TodaySections` bucketing logic lives in `TodaySections.swift` so it
+// can be unit-tested without this view's SwiftUI dependencies.
 
 #Preview("Today — with fixture items") {
     let preview = PersistenceController.makePreview()
