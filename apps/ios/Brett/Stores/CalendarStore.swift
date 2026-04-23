@@ -19,24 +19,38 @@ final class CalendarStore {
 
     // MARK: - Events (read-only)
 
-    func fetchEvents(startDate: Date, endDate: Date) -> [CalendarEvent] {
+    /// Events that overlap the window `[startDate, endDate)` for the given
+    /// user. The overlap predicate (`startTime < endDate AND endTime >
+    /// startDate`) runs in SQLite — previously this fetched every row and
+    /// filtered in Swift, which was a perf cliff on accounts with thousands
+    /// of historical events. `userId` scopes the query so a prior account's
+    /// events never surface during an account switch.
+    func fetchEvents(userId: String?, startDate: Date, endDate: Date) -> [CalendarEvent] {
         var descriptor = FetchDescriptor<CalendarEvent>(
             sortBy: [SortDescriptor(\.startTime)]
         )
-        descriptor.predicate = #Predicate { event in
-            event.deletedAt == nil
+        if let userId {
+            descriptor.predicate = #Predicate { event in
+                event.deletedAt == nil
+                    && event.userId == userId
+                    && event.startTime < endDate
+                    && event.endTime > startDate
+            }
+        } else {
+            descriptor.predicate = #Predicate { event in
+                event.deletedAt == nil
+                    && event.startTime < endDate
+                    && event.endTime > startDate
+            }
         }
-        let events = (try? context.fetch(descriptor)) ?? []
-        return events.filter { event in
-            event.startTime < endDate && event.endTime > startDate
-        }
+        return fetch(descriptor)
     }
 
     func fetchById(_ id: String) -> CalendarEvent? {
         var descriptor = FetchDescriptor<CalendarEvent>()
         descriptor.predicate = #Predicate { $0.id == id }
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return fetch(descriptor).first
     }
 
     // MARK: - Notes (read/write)
@@ -47,7 +61,7 @@ final class CalendarStore {
             note.calendarEventId == eventId && note.deletedAt == nil
         }
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return fetch(descriptor).first
     }
 
     /// Upsert a note's content for the given event. Enqueues CREATE or UPDATE.
@@ -91,8 +105,8 @@ final class CalendarStore {
             "calendarEventId": eventId,
             "userId": userId,
             "content": content,
-            "createdAt": note.createdAt.iso8601String(),
-            "updatedAt": note.updatedAt.iso8601String(),
+            "createdAt": note.createdAt,
+            "updatedAt": note.updatedAt,
         ]
         let entry = MutationQueueEntry(
             entityType: "calendar_event_note",
@@ -109,7 +123,22 @@ final class CalendarStore {
         return note
     }
 
+    // MARK: - Internals
+
+    private func fetch<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> [T] {
+        do {
+            return try context.fetch(descriptor)
+        } catch {
+            BrettLog.store.error("CalendarStore fetch failed: \(String(describing: error), privacy: .public)")
+            return []
+        }
+    }
+
     private func save() {
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            BrettLog.store.error("CalendarStore save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 }

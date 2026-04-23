@@ -43,15 +43,22 @@ final class ScoutStore {
     // MARK: - Legacy SwiftData readers (kept so existing callers compile)
 
     /// Legacy read-through: returns SwiftData-backed rows for any code that
-    /// still reads from the local store. Prefer the API-backed methods below
-    /// for new views.
-    func fetchScouts(includeArchived: Bool = false) -> [Scout] {
+    /// still reads from the local store. `userId` scopes to the active
+    /// account so cached rows from a prior session don't surface after an
+    /// account switch. Prefer the API-backed methods below for new views.
+    func fetchScouts(userId: String? = nil, includeArchived: Bool = false) -> [Scout] {
         guard let context else { return [] }
         var descriptor = FetchDescriptor<Scout>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
-        descriptor.predicate = #Predicate { $0.deletedAt == nil }
-        let rows = (try? context.fetch(descriptor)) ?? []
+        if let userId {
+            descriptor.predicate = #Predicate { scout in
+                scout.deletedAt == nil && scout.userId == userId
+            }
+        } else {
+            descriptor.predicate = #Predicate { $0.deletedAt == nil }
+        }
+        let rows = fetch(descriptor)
         if includeArchived { return rows }
         return rows.filter { $0.status != ScoutStatus.archived.rawValue }
     }
@@ -61,7 +68,7 @@ final class ScoutStore {
         var descriptor = FetchDescriptor<Scout>()
         descriptor.predicate = #Predicate { $0.id == id }
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return fetch(descriptor).first
     }
 
     /// Legacy local-only findings read (pre-API). New UI should call
@@ -74,7 +81,7 @@ final class ScoutStore {
         descriptor.predicate = #Predicate { finding in
             finding.scoutId == scoutId && finding.deletedAt == nil
         }
-        return (try? context.fetch(descriptor)) ?? []
+        return fetch(descriptor)
     }
 
     // MARK: - API-backed reads
@@ -167,7 +174,7 @@ final class ScoutStore {
         scouts.removeAll { $0.id == id }
         if let context, let row = fetchScout(id: id) {
             context.delete(row)
-            try? context.save()
+            saveContext(context)
         }
     }
 
@@ -201,7 +208,7 @@ final class ScoutStore {
     }
 
     /// Upsert a batch of DTOs into the SwiftData cache. Best-effort — any
-    /// failure is logged in DEBUG builds and swallowed.
+    /// failure is logged and swallowed.
     private func upsertLocal(_ dtos: [APIClient.ScoutDTO]) {
         guard let context else { return }
         for dto in dtos {
@@ -238,6 +245,26 @@ final class ScoutStore {
                 context.insert(row)
             }
         }
-        try? context.save()
+        saveContext(context)
+    }
+
+    // MARK: - Internals
+
+    private func fetch<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> [T] {
+        guard let context else { return [] }
+        do {
+            return try context.fetch(descriptor)
+        } catch {
+            BrettLog.store.error("ScoutStore fetch failed: \(String(describing: error), privacy: .public)")
+            return []
+        }
+    }
+
+    private func saveContext(_ context: ModelContext) {
+        do {
+            try context.save()
+        } catch {
+            BrettLog.store.error("ScoutStore save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 }

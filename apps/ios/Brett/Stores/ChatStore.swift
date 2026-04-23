@@ -325,8 +325,12 @@ final class ChatStore {
 
         // UserId: we can lift it from UserProfile if one is present.
         var userId = ""
-        if let profile = (try? context.fetch(FetchDescriptor<UserProfile>()))?.first {
-            userId = profile.id
+        do {
+            if let profile = try context.fetch(FetchDescriptor<UserProfile>()).first {
+                userId = profile.id
+            }
+        } catch {
+            BrettLog.store.error("ChatStore profile fetch failed: \(String(describing: error), privacy: .public)")
         }
 
         let message = BrettMessage(
@@ -339,7 +343,11 @@ final class ChatStore {
             updatedAt: Date()
         )
         context.insert(message)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            BrettLog.store.error("ChatStore persistAssistant save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// Drain an `URLSession.AsyncBytes` sequence into a `Data` buffer.

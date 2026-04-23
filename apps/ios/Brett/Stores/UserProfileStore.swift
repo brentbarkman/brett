@@ -22,7 +22,12 @@ final class UserProfileStore {
     var current: UserProfile? {
         var descriptor = FetchDescriptor<UserProfile>()
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        do {
+            return try context.fetch(descriptor).first
+        } catch {
+            BrettLog.store.error("UserProfileStore fetch failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
     /// Replace the cached profile with fresh values.
@@ -64,13 +69,21 @@ final class UserProfileStore {
 
         profile.updatedAt = Date()
 
-        try? context.save()
+        save()
     }
 
     func clear() {
         guard let existing = current else { return }
         context.delete(existing)
-        try? context.save()
+        save()
+    }
+
+    private func save() {
+        do {
+            try context.save()
+        } catch {
+            BrettLog.store.error("UserProfileStore save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// Fetch `/users/me` and hydrate the local cache.

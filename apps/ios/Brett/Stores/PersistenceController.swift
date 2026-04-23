@@ -130,9 +130,12 @@ final class PersistenceController {
         do {
             try context.save()
         } catch {
-            #if DEBUG
-            print("[PersistenceController] wipeAllData: save failed — \(error)")
-            #endif
+            // wipeAllData runs as part of sign-out. A silent failure here
+            // used to mean the next user's SwiftData still contained the
+            // previous user's rows — exactly the multi-user data-leak
+            // scenario CLAUDE.md forbids. Surface the error so it shows up
+            // in sysdiagnose and any future observability hook picks it up.
+            BrettLog.store.error("PersistenceController wipeAllData save failed: \(String(describing: error), privacy: .public)")
         }
     }
 
