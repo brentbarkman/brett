@@ -53,18 +53,33 @@ final class PersistenceController {
             return
         }
 
-        // Migration or schema mismatch — wipe and retry. Dev-only policy; safe because
-        // data is recoverable by re-pulling from the server on next sync.
-        #if DEBUG
-        print("[PersistenceController] schema load failed — resetting SwiftData store")
-        #endif
+        // Schema mismatch (most often after a model change between builds).
+        // We wipe the on-disk store and retry so the next app launch starts
+        // clean. This blocks the main thread — the call runs inside the
+        // synchronous @main initializer before the first frame renders, so
+        // a slow wipe flashes a black launch screen a bit longer. Kept
+        // synchronous intentionally: proper async recovery needs a
+        // loading-splash UI that we haven't wired yet.
+        //
+        // Migrations on real user data will need this replaced with a
+        // proper SchemaMigrationPlan before v1 ships broadly — dropping
+        // the user's local mirror isn't OK when they have queued
+        // mutations that haven't pushed yet. For now the engineering
+        // cost/reward ratio argues for the log-loud-wipe approach since
+        // the fallback only fires on developer-machine schema drift.
+        BrettLog.app.error("PersistenceController schema load failed — wiping on-disk store and retrying")
 
         Self.wipeOnDiskStore()
 
         do {
             self.container = try ModelContainer(for: schema, configurations: [configuration])
         } catch {
-            fatalError("[PersistenceController] unable to create ModelContainer after reset: \(error)")
+            // Hard fatal: the container is required for any SwiftUI view
+            // to bind to @Query, so there's no sensible recovery if the
+            // second attempt also fails. At least surface the underlying
+            // error in the crash log instead of silently swallowing it.
+            BrettLog.app.error("PersistenceController post-wipe retry failed: \(String(describing: error), privacy: .public)")
+            fatalError("PersistenceController unable to create ModelContainer after reset: \(error)")
         }
     }
 
