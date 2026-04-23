@@ -73,8 +73,10 @@ aiConfig.get("/config", async (c) => {
 });
 
 // POST /ai/config — Add/update a provider key (validates before saving)
-// Rate limited: max 5 per minute
-aiConfig.post("/config", rateLimiter(5), async (c) => {
+// Rate limited aggressively: validateApiKey() makes upstream calls to
+// Anthropic/OpenAI/Google, so this is the brute-force surface for a leaked
+// bearer token trying to enumerate valid third-party keys.
+aiConfig.post("/config", rateLimiter(3), async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
   const { provider, apiKey } = body as {

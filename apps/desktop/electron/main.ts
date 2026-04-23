@@ -7,6 +7,31 @@ import Store from "electron-store";
 import { scanThings3, readThings3 } from "./things3";
 import { initAutoUpdater, quitAndInstall, isUpdateReady, getDownloadedVersion, setAutoInstallOnQuit, checkForUpdatesNow } from "./updater";
 
+/**
+ * Only allow `shell.openExternal` to open http(s) URLs. Without this a
+ * malicious link in rendered content (pasted in chat, from a Scout finding,
+ * embedded in a newsletter) could trigger `javascript:`, `file://`, or an
+ * arbitrary protocol handler when clicked.
+ */
+function isSafeExternalUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function openExternalSafe(rawUrl: string): void {
+  if (isSafeExternalUrl(rawUrl)) {
+    shell.openExternal(rawUrl).catch((err) => {
+      console.error("[main] shell.openExternal failed:", err);
+    });
+  } else {
+    console.warn("[main] refusing to open non-http(s) URL:", rawUrl);
+  }
+}
+
 // #3: Load API URL from main process config — never accept from renderer
 // Reads from api-config.json generated at build time, falls back to env var
 function getApiURL(): string {
@@ -158,6 +183,12 @@ ipcMain.handle("get-system-info", () => {
 ipcMain.handle("capture-screenshot", async () => {
   const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
   if (!win) throw new Error("No available window");
+  // Close DevTools before capturing so we never accidentally include the
+  // Network tab (which shows bearer tokens on outgoing requests) in a
+  // feedback screenshot.
+  if (win.webContents.isDevToolsOpened()) {
+    win.webContents.closeDevTools();
+  }
   const image = await win.webContents.capturePage();
   // Resize to max 1280px wide to limit payload size
   const size = image.getSize();
@@ -221,12 +252,22 @@ ipcMain.handle("start-google-oauth", () => {
   return new Promise<string>((resolve, reject) => {
     const state = crypto.randomBytes(32).toString("hex");
     let settled = false;
+    // Track live sockets so we can destroy them on teardown — server.close()
+    // only stops new connections; existing keep-alives can linger and hold
+    // the ephemeral port, which matters if the user retries OAuth rapidly.
+    const activeSockets = new Set<import("net").Socket>();
 
     function settle() {
       if (!settled) {
         settled = true;
         oauthInProgress = false;
       }
+    }
+
+    function shutdownServer() {
+      for (const sock of activeSockets) sock.destroy();
+      activeSockets.clear();
+      server.close();
     }
 
     const server = http.createServer((req, res) => {
@@ -268,13 +309,18 @@ ipcMain.handle("start-google-oauth", () => {
       `);
 
       settle();
-      server.close();
+      shutdownServer();
 
       // Focus the app window
       const win = BrowserWindow.getAllWindows()[0];
       if (win) win.focus();
 
       resolve(token);
+    });
+
+    server.on("connection", (socket) => {
+      activeSockets.add(socket);
+      socket.on("close", () => activeSockets.delete(socket));
     });
 
     // Listen on random port on localhost only
@@ -288,14 +334,23 @@ ipcMain.handle("start-google-oauth", () => {
 
       const port = address.port;
       const oauthURL = `${API_URL}/api/auth/desktop/google?port=${port}&state=${state}`;
-      shell.openExternal(oauthURL);
+      // Defensive: if API_URL ever turns up blank or malformed (bad build
+      // config, env-var poisoning), fail loudly rather than handing a
+      // junk URL to the OS handler.
+      if (!isSafeExternalUrl(oauthURL)) {
+        settle();
+        shutdownServer();
+        reject(new Error("OAuth URL is not a valid http(s) URL — API_URL may be misconfigured"));
+        return;
+      }
+      openExternalSafe(oauthURL);
     });
 
     // #10: Timeout after 2 minutes (reduced from 5)
     setTimeout(() => {
       if (!settled) {
         settle();
-        server.close();
+        shutdownServer();
         reject(new Error("OAuth timed out"));
       }
     }, 2 * 60 * 1000);
@@ -326,9 +381,14 @@ function createWindow() {
     trafficLightPosition: { x: 20, y: 18 },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
+      // Defense-in-depth — these are Electron defaults today, but pinning
+      // them means a future Electron version that changes a default can't
+      // silently weaken the sandbox.
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
 
@@ -342,13 +402,13 @@ function createWindow() {
   win.webContents.on("will-navigate", (event, url) => {
     if (!allowedOrigins.some((origin) => url.startsWith(origin))) {
       event.preventDefault();
-      shell.openExternal(url);
+      openExternalSafe(url);
     }
   });
 
   // #9: External links (target=_blank) open in system browser, not new Electron window
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    openExternalSafe(url);
     return { action: "deny" };
   });
 
@@ -377,15 +437,35 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(fullPath).toString());
   });
 
-  // In production, override the relaxed dev CSP with a strict policy
+  // In production, override the relaxed dev CSP with a strict policy.
+  // Pin connect-src/media-src to the exact API host rather than
+  // `*.railway.app` / `*.brentbarkman.com` — a subdomain takeover on
+  // either zone would otherwise let an attacker receive XHR / SSE traffic
+  // from the app. img-src keeps a general `https:` because user-content
+  // images (OG thumbnails, link previews) come from arbitrary hosts.
   if (!isDev) {
+    let apiOrigin = "";
+    try {
+      apiOrigin = new URL(API_URL).origin;
+    } catch {
+      apiOrigin = "";
+    }
+    const apiHost = apiOrigin ? ` ${apiOrigin}` : "";
+    const csp = [
+      "default-src 'self' app:",
+      "script-src 'self' app:",
+      "style-src 'self' app: 'unsafe-inline'",
+      "img-src 'self' app: data: https:",
+      `media-src 'self' app:${apiHost}`,
+      `connect-src 'self' app:${apiHost}`,
+      "font-src 'self' app: data:",
+      "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://open.spotify.com https://embed.podcasts.apple.com https://player.vimeo.com",
+    ].join("; ") + ";";
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          "Content-Security-Policy": [
-            "default-src 'self' app:; script-src 'self' app:; style-src 'self' app: 'unsafe-inline'; img-src 'self' app: data: https:; media-src 'self' app: https://*.railway.app https://*.brentbarkman.com; connect-src 'self' app: https://*.railway.app https://*.brentbarkman.com; font-src 'self' app: data:; frame-src https://www.youtube.com https://open.spotify.com https://embed.podcasts.apple.com https://*.railway.app;"
-          ],
+          "Content-Security-Policy": [csp],
         },
       });
     });

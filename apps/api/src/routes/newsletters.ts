@@ -18,7 +18,37 @@ const MAX_BODY_SIZE = 2 * 1024 * 1024; // 2 MB
 
 const webhookRouter = new Hono();
 
-webhookRouter.post("/email/ingest/:secret", async (c) => {
+/**
+ * Extract the secret from either:
+ *  - Authorization: Basic <base64(user:pass)>   (preferred — Postmark's
+ *    inbound webhook URL accepts `https://user:pass@host/...` and rewrites
+ *    it to this header, keeping the secret out of proxy logs and referrer
+ *    chains), or
+ *  - the `:secret` path param (legacy; kept for back-compat during rollover).
+ *
+ * The password half of Basic creds is the shared secret. The username is
+ * ignored — Postmark requires one, but we don't use it.
+ */
+function extractIngestSecret(c: {
+  req: {
+    header: (name: string) => string | undefined;
+    param: (name: string) => string;
+  };
+}): string {
+  const auth = c.req.header("authorization") || "";
+  if (auth.toLowerCase().startsWith("basic ")) {
+    try {
+      const decoded = Buffer.from(auth.slice(6).trim(), "base64").toString("utf-8");
+      const colonIdx = decoded.indexOf(":");
+      if (colonIdx !== -1) return decoded.slice(colonIdx + 1);
+    } catch {
+      // fall through to path param
+    }
+  }
+  return c.req.param("secret") || "";
+}
+
+async function handleNewsletterIngest(c: any) {
   // 1. Validate secret
   const expected = process.env.NEWSLETTER_INGEST_SECRET;
   if (!expected) {
@@ -26,7 +56,7 @@ webhookRouter.post("/email/ingest/:secret", async (c) => {
     return c.json({ error: "Server misconfigured" }, 500);
   }
 
-  const provided = c.req.param("secret");
+  const provided = extractIngestSecret(c);
   if (!verifyIngestSecret(provided, expected)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
@@ -124,7 +154,17 @@ webhookRouter.post("/email/ingest/:secret", async (c) => {
     console.error("[newsletter-webhook] DB error:", err);
     return c.json({ error: "Internal error" }, 500);
   }
-});
+}
+
+// Preferred path — Postmark's Inbound Webhook URL can embed Basic Auth
+// credentials (`https://user:pass@host/webhooks/email/ingest`). Postmark
+// rewrites them to an `Authorization: Basic …` header, keeping the shared
+// secret out of URL paths, referrer headers, and proxy access logs.
+webhookRouter.post("/email/ingest", handleNewsletterIngest);
+
+// Legacy path — secret in URL. Retained so existing Postmark configs keep
+// working during rollover. Safe to remove once all webhooks use Basic Auth.
+webhookRouter.post("/email/ingest/:secret", handleNewsletterIngest);
 
 // ── Sender Management Router (authed) ──
 

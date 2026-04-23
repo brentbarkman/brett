@@ -32,10 +32,19 @@ export const devices = new Hono<AuthEnv>()
     const existing = await prisma.deviceToken.findUnique({ where: { token } });
 
     if (existing) {
-      // Update existing token — update platform and appVersion
+      // Refuse to reassign a token that's registered to another user.
+      // Without this check any authenticated user could claim any known
+      // device token by re-registering it, hijacking that device's push
+      // notifications.
+      if (existing.userId !== user.id) {
+        return c.json(
+          { error: "Token already registered to a different account" },
+          409,
+        );
+      }
       const updated = await prisma.deviceToken.update({
         where: { token },
-        data: { platform, appVersion, userId: user.id },
+        data: { platform, appVersion },
       });
       return c.json(updated, 200);
     }
