@@ -21,8 +21,23 @@ struct ListsPage: View {
         context: PersistenceController.shared.mainContext
     )
 
-    /// Bumped on mutations so the list re-reads.
-    @State private var refreshTick: Int = 0
+    /// Live reactive reads. @Query broadcasts SwiftData mutations so the
+    /// view rebuilds automatically on create/update/archive without any
+    /// manual re-render nudge. (The previous `refreshTick` counter
+    /// existed because these reads went through imperative store
+    /// fetches; switching to @Query makes it redundant.)
+    @Query(
+        filter: #Predicate<ItemList> {
+            $0.deletedAt == nil && $0.archivedAt == nil
+        },
+        sort: \ItemList.sortOrder
+    ) private var listsAnyUser: [ItemList]
+
+    @Query(
+        filter: #Predicate<Item> { $0.deletedAt == nil },
+        sort: \Item.createdAt,
+        order: .reverse
+    ) private var itemsAnyUser: [Item]
 
     /// Used by the empty-vs-skeleton gate, same pattern as the other pages.
     @Query private var syncHealthRows: [SyncHealth]
@@ -32,22 +47,17 @@ struct ListsPage: View {
     }
 
     private var lists: [ItemList] {
-        _ = refreshTick
-        return listStore.fetchAll(
-            userId: authManager.currentUser?.id,
-            includeArchived: false
-        )
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return listsAnyUser.filter { $0.userId == uid }
     }
 
-    /// Counts bucketed by `listId` in a single pass over every item, so
-    /// rendering N list cards triggers one SwiftData fetch instead of N.
-    /// `ItemStore.fetchAll()` reads every non-deleted row and filters in
-    /// memory, which is why this must not run per card. See
-    /// `ListCounts.groupByListId` for the grouping rules.
+    /// Counts bucketed by `listId` in a single pass. Rendering N list
+    /// cards triggers one pass over `itemsAnyUser` instead of N SwiftData
+    /// fetches (the prior imperative pattern).
     private var countsByList: [String: ListCounts.Entry] {
-        _ = refreshTick
-        let items = itemStore.fetchAll(userId: authManager.currentUser?.id)
-        return ListCounts.groupByListId(items)
+        guard let uid = authManager.currentUser?.id else { return [:] }
+        let userItems = itemsAnyUser.filter { $0.userId == uid }
+        return ListCounts.groupByListId(userItems)
     }
 
     var body: some View {
@@ -77,7 +87,6 @@ struct ListsPage: View {
             .scrollIndicators(.hidden)
             .refreshable {
                 try? await ActiveSession.syncManager?.pullToRefresh()
-                refreshTick &+= 1
             }
 
             fab
@@ -220,7 +229,6 @@ struct ListsPage: View {
         guard let userId = authManager.currentUser?.id else { return }
         HapticManager.light()
         _ = listStore.create(userId: userId, name: "Untitled")
-        refreshTick &+= 1
     }
 
 }

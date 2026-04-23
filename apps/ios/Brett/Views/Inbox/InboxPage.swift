@@ -29,22 +29,38 @@ struct InboxPage: View {
     @State private var triageMode: TriageMode? = nil
     @State private var showTriage: Bool = false
 
-    /// Cheap re-render nudge — bump after mutations so observation picks up
-    /// store changes immediately. (SwiftData publishes on its own too; this
-    /// just avoids sheet-scroll edge cases.)
-    @State private var refreshTick: Int = 0
-
     /// Used to decide skeleton-vs-empty-state when the inbox has zero
     /// items. See TodayPage for the same pattern.
     @Query private var syncHealthRows: [SyncHealth]
+
+    /// Live reactive read of inbox items. SwiftData broadcasts mutations
+    /// to @Query consumers automatically, which is the whole point — the
+    /// previous `refreshTick` anti-pattern existed only because the page
+    /// fetched imperatively via `itemStore.fetchInbox()` and needed a
+    /// manual poke to re-render. Predicate mirrors ItemStore.fetchInbox:
+    /// no list, no due date, active status.
+    ///
+    /// Inbox-status is interpolated as a literal string because
+    /// #Predicate can't call `ItemStatus.active.rawValue` at macro
+    /// expansion time. If the enum's raw values ever drift, update both.
+    @Query(
+        filter: #Predicate<Item> {
+            $0.deletedAt == nil
+                && $0.listId == nil
+                && $0.dueDate == nil
+                && $0.status == "active"
+        },
+        sort: \Item.createdAt,
+        order: .reverse
+    ) private var inboxItemsAnyUser: [Item]
 
     private var hasCompletedInitialSync: Bool {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
     }
 
     private var allInboxItems: [Item] {
-        _ = refreshTick
-        return itemStore.fetchInbox(userId: authManager.currentUser?.id)
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return inboxItemsAnyUser.filter { $0.userId == uid }
     }
 
     private var filteredItems: [Item] {
@@ -122,7 +138,6 @@ struct InboxPage: View {
                     isPresented: $showTriage,
                     onCommit: {
                         exitSelectMode()
-                        refreshTick += 1
                     }
                 )
                 .presentationDetents([.medium, .large])
@@ -215,7 +230,6 @@ struct InboxPage: View {
                         } else {
                             HapticManager.light()
                             itemStore.toggleStatus(id: item.id)
-                            refreshTick += 1
                         }
                     },
                     onSelect: {
@@ -239,7 +253,6 @@ struct InboxPage: View {
                 Button(role: .destructive) {
                     HapticManager.heavy()
                     itemStore.delete(id: item.id)
-                    refreshTick += 1
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -287,7 +300,6 @@ struct InboxPage: View {
         guard !ids.isEmpty else { return }
         itemStore.bulkDelete(ids: ids)
         exitSelectMode()
-        refreshTick += 1
     }
 }
 
