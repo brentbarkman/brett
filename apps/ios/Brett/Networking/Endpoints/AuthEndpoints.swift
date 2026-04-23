@@ -156,6 +156,29 @@ struct AuthEndpoints {
         try await client.request(AuthUser.self, path: "/users/me", method: "GET")
     }
 
+    /// Session status check. Hits `/api/auth/ios/session` — a lightweight
+    /// endpoint that returns only the session's `expiresAt` plus a
+    /// minimal user stub. Used by `AuthManager.refreshIfStale` for the
+    /// foreground keepalive. Also transparently slides the session's
+    /// expiration forward under better-auth's sliding-session behaviour.
+    ///
+    /// Throws `APIError.unauthorized` on 401, which `AuthManager`
+    /// treats as "sign out and return to login."
+    func getSession() async throws -> SessionStatus {
+        try await client.request(SessionStatus.self, path: "/api/auth/ios/session", method: "GET")
+    }
+
+    struct SessionStatus: Decodable, Sendable {
+        let token: String
+        let expiresAt: Date
+        let user: SessionUser
+
+        struct SessionUser: Decodable, Sendable {
+            let id: String
+            let email: String
+        }
+    }
+
     // MARK: - Private helpers
 
     /// Shared implementation for both sign-in and sign-up. POSTs the given

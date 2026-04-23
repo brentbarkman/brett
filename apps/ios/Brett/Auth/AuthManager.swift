@@ -272,22 +272,49 @@ final class AuthManager {
     }
 
     /// Foreground-keepalive: re-validate the session if it's been a while
-    /// since we last hit `/users/me`. Throttled at one ping per five
-    /// minutes so rapid app-switches don't generate traffic. Token-refresh
-    /// (rotating the bearer for a fresh one) is a server concern — when
-    /// `POST /api/auth/token/refresh` ships, swap this call to hit that
-    /// endpoint and persist the new token to the Keychain.
+    /// since the last check. Throttled at one ping per five minutes so
+    /// rapid app-switches don't generate traffic.
     ///
-    /// The main practical benefit today is detecting zombie tokens
-    /// (revoked server-side, app reinstalled with stale keychain entry,
-    /// user signed out from another device) and gracefully signing out
-    /// instead of showing an app full of data that silently fails to sync.
+    /// Uses `/api/auth/ios/session` — a lightweight endpoint that returns
+    /// just `{ token, expiresAt, user: { id, email } }` rather than the
+    /// full profile payload of `/users/me`. The main practical benefit
+    /// is detecting zombie tokens (revoked server-side, user signed out
+    /// from another device, keychain that survived uninstall of a
+    /// different-env install) and gracefully signing out instead of
+    /// letting every subsequent request silently 401.
+    ///
+    /// better-auth's session-extension is automatic — hitting the
+    /// endpoint with a valid bearer updates `session.updatedAt` if we're
+    /// within the `updateAge` window, which slides the expiration
+    /// forward. So this call doubles as both a health check AND a
+    /// session refresh.
     func refreshIfStale(threshold: TimeInterval = 300) async {
         guard token != nil else { return }
         if let last = lastRefreshedAt, Date().timeIntervalSince(last) < threshold {
             return
         }
-        await refreshCurrentUser()
+
+        do {
+            let session = try await endpoints.getSession()
+            self.lastRefreshedAt = Date()
+            // Session token rotation isn't exposed by better-auth's bearer
+            // plugin today (the token string stays the same across
+            // extensions). If that changes in a future endpoint contract,
+            // persist the new token here.
+            if session.user.id != currentUser?.id {
+                // User id changed under us — sign out defensively. This
+                // shouldn't happen but covers the case where the server
+                // reassigned the token to a different account.
+                BrettLog.auth.error("Session endpoint returned different user id — signing out")
+                await signOut()
+            }
+        } catch APIError.unauthorized {
+            BrettLog.auth.info("Session invalid — signing out")
+            await signOut()
+        } catch {
+            // Network / server blip — leave state in place. The next
+            // keepalive will retry.
+        }
     }
 
     /// Clears a previously-surfaced error message. Called by the UI when the
