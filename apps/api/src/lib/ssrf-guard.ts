@@ -81,10 +81,12 @@ export interface SafeFetchOptions {
   timeoutMs?: number;
   maxSizeBytes?: number;
   maxRedirects?: number;
+  /** Extra request headers. Overrides defaults (e.g. `User-Agent`) on case-insensitive match. */
+  headers?: Record<string, string>;
 }
 
 export async function safeFetch(url: string, options: SafeFetchOptions = {}): Promise<Response> {
-  const { timeoutMs = 10_000, maxSizeBytes = 5 * 1024 * 1024, maxRedirects = 5 } = options;
+  const { timeoutMs = 10_000, maxSizeBytes = 5 * 1024 * 1024, maxRedirects = 5, headers: extraHeaders } = options;
   const parsed = new URL(url);
   if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(`Blocked protocol: ${parsed.protocol}`);
 
@@ -96,15 +98,26 @@ export async function safeFetch(url: string, options: SafeFetchOptions = {}): Pr
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
+  // Merge default headers with caller overrides. Case-insensitive: if the caller
+  // passes "user-agent", strip the default "User-Agent" so there's a single value.
+  const mergedHeaders: Record<string, string> = {
+    "User-Agent": "Brett/1.0 (+https://brett.app)",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  };
+  if (extraHeaders) {
+    const extraKeysLower = new Set(Object.keys(extraHeaders).map(k => k.toLowerCase()));
+    for (const key of Object.keys(mergedHeaders)) {
+      if (extraKeysLower.has(key.toLowerCase())) delete mergedHeaders[key];
+    }
+    Object.assign(mergedHeaders, extraHeaders);
+  }
+
   try {
     const response = await undiciFetch(url, {
       signal: controller.signal,
       redirect: "manual", // Handle redirects manually to re-check IPs
       dispatcher: ssrfAgent,
-      headers: {
-        "User-Agent": "Brett/1.0 (+https://brett.app)",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
+      headers: mergedHeaders,
     });
 
     // Handle redirects manually — re-validate IP on each hop by routing
