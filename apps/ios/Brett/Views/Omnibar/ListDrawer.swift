@@ -35,12 +35,26 @@ struct ListDrawer: View {
     @State private var colorPickerListId: String? = nil
     @FocusState private var nameFieldFocused: Bool
 
+    /// Lists scoped to the signed-in user. Defense-in-depth: sign-out
+    /// wipes SwiftData and SyncManager is session-owned, but a late async
+    /// task from a prior session could briefly land a row here, so every
+    /// list-bearing surface filters by userId.
+    private var userLists: [ItemList] {
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return allLists.filter { $0.userId == uid }
+    }
+
+    private var userItems: [Item] {
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return allItems.filter { $0.userId == uid }
+    }
+
     private var activeLists: [PillModel] {
-        pillModels(from: allLists.filter { $0.archivedAt == nil })
+        pillModels(from: userLists.filter { $0.archivedAt == nil })
     }
 
     private var archivedLists: [PillModel] {
-        pillModels(from: allLists.filter { $0.archivedAt != nil })
+        pillModels(from: userLists.filter { $0.archivedAt != nil })
     }
 
     var body: some View {
@@ -287,7 +301,7 @@ struct ListDrawer: View {
 
     private func pillModels(from lists: [ItemList]) -> [PillModel] {
         lists.map { list in
-            let count = allItems.filter { $0.listId == list.id && $0.itemStatus != .done }.count
+            let count = userItems.filter { $0.listId == list.id && $0.itemStatus != .done }.count
             return PillModel(
                 id: list.id,
                 name: list.name,

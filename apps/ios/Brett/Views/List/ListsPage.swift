@@ -33,7 +33,10 @@ struct ListsPage: View {
 
     private var lists: [ItemList] {
         _ = refreshTick
-        return listStore.fetchAll(includeArchived: false)
+        return listStore.fetchAll(
+            userId: authManager.currentUser?.id,
+            includeArchived: false
+        )
     }
 
     /// Counts bucketed by `listId` in a single pass over every item, so
@@ -43,7 +46,7 @@ struct ListsPage: View {
     /// `ListCounts.groupByListId` for the grouping rules.
     private var countsByList: [String: ListCounts.Entry] {
         _ = refreshTick
-        let items = itemStore.fetchAll()
+        let items = itemStore.fetchAll(userId: authManager.currentUser?.id)
         return ListCounts.groupByListId(items)
     }
 

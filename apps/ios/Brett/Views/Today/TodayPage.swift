@@ -3,12 +3,17 @@ import SwiftUI
 
 /// Today page — the home screen of the app.
 ///
-/// Wave 3 rewire: now sourced from `ItemStore` (real SwiftData) rather than
-/// `MockStore`. The legacy `store: MockStore` parameter is kept for
-/// backwards-compat with `MainContainer` until MockStore is deprecated in a
-/// follow-up wave — we ignore everything on it except `selectedTaskId`, which
-/// still drives the TaskDetail sheet until that view is migrated too.
+/// Data flows through `ItemStore` (SwiftData mutations + sync queue) + live
+/// `@Query` for reactive reads. The @Query predicates filter by the current
+/// user via computed `userItems` / `userLists` / `userEvents` — during a
+/// rapid account switch the sign-out wipe + session-owned SyncManager make
+/// cross-user rows nearly impossible, but this is defense-in-depth so that
+/// a late-arriving async task from a prior session can never render.
 struct TodayPage: View {
+    // MARK: - Auth scope
+
+    @Environment(AuthManager.self) private var authManager
+
     // MARK: - Real stores
 
     @State private var itemStore = ItemStore(
@@ -43,6 +48,25 @@ struct TodayPage: View {
         filter: #Predicate<CalendarEvent> { $0.deletedAt == nil },
         sort: \CalendarEvent.startTime
     ) private var allEvents: [CalendarEvent]
+
+    /// Auth-scoped views of the reactive reads. `@Query` can't take a
+    /// dynamic predicate without an init-based Query + view split, so the
+    /// userId filter lives here. Wave E can push this into the predicate
+    /// for perf once we're comfortable with a TodayPageBody subview.
+    private var userItems: [Item] {
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return allItems.filter { $0.userId == uid }
+    }
+
+    private var userLists: [ItemList] {
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return allLists.filter { $0.userId == uid }
+    }
+
+    private var userEvents: [CalendarEvent] {
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return allEvents.filter { $0.userId == uid }
+    }
 
     /// 0 or 1 row. Used to distinguish "empty because the user has
     /// nothing" from "empty because the first sync hasn't landed yet" —
@@ -165,7 +189,7 @@ struct TodayPage: View {
 
     private var sections: TodaySections {
         TodaySections.bucket(
-            items: allItems,
+            items: userItems,
             reflowKey: reflowSnapshotKey,
             pendingDoneIDs: pendingDoneIDs
         )
@@ -176,7 +200,7 @@ struct TodayPage: View {
     /// row does an O(1) dictionary read instead of triggering a rebuild of
     /// the full `[listId: name]` map per lookup.
     private func makeListNameProvider() -> (Item) -> String? {
-        let index = Dictionary(uniqueKeysWithValues: allLists.map { ($0.id, $0.name) })
+        let index = Dictionary(uniqueKeysWithValues: userLists.map { ($0.id, $0.name) })
         return { item in
             guard let listId = item.listId else { return nil }
             return index[listId]
@@ -311,7 +335,7 @@ struct TodayPage: View {
         let total = s.activeCount + s.doneToday.count
         let done = s.doneToday.count
         let base = "\(done) of \(total) done"
-        guard !allEvents.isEmpty else { return base }
+        guard !userEvents.isEmpty else { return base }
         let meetingCount = events.count
         let suffix = meetingCount == 1 ? "meeting" : "meetings"
         return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: events)))"
@@ -332,11 +356,11 @@ struct TodayPage: View {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        return allEvents.filter { $0.startTime >= start && $0.startTime < end }
+        return userEvents.filter { $0.startTime >= start && $0.startTime < end }
     }
 
     private var nextUpcomingEvent: CalendarEvent? {
-        allEvents.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
+        userEvents.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
     }
 
     /// Only surface the card when the next event is genuinely soon. We use a

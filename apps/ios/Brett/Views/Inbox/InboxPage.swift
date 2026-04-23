@@ -44,7 +44,7 @@ struct InboxPage: View {
 
     private var allInboxItems: [Item] {
         _ = refreshTick
-        return itemStore.fetchInbox()
+        return itemStore.fetchInbox(userId: authManager.currentUser?.id)
     }
 
     private var filteredItems: [Item] {
