@@ -45,10 +45,27 @@ final class SSEClient {
     /// called; flips back to true once a new connection succeeds.
     private(set) var isConnected: Bool = false
 
-    /// How many reconnect attempts we've made since the last successful
-    /// connection. 0 while the current connection is healthy. Exposed for
-    /// tests and for a future diagnostic UI.
+    /// How many reconnect attempts we've made since the last healthy
+    /// connection. 0 while the current connection is healthy OR after a
+    /// connection that was open for at least `sustainedHealthyThreshold`
+    /// seconds. Exposed for tests and for a future diagnostic UI.
     private(set) var reconnectAttempt: Int = 0
+
+    /// Timestamp when `openAndStream` last transitioned to isConnected =
+    /// true. Used by the reconnect loop to decide whether a stream was
+    /// "healthy enough" to reset the backoff counter on disconnect. Without
+    /// this, a server that opens 200 then immediately closes would keep
+    /// bumping the counter and back off to 30s even though the HTTP layer
+    /// is fine — the problem is server-side and not something the client
+    /// should punish itself over.
+    private var lastHealthyConnectAt: Date?
+
+    /// A stream must stay open at least this long before we consider the
+    /// last session "healthy" enough to zero the backoff counter. Five
+    /// minutes is long enough to survive brief server hiccups but short
+    /// enough that a user on a stable connection returns to fresh-state
+    /// cadence quickly. Exposed via init for tests.
+    private let sustainedHealthyThreshold: TimeInterval
 
     // MARK: - Event stream
 
@@ -86,12 +103,14 @@ final class SSEClient {
         apiClient: APIClient = .shared,
         session: URLSession = .shared,
         maxBackoffSeconds: TimeInterval = 30,
-        backoffMultiplier: TimeInterval = 1
+        backoffMultiplier: TimeInterval = 1,
+        sustainedHealthyThreshold: TimeInterval = 300
     ) {
         self.apiClient = apiClient
         self.session = session
         self.maxBackoffSeconds = maxBackoffSeconds
         self.backoffMultiplier = backoffMultiplier
+        self.sustainedHealthyThreshold = sustainedHealthyThreshold
 
         var continuation: AsyncStream<SSEEvent>.Continuation!
         self.events = AsyncStream(
@@ -129,34 +148,40 @@ final class SSEClient {
     // MARK: - Loop
 
     /// Outer loop — keeps trying to (re)connect until the task is cancelled.
-    /// Backoff grows exponentially on each consecutive failure, resets to
-    /// zero after a successful connect.
+    ///
+    /// Backoff strategy: each reconnect bumps `reconnectAttempt`, which
+    /// doubles the delay. The counter is zeroed only after a stream that
+    /// stayed open for at least `sustainedHealthyThreshold` (default 5
+    /// minutes) — so a server that opens 200 then immediately closes can't
+    /// trick the client into "looking healthy" and reset the backoff on
+    /// every broken-but-connected reconnect. This is the audit's Wave B.5
+    /// fix: before this, a long-idle healthy stream that dropped would
+    /// immediately attempt a fast reconnect, good — but a flaky server
+    /// that kept opening+closing within seconds would also reset, so the
+    /// client hammered it with 1s-intervals forever.
     private func runConnectLoop() async {
         while !Task.isCancelled {
             do {
                 try await openAndStream()
-                // `openAndStream` returns when the stream closes cleanly. We
-                // still want to reconnect — servers can drop idle streams.
-                // Skip the attempt bump when the task has been cancelled
-                // between the `.bytes(for:)` network completing and the loop
-                // regaining control — otherwise a `disconnect()` that races
-                // with in-flight bytes can leave `reconnectAttempt == 1`
-                // after teardown instead of 0.
+                // `openAndStream` returns when the stream closes cleanly.
+                // If the stream was up long enough to be considered
+                // "healthy," treat this as a fresh server-initiated
+                // drop — zero the backoff so the next open starts at 1s.
+                // Otherwise preserve the counter: whatever made the last
+                // connection unhealthy is probably still happening.
                 if !Task.isCancelled {
-                    reconnectAttempt += 1
+                    bumpOrReset()
                 }
             } catch is CancellationError {
                 break
             } catch {
-                // Any other error means the connection failed or dropped
-                // mid-stream. Same race-guard as above — honour a cancel
-                // that arrived while the error was propagating up.
                 if !Task.isCancelled {
-                    reconnectAttempt += 1
+                    bumpOrReset()
                 }
             }
 
             isConnected = false
+            lastHealthyConnectAt = nil
             if Task.isCancelled { break }
 
             let delay = backoffDelay(for: reconnectAttempt)
@@ -168,7 +193,26 @@ final class SSEClient {
         // told to finish. Reset state so a future `connect()` starts fresh.
         loopTask = nil
         isConnected = false
+        lastHealthyConnectAt = nil
         reconnectAttempt = 0
+    }
+
+    /// Called exactly once per stream close (clean or errored). Decides
+    /// whether to reset-then-bump (healthy connection) or bump-only
+    /// (unhealthy).
+    private func bumpOrReset() {
+        let wasSustainedHealthy: Bool
+        if let openedAt = lastHealthyConnectAt {
+            wasSustainedHealthy = Date().timeIntervalSince(openedAt) >= sustainedHealthyThreshold
+        } else {
+            wasSustainedHealthy = false
+        }
+
+        if wasSustainedHealthy {
+            reconnectAttempt = 1
+        } else {
+            reconnectAttempt += 1
+        }
     }
 
     /// Fetch a ticket, open the stream, and iterate its events. Returns when
@@ -193,7 +237,10 @@ final class SSEClient {
         try Self.validateStreamResponse(response)
 
         isConnected = true
-        reconnectAttempt = 0
+        lastHealthyConnectAt = Date()
+        // Don't zero `reconnectAttempt` here — the audit's fix is to zero
+        // it only after a stream that was sustained-healthy for at least
+        // `sustainedHealthyThreshold`. See `bumpOrReset` in the outer loop.
 
         try await parseLines(bytes)
     }

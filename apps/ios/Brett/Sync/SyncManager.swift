@@ -92,6 +92,18 @@ final class SyncManager {
     /// if the auth state flips rapidly at launch.
     private var hasStarted = false
 
+    /// Consecutive failures across the push+pull cycle. Used by the poll
+    /// loop to back off exponentially (1s → 2s → 4s → 8s → … capped at
+    /// 5 minutes). Debounced / user-initiated syncs are NOT throttled —
+    /// they fire immediately because the user just expressed intent.
+    /// Reset to 0 on any successful sync.
+    private var consecutiveFailures: Int = 0
+
+    /// Upper bound on the backoff window. Five minutes — longer than the
+    /// default 30s poll, but short enough that a user returning from a
+    /// flaky network doesn't wait forever for fresh state.
+    private static let maxBackoffSeconds: TimeInterval = 300
+
     // MARK: - Init
 
     init(
@@ -192,11 +204,15 @@ final class SyncManager {
             firstError = firstError ?? describe(error)
         }
 
-        // Final state reflects whether either phase errored.
+        // Final state reflects whether either phase errored. The backoff
+        // counter tracks consecutive failures so the poll loop can throttle
+        // repeated retries on a flaky network.
         if let message = firstError {
             state = .error(message)
+            consecutiveFailures += 1
         } else {
             state = .idle
+            consecutiveFailures = 0
         }
     }
 
@@ -282,16 +298,20 @@ final class SyncManager {
 
     // MARK: - Foreground poll
 
-    /// 30-second auto-poll while the app is in the foreground. Uses `Task.sleep`
-    /// so it naturally pauses when iOS suspends the app. Cancellation stops it
-    /// cleanly via `stop()`.
+    /// Periodic auto-poll while the app is in the foreground. Default
+    /// cadence is `pollInterval` (30s); after a failed sync the loop backs
+    /// off exponentially up to `maxBackoffSeconds` so we don't hammer a
+    /// server that's already returning errors or a network that's flapping.
+    /// `Task.sleep` pauses naturally when iOS suspends the app; `stop()`
+    /// cancels cleanly.
     private func startForegroundPoll() {
         pollTask?.cancel()
         pollTask = Task { @MainActor [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
+                let waitSeconds = self.nextPollDelay()
                 do {
-                    try await Task.sleep(nanoseconds: UInt64(self.pollInterval * 1_000_000_000))
+                    try await Task.sleep(nanoseconds: UInt64(waitSeconds * 1_000_000_000))
                 } catch {
                     return
                 }
@@ -301,6 +321,19 @@ final class SyncManager {
                 }
             }
         }
+    }
+
+    /// Compute the wait before the next poll. 0 failures → `pollInterval`
+    /// (the user-facing freshness guarantee). Each additional consecutive
+    /// failure doubles the wait with ±20% jitter, capped at five minutes.
+    /// Jitter prevents a thundering herd when the network flaps for many
+    /// clients simultaneously.
+    private func nextPollDelay() -> TimeInterval {
+        guard consecutiveFailures > 0 else { return pollInterval }
+        let base = pollInterval * pow(2.0, Double(min(consecutiveFailures, 10) - 1))
+        let capped = min(base, Self.maxBackoffSeconds)
+        let jitter = Double.random(in: 0.8...1.2)
+        return capped * jitter
     }
 
     // MARK: - Crash recovery
