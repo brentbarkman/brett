@@ -7,6 +7,10 @@ import SwiftData
 /// Mutations also enqueue a `MutationQueueEntry` so the push engine (Wave 2)
 /// has everything it needs: `changedFields`, `previousValues`, and a
 /// `beforeSnapshot` for rollback on permanent failure.
+///
+/// Field-level wire format is defined in `Item+Fields.swift` via
+/// `MutableFieldModel`. Adding a new mutable field is a one-place change —
+/// the snapshot / apply / payload / previousValues helpers all read from it.
 @MainActor
 @Observable
 final class ItemStore {
@@ -26,14 +30,30 @@ final class ItemStore {
     // MARK: - Fetch
 
     /// All non-deleted items for the current user, newest first.
-    func fetchAll(listId: String? = nil, status: ItemStatus? = nil) -> [Item] {
+    ///
+    /// `userId` scopes the query so data from a previous account never
+    /// leaks into the current session — critical for shared-device and
+    /// sign-out-then-sign-in flows (CLAUDE.md multi-user rule).
+    /// Passing `nil` preserves legacy behavior (returns every user's rows)
+    /// but should only be used by tests or sync internals.
+    func fetchAll(
+        userId: String? = nil,
+        listId: String? = nil,
+        status: ItemStatus? = nil
+    ) -> [Item] {
         var descriptor = FetchDescriptor<Item>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
-        descriptor.predicate = #Predicate { item in
-            item.deletedAt == nil
+        if let userId {
+            descriptor.predicate = #Predicate { item in
+                item.deletedAt == nil && item.userId == userId
+            }
+        } else {
+            descriptor.predicate = #Predicate { item in
+                item.deletedAt == nil
+            }
         }
-        let items = (try? context.fetch(descriptor)) ?? []
+        let items = fetch(descriptor)
         return items.filter { item in
             if let listId, item.listId != listId { return false }
             if let status, item.status != status.rawValue { return false }
@@ -42,28 +62,29 @@ final class ItemStore {
     }
 
     /// Inbox = items with no list assigned and no due date (spec §UI).
-    func fetchInbox() -> [Item] {
-        let items = fetchAll()
-        return items.filter { $0.listId == nil && $0.dueDate == nil && $0.itemStatus == .active }
+    func fetchInbox(userId: String? = nil) -> [Item] {
+        fetchAll(userId: userId).filter {
+            $0.listId == nil && $0.dueDate == nil && $0.itemStatus == .active
+        }
     }
 
     /// Today = due today or overdue, not yet done.
-    func fetchToday() -> [Item] {
+    func fetchToday(userId: String? = nil) -> [Item] {
         let calendar = Calendar.current
         let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date()) ?? Date()
-        let items = fetchAll()
-        return items.filter { item in
-            guard let due = item.dueDate, item.itemStatus != .done, item.itemStatus != .archived else { return false }
+        return fetchAll(userId: userId).filter { item in
+            guard let due = item.dueDate,
+                  item.itemStatus != .done,
+                  item.itemStatus != .archived else { return false }
             return due <= endOfToday
         }
     }
 
     /// Upcoming = due after today, not yet done.
-    func fetchUpcoming() -> [Item] {
+    func fetchUpcoming(userId: String? = nil) -> [Item] {
         let calendar = Calendar.current
         let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date()) ?? Date()
-        let items = fetchAll()
-        return items
+        return fetchAll(userId: userId)
             .filter { item in
                 guard let due = item.dueDate else { return false }
                 return due > endOfToday && item.itemStatus != .done && item.itemStatus != .archived
@@ -75,7 +96,7 @@ final class ItemStore {
         var descriptor = FetchDescriptor<Item>()
         descriptor.predicate = #Predicate { $0.id == id }
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return fetch(descriptor).first
     }
 
     // MARK: - Mutate
@@ -114,21 +135,50 @@ final class ItemStore {
         return item
     }
 
-    /// Apply a changeset to an existing item.
-    /// - Parameter changes: [fieldName: newValue] — the push engine uses
-    ///   this + `previousValues` to perform field-level merge on conflict.
-    /// - Parameter previousValues: [fieldName: oldValue] captured from the
-    ///   item BEFORE the edit. Required for field-level conflict resolution.
+    /// Apply a changeset to an existing item. The store captures
+    /// `previousValues` + `beforeSnapshot` from the model's current state
+    /// *before* applying `changes` — callers must not pre-mutate the model.
+    ///
+    /// Preferred form for all new code. The 3-parameter overload below is
+    /// kept for call sites (e.g. `ItemDraft`) that already captured the
+    /// pre-edit state before the user began editing.
+    func update(id: String, changes: [String: Any]) {
+        guard let item = fetchById(id) else { return }
+        let fields = Array(changes.keys)
+        let capturedPrevious = item.previousValues(forFields: fields)
+        applyUpdate(item: item, changes: changes, previousValues: capturedPrevious)
+    }
+
+    /// Apply a changeset using caller-supplied `previousValues`. Use when
+    /// the caller already has the true pre-mutation state (e.g. a form
+    /// draft that snapshotted on open). The caller MUST NOT have mutated
+    /// the model yet — if they have, `beforeSnapshot` would record the
+    /// post-mutation state and permanent-failure rollback would be a no-op.
     func update(
         id: String,
         changes: [String: Any],
         previousValues: [String: Any]
     ) {
         guard let item = fetchById(id) else { return }
+        applyUpdate(item: item, changes: changes, previousValues: previousValues)
+    }
 
-        let before = snapshot(of: item)
-        applyChanges(changes, to: item)
+    private func applyUpdate(
+        item: Item,
+        changes: [String: Any],
+        previousValues: [String: Any]
+    ) {
+        // beforeSnapshot starts from the current full model state, then is
+        // overridden for changed fields with the authoritative previousValues.
+        // This defends against call sites that mutate the model before
+        // calling update() — those fields still roll back correctly because
+        // their pre-mutation values live in previousValues.
+        var beforeSnapshot = item.mutableFieldSnapshot()
+        for (field, oldValue) in previousValues {
+            beforeSnapshot[field] = oldValue
+        }
 
+        item.apply(changes: changes)
         item.updatedAt = Date()
         if item._syncStatus == SyncStatus.synced.rawValue {
             item._syncStatus = SyncStatus.pendingUpdate.rawValue
@@ -138,39 +188,30 @@ final class ItemStore {
             item,
             changedFields: Array(changes.keys),
             previousValues: previousValues,
-            beforeSnapshot: before
+            beforeSnapshot: beforeSnapshot
         )
         save()
         SyncManager.shared.schedulePushDebounced()
     }
 
     /// Toggle the done/active state of an item (common Inbox + Today action).
+    /// Routes through `update(id:changes:)` so `beforeSnapshot` is captured
+    /// from pre-mutation state — earlier versions mutated `item` first and
+    /// then passed old values explicitly, which produced a post-mutation
+    /// `beforeSnapshot` and silently broke permanent-failure rollback.
     func toggleStatus(id: String) {
         guard let item = fetchById(id) else { return }
         let wasDone = item.itemStatus == .done
-        let previousStatus = item.status
-        let previousCompletedAt = item.completedAt
-
-        item.status = wasDone ? ItemStatus.active.rawValue : ItemStatus.done.rawValue
-        item.completedAt = wasDone ? nil : Date()
-
-        update(
-            id: id,
-            changes: [
-                "status": item.status,
-                "completedAt": item.completedAt as Any,
-            ],
-            previousValues: [
-                "status": previousStatus,
-                "completedAt": previousCompletedAt as Any,
-            ]
-        )
+        update(id: id, changes: [
+            "status": wasDone ? ItemStatus.active.rawValue : ItemStatus.done.rawValue,
+            "completedAt": wasDone ? NSNull() : Date(),
+        ])
     }
 
     /// Soft-delete — sets `deletedAt` locally and enqueues a DELETE.
     func delete(id: String) {
         guard let item = fetchById(id) else { return }
-        let before = snapshot(of: item)
+        let before = item.mutableFieldSnapshot()
         item.deletedAt = Date()
         item._syncStatus = SyncStatus.pendingDelete.rawValue
 
@@ -181,146 +222,57 @@ final class ItemStore {
 
     // MARK: - Bulk mutate
 
-    /// Apply the same changeset to every id, computing per-item `previousValues`
-    /// so field-level conflict resolution still works on the server.
-    ///
-    /// This simply enqueues one UPDATE mutation per item; the mutation queue's
-    /// compactor coalesces redundant ops when it flushes.
-    ///
-    /// - Parameters:
-    ///   - ids: item IDs to apply `changes` to. Missing IDs are silently skipped.
-    ///   - changes: `[fieldName: newValue]`. The same values are applied to every
-    ///     item, but previousValues are snapshotted per item (so the server
-    ///     sees the correct base state for each).
+    /// Apply the same changeset to every id. Per-item `previousValues` are
+    /// captured inside `update(id:changes:)` so each enqueued mutation has
+    /// the correct pre-mutation baseline.
     func bulkUpdate(ids: [String], changes: [String: Any]) {
         guard !ids.isEmpty, !changes.isEmpty else { return }
         for id in ids {
-            guard let item = fetchById(id) else { continue }
-            let previousValues = previousValuesForChanges(Array(changes.keys), on: item)
-            update(id: id, changes: changes, previousValues: previousValues)
+            update(id: id, changes: changes)
         }
     }
 
-    /// Soft-delete many items at once. Enqueues one DELETE per item — the
-    /// mutation queue compactor will collapse redundant ops.
+    /// Soft-delete many items at once.
     func bulkDelete(ids: [String]) {
         guard !ids.isEmpty else { return }
-        for id in ids {
-            delete(id: id)
-        }
+        for id in ids { delete(id: id) }
     }
 
+    // MARK: - Internals
 
-    /// Snapshot the current value of a set of fields on an item. Used by
-    /// `bulkUpdate` so each enqueued mutation has per-item previousValues.
-    private func previousValuesForChanges(_ fields: [String], on item: Item) -> [String: Any] {
-        var out: [String: Any] = [:]
-        for field in fields {
-            switch field {
-            case "title": out["title"] = item.title
-            case "description": out["description"] = item.itemDescription as Any
-            case "notes": out["notes"] = item.notes as Any
-            case "status": out["status"] = item.status
-            case "type": out["type"] = item.type
-            case "dueDate": out["dueDate"] = item.dueDate as Any
-            case "dueDatePrecision": out["dueDatePrecision"] = item.dueDatePrecision as Any
-            case "completedAt": out["completedAt"] = item.completedAt as Any
-            case "snoozedUntil": out["snoozedUntil"] = item.snoozedUntil as Any
-            case "listId": out["listId"] = item.listId as Any
-            case "reminder": out["reminder"] = item.reminder as Any
-            case "recurrence": out["recurrence"] = item.recurrence as Any
-            case "recurrenceRule": out["recurrenceRule"] = item.recurrenceRule as Any
-            case "brettObservation": out["brettObservation"] = item.brettObservation as Any
-            case "sourceUrl": out["sourceUrl"] = item.sourceUrl as Any
-            case "contentTitle": out["contentTitle"] = item.contentTitle as Any
-            case "contentDescription": out["contentDescription"] = item.contentDescription as Any
-            case "contentImageUrl": out["contentImageUrl"] = item.contentImageUrl as Any
-            case "contentFavicon": out["contentFavicon"] = item.contentFavicon as Any
-            case "contentDomain": out["contentDomain"] = item.contentDomain as Any
-            default: continue
-            }
+    private func fetch<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> [T] {
+        do {
+            return try context.fetch(descriptor)
+        } catch {
+            BrettLog.store.error("ItemStore fetch failed: \(String(describing: error), privacy: .public)")
+            return []
         }
-        return out
     }
-
-    // MARK: - Helpers
 
     private func save() {
         do {
             try context.save()
         } catch {
-            #if DEBUG
-            print("[ItemStore] save failed: \(error)")
-            #endif
+            // Silent failures here used to mean edits vanished on restart
+            // with no trace. Log at error level so sysdiagnose picks it up.
+            BrettLog.store.error("ItemStore save failed: \(String(describing: error), privacy: .public)")
         }
-    }
-
-    /// Apply a field-level changeset to an Item. Only known keys are written;
-    /// unknown keys are ignored (forward-compatibility with server additions).
-    private func applyChanges(_ changes: [String: Any], to item: Item) {
-        for (key, value) in changes {
-            switch key {
-            case "title": if let v = value as? String { item.title = v }
-            case "description": item.itemDescription = value as? String
-            case "notes": item.notes = value as? String
-            case "status": if let v = value as? String { item.status = v }
-            case "type": if let v = value as? String { item.type = v }
-            case "dueDate": item.dueDate = value as? Date
-            case "dueDatePrecision": item.dueDatePrecision = value as? String
-            case "completedAt": item.completedAt = value as? Date
-            case "snoozedUntil": item.snoozedUntil = value as? Date
-            case "listId": item.listId = value as? String
-            case "reminder": item.reminder = value as? String
-            case "recurrence": item.recurrence = value as? String
-            case "recurrenceRule": item.recurrenceRule = value as? String
-            case "brettObservation": item.brettObservation = value as? String
-            case "sourceUrl": item.sourceUrl = value as? String
-            case "contentTitle": item.contentTitle = value as? String
-            case "contentDescription": item.contentDescription = value as? String
-            case "contentImageUrl": item.contentImageUrl = value as? String
-            case "contentFavicon": item.contentFavicon = value as? String
-            case "contentDomain": item.contentDomain = value as? String
-            default: continue
-            }
-        }
-    }
-
-    private func snapshot(of item: Item) -> [String: Any] {
-        [
-            "id": item.id,
-            "title": item.title,
-            "description": item.itemDescription as Any,
-            "notes": item.notes as Any,
-            "status": item.status,
-            "type": item.type,
-            "dueDate": item.dueDate as Any,
-            "listId": item.listId as Any,
-            "completedAt": item.completedAt as Any,
-            "snoozedUntil": item.snoozedUntil as Any,
-            "updatedAt": item.updatedAt,
-        ]
     }
 
     // MARK: - Mutation queue enqueue
 
     private func enqueueCreate(_ item: Item) {
-        let payload: [String: Any] = [
-            "id": item.id,
-            "type": item.type,
-            "status": item.status,
-            "title": item.title,
-            "userId": item.userId,
-            "dueDate": (item.dueDate?.iso8601String() as Any),
-            "listId": (item.listId as Any),
-            "notes": (item.notes as Any),
-            "source": item.source,
-            "createdAt": item.createdAt.iso8601String(),
-            "updatedAt": item.updatedAt.iso8601String(),
-        ]
+        // CREATE payload = full mutable snapshot + identity + ownership +
+        // lifecycle timestamps. Intermediate fields (sourceUrl etc.) are
+        // picked up via mutableFieldSnapshot so adding a new Field here is
+        // a one-line edit in Item+Fields.swift.
+        var payload: [String: Any] = item.mutableFieldSnapshot()
+        payload["id"] = item.id
+        payload["userId"] = item.userId
+        payload["source"] = item.source
+        payload["createdAt"] = item.createdAt
+        payload["updatedAt"] = item.updatedAt
 
-        // Route through MutationQueue so eager compaction runs — direct
-        // context.insert bypasses it and leaves the push engine to see
-        // redundant rows.
         mutationQueue.enqueue(
             entityType: "item",
             entityId: item.id,
@@ -337,7 +289,7 @@ final class ItemStore {
         previousValues: [String: Any],
         beforeSnapshot: [String: Any]
     ) {
-        let payload = payloadForUpdate(item: item, changedFields: changedFields)
+        let payload = item.patchPayload(for: changedFields)
 
         let entry = MutationQueueEntry(
             entityType: "item",
@@ -366,36 +318,6 @@ final class ItemStore {
             beforeSnapshot: JSONCodec.encode(beforeSnapshot)
         )
         context.insert(entry)
-    }
-
-    private func payloadForUpdate(item: Item, changedFields: [String]) -> [String: Any] {
-        var out: [String: Any] = [:]
-        for field in changedFields {
-            switch field {
-            case "title": out["title"] = item.title
-            case "description": out["description"] = item.itemDescription as Any
-            case "notes": out["notes"] = item.notes as Any
-            case "status": out["status"] = item.status
-            case "type": out["type"] = item.type
-            case "dueDate": out["dueDate"] = item.dueDate?.iso8601String() as Any
-            case "dueDatePrecision": out["dueDatePrecision"] = item.dueDatePrecision as Any
-            case "completedAt": out["completedAt"] = item.completedAt?.iso8601String() as Any
-            case "snoozedUntil": out["snoozedUntil"] = item.snoozedUntil?.iso8601String() as Any
-            case "listId": out["listId"] = item.listId as Any
-            case "reminder": out["reminder"] = item.reminder as Any
-            case "recurrence": out["recurrence"] = item.recurrence as Any
-            case "recurrenceRule": out["recurrenceRule"] = item.recurrenceRule as Any
-            case "brettObservation": out["brettObservation"] = item.brettObservation as Any
-            case "sourceUrl": out["sourceUrl"] = item.sourceUrl as Any
-            case "contentTitle": out["contentTitle"] = item.contentTitle as Any
-            case "contentDescription": out["contentDescription"] = item.contentDescription as Any
-            case "contentImageUrl": out["contentImageUrl"] = item.contentImageUrl as Any
-            case "contentFavicon": out["contentFavicon"] = item.contentFavicon as Any
-            case "contentDomain": out["contentDomain"] = item.contentDomain as Any
-            default: continue
-            }
-        }
-        return out
     }
 }
 

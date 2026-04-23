@@ -2,12 +2,15 @@ import Foundation
 import Observation
 import SwiftData
 
+/// Observable facade around SwiftData for `ItemList` queries + mutations.
+///
+/// Field-level wire format is declared in `ItemList+Fields.swift` via
+/// `MutableFieldModel`; snapshot / apply / payload all derive from it so
+/// adding a mutable field is a one-place change.
 @MainActor
 @Observable
 final class ListStore {
     private let context: ModelContext
-    // Lazy so tests/previews that never enqueue don't pay the allocation,
-    // and so the queue always shares the store's ModelContext.
     private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
     init(context: ModelContext) {
@@ -20,14 +23,24 @@ final class ListStore {
 
     // MARK: - Fetch
 
-    func fetchAll(includeArchived: Bool = false) -> [ItemList] {
+    /// All non-deleted lists, ordered by `sortOrder`. `userId` scopes the
+    /// query so a prior account's lists never appear after an account
+    /// switch (CLAUDE.md multi-user rule). `nil` returns every user's rows;
+    /// reserved for sync internals and tests.
+    func fetchAll(userId: String? = nil, includeArchived: Bool = false) -> [ItemList] {
         var descriptor = FetchDescriptor<ItemList>(
             sortBy: [SortDescriptor(\.sortOrder)]
         )
-        descriptor.predicate = #Predicate { list in
-            list.deletedAt == nil
+        if let userId {
+            descriptor.predicate = #Predicate { list in
+                list.deletedAt == nil && list.userId == userId
+            }
+        } else {
+            descriptor.predicate = #Predicate { list in
+                list.deletedAt == nil
+            }
         }
-        let lists = (try? context.fetch(descriptor)) ?? []
+        let lists = fetch(descriptor)
         return lists.filter { includeArchived || $0.archivedAt == nil }
     }
 
@@ -35,7 +48,7 @@ final class ListStore {
         var descriptor = FetchDescriptor<ItemList>()
         descriptor.predicate = #Predicate { $0.id == id }
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return fetch(descriptor).first
     }
 
     // MARK: - Mutate
@@ -47,7 +60,7 @@ final class ListStore {
             userId: userId,
             name: name,
             colorClass: colorClass,
-            sortOrder: nextSortOrder(),
+            sortOrder: nextSortOrder(userId: userId),
             createdAt: now,
             updatedAt: now
         )
@@ -59,98 +72,100 @@ final class ListStore {
         return list
     }
 
+    /// Apply a changeset to an existing list. Store captures `previousValues`
+    /// and `beforeSnapshot` from the model's current state — callers MUST
+    /// NOT pre-mutate the model (see ItemStore for rationale).
+    func update(id: String, changes: [String: Any]) {
+        guard let list = fetchById(id) else { return }
+        let fields = Array(changes.keys)
+        let capturedPrevious = list.previousValues(forFields: fields)
+        applyUpdate(list: list, changes: changes, previousValues: capturedPrevious)
+    }
+
+    /// Apply a changeset using caller-supplied `previousValues`. Use when
+    /// the caller already captured the pre-edit state (e.g. a settings
+    /// form snapshotted on open).
     func update(id: String, changes: [String: Any], previousValues: [String: Any]) {
         guard let list = fetchById(id) else { return }
-        let before = snapshot(of: list)
+        applyUpdate(list: list, changes: changes, previousValues: previousValues)
+    }
 
-        for (key, value) in changes {
-            switch key {
-            case "name": if let v = value as? String { list.name = v }
-            case "colorClass": if let v = value as? String { list.colorClass = v }
-            case "sortOrder": if let v = value as? Int { list.sortOrder = v }
-            case "archivedAt": list.archivedAt = value as? Date
-            default: continue
-            }
+    private func applyUpdate(
+        list: ItemList,
+        changes: [String: Any],
+        previousValues: [String: Any]
+    ) {
+        var beforeSnapshot = list.mutableFieldSnapshot()
+        for (field, oldValue) in previousValues {
+            beforeSnapshot[field] = oldValue
         }
+
+        list.apply(changes: changes)
         list.updatedAt = Date()
         if list._syncStatus == SyncStatus.synced.rawValue {
             list._syncStatus = SyncStatus.pendingUpdate.rawValue
         }
+
         enqueueUpdate(
             list,
             changedFields: Array(changes.keys),
             previousValues: previousValues,
-            beforeSnapshot: before
+            beforeSnapshot: beforeSnapshot
         )
         save()
         SyncManager.shared.schedulePushDebounced()
     }
 
     func archive(id: String) {
-        guard let list = fetchById(id) else { return }
-        update(
-            id: id,
-            changes: ["archivedAt": Date()],
-            previousValues: ["archivedAt": list.archivedAt as Any]
-        )
+        update(id: id, changes: ["archivedAt": Date()])
     }
 
     func unarchive(id: String) {
-        guard let list = fetchById(id) else { return }
-        update(
-            id: id,
-            changes: ["archivedAt": NSNull()],
-            previousValues: ["archivedAt": list.archivedAt as Any]
-        )
+        update(id: id, changes: ["archivedAt": NSNull()])
     }
 
     func reorder(ids: [String]) {
         for (index, id) in ids.enumerated() {
-            guard let list = fetchById(id) else { continue }
-            let previous = list.sortOrder
-            if previous != index {
-                update(
-                    id: id,
-                    changes: ["sortOrder": index],
-                    previousValues: ["sortOrder": previous]
-                )
-            }
+            guard let list = fetchById(id), list.sortOrder != index else { continue }
+            update(id: id, changes: ["sortOrder": index])
         }
     }
 
     // MARK: - Helpers
 
-    private func nextSortOrder() -> Int {
-        let existing = fetchAll(includeArchived: true)
+    /// Next sortOrder within the user's own lists. Without userId scoping,
+    /// a new user's first list would inherit a large sortOrder from the
+    /// previous account's lists still resident in SwiftData between sign-in
+    /// and the first pull.
+    private func nextSortOrder(userId: String) -> Int {
+        let existing = fetchAll(userId: userId, includeArchived: true)
         return (existing.map(\.sortOrder).max() ?? -1) + 1
     }
 
-    private func save() {
-        try? context.save()
+    private func fetch<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> [T] {
+        do {
+            return try context.fetch(descriptor)
+        } catch {
+            BrettLog.store.error("ListStore fetch failed: \(String(describing: error), privacy: .public)")
+            return []
+        }
     }
 
-    private func snapshot(of list: ItemList) -> [String: Any] {
-        [
-            "id": list.id,
-            "name": list.name,
-            "colorClass": list.colorClass,
-            "sortOrder": list.sortOrder,
-            "archivedAt": list.archivedAt as Any,
-            "updatedAt": list.updatedAt,
-        ]
+    private func save() {
+        do {
+            try context.save()
+        } catch {
+            BrettLog.store.error("ListStore save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     private func enqueueCreate(_ list: ItemList) {
-        let payload: [String: Any] = [
-            "id": list.id,
-            "name": list.name,
-            "colorClass": list.colorClass,
-            "sortOrder": list.sortOrder,
-            "userId": list.userId,
-            "createdAt": list.createdAt.iso8601String(),
-            "updatedAt": list.updatedAt.iso8601String(),
-        ]
-        // Route through MutationQueue so eager compaction runs.
+        var payload: [String: Any] = list.mutableFieldSnapshot()
+        payload["id"] = list.id
+        payload["userId"] = list.userId
+        payload["createdAt"] = list.createdAt
+        payload["updatedAt"] = list.updatedAt
+
         mutationQueue.enqueue(
             entityType: "list",
             entityId: list.id,
@@ -167,16 +182,8 @@ final class ListStore {
         previousValues: [String: Any],
         beforeSnapshot: [String: Any]
     ) {
-        var payload: [String: Any] = [:]
-        for field in changedFields {
-            switch field {
-            case "name": payload["name"] = list.name
-            case "colorClass": payload["colorClass"] = list.colorClass
-            case "sortOrder": payload["sortOrder"] = list.sortOrder
-            case "archivedAt": payload["archivedAt"] = list.archivedAt?.iso8601String() as Any
-            default: continue
-            }
-        }
+        let payload = list.patchPayload(for: changedFields)
+
         let entry = MutationQueueEntry(
             entityType: "list",
             entityId: list.id,
