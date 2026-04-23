@@ -1,16 +1,25 @@
 import AuthenticationServices
+import CryptoKit
 import Foundation
 
 /// Sign in with Apple provider.
 ///
 /// Flow:
-/// 1. Present `ASAuthorizationController` with an Apple ID request.
-/// 2. Extract the `identityToken` from the returned credential.
-/// 3. POST it to `/api/auth/sign-in/social` with `provider: "apple"`.
-/// 4. Return the resulting `AuthSession` (token + user).
+/// 1. Generate a cryptographically-random raw nonce.
+/// 2. SHA-256 hash it and pass the HASH to Apple via `request.nonce`.
+///    Apple embeds the hash in the returned JWT's `nonce` claim.
+/// 3. Present `ASAuthorizationController` with an Apple ID request.
+/// 4. Extract `identityToken` from the credential and read the `nonce`
+///    claim from its JWT payload. Verify it matches our hashed nonce —
+///    a defense-in-depth check against replay of a captured token.
+/// 5. POST the idToken AND the raw nonce to the server. The server
+///    independently verifies `sha256(rawNonce) == idToken.claims.nonce`,
+///    which is Apple's required server-side nonce check.
 ///
-/// A dedicated `ASAuthorizationControllerDelegate` bridge object (`Bridge`)
-/// adapts the delegate callbacks into an `async` continuation.
+/// Without this flow, a stolen or replayed identityToken from a prior
+/// Apple Sign In session could in principle be used to impersonate the
+/// user. The nonce binds each token to a single client-generated value
+/// that can't be reused.
 @MainActor
 final class AppleSignInProvider: AuthProvider {
     private let endpoints: AuthEndpoints
@@ -20,23 +29,90 @@ final class AppleSignInProvider: AuthProvider {
     }
 
     func signIn() async throws -> AuthSession {
-        let credential = try await requestAppleCredential()
+        let rawNonce = Self.makeRawNonce()
+        let hashedNonce = Self.sha256(rawNonce)
+
+        let credential = try await requestAppleCredential(hashedNonce: hashedNonce)
 
         guard let tokenData = credential.identityToken,
               let idToken = String(data: tokenData, encoding: .utf8) else {
             throw APIError.validation("Apple didn't return an identity token.")
         }
 
-        return try await endpoints.signInSocial(provider: "apple", idToken: idToken)
+        // Client-side nonce check. Not a substitute for the server's
+        // verification, but catches obvious tampering (and rules out the
+        // most common misconfiguration — server quietly accepting tokens
+        // without running the nonce comparison) before we POST.
+        try Self.verifyNonceClaim(idToken: idToken, expectedHash: hashedNonce)
+
+        return try await endpoints.signInSocial(
+            provider: "apple",
+            idToken: idToken,
+            rawNonce: rawNonce
+        )
+    }
+
+    // MARK: - Nonce
+
+    private static let nonceAlphabet = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._")
+
+    /// 32-char URL-safe random nonce. Not hex-encoded: Apple accepts any
+    /// reasonable opaque string, and the alphabet here matches what the
+    /// community implementations use so a future server-side diff is smaller.
+    private static func makeRawNonce(length: Int = 32) -> String {
+        var result = ""
+        result.reserveCapacity(length)
+
+        while result.count < length {
+            var byte: UInt8 = 0
+            let status = withUnsafeMutablePointer(to: &byte) { ptr -> Int32 in
+                SecRandomCopyBytes(kSecRandomDefault, 1, ptr)
+            }
+            guard status == errSecSuccess else {
+                // Fall back to AES-backed RNG via UInt64.random if SecRandom
+                // fails (should never happen on device).
+                byte = UInt8(UInt64.random(in: 0...255))
+            }
+            let idx = Int(byte) % nonceAlphabet.count
+            result.append(nonceAlphabet[idx])
+        }
+
+        return result
+    }
+
+    private static func sha256(_ string: String) -> String {
+        let data = Data(string.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Decode the JWT payload, extract `nonce`, compare against the hash we
+    /// sent. Throws `APIError.validation` on any mismatch — the UI surfaces
+    /// this as a sign-in failure rather than proceeding with a suspect token.
+    private static func verifyNonceClaim(idToken: String, expectedHash: String) throws {
+        let segments = idToken.split(separator: ".")
+        guard segments.count >= 2 else {
+            throw APIError.validation("Malformed Apple identity token.")
+        }
+        let payload = String(segments[1])
+        guard let payloadData = Data(base64URLEncoded: payload),
+              let claims = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
+              let claimedNonce = claims["nonce"] as? String else {
+            throw APIError.validation("Apple identity token missing nonce claim.")
+        }
+        guard claimedNonce == expectedHash else {
+            throw APIError.validation("Apple identity token nonce mismatch.")
+        }
     }
 
     // MARK: - ASAuthorization continuation bridge
 
     /// Present the Apple ID sheet and await the user's response. Runs the
     /// controller on the main actor and awaits the delegate callback.
-    private func requestAppleCredential() async throws -> ASAuthorizationAppleIDCredential {
+    private func requestAppleCredential(hashedNonce: String) async throws -> ASAuthorizationAppleIDCredential {
         let request = ASAuthorizationAppleIDProvider().createRequest()
         request.requestedScopes = [.fullName, .email]
+        request.nonce = hashedNonce
 
         let controller = ASAuthorizationController(authorizationRequests: [request])
 
@@ -118,5 +194,24 @@ final class AppleSignInProvider: AuthProvider {
             }
             return ASPresentationAnchor()
         }
+    }
+}
+
+// MARK: - Base64URL decoder
+
+private extension Data {
+    /// Decode base64url (no padding, `-_` instead of `+/`) as used in JWT
+    /// payload segments. Swift's `Data(base64Encoded:)` only handles plain
+    /// base64, so we normalize before decoding.
+    init?(base64URLEncoded string: String) {
+        var base64 = string
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64.append(String(repeating: "=", count: 4 - remainder))
+        }
+        guard let data = Data(base64Encoded: base64) else { return nil }
+        self = data
     }
 }

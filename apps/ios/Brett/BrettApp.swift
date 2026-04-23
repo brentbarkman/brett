@@ -69,6 +69,36 @@ struct BrettApp: App {
     }
     #endif
 
+    /// Route an inbound URL to the right handler. Scheme whitelist
+    /// prevents a crafted `malicious://...` URL from reaching GIDSignIn
+    /// (which takes every URL it's handed and tries to parse it as an
+    /// OAuth callback — low risk today but a liability for any future
+    /// deep-link work that reuses the handler). Unknown schemes are
+    /// silently dropped.
+    private func handleOpenURL(_ url: URL) {
+        guard let scheme = url.scheme?.lowercased() else { return }
+
+        // Google OAuth callback scheme is `com.googleusercontent.apps.<id>`
+        // — injected into Info.plist via `GOOGLE_IOS_URL_SCHEME` at build
+        // time. Check the prefix rather than an exact match so Debug vs
+        // Release client IDs both route correctly.
+        if scheme.hasPrefix("com.googleusercontent.apps.") {
+            _ = GIDSignIn.sharedInstance.handle(url)
+            return
+        }
+
+        // Reserved for future first-party deep links (magic email links,
+        // invitations, reminder reopens). No-op today; incoming `brett://`
+        // URLs we don't understand are dropped rather than routed blindly.
+        if scheme == "brett" {
+            BrettLog.app.info("Dropped unsupported brett:// URL — no handler registered")
+            return
+        }
+
+        // Anything else is out-of-bounds. Fail closed.
+        BrettLog.app.info("Dropped inbound URL with unrecognized scheme")
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -84,14 +114,13 @@ struct BrettApp: App {
                 // `StickyCardSection(tint: ...)` overrides — those aren't
                 // affected by this modifier.
                 .tint(BrettColors.gold)
-                // GoogleSignIn-iOS finishes its OAuth dance by redirecting to
-                // the reversed client-ID URL scheme. The SDK needs to see
-                // that redirect to complete the pending sign-in call, so we
-                // hand every inbound URL to it. Returns `true` if the SDK
-                // consumed the URL; otherwise it's ours to ignore (or route
-                // elsewhere in the future — deep links, magic email links).
+                // Inbound URL handler. Whitelisted to schemes we declare in
+                // Info.plist (`brett://` and the Google reversed-client-id)
+                // so a malicious URL with some other scheme can't even
+                // reach `GIDSignIn.handle`. Returning without consuming is
+                // the fail-closed default.
                 .onOpenURL { url in
-                    _ = GIDSignIn.sharedInstance.handle(url)
+                    handleOpenURL(url)
                 }
         }
         // Single shared ModelContainer owned by `PersistenceController` —
@@ -134,9 +163,29 @@ private struct RootView: View {
                 SignInView()
                     .transition(.opacity)
             }
+
+            // App-switcher privacy cover. When iOS transitions the scene
+            // to `.inactive` it snapshots the window for the task-switcher
+            // thumbnail. Without this overlay, that snapshot shows whatever
+            // the user had open — inbox contents, calendar events, chat
+            // threads — to anyone who swipes to the app switcher while the
+            // phone is unlocked. Opaque BackgroundView matches our brand
+            // atmospheric chrome and avoids a flash of black.
+            //
+            // Intentionally outside the auth/lock switch so it covers
+            // SignInView too (email field) and BiometricLockView (less
+            // sensitive, but we may add recent-activity glances later).
+            if scenePhase != .active {
+                BackgroundView()
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .zIndex(1000)
+                    .accessibilityHidden(true)
+            }
         }
         .animation(.easeInOut(duration: 0.35), value: authManager.isAuthenticated)
         .animation(.easeInOut(duration: 0.25), value: lockManager.isLocked)
+        .animation(.easeInOut(duration: 0.15), value: scenePhase)
         // Biometric lock lifecycle only — sync/SSE are handled by AuthManager.
         .onChange(of: authManager.isAuthenticated) { _, isAuth in
             if isAuth {
@@ -172,6 +221,11 @@ private struct RootView: View {
                 // active so in-foreground shares reconcile quickly too.
                 ShareIngestor.shared.configure(auth: authManager)
                 Task { await ShareIngestor.shared.drain() }
+                // Foreground keepalive: re-validate the session in case
+                // it was revoked server-side while we were backgrounded.
+                // Throttled to one call per 5 minutes inside AuthManager so
+                // rapid app-switches don't hammer /users/me.
+                Task { await authManager.refreshIfStale() }
             default:
                 break
             }

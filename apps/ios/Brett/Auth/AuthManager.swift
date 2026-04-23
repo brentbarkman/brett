@@ -24,6 +24,11 @@ final class AuthManager {
     /// offer a "create account" CTA instead of a plain error banner.
     private(set) var errorIsNoAccount: Bool = false
 
+    /// Last time we successfully hit `/users/me`. Used by `refreshIfStale`
+    /// to avoid hammering the server on every brief app-switch while still
+    /// re-validating the session after real backgrounded gaps.
+    private var lastRefreshedAt: Date?
+
     /// True when a token + user are present. Used by the app-level gate to
     /// decide between SignInView and MainContainer.
     var isAuthenticated: Bool {
@@ -48,6 +53,15 @@ final class AuthManager {
             MainActor.assumeIsolated { self?.token }
         }
 
+        // Fresh-install detection. Keychain items with
+        // `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` survive an app
+        // uninstall/reinstall cycle — on a shared iPad this means installing
+        // the app a second time can silently sign the device in as whoever
+        // used it last. Track installs in UserDefaults (which IS wiped on
+        // uninstall) and purge any leftover keychain entries on first-ever
+        // launch of this install.
+        Self.purgeKeychainIfFreshInstall()
+
         // Hydrate from Keychain synchronously, then kick off a background
         // /users/me to refresh the user record. If Keychain read fails we
         // treat it as "not signed in" (no need to surface the error).
@@ -58,6 +72,33 @@ final class AuthManager {
             // the user and, on success, installs the session.
             Task { await self.refreshCurrentUser() }
         }
+    }
+
+    /// Sentinel UserDefaults key. Presence = "this install has run before."
+    /// Absence = "fresh install" (or install after uninstall, which is the
+    /// case we care about). Scoped to the app, not the device, so each
+    /// reinstall starts the handshake over.
+    private static let installSentinelKey = "brett.auth.installSentinel.v1"
+
+    /// First-launch purge of stale keychain tokens. Idempotent thereafter.
+    private static func purgeKeychainIfFreshInstall() {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: installSentinelKey) {
+            return
+        }
+        // First run of this install. If the keychain still holds a token,
+        // it's from a previous install owned by a different (or same)
+        // user — either way the session is stale and using it would
+        // surprise the user. Wipe everything we own in the keychain.
+        do {
+            try KeychainStore.deleteToken()
+            BrettLog.auth.info("Fresh install detected — purged residual keychain token")
+        } catch {
+            // Non-fatal: a keychain that already had no token will report
+            // errSecItemNotFound which KeychainStore should surface benignly.
+            BrettLog.auth.error("Keychain purge on fresh install failed: \(String(describing: error), privacy: .public)")
+        }
+        defaults.set(true, forKey: installSentinelKey)
     }
 
     // MARK: - Sign-in flows
@@ -209,6 +250,7 @@ final class AuthManager {
         do {
             let me = try await endpoints.getMe()
             self.currentUser = me
+            self.lastRefreshedAt = Date()
             // Mirror to the App Group so the share extension sees the
             // right user-id even on the "already signed in at launch"
             // path (where `persist(session:)` wasn't called this run).
@@ -221,11 +263,31 @@ final class AuthManager {
             }
         } catch APIError.unauthorized {
             // Token is no good — fall back to the login screen.
+            BrettLog.auth.info("Token rejected — signing out")
             await signOut()
         } catch {
             // Other errors (network, timeout) are transient — leave the
             // existing currentUser in place so the UI doesn't flicker out.
         }
+    }
+
+    /// Foreground-keepalive: re-validate the session if it's been a while
+    /// since we last hit `/users/me`. Throttled at one ping per five
+    /// minutes so rapid app-switches don't generate traffic. Token-refresh
+    /// (rotating the bearer for a fresh one) is a server concern — when
+    /// `POST /api/auth/token/refresh` ships, swap this call to hit that
+    /// endpoint and persist the new token to the Keychain.
+    ///
+    /// The main practical benefit today is detecting zombie tokens
+    /// (revoked server-side, app reinstalled with stale keychain entry,
+    /// user signed out from another device) and gracefully signing out
+    /// instead of showing an app full of data that silently fails to sync.
+    func refreshIfStale(threshold: TimeInterval = 300) async {
+        guard token != nil else { return }
+        if let last = lastRefreshedAt, Date().timeIntervalSince(last) < threshold {
+            return
+        }
+        await refreshCurrentUser()
     }
 
     /// Clears a previously-surfaced error message. Called by the UI when the

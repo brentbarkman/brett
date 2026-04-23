@@ -27,19 +27,33 @@ final class BiometricLockManager {
     private(set) var isEvaluating: Bool = false
     private(set) var lastError: String?
 
-    /// Mirrors the per-user Face ID toggle in Settings. Read via UserDefaults
-    /// because the manager isn't a View. When the toggle flips off in
-    /// Settings we eagerly unlock — no point holding the user behind a
-    /// prompt they just disabled.
+    /// Device-scoped Face ID toggle. Read via UserDefaults because the
+    /// manager isn't a View. When the toggle flips off in Settings we
+    /// eagerly unlock — no point holding the user behind a prompt they
+    /// just disabled.
+    ///
+    /// Deliberately NOT `UserScopedStorage.key`-scoped. Biometric lock is
+    /// a device-owner policy — whoever holds the phone has to pass Face
+    /// ID to use the app, regardless of which account is signed in. The
+    /// earlier scoped version had a latent bug: `BiometricLockManager`
+    /// runs before `AuthManager.refreshCurrentUser` populates
+    /// `currentUser?.id`, so the scoped lookup always hit `"anon"` and
+    /// reported false → `isLocked = false` → the app flashed its main
+    /// UI during cold launch for any user who had previously enabled
+    /// Face ID. Device scoping closes the window.
+    static let faceIDEnabledKey = "security.faceid.enabled"
+
     private var isEnabledInSettings: Bool {
-        UserDefaults.standard.bool(forKey: UserScopedStorage.key("security.faceid.enabled"))
+        UserDefaults.standard.bool(forKey: Self.faceIDEnabledKey)
     }
 
     private var context: LAContext?
 
     private init() {
-        // If the user has Face ID turned on and the app is starting, begin
-        // in the locked state. If they haven't, stay unlocked.
+        // Face ID policy is known synchronously at init (device-scoped key)
+        // so cold launch locks immediately — no gap between first render
+        // and the scene-phase hook where the main UI would otherwise be
+        // visible in the app switcher.
         isLocked = isEnabledInSettings
     }
 

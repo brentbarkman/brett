@@ -32,6 +32,12 @@ struct AuthEndpoints {
     private struct SocialSignIn: Encodable {
         let provider: String
         let idToken: IDTokenPayload?
+        /// Raw nonce the client generated for Apple Sign In. Server hashes
+        /// this with SHA-256 and asserts it matches the `nonce` claim
+        /// embedded in `idToken`. Nil for flows that don't use a nonce
+        /// (Google via ASWebAuthenticationSession relies on the HTTP
+        /// redirect state parameter instead).
+        let nonce: String?
 
         struct IDTokenPayload: Encodable {
             let token: String
@@ -69,11 +75,17 @@ struct AuthEndpoints {
     }
 
     /// Social sign-in. For Apple, pass the ASAuthorization identity token as
-    /// `idToken`. For flows that don't have a token upfront (e.g. Google via
-    /// ASWebAuthenticationSession), pass nil — the caller handles redirects.
-    func signInSocial(provider: String, idToken: String? = nil) async throws -> AuthSession {
+    /// `idToken` plus the raw nonce the client generated (see
+    /// `AppleSignInProvider`). For flows without a pre-minted token (Google
+    /// via ASWebAuthenticationSession), both are nil — the caller handles
+    /// redirects.
+    func signInSocial(
+        provider: String,
+        idToken: String? = nil,
+        rawNonce: String? = nil
+    ) async throws -> AuthSession {
         let payload = idToken.map { SocialSignIn.IDTokenPayload(token: $0) }
-        let body = SocialSignIn(provider: provider, idToken: payload)
+        let body = SocialSignIn(provider: provider, idToken: payload, nonce: rawNonce)
         return try await performSignIn(path: "/api/auth/sign-in/social", body: body)
     }
 

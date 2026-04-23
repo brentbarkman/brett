@@ -42,24 +42,31 @@ enum APIError: Error, CustomStringConvertible {
         }
     }
 
+    /// Redacted debug description — safe for OSLog / crash-reports.
+    /// User-typed fields (email in `invalidCredentials.detail`, server
+    /// messages in `validation(...)`, underlying error text from
+    /// `unknown(Error)`) are deliberately omitted because they may echo
+    /// back the user's email or other PII. The UI reaches for
+    /// `userFacingMessage` when it needs something to render; logs use
+    /// the category alone so support can correlate without leaking.
     var description: String {
         switch self {
         case .offline:
             return "APIError.offline"
         case .unauthorized:
             return "APIError.unauthorized"
-        case .invalidCredentials(let detail):
-            return "APIError.invalidCredentials(\(detail ?? "nil"))"
+        case .invalidCredentials:
+            return "APIError.invalidCredentials"
         case .rateLimited(let retry):
             return "APIError.rateLimited(retryAfter: \(retry.map(String.init) ?? "nil"))"
         case .serverError(let status):
             return "APIError.serverError(\(status))"
-        case .validation(let message):
-            return "APIError.validation(\(message))"
-        case .decodingFailed(let underlying):
-            return "APIError.decodingFailed(\(underlying))"
-        case .unknown(let underlying):
-            return "APIError.unknown(\(underlying))"
+        case .validation:
+            return "APIError.validation"
+        case .decodingFailed:
+            return "APIError.decodingFailed"
+        case .unknown:
+            return "APIError.unknown"
         }
     }
 }

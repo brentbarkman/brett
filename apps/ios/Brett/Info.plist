@@ -51,8 +51,30 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
+		<!-- Release builds hit https://api.brett.brentbarkman.com and
+		     never resolve to this address; the exception only matters for
+		     Debug builds pointed at the LAN dev API (see
+		     BRETT_API_URL in project.yml). Removing the old blanket
+		     NSAllowsArbitraryLoads closes the App Store gap where a
+		     TestFlight build could still talk HTTP to any host on a
+		     compromised network. -->
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>192.168.50.242</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<false/>
+			</dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<false/>
+			</dict>
+		</dict>
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock Brett with Face ID</string>

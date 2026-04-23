@@ -83,7 +83,7 @@ struct SecuritySettingsView: View {
                 .tint(BrettColors.gold)
                 .disabled(!biometryAvailable)
                 .onChange(of: faceIDEnabled) { _, newValue in
-                    UserDefaults.standard.set(newValue, forKey: UserScopedStorage.key("security.faceid.enabled"))
+                    UserDefaults.standard.set(newValue, forKey: BiometricLockManager.faceIDEnabledKey)
                     BiometricLockManager.shared.settingsDidChange()
                 }
                 .padding(.horizontal, 14)
@@ -145,7 +145,7 @@ struct SecuritySettingsView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
-            faceIDEnabled = UserDefaults.standard.bool(forKey: UserScopedStorage.key("security.faceid.enabled"))
+            faceIDEnabled = UserDefaults.standard.bool(forKey: BiometricLockManager.faceIDEnabledKey)
         }
         .task { await loadAccounts() }
         .task { await loadPasskeys() }
