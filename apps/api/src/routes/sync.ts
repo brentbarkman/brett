@@ -184,25 +184,9 @@ export const sync = new Hono<AuthEnv>()
 
       const cursor = cursors[table] ?? null;
 
-      // Build base where clause for active records.
-      // Most models have a direct userId column. ScoutFinding now has one
-      // too (nullable during the rollout — release A of the two-release
-      // flow that ends with NOT NULL). Prefer the direct column when
-      // present so the query hits the new `(userId, updatedAt)` composite
-      // index, but fall back to the relation filter for any legacy row
-      // whose `userId` isn't backfilled yet. Release B drops the OR.
-      const ownershipFilter: any =
-        table === "scout_findings"
-          ? {
-              OR: [
-                { userId: user.id },
-                { userId: null, scout: { userId: user.id } },
-              ],
-            }
-          : { userId: user.id };
-
-      // Normal query — soft-delete extension auto-filters deletedAt IS NULL
-      const where: any = { ...ownershipFilter };
+      // Every syncable model has a direct userId column, so sync pull
+      // hits the composite `(userId, updatedAt)` index without a join.
+      const where: any = { userId: user.id };
       applyCursorFilter(where, cursor);
 
       // Special handling for calendar_events: scope to last 90 days + future
@@ -220,7 +204,7 @@ export const sync = new Hono<AuthEnv>()
 
       // Query tombstone IDs only (bypasses soft-delete extension via key existence)
       const tombstoneWhere: any = {
-        ...ownershipFilter,
+        userId: user.id,
         deletedAt: { not: null }, // key exists -> bypasses extension
       };
       applyCursorFilter(tombstoneWhere, cursor);
