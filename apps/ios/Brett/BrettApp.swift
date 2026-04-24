@@ -133,6 +133,7 @@ private struct RootView: View {
                             if !Self.isUITest {
                                 SyncManager.shared.start()
                                 startSSE()
+                                await BadgeManager.shared.requestAuthorization()
                             }
                         }
                 }
@@ -153,10 +154,16 @@ private struct RootView: View {
                 // prompt the user for Face ID right after they typed
                 // their password.
                 lockManager.handleFreshSignIn()
+                Task { await BadgeManager.shared.requestAuthorization() }
             } else {
                 SyncManager.shared.stop()
                 stopSSE()
                 lockManager.handleSignOut()
+                // Fire-and-forget: sign-out is always a foreground action,
+                // so setBadgeCount(0) lands before the process suspends.
+                // Worst case on drop: stale badge until next launch, which
+                // the cold-launch refresh in MainContainer will overwrite.
+                Task { await BadgeManager.shared.clear() }
             }
         }
         // Scene-phase drives the biometric re-lock. Backgrounding the

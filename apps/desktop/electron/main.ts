@@ -181,6 +181,16 @@ ipcMain.handle("set-auto-install-on-quit", (_event, enabled: boolean) => {
   setAutoInstallOnQuit(enabled);
 });
 
+// macOS dock badge (and Linux Unity launcher). No-op on Windows.
+// Clamp to a non-negative integer; reject non-finite values so the
+// renderer surfaces bugs rather than silently zeroing out the badge.
+ipcMain.handle("set-badge-count", (_event, count: unknown) => {
+  if (typeof count !== "number" || !Number.isFinite(count)) {
+    throw new Error("set-badge-count: expected a finite number");
+  }
+  app.setBadgeCount(Math.max(0, Math.floor(count)));
+});
+
 ipcMain.handle("get-system-info", () => {
   return {
     electronVersion: process.versions.electron,
