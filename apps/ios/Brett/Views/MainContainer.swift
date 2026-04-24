@@ -81,6 +81,13 @@ struct MainContainer: View {
     /// changes (id, status, or dueDate on any item). `Item` is an `@Model`
     /// class and not `Equatable`, so we observe this `Int` in `onChange`
     /// rather than `allItems` directly.
+    ///
+    /// Tradeoff: this is a computed property, so SwiftUI re-evaluates it on
+    /// every `body` pass, not only on SwiftData pushes. For a user with
+    /// thousands of items the extra cost is still negligible (hashing is
+    /// O(n) with a tiny constant), and `onChange(of: badgeSignature)` still
+    /// fires only on real changes. Caching in `@State` adds complexity for
+    /// no measurable win; if a profile ever shows this hot, revisit then.
     private var badgeSignature: Int {
         var hasher = Hasher()
         for item in allItems {

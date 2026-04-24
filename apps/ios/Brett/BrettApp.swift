@@ -159,6 +159,10 @@ private struct RootView: View {
                 SyncManager.shared.stop()
                 stopSSE()
                 lockManager.handleSignOut()
+                // Fire-and-forget: sign-out is always a foreground action,
+                // so setBadgeCount(0) lands before the process suspends.
+                // Worst case on drop: stale badge until next launch, which
+                // the cold-launch refresh in MainContainer will overwrite.
                 Task { await BadgeManager.shared.clear() }
             }
         }
