@@ -23,4 +23,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   captureScreenshot: () => ipcRenderer.invoke("capture-screenshot"),
   getSystemInfo: () => ipcRenderer.invoke("get-system-info"),
+  setBadgeCount: (count: number) => ipcRenderer.invoke("set-badge-count", count),
 });

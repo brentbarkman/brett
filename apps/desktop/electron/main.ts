@@ -144,6 +144,14 @@ ipcMain.handle("set-auto-install-on-quit", (_event, enabled: boolean) => {
   setAutoInstallOnQuit(enabled);
 });
 
+// macOS dock badge (and Linux Unity launcher). No-op on Windows. Clamp
+// at the boundary — the renderer is trusted, but a stray NaN or
+// negative number would throw inside Electron.
+ipcMain.handle("set-badge-count", (_event, count: unknown) => {
+  const n = typeof count === "number" && Number.isFinite(count) ? count : 0;
+  app.setBadgeCount(Math.max(0, Math.floor(n)));
+});
+
 ipcMain.handle("get-system-info", () => {
   return {
     electronVersion: process.versions.electron,
