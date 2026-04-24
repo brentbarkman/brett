@@ -17,6 +17,13 @@ struct TodaySectionsBadgeTests {
     private var noonToday: Date { calendar.date(byAdding: .hour, value: 12, to: startOfToday)! }
     /// A date strictly inside "this week" but after today. If today is
     /// Saturday, "+1 day" lands in next week — clamp to end-of-week-minus-1h.
+    ///
+    /// NOTE: On Saturday the `thisWeek` bucket is structurally empty
+    /// (`endOfThisWeek == endOfToday` in `bucket()`), so this fixture
+    /// falls into `today` rather than `thisWeek`. `badgeCount` still
+    /// returns the right number because it sums overdue + today +
+    /// thisWeek, but `countsThisWeek` is effectively exercising the
+    /// `today` bucket on Saturdays. That's acceptable for this helper.
     private var laterThisWeek: Date {
         let weekday = calendar.component(.weekday, from: Date())
         let daysUntilEndOfWeek = max(0, 8 - weekday) // matches bucket()
@@ -81,6 +88,17 @@ struct TodaySectionsBadgeTests {
         #expect(TodaySections.badgeCount(items: items) == 0)
     }
 
+    @Test func excludesSnoozedItems() {
+        // Snoozed items are hidden from the Today view until their snooze
+        // expires, so the badge should match what the user sees on-screen
+        // — zero contribution regardless of the due date.
+        let items = [
+            TestFixtures.makeItem(status: .snoozed, dueDate: yesterday),
+            TestFixtures.makeItem(status: .snoozed, dueDate: noonToday),
+        ]
+        #expect(TodaySections.badgeCount(items: items) == 0)
+    }
+
     @Test func excludesItemsWithoutDueDate() {
         let items = [
             TestFixtures.makeItem(status: .active, dueDate: nil),
@@ -90,12 +108,13 @@ struct TodaySectionsBadgeTests {
 
     @Test func sumsBucketsTogether() {
         let items = [
-            TestFixtures.makeItem(status: .active, dueDate: yesterday),
-            TestFixtures.makeItem(status: .active, dueDate: noonToday),
-            TestFixtures.makeItem(status: .active, dueDate: laterThisWeek),
-            TestFixtures.makeItem(status: .active, dueDate: nextWeek),       // excluded
-            TestFixtures.makeItem(status: .done,   dueDate: noonToday),       // excluded
-            TestFixtures.makeItem(status: .active, dueDate: nil),             // excluded
+            TestFixtures.makeItem(status: .active,  dueDate: yesterday),
+            TestFixtures.makeItem(status: .active,  dueDate: noonToday),
+            TestFixtures.makeItem(status: .active,  dueDate: laterThisWeek),
+            TestFixtures.makeItem(status: .active,  dueDate: nextWeek),       // excluded
+            TestFixtures.makeItem(status: .done,    dueDate: noonToday),       // excluded
+            TestFixtures.makeItem(status: .snoozed, dueDate: yesterday),       // excluded
+            TestFixtures.makeItem(status: .active,  dueDate: nil),             // excluded
         ]
         #expect(TodaySections.badgeCount(items: items) == 3)
     }
