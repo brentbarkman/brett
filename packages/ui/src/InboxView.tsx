@@ -341,8 +341,12 @@ export function InboxView({
         return;
       }
 
-      // Quick add
-      if (key === "n") {
+      // Quick add — plain `n` only. cmd/ctrl+n is reserved for the global
+      // "open Spotlight with create preselected" shortcut registered in
+      // App.tsx; without this guard the single-letter handler shadows it and
+      // scrolls to the quick-add input instead (regression covered in
+      // InboxView.test.tsx).
+      if (key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         quickAddRef.current?.focus();
         return;
