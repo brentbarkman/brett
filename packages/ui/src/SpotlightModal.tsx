@@ -46,6 +46,8 @@ export interface SpotlightModalProps {
   initialForcedAction?: "search" | "create" | null;
   showScoutAction?: boolean;
   assistantName?: string;
+  /** Where a newly-created task will actually land (e.g. "Inbox", "Today", "Shopping"). */
+  destinationLabel?: string;
 }
 
 export function SpotlightModal({
@@ -74,6 +76,7 @@ export function SpotlightModal({
   initialForcedAction,
   showScoutAction,
   assistantName = "Brett",
+  destinationLabel = "Inbox",
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -442,7 +445,7 @@ export function SpotlightModal({
               <Check size={14} className="text-brett-teal flex-shrink-0" />
               <div className="min-w-0">
                 <div className="text-sm text-white/85 font-medium truncate">{confirmedTask}</div>
-                <div className="text-[11px] text-white/40">Added to Inbox</div>
+                <div className="text-[11px] text-white/40">Added to {destinationLabel}</div>
               </div>
             </div>
           </div>

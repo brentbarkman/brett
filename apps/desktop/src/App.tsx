@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { slugify, getEventGlassColor } from "@brett/utils";
+import { slugify, getEventGlassColor, getTaskDestinationLabel } from "@brett/utils";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
 import { useTodayKey } from "./hooks/useTodayKey";
 import { usePinnedDate } from "./hooks/usePinnedDate";
@@ -697,6 +697,10 @@ export function App() {
     return undefined;
   })();
 
+  // Destination shown in the "Added to …" confirmation on both Omnibar and
+  // SpotlightModal. Matches the actual landing spot chosen by createTask().
+  const taskDestinationLabel = getTaskDestinationLabel(currentView, lists);
+
   const omnibarProps = {
     isOpen: omnibar.isOpen && omnibar.mode === "bar",
     input: omnibar.input,
@@ -778,6 +782,7 @@ export function App() {
     showWeatherExpanded,
     onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
     assistantName,
+    destinationLabel: taskDestinationLabel,
   };
 
   const scoutsOmnibarProps = {
@@ -1552,6 +1557,7 @@ export function App() {
           initialForcedAction={spotlightInitialAction}
           showScoutAction={true}
           assistantName={assistantName}
+          destinationLabel={taskDestinationLabel}
         />
 
         {/* Calendar connect interstitial — meeting notes opt-in */}

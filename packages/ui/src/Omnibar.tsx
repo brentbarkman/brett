@@ -65,6 +65,8 @@ export interface OmnibarProps {
   assistantName?: string;
   isMinimized?: boolean;
   onMinimize?: () => void;
+  /** Where a newly-created task will actually land (e.g. "Inbox", "Today", "Shopping"). */
+  destinationLabel?: string;
 }
 
 type Suggestion = {
@@ -110,6 +112,7 @@ export function Omnibar({
   assistantName = "Brett",
   isMinimized,
   onMinimize,
+  destinationLabel = "Inbox",
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -588,7 +591,7 @@ export function Omnibar({
               <Check size={14} className="text-brett-teal/70 flex-shrink-0 mt-0.5" />
               <div className="min-w-0">
                 <div className="text-sm text-white/70 truncate">{confirmedTask}</div>
-                <div className="text-[11px] text-white/30">Added to Inbox</div>
+                <div className="text-[11px] text-white/30">Added to {destinationLabel}</div>
               </div>
             </div>
           )}
