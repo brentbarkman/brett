@@ -84,11 +84,15 @@ struct BrettApp: App {
     private func handleOpenURL(_ url: URL) {
         guard let scheme = url.scheme?.lowercased() else { return }
 
-        // Google OAuth callback scheme is `com.googleusercontent.apps.<id>`
-        // — injected into Info.plist via `GOOGLE_IOS_URL_SCHEME` at build
-        // time. Check the prefix rather than an exact match so Debug vs
-        // Release client IDs both route correctly.
-        if scheme.hasPrefix("com.googleusercontent.apps.") {
+        // Google OAuth callback scheme is `com.googleusercontent.apps.<id>`,
+        // injected into Info.plist via `GOOGLE_IOS_URL_SCHEME` at build time.
+        // Compare against the exact expected value (read from the bundle) so
+        // a malicious app registering `com.googleusercontent.apps.evil://`
+        // doesn't reach GIDSignIn.handle(). The prefix-match approach is
+        // permissive by accident — this one fails closed for anything but
+        // the Google SDK's actual callback.
+        if let expected = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_IOS_URL_SCHEME") as? String,
+           scheme == expected.lowercased() {
             _ = GIDSignIn.sharedInstance.handle(url)
             return
         }

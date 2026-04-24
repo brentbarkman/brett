@@ -59,20 +59,36 @@ final class AppleSignInProvider: AuthProvider {
     /// 32-char URL-safe random nonce. Not hex-encoded: Apple accepts any
     /// reasonable opaque string, and the alphabet here matches what the
     /// community implementations use so a future server-side diff is smaller.
+    ///
+    /// Security notes:
+    /// - `SecRandomCopyBytes` is the CSPRNG here. A `UInt64.random(in:)`
+    ///   fallback runs only if that API fails, which per Apple's docs
+    ///   doesn't happen on real devices.
+    /// - The alphabet has 65 characters. A naive `byte % 65` reduction
+    ///   introduces modulo bias (byte values 0–60 are ~4/256, 61–64 are
+    ///   ~3/256). We use rejection sampling: bytes in the biased tail are
+    ///   discarded. For a 32-char nonce on a 65-symbol alphabet that's
+    ///   ~192 bits of entropy — more than enough.
     private static func makeRawNonce(length: Int = 32) -> String {
         var result = ""
         result.reserveCapacity(length)
+
+        // Largest multiple of the alphabet size that fits in a byte. Bytes
+        // >= this value are rejected so every index has equal probability.
+        let rejectionLimit = UInt8((256 / nonceAlphabet.count) * nonceAlphabet.count)
 
         while result.count < length {
             var byte: UInt8 = 0
             let status = withUnsafeMutablePointer(to: &byte) { ptr -> Int32 in
                 SecRandomCopyBytes(kSecRandomDefault, 1, ptr)
             }
-            guard status == errSecSuccess else {
+            if status != errSecSuccess {
                 // Fall back to AES-backed RNG via UInt64.random if SecRandom
                 // fails (should never happen on device).
                 byte = UInt8(UInt64.random(in: 0...255))
             }
+            // Reject biased-tail bytes — sample again.
+            if byte >= rejectionLimit { continue }
             let idx = Int(byte) % nonceAlphabet.count
             result.append(nonceAlphabet[idx])
         }

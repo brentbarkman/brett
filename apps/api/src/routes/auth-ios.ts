@@ -111,8 +111,14 @@ authIOS.post("/google/token", ipRateLimiter(10, 60_000), async (c) => {
  *
  * Returns 401 when the bearer token is absent, expired, or revoked.
  * The iOS client treats 401 here as "sign out and return to login."
+ *
+ * Rate limited: 20/60s per IP. The iOS client throttles itself to one
+ * call per ~5 minutes, so anything above 20/min indicates abuse (token
+ * validation oracle). Higher than /google/token's 10/60s because a
+ * real device with multiple scene transitions may legitimately burst
+ * 2–3 calls within a minute.
  */
-authIOS.get("/session", async (c) => {
+authIOS.get("/session", ipRateLimiter(20, 60_000), async (c) => {
   let session;
   try {
     session = await auth.api.getSession({ headers: c.req.raw.headers });

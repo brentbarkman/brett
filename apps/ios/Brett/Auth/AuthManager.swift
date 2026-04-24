@@ -74,31 +74,55 @@ final class AuthManager {
         }
     }
 
-    /// Sentinel UserDefaults key. Presence = "this install has run before."
-    /// Absence = "fresh install" (or install after uninstall, which is the
-    /// case we care about). Scoped to the app, not the device, so each
-    /// reinstall starts the handshake over.
-    private static let installSentinelKey = "brett.auth.installSentinel.v1"
+    /// Legacy UserDefaults sentinel key. UserDefaults is restored from
+    /// encrypted iTunes/Finder backups and device-to-device migration
+    /// (Quick Start), so its presence can't prove the purge actually ran
+    /// on THIS device. The current sentinel is in the Keychain with
+    /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` +
+    /// `kSecAttrSynchronizable = false`, which doesn't get restored. This
+    /// key is still read for the one-shot migration below.
+    private static let legacyInstallSentinelKey = "brett.auth.installSentinel.v1"
 
     /// First-launch purge of stale keychain tokens. Idempotent thereafter.
+    ///
+    /// Detection order:
+    /// 1. If the Keychain sentinel is present → this install has already
+    ///    run the purge on this device. No-op.
+    /// 2. Else, if the legacy UserDefaults sentinel is present → treat as
+    ///    "already purged" (grandfather existing users) and migrate the
+    ///    marker into the Keychain so future checks are backup-safe.
+    /// 3. Else, this is a fresh arrival on this device. Purge the token
+    ///    and write the Keychain sentinel.
     private static func purgeKeychainIfFreshInstall() {
-        let defaults = UserDefaults.standard
-        if defaults.bool(forKey: installSentinelKey) {
+        if KeychainStore.hasInstallSentinel() {
             return
         }
-        // First run of this install. If the keychain still holds a token,
-        // it's from a previous install owned by a different (or same)
-        // user — either way the session is stale and using it would
-        // surprise the user. Wipe everything we own in the keychain.
+
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: legacyInstallSentinelKey) {
+            // Migrate: the app had already run at least once on what is
+            // presumed to be this device, so we won't wipe the token —
+            // but we move the sentinel to the Keychain so a future backup
+            // restore can't fool us.
+            KeychainStore.writeInstallSentinel()
+            BrettLog.auth.info("Migrated install sentinel from UserDefaults to Keychain")
+            return
+        }
+
+        // First run of this install on this device (or a post-restore
+        // reinstall). Wipe any residual token — it was either from a
+        // prior install on this device or a backup from a different
+        // user's device; either way using it would surprise the user.
         do {
             try KeychainStore.deleteToken()
-            BrettLog.auth.info("Fresh install detected — purged residual keychain token")
+            BrettLog.auth.info("Fresh install detected on this device — purged residual keychain token")
         } catch {
-            // Non-fatal: a keychain that already had no token will report
-            // errSecItemNotFound which KeychainStore should surface benignly.
             BrettLog.auth.error("Keychain purge on fresh install failed: \(String(describing: error), privacy: .public)")
         }
-        defaults.set(true, forKey: installSentinelKey)
+        KeychainStore.writeInstallSentinel()
+        // Write the legacy flag too so a downgrade to an older build
+        // doesn't redundantly purge.
+        defaults.set(true, forKey: legacyInstallSentinelKey)
     }
 
     // MARK: - Sign-in flows
