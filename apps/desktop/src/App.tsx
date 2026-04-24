@@ -461,17 +461,22 @@ export function App() {
   const { data: activeThingsForCount = [], isSuccess: todayQuerySuccess } = useActiveThings(endOfWeekISO);
 
   // Push the Today count (overdue + due today + this week) to the macOS
-  // dock via the main process. Clears to 0 when signed out so the dock
-  // doesn't keep a stale number for the previous user. No-op in browsers
-  // and on Windows. iOS parity lives in apps/ios/Brett/Services/BadgeManager.
+  // dock via the main process. Gates on `todayQuerySuccess` so the dock
+  // doesn't flash 0 during the brief hydration window before the first
+  // Today query resolves. Clears to 0 when signed out so the dock doesn't
+  // keep a stale number for the previous user. No-op in browsers and on
+  // Windows. iOS parity lives in apps/ios/Brett/Services/BadgeManager.
   useEffect(() => {
     const api = (window as { electronAPI?: { setBadgeCount?: (n: number) => Promise<void> } }).electronAPI;
     if (!api?.setBadgeCount) return;
+    // While signed in, wait for the first successful query before writing
+    // a number. While signed out, push 0 immediately to clear.
+    if (user && !todayQuerySuccess) return;
     const count = user ? activeThingsForCount.length : 0;
     api.setBadgeCount(count).catch(() => {
       // Ignore — losing a badge update is strictly cosmetic.
     });
-  }, [user, activeThingsForCount.length]);
+  }, [user?.id ?? null, todayQuerySuccess, activeThingsForCount.length]);
 
   // Upcoming badge count
   const { data: upcomingThings = [] } = useUpcomingThings();
