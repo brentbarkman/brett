@@ -35,6 +35,7 @@ import {
   LivingBackground,
   BackgroundScrim,
   demoMode,
+  ErrorBoundary,
 } from "@brett/ui";
 import { useAwakening } from "./hooks/useAwakening";
 import { useAppConfig } from "./hooks/useAppConfig";
@@ -1186,6 +1187,13 @@ export function App() {
             isAIWorking={omnibar.isStreaming}
           />
 
+          {/*
+            ErrorBoundary around the Routes subtree — a render-time throw in
+            any single view previously tore down the whole App shell. Scoping
+            the boundary here keeps the chrome (LeftNav, Omnibar, background)
+            alive and lets the user navigate away from a broken view.
+          */}
+          <ErrorBoundary scope="routes">
           <Routes>
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
@@ -1297,9 +1305,11 @@ export function App() {
               </MainLayout>
             } />
           </Routes>
+          </ErrorBoundary>
         </div>
 
         {/* Sliding Detail Panel Overlay */}
+        <ErrorBoundary scope="detail-panel">
         <DetailPanel
           isOpen={isDetailOpen}
           item={selectedItem}
@@ -1472,6 +1482,7 @@ export function App() {
             navigate(path);
           }}
         />
+        </ErrorBoundary>
 
         {/* Drag overlay */}
         <DragOverlay dropAnimation={null}>

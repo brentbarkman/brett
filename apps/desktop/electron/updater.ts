@@ -44,6 +44,17 @@ export function initAutoUpdater(store: Store): void {
     return;
   }
 
+  // Loud failure for the "shipped a build with the placeholder URL" case.
+  // electron-builder's default publish config points at `placeholder.invalid`
+  // until operator config rewrites it; a build released with the default
+  // would otherwise silently never update.
+  if (feedUrl.includes("placeholder.invalid") || feedUrl.includes("placeholder")) {
+    console.error(
+      "[Updater] Feed URL contains 'placeholder' — likely a misconfigured build. Skipping.",
+    );
+    return;
+  }
+
   autoUpdater.setFeedURL({
     provider: "generic",
     url: feedUrl,

@@ -13,10 +13,15 @@ authRouter.post("/sign-up/*", ipRateLimiter(5, 60_000));
 // Sign the desktop OAuth state to prevent forgery
 const AUTH_SECRET = process.env.BETTER_AUTH_SECRET || "";
 
-function signState(state: string, port: number): string {
+// Reject OAuth callbacks where more than this many ms have elapsed since
+// `/desktop/google` was served. A legitimate flow completes in ~10s; 15min
+// covers slow users without leaving stolen `state` values useful indefinitely.
+const OAUTH_STATE_MAX_AGE_MS = 15 * 60 * 1000;
+
+function signState(state: string, port: number, issuedAt: number): string {
   return crypto
     .createHmac("sha256", AUTH_SECRET)
-    .update(`${state}:${port}`)
+    .update(`${state}:${port}:${issuedAt}`)
     .digest("hex");
 }
 
@@ -40,8 +45,12 @@ authRouter.get("/desktop/google", (c) => {
   const callbackURL = new URL("/api/auth/desktop-callback", baseURL);
   callbackURL.searchParams.set("port", String(portNum));
   callbackURL.searchParams.set("state", state);
+  // Issue timestamp rides through the OAuth as a URL param and is part of
+  // the signed payload — lets /desktop-callback reject stale state values.
+  const issuedAt = Date.now();
+  callbackURL.searchParams.set("ts", String(issuedAt));
   // Attach HMAC signature so desktop-callback can verify this flow was initiated here
-  callbackURL.searchParams.set("sig", signState(state, portNum));
+  callbackURL.searchParams.set("sig", signState(state, portNum, issuedAt));
 
   // Render a page that POSTs from the browser — preserves Set-Cookie from better-auth
   const signInURL = new URL("/api/auth/sign-in/social", baseURL).toString();
@@ -78,11 +87,12 @@ authRouter.get("/desktop-callback", (c) => {
   const port = c.req.query("port");
   const state = c.req.query("state");
   const sig = c.req.query("sig");
+  const ts = c.req.query("ts");
 
   if (!sessionToken) {
     return c.text("Authentication failed — no session token", 401);
   }
-  if (!port || !state || !sig) {
+  if (!port || !state || !sig || !ts) {
     return c.text("Missing required parameters", 400);
   }
 
@@ -92,9 +102,26 @@ authRouter.get("/desktop-callback", (c) => {
     return c.text("Invalid port", 400);
   }
 
+  // Reject stale OAuth flows — the signed `ts` is how long ago /desktop/google
+  // minted this `state`. Stops replay of intercepted callbacks days later.
+  const issuedAt = Number(ts);
+  if (!Number.isInteger(issuedAt) || issuedAt <= 0) {
+    return c.text("Invalid timestamp", 400);
+  }
+  const age = Date.now() - issuedAt;
+  if (age < 0 || age > OAUTH_STATE_MAX_AGE_MS) {
+    return c.text("OAuth request expired — please try again", 403);
+  }
+
   // Verify HMAC signature — ensures this callback was initiated by /desktop/google
-  const expectedSig = signState(state, portNum);
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
+  // and that the port/state/timestamp tuple hasn't been tampered with.
+  const expectedSig = signState(state, portNum, issuedAt);
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expectedSig);
+  if (
+    sigBuf.length !== expBuf.length ||
+    !crypto.timingSafeEqual(sigBuf, expBuf)
+  ) {
     return c.text("Invalid signature", 403);
   }
 

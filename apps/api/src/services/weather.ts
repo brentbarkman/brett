@@ -122,6 +122,11 @@ interface GoogleAqiResponse {
   indexes?: GoogleAqiIndex[];
 }
 
+// Google's APIs are usually fast, but a stalled socket would otherwise hang
+// the briefing pipeline until the OS socket timeout (30s+). 6s is plenty
+// for a single upstream call.
+const WEATHER_FETCH_TIMEOUT_MS = 6_000;
+
 /** Fetch current AQI from Google Air Quality API. Returns null on failure (non-critical). */
 async function fetchAirQuality(latitude: number, longitude: number, key: string): Promise<AirQuality | undefined> {
   try {
@@ -132,6 +137,7 @@ async function fetchAirQuality(latitude: number, longitude: number, key: string)
         location: { latitude, longitude },
         extraComputations: ["DOMINANT_POLLUTANT_CONCENTRATION"],
       }),
+      signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return undefined;
 
@@ -160,11 +166,13 @@ export async function fetchForecast(
   const key = getGoogleWeatherApiKey();
   const loc = `location.latitude=${latitude}&location.longitude=${longitude}`;
 
-  // Fetch weather (current, hourly, daily) + AQI in parallel
+  // Fetch weather (current, hourly, daily) + AQI in parallel, each with a
+  // bounded timeout so one stuck upstream can't hang the briefing pipeline.
+  const signal = AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS);
   const [currentRes, hourlyRes, dailyRes, airQuality] = await Promise.all([
-    fetch(`${GOOGLE_WEATHER_BASE}/currentConditions:lookup?key=${key}&${loc}`),
-    fetch(`${GOOGLE_WEATHER_BASE}/forecast/hours:lookup?key=${key}&${loc}&hours=168`),
-    fetch(`${GOOGLE_WEATHER_BASE}/forecast/days:lookup?key=${key}&${loc}&days=7&pageSize=7`),
+    fetch(`${GOOGLE_WEATHER_BASE}/currentConditions:lookup?key=${key}&${loc}`, { signal }),
+    fetch(`${GOOGLE_WEATHER_BASE}/forecast/hours:lookup?key=${key}&${loc}&hours=168`, { signal }),
+    fetch(`${GOOGLE_WEATHER_BASE}/forecast/days:lookup?key=${key}&${loc}&days=7&pageSize=7`, { signal }),
     fetchAirQuality(latitude, longitude, key),
   ]);
 
@@ -247,7 +255,9 @@ export async function searchCities(query: string): Promise<GeocodingResult[]> {
     language: "en",
   });
 
-  const res = await fetch(`${GEOCODING_BASE}?${params}`);
+  const res = await fetch(`${GEOCODING_BASE}?${params}`, {
+    signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) {
     throw new Error(`Open-Meteo geocoding failed: ${res.status} ${res.statusText}`);
   }

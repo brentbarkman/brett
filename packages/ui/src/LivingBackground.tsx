@@ -24,8 +24,16 @@ export function LivingBackground({
   awakeningZoomDurationMs,
 }: LivingBackgroundProps) {
   const useGradients = gradient != null;
+  // Respect prefers-reduced-motion: OS-level "reduce motion" users can get
+  // vestibular discomfort from the Ken Burns zoom. Read once per render
+  // (no listener needed) since mounts are infrequent enough that tracking
+  // changes over the component lifetime isn't worth the complexity.
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const zoomStyle =
-    awakeningZoom !== undefined
+    awakeningZoom !== undefined && !reduceMotion
       ? {
           transform: awakeningZoom ? "scale(1.15)" : "scale(1)",
           transition: awakeningZoomDurationMs

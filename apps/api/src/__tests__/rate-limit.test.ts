@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
-import { rateLimiter } from "../middleware/rate-limit.js";
+import { rateLimiter, extractClientIp } from "../middleware/rate-limit.js";
 
 // Build a tiny Hono app with the rate limiter for testing.
 // We mock the auth user by setting it in middleware before the rate limiter.
@@ -113,5 +113,36 @@ describe("rateLimiter", () => {
       headers: { "X-Test-User-Id": uid2 },
     });
     expect(resB.status).toBe(200);
+  });
+});
+
+describe("extractClientIp", () => {
+  it("returns 'unknown' for missing header", () => {
+    expect(extractClientIp(undefined)).toBe("unknown");
+    expect(extractClientIp("")).toBe("unknown");
+  });
+
+  it("returns the only entry when there's one hop", () => {
+    expect(extractClientIp("203.0.113.5")).toBe("203.0.113.5");
+  });
+
+  it("trusts the right-most entry — not the client-supplied left", () => {
+    // Railway / other trusted proxies APPEND the real client IP, so the
+    // right-most is the least-spoofable. The left entry is a value the
+    // client sent themselves and can be forged.
+    expect(extractClientIp("1.2.3.4, 5.6.7.8, 203.0.113.5")).toBe("203.0.113.5");
+  });
+
+  it("handles whitespace and empty entries", () => {
+    expect(extractClientIp("  1.2.3.4 ,  , 203.0.113.5  ")).toBe("203.0.113.5");
+  });
+
+  it("does not let the client spoof the left-most entry to poison rate-limit keys", () => {
+    // If a malicious client sets X-Forwarded-For: "victim.ip", the proxy
+    // appends the real IP, yielding "victim.ip, real.ip". We must take
+    // real.ip, not victim.ip.
+    const spoofed = "1.1.1.1, 198.51.100.7";
+    expect(extractClientIp(spoofed)).toBe("198.51.100.7");
+    expect(extractClientIp(spoofed)).not.toBe("1.1.1.1");
   });
 });

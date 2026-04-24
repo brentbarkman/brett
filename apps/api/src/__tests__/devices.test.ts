@@ -152,4 +152,34 @@ describe("Device registration routes", () => {
     });
     expect(res.status).toBe(401);
   });
+
+  it("POST /devices/register refuses to reassign another user's token (409)", async () => {
+    // Regression test for the device-token bypass: previously, any
+    // authenticated user could POST a token registered to someone else and
+    // have the server silently update userId, hijacking that device's push
+    // notifications. Now we return 409 when the token belongs to another
+    // user.
+    clearAllRateLimits();
+    const attacker = await createTestUser("Attacker");
+    clearAllRateLimits();
+
+    const victimToken = `victim-${nonce}-hijack`;
+    // Register the token to the original victim user (the `token` at the
+    // top of this file belongs to "Device User").
+    const reg = await authRequest("/devices/register", token, {
+      method: "POST",
+      body: JSON.stringify({ token: victimToken, platform: "ios" }),
+    });
+    expect(reg.status).toBe(201);
+
+    clearAllRateLimits();
+    // Attacker tries to claim the same token
+    const hijack = await authRequest("/devices/register", attacker.token, {
+      method: "POST",
+      body: JSON.stringify({ token: victimToken, platform: "ios" }),
+    });
+    expect(hijack.status).toBe(409);
+    const body = (await hijack.json()) as any;
+    expect(body.error).toMatch(/different account/i);
+  });
 });

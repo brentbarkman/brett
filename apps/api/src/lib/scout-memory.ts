@@ -217,18 +217,25 @@ export async function getActiveMemories(
   }));
 }
 
+// Even with a counter-based threshold, we want a hard floor on how often
+// consolidation can fire per scout to keep unexpected token costs down for
+// very active scouts. 12h means at most two consolidations per scout per day.
+const CONSOLIDATION_MIN_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
 /**
  * Atomically increment consolidationRunCount and check if consolidation should run.
  * When the threshold is hit, the count resets to 0 in the same UPDATE — no race window
  * for concurrent runs to trigger duplicate consolidations.
  *
  * RETURNING evaluates against the NEW row: if count reset to 0, shouldConsolidate is true.
+ * The threshold trigger is also gated by CONSOLIDATION_MIN_INTERVAL_MS since
+ * the last consolidation so a high-cadence scout can't burn through tokens.
  */
 export async function incrementAndCheckConsolidation(
   scoutId: string,
 ): Promise<{ shouldConsolidate: boolean; threshold: number }> {
   const result = await prisma.$queryRaw<
-    Array<{ shouldConsolidate: boolean; consolidationThreshold: number }>
+    Array<{ shouldConsolidate: boolean; consolidationThreshold: number; lastConsolidatedAt: Date | null }>
   >`
     UPDATE "Scout"
     SET
@@ -240,7 +247,8 @@ export async function incrementAndCheckConsolidation(
     WHERE id = ${scoutId}
     RETURNING
       "consolidationRunCount" = 0 AS "shouldConsolidate",
-      "consolidationThreshold"
+      "consolidationThreshold",
+      "lastConsolidatedAt"
   `;
 
   if (!result || result.length === 0) {
@@ -248,8 +256,20 @@ export async function incrementAndCheckConsolidation(
   }
 
   const row = result[0]!;
+  const thresholdHit = Boolean(row.shouldConsolidate);
+
+  // Apply the cooldown AFTER the counter update so a suppressed trigger
+  // doesn't leave the counter stuck at 0 waiting for the next threshold.
+  let shouldConsolidate = thresholdHit;
+  if (thresholdHit && row.lastConsolidatedAt) {
+    const sinceLast = Date.now() - new Date(row.lastConsolidatedAt).getTime();
+    if (sinceLast < CONSOLIDATION_MIN_INTERVAL_MS) {
+      shouldConsolidate = false;
+    }
+  }
+
   return {
-    shouldConsolidate: Boolean(row.shouldConsolidate),
+    shouldConsolidate,
     threshold: row.consolidationThreshold,
   };
 }

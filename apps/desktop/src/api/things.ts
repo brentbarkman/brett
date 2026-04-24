@@ -401,24 +401,65 @@ export function useRetryExtraction() {
       return res;
     },
     onMutate: async (itemId) => {
-      // Optimistically flip to "pending" so the LoadingSkeleton shows immediately.
-      // Without this the button click feels like a no-op: the server returns 202
-      // fast, background extraction often finishes before the refetch settles,
-      // and the UI flashes through pending too quickly to perceive.
+      // Optimistically flip to "pending" everywhere the item could render
+      // — thing-detail is the obvious one, but inbox and any `["things",
+      // ...]` list view shows the same contentStatus badge. Prior behavior
+      // only snapshotted thing-detail, so a failure left inbox/list caches
+      // stuck showing "pending" until a background refetch caught up.
       await qc.cancelQueries({ queryKey: ["thing-detail", itemId] });
-      const prev = qc.getQueryData<unknown>(["thing-detail", itemId]);
+      await qc.cancelQueries({ queryKey: ["inbox"] });
+      await qc.cancelQueries({ queryKey: ["things"] });
+
+      const prevDetail = qc.getQueryData<unknown>(["thing-detail", itemId]);
+      const prevInbox = qc.getQueriesData<unknown>({ queryKey: ["inbox"] });
+      const prevThings = qc.getQueriesData<unknown>({ queryKey: ["things"] });
+
       qc.setQueryData<any>(["thing-detail", itemId], (old: any) =>
         old ? { ...old, contentStatus: "pending" } : old
       );
-      return { prev };
+      // Patch every matching inbox / list cache entry in place so the row
+      // updates without a refetch.
+      const patchList = (data: any): any => {
+        if (!data) return data;
+        if (Array.isArray(data.visible)) {
+          return {
+            ...data,
+            visible: data.visible.map((it: any) =>
+              it?.id === itemId ? { ...it, contentStatus: "pending" } : it,
+            ),
+          };
+        }
+        if (Array.isArray(data)) {
+          return data.map((it: any) =>
+            it?.id === itemId ? { ...it, contentStatus: "pending" } : it,
+          );
+        }
+        return data;
+      };
+      qc.setQueriesData({ queryKey: ["inbox"] }, patchList);
+      qc.setQueriesData({ queryKey: ["things"] }, patchList);
+
+      return { prevDetail, prevInbox, prevThings };
     },
     onError: (_err, itemId, context) => {
-      if (context?.prev !== undefined) {
-        qc.setQueryData(["thing-detail", itemId], context.prev);
+      if (context?.prevDetail !== undefined) {
+        qc.setQueryData(["thing-detail", itemId], context.prevDetail);
+      }
+      if (context?.prevInbox) {
+        for (const [key, value] of context.prevInbox) {
+          qc.setQueryData(key, value);
+        }
+      }
+      if (context?.prevThings) {
+        for (const [key, value] of context.prevThings) {
+          qc.setQueryData(key, value);
+        }
       }
     },
     onSettled: (_data, _err, itemId) => {
       qc.invalidateQueries({ queryKey: ["thing-detail", itemId] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["things"] });
     },
   });
 }

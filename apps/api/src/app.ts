@@ -53,8 +53,12 @@ app.use(
   "*",
   cors({
     origin: (origin) => {
-      // React Native / mobile clients send no Origin header — allow them
-      if (!origin) return "*";
+      // Non-browser clients (iOS, curl, React Native) send no Origin header.
+      // For those, return null — CORS only matters to browsers, and they
+      // always send an Origin. Returning "*" with credentials: true was
+      // spec-invalid and still leaked a permissive header to downstream
+      // caches/proxies. Bearer-auth clients work regardless.
+      if (!origin) return null;
       if (origin === "app://.") return origin;
       if (isLocal && origin.match(/^http:\/\/localhost:\d+$/)) return origin;
       return null;

@@ -21,7 +21,6 @@ const MAGIC_BYTES: Array<{ mime: string; bytes: number[]; offset?: number }> = [
   { mime: "image/jpeg", bytes: [0xFF, 0xD8, 0xFF] },
   { mime: "image/png", bytes: [0x89, 0x50, 0x4E, 0x47] },
   { mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38] },
-  { mime: "image/webp", bytes: [0x57, 0x45, 0x42, 0x50], offset: 8 },
   { mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46] },
   { mime: "application/zip", bytes: [0x50, 0x4B, 0x03, 0x04] },
   { mime: "application/gzip", bytes: [0x1F, 0x8B] },
@@ -29,6 +28,22 @@ const MAGIC_BYTES: Array<{ mime: string; bytes: number[]; offset?: number }> = [
 
 function detectMimeFromBytes(buffer: ArrayBuffer): string | null {
   const view = new Uint8Array(buffer);
+  // WebP = `RIFF` at offset 0 + `WEBP` at offset 8. Checking only offset 8
+  // (the previous behavior) let an attacker prepend 8 arbitrary bytes to a
+  // non-WebP payload and have it detected as WebP.
+  if (
+    view.length >= 12 &&
+    view[0] === 0x52 &&
+    view[1] === 0x49 &&
+    view[2] === 0x46 &&
+    view[3] === 0x46 &&
+    view[8] === 0x57 &&
+    view[9] === 0x45 &&
+    view[10] === 0x42 &&
+    view[11] === 0x50
+  ) {
+    return "image/webp";
+  }
   for (const sig of MAGIC_BYTES) {
     const offset = sig.offset ?? 0;
     if (view.length < offset + sig.bytes.length) continue;
