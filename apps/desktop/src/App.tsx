@@ -460,6 +460,19 @@ export function App() {
   const endOfWeekISO = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
   const { data: activeThingsForCount = [], isSuccess: todayQuerySuccess } = useActiveThings(endOfWeekISO);
 
+  // Push the Today count (overdue + due today + this week) to the macOS
+  // dock via the main process. Clears to 0 when signed out so the dock
+  // doesn't keep a stale number for the previous user. No-op in browsers
+  // and on Windows. iOS parity lives in apps/ios/Brett/Services/BadgeManager.
+  useEffect(() => {
+    const api = (window as { electronAPI?: { setBadgeCount?: (n: number) => Promise<void> } }).electronAPI;
+    if (!api?.setBadgeCount) return;
+    const count = user ? activeThingsForCount.length : 0;
+    api.setBadgeCount(count).catch(() => {
+      // Ignore — losing a badge update is strictly cosmetic.
+    });
+  }, [user, activeThingsForCount.length]);
+
   // Upcoming badge count
   const { data: upcomingThings = [] } = useUpcomingThings();
 
