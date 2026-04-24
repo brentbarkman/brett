@@ -467,17 +467,18 @@ export function App() {
   // Today query resolves. Clears to 0 when signed out so the dock doesn't
   // keep a stale number for the previous user. No-op in browsers and on
   // Windows. iOS parity lives in apps/ios/Brett/Services/BadgeManager.
+  const badgeUserId = user?.id ?? null;
   useEffect(() => {
     const api = (window as { electronAPI?: { setBadgeCount?: (n: number) => Promise<void> } }).electronAPI;
     if (!api?.setBadgeCount) return;
     // While signed in, wait for the first successful query before writing
     // a number. While signed out, push 0 immediately to clear.
-    if (user && !todayQuerySuccess) return;
-    const count = user ? activeThingsForCount.length : 0;
+    if (badgeUserId && !todayQuerySuccess) return;
+    const count = badgeUserId ? activeThingsForCount.length : 0;
     api.setBadgeCount(count).catch(() => {
       // Ignore — losing a badge update is strictly cosmetic.
     });
-  }, [user?.id ?? null, todayQuerySuccess, activeThingsForCount.length]);
+  }, [badgeUserId, todayQuerySuccess, activeThingsForCount.length]);
 
   // Upcoming badge count
   const { data: upcomingThings = [] } = useUpcomingThings();
