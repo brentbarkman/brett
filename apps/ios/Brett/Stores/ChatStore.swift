@@ -38,6 +38,13 @@ final class ChatStore {
     private let session: URLSession
     private let persistence: PersistenceController?
 
+    /// In-flight streaming tasks keyed by chat key. Tracked so
+    /// `cancelAll()` can tear them down synchronously on sign-out —
+    /// without this, a stream that's mid-flight when the user signs out
+    /// can land its final `persistAssistant` on the new user's context.
+    /// See `ActiveSession.tearDown()`.
+    @ObservationIgnored private var activeStreams: [String: Task<Void, Never>] = [:]
+
     init(
         apiClient: APIClient = .shared,
         session: URLSession = ChatStore.makeStreamingSession(),
@@ -46,7 +53,14 @@ final class ChatStore {
         self.apiClient = apiClient
         self.session = session
         self.persistence = persistence
+        ChatStoreRegistry.register(self)
     }
+
+    // No explicit deinit: the registry holds weak refs and compacts on
+    // every `register()` call, so dead slots never accumulate. A deinit
+    // that touched the registry would need to hop to the main actor
+    // (because ChatStore is @MainActor), which Swift 6 rejects for
+    // synchronous nonisolated deinit contexts.
 
     /// Build a URLSession tuned for SSE streaming. The default
     /// `URLSession.shared` aggressively buffers responses on iOS — chunks
@@ -86,7 +100,12 @@ final class ChatStore {
     /// trailing assistant bubble. Throws only on pre-flight failures (bad
     /// URL, missing auth); network errors are swallowed into `lastError`
     /// so the UI can render a soft banner.
-    func send(itemId: String, message: String) async {
+    ///
+    /// `userId` is captured here and plumbed all the way through to
+    /// `persistAssistant` so the final row is written with the caller's
+    /// authenticated id — never re-derived mid-stream from a potentially
+    /// swapped `UserProfile` row.
+    func send(itemId: String, message: String, userId: String?) async {
         let key = itemId
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -94,20 +113,23 @@ final class ChatStore {
         appendUser(key: key, content: trimmed)
         let assistantIndex = beginAssistant(key: key)
 
-        await stream(
-            path: "/brett/chat/\(itemId)",
-            body: ["message": trimmed],
-            key: key,
-            assistantIndex: assistantIndex,
-            itemId: itemId,
-            calendarEventId: nil
-        )
+        await runTrackedStream(key: key) { [weak self] in
+            await self?.stream(
+                path: "/brett/chat/\(itemId)",
+                body: ["message": trimmed],
+                key: key,
+                assistantIndex: assistantIndex,
+                itemId: itemId,
+                calendarEventId: nil,
+                userId: userId
+            )
+        }
     }
 
     /// POST `/brett/chat/event/:eventId` — parallel method for Calendar.
     /// Kept here rather than forking a separate store so both UIs share the
     /// same streaming machinery.
-    func send(eventId: String, message: String) async {
+    func send(eventId: String, message: String, userId: String?) async {
         let key = eventId
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -115,14 +137,41 @@ final class ChatStore {
         appendUser(key: key, content: trimmed)
         let assistantIndex = beginAssistant(key: key)
 
-        await stream(
-            path: "/brett/chat/event/\(eventId)",
-            body: ["message": trimmed],
-            key: key,
-            assistantIndex: assistantIndex,
-            itemId: nil,
-            calendarEventId: eventId
-        )
+        await runTrackedStream(key: key) { [weak self] in
+            await self?.stream(
+                path: "/brett/chat/event/\(eventId)",
+                body: ["message": trimmed],
+                key: key,
+                assistantIndex: assistantIndex,
+                itemId: nil,
+                calendarEventId: eventId,
+                userId: userId
+            )
+        }
+    }
+
+    /// Cancel every in-flight chat stream. Called from `ActiveSession.tearDown()`
+    /// so a stream that's mid-response when the user signs out can't land its
+    /// final `persistAssistant` against the *next* user's context.
+    func cancelAll() {
+        for (_, task) in activeStreams {
+            task.cancel()
+        }
+        activeStreams.removeAll()
+        for key in isStreaming.keys { isStreaming[key] = false }
+    }
+
+    /// Wrap a stream launch so the inner Task is tracked in `activeStreams`
+    /// and removed on completion. The caller `await`s the wrapped Task, so
+    /// normal suspension semantics are preserved — the tracking is transparent.
+    private func runTrackedStream(
+        key: String,
+        _ body: @escaping @Sendable () async -> Void
+    ) async {
+        let task = Task { await body() }
+        activeStreams[key] = task
+        await task.value
+        activeStreams.removeValue(forKey: key)
     }
 
     // MARK: - Streaming core
@@ -133,7 +182,8 @@ final class ChatStore {
         key: String,
         assistantIndex: Int,
         itemId: String?,
-        calendarEventId: String?
+        calendarEventId: String?,
+        userId: String?
     ) async {
         isStreaming[key] = true
         lastError[key] = nil
@@ -227,7 +277,8 @@ final class ChatStore {
                     persistAssistant(
                         content: final.content,
                         itemId: itemId,
-                        calendarEventId: calendarEventId
+                        calendarEventId: calendarEventId,
+                        userId: userId
                     )
                 }
             }
@@ -314,20 +365,30 @@ final class ChatStore {
 
     // MARK: - SwiftData persistence
 
+    /// Persist the final assistant message. `userId` is captured by the
+    /// caller (`send(...)`) at the top of the turn and plumbed through —
+    /// we never re-derive it inside the persistence path, because between
+    /// the send and the stream's end the user might have signed out, a new
+    /// `UserProfile` row might have landed from a pull, and a late-arriving
+    /// assistant chunk could otherwise be tagged with the wrong owner.
+    ///
+    /// If `userId` is nil (the caller signed out mid-stream), we skip the
+    /// write entirely — there's no authenticated owner to attribute the
+    /// message to, and the cancellation in `ActiveSession.tearDown()`
+    /// should have short-circuited this path anyway.
     private func persistAssistant(
         content: String,
         itemId: String?,
-        calendarEventId: String?
+        calendarEventId: String?,
+        userId: String?
     ) {
         guard !content.trimmingCharacters(in: .whitespaces).isEmpty,
               let persistence else { return }
-        let context = persistence.mainContext
-
-        // UserId: we can lift it from UserProfile if one is present.
-        var userId = ""
-        if let profile = (try? context.fetch(FetchDescriptor<UserProfile>()))?.first {
-            userId = profile.id
+        guard let userId, !userId.isEmpty else {
+            BrettLog.store.info("ChatStore: dropped assistant persist — no authenticated userId")
+            return
         }
+        let context = persistence.mainContext
 
         let message = BrettMessage(
             userId: userId,
@@ -339,7 +400,11 @@ final class ChatStore {
             updatedAt: Date()
         )
         context.insert(message)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            BrettLog.store.error("ChatStore persistAssistant save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// Drain an `URLSession.AsyncBytes` sequence into a `Data` buffer.
@@ -465,3 +530,42 @@ private final class ChunkBox: @unchecked Sendable {
     func increment() { value += 1 }
 }
 #endif
+
+// MARK: - Registry
+
+/// Weak-reference registry of live `ChatStore` instances. Lets
+/// `ActiveSession.tearDown()` cancel every in-flight chat stream in the
+/// process without introducing a singleton or plumbing a reference
+/// through every view that hosts a chat.
+///
+/// Why a registry instead of a singleton: chat state is per-view
+/// (`@State private var chatStore = ChatStore()` in `TaskDetailView`),
+/// so there may be several concurrent stores at once. The registry
+/// fans the cancellation out to all of them.
+@MainActor
+enum ChatStoreRegistry {
+    /// Weak-box wrapper so stores can be registered without pinning them
+    /// in memory past their view's lifetime. The registry is itself
+    /// main-actor-isolated, so no locking is required.
+    private final class WeakRef {
+        weak var store: ChatStore?
+        init(_ store: ChatStore) { self.store = store }
+    }
+
+    private static var refs: [WeakRef] = []
+
+    static func register(_ store: ChatStore) {
+        // Opportunistic compact: drop empty weak boxes while we're here.
+        refs.removeAll { $0.store == nil }
+        refs.append(WeakRef(store))
+    }
+
+    /// Cancel every in-flight stream across all live `ChatStore`s.
+    /// Called from `ActiveSession.tearDown()` before SwiftData is wiped
+    /// so no stream can land `persistAssistant` on the next user's rows.
+    static func cancelAllActive() {
+        for ref in refs {
+            ref.store?.cancelAll()
+        }
+    }
+}

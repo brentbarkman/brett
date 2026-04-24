@@ -9,6 +9,11 @@ import SwiftData
 @Suite("PushEngine", .tags(.sync), .serialized)
 @MainActor
 struct PushEngineTests {
+    /// Reset MockURLProtocol before each test. The stub registry + request
+    /// log are static; without this reset, a test that asserts the log is
+    /// empty sees stragglers from a previous suite.
+    init() { MockURLProtocol.reset() }
+
     // MARK: - Fixtures
 
     /// Compute the URL the APIClient will POST to, matching the rules in

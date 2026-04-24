@@ -53,6 +53,7 @@ private struct TaskDetailBody: View {
     let onOpenLinkedItem: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AuthManager.self) private var authManager
 
     @State private var itemStore = ItemStore()
     @State private var listStore = ListStore()
@@ -245,7 +246,7 @@ private struct TaskDetailBody: View {
 
     private func reload() {
         item = itemStore.fetchById(itemId)
-        lists = listStore.fetchAll()
+        lists = listStore.fetchAll(userId: authManager.currentUser?.id)
         if let item {
             draft = ItemDraft(from: item)
         }
@@ -256,7 +257,7 @@ private struct TaskDetailBody: View {
     }
 
     private func hydrateChat() {
-        let persisted = messageStore.fetchForItem(itemId)
+        let persisted = messageStore.fetchForItem(itemId, userId: authManager.currentUser?.id)
         chatStore.hydrate(itemId: itemId, from: persisted)
     }
 
@@ -280,7 +281,7 @@ private struct TaskDetailBody: View {
     }
 
     private func refreshAttachments() {
-        attachments = attachmentStore.fetchForItem(itemId)
+        attachments = attachmentStore.fetchForItem(itemId, userId: authManager.currentUser?.id)
         pendingUploads = fetchPendingUploads()
     }
 

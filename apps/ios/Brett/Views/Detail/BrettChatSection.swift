@@ -229,8 +229,12 @@ struct BrettChatSection: View {
     private func send() {
         let pending = input
         input = ""
+        // Capture the authenticated userId at the moment of send so the
+        // final assistant row is attributed to the caller — never to a
+        // subsequent account that may sign in before the stream ends.
+        let userId = ActiveSession.userId
         Task {
-            await store.send(itemId: itemId, message: pending)
+            await store.send(itemId: itemId, message: pending, userId: userId)
         }
     }
 }

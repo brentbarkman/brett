@@ -3,12 +3,17 @@ import SwiftUI
 
 /// Today page — the home screen of the app.
 ///
-/// Wave 3 rewire: now sourced from `ItemStore` (real SwiftData) rather than
-/// `MockStore`. The legacy `store: MockStore` parameter is kept for
-/// backwards-compat with `MainContainer` until MockStore is deprecated in a
-/// follow-up wave — we ignore everything on it except `selectedTaskId`, which
-/// still drives the TaskDetail sheet until that view is migrated too.
+/// Data flows through `ItemStore` (SwiftData mutations + sync queue) + live
+/// `@Query` for reactive reads. The @Query predicates filter by the current
+/// user via computed `userItems` / `userLists` / `userEvents` — during a
+/// rapid account switch the sign-out wipe + session-owned SyncManager make
+/// cross-user rows nearly impossible, but this is defense-in-depth so that
+/// a late-arriving async task from a prior session can never render.
 struct TodayPage: View {
+    // MARK: - Auth scope
+
+    @Environment(AuthManager.self) private var authManager
+
     // MARK: - Real stores
 
     @State private var itemStore = ItemStore(
@@ -43,6 +48,25 @@ struct TodayPage: View {
         filter: #Predicate<CalendarEvent> { $0.deletedAt == nil },
         sort: \CalendarEvent.startTime
     ) private var allEvents: [CalendarEvent]
+
+    /// Auth-scoped views of the reactive reads. `@Query` can't take a
+    /// dynamic predicate without an init-based Query + view split, so the
+    /// userId filter lives here. Wave E can push this into the predicate
+    /// for perf once we're comfortable with a TodayPageBody subview.
+    private var userItems: [Item] {
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return allItems.filter { $0.userId == uid }
+    }
+
+    private var userLists: [ItemList] {
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return allLists.filter { $0.userId == uid }
+    }
+
+    private var userEvents: [CalendarEvent] {
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return allEvents.filter { $0.userId == uid }
+    }
 
     /// 0 or 1 row. Used to distinguish "empty because the user has
     /// nothing" from "empty because the first sync hasn't landed yet" —
@@ -107,7 +131,7 @@ struct TodayPage: View {
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "scroll")
             .refreshable {
-                try? await SyncManager.shared.pullToRefresh()
+                try? await ActiveSession.syncManager?.pullToRefresh()
                 await briefingStore.fetch()
             }
             .onChange(of: SelectionStore.shared.lastCreatedItemId) { _, newId in
@@ -165,7 +189,7 @@ struct TodayPage: View {
 
     private var sections: TodaySections {
         TodaySections.bucket(
-            items: allItems,
+            items: userItems,
             reflowKey: reflowSnapshotKey,
             pendingDoneIDs: pendingDoneIDs
         )
@@ -176,7 +200,7 @@ struct TodayPage: View {
     /// row does an O(1) dictionary read instead of triggering a rebuild of
     /// the full `[listId: name]` map per lookup.
     private func makeListNameProvider() -> (Item) -> String? {
-        let index = Dictionary(uniqueKeysWithValues: allLists.map { ($0.id, $0.name) })
+        let index = Dictionary(uniqueKeysWithValues: userLists.map { ($0.id, $0.name) })
         return { item in
             guard let listId = item.listId else { return nil }
             return index[listId]
@@ -311,7 +335,7 @@ struct TodayPage: View {
         let total = s.activeCount + s.doneToday.count
         let done = s.doneToday.count
         let base = "\(done) of \(total) done"
-        guard !allEvents.isEmpty else { return base }
+        guard !userEvents.isEmpty else { return base }
         let meetingCount = events.count
         let suffix = meetingCount == 1 ? "meeting" : "meetings"
         return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: events)))"
@@ -332,11 +356,11 @@ struct TodayPage: View {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        return allEvents.filter { $0.startTime >= start && $0.startTime < end }
+        return userEvents.filter { $0.startTime >= start && $0.startTime < end }
     }
 
     private var nextUpcomingEvent: CalendarEvent? {
-        allEvents.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
+        userEvents.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
     }
 
     /// Only surface the card when the next event is genuinely soon. We use a
@@ -438,116 +462,10 @@ struct TodayPage: View {
     }
 }
 
-// MARK: - Section bucketing
-
-/// Value type carrying the bucketed sections for the Today page.
-///
-/// Keeping the bucketing logic off the view makes it trivially testable in
-/// previews with fixture items (see the #Preview at the bottom of this file).
-struct TodaySections {
-    let overdue: [Item]
-    let today: [Item]
-    let thisWeek: [Item]
-    let nextWeek: [Item]
-    let doneToday: [Item]
-
-    var activeCount: Int {
-        overdue.count + today.count + thisWeek.count + nextWeek.count
-    }
-
-    /// Count shown on the iOS home-screen badge and the macOS dock badge.
-    /// Overdue + due today + due this week, excluding Next Week, completed,
-    /// archived, and items without a due date. Semantically equivalent to
-    /// desktop's `activeThingsForCount.length` in `apps/desktop/src/App.tsx`,
-    /// but the two can diverge at week boundaries for non-UTC timezones —
-    /// desktop uses UTC end-of-week (`getEndOfWeekUTC`) while iOS uses
-    /// `Calendar.current` (local time). Matches the existing iOS vs desktop
-    /// split in the Today view itself, so the badge stays consistent with
-    /// what each client shows on-screen.
-    static func badgeCount(items: [Item]) -> Int {
-        let s = bucket(items: items, reflowKey: 0)
-        return s.overdue.count + s.today.count + s.thisWeek.count
-    }
-
-    var hasDoneToday: Bool { !doneToday.isEmpty }
-
-    var isEveryActiveSectionEmpty: Bool { activeCount == 0 }
-
-    /// Bucket items into Overdue / Today / This Week / Next Week / Done Today
-    /// based on local-calendar date math. `reflowKey` is unused here but
-    /// participates in the computed identity so SwiftUI re-derives the
-    /// sections when the parent bumps it (debounced completion cascade).
-    /// `pendingDoneIDs` lists items the user just marked done — we keep
-    /// them in their original active section until the debounce expires
-    /// so the user can keep tapping nearby rows without the list jumping.
-    static func bucket(
-        items: [Item],
-        reflowKey: Int,
-        pendingDoneIDs: Set<String> = []
-    ) -> TodaySections {
-        _ = reflowKey // force re-derivation on change; see toggle() in the parent
-        let calendar = Calendar.current
-        let now = Date()
-        let startOfToday = calendar.startOfDay(for: now)
-        let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday.addingTimeInterval(86_400)
-
-        // End of this week = next Sunday midnight local time.
-        let weekday = calendar.component(.weekday, from: now)
-        let daysUntilEndOfWeek = max(0, 8 - weekday) // Sunday = 1, Saturday = 7
-        let endOfThisWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday) ?? endOfToday
-        let endOfNextWeek = calendar.date(byAdding: .day, value: 7, to: endOfThisWeek) ?? endOfThisWeek.addingTimeInterval(7 * 86_400)
-
-        var overdue: [Item] = []
-        var today: [Item] = []
-        var thisWeek: [Item] = []
-        var nextWeek: [Item] = []
-        var doneToday: [Item] = []
-
-        for item in items {
-            if item.itemStatus == .archived { continue }
-
-            // If this item is being held in its previous section, override
-            // its effective status. The TaskRow still reads `isCompleted`
-            // from the live model so the checkbox + strikethrough still
-            // show as done — only the section assignment is delayed.
-            let effectiveStatus: ItemStatus = pendingDoneIDs.contains(item.id) ? .active : item.itemStatus
-
-            if effectiveStatus == .done {
-                if let completed = item.completedAt,
-                   completed >= startOfToday && completed < endOfToday {
-                    doneToday.append(item)
-                }
-                continue
-            }
-
-            // Active tasks only from here on out.
-            if effectiveStatus != .active { continue }
-            guard let due = item.dueDate else { continue }
-
-            if due < startOfToday {
-                overdue.append(item)
-            } else if due < endOfToday {
-                today.append(item)
-            } else if due < endOfThisWeek {
-                thisWeek.append(item)
-            } else if due < endOfNextWeek {
-                nextWeek.append(item)
-            }
-        }
-
-        return TodaySections(
-            overdue: overdue.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            today: today.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            thisWeek: thisWeek.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            nextWeek: nextWeek.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            doneToday: doneToday.sorted {
-                ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
-            }
-        )
-    }
-}
-
 // MARK: - Preview
+//
+// The `TodaySections` bucketing logic lives in `TodaySections.swift` so it
+// can be unit-tested without this view's SwiftUI dependencies.
 
 #Preview("Today — with fixture items") {
     let preview = PersistenceController.makePreview()

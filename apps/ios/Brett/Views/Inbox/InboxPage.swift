@@ -29,22 +29,48 @@ struct InboxPage: View {
     @State private var triageMode: TriageMode? = nil
     @State private var showTriage: Bool = false
 
-    /// Cheap re-render nudge — bump after mutations so observation picks up
-    /// store changes immediately. (SwiftData publishes on its own too; this
-    /// just avoids sheet-scroll edge cases.)
-    @State private var refreshTick: Int = 0
-
     /// Used to decide skeleton-vs-empty-state when the inbox has zero
     /// items. See TodayPage for the same pattern.
     @Query private var syncHealthRows: [SyncHealth]
+
+    /// Live reactive read of non-deleted items. SwiftData broadcasts
+    /// mutations to @Query consumers automatically, which is the whole
+    /// point — the previous `refreshTick` anti-pattern existed only because
+    /// the page fetched imperatively via `itemStore.fetchInbox()` and
+    /// needed a manual poke to re-render.
+    ///
+    /// The @Query filter is intentionally narrow (`deletedAt == nil`) for
+    /// two reasons: (1) the broader 4-condition predicate that mirrors
+    /// `ItemStore.fetchInbox` times out Swift's type checker under newer
+    /// toolchains when combined with mixed `Date?` / `String?` nil checks,
+    /// and (2) we want the final filter to include the authenticated
+    /// `userId`, which can't be captured in a `@Query` initializer. The
+    /// remaining filters (inbox-shape + userId scoping) run in
+    /// `allInboxItems`. Row volume is bounded per user, so Swift-side
+    /// filtering is cheap.
+    @Query(
+        filter: #Predicate<Item> { $0.deletedAt == nil },
+        sort: \Item.createdAt,
+        order: .reverse
+    ) private var nonDeletedItemsAnyUser: [Item]
 
     private var hasCompletedInitialSync: Bool {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
     }
 
+    /// Inbox view mirrors `ItemStore.fetchInbox`: user-scoped, active
+    /// status, no list assignment, no due date. Applied in Swift so the
+    /// userId (dynamic) can participate in the filter alongside the
+    /// shape conditions.
     private var allInboxItems: [Item] {
-        _ = refreshTick
-        return itemStore.fetchInbox()
+        guard let uid = authManager.currentUser?.id else { return [] }
+        let activeStatus = ItemStatus.active.rawValue
+        return nonDeletedItemsAnyUser.filter { item in
+            item.userId == uid
+                && item.listId == nil
+                && item.dueDate == nil
+                && item.status == activeStatus
+        }
     }
 
     private var filteredItems: [Item] {
@@ -122,7 +148,6 @@ struct InboxPage: View {
                     isPresented: $showTriage,
                     onCommit: {
                         exitSelectMode()
-                        refreshTick += 1
                     }
                 )
                 .presentationDetents([.medium, .large])
@@ -205,8 +230,12 @@ struct InboxPage: View {
                         .padding(.vertical, 4)
                 }
 
-                InboxItemRow(
+                TaskRow(
                     item: item,
+                    listName: nil,
+                    allowSwipeRight: false,
+                    allowSwipeLeft: false,
+                    allowDrag: false,
                     isSelectMode: isSelectMode,
                     isSelected: selectedIDs.contains(item.id),
                     onToggle: {
@@ -215,7 +244,6 @@ struct InboxPage: View {
                         } else {
                             HapticManager.light()
                             itemStore.toggleStatus(id: item.id)
-                            refreshTick += 1
                         }
                     },
                     onSelect: {
@@ -228,6 +256,11 @@ struct InboxPage: View {
                 )
                 .padding(.leading, isNewsletter ? 6 : 0)
             }
+            // Inbox owns the row-level swipe actions — TaskRow's default
+            // Today/Lists swipe set (schedule leading, delete/archive
+            // trailing) is turned off above via the allowSwipe* = false
+            // flags. Replaced with Inbox's triage-flavoured actions:
+            // Select (enter multi-select) + Delete.
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button {
                     enterSelectMode(selecting: item.id)
@@ -239,7 +272,6 @@ struct InboxPage: View {
                 Button(role: .destructive) {
                     HapticManager.heavy()
                     itemStore.delete(id: item.id)
-                    refreshTick += 1
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -287,133 +319,6 @@ struct InboxPage: View {
         guard !ids.isEmpty else { return }
         itemStore.bulkDelete(ids: ids)
         exitSelectMode()
-        refreshTick += 1
     }
 }
 
-// MARK: - Row
-
-/// Inbox-specific row bound directly to `Item`. Lives here rather than in
-/// `Shared/TaskRow.swift` because `TaskRow` is still tied to `MockItem` and is
-/// shared with Today/Calendar during the mobile migration. Keeping the Inbox
-/// row local avoids a cross-page ripple and lets us add the selection-mode
-/// affordance without touching the mock-driven rows.
-private struct InboxItemRow: View {
-    let item: Item
-    let isSelectMode: Bool
-    let isSelected: Bool
-    let onToggle: () -> Void
-    let onSelect: () -> Void
-
-    var body: some View {
-        Button {
-            onSelect()
-        } label: {
-            HStack(spacing: 12) {
-                if isSelectMode {
-                    selectionCircle
-                } else {
-                    leadingGlyph
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title)
-                        .font(BrettTypography.taskTitle)
-                        .foregroundStyle(BrettColors.textCardTitle)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    HStack(spacing: 6) {
-                        Text("Captured \(capturedAgo)")
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.textMeta)
-
-                        if let domain = item.contentDomain {
-                            Text("·")
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textGhost)
-                            Text(domain)
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.cerulean.opacity(0.6))
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.title), captured \(capturedAgo)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var leadingGlyph: some View {
-        ZStack {
-            Circle()
-                .fill(Color.black.opacity(0.20))
-                .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                }
-                .frame(width: 30, height: 30)
-
-            Image(systemName: item.itemType == .content ? "doc.text" : "bolt.fill")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(
-                    item.itemType == .content
-                        ? BrettColors.cerulean.opacity(0.7)
-                        : BrettColors.gold.opacity(0.7)
-                )
-        }
-        .frame(width: 34, height: 34)
-        .contentShape(Rectangle())
-        .highPriorityGesture(
-            TapGesture().onEnded {
-                onToggle()
-            }
-        )
-    }
-
-    private var selectionCircle: some View {
-        ZStack {
-            Circle()
-                .strokeBorder(
-                    isSelected ? BrettColors.gold : Color.white.opacity(0.25),
-                    lineWidth: 1.5
-                )
-                .background {
-                    Circle().fill(
-                        isSelected
-                            ? BrettColors.gold.opacity(0.25)
-                            : Color.clear
-                    )
-                }
-                .frame(width: 22, height: 22)
-
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(BrettColors.gold)
-            }
-        }
-        .frame(width: 34, height: 34)
-        .contentShape(Rectangle())
-        .highPriorityGesture(
-            TapGesture().onEnded { onToggle() }
-        )
-        .transition(.scale.combined(with: .opacity))
-    }
-
-    private var capturedAgo: String {
-        let interval = Date().timeIntervalSince(item.createdAt)
-        let hours = Int(interval / 3_600)
-        let days = hours / 24
-        if days >= 1 { return days == 1 ? "yesterday" : "\(days)d ago" }
-        if hours >= 1 { return "\(hours)h ago" }
-        let minutes = max(1, Int(interval / 60))
-        return "\(minutes)m ago"
-    }
-}

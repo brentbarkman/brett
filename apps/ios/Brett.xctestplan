@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "62C1D5F2-F9B6-4DAB-8F33-C23C61D7B4C1",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "parallelizable" : false,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Brett.xcodeproj",
+      "identifier" : "Brett",
+      "name" : "Brett"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:Brett.xcodeproj",
+        "identifier" : "BrettTests",
+        "name" : "BrettTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:Brett.xcodeproj",
+        "identifier" : "BrettUITests",
+        "name" : "BrettUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -13,6 +13,11 @@ import SwiftData
 @Suite("AttachmentRetry", .tags(.sync), .serialized)
 @MainActor
 struct AttachmentRetryTests {
+    /// Reset MockURLProtocol before each test — see AttachmentUploaderTests
+    /// for the rationale. Swift Testing reinstantiates the suite struct
+    /// once per `@Test`, so this runs in isolation per test.
+    init() { MockURLProtocol.reset() }
+
     // MARK: - Harness
 
     final class Harness {
@@ -50,7 +55,8 @@ struct AttachmentRetryTests {
                 apiClient: apiClient,
                 attachmentStore: attachmentStore,
                 persistence: persistence,
-                stagingDirectory: stagingDir
+                stagingDirectory: stagingDir,
+                useBackgroundSession: false
             )
 
             let src = tempRoot.appendingPathComponent("source.bin")

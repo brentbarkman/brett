@@ -40,6 +40,34 @@ extension APIClient {
 
     // MARK: - Upload
 
+    /// Build the URLRequest used by the attachment upload endpoint without
+    /// executing it. `BackgroundUploadService` needs this so it can hand
+    /// the request to `URLSessionConfiguration.background` — which is the
+    /// only way an upload survives app termination. Shape matches what
+    /// `uploadAttachment(...)` below sends, so a server that works for
+    /// the foreground path works for the background path.
+    func buildAttachmentUploadRequest(
+        itemId: String,
+        fileURL: URL,
+        filename: String,
+        mimeType: String
+    ) throws -> URLRequest {
+        let url = baseURL.appendingPathComponent("things/\(itemId)/attachments")
+        let sizeBytes = try Self.fileSize(at: fileURL)
+        let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
+
+        var request = URLRequest(url: url, timeoutInterval: 300)
+        request.httpMethod = "POST"
+        request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+        request.setValue(encodedFilename, forHTTPHeaderField: "X-Filename")
+        request.setValue(String(sizeBytes), forHTTPHeaderField: "Content-Length")
+        request.setValue(RequestBuilder.userAgent, forHTTPHeaderField: "User-Agent")
+        if let token = tokenProvider?(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+
     /// POST a file to `/things/:itemId/attachments`.
     ///
     /// - Parameters:
@@ -76,8 +104,31 @@ extension APIClient {
         // One-shot session per upload so the delegate forwards *our* progress
         // closure. URLSessionDelegate is retained strongly by the session, so
         // we `finishTasksAndInvalidate()` after the upload completes.
+        //
+        // Config choice: `.default` (not `.ephemeral`) so the session has the
+        // URL cache + connection pooling the OS uses for regular transfers,
+        // then tuned for the large-file upload case:
+        //
+        //   - waitsForConnectivity = true: if the user drops off Wi-Fi
+        //     mid-upload we pause and resume instead of failing instantly.
+        //   - timeoutIntervalForResource = 600s: a 20 MB video on 3G can take
+        //     multiple minutes; the default 7-day resource timeout is fine
+        //     but we cap explicitly so a stuck upload eventually gives up.
+        //   - allowsExpensiveNetworkAccess / allowsConstrainedNetworkAccess
+        //     = true: users sharing a file after a Low Data Mode toggle
+        //     should still succeed.
+        //
+        // TODO(WAVE-B-follow-up): migrate to a true background URLSession
+        // (URLSessionConfiguration.background(withIdentifier:)) so uploads
+        // survive app termination. Requires plumbing through the app
+        // delegate's `application(_:handleEventsForBackgroundURLSession:)`
+        // handler plus persisting in-flight uploadTask state across launches.
         let delegate = UploadProgressDelegate(progress: progress)
-        let config = URLSessionConfiguration.ephemeral
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForResource = 600
+        config.allowsExpensiveNetworkAccess = true
+        config.allowsConstrainedNetworkAccess = true
         // Piggy-back on the shared-session's protocol classes so tests using
         // MockURLProtocol on the APIClient-owned session still get intercepted.
         config.protocolClasses = APIClient.testProtocolClasses ?? config.protocolClasses
@@ -130,6 +181,31 @@ extension APIClient {
         )
     }
 
+    // MARK: - Response parsing
+
+    /// Decode the body of an attachment upload response. Used by
+    /// `BackgroundUploadService` to reconstruct the typed result from the
+    /// raw bytes its URLSession delegate callback receives. Status-code
+    /// validation mirrors the foreground path.
+    static func parseAttachmentUploadResponse(
+        data: Data?,
+        httpStatus: Int?
+    ) throws -> AttachmentResponse {
+        guard let httpStatus else {
+            throw APIError.unknown(URLError(.badServerResponse))
+        }
+        let body = data ?? Data()
+        try validateAttachments(status: httpStatus, data: body)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        do {
+            return try decoder.decode(AttachmentResponse.self, from: body)
+        } catch {
+            throw APIError.decodingFailed(error)
+        }
+    }
+
     // MARK: - Test plumbing
 
     /// Tests set this to inject `MockURLProtocol` into per-upload ephemeral
@@ -145,7 +221,10 @@ extension APIClient {
 
     /// Duplicates `APIClient.validate` — kept inline so we can call it from
     /// the extension (the original is `private`). Keep logic in sync.
-    fileprivate static func validateAttachments(status: Int, data: Data) throws {
+    /// Response validator, accessible from `BackgroundUploadService` via
+    /// `parseAttachmentUploadResponse`. Intentionally `internal` so test
+    /// harnesses can drive edge cases.
+    static func validateAttachments(status: Int, data: Data) throws {
         switch status {
         case 200...299:
             return
@@ -163,7 +242,7 @@ extension APIClient {
         }
     }
 
-    fileprivate static func extractAttachmentsErrorMessage(from data: Data) -> String? {
+    static func extractAttachmentsErrorMessage(from data: Data) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return (json["message"] as? String) ?? (json["error"] as? String)
     }

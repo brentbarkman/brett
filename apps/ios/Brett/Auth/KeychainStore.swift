@@ -30,6 +30,15 @@ enum KeychainStore {
     /// Account key for the single bearer token entry.
     private static let tokenAccount = "sessionToken"
 
+    /// Account key for the "this install has run on this device" sentinel.
+    /// Stored with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and
+    /// `kSecAttrSynchronizable = false`, so it is NOT restored via iCloud
+    /// Keychain sync, encrypted iTunes/Finder backups, or Quick Start
+    /// device-to-device migration. Its absence is therefore a reliable
+    /// "never run on this particular device" signal — which a UserDefaults
+    /// sentinel cannot give us (UserDefaults *is* restored from backup).
+    private static let installSentinelAccount = "installSentinel.v1"
+
     /// Shared keychain access group, matching the `$(AppIdentifierPrefix)`
     /// entitlement in both the main app and the share extension. Per Apple:
     /// when a single access group is declared in the entitlement, iOS
@@ -146,9 +155,9 @@ enum KeychainStore {
     static func deleteToken() throws {
         var statuses: [OSStatus] = []
         if let group = sharedAccessGroup {
-            statuses.append(deleteInternalStatus(accessGroup: group))
+            statuses.append(deleteInternalStatus(accessGroup: group, account: tokenAccount))
         }
-        statuses.append(deleteInternalStatus(accessGroup: nil))
+        statuses.append(deleteInternalStatus(accessGroup: nil, account: tokenAccount))
 
         for status in statuses {
             guard status == errSecSuccess || status == errSecItemNotFound else {
@@ -157,13 +166,53 @@ enum KeychainStore {
         }
     }
 
-    // MARK: - Internals
+    // MARK: - Install sentinel
 
-    private static func baseQuery(accessGroup: String?) -> [String: Any] {
+    /// True iff the install-sentinel keychain item is present on THIS device.
+    /// Absence means the app has never completed a first-launch purge on this
+    /// device, even if UserDefaults was restored from a backup.
+    static func hasInstallSentinel() -> Bool {
+        // Check the shared access group first, then fall back to the default.
+        // The accessor probes shared-group availability lazily so we can't
+        // rely on it in every environment.
+        if let group = sharedAccessGroup,
+           (try? read(accessGroup: group, account: installSentinelAccount)) != nil {
+            return true
+        }
+        return (try? read(accessGroup: nil, account: installSentinelAccount)) != nil
+    }
+
+    /// Writes the install sentinel so subsequent launches can detect that
+    /// the purge has already run on this device. Best-effort — logged but
+    /// not fatal on failure.
+    static func writeInstallSentinel() {
+        // A single byte is enough. The presence of the item, not its value,
+        // is what we check.
+        let data = Data([1])
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: tokenAccount,
+            kSecAttrAccount as String: installSentinelAccount,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+        ]
+        if let group = sharedAccessGroup {
+            query[kSecAttrAccessGroup as String] = group
+        }
+        let addStatus = SecItemAdd(query as CFDictionary, nil)
+        if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
+            BrettLog.auth.error("Install sentinel write failed: \(addStatus, privacy: .public)")
+        }
+    }
+
+    // MARK: - Internals
+
+    private static func baseQuery(accessGroup: String?, account: String = tokenAccount) -> [String: Any] {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
         ]
         if let accessGroup {
             query[kSecAttrAccessGroup as String] = accessGroup
@@ -171,8 +220,8 @@ enum KeychainStore {
         return query
     }
 
-    private static func read(accessGroup: String?) throws -> String? {
-        var query = baseQuery(accessGroup: accessGroup)
+    private static func read(accessGroup: String?, account: String = tokenAccount) throws -> String? {
+        var query = baseQuery(accessGroup: accessGroup, account: account)
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         query[kSecReturnData as String] = true
 
@@ -224,8 +273,8 @@ enum KeychainStore {
     }
 
     /// Delete helper that throws on unexpected status codes.
-    private static func deleteInternal(accessGroup: String?) throws {
-        let status = deleteInternalStatus(accessGroup: accessGroup)
+    private static func deleteInternal(accessGroup: String?, account: String = tokenAccount) throws {
+        let status = deleteInternalStatus(accessGroup: accessGroup, account: account)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.status(status)
         }
@@ -233,8 +282,8 @@ enum KeychainStore {
 
     /// Delete helper that returns the raw status so the caller can aggregate
     /// across multiple locations (see `deleteToken`).
-    private static func deleteInternalStatus(accessGroup: String?) -> OSStatus {
-        let query = baseQuery(accessGroup: accessGroup)
+    private static func deleteInternalStatus(accessGroup: String?, account: String = tokenAccount) -> OSStatus {
+        let query = baseQuery(accessGroup: accessGroup, account: account)
         return SecItemDelete(query as CFDictionary)
     }
 }

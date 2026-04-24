@@ -30,9 +30,9 @@ final class APIClient {
     private let decoder: JSONDecoder
 
     /// Preferred initialiser for tests — pass a stubbed URLSession.
-    init(session: URLSession = .shared) {
+    init(session: URLSession? = nil) {
         self.baseURL = Self.resolveBaseURL()
-        self.session = session
+        self.session = session ?? Self.makeDefaultSession()
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -43,6 +43,25 @@ final class APIClient {
         // in dev where `BrettAPIURL` is a LAN IP that changes by network —
         // without this the extension would silently post to production.
         SharedConfig.writeAPIURL(self.baseURL)
+    }
+
+    /// Bearer-only session: no cookie jar. Authentication is strictly via
+    /// the `Authorization: Bearer …` header wired through `tokenProvider`.
+    /// If the server somehow sets a cookie (debug misconfig, accidental
+    /// better-auth default), we never store it — removing an alternate
+    /// auth path an attacker who stole a cookie but not a bearer token
+    /// could exploit. The auth flows that need to READ Set-Cookie parse
+    /// it from response headers directly via
+    /// `HTTPCookie.cookies(withResponseHeaderFields:)`, not from
+    /// HTTPCookieStorage, so this disable is transparent to sign-in.
+    private static func makeDefaultSession() -> URLSession {
+        let config = URLSessionConfiguration.default
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        // Also drop the default cookie jar so other code paths can't
+        // accidentally reach for persisted cookies.
+        config.httpCookieStorage = nil
+        return URLSession(configuration: config)
     }
 
     // MARK: - Base URL resolution

@@ -23,7 +23,11 @@ struct DailyBriefing: View {
                     Text("DAILY BRIEFING")
                         .font(BrettTypography.sectionLabel)
                         .tracking(2.4)
-                        .foregroundStyle(Color.white.opacity(0.60))
+                        // Cerulean/60 instead of white/60: this is an AI
+                        // surface, and the design guide reserves cerulean
+                        // for Brett-generated content. Matches the
+                        // desktop's DailyBriefing header treatment.
+                        .foregroundStyle(BrettColors.cerulean.opacity(0.60))
 
                     Spacer()
 

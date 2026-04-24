@@ -870,33 +870,17 @@ enum SyncEntityMapper {
 
     // MARK: - Date / JSON helpers
 
-    /// ISO-8601 formatters configured for Prisma's default output
-    /// (`YYYY-MM-DDTHH:mm:ss.sssZ`). Cached because sync churns through
-    /// hundreds of calls per pull — ISO8601DateFormatter's init is not
-    /// free. Its configuration is immutable after init; Apple's docs note
-    /// that reading a configured formatter is thread-safe in practice, but
-    /// every caller here is @MainActor so we don't rely on that.
-    private static let sharedISOFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let sharedISOFormatterNoFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
+    /// Thin forwarders to the shared `BrettDate` utility so the mapper
+    /// doesn't have its own formatter statics (which errored under Swift 6
+    /// strict concurrency on newer Xcode). Sync still churns through
+    /// hundreds of calls per pull — `BrettDate.iso8601WithFractional` is
+    /// the single cached instance.
     static func isoString(_ date: Date?) -> String? {
-        guard let date else { return nil }
-        return sharedISOFormatter.string(from: date)
+        BrettDate.isoString(date)
     }
 
     static func parseDate(_ raw: Any?) -> Date? {
-        guard let str = raw as? String else { return nil }
-        if let d = sharedISOFormatter.date(from: str) { return d }
-        return sharedISOFormatterNoFraction.date(from: str)
+        BrettDate.parseISO(raw)
     }
 
     /// Decode a JSON string (as stored on-device) back into a dict/array so

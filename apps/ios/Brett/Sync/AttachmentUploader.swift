@@ -32,6 +32,23 @@ final class AttachmentUploader {
     private let persistence: PersistenceController
     private let fileManager: FileManager
 
+    /// Whether to route uploads through `BackgroundUploadService`'s
+    /// background URLSession (survives app termination) or through the
+    /// in-process `APIClient.uploadAttachment` path. Production defaults
+    /// to background; tests opt out so MockURLProtocol works.
+    private let useBackgroundSession: Bool
+
+    private let backgroundService: BackgroundUploadService
+
+    /// Bridges background URLSession completion callbacks back into the
+    /// async/await caller. When the service's `onUploadFinished` fires we
+    /// look up the matching continuation and resume it. If the app was
+    /// killed and relaunched between the upload start and completion, the
+    /// continuation is gone — the callback still updates the
+    /// `AttachmentUpload` row directly so state stays consistent.
+    @ObservationIgnored
+    private var pendingContinuations: [String: CheckedContinuation<APIClient.AttachmentResponse, Error>] = [:]
+
     /// Directory inside the app's Documents container where we stash copies of
     /// queued uploads. Re-created on first enqueue if it doesn't exist.
     let uploadStagingDirectory: URL
@@ -67,12 +84,16 @@ final class AttachmentUploader {
         attachmentStore: AttachmentStore,
         persistence: PersistenceController,
         fileManager: FileManager = .default,
-        stagingDirectory: URL? = nil
+        stagingDirectory: URL? = nil,
+        useBackgroundSession: Bool = true,
+        backgroundService: BackgroundUploadService = .shared
     ) {
         self.apiClient = apiClient
         self.attachmentStore = attachmentStore
         self.persistence = persistence
         self.fileManager = fileManager
+        self.useBackgroundSession = useBackgroundSession
+        self.backgroundService = backgroundService
 
         if let stagingDirectory {
             self.uploadStagingDirectory = stagingDirectory
@@ -93,6 +114,88 @@ final class AttachmentUploader {
         let (stream, continuation) = AsyncStream.makeStream(of: UploadProgress.self)
         self.progressStream = stream
         self.progressContinuation = continuation
+
+        if useBackgroundSession {
+            installBackgroundCallbacks()
+            // Ask iOS to report any tasks that finished while we were
+            // suspended/killed. The service logs them; per-task completion
+            // callbacks flow through `onUploadFinished` as iOS replays them.
+            backgroundService.reconcilePendingTasks()
+        }
+    }
+
+    /// Route the shared background service's callbacks into this uploader.
+    /// Called on init when `useBackgroundSession` is true.
+    private func installBackgroundCallbacks() {
+        backgroundService.onProgress = { [weak self] uploadId, fraction in
+            guard let self else { return }
+            // Look up the row to surface itemId alongside fraction. If
+            // the row has been wiped (sign-out mid-upload, for example)
+            // we still fire a best-effort progress event on the stream.
+            if let upload = self.fetchUpload(id: uploadId) {
+                self.updateProgress(uploadId: uploadId, itemId: upload.itemId, fraction: fraction)
+            }
+        }
+
+        backgroundService.onUploadFinished = { [weak self] uploadId, data, httpStatus, error in
+            guard let self else { return }
+            self.handleBackgroundCompletion(
+                uploadId: uploadId,
+                data: data,
+                httpStatus: httpStatus,
+                error: error
+            )
+        }
+    }
+
+    /// Shared entry point invoked by the background service's delegate
+    /// callback. Resolves any awaiting in-process continuation AND
+    /// updates the persistent row — the two paths diverge only on
+    /// cold-launch reconciliation where the continuation is gone.
+    private func handleBackgroundCompletion(
+        uploadId: String,
+        data: Data?,
+        httpStatus: Int?,
+        error: Error?
+    ) {
+        // Transport-layer error (network drop, etc.) — surface as a
+        // thrown error to any awaiting continuation; standalone path
+        // marks the row failed.
+        if let error = error {
+            if let cont = pendingContinuations.removeValue(forKey: uploadId) {
+                cont.resume(throwing: error)
+            } else if let upload = fetchUpload(id: uploadId) {
+                // Cold-launch path: no one is awaiting. Mark the row
+                // failed so the queue's retry logic can decide whether
+                // to re-enqueue.
+                let message = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+                finalizeFailure(uploadId: uploadId, itemId: upload.itemId, error: message, keepFile: true)
+            }
+            return
+        }
+
+        // HTTP-layer: parse the body + status. APIClient's validator
+        // throws on 4xx/5xx.
+        do {
+            let response = try APIClient.parseAttachmentUploadResponse(data: data, httpStatus: httpStatus)
+            if let cont = pendingContinuations.removeValue(forKey: uploadId) {
+                cont.resume(returning: response)
+            } else {
+                finalizeSuccess(uploadId: uploadId, response: response)
+            }
+        } catch {
+            if let cont = pendingContinuations.removeValue(forKey: uploadId) {
+                cont.resume(throwing: error)
+            } else if let upload = fetchUpload(id: uploadId) {
+                let message = (error as? APIError)?.userFacingMessage ?? String(describing: error)
+                let permanent: Bool = {
+                    if case .validation = (error as? APIError) { return true }
+                    if case .unauthorized = (error as? APIError) { return true }
+                    return false
+                }()
+                finalizeFailure(uploadId: uploadId, itemId: upload.itemId, error: message, keepFile: !permanent, permanent: permanent)
+            }
+        }
     }
 
     // MARK: - Public API
@@ -228,17 +331,12 @@ final class AttachmentUploader {
         let taskHandle = Task<Void, Never> { [weak self] in
             guard let self else { return }
             do {
-                let response = try await self.apiClient.uploadAttachment(
+                let response = try await self.performUpload(
+                    uploadId: uploadId,
                     itemId: itemId,
                     fileURL: fileURL,
                     filename: filename,
-                    mimeType: mimeType,
-                    progress: { [weak self] fraction in
-                        guard let self else { return }
-                        Task { @MainActor in
-                            self.updateProgress(uploadId: uploadId, itemId: itemId, fraction: fraction)
-                        }
-                    }
+                    mimeType: mimeType
                 )
                 await MainActor.run {
                     self.finalizeSuccess(uploadId: uploadId, response: response)
@@ -266,6 +364,47 @@ final class AttachmentUploader {
         inFlight[uploadId] = taskHandle
         await taskHandle.value
         inFlight.removeValue(forKey: uploadId)
+    }
+
+    /// Perform the actual HTTP transfer. Routes through the background
+    /// URLSession when `useBackgroundSession` is true (production path —
+    /// survives app termination) or through the in-process `APIClient`
+    /// path when false (test path, keeps MockURLProtocol interception
+    /// working). Both paths return the server's `AttachmentResponse` via
+    /// async/await; the background path bridges the delegate callback
+    /// via a `CheckedContinuation` registered in `pendingContinuations`.
+    private func performUpload(
+        uploadId: String,
+        itemId: String,
+        fileURL: URL,
+        filename: String,
+        mimeType: String
+    ) async throws -> APIClient.AttachmentResponse {
+        if useBackgroundSession {
+            let request = try apiClient.buildAttachmentUploadRequest(
+                itemId: itemId,
+                fileURL: fileURL,
+                filename: filename,
+                mimeType: mimeType
+            )
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingContinuations[uploadId] = continuation
+                backgroundService.upload(stagedFile: fileURL, to: request, uploadId: uploadId)
+            }
+        }
+
+        return try await apiClient.uploadAttachment(
+            itemId: itemId,
+            fileURL: fileURL,
+            filename: filename,
+            mimeType: mimeType,
+            progress: { [weak self] fraction in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.updateProgress(uploadId: uploadId, itemId: itemId, fraction: fraction)
+                }
+            }
+        )
     }
 
     // MARK: - Finalisation
@@ -333,8 +472,14 @@ final class AttachmentUploader {
         var descriptor = FetchDescriptor<AttachmentUpload>(
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
+        // Exclude `uploading` rows so a concurrent `processQueue()` call
+        // doesn't pick up a row that already has an in-flight URLSession
+        // task. Without this, the inner Task bookkeeping (`inFlight[id]`)
+        // gets overwritten and both transfers race for the same row.
         descriptor.predicate = #Predicate { upload in
-            upload.stage != "done" && upload.stage != "failed"
+            upload.stage != "done"
+                && upload.stage != "failed"
+                && upload.stage != "uploading"
         }
         descriptor.fetchLimit = 1
         return (try? context.fetch(descriptor))?.first

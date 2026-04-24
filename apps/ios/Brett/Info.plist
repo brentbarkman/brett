@@ -49,15 +49,13 @@
 	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
+	<!-- Release build: NO NSAppTransportSecurity exceptions. The only
+	     Release host is https://api.brett.brentbarkman.com, which ATS
+	     satisfies out of the box. Debug builds (which talk to a LAN IP
+	     over HTTP) use Info-Debug.plist, selected per-configuration via
+	     INFOPLIST_FILE in project.yml. -->
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock Brett with Face ID</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Brett needs local network to connect to the dev API server.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Brett needs microphone access for voice input.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

@@ -144,7 +144,11 @@ struct OmnibarView: View {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let realLists = listStore.fetchAll()  // excludes archived by default
+        // Scope to the current user — #listname tags should only resolve
+        // against lists the signed-in account owns. Without userId, a
+        // late-arriving sync row from a prior session could capture the
+        // tag intent.
+        let realLists = listStore.fetchAll(userId: authManager.currentUser?.id)
         let lists = realLists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
         let parsed = SmartParser.parse(
             trimmed,
