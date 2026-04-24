@@ -457,8 +457,13 @@ struct TodaySections {
 
     /// Count shown on the iOS home-screen badge and the macOS dock badge.
     /// Overdue + due today + due this week, excluding Next Week, completed,
-    /// archived, and items without a due date. Mirrors desktop's
-    /// `activeThingsForCount.length` derivation in `apps/desktop/src/App.tsx`.
+    /// archived, and items without a due date. Semantically equivalent to
+    /// desktop's `activeThingsForCount.length` in `apps/desktop/src/App.tsx`,
+    /// but the two can diverge at week boundaries for non-UTC timezones —
+    /// desktop uses UTC end-of-week (`getEndOfWeekUTC`) while iOS uses
+    /// `Calendar.current` (local time). Matches the existing iOS vs desktop
+    /// split in the Today view itself, so the badge stays consistent with
+    /// what each client shows on-screen.
     static func badgeCount(items: [Item]) -> Int {
         let s = bucket(items: items, reflowKey: 0)
         return s.overdue.count + s.today.count + s.thisWeek.count
