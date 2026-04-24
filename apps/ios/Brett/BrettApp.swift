@@ -133,6 +133,7 @@ private struct RootView: View {
                             if !Self.isUITest {
                                 SyncManager.shared.start()
                                 startSSE()
+                                await BadgeManager.shared.requestAuthorization()
                             }
                         }
                 }
@@ -153,10 +154,12 @@ private struct RootView: View {
                 // prompt the user for Face ID right after they typed
                 // their password.
                 lockManager.handleFreshSignIn()
+                Task { await BadgeManager.shared.requestAuthorization() }
             } else {
                 SyncManager.shared.stop()
                 stopSSE()
                 lockManager.handleSignOut()
+                Task { await BadgeManager.shared.clear() }
             }
         }
         // Scene-phase drives the biometric re-lock. Backgrounding the

@@ -67,6 +67,30 @@ struct MainContainer: View {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
     }
 
+    /// Full item set used for badge computation. Mirrors the query in
+    /// `TodayPage` — one notification drives the whole badge pipeline.
+    @Query(
+        filter: #Predicate<Item> { $0.deletedAt == nil },
+        sort: \Item.createdAt,
+        order: .reverse
+    ) private var allItems: [Item]
+
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Stable hash that changes whenever something affecting the badge count
+    /// changes (id, status, or dueDate on any item). `Item` is an `@Model`
+    /// class and not `Equatable`, so we observe this `Int` in `onChange`
+    /// rather than `allItems` directly.
+    private var badgeSignature: Int {
+        var hasher = Hasher()
+        for item in allItems {
+            hasher.combine(item.id)
+            hasher.combine(item.itemStatus)
+            hasher.combine(item.dueDate)
+        }
+        return hasher.finalize()
+    }
+
     @State private var kenBurnsScale: CGFloat = Awakening.sessionPlayed ? 1.0 : Awakening.startScale
     @State private var coverOpacity: Double = Awakening.sessionPlayed ? 0.0 : 1.0
     @State private var awakeningTriggered: Bool = Awakening.sessionPlayed
@@ -108,6 +132,26 @@ struct MainContainer: View {
                 if ready && !awakeningTriggered {
                     fireAwakening()
                 }
+            }
+            // Badge sync — fires on any add, delete, or edit that touches
+            // id/status/dueDate. `badgeSignature` is an `Int` (Equatable)
+            // that hashes the fields affecting the Today bucket count, so
+            // we avoid conforming `Item` to `Equatable`.
+            .onChange(of: badgeSignature) { _, _ in
+                Task { await BadgeManager.shared.refresh(items: allItems) }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await BadgeManager.shared.refresh(items: allItems) }
+                }
+            }
+            .task {
+                // Cold-launch badge seed. `onChange(of: badgeSignature)` does
+                // not fire for the initial value, so we push once here to cover
+                // the case where the item set is already loaded when the view
+                // mounts. Uses a separate task from the awakening task above so
+                // neither blocks the other.
+                await BadgeManager.shared.refresh(items: allItems)
             }
             // Tap-to-dismiss the keyboard. `simultaneousGesture` runs in
             // parallel with TabView's swipe + every button's own tap so
