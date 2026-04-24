@@ -182,7 +182,7 @@ export function useBackground({
     if (baseUrl) {
       rotateImageRef.current();
     }
-  }, [baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: only run once when baseUrl becomes available; rotateImageRef.current always reads the latest
+  }, [baseUrl]);
 
   // Persist the current segment so next launch can do the awakening effect
   useEffect(() => {
