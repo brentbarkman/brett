@@ -21,23 +21,19 @@ import UserNotifications
 final class BadgeManager {
     static let shared = BadgeManager()
 
-    private var didRequestAuthorization = false
-
     private init() {}
 
-    /// Ask once for `.badge` authorization. Idempotent — subsequent calls
-    /// are no-ops so we don't re-prompt on every sign-in. The prompt
-    /// itself is fine to share with real notifications later; iOS merges
-    /// authorization across option sets.
+    /// Ask for `.badge` authorization if the user hasn't made a choice
+    /// yet. Consults the system's `authorizationStatus` rather than a
+    /// local flag so we skip the prompt correctly across app launches
+    /// and correctly re-no-op if the user later grants or denies badge
+    /// permissions in Settings. Best-effort: any error is swallowed
+    /// because the badge is cosmetic.
     func requestAuthorization() async {
-        guard !didRequestAuthorization else { return }
-        didRequestAuthorization = true
-        do {
-            _ = try await UNUserNotificationCenter.current()
-                .requestAuthorization(options: [.badge])
-        } catch {
-            // Best-effort; badge is cosmetic.
-        }
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { return }
+        _ = try? await UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.badge])
     }
 
     /// Recompute the badge from the current item set and push it to
