@@ -455,6 +455,15 @@ struct TodaySections {
         overdue.count + today.count + thisWeek.count + nextWeek.count
     }
 
+    /// Count shown on the iOS home-screen badge and the macOS dock badge.
+    /// Overdue + due today + due this week, excluding Next Week, completed,
+    /// archived, and items without a due date. Mirrors desktop's
+    /// `activeThingsForCount.length` derivation in `apps/desktop/src/App.tsx`.
+    static func badgeCount(items: [Item]) -> Int {
+        let s = bucket(items: items, reflowKey: 0)
+        return s.overdue.count + s.today.count + s.thisWeek.count
+    }
+
     var hasDoneToday: Bool { !doneToday.isEmpty }
 
     var isEveryActiveSectionEmpty: Bool { activeCount == 0 }
