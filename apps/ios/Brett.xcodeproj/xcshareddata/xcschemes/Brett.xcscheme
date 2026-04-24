@@ -71,6 +71,12 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       onlyGenerateCoverageForSpecifiedTargets = "NO">
+      <TestPlans>
+         <TestPlanReference
+            default = "YES"
+            reference = "container:Brett.xctestplan">
+         </TestPlanReference>
+      </TestPlans>
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
@@ -81,28 +87,6 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "4B72560AC660F3001873E768"
-               BuildableName = "BrettTests.xctest"
-               BlueprintName = "BrettTests"
-               ReferencedContainer = "container:Brett.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "186595853033417F72BC6F1E"
-               BuildableName = "BrettUITests.xctest"
-               BlueprintName = "BrettUITests"
-               ReferencedContainer = "container:Brett.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

@@ -27,8 +27,11 @@ struct ItemStoreUpdateTests {
         store.update(id: item.id, changes: ["title": "edited", "notes": "after"])
 
         // Find the resulting mutation queue entry and verify previousValues.
+        // The id is hoisted into a local value — `#Predicate` captures only
+        // simple values, not KeyPath traversals on captured model instances.
+        let itemId = item.id
         let queueDescriptor = FetchDescriptor<MutationQueueEntry>(
-            predicate: #Predicate { $0.entityType == "item" && $0.entityId == item.id }
+            predicate: #Predicate { $0.entityType == "item" && $0.entityId == itemId }
         )
         let queue = try context.fetch(queueDescriptor)
         #expect(queue.count == 1)
@@ -61,8 +64,9 @@ struct ItemStoreUpdateTests {
 
         store.toggleStatus(id: item.id)
 
+        let itemId = item.id
         let queueDescriptor = FetchDescriptor<MutationQueueEntry>(
-            predicate: #Predicate { $0.entityType == "item" && $0.entityId == item.id }
+            predicate: #Predicate { $0.entityType == "item" && $0.entityId == itemId }
         )
         let queue = try context.fetch(queueDescriptor)
         let entry = try #require(queue.first)
@@ -97,8 +101,9 @@ struct ItemStoreUpdateTests {
             previousValues: ["title": "form-open-title"]
         )
 
+        let itemId = item.id
         let queueDescriptor = FetchDescriptor<MutationQueueEntry>(
-            predicate: #Predicate { $0.entityType == "item" && $0.entityId == item.id }
+            predicate: #Predicate { $0.entityType == "item" && $0.entityId == itemId }
         )
         let entry = try #require(try context.fetch(queueDescriptor).first)
         let prev = try #require(decodeJSON(entry.previousValues))

@@ -15,6 +15,8 @@ import Foundation
 @Suite("ScoutStore", .tags(.views), .serialized)
 @MainActor
 struct ScoutStoreTests {
+    /// Reset MockURLProtocol before each test. See AttachmentUploaderTests.
+    init() { MockURLProtocol.reset() }
 
     // MARK: - Fixtures
 

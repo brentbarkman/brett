@@ -9,6 +9,10 @@ import Foundation
 @Suite("AttachmentDownloader", .tags(.sync), .serialized)
 @MainActor
 struct AttachmentDownloaderTests {
+    /// Reset MockURLProtocol before each test so static stub / requestLog
+    /// state from a prior suite doesn't leak in.
+    init() { MockURLProtocol.reset() }
+
     // MARK: - Harness
 
     final class Harness {

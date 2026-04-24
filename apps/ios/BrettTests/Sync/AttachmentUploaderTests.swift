@@ -10,6 +10,11 @@ import SwiftData
 @Suite("AttachmentUploader", .tags(.sync), .serialized)
 @MainActor
 struct AttachmentUploaderTests {
+    /// Per-test MockURLProtocol reset. Swift Testing constructs a new
+    /// `Self` for each `@Test`, so this runs before every test and
+    /// isolates the shared-static request log + stub registry from
+    /// whatever the previous suite left behind.
+    init() { MockURLProtocol.reset() }
     // MARK: - Harness
 
     final class Harness {

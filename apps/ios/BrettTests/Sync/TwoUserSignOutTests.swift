@@ -22,27 +22,131 @@ struct TwoUserSignOutTests {
         let container = try InMemoryPersistenceController.makeContainer()
         let context = ModelContext(container)
 
-        // Populate rows for two different users across every model type
-        // PersistenceController.wipeAllData is responsible for.
+        // Populate rows across EVERY @Model type that PersistenceController
+        // is responsible for wiping. If a future change adds a new @Model
+        // to `PersistenceController.modelTypes` and forgets to wipe it in
+        // `wipeAllData`, the prior user's rows leak to the next signed-in
+        // user. This test enumerates all 14 model types so that oversight
+        // shows up as a test failure instead of a production data leak.
         context.insert(Item(userId: "alice", title: "a"))
         context.insert(Item(userId: "bob", title: "b"))
         context.insert(ItemList(userId: "alice", name: "Alice list"))
         context.insert(ItemList(userId: "bob", name: "Bob list"))
+        context.insert(CalendarEvent(
+            userId: "alice",
+            googleAccountId: "acc-a",
+            calendarListId: "cal-a",
+            googleEventId: "evt-a",
+            title: "Meet",
+            startTime: Date(),
+            endTime: Date().addingTimeInterval(3600)
+        ))
+        context.insert(CalendarEventNote(
+            calendarEventId: "evt-a",
+            userId: "alice",
+            content: "notes"
+        ))
+        context.insert(Scout(
+            id: "s1",
+            userId: "alice",
+            name: "Scout",
+            goal: "watch X",
+            createdAt: Date()
+        ))
+        context.insert(ScoutFinding(
+            scoutId: "s1",
+            title: "finding",
+            description: "desc",
+            sourceName: "src"
+        ))
         context.insert(BrettMessage(userId: "alice", role: .user, content: "hi"))
         context.insert(BrettMessage(userId: "bob", role: .user, content: "hi"))
+        context.insert(Brett.Attachment(
+            filename: "a.png",
+            mimeType: "image/png",
+            sizeBytes: 1,
+            storageKey: "k",
+            itemId: "i1",
+            userId: "alice"
+        ))
+        context.insert(UserProfile(id: "u-alice", email: "alice@ex.com"))
+        context.insert(MutationQueueEntry(
+            entityType: "item",
+            entityId: "i1",
+            action: .update,
+            endpoint: "/items/i1",
+            method: .patch,
+            payload: "{}"
+        ))
+        context.insert(SyncCursor(tableName: "items", lastSyncedAt: "abc"))
+        context.insert(ConflictLogEntry(
+            entityType: "item",
+            entityId: "i1",
+            localValuesJSON: "{}",
+            serverValuesJSON: "{}",
+            conflictedFieldsJSON: "[]"
+        ))
+        context.insert(SyncHealth())
+        context.insert(AttachmentUpload(
+            itemId: "i1",
+            localFilePath: "/tmp/a",
+            filename: "a.png",
+            mimeType: "image/png",
+            sizeBytes: 1
+        ))
         try context.save()
 
         // Sanity — everything inserted.
         #expect(try context.fetch(FetchDescriptor<Item>()).count == 2)
         #expect(try context.fetch(FetchDescriptor<ItemList>()).count == 2)
+        #expect(try context.fetch(FetchDescriptor<CalendarEvent>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<CalendarEventNote>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<Scout>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<ScoutFinding>()).count == 1)
         #expect(try context.fetch(FetchDescriptor<BrettMessage>()).count == 2)
+        #expect(try context.fetch(FetchDescriptor<Brett.Attachment>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<UserProfile>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<MutationQueueEntry>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<SyncCursor>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<ConflictLogEntry>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<SyncHealth>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<AttachmentUpload>()).count == 1)
 
         // This is exactly what AuthManager.signOut → wipeAllData does.
         PersistenceController.wipeAllData(in: context)
 
+        // Every table must be empty. A missing assertion here means a
+        // future regression that leaves rows behind on sign-out wouldn't
+        // be caught.
         #expect(try context.fetch(FetchDescriptor<Item>()).isEmpty)
         #expect(try context.fetch(FetchDescriptor<ItemList>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<CalendarEvent>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<CalendarEventNote>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Scout>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<ScoutFinding>()).isEmpty)
         #expect(try context.fetch(FetchDescriptor<BrettMessage>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Brett.Attachment>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<UserProfile>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<MutationQueueEntry>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<SyncCursor>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<ConflictLogEntry>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<SyncHealth>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<AttachmentUpload>()).isEmpty)
+    }
+
+    @Test func wipeAllDataCoversEveryModelTypeRegisteredInPersistence() {
+        // Structural invariant: `PersistenceController.modelTypes` is the
+        // authoritative list of @Model types the app registers with its
+        // ModelContainer. Every type on that list needs a corresponding
+        // `deleteAll(...)` call in `wipeAllData`. Count parity here keeps
+        // adding a new model + forgetting the wipe from shipping.
+        //
+        // If this test starts failing, audit `wipeAllData` against the
+        // updated `modelTypes` list.
+        #expect(
+            PersistenceController.modelTypes.count == 14,
+            "PersistenceController.modelTypes changed — update wipeAllData to match and bump this count"
+        )
     }
 
     @Test func scopedFetchIsolatesUsersWithoutWipe() throws {

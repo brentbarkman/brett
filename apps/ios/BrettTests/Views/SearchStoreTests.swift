@@ -12,8 +12,10 @@ import Testing
 /// `MockURLProtocol` via a dedicated `APIClient`. We use a fresh ephemeral
 /// UserDefaults suite per test so recent-query persistence doesn't leak.
 @MainActor
-@Suite("SearchStore", .tags(.views))
+@Suite("SearchStore", .tags(.views), .serialized)
 struct SearchStoreTests {
+    /// Reset MockURLProtocol before each test. See AttachmentUploaderTests.
+    init() { MockURLProtocol.reset() }
 
     // MARK: - Fixtures
 

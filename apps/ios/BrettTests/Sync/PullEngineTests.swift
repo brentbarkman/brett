@@ -8,6 +8,10 @@ import SwiftData
 @Suite("PullEngine", .tags(.sync), .serialized)
 @MainActor
 struct PullEngineTests {
+    /// Reset MockURLProtocol before every test so a stale stub or recorded
+    /// request from another suite doesn't bleed in.
+    init() { MockURLProtocol.reset() }
+
     /// Compute the URL the APIClient will POST to, matching the rules in
     /// `APIClient.rawRequest` so stubs match regardless of the `BrettAPIURL`
     /// resolved from the bundle at test time.

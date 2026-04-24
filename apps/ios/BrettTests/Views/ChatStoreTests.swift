@@ -119,7 +119,7 @@ struct ChatStoreTests {
 
     @Test func emptyMessageIsNoOp() async {
         let store = ChatStore(session: noopSession(), persistence: nil)
-        await store.send(itemId: "item-1", message: "   ")
+        await store.send(itemId: "item-1", message: "   ", userId: "u1")
         #expect((store.messages["item-1"] ?? []).isEmpty)
     }
 

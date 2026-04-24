@@ -17,6 +17,9 @@ import SwiftData
 @Suite("IntegrationFlow", .tags(.sync), .serialized)
 @MainActor
 struct IntegrationFlowTests {
+    /// Reset MockURLProtocol before each test. See AttachmentUploaderTests.
+    init() { MockURLProtocol.reset() }
+
     // MARK: - Harness
 
     /// One-shot harness that wires a push engine against an in-memory context

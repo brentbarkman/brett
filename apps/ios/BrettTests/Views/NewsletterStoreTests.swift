@@ -11,6 +11,8 @@ import Foundation
 @Suite("NewsletterStore", .tags(.views), .serialized)
 @MainActor
 struct NewsletterStoreTests {
+    /// Reset MockURLProtocol before each test. See AttachmentUploaderTests.
+    init() { MockURLProtocol.reset() }
 
     private func makeStore() -> (NewsletterStore, APIClient) {
         let config = URLSessionConfiguration.ephemeral
