@@ -168,6 +168,18 @@ private struct RootView: View {
                 } else {
                     MainContainer()
                         .transition(.opacity)
+                        .task {
+                            // Fires once per authenticated mount — covers the
+                            // cold-launch "already signed in at launch" path
+                            // where `.onChange(of: isAuthenticated)` never
+                            // transitions and therefore never prompts.
+                            //
+                            // Sync / SSE lifecycle is deliberately NOT started
+                            // here — `AuthManager.persist(session:)` already
+                            // installs an `ActiveSession` which owns both.
+                            // Only the badge-permission prompt is view-level.
+                            await BadgeManager.shared.requestAuthorization()
+                        }
                 }
             } else {
                 SignInView()
@@ -203,8 +215,14 @@ private struct RootView: View {
                 // prompt the user for Face ID right after they typed
                 // their password.
                 lockManager.handleFreshSignIn()
+                Task { await BadgeManager.shared.requestAuthorization() }
             } else {
                 lockManager.handleSignOut()
+                // Fire-and-forget: sign-out is always a foreground action,
+                // so setBadgeCount(0) lands before the process suspends.
+                // Worst case on drop: stale badge until next launch, which
+                // the cold-launch refresh in MainContainer will overwrite.
+                Task { await BadgeManager.shared.clear() }
             }
         }
         // Scene-phase drives the biometric re-lock. Backgrounding the

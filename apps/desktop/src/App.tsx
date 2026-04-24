@@ -35,6 +35,7 @@ import {
   LivingBackground,
   BackgroundScrim,
   demoMode,
+  ErrorBoundary,
 } from "@brett/ui";
 import { useAwakening } from "./hooks/useAwakening";
 import { useAppConfig } from "./hooks/useAppConfig";
@@ -459,6 +460,24 @@ export function App() {
   // when the UTC day rolls over (via shared todayKey above).
   const endOfWeekISO = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
   const { data: activeThingsForCount = [], isSuccess: todayQuerySuccess } = useActiveThings(endOfWeekISO);
+
+  // Push the Today count (overdue + due today + this week) to the macOS
+  // dock via the main process. Gates on `todayQuerySuccess` so the dock
+  // doesn't flash 0 during the brief hydration window before the first
+  // Today query resolves. Clears to 0 when signed out so the dock doesn't
+  // keep a stale number for the previous user. No-op in browsers and on
+  // Windows. iOS parity lives in apps/ios/Brett/Services/BadgeManager.
+  useEffect(() => {
+    const api = (window as { electronAPI?: { setBadgeCount?: (n: number) => Promise<void> } }).electronAPI;
+    if (!api?.setBadgeCount) return;
+    // While signed in, wait for the first successful query before writing
+    // a number. While signed out, push 0 immediately to clear.
+    if (user && !todayQuerySuccess) return;
+    const count = user ? activeThingsForCount.length : 0;
+    api.setBadgeCount(count).catch(() => {
+      // Ignore — losing a badge update is strictly cosmetic.
+    });
+  }, [user?.id ?? null, todayQuerySuccess, activeThingsForCount.length]);
 
   // Upcoming badge count
   const { data: upcomingThings = [] } = useUpcomingThings();
@@ -1186,6 +1205,13 @@ export function App() {
             isAIWorking={omnibar.isStreaming}
           />
 
+          {/*
+            ErrorBoundary around the Routes subtree — a render-time throw in
+            any single view previously tore down the whole App shell. Scoping
+            the boundary here keeps the chrome (LeftNav, Omnibar, background)
+            alive and lets the user navigate away from a broken view.
+          */}
+          <ErrorBoundary scope="routes">
           <Routes>
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
@@ -1297,9 +1323,11 @@ export function App() {
               </MainLayout>
             } />
           </Routes>
+          </ErrorBoundary>
         </div>
 
         {/* Sliding Detail Panel Overlay */}
+        <ErrorBoundary scope="detail-panel">
         <DetailPanel
           isOpen={isDetailOpen}
           item={selectedItem}
@@ -1472,6 +1500,7 @@ export function App() {
             navigate(path);
           }}
         />
+        </ErrorBoundary>
 
         {/* Drag overlay */}
         <DragOverlay dropAnimation={null}>

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma.js";
 import { auth } from "../lib/auth.js";
-import { ipRateLimiter } from "../middleware/rate-limit.js";
+import { extractClientIp, ipRateLimiter } from "../middleware/rate-limit.js";
 import { getIOSGoogleVerifier } from "../lib/ios-google-verifier.js";
 import {
   signInWithIOSGoogleIdToken,
@@ -59,12 +59,12 @@ authIOS.post("/google/token", ipRateLimiter(10, 60_000), async (c) => {
   }
 
   try {
-    const forwardedFor = c.req.header("x-forwarded-for");
+    const clientIp = extractClientIp(c.req.header("x-forwarded-for"));
     const result = await signInWithIOSGoogleIdToken({
       idToken,
       verifier,
       prisma,
-      ipAddress: forwardedFor ? forwardedFor.split(",")[0]!.trim() : null,
+      ipAddress: clientIp === "unknown" ? null : clientIp,
       userAgent: c.req.header("user-agent") ?? null,
     });
 

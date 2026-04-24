@@ -14,9 +14,16 @@ import { logUsage } from "./memory/usage.js";
 const MAX_ROUNDS = AI_CONFIG.orchestrator.maxRounds;
 const MAX_TOTAL_TOKENS = AI_CONFIG.orchestrator.maxTotalTokens;
 const MAX_TOOL_RESULT_SIZE = AI_CONFIG.orchestrator.maxToolResultSize;
+const MAX_DURATION_MS = AI_CONFIG.orchestrator.maxDurationMs;
 
-// Matches common API key patterns (Bearer tokens, sk-*, key-*, etc.)
+// Matches common API key patterns (Bearer tokens, sk-*, key-*, etc.) — an
+// allowlist of known-bad prefixes is more precise than entropy guessing and
+// won't over-redact legitimate identifiers.
 const API_KEY_PATTERN = /(?:sk-|key-|bearer\s+)[a-zA-Z0-9_-]{20,}/gi;
+// AWS access key IDs start with AKIA/ASIA and are exactly 20 chars.
+const AWS_ACCESS_KEY_PATTERN = /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g;
+// GitHub PATs: ghp_/gho_/ghu_/ghs_/ghr_ + 36 chars.
+const GITHUB_TOKEN_PATTERN = /\bgh[pousr]_[A-Za-z0-9]{36}\b/g;
 // Catches long alphanumeric strings that look like tokens/secrets. Threshold
 // was bumped from 40 to 50 to avoid false-positives on Prisma CUIDs / UUIDs
 // embedded in error messages, which made real logs look like they were
@@ -48,7 +55,10 @@ export interface OrchestratorParams {
 function sanitizeError(message: string): string {
   // Layer 1: Known key prefixes (sk-, key-, bearer)
   let sanitized = message.replace(API_KEY_PATTERN, "[REDACTED]");
-  // Layer 2: Long high-entropy strings that look like tokens/secrets
+  // Layer 2: Provider-specific access-key formats
+  sanitized = sanitized.replace(AWS_ACCESS_KEY_PATTERN, "[REDACTED]");
+  sanitized = sanitized.replace(GITHUB_TOKEN_PATTERN, "[REDACTED]");
+  // Layer 3: Long high-entropy strings that look like tokens/secrets
   sanitized = sanitized.replace(HIGH_ENTROPY_PATTERN, "[REDACTED]");
   return sanitized;
 }
@@ -143,9 +153,21 @@ export async function* orchestrate(
       message?: string;
     }> = [];
 
+    const startedAt = Date.now();
+
     // 2. Tool call loop
     while (round < MAX_ROUNDS) {
       round++;
+
+      // Wall-clock guard: bail out before burning another round's worth of
+      // tokens if the whole conversation has already run over budget.
+      if (Date.now() - startedAt > MAX_DURATION_MS) {
+        yield {
+          type: "error",
+          message: "Conversation exceeded maximum duration. Please try again with a more focused request.",
+        };
+        break;
+      }
 
       const model = resolveModel(providerName, currentTier);
       lastModel = model;
@@ -201,7 +223,11 @@ export async function* orchestrate(
                 outputTokens: chunk.usage.output,
                 cacheCreationTokens: chunk.usage.cacheCreation ?? 0,
                 cacheReadTokens: chunk.usage.cacheRead ?? 0,
-              }).catch(() => {});
+              }).catch((err) => {
+                // Don't swallow silently — cost accounting silently missing
+                // rows was how we lost visibility into token spend before.
+                console.error("[orchestrator] logUsage failed:", err);
+              });
             }
 
             if (pendingToolCalls.length > 0) {

@@ -17,6 +17,7 @@ import type {
   UpcomingSection,
   Things3ImportPayload,
 } from "@brett/types";
+import { isSafeUrl } from "@brett/utils";
 import { RRule } from "rrule";
 
 // ── Compute helpers ──
@@ -281,14 +282,11 @@ export function itemToThing(
 
 // ── Validation ──
 
-function isValidHttpUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
+// Delegated to @brett/utils so every http(s)-only URL check in the codebase
+// runs the same logic. Previous local copy was a silent duplicate — now if
+// we tighten isSafeUrl (e.g. to reject `javascript:` variants) every caller
+// gets the fix.
+const isValidHttpUrl = isSafeUrl;
 
 const VALID_CONTENT_TYPES = new Set(["tweet", "article", "video", "pdf", "podcast", "web_page", "newsletter"]);
 const VALID_ITEM_TYPES = new Set(["task", "content"]);

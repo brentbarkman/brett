@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import type { Thing } from "@brett/types";
 
 interface UseListKeyboardNavOptions {
@@ -28,7 +28,54 @@ export function useListKeyboardNav({
     setFocusedIndex((i) => Math.min(i, Math.max(items.length - 1, 0)));
   }, [items.length]);
 
-  const handleKeyDown = (e: KeyboardEvent) => {
+  // Pin every caller-provided dependency of the keyboard handler on a ref
+  // so the listener's identity stays stable even when parents pass inline
+  // arrow functions / fresh arrays every render. Prior code used
+  // `[handleKeyDown]` as the effect dep list, which re-ran add/remove on
+  // every parent render — expensive when a parent re-renders on every
+  // stream token.
+  //
+  // The ref update runs in useLayoutEffect (sync, pre-paint) so events
+  // dispatched during paint always see the latest state, not values from
+  // the previous commit.
+  const handlerStateRef = useRef({
+    items,
+    focusedIndex,
+    focusedThing,
+    onItemClick,
+    onToggle,
+    onFocusAdd,
+    onFocusChange,
+    onExtraKey,
+  });
+  useLayoutEffect(() => {
+    handlerStateRef.current = {
+      items,
+      focusedIndex,
+      focusedThing,
+      onItemClick,
+      onToggle,
+      onFocusAdd,
+      onFocusChange,
+      onExtraKey,
+    };
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Read everything through the ref so this closure is stable across
+      // renders but always sees the latest committed values.
+      const {
+        items,
+        focusedIndex,
+        focusedThing,
+        onItemClick,
+        onToggle,
+        onFocusAdd,
+        onFocusChange,
+        onExtraKey,
+      } = handlerStateRef.current;
+
       // Don't intercept when input, textarea, or contenteditable is focused
       const el = document.activeElement;
       if (
@@ -90,12 +137,11 @@ export function useListKeyboardNav({
         onFocusAdd?.();
         return;
       }
-  };
+    };
 
-  useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  }, []);
 
   const [addInputFocused, setAddInputFocused] = useState(false);
 

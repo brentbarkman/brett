@@ -36,15 +36,36 @@ export function rateLimiter(maxRequests: number, windowMs: number = 60_000) {
   return createLimiter<AuthEnv>((c) => c.get("user").id, maxRequests, windowMs);
 }
 
+/**
+ * Extract the client IP from the request.
+ *
+ * X-Forwarded-For is a comma-separated hop list; clients can spoof the
+ * left-most entries by sending their own XFF header. Railway's proxy
+ * APPENDS the real client IP as the right-most entry, so we trust that
+ * one. Taking the left-most (old behavior) let attackers bypass IP-based
+ * rate limits by rotating spoofed IPs in the header they controlled.
+ */
+function extractClientIp(xff: string | undefined): string {
+  if (!xff) return "unknown";
+  const parts = xff
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return "unknown";
+  return parts[parts.length - 1]!;
+}
+
 /** Rate limiter keyed by client IP. Use for unauthenticated routes (login, sign-up). */
 export function ipRateLimiter(maxRequests: number, windowMs: number = 60_000) {
   return createLimiter<Env>(
-    // x-forwarded-for from Railway's reverse proxy, fall back to remote address
-    (c) => c.req.header("x-forwarded-for")?.split(",")[0].trim() || "unknown",
+    (c) => extractClientIp(c.req.header("x-forwarded-for")),
     maxRequests,
     windowMs,
   );
 }
+
+// Exported for tests and for any other code that needs a trustworthy client IP.
+export { extractClientIp };
 
 /** Clear all rate limit windows. Used by tests to prevent cross-test rate limiting. */
 export function clearAllRateLimits(): void {

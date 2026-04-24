@@ -8,6 +8,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import { AuthGuard } from "./auth/AuthGuard";
 import { LoginPage } from "./auth/LoginPage";
 import { AutoUpdateProvider } from "./hooks/useAutoUpdate";
+import { setQueryClient } from "./auth/AuthContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,6 +18,13 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Hand the sign-out path a reference so it can explicitly wipe the
+// React Query cache. The AuthGuard would otherwise unmount the provider
+// on user change and let React garbage-collect it, but (a) that's timing-
+// dependent on better-auth's session hook re-render, and (b) explicit
+// clears are cheap and make the intent unmistakable.
+setQueryClient(queryClient);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

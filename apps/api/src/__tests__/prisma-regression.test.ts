@@ -642,6 +642,7 @@ describe("Enum mapping", () => {
         data: {
           scoutId: scout.id,
           scoutRunId: run.id,
+          userId: testUserId,
           type,
           title: `Test ${type}`,
           description: "Test description",

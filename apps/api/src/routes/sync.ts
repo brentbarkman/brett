@@ -3,7 +3,7 @@ import { Prisma } from "@brett/api-core";
 import { prisma } from "../lib/prisma.js";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
-import { fieldLevelMerge } from "../lib/sync-merge.js";
+import { fieldLevelMerge, findMissingBaselines } from "../lib/sync-merge.js";
 import { publishSSE } from "../lib/sse.js";
 import { detectContentType } from "@brett/utils";
 import { runExtraction } from "../lib/content-extractor.js";
@@ -79,6 +79,46 @@ const STALE_CURSOR_DAYS = 30;
 const MAX_MUTATIONS = 50;
 const MAX_BODY_SIZE = 1_048_576; // 1MB
 
+/**
+ * Cursor is `"<ISO-8601 timestamp>|<row id>"` or, for clients on the old
+ * format, just `"<ISO-8601 timestamp>"`. We always emit the pipe form; we
+ * still accept the old form so an existing client's stored cursor keeps
+ * working across the deploy.
+ *
+ * Keyset pagination over `(updatedAt, id)` fixes a boundary bug where many
+ * rows sharing the exact same `updatedAt` could get sliced across pages
+ * and the skipped ones permanently missed on the next pull.
+ */
+function parseCursor(raw: string | null | undefined): { ts: Date; id: string | null } | null {
+  if (!raw) return null;
+  const pipe = raw.indexOf("|");
+  if (pipe === -1) {
+    const ts = new Date(raw);
+    return Number.isNaN(ts.getTime()) ? null : { ts, id: null };
+  }
+  const ts = new Date(raw.slice(0, pipe));
+  if (Number.isNaN(ts.getTime())) return null;
+  return { ts, id: raw.slice(pipe + 1) };
+}
+
+function formatCursor(updatedAt: Date | string, id: string): string {
+  const iso = updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt;
+  return `${iso}|${id}`;
+}
+
+function applyCursorFilter(where: Record<string, unknown>, cursor: string | null | undefined): void {
+  const parsed = parseCursor(cursor);
+  if (!parsed) return;
+  if (parsed.id === null) {
+    where.updatedAt = { gt: parsed.ts };
+    return;
+  }
+  where.OR = [
+    { updatedAt: { gt: parsed.ts } },
+    { updatedAt: parsed.ts, id: { gt: parsed.id } },
+  ];
+}
+
 export const sync = new Hono<AuthEnv>()
   .use("/*", authMiddleware)
 
@@ -105,12 +145,16 @@ export const sync = new Hono<AuthEnv>()
 
     const cursors = body.cursors ?? {};
 
-    // Check for stale cursors (>30 days old)
+    // Check for stale cursors (>30 days old). Handle both the legacy
+    // plain-timestamp form and the new `"<ts>|<id>"` keyset form.
     for (const cursor of Object.values(cursors)) {
       if (cursor) {
-        const cursorDate = new Date(cursor);
+        const parsed = parseCursor(cursor);
+        if (!parsed) {
+          return c.json({ error: "Invalid cursor" }, 400);
+        }
         const staleCutoff = new Date(Date.now() - STALE_CURSOR_DAYS * 24 * 60 * 60 * 1000);
-        if (cursorDate < staleCutoff) {
+        if (parsed.ts < staleCutoff) {
           return c.json({
             changes: {},
             cursors: {},
@@ -141,28 +185,36 @@ export const sync = new Hono<AuthEnv>()
       const cursor = cursors[table] ?? null;
 
       // Build base where clause for active records.
-      // Most models have a direct userId column. ScoutFinding is the exception:
-      // ownership goes through scout.userId (a relation filter).
+      // Most models have a direct userId column. ScoutFinding now has one
+      // too (nullable during the rollout — release A of the two-release
+      // flow that ends with NOT NULL). Prefer the direct column when
+      // present so the query hits the new `(userId, updatedAt)` composite
+      // index, but fall back to the relation filter for any legacy row
+      // whose `userId` isn't backfilled yet. Release B drops the OR.
       const ownershipFilter: any =
         table === "scout_findings"
-          ? { scout: { userId: user.id } }
+          ? {
+              OR: [
+                { userId: user.id },
+                { userId: null, scout: { userId: user.id } },
+              ],
+            }
           : { userId: user.id };
 
       // Normal query — soft-delete extension auto-filters deletedAt IS NULL
       const where: any = { ...ownershipFilter };
-      if (cursor) {
-        where.updatedAt = { gt: new Date(cursor) };
-      }
+      applyCursorFilter(where, cursor);
 
       // Special handling for calendar_events: scope to last 90 days + future
       if (table === "calendar_events") {
         where.startTime = { gte: ninetyDaysAgo };
       }
 
-      // Query active records (upserted)
+      // Keyset pagination: order by (updatedAt, id) so rows sharing a
+      // millisecond don't get split across pages and silently lost.
       const upserted = await model.findMany({
         where,
-        orderBy: { updatedAt: "asc" },
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         take: limit + 1, // +1 to detect hasMore
       });
 
@@ -171,9 +223,7 @@ export const sync = new Hono<AuthEnv>()
         ...ownershipFilter,
         deletedAt: { not: null }, // key exists -> bypasses extension
       };
-      if (cursor) {
-        tombstoneWhere.updatedAt = { gt: new Date(cursor) };
-      }
+      applyCursorFilter(tombstoneWhere, cursor);
       // Special handling for calendar_events tombstones
       if (table === "calendar_events") {
         tombstoneWhere.startTime = { gte: ninetyDaysAgo };
@@ -188,7 +238,7 @@ export const sync = new Hono<AuthEnv>()
         where: tombstoneWhere,
         select: { id: true, updatedAt: true },
         take: limit,
-        orderBy: { updatedAt: "asc" },
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
       });
       const deleted = tombstones.map((r: any) => r.id);
 
@@ -196,22 +246,21 @@ export const sync = new Hono<AuthEnv>()
       const hasMore = upserted.length > limit;
       const records = hasMore ? upserted.slice(0, limit) : upserted;
 
-      // Compute new cursor from max(upserted, tombstones) so neither stream
-      // gets silently truncated on the next pull.
-      const toIso = (v: unknown) =>
-        v instanceof Date ? v.toISOString() : String(v);
-      const maxUpserted = records.length > 0
-        ? toIso(records[records.length - 1].updatedAt)
-        : null;
-      const maxTombstone = tombstones.length > 0
-        ? toIso(tombstones[tombstones.length - 1].updatedAt)
-        : null;
-      const advanced = [maxUpserted, maxTombstone]
-        .filter((v): v is string => v !== null)
-        .sort()
-        .pop();
-      if (advanced) {
-        newCursors[table] = advanced;
+      // Compute new cursor from the latest row across upserts and tombstones.
+      // Cursor is `"<updatedAt>|<id>"` so clients can resume on the exact row
+      // boundary without skipping siblings that share a timestamp.
+      const lastUpserted = records.length > 0 ? records[records.length - 1] : null;
+      const lastTombstone = tombstones.length > 0 ? tombstones[tombstones.length - 1] : null;
+      let winner: { updatedAt: Date | string; id: string } | null = null;
+      if (lastUpserted && lastTombstone) {
+        const a = new Date(lastUpserted.updatedAt).getTime();
+        const b = new Date(lastTombstone.updatedAt).getTime();
+        winner = a >= b ? lastUpserted : lastTombstone;
+      } else {
+        winner = lastUpserted ?? lastTombstone;
+      }
+      if (winner) {
+        newCursors[table] = formatCursor(winner.updatedAt, winner.id);
       } else if (cursor) {
         // Preserve existing cursor if no new records
         newCursors[table] = cursor;
@@ -460,6 +509,20 @@ async function processUpdate(
       idempotencyKey: mutation.idempotencyKey,
       status: "error",
       error: `Fields not mutable: ${illegalFields.join(", ")}`,
+    };
+  }
+
+  // Require a baseline for every declared change. Without one, the
+  // field-level merge can't tell whether the client is ahead of or stale
+  // against the server, so it used to silently treat the field as
+  // conflicted (server-wins) and drop the client's edit. Better to reject
+  // up front so buggy clients get a clear signal.
+  const missingBaselines = findMissingBaselines(changedFields, previousValues);
+  if (missingBaselines.length > 0) {
+    return {
+      idempotencyKey: mutation.idempotencyKey,
+      status: "error",
+      error: `Missing previousValues for fields: ${missingBaselines.join(", ")}`,
     };
   }
 

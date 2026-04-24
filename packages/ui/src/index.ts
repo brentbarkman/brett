@@ -1,6 +1,7 @@
 import "./animations.css";
 
 export { Button } from "./button";
+export { ErrorBoundary } from "./ErrorBoundary";
 export { BrettMark, ProductMark, Wordmark } from "./BrettMark";
 export { AppIcon } from "./AppIcon";
 export { LeftNav } from "./LeftNav";

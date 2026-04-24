@@ -57,6 +57,7 @@ describe("Scout memory routes", () => {
       data: {
         scoutId,
         scoutRunId: run.id,
+        userId,
         type: "insight",
         title: "Test Finding",
         description: "A test finding description",

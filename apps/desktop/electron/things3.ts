@@ -14,6 +14,28 @@ const THINGS_CONTAINER = path.join(
   "JLMPQHK86H.com.culturedcode.ThingsMac",
 );
 
+/**
+ * Resolve a candidate path and verify it (a) exists as a regular file,
+ * (b) has the expected `.sqlite` suffix, and (c) actually lives inside
+ * the Things container after symlink resolution. Without the realpath
+ * check a symlink at the expected location could trick us into opening
+ * an arbitrary sqlite file — or any file, which sql.js would reject but
+ * only after reading it.
+ */
+function safelyResolveDbPath(candidate: string): string | null {
+  try {
+    const realCandidate = fs.realpathSync(candidate);
+    const realContainer = fs.realpathSync(THINGS_CONTAINER);
+    if (!realCandidate.startsWith(realContainer + path.sep)) return null;
+    if (!realCandidate.endsWith(".sqlite")) return null;
+    const st = fs.statSync(realCandidate);
+    if (!st.isFile()) return null;
+    return realCandidate;
+  } catch {
+    return null;
+  }
+}
+
 /** Find Things 3 database — it moved to a ThingsData-* subdirectory in 2023 */
 function findThingsDbPath(): string | null {
   // New location (2023+): ThingsData-*/Things Database.thingsdatabase/main.sqlite
@@ -22,13 +44,13 @@ function findThingsDbPath(): string | null {
     const dataDir = entries.find((e) => e.startsWith("ThingsData-"));
     if (dataDir) {
       const newPath = path.join(THINGS_CONTAINER, dataDir, "Things Database.thingsdatabase", "main.sqlite");
-      if (fs.existsSync(newPath)) return newPath;
+      const safe = safelyResolveDbPath(newPath);
+      if (safe) return safe;
     }
   } catch {}
   // Legacy location
   const legacyPath = path.join(THINGS_CONTAINER, "Things Database.thingsdatabase", "main.sqlite");
-  if (fs.existsSync(legacyPath)) return legacyPath;
-  return null;
+  return safelyResolveDbPath(legacyPath);
 }
 
 /**
