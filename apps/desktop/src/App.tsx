@@ -583,8 +583,9 @@ export function App() {
     };
   }, [awakening.status]);
 
-  // Track whether spotlight should open with search pre-selected (Cmd+F)
-  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
+  // Track whether spotlight should open with a specific action pre-selected
+  // (Cmd+F → search, Cmd+N → create). null = normal open.
+  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | "create" | null>(null);
 
   // Global Cmd+K / Ctrl+K listener for spotlight.
   // Destructures actions so the effect doesn't re-run on every SSE text
@@ -611,6 +612,23 @@ export function App() {
           omnibarClose();
         } else {
           setSpotlightInitialAction("search");
+          omnibarOpen("spotlight");
+          setSelectedItem(null);
+          setIsDetailOpen(false);
+        }
+      }
+      // Cmd+N / Ctrl+N opens spotlight with create-task pre-selected.
+      // No activeElement guard — unlike per-view shortcuts, a global
+      // "new task" shortcut must fire regardless of where focus is (including
+      // inside the Omnibar input, which is why the legacy InboxView plain-`n`
+      // handler was scoping us out of reach). The task destination is
+      // routed through createTask's contextual `currentView` logic.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === "n") {
+        e.preventDefault();
+        if (omnibarIsOpen && omnibarMode === "spotlight") {
+          omnibarClose();
+        } else {
+          setSpotlightInitialAction("create");
           omnibarOpen("spotlight");
           setSelectedItem(null);
           setIsDetailOpen(false);
