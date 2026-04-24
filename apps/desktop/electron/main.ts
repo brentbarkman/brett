@@ -8,15 +8,27 @@ import { scanThings3, readThings3 } from "./things3";
 import { initAutoUpdater, quitAndInstall, isUpdateReady, getDownloadedVersion, setAutoInstallOnQuit, checkForUpdatesNow } from "./updater";
 
 /**
- * Only allow `shell.openExternal` to open http(s) URLs. Without this a
- * malicious link in rendered content (pasted in chat, from a Scout finding,
- * embedded in a newsletter) could trigger `javascript:`, `file://`, or an
- * arbitrary protocol handler when clicked.
+ * Protocols we'll hand to `shell.openExternal`. http(s) is the common
+ * case. `mailto:` is added because newsletter content and link previews
+ * commonly contain mailto: links — blocking them silently is a real UX
+ * regression and mailto: is handled by the OS mail client, which is safe.
+ *
+ * Deliberately NOT included: `javascript:`, `data:`, `file:`, `ms-*:`,
+ * `x-apple-*:`, and any other scheme that can invoke an arbitrary
+ * protocol handler on the OS.
+ */
+const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+
+/**
+ * Validate that a URL is safe to pass to `shell.openExternal`. Without
+ * this a malicious link in rendered content (pasted in chat, from a Scout
+ * finding, embedded in a newsletter) could trigger `javascript:`, `file://`,
+ * or an arbitrary protocol handler when clicked.
  */
 function isSafeExternalUrl(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol);
   } catch {
     return false;
   }
@@ -185,9 +197,18 @@ ipcMain.handle("capture-screenshot", async () => {
   if (!win) throw new Error("No available window");
   // Close DevTools before capturing so we never accidentally include the
   // Network tab (which shows bearer tokens on outgoing requests) in a
-  // feedback screenshot.
+  // feedback screenshot. `closeDevTools()` is fire-and-forget — we have
+  // to wait for the `devtools-closed` event before capturePage, otherwise
+  // a docked DevTools panel can still be visible in the capture.
   if (win.webContents.isDevToolsOpened()) {
-    win.webContents.closeDevTools();
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(resolve, 1000); // defensive — don't hang forever
+      win.webContents.once("devtools-closed", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+      win.webContents.closeDevTools();
+    });
   }
   const image = await win.webContents.capturePage();
   // Resize to max 1280px wide to limit payload size

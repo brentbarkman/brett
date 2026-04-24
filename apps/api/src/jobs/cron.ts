@@ -223,15 +223,20 @@ export function startCronJobs(): void {
   });
 
   // IdempotencyKey cleanup — daily at 3:15am. The sync-push table grows on
-  // every mobile mutation. 7 days is a generous buffer over the actual client
-  // retry window (a mobile client sends + retries within seconds or minutes)
-  // and is far shorter than the previous 30 days — a device returning after
-  // a full 30 days offline could otherwise see its cached mutation IDs
-  // collide with someone else's keys or, worse, re-apply the same op if the
-  // row had been cleaned up just before it came back online.
+  // every mobile mutation.
+  //
+  // Retention = 30 days. Shorter (e.g. 7d) is tempting because the typical
+  // client retry window is seconds-to-minutes, but iOS `MutationQueue` has
+  // NO age-based pruning — a mutation enqueued while offline lives
+  // indefinitely and keeps its original idempotency key across restarts.
+  // A device offline >7d that reconnects would have its queued mutations
+  // replayed against an empty server-side cache, bypassing idempotency
+  // and potentially double-applying CREATEs. Keys are user-scoped
+  // (see `scopedKey` in routes/sync.ts), so cross-user collision isn't a
+  // concern; row volume is the only real cost, which 30d handles fine.
   cron.schedule("15 3 * * *", async () => {
     await withCronLock("idempotencyCleanup", LEASE.idempotencyCleanup, async () => {
-      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const { count } = await prisma.idempotencyKey.deleteMany({
         where: { createdAt: { lt: cutoff } },
       });

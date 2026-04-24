@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import {
   extractEmail,
@@ -29,12 +29,7 @@ const webhookRouter = new Hono();
  * The password half of Basic creds is the shared secret. The username is
  * ignored — Postmark requires one, but we don't use it.
  */
-function extractIngestSecret(c: {
-  req: {
-    header: (name: string) => string | undefined;
-    param: (name: string) => string;
-  };
-}): string {
+function extractIngestSecret(c: Context): string {
   const auth = c.req.header("authorization") || "";
   if (auth.toLowerCase().startsWith("basic ")) {
     try {
@@ -48,7 +43,7 @@ function extractIngestSecret(c: {
   return c.req.param("secret") || "";
 }
 
-async function handleNewsletterIngest(c: any) {
+async function handleNewsletterIngest(c: Context) {
   // 1. Validate secret
   const expected = process.env.NEWSLETTER_INGEST_SECRET;
   if (!expected) {

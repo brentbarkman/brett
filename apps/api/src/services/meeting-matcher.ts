@@ -56,13 +56,17 @@ export function findBestMatch(
     );
     const score = titleScore * TITLE_WEIGHT + attendeeScore * ATTENDEE_WEIGHT;
 
-    // When we have no attendee signal on either side (common for 1:1
-    // calls and scratch Granola notes), require a tight time overlap.
-    // Otherwise two generic "Team Sync" events on the same day would
-    // match each other on title alone and pollute both with wrong notes.
-    const hasAttendeeSignal =
-      meeting.attendees.length > 0 && candidate.attendees.length > 0;
-    if (!hasAttendeeSignal && !hasTightTimeOverlap(meeting, candidate)) continue;
+    // When BOTH sides have zero attendees (common for 1:1 calls and
+    // scratch Granola notes), require a tight time overlap. Otherwise
+    // two generic "Team Sync" events on the same day would match each
+    // other on title alone and pollute both with wrong notes.
+    //
+    // If even one side has attendees, attendeeScore carries some signal
+    // (even when it's 0) — the 0.5 CONFIDENCE_THRESHOLD check below is
+    // the primary filter for weak matches there.
+    const bothMissingAttendees =
+      meeting.attendees.length === 0 && candidate.attendees.length === 0;
+    if (bothMissingAttendees && !hasTightTimeOverlap(meeting, candidate)) continue;
 
     if (score >= CONFIDENCE_THRESHOLD && (!bestMatch || score > bestMatch.score)) {
       bestMatch = { id: candidate.id, score };

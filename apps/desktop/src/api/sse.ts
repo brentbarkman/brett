@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { clearStoredToken, getToken } from "../auth/auth-client";
+import { getToken, handleUnauthorized } from "../auth/auth-client";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
@@ -78,10 +78,11 @@ export function useEventStream(): void {
           headers: { Authorization: `Bearer ${token}` },
         });
         // If the bearer itself is rejected, retrying with the same token
-        // just burns cycles. Clear stored token so the auth layer can
-        // surface the sign-in flow instead of quietly looping.
+        // just burns cycles. Clear it AND drop better-auth's session cache
+        // (via handleUnauthorized) so the AuthGuard flips to LoginPage
+        // instead of leaving the shell rendered with dead requests.
         if (res.status === 401 || res.status === 403) {
-          await clearStoredToken();
+          await handleUnauthorized();
           return;
         }
         if (!res.ok) throw new Error(`ticket fetch failed: ${res.status}`);
