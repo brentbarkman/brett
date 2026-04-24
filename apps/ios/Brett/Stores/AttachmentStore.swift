@@ -21,14 +21,25 @@ final class AttachmentStore {
 
     // MARK: - Attachment queries
 
-    func fetchForItem(_ itemId: String) -> [Attachment] {
+    /// Attachments for an item, optionally scoped to `userId`. Without the
+    /// scope a pre-sync leftover row from a previous account could appear
+    /// attached to a new user's item if the server happens to reuse the id.
+    func fetchForItem(_ itemId: String, userId: String? = nil) -> [Attachment] {
         var descriptor = FetchDescriptor<Attachment>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
-        descriptor.predicate = #Predicate { attachment in
-            attachment.itemId == itemId && attachment.deletedAt == nil
+        if let userId {
+            descriptor.predicate = #Predicate { attachment in
+                attachment.itemId == itemId
+                    && attachment.userId == userId
+                    && attachment.deletedAt == nil
+            }
+        } else {
+            descriptor.predicate = #Predicate { attachment in
+                attachment.itemId == itemId && attachment.deletedAt == nil
+            }
         }
-        return (try? context.fetch(descriptor)) ?? []
+        return fetch(descriptor)
     }
 
     // MARK: - Upload lifecycle
@@ -48,7 +59,7 @@ final class AttachmentStore {
             sizeBytes: size
         )
         context.insert(upload)
-        try? context.save()
+        save()
         return upload
     }
 
@@ -61,7 +72,7 @@ final class AttachmentStore {
         uploadDescriptor.predicate = #Predicate { $0.id == uploadId }
         uploadDescriptor.fetchLimit = 1
 
-        guard let upload = try? context.fetch(uploadDescriptor).first else { return }
+        guard let upload = fetch(uploadDescriptor).first else { return }
 
         upload.stage = AttachmentUploadStage.done.rawValue
         upload.storageKey = storageKey
@@ -79,11 +90,11 @@ final class AttachmentStore {
         attachment._syncStatus = SyncStatus.synced.rawValue
         context.insert(attachment)
 
-        try? context.save()
-        // Upload path is handled by W2-E's uploader, but we still nudge the
+        save()
+        // Upload path is handled by the uploader, but we still nudge the
         // sync manager so any other pending mutations (e.g. the parent item's
         // attachment list) flush promptly.
-        SyncManager.shared.schedulePushDebounced()
+        ActiveSession.syncManager?.schedulePushDebounced()
     }
 
     func markFailed(uploadId: String, error: String) {
@@ -91,12 +102,31 @@ final class AttachmentStore {
         descriptor.predicate = #Predicate { $0.id == uploadId }
         descriptor.fetchLimit = 1
 
-        guard let upload = try? context.fetch(descriptor).first else { return }
+        guard let upload = fetch(descriptor).first else { return }
 
         upload.stage = AttachmentUploadStage.failed.rawValue
         upload.error = error
         upload.retryCount += 1
 
-        try? context.save()
+        save()
+    }
+
+    // MARK: - Internals
+
+    private func fetch<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> [T] {
+        do {
+            return try context.fetch(descriptor)
+        } catch {
+            BrettLog.store.error("AttachmentStore fetch failed: \(String(describing: error), privacy: .public)")
+            return []
+        }
+    }
+
+    private func save() {
+        do {
+            try context.save()
+        } catch {
+            BrettLog.store.error("AttachmentStore save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 }

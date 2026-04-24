@@ -165,6 +165,31 @@ async function fetchTweetSyndication(url: string): Promise<TweetSyndicationResul
   }
 }
 
+// X serves OG tags to recognized crawlers (facebookexternalhit, Twitterbot)
+// but a JS shell to normal User-Agents. When the syndication CDN refuses us
+// (rate limit, auth-gated tweet, CDN hiccup), the OG scrape usually still
+// works and gives us title + description + image.
+async function fetchTweetOgTags(url: string): Promise<OgTags | null> {
+  try {
+    const response = await safeFetch(url, {
+      timeoutMs: 5000,
+      maxSizeBytes: 2 * 1024 * 1024,
+      headers: {
+        "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+      },
+    });
+    if (!response.ok) return null;
+    const html = await readBodyWithLimit(response, 2 * 1024 * 1024);
+    const tags = parseOgTags(html, url);
+    // Require at least a description OR an image — a lone title ("X") is
+    // the generic homepage fallback and not worth returning.
+    if (!tags.description && !tags.imageUrl) return null;
+    return tags;
+  } catch {
+    return null;
+  }
+}
+
 async function extractTweet(url: string): Promise<ExtractionResult> {
   const parsed = new URL(url);
   const domain = parsed.hostname.replace(/^www\./, "");
@@ -199,14 +224,38 @@ async function extractTweet(url: string): Promise<ExtractionResult> {
     };
   }
 
-  // Syndication failed (deleted, rate-limited, or CDN hiccup) — still return a
-  // usable card with the handle derived from the URL path so the panel doesn't
-  // show the raw URL as the title.
+  // Syndication failed (deleted, rate-limited, or CDN hiccup). Try scraping
+  // X's own HTML with a crawler User-Agent — X still serves OG tags to
+  // facebookexternalhit even though it serves a JS shell to regular UAs.
   const urlAuthor = extractTweetAuthor(url);
+  const ogTags = await fetchTweetOgTags(url);
+  if (ogTags) {
+    const title = ogTags.title ?? (urlAuthor ? `Tweet by @${urlAuthor}` : null);
+    return {
+      contentType: "tweet",
+      contentStatus: "extracted",
+      contentTitle: title,
+      contentDescription: ogTags.description ?? null,
+      contentImageUrl: ogTags.imageUrl ?? null,
+      contentBody: null,
+      contentFavicon: favicon,
+      contentDomain: domain,
+      contentMetadata: {
+        type: "tweet",
+        author: urlAuthor ?? undefined,
+        tweetText: ogTags.description ?? undefined,
+      },
+      title: title ?? undefined,
+    };
+  }
+
+  // Both paths failed — surface it as `failed` so the UI shows a retry button
+  // instead of a silently-empty card. Still populate the handle-derived title
+  // so the item has a meaningful label while the retry is pending.
   const fallbackTitle = urlAuthor ? `Tweet by @${urlAuthor}` : null;
   return {
     contentType: "tweet",
-    contentStatus: "extracted",
+    contentStatus: "failed",
     contentTitle: fallbackTitle,
     contentDescription: null,
     contentImageUrl: null,

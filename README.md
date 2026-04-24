@@ -111,7 +111,7 @@ brett/
 │   └── mobile/         # Expo / React Native (deferred)
 ├── packages/
 │   ├── types/          # Shared TypeScript interfaces
-│   ├── utils/          # Generic helpers (formatDate, generateId, sleep)
+│   ├── utils/          # Generic helpers (formatRelativeTime, generateId, sleep)
 │   ├── business/       # Domain logic (createTask, toggleTask)
 │   └── ui/             # Web-only React components (desktop only)
 ├── docker-compose.yml  # Local Postgres 16 (if using Docker)

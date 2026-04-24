@@ -57,6 +57,7 @@ describe("Scout memory routes", () => {
       data: {
         scoutId,
         scoutRunId: run.id,
+        userId,
         type: "insight",
         title: "Test Finding",
         description: "A test finding description",
@@ -303,28 +304,4 @@ describe("Scout memory routes", () => {
     });
   });
 
-  // ── Clear history includes memories ──
-
-  describe("DELETE /scouts/:id/history", () => {
-    it("clears memories and consolidations", async () => {
-      // Verify memories exist
-      const memRes = await authRequest(`/scouts/${scoutId}/memories`, token);
-      const mems = (await memRes.json()) as any[];
-      expect(mems.length).toBeGreaterThan(0);
-
-      // Clear history
-      const res = await authRequest(`/scouts/${scoutId}/history`, token, { method: "DELETE" });
-      expect(res.status).toBe(200);
-
-      // Verify memories are gone
-      const memRes2 = await authRequest(`/scouts/${scoutId}/memories`, token);
-      const mems2 = (await memRes2.json()) as any[];
-      expect(mems2).toHaveLength(0);
-
-      // Verify consolidation run count reset
-      const scout = await prisma.scout.findUnique({ where: { id: scoutId } });
-      expect(scout?.consolidationRunCount).toBe(0);
-      expect(scout?.lastConsolidatedAt).toBeNull();
-    });
-  });
 });

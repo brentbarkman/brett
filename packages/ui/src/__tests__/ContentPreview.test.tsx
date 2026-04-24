@@ -158,3 +158,79 @@ describe("ContentPreview article typography", () => {
     expect(container.textContent).toContain("Preview unavailable");
   });
 });
+
+describe("ContentPreview tweet rendering", () => {
+  it("renders the cover image for an X article", () => {
+    const { container } = render(
+      <ContentPreview
+        contentType="tweet"
+        contentStatus="extracted"
+        sourceUrl="https://x.com/alice/status/1"
+        contentTitle="A really good article headline"
+        contentDescription="Preview text explaining the article."
+        contentImageUrl="https://example.com/cover.jpg"
+        contentMetadata={{ type: "tweet", author: "alice", tweetText: "Preview text explaining the article." }}
+      />
+    );
+    const img = container.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("https://example.com/cover.jpg");
+    expect(container.querySelector("h4")?.textContent).toBe("A really good article headline");
+    expect(container.textContent).toContain("Preview text explaining the article.");
+    expect(container.textContent).toContain("@alice");
+  });
+
+  it("does not render the fallback 'Tweet by @handle' as a heading", () => {
+    const { container } = render(
+      <ContentPreview
+        contentType="tweet"
+        contentStatus="extracted"
+        sourceUrl="https://x.com/alice/status/1"
+        contentTitle="Tweet by @alice"
+        contentDescription="Hello world"
+        contentMetadata={{ type: "tweet", author: "alice", tweetText: "Hello world" }}
+      />
+    );
+    expect(container.querySelector("h4")).toBeNull();
+    expect(container.textContent).toContain("Hello world");
+    expect(container.textContent).toContain("@alice");
+  });
+
+  it("renders a photo-only tweet (no article title, no description)", () => {
+    const { container } = render(
+      <ContentPreview
+        contentType="tweet"
+        contentStatus="extracted"
+        sourceUrl="https://x.com/alice/status/1"
+        contentTitle="Tweet by @alice"
+        contentImageUrl="https://example.com/photo.jpg"
+        contentMetadata={{ type: "tweet", author: "alice" }}
+      />
+    );
+    expect(container.querySelector("img")?.getAttribute("src")).toBe("https://example.com/photo.jpg");
+    expect(container.querySelector("h4")).toBeNull();
+  });
+
+  it("falls back to 'Tweet content unavailable' when everything is empty", () => {
+    const { container } = render(
+      <ContentPreview
+        contentType="tweet"
+        contentStatus="extracted"
+        sourceUrl="https://x.com/alice/status/1"
+        contentMetadata={{ type: "tweet", author: "alice" }}
+      />
+    );
+    expect(container.textContent).toContain("Tweet content unavailable");
+    expect(container.textContent).toContain("@alice");
+  });
+
+  it("shows retry UI when tweet extraction is marked failed", () => {
+    const { container } = render(
+      <ContentPreview
+        contentType="tweet"
+        contentStatus="failed"
+        sourceUrl="https://x.com/alice/status/1"
+      />
+    );
+    expect(container.textContent).toContain("Preview unavailable");
+  });
+});

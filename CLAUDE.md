@@ -55,9 +55,9 @@ pnpm workspaces + Turborepo monorepo. The TypeScript side is the API, desktop, a
 ### Dependency Graph
 
 ```
-@brett/types          ← shared TS interfaces (User, AuthUser, Task, Notification)
+@brett/types          ← shared TS interfaces (User, AuthUser, ItemRecord, Notification)
   ↑
-@brett/utils          ← generic helpers (formatDate, generateId, sleep)
+@brett/utils          ← generic helpers (formatRelativeTime, generateId, sleep)
   ↑
 @brett/business       ← domain logic (createTask, toggleTask)
   ↑

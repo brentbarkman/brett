@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Clock } from "lucide-react";
-import { ThingCard, ItemListShell, useListKeyboardNav, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
+import { ThingCard, ItemListShell, useListKeyboardNav, useDeferredToggle, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
 import type { Thing, FilterType } from "@brett/types";
 import { groupUpcomingThings } from "@brett/business";
 import { useUpcomingThings, useToggleThing } from "../api/things";
@@ -8,7 +8,7 @@ import { useAutoUpdate } from "../hooks/useAutoUpdate";
 
 interface UpcomingViewProps {
   onItemClick: (item: Thing) => void;
-  onTriageOpen: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   onFocusChange?: (thing: Thing) => void;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
@@ -30,9 +30,9 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
   const sections = groupUpcomingThings(filteredThings);
   const allItems = sections.flatMap((s) => s.things);
 
-  const handleToggle = (id: string) => {
-    toggleThing.mutate(id);
-  };
+  // Deferred batch toggle — matches ThingsList + InboxView so rapid-fire
+  // clicks in Upcoming don't fire one API mutation per tap.
+  const handleToggle = useDeferredToggle((id: string) => toggleThing.mutate(id));
 
   const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
     items: allItems,
@@ -43,12 +43,12 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
       if (!focusedThing) return false;
       if (e.key === "l") {
         e.preventDefault();
-        onTriageOpen("list-first", [focusedThing.id], focusedThing);
+        onTriageOpen("list-only", [focusedThing.id], focusedThing);
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
-        onTriageOpen("date-first", [focusedThing.id], focusedThing);
+        onTriageOpen("date-only", [focusedThing.id], focusedThing);
         return true;
       }
       return false;

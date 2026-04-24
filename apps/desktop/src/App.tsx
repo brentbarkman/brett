@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { slugify, getEventGlassColor } from "@brett/utils";
+import { slugify, getEventGlassColor, getTaskDestinationLabel } from "@brett/utils";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
 import { useTodayKey } from "./hooks/useTodayKey";
 import { usePinnedDate } from "./hooks/usePinnedDate";
@@ -35,6 +35,7 @@ import {
   LivingBackground,
   BackgroundScrim,
   demoMode,
+  ErrorBoundary,
 } from "@brett/ui";
 import { useAwakening } from "./hooks/useAwakening";
 import { useAppConfig } from "./hooks/useAppConfig";
@@ -42,6 +43,7 @@ import type { Thing, CalendarEventDisplay, CalendarEventRecord, DueDatePrecision
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
+import { setStorageUser, userStorage } from "./lib/userScopedStorage";
 import {
   useActiveThings,
   useUpcomingThings,
@@ -100,14 +102,12 @@ import {
   useResumeScout,
   useUpdateScout,
   useTriggerScoutRun,
-  useTriggerConsolidation,
-  useClearScoutHistory,
   useDeleteScout,
   useSubmitScoutFeedback,
   useRecentFindings,
 } from "./api/scouts";
 import { useApproveNewsletterSender, useBlockNewsletterSender } from "./api/newsletters";
-import type { RecentFindingItem } from "@brett/ui";
+import type { RecentFindingItem, SearchResultItem } from "@brett/ui";
 
 const SIDEBAR_DISMISSED_KEY = "brett-calendar-sidebar-dismissed";
 
@@ -121,7 +121,7 @@ const AWAKENING_KENBURNS_MS = 2500;
  *  the UI emerge together. Because UI shell stays at opacity 1
  *  throughout, glass cards' backdrop-filter renders continuously with no
  *  pop. */
-const AWAKENING_COVER_FADE_MS = 1500;
+const AWAKENING_COVER_FADE_MS = 1800;
 
 function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar, showSidebar, onConnectCalendar, onDismissSidebar, sidebarDate, onPrevDay, onNextDay, onToday, nextUpEvent, nextUpTimer, assistantName }: {
   children: React.ReactNode;
@@ -207,6 +207,12 @@ export function App() {
   const approveNewsletter = useApproveNewsletterSender();
   const blockNewsletter = useBlockNewsletterSender();
 
+  // Thread the current user ID into the scoped storage wrapper so preferences
+  // don't bleed across accounts that sign in on the same device.
+  useEffect(() => {
+    setStorageUser(user?.id ?? null);
+  }, [user?.id]);
+
   // Initialize SSE for real-time updates
   useEventStream();
   useTimezoneSync();
@@ -248,7 +254,7 @@ export function App() {
 
   // Triage popup state
   const [triageState, setTriageState] = useState<{
-    mode: "list-first" | "date-first";
+    mode: "list-first" | "date-first" | "list-only" | "date-only";
     ids: string[];
     currentListId?: string | null;
     currentDueDate?: string | null;
@@ -320,7 +326,7 @@ export function App() {
   const connectCalendar = useConnectCalendar();
   const hasCalendarAccounts = calendarAccounts.length > 0;
   const [sidebarDismissed, setSidebarDismissed] = useState(
-    () => localStorage.getItem(SIDEBAR_DISMISSED_KEY) === "true",
+    () => userStorage.getItem(SIDEBAR_DISMISSED_KEY) === "true",
   );
   const showCalendarSidebar = hasCalendarAccounts || !sidebarDismissed;
 
@@ -332,16 +338,22 @@ export function App() {
 
   const handleDismissSidebar = () => {
     setSidebarDismissed(true);
-    localStorage.setItem(SIDEBAR_DISMISSED_KEY, "true");
+    userStorage.setItem(SIDEBAR_DISMISSED_KEY, "true");
   };
 
   // Clear dismissed state when accounts are connected
   useEffect(() => {
     if (hasCalendarAccounts && sidebarDismissed) {
       setSidebarDismissed(false);
-      localStorage.removeItem(SIDEBAR_DISMISSED_KEY);
+      userStorage.removeItem(SIDEBAR_DISMISSED_KEY);
     }
   }, [hasCalendarAccounts, sidebarDismissed]);
+
+  // Re-read sidebar dismissal after user changes — `setStorageUser` updates
+  // the scoped key and the stored value may differ per account.
+  useEffect(() => {
+    setSidebarDismissed(userStorage.getItem(SIDEBAR_DISMISSED_KEY) === "true");
+  }, [user?.id]);
 
   // Local day boundaries as ISO timestamps for API queries.
   // Always send full ISO strings — never date-only strings like "2026-03-29" —
@@ -447,7 +459,26 @@ export function App() {
   // Today badge count — active items due this week or earlier. Recomputed
   // when the UTC day rolls over (via shared todayKey above).
   const endOfWeekISO = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
-  const { data: activeThingsForCount = [] } = useActiveThings(endOfWeekISO);
+  const { data: activeThingsForCount = [], isSuccess: todayQuerySuccess } = useActiveThings(endOfWeekISO);
+
+  // Push the Today count (overdue + due today + this week) to the macOS
+  // dock via the main process. Gates on `todayQuerySuccess` so the dock
+  // doesn't flash 0 during the brief hydration window before the first
+  // Today query resolves. Clears to 0 when signed out so the dock doesn't
+  // keep a stale number for the previous user. No-op in browsers and on
+  // Windows. iOS parity lives in apps/ios/Brett/Services/BadgeManager.
+  const badgeUserId = user?.id ?? null;
+  useEffect(() => {
+    const api = (window as { electronAPI?: { setBadgeCount?: (n: number) => Promise<void> } }).electronAPI;
+    if (!api?.setBadgeCount) return;
+    // While signed in, wait for the first successful query before writing
+    // a number. While signed out, push 0 immediately to clear.
+    if (badgeUserId && !todayQuerySuccess) return;
+    const count = badgeUserId ? activeThingsForCount.length : 0;
+    api.setBadgeCount(count).catch(() => {
+      // Ignore — losing a badge update is strictly cosmetic.
+    });
+  }, [badgeUserId, todayQuerySuccess, activeThingsForCount.length]);
 
   // Upcoming badge count
   const { data: upcomingThings = [] } = useUpcomingThings();
@@ -470,8 +501,6 @@ export function App() {
   const resumeScout = useResumeScout();
   const updateScout = useUpdateScout();
   const triggerRun = useTriggerScoutRun();
-  const triggerConsolidation = useTriggerConsolidation();
-  const clearHistory = useClearScoutHistory();
   const deleteScout = useDeleteScout();
   const submitFeedback = useSubmitScoutFeedback();
   const { data: scoutMemories = [], isLoading: isLoadingMemories } = useScoutMemories(selectedScoutId ?? undefined);
@@ -533,30 +562,31 @@ export function App() {
   });
 
   // Awakening — plays once per session on cold launch.
+  // Ready when: CDN base URL resolved, the real wallpaper has painted, AND
+  // the Today query has landed its first success. Each of these prevents a
+  // different kind of pop: base-url → image-url is valid, imageReady →
+  // LivingBackground is showing the real photo under the zoom, todayReady →
+  // the most-visible panel isn't empty-to-populated while the cover lifts.
+  // useAwakening caps this wait at 2.2s so a slow query can't strand us.
   const { data: appConfig } = useAppConfig();
-  const awakening = useAwakening({
-    baseUrl: appConfig?.storageBaseUrl ?? "",
-  });
-  // Awakening: LivingBackground image starts at scale(1.15) and transitions
-  // to scale(1.0) over AWAKENING_KENBURNS_MS. A black cover above the UI
-  // (z-30) is opaque at mount and fades to transparent over
-  // AWAKENING_COVER_FADE_MS — the cover fading IS the UI reveal. Because
-  // the UI shell stays at opacity 1 the whole time, glass cards'
-  // backdrop-filter renders continuously (no "pop" at opacity === 1).
+  const revealReady =
+    Boolean(appConfig?.storageBaseUrl) && background.hasLoadedImage && todayQuerySuccess;
+  const awakening = useAwakening({ ready: revealReady });
+  // LivingBackground image starts at scale(1.15) and transitions to scale(1.0)
+  // over AWAKENING_KENBURNS_MS. A black cover above the UI (z-30) is opaque
+  // at mount and fades to transparent over AWAKENING_COVER_FADE_MS — the
+  // cover fading IS the UI reveal. Because the UI shell stays at opacity 1
+  // throughout, glass cards' backdrop-filter renders continuously.
   const [awakeningPhase, setAwakeningPhase] = useState<"playing" | "fading">("playing");
   const [coverFaded, setCoverFaded] = useState(() => awakening.status === "skip");
 
   useEffect(() => {
     if (awakening.status === "skip") {
-      // Session already played / reduced motion — no animation, UI instant.
       setAwakeningPhase("fading");
       setCoverFaded(true);
       return;
     }
-    // Wait for the real wallpaper to load before kicking off. If we started
-    // on the empty (black) state and the image loaded mid-zoom, the user
-    // would see an abrupt image pop-in.
-    if (!background.hasLoadedImage) return;
+    if (awakening.status !== "play") return; // "pending": no-op
     // Double rAF ensures the initial frame (scale(1.15), cover opaque) has
     // painted before we flip state — so the browser runs real transitions
     // rather than short-circuiting to the final values.
@@ -571,10 +601,11 @@ export function App() {
       cancelAnimationFrame(raf1);
       if (raf2) cancelAnimationFrame(raf2);
     };
-  }, [awakening.status, background.hasLoadedImage]);
+  }, [awakening.status]);
 
-  // Track whether spotlight should open with search pre-selected (Cmd+F)
-  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | null>(null);
+  // Track whether spotlight should open with a specific action pre-selected
+  // (Cmd+F → search, Cmd+N → create). null = normal open.
+  const [spotlightInitialAction, setSpotlightInitialAction] = useState<"search" | "create" | null>(null);
 
   // Global Cmd+K / Ctrl+K listener for spotlight.
   // Destructures actions so the effect doesn't re-run on every SSE text
@@ -601,6 +632,23 @@ export function App() {
           omnibarClose();
         } else {
           setSpotlightInitialAction("search");
+          omnibarOpen("spotlight");
+          setSelectedItem(null);
+          setIsDetailOpen(false);
+        }
+      }
+      // Cmd+N / Ctrl+N opens spotlight with create-task pre-selected.
+      // No activeElement guard — unlike per-view shortcuts, a global
+      // "new task" shortcut must fire regardless of where focus is (including
+      // inside the Omnibar input, which is why the legacy InboxView plain-`n`
+      // handler was scoping us out of reach). The task destination is
+      // routed through createTask's contextual `currentView` logic.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === "n") {
+        e.preventDefault();
+        if (omnibarIsOpen && omnibarMode === "spotlight") {
+          omnibarClose();
+        } else {
+          setSpotlightInitialAction("create");
           omnibarOpen("spotlight");
           setSelectedItem(null);
           setIsDetailOpen(false);
@@ -669,6 +717,10 @@ export function App() {
     return undefined;
   })();
 
+  // Destination shown in the "Added to …" confirmation on both Omnibar and
+  // SpotlightModal. Matches the actual landing spot chosen by createTask().
+  const taskDestinationLabel = getTaskDestinationLabel(currentView, lists);
+
   const omnibarProps = {
     isOpen: omnibar.isOpen && omnibar.mode === "bar",
     input: omnibar.input,
@@ -700,8 +752,36 @@ export function App() {
     },
     searchResults: omnibar.searchResults ?? null,
     isSearching: omnibar.isSearching,
-    onSearchResultClick: (id: string) => {
-      // Fallback click handler for entity types not handled by onItemClick/onEventClick
+    onSearchResultClick: (item: SearchResultItem) => {
+      // Fallback for entity types not handled by onItemClick/onEventClick.
+      // meeting_note → open the calendar event that owns it.
+      // scout_finding → open the scout detail with that finding focused.
+      // Unknown type falls through to /inbox as a safe default.
+      if (item.entityType === "meeting_note") {
+        const calendarEventId = typeof item.metadata?.calendarEventId === "string"
+          ? item.metadata.calendarEventId
+          : null;
+        if (calendarEventId) {
+          const event = sidebarCalendarEvents.find((e) => e.id === calendarEventId);
+          if (event) {
+            handleItemClick(event);
+          } else {
+            setSelectedItem({ id: calendarEventId, googleEventId: "", title: item.title, startTime: "", endTime: "", durationMinutes: 0, color: "blue", hasBrettContext: false, isAllDay: false, myResponseStatus: "needsAction" } as any);
+            setIsDetailOpen(true);
+          }
+          omnibar.close();
+          return;
+        }
+      }
+      if (item.entityType === "scout_finding") {
+        const scoutId = typeof item.metadata?.scoutId === "string" ? item.metadata.scoutId : null;
+        if (scoutId) {
+          setSelectedScoutId(scoutId);
+          navigate("/scouts");
+          omnibar.close();
+          return;
+        }
+      }
       navigate("/inbox");
       omnibar.close();
     },
@@ -722,6 +802,7 @@ export function App() {
     showWeatherExpanded,
     onWeatherClick: () => setShowWeatherExpanded((prev) => !prev),
     assistantName,
+    destinationLabel: taskDestinationLabel,
   };
 
   const scoutsOmnibarProps = {
@@ -854,7 +935,12 @@ export function App() {
   const [newScoutId, setNewScoutId] = useState<string | null>(null);
   const newScoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Detect successful scout creation in the omnibar and navigate to the new scout
+  // Detect successful scout creation in the omnibar and navigate to the new scout.
+  // `omnibar.messages` is the one slice we actually care about — depending on the
+  // full `omnibar` object would re-fire on every stream token (the parent memo
+  // changes whenever `messages` does). `processedScoutIds` makes the side effect
+  // idempotent in case a message is seen in multiple runs.
+  const processedScoutIdsRef = useRef(new Set<string>());
   useEffect(() => {
     for (const msg of omnibar.messages) {
       if (msg.role !== "assistant") continue;
@@ -863,10 +949,10 @@ export function App() {
           const result = tc.result as { success?: boolean; data?: { id?: string } };
           if (result.success && result.data?.id) {
             const scoutId = result.data.id;
+            if (processedScoutIdsRef.current.has(scoutId)) continue;
+            processedScoutIdsRef.current.add(scoutId);
             setSelectedScoutId(scoutId);
-            // Collapse omnibar back to bar on the scouts page
             omnibar.reset();
-            // Show "NEW" badge that fades after 5 seconds
             setNewScoutId(scoutId);
             if (newScoutTimerRef.current) clearTimeout(newScoutTimerRef.current);
             newScoutTimerRef.current = setTimeout(() => setNewScoutId(null), 5000);
@@ -874,7 +960,16 @@ export function App() {
         }
       }
     }
-  }, [omnibar]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [omnibar.messages]);
+
+  // Clean up the deferred "NEW" badge timer on unmount so it can't fire on a
+  // torn-down tree during fast account switching.
+  useEffect(() => {
+    return () => {
+      if (newScoutTimerRef.current) clearTimeout(newScoutTimerRef.current);
+    };
+  }, []);
 
   const handleInboxAddContent = (url: string) => {
     createThing.mutate(
@@ -917,7 +1012,7 @@ export function App() {
     handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
   };
 
-  const handleTriageOpen = (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {
+  const handleTriageOpen = (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {
     setTriageState({ mode, ids, currentListId: thing?.listId, currentDueDate: thing?.dueDate, currentDueDatePrecision: thing?.dueDatePrecision });
   };
 
@@ -1111,6 +1206,13 @@ export function App() {
             isAIWorking={omnibar.isStreaming}
           />
 
+          {/*
+            ErrorBoundary around the Routes subtree — a render-time throw in
+            any single view previously tore down the whole App shell. Scoping
+            the boundary here keeps the chrome (LeftNav, Omnibar, background)
+            alive and lets the user navigate away from a broken view.
+          */}
+          <ErrorBoundary scope="routes">
           <Routes>
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/calendar" element={<CalendarPage onEventClick={handleCalendarEventClick} />} />
@@ -1130,10 +1232,6 @@ export function App() {
                   onUpdate={(data) => updateScout.mutate({ id: selectedScoutId, ...data })}
                   onTriggerRun={import.meta.env.DEV ? () => { triggerRun.mutate(selectedScoutId!); setScoutRunning(true); } : undefined}
                   isRunning={scoutRunning}
-                  onClearHistory={import.meta.env.DEV ? () => clearHistory.mutate(selectedScoutId!) : undefined}
-                  isClearing={clearHistory.isPending}
-                  onConsolidate={import.meta.env.DEV ? () => triggerConsolidation.mutate(selectedScoutId!) : undefined}
-                  isConsolidating={triggerConsolidation.isPending}
                   onDelete={() => { deleteScout.mutate(selectedScoutId!); setSelectedScoutId(null); }}
                   onClickFindingItem={(itemId) => {
                     const thing = allActiveThings.find((t) => t.id === itemId);
@@ -1226,9 +1324,11 @@ export function App() {
               </MainLayout>
             } />
           </Routes>
+          </ErrorBoundary>
         </div>
 
         {/* Sliding Detail Panel Overlay */}
+        <ErrorBoundary scope="detail-panel">
         <DetailPanel
           isOpen={isDetailOpen}
           item={selectedItem}
@@ -1401,6 +1501,7 @@ export function App() {
             navigate(path);
           }}
         />
+        </ErrorBoundary>
 
         {/* Drag overlay */}
         <DragOverlay dropAnimation={null}>
@@ -1456,10 +1557,7 @@ export function App() {
           onSearch={omnibar.searchThings}
           searchResults={omnibar.searchResults ?? null}
           isSearching={omnibar.isSearching}
-          onSearchResultClick={(id: string) => {
-            navigate("/inbox");
-            omnibar.close();
-          }}
+          onSearchResultClick={omnibarProps.onSearchResultClick}
           onClose={() => { setSpotlightInitialAction(null); omnibar.close(); }}
           onCancel={omnibar.cancel}
           onReset={omnibar.reset}
@@ -1489,6 +1587,7 @@ export function App() {
           initialForcedAction={spotlightInitialAction}
           showScoutAction={true}
           assistantName={assistantName}
+          destinationLabel={taskDestinationLabel}
         />
 
         {/* Calendar connect interstitial — meeting notes opt-in */}

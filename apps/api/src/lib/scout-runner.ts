@@ -801,11 +801,26 @@ export async function runScout(scoutId: string): Promise<void> {
   };
 
   try {
-    // 3. Budget check
-    if (scout.budgetUsed >= scout.budgetTotal) {
+    // 3. Budget check — atomic reserve. We commit one budget slot up front
+    // with `WHERE budgetUsed < budgetTotal`; if the slot isn't available we
+    // abort the run. This closes the TOCTOU race the old read-then-write
+    // pattern had: two concurrent ticks could both see `used=199/total=200`,
+    // both pass the check, then both increment, silently overspending the
+    // user's budget.
+    const budgetReserved = await prisma.$executeRaw`
+      UPDATE "Scout"
+      SET "budgetUsed" = "budgetUsed" + 1
+      WHERE "id" = ${scout.id}
+        AND "budgetUsed" < "budgetTotal"
+        AND "deletedAt" IS NULL
+    `;
+    if (budgetReserved === 0) {
       await finalizeRun("skipped", { reasoning: "Monthly budget exhausted" });
       return;
     }
+    // Reflect the reservation on the in-memory scout so downstream code
+    // and the later "update cadence/nextRunAt" step see the right value.
+    scout.budgetUsed += 1;
 
     // 3b. Global system budget check
     const systemBudget = parseInt(process.env.SCOUT_SYSTEM_BUDGET_MONTHLY ?? "0", 10);
@@ -896,14 +911,11 @@ export async function runScout(scoutId: string): Promise<void> {
         reasoning: "No search results returned",
       });
 
-      // Update nextRunAt even on empty results
+      // Update nextRunAt even on empty results (budget was already reserved).
       const nextRunAt = new Date(Date.now() + scout.cadenceCurrentIntervalHours * 3600000);
       await prisma.scout.update({
         where: { id: scout.id },
-        data: {
-          budgetUsed: { increment: 1 },
-          nextRunAt,
-        },
+        data: { nextRunAt },
       });
 
       publishSSE(scout.userId, {
@@ -1019,6 +1031,7 @@ export async function runScout(scoutId: string): Promise<void> {
         data: {
           scoutId: scout.id,
           scoutRunId: run.id,
+          userId: scout.userId,
           type: finding.type,
           title: finding.title,
           description: finding.description,
@@ -1058,12 +1071,11 @@ export async function runScout(scoutId: string): Promise<void> {
 
     const cadenceChanged = newInterval !== scout.cadenceCurrentIntervalHours;
 
-    // 11. Update scout — increment budgetUsed, set nextRunAt
+    // 11. Update scout — set nextRunAt (budget was reserved atomically in step 3)
     const nextRunAt = new Date(Date.now() + newInterval * 3600000);
     const updatedScout = await prisma.scout.update({
       where: { id: scout.id },
       data: {
-        budgetUsed: { increment: 1 },
         nextRunAt,
         cadenceCurrentIntervalHours: newInterval,
         cadenceReason: cadenceChanged ? judgment.cadenceReason : undefined,
@@ -1256,11 +1268,20 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
   };
 
   try {
-    if (scout.budgetUsed >= scout.budgetTotal) {
+    // Atomic budget reservation (same pattern as the regular tick path).
+    const bootstrapReserved = await prisma.$executeRaw`
+      UPDATE "Scout"
+      SET "budgetUsed" = "budgetUsed" + 1
+      WHERE "id" = ${scout.id}
+        AND "budgetUsed" < "budgetTotal"
+        AND "deletedAt" IS NULL
+    `;
+    if (bootstrapReserved === 0) {
       await finalizeRun("skipped", { reasoning: "Monthly budget exhausted — skipping bootstrap" });
       await prisma.scout.update({ where: { id: scout.id }, data: { bootstrapped: true, nextRunAt: scout.budgetResetAt } });
       return;
     }
+    scout.budgetUsed += 1;
 
     // System budget check
     const systemBudget = parseInt(process.env.SCOUT_SYSTEM_BUDGET_MONTHLY ?? "0", 10);
@@ -1336,7 +1357,7 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
       const nextRunAt = new Date(Date.now() + scout.cadenceCurrentIntervalHours * 3600000);
       await prisma.scout.update({
         where: { id: scout.id },
-        data: { bootstrapped: true, budgetUsed: { increment: 1 }, nextRunAt, statusLine: "Initial survey complete — no results found" },
+        data: { bootstrapped: true, nextRunAt, statusLine: "Initial survey complete — no results found" },
       });
 
       publishSSE(scout.userId, {
@@ -1400,6 +1421,7 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
         data: {
           scoutId: scout.id,
           scoutRunId: run.id,
+          userId: scout.userId,
           type: finding.type,
           title: finding.title,
           description: finding.description,
@@ -1440,7 +1462,6 @@ export async function runBootstrapScout(scoutId: string): Promise<void> {
       where: { id: scout.id },
       data: {
         bootstrapped: true,
-        budgetUsed: { increment: 1 },
         nextRunAt,
         statusLine: safeStatusLine || "Initial survey complete",
       },

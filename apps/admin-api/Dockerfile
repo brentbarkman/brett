@@ -36,6 +36,7 @@ RUN VITE_ADMIN_API_URL="" pnpm --filter @brett/admin run build
 # Run — no migrations (owned by apps/api)
 FROM base AS runner
 WORKDIR /app
+RUN apk add --no-cache curl
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/packages/types packages/types
 COPY --from=build /app/packages/utils packages/utils
@@ -46,4 +47,6 @@ COPY --from=build /app/apps/admin-api/package.json apps/admin-api/package.json
 # Admin frontend static files
 COPY --from=build /app/apps/admin/dist apps/admin-api/public
 WORKDIR /app/apps/admin-api
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -sf "http://localhost:${PORT:-8080}/health" || exit 1
 CMD ["/app/node_modules/.bin/tsx", "dist/index.js"]

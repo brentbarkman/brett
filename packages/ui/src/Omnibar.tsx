@@ -51,7 +51,7 @@ export interface OmnibarProps {
   onNavigate?: (path: string) => void;
   searchResults?: SearchResultItem[] | null;
   isSearching?: boolean;
-  onSearchResultClick?: (id: string) => void;
+  onSearchResultClick?: (item: SearchResultItem) => void;
   sessionId?: string | null;
   showTokenUsage?: boolean;
   sessionUsage?: { totalTokens: number } | null;
@@ -65,6 +65,8 @@ export interface OmnibarProps {
   assistantName?: string;
   isMinimized?: boolean;
   onMinimize?: () => void;
+  /** Where a newly-created task will actually land (e.g. "Inbox", "Today", "Shopping"). */
+  destinationLabel?: string;
 }
 
 type Suggestion = {
@@ -110,6 +112,7 @@ export function Omnibar({
   assistantName = "Brett",
   isMinimized,
   onMinimize,
+  destinationLabel = "Inbox",
 }: OmnibarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -156,19 +159,51 @@ export function Omnibar({
     if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
   }, []);
 
-  // Intercept input changes to detect shortcut prefixes
+  const hasConversation = messages.length > 0;
+  // Conversation area only replaces the top bar when the omnibar is actively
+  // open. If messages exist but isOpen is false (e.g. the user escaped out of
+  // mid-compose, or dismissed Spotlight while a stream was in flight), we
+  // still render the top bar so the surface remains interactive. Clicking
+  // the bar re-opens and restores the conversation via the hook's state.
+  const showConversation = isOpen && hasConversation && !isMinimized;
+
+  // Intercept input changes to detect shortcut prefixes.
+  //
+  // Preview model: typing "t" or "s" from an empty input enters a *preview*
+  // of task/search mode (forcedAction set, input still shows the letter). The
+  // next keystroke decides:
+  //   - space → commit the mode (clear input, stay in mode)
+  //   - anything else → flip to Brett (clear forcedAction, keep the typed text)
+  // Once a conversation is active the bottom input is a plain textbox — no
+  // prefix shortcuts — so the user can keep talking to Brett uninterrupted.
   const handleInputChange = (value: string) => {
-    if (!forcedAction && value === "s ") {
-      setForcedAction("search");
-      onInputChange("");
+    if (hasConversation) {
+      onInputChange(value);
       return;
     }
-    if (!forcedAction && value === "t ") {
-      setForcedAction("create");
-      onInputChange("");
+
+    // Preview state: single "t" or "s" with forcedAction set.
+    const inPreview = forcedAction !== null && (input === "t" || input === "s");
+    if (inPreview) {
+      // Space appended → commit mode, clear input.
+      if (value === input + " ") {
+        onInputChange("");
+        return;
+      }
+      // Any other change (new char, backspace, paste, …) → flip to Brett.
+      setForcedAction(null);
+      onInputChange(value);
       return;
     }
-    // Backspace to empty clears the forced mode
+
+    // Enter preview mode from empty input.
+    if (!forcedAction && input === "" && (value === "t" || value === "s")) {
+      setForcedAction(value === "t" ? "create" : "search");
+      onInputChange(value);
+      return;
+    }
+
+    // Committed mode, backspace to empty → clear mode.
     if (forcedAction && value === "") {
       setForcedAction(null);
     }
@@ -253,14 +288,6 @@ export function Omnibar({
     }, 2500);
     return () => clearTimeout(timer);
   }, [confirmedTask, animateClose]);
-
-  const hasConversation = messages.length > 0;
-  // Conversation area only replaces the top bar when the omnibar is actively
-  // open. If messages exist but isOpen is false (e.g. the user escaped out of
-  // mid-compose, or dismissed Spotlight while a stream was in flight), we
-  // still render the top bar so the surface remains interactive. Clicking
-  // the bar re-opens and restores the conversation via the hook's state.
-  const showConversation = isOpen && hasConversation && !isMinimized;
 
   const showSuggestions = isOpen && (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
   const showSearchResults = isOpen && !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));
@@ -411,7 +438,7 @@ export function Omnibar({
           } else if (r.entityType === "item" && onItemClick) {
             onItemClick(r.entityId);
           } else {
-            onSearchResultClick?.(r.entityId);
+            onSearchResultClick?.(r);
           }
           return;
         }
@@ -449,7 +476,7 @@ export function Omnibar({
         {!showConversation && (
           <div
             className="flex items-center h-12 px-4 cursor-text"
-            onClick={() => !isOpen && onOpen()}
+            onClick={() => { if (!isOpen || isMinimized) onOpen(); }}
           >
             <BrettMark
               size={26}
@@ -464,7 +491,7 @@ export function Omnibar({
               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 px-3 text-sm"
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
-              onFocus={() => !isOpen && onOpen()}
+              onFocus={() => { if (!isOpen || isMinimized) onOpen(); }}
               onKeyDown={handleKeyDown}
               data-1p-ignore
               autoComplete="off"
@@ -544,7 +571,7 @@ export function Omnibar({
                         } else if (item.entityType === "item" && onItemClick) {
                           onItemClick(item.entityId);
                         } else {
-                          onSearchResultClick?.(item.entityId);
+                          onSearchResultClick?.(item);
                         }
                       }}
                       onMouseEnter={() => setSelectedSearchIdx(i)}
@@ -564,7 +591,7 @@ export function Omnibar({
               <Check size={14} className="text-brett-teal/70 flex-shrink-0 mt-0.5" />
               <div className="min-w-0">
                 <div className="text-sm text-white/70 truncate">{confirmedTask}</div>
-                <div className="text-[11px] text-white/30">Added to Inbox</div>
+                <div className="text-[11px] text-white/30">Added to {destinationLabel}</div>
               </div>
             </div>
           )}

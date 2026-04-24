@@ -1,4 +1,4 @@
-import type { CalendarGlassColor, ContentType } from "@brett/types";
+import type { CalendarGlassColor, ContentType, NavList } from "@brett/types";
 
 // ── URL content type detection ──
 
@@ -23,14 +23,6 @@ export function detectContentType(url: string): ContentType {
   return "web_page";
 }
 
-export function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export function generateId(): string {
   return crypto.randomUUID();
 }
@@ -39,10 +31,15 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Format an ISO date string as a relative time label (e.g. "3h ago", "2d ago") */
-export function formatRelativeTime(isoString: string): string {
-  const date = new Date(isoString);
-  const now = new Date();
+/**
+ * Format a time as a relative label (e.g. "3h ago", "2d ago").
+ *
+ * Accepts either an ISO string or a `Date`. After 7 days, falls back to
+ * `toLocaleDateString()` — callers that want unbounded "N d ago" forever
+ * should clamp upstream.
+ */
+export function formatRelativeTime(input: string | Date, now: Date = new Date()): string {
+  const date = typeof input === "string" ? new Date(input) : input;
   const diffMs = now.getTime() - date.getTime();
   const diffSec = Math.floor(diffMs / 1000);
   if (diffSec < 60) return "just now";
@@ -166,6 +163,28 @@ export function humanizeCadence(hours: number): string {
 export { resolveTempUnit, convertTemp } from "./weather.js";
 export { generateCuid } from "./cuid.js";
 
+/**
+ * Where a new task created from the current view will actually land.
+ * Keep aligned with `useOmnibar.createTask(currentView)` in
+ * `apps/desktop/src/api/omnibar.ts`: Today adds a due date, `list:<id>` sets
+ * `listId`, everything else falls through to inbox. The label must reflect
+ * the destination, not the screen the user is on.
+ */
+export function getTaskDestinationLabel(
+  currentView: string | undefined,
+  lists: ReadonlyArray<Pick<NavList, "id" | "name">>,
+): string {
+  if (currentView === "today") return "Today";
+  if (currentView?.startsWith("list:")) {
+    const listId = currentView.slice(5);
+    if (listId) {
+      const match = lists.find((l) => l.id === listId);
+      if (match) return match.name;
+    }
+  }
+  return "Inbox";
+}
+
 // ── Password validation ──
 
 export const PASSWORD_MIN_LENGTH = 10;
@@ -174,6 +193,7 @@ export const PASSWORD_MAX_LENGTH = 128;
 /** Returns an error message if the password fails complexity requirements, or null if valid. */
 export function validatePassword(password: string): string | null {
   if (password.length < PASSWORD_MIN_LENGTH) return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+  if (password.length > PASSWORD_MAX_LENGTH) return `Password must be at most ${PASSWORD_MAX_LENGTH} characters`;
   if (!/[a-z]/.test(password)) return "Password must contain a lowercase letter";
   if (!/[A-Z]/.test(password)) return "Password must contain an uppercase letter";
   if (!/\d/.test(password)) return "Password must contain a number";

@@ -8,7 +8,6 @@ import {
   validateCreateList,
   validateUpdateList,
   validateBulkUpdate,
-  computeRelativeAge,
   computeTriageResult,
   groupUpcomingThings,
 } from "../index";
@@ -537,15 +536,6 @@ describe("validateBulkUpdate", () => {
     expect(validateBulkUpdate({ ids, updates: { listId: "x" } }).ok).toBe(false);
   });
   it("rejects null body", () => expect(validateBulkUpdate(null).ok).toBe(false));
-});
-
-// ── computeRelativeAge ──
-
-describe("computeRelativeAge", () => {
-  it("just now", () => expect(computeRelativeAge(new Date(NOW.getTime() - 30_000), NOW)).toBe("just now"));
-  it("minutes", () => expect(computeRelativeAge(new Date(NOW.getTime() - 25 * 60_000), NOW)).toBe("25m ago"));
-  it("hours", () => expect(computeRelativeAge(new Date(NOW.getTime() - 5 * 3600_000), NOW)).toBe("5h ago"));
-  it("days", () => expect(computeRelativeAge(new Date(NOW.getTime() - 3 * 86400_000), NOW)).toBe("3d ago"));
 });
 
 // ── validateCreateList ──

@@ -32,9 +32,32 @@ struct AuthEndpoints {
     private struct SocialSignIn: Encodable {
         let provider: String
         let idToken: IDTokenPayload?
+        /// Raw nonce the client generated for Apple Sign In. Server hashes
+        /// this with SHA-256 and asserts it matches the `nonce` claim
+        /// embedded in `idToken`. Nil for flows that don't use a nonce
+        /// (Google via ASWebAuthenticationSession relies on the HTTP
+        /// redirect state parameter instead).
+        let nonce: String?
 
         struct IDTokenPayload: Encodable {
             let token: String
+        }
+
+        // Custom encoding so the optional `idToken` and `nonce` fields
+        // are OMITTED when nil rather than encoded as `null`. Sending
+        // `"nonce": null` to a better-auth endpoint that doesn't know
+        // about the field could cause strict schemas to reject the
+        // request; omitting is the safer wire shape for a forward-
+        // compatible client change.
+        enum CodingKeys: String, CodingKey {
+            case provider, idToken, nonce
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(provider, forKey: .provider)
+            try c.encodeIfPresent(idToken, forKey: .idToken)
+            try c.encodeIfPresent(nonce, forKey: .nonce)
         }
     }
 
@@ -69,11 +92,17 @@ struct AuthEndpoints {
     }
 
     /// Social sign-in. For Apple, pass the ASAuthorization identity token as
-    /// `idToken`. For flows that don't have a token upfront (e.g. Google via
-    /// ASWebAuthenticationSession), pass nil — the caller handles redirects.
-    func signInSocial(provider: String, idToken: String? = nil) async throws -> AuthSession {
+    /// `idToken` plus the raw nonce the client generated (see
+    /// `AppleSignInProvider`). For flows without a pre-minted token (Google
+    /// via ASWebAuthenticationSession), both are nil — the caller handles
+    /// redirects.
+    func signInSocial(
+        provider: String,
+        idToken: String? = nil,
+        rawNonce: String? = nil
+    ) async throws -> AuthSession {
         let payload = idToken.map { SocialSignIn.IDTokenPayload(token: $0) }
-        let body = SocialSignIn(provider: provider, idToken: payload)
+        let body = SocialSignIn(provider: provider, idToken: payload, nonce: rawNonce)
         return try await performSignIn(path: "/api/auth/sign-in/social", body: body)
     }
 
@@ -125,6 +154,29 @@ struct AuthEndpoints {
     /// set on `APIClient`.
     func getMe() async throws -> AuthUser {
         try await client.request(AuthUser.self, path: "/users/me", method: "GET")
+    }
+
+    /// Session status check. Hits `/api/auth/ios/session` — a lightweight
+    /// endpoint that returns only the session's `expiresAt` plus a
+    /// minimal user stub. Used by `AuthManager.refreshIfStale` for the
+    /// foreground keepalive. Also transparently slides the session's
+    /// expiration forward under better-auth's sliding-session behaviour.
+    ///
+    /// Throws `APIError.unauthorized` on 401, which `AuthManager`
+    /// treats as "sign out and return to login."
+    func getSession() async throws -> SessionStatus {
+        try await client.request(SessionStatus.self, path: "/api/auth/ios/session", method: "GET")
+    }
+
+    struct SessionStatus: Decodable, Sendable {
+        let token: String
+        let expiresAt: Date
+        let user: SessionUser
+
+        struct SessionUser: Decodable, Sendable {
+            let id: String
+            let email: String
+        }
     }
 
     // MARK: - Private helpers

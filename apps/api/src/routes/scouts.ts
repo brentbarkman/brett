@@ -487,34 +487,6 @@ scouts.post("/:id/resume", async (c) => {
   );
 });
 
-// DEV ONLY: Clear scout history (findings, runs, activity)
-scouts.delete("/:id/history", async (c) => {
-  const user = c.get("user");
-  const id = c.req.param("id");
-
-  const scout = await prisma.scout.findFirst({ where: { id, userId: user.id } });
-  if (!scout) return c.json({ error: "Not found" }, 404);
-
-  // Delete in order: memories/consolidations, findings (FK to runs), runs, activity.
-  // ScoutMemory, ScoutConsolidation, ScoutRun, and ScoutActivity are not soft-delete
-  // models so deleteMany is a true hard delete. ScoutFinding IS a soft-delete model,
-  // so we bypass the extension with raw SQL to hard-delete — otherwise soft-deleted
-  // findings would be left with dangling scoutRunId FK references after runs are removed.
-  await prisma.scoutMemory.deleteMany({ where: { scoutId: id } });
-  await prisma.scoutConsolidation.deleteMany({ where: { scoutId: id } });
-  await prisma.$executeRaw(Prisma.sql`DELETE FROM "ScoutFinding" WHERE "scoutId" = ${id}`);
-  await prisma.scoutRun.deleteMany({ where: { scoutId: id } });
-  await prisma.scoutActivity.deleteMany({ where: { scoutId: id } });
-
-  // Reset budget and consolidation state
-  await prisma.scout.update({
-    where: { id },
-    data: { budgetUsed: 0, consolidationRunCount: 0, lastConsolidatedAt: null },
-  });
-
-  return c.json({ ok: true });
-});
-
 // POST /scouts/:id/run — manually trigger a scout run
 scouts.post("/:id/run", async (c) => {
   const user = c.get("user");
@@ -549,32 +521,6 @@ scouts.post("/:id/run", async (c) => {
     .catch((err) => console.error(`[scouts] Manual run failed for ${id}:`, err));
 
   return c.json({ ok: true, message: "Run triggered" });
-});
-
-// POST /scouts/:id/consolidate — DEV ONLY: manually trigger memory consolidation
-scouts.post("/:id/consolidate", async (c) => {
-  const user = c.get("user");
-  const id = c.req.param("id");
-
-  const scout = await prisma.scout.findFirst({
-    where: { id, userId: user.id },
-  });
-  if (!scout) return c.json({ error: "Not found" }, 404);
-
-  // Rate limit: reject if a consolidation is already in progress
-  const pendingConsolidation = await prisma.scoutConsolidation.findFirst({
-    where: { scoutId: id, status: { in: ["pending", "processing"] } },
-  });
-  if (pendingConsolidation) {
-    return c.json({ error: "A consolidation is already in progress for this scout" }, 429);
-  }
-
-  // Fire-and-forget
-  import("../lib/scout-runner.js")
-    .then((mod) => mod.triggerConsolidation(id))
-    .catch((err) => console.error(`[scouts] Manual consolidation failed for ${id}:`, err));
-
-  return c.json({ ok: true, message: "Consolidation triggered" });
 });
 
 // GET /scouts/:id/findings — paginated findings for a scout

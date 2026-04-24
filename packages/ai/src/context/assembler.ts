@@ -136,14 +136,14 @@ function isValidView(view: string): boolean {
   return false;
 }
 
-function escapeUserContent(content: string): string {
+export function escapeUserContent(content: string): string {
   // Prevent tag breakout attacks: user content containing </user_data> could
   // escape the data block and inject instructions into the trusted prompt space.
   // Replace closing tags with an escaped version the LLM won't interpret as a boundary.
   return content.replace(/<\/user_data>/gi, "&lt;/user_data&gt;");
 }
 
-function wrapUserData(label: string, content: string): string {
+export function wrapUserData(label: string, content: string): string {
   // Sanitize label to prevent attribute injection (should always be hardcoded,
   // but defense-in-depth in case it's ever called with dynamic values)
   const safeLabel = label.replace(/[^a-z0-9_-]/gi, "");

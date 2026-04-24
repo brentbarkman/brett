@@ -155,19 +155,29 @@ export function recordRouteChange(route: string) {
 
 // --- Failed API call recording ---
 
+// Mask path segments that look like opaque IDs (cuids, uuids, 20+-char
+// tokens) so the diagnostics payload can't accidentally carry an item id,
+// scout id, or — if a future endpoint ever puts one there — a secret.
+function maskPathSegments(pathname: string): string {
+  return pathname
+    .split("/")
+    .map((seg) => (/^[a-zA-Z0-9_-]{20,}$/.test(seg) ? "[ID]" : seg))
+    .join("/");
+}
+
 export function recordFailedApiCall(url: string, method: string, status: number) {
   try {
     const parsed = new URL(url);
     if (AUTH_ROUTE_PATTERNS.some((p) => p.test(parsed.pathname))) return;
     failedApiCalls.push({
-      path: parsed.pathname,
+      path: maskPathSegments(parsed.pathname),
       method: method.toUpperCase(),
       status,
       timestamp: new Date().toISOString(),
     });
   } catch {
     failedApiCalls.push({
-      path: url.split("?")[0],
+      path: maskPathSegments(url.split("?")[0]),
       method: method.toUpperCase(),
       status,
       timestamp: new Date().toISOString(),
@@ -213,3 +223,15 @@ export function initDiagnostics() {
   initConsoleCapture();
   initBreadcrumbs();
 }
+
+// Namespaced object for ergonomic call sites (e.g. `diagnostics.clear()` at
+// sign-out). Keep the free functions above for their existing import sites.
+export const diagnostics = {
+  clear(): void {
+    consoleErrors.clear();
+    consoleLogs.clear();
+    failedApiCalls.clear();
+    breadcrumbs.clear();
+    lastRoute = "";
+  },
+};

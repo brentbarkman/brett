@@ -238,9 +238,12 @@ final class MutationQueue: MutationQueueProtocol {
         do {
             try context.save()
         } catch {
-            #if DEBUG
-            print("[MutationQueue] save failed: \(error)")
-            #endif
+            // Queue-state save failures are high-severity: they mean a
+            // mutation transition (pending→in_flight, retry bump, dead,
+            // etc.) didn't hit disk. The next launch reads the pre-save
+            // state, which is usually recoverable but can surprise the
+            // user. Log at error level so sysdiagnose picks it up.
+            BrettLog.sync.error("MutationQueue save failed: \(String(describing: error), privacy: .public)")
         }
     }
 

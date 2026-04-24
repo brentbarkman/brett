@@ -3,6 +3,7 @@ import SwiftUI
 /// Calendar page — wired to the live `CalendarStore` (SwiftData backed by
 /// the sync pull).
 struct CalendarPage: View {
+    @Environment(AuthManager.self) private var authManager
     @State private var selectedDate = Date()
     /// Tracks whether the user is still viewing "today" (vs. having
     /// navigated to a specific day via the week strip). When true, the
@@ -156,6 +157,10 @@ struct CalendarPage: View {
         let dayStart = calendar.startOfDay(for: selectedDate)
         let windowStart = calendar.date(byAdding: .day, value: -windowDays, to: dayStart) ?? dayStart
         let windowEnd = calendar.date(byAdding: .day, value: windowDays, to: dayStart) ?? dayStart
-        events = calendarStore.fetchEvents(startDate: windowStart, endDate: windowEnd)
+        events = calendarStore.fetchEvents(
+            userId: authManager.currentUser?.id,
+            startDate: windowStart,
+            endDate: windowEnd
+        )
     }
 }

@@ -27,20 +27,73 @@ final class BiometricLockManager {
     private(set) var isEvaluating: Bool = false
     private(set) var lastError: String?
 
-    /// Mirrors `@AppStorage("security.faceid.enabled")`. Read via UserDefaults
-    /// because the manager isn't a View. When the toggle flips off in
-    /// Settings we eagerly unlock — no point holding the user behind a
-    /// prompt they just disabled.
+    /// Device-scoped Face ID toggle. Read via UserDefaults because the
+    /// manager isn't a View. When the toggle flips off in Settings we
+    /// eagerly unlock — no point holding the user behind a prompt they
+    /// just disabled.
+    ///
+    /// Deliberately NOT `UserScopedStorage.key`-scoped. Biometric lock is
+    /// a device-owner policy — whoever holds the phone has to pass Face
+    /// ID to use the app, regardless of which account is signed in. The
+    /// earlier scoped version had a latent bug: `BiometricLockManager`
+    /// runs before `AuthManager.refreshCurrentUser` populates
+    /// `currentUser?.id`, so the scoped lookup always hit `"anon"` and
+    /// reported false → `isLocked = false` → the app flashed its main
+    /// UI during cold launch for any user who had previously enabled
+    /// Face ID. Device scoping closes the window.
+    static let faceIDEnabledKey = "security.faceid.enabled"
+
     private var isEnabledInSettings: Bool {
-        UserDefaults.standard.bool(forKey: "security.faceid.enabled")
+        UserDefaults.standard.bool(forKey: Self.faceIDEnabledKey)
     }
 
     private var context: LAContext?
 
     private init() {
-        // If the user has Face ID turned on and the app is starting, begin
-        // in the locked state. If they haven't, stay unlocked.
+        // One-shot migration from the previous user-scoped key. Before
+        // device-scoping, the toggle lived at
+        // `security.faceid.enabled.user=<id>` so every signed-in account
+        // had its own preference. Users who had FaceID on under that
+        // scheme would silently lose the protection after the device-
+        // scoping change if we didn't forward it. Runs once per install
+        // (the UserDefaults flag is wiped on uninstall, so reinstall also
+        // runs it again — harmless, since it only sets a bool).
+        Self.migrateFaceIDPreferenceIfNeeded()
+
+        // Face ID policy is known synchronously at init (device-scoped key)
+        // so cold launch locks immediately — no gap between first render
+        // and the scene-phase hook where the main UI would otherwise be
+        // visible in the app switcher.
         isLocked = isEnabledInSettings
+    }
+
+    /// UserDefaults sentinel so the migration only runs once per install.
+    private static let migrationSentinelKey = "security.faceid.enabled.migratedFromUserScope.v1"
+
+    private static func migrateFaceIDPreferenceIfNeeded() {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: migrationSentinelKey) {
+            return
+        }
+        // The legacy key format was `security.faceid.enabled.user=<id>`.
+        // Scan UserDefaults for any matching key and OR its value — if
+        // ANY user had FaceID enabled on this device, carry that forward
+        // as the device-level default. Users who don't want it can flip
+        // the toggle off in Settings.
+        let legacyPrefix = "security.faceid.enabled.user="
+        var anyEnabled = false
+        for (key, value) in defaults.dictionaryRepresentation()
+            where key.hasPrefix(legacyPrefix) {
+            if let boolValue = value as? Bool, boolValue {
+                anyEnabled = true
+                break
+            }
+        }
+
+        if anyEnabled {
+            defaults.set(true, forKey: faceIDEnabledKey)
+        }
+        defaults.set(true, forKey: migrationSentinelKey)
     }
 
     // MARK: - Lifecycle hooks

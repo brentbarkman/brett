@@ -2,6 +2,11 @@ const TIME_TOLERANCE_MS = 3 * 60 * 60 * 1000; // 3 hours — Granola reports act
 const CONFIDENCE_THRESHOLD = 0.5;
 const TITLE_WEIGHT = 0.6;
 const ATTENDEE_WEIGHT = 0.4;
+// Tight window used when we have no attendee signal to lean on — a "Team
+// Sync" Granola note landing in the same day as a different "Team Sync"
+// calendar event shouldn't match unless the times line up much more closely
+// than the generous TIME_TOLERANCE_MS allows.
+const NO_ATTENDEE_TIME_TOLERANCE_MS = 30 * 60 * 1000; // 30 min
 
 export interface MatchCandidate {
   id: string;
@@ -51,6 +56,18 @@ export function findBestMatch(
     );
     const score = titleScore * TITLE_WEIGHT + attendeeScore * ATTENDEE_WEIGHT;
 
+    // When BOTH sides have zero attendees (common for 1:1 calls and
+    // scratch Granola notes), require a tight time overlap. Otherwise
+    // two generic "Team Sync" events on the same day would match each
+    // other on title alone and pollute both with wrong notes.
+    //
+    // If even one side has attendees, attendeeScore carries some signal
+    // (even when it's 0) — the 0.5 CONFIDENCE_THRESHOLD check below is
+    // the primary filter for weak matches there.
+    const bothMissingAttendees =
+      meeting.attendees.length === 0 && candidate.attendees.length === 0;
+    if (bothMissingAttendees && !hasTightTimeOverlap(meeting, candidate)) continue;
+
     if (score >= CONFIDENCE_THRESHOLD && (!bestMatch || score > bestMatch.score)) {
       bestMatch = { id: candidate.id, score };
     }
@@ -62,6 +79,15 @@ export function findBestMatch(
 function hasTimeOverlap(a: MeetingInput, b: MatchCandidate): boolean {
   const aStart = a.startTime.getTime() - TIME_TOLERANCE_MS;
   const aEnd = a.endTime.getTime() + TIME_TOLERANCE_MS;
+  const bStart = b.startTime.getTime();
+  const bEnd = b.endTime.getTime();
+
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function hasTightTimeOverlap(a: MeetingInput, b: MatchCandidate): boolean {
+  const aStart = a.startTime.getTime() - NO_ATTENDEE_TIME_TOLERANCE_MS;
+  const aEnd = a.endTime.getTime() + NO_ATTENDEE_TIME_TOLERANCE_MS;
   const bStart = b.startTime.getTime();
   const bEnd = b.endTime.getTime();
 

@@ -47,7 +47,10 @@ export const analyzeMeetingPatternSkill: Skill = {
     },
     required: ["meetingTitle"],
   },
-  modelTier: "large",
+  // "medium" matches the actual `resolveModel` call below. The earlier
+  // "large" declaration was a doc/runtime drift that would confuse any
+  // future cost/telemetry router reading this field.
+  modelTier: "medium",
   requiresAI: true,
 
   async execute(params, ctx) {
@@ -64,14 +67,24 @@ export const analyzeMeetingPatternSkill: Skill = {
       };
     }
 
-    // Find all meetings matching the title
-    const meetings = await ctx.prisma.meetingNote.findMany({
+    // Cap fetch + per-meeting summary length so a power user with many
+    // recurring instances of a meeting doesn't blow past the context window
+    // or generate a multi-dollar LLM call from a single question.
+    const MAX_MEETINGS = 20;
+    const MAX_SUMMARY_CHARS = 400;
+    const MAX_ACTION_ITEMS_PER_MEETING = 6;
+
+    // Find most recent N meetings matching the title (newest instances
+    // carry the most actionable pattern signal).
+    const recent = await ctx.prisma.meetingNote.findMany({
       where: {
         userId: ctx.userId,
         title: { contains: p.meetingTitle, mode: "insensitive" },
       },
-      orderBy: { meetingStartedAt: "asc" },
+      orderBy: { meetingStartedAt: "desc" },
+      take: MAX_MEETINGS,
     });
+    const meetings = recent.slice().reverse(); // chronological for the prompt
 
     if (meetings.length < 2) {
       return {
@@ -85,12 +98,18 @@ export const analyzeMeetingPatternSkill: Skill = {
       };
     }
 
-    // Build context from each meeting
+    // Build context from each meeting, truncating each summary to keep
+    // the overall prompt bounded.
     const meetingContext = meetings
       .map((m) => {
         const date = m.meetingStartedAt.toISOString().split("T")[0];
+        const rawSummary = m.summary ?? "_No summary_";
+        const summary = rawSummary.length > MAX_SUMMARY_CHARS
+          ? `${rawSummary.slice(0, MAX_SUMMARY_CHARS).trimEnd()}…`
+          : rawSummary;
         const actionItems = Array.isArray(m.actionItems)
           ? (m.actionItems as Array<{ title: string }>)
+              .slice(0, MAX_ACTION_ITEMS_PER_MEETING)
               .map((ai) => `  - ${ai.title}`)
               .join("\n")
           : "  (none)";
@@ -98,7 +117,7 @@ export const analyzeMeetingPatternSkill: Skill = {
         return [
           `## ${m.title} (${date})`,
           "",
-          m.summary ?? "_No summary_",
+          summary,
           "",
           "**Action items:**",
           actionItems,

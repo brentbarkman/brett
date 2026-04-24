@@ -16,17 +16,6 @@ export interface AuthUser {
   role?: string;
 }
 
-/** @deprecated Use ItemRecord + itemToThing() instead */
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  userId: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export interface Notification {
   id: string;
   userId: string;
@@ -573,6 +562,57 @@ export interface Things3ImportResult {
 export interface Things3ScanResult {
   projects: number;
   tasks: { active: number; completed: number };
+}
+
+// ── Knowledge graph ──
+
+/** DB record — mirrors the Prisma KnowledgeEntity model. `embedding` is server-only. */
+export interface KnowledgeEntityRecord {
+  id: string;
+  userId: string;
+  type: string;
+  name: string;
+  properties: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** DB record — mirrors the Prisma KnowledgeRelationship model. */
+export interface KnowledgeRelationshipRecord {
+  id: string;
+  userId: string;
+  sourceId: string;
+  targetId: string;
+  relationship: string;
+  properties: Record<string, unknown>;
+  weight: number;
+  validFrom: Date;
+  validUntil: Date | null;
+  sourceType: string | null;
+  provenanceEntityId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ── Mobile sync infrastructure ──
+
+/** DB record — mirrors the Prisma DeviceToken model. */
+export interface DeviceTokenRecord {
+  id: string;
+  userId: string;
+  token: string;
+  platform: string;
+  appVersion: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** DB record — mirrors the Prisma IdempotencyKey model. */
+export interface IdempotencyKeyRecord {
+  key: string;
+  response: Record<string, unknown>;
+  statusCode: number;
+  createdAt: Date;
 }
 
 export * from "./sync.js";

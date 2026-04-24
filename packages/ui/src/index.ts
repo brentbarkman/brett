@@ -1,7 +1,9 @@
 import "./animations.css";
 
 export { Button } from "./button";
+export { ErrorBoundary } from "./ErrorBoundary";
 export { BrettMark, ProductMark, Wordmark } from "./BrettMark";
+export { AppIcon } from "./AppIcon";
 export { LeftNav } from "./LeftNav";
 export { Omnibar } from "./Omnibar";
 export type { OmnibarProps, OmnibarMessage, SearchResultItem } from "./Omnibar";
@@ -34,6 +36,7 @@ export { StaleTooltip } from "./StaleTooltip";
 export { Tooltip } from "./Tooltip";
 export type { QuickAddInputHandle } from "./QuickAddInput";
 export { useListKeyboardNav } from "./useListKeyboardNav";
+export { useDeferredToggle } from "./useDeferredToggle";
 export { ItemListShell } from "./ItemListShell";
 export { SectionHeader } from "./SectionHeader";
 export { useClickOutside } from "./useClickOutside";

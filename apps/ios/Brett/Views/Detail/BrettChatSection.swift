@@ -11,7 +11,9 @@ struct BrettChatSection: View {
     let itemId: String
 
     @State private var input: String = ""
-    @State private var aiStore = AIProviderStore.shared
+    // Reference the @Observable singleton directly — wrapping it in @State
+    // would snapshot it once and hide subsequent changes from SwiftUI.
+    private var aiStore: AIProviderStore { AIProviderStore.shared }
     @FocusState private var isFocused: Bool
 
     private var messages: [ChatMessage] {
@@ -227,8 +229,12 @@ struct BrettChatSection: View {
     private func send() {
         let pending = input
         input = ""
+        // Capture the authenticated userId at the moment of send so the
+        // final assistant row is attributed to the caller — never to a
+        // subsequent account that may sign in before the stream ends.
+        let userId = ActiveSession.userId
         Task {
-            await store.send(itemId: itemId, message: pending)
+            await store.send(itemId: itemId, message: pending, userId: userId)
         }
     }
 }

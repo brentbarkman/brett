@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Calendar, Bell, RotateCw } from "lucide-react";
 import type { DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
+import { computeTriageResult, type TriageDatePreset } from "@brett/business";
 import { useClickOutside } from "./useClickOutside";
 
 interface ScheduleRowProps {
@@ -78,25 +79,29 @@ function DropdownOption({
   );
 }
 
-function getTodayISO(): string {
-  const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
-}
-
-function getTomorrowISO(): string {
-  const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)).toISOString();
-}
-
-function getThisWeekISO(): string {
-  const d = new Date();
-  const day = d.getUTCDay();
-  const daysUntilSun = day === 0 ? 7 : 7 - day;
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + daysUntilSun)).toISOString();
-}
-
 function getUTCDatePrefix(iso: string): string {
   return iso.slice(0, 10);
+}
+
+/** Preset options — must stay in sync with TriagePopup so the `d` shortcut
+ *  and the thing panel dropdown produce identical dates. */
+const DATE_PRESETS: { preset: TriageDatePreset; label: string }[] = [
+  { preset: "today", label: "Today" },
+  { preset: "tomorrow", label: "Tomorrow" },
+  { preset: "this_week", label: "This Week" },
+  { preset: "next_week", label: "Next Week" },
+  { preset: "next_month", label: "Next Month" },
+];
+
+function isPresetActive(
+  preset: TriageDatePreset,
+  dueDate: string | undefined,
+  precision: DueDatePrecision | undefined
+): boolean {
+  if (!dueDate) return false;
+  const result = computeTriageResult(preset);
+  if (result.dueDatePrecision !== precision) return false;
+  return getUTCDatePrefix(result.dueDate) === getUTCDatePrefix(dueDate);
 }
 
 const reminderLabels: Record<ReminderType, string> = {
@@ -136,21 +141,18 @@ export function ScheduleRow({
         >
           {(close) => (
             <>
-              <DropdownOption
-                label="Today"
-                isActive={!!dueDate && dueDatePrecision === "day" && getUTCDatePrefix(dueDate) === getUTCDatePrefix(getTodayISO())}
-                onClick={() => { onUpdateDueDate(getTodayISO(), "day"); close(); }}
-              />
-              <DropdownOption
-                label="Tomorrow"
-                isActive={!!dueDate && dueDatePrecision === "day" && getUTCDatePrefix(dueDate) === getUTCDatePrefix(getTomorrowISO())}
-                onClick={() => { onUpdateDueDate(getTomorrowISO(), "day"); close(); }}
-              />
-              <DropdownOption
-                label="This Week"
-                isActive={dueDatePrecision === "week"}
-                onClick={() => { onUpdateDueDate(getThisWeekISO(), "week"); close(); }}
-              />
+              {DATE_PRESETS.map(({ preset, label }) => (
+                <DropdownOption
+                  key={preset}
+                  label={label}
+                  isActive={isPresetActive(preset, dueDate, dueDatePrecision)}
+                  onClick={() => {
+                    const result = computeTriageResult(preset);
+                    onUpdateDueDate(result.dueDate, result.dueDatePrecision);
+                    close();
+                  }}
+                />
+              ))}
               <DropdownOption
                 label="No date"
                 isActive={!dueDate}

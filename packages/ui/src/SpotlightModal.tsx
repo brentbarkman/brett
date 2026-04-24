@@ -3,7 +3,7 @@ import { Send, Square, X, Search, Plus, Check, Radar, MessageSquare } from "luci
 import { BrettMark } from "./BrettMark";
 import { SkillResultCard } from "./SkillResultCard";
 import { SimpleMarkdown } from "./SimpleMarkdown";
-import { SearchResultRow } from "./Omnibar";
+import { SearchResultRow, type SearchResultItem } from "./Omnibar";
 import type { DisplayHint } from "@brett/types";
 
 export interface SpotlightMessage {
@@ -17,15 +17,8 @@ export interface SpotlightMessage {
   }>;
 }
 
-export interface SpotlightSearchResult {
-  entityType: string;
-  entityId: string;
-  title: string;
-  snippet: string;
-  score: number;
-  matchType: "keyword" | "semantic" | "both";
-  metadata: Record<string, unknown>;
-}
+/** Re-exported for backwards compat — identical to `SearchResultItem` */
+export type SpotlightSearchResult = SearchResultItem;
 
 export interface SpotlightModalProps {
   isOpen: boolean;
@@ -43,7 +36,7 @@ export interface SpotlightModalProps {
   onNavigateToSettings?: () => void;
   searchResults?: SpotlightSearchResult[] | null;
   isSearching?: boolean;
-  onSearchResultClick?: (id: string) => void;
+  onSearchResultClick?: (item: SpotlightSearchResult) => void;
   onItemClick?: (id: string) => void;
   onEventClick?: (eventId: string) => void;
   onNavigate?: (path: string) => void;
@@ -53,6 +46,8 @@ export interface SpotlightModalProps {
   initialForcedAction?: "search" | "create" | null;
   showScoutAction?: boolean;
   assistantName?: string;
+  /** Where a newly-created task will actually land (e.g. "Inbox", "Today", "Shopping"). */
+  destinationLabel?: string;
 }
 
 export function SpotlightModal({
@@ -81,6 +76,7 @@ export function SpotlightModal({
   initialForcedAction,
   showScoutAction,
   assistantName = "Brett",
+  destinationLabel = "Inbox",
 }: SpotlightModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -91,7 +87,6 @@ export function SpotlightModal({
   const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
 
-  // Intercept input changes to detect shortcut prefixes
   const handleScroll = () => {
     const el = chatContainerRef.current;
     if (!el) return;
@@ -99,18 +94,33 @@ export function SpotlightModal({
     userScrolledUpRef.current = !nearBottom;
   };
 
+  const hasConversation = messages.length > 0;
+
+  // Intercept input changes to detect shortcut prefixes. See Omnibar.tsx for
+  // the full preview-model rationale — kept in sync with that surface.
   const handleInputChange = (value: string) => {
-    if (!forcedAction && value === "s ") {
-      setForcedAction("search");
-      onInputChange("");
+    if (hasConversation) {
+      onInputChange(value);
       return;
     }
-    if (!forcedAction && value === "t ") {
-      setForcedAction("create");
-      onInputChange("");
+
+    const inPreview = forcedAction !== null && (input === "t" || input === "s");
+    if (inPreview) {
+      if (value === input + " ") {
+        onInputChange("");
+        return;
+      }
+      setForcedAction(null);
+      onInputChange(value);
       return;
     }
-    // Backspace to empty clears the forced mode
+
+    if (!forcedAction && input === "" && (value === "t" || value === "s")) {
+      setForcedAction(value === "t" ? "create" : "search");
+      onInputChange(value);
+      return;
+    }
+
     if (forcedAction && value === "") {
       setForcedAction(null);
     }
@@ -186,8 +196,6 @@ export function SpotlightModal({
       setConfirmedTask(null);
     }
   }, [isOpen]);
-
-  const hasConversation = messages.length > 0;
 
   const showSuggestions = (input.trim().length > 0 || forcedAction !== null) && !hasConversation && !confirmedTask;
   const showSearchResults = !hasConversation && !showSuggestions && !confirmedTask && (isSearching || (searchResults !== null && searchResults !== undefined));
@@ -322,7 +330,7 @@ export function SpotlightModal({
           } else if (r.entityType === "item" && onItemClick) {
             onItemClick(r.entityId);
           } else {
-            onSearchResultClick?.(r.entityId);
+            onSearchResultClick?.(r);
           }
           return;
         }
@@ -437,7 +445,7 @@ export function SpotlightModal({
               <Check size={14} className="text-brett-teal flex-shrink-0" />
               <div className="min-w-0">
                 <div className="text-sm text-white/85 font-medium truncate">{confirmedTask}</div>
-                <div className="text-[11px] text-white/40">Added to Inbox</div>
+                <div className="text-[11px] text-white/40">Added to {destinationLabel}</div>
               </div>
             </div>
           </div>
@@ -539,7 +547,7 @@ export function SpotlightModal({
                       } else if (item.entityType === "item" && onItemClick) {
                         onItemClick(item.entityId);
                       } else {
-                        onSearchResultClick?.(item.entityId);
+                        onSearchResultClick?.(item);
                       }
                     }}
                     onMouseEnter={() => setSelectedSearchIdx(i)}

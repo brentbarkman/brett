@@ -118,7 +118,10 @@ export class AnthropicProvider implements AIProvider {
   private client: Anthropic;
 
   constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey, maxRetries: 3 });
+    // 2-minute timeout — long enough for extended thinking + the slowest
+    // generations we allow, but short enough that a stuck stream doesn't
+    // leak orchestrator generators or hold SSE connections open forever.
+    this.client = new Anthropic({ apiKey, maxRetries: 3, timeout: 120_000 });
   }
 
   async *chat(params: ChatParams): AsyncIterable<StreamChunk> {

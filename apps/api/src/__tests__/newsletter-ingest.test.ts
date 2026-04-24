@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   extractEmail,
   sanitizeNewsletterHtml,
   verifyIngestSecret,
 } from "../lib/newsletter-ingest.js";
+import { app } from "../app.js";
 
 describe("extractEmail", () => {
   it("extracts email from angle bracket format", () => {
@@ -140,5 +141,80 @@ describe("verifyIngestSecret", () => {
 
   it("returns false for different length secrets", () => {
     expect(verifyIngestSecret("short", "much-longer-secret")).toBe(false);
+  });
+});
+
+// Full-route coverage for the Basic Auth path. The handler accepts the
+// secret in either the `:secret` URL param (legacy) or the Basic Auth
+// password (preferred — Postmark's inbound webhook URL can embed
+// `https://x:<secret>@host/...` which is rewritten to the header, keeping
+// the secret out of referrer / proxy logs).
+describe("newsletter webhook auth", () => {
+  const SECRET = "ingest-secret-test";
+  const orig: { secret?: string } = {};
+
+  beforeAll(() => {
+    orig.secret = process.env.NEWSLETTER_INGEST_SECRET;
+    process.env.NEWSLETTER_INGEST_SECRET = SECRET;
+  });
+  afterAll(() => {
+    if (orig.secret === undefined) delete process.env.NEWSLETTER_INGEST_SECRET;
+    else process.env.NEWSLETTER_INGEST_SECRET = orig.secret;
+  });
+
+  it("accepts the secret via Authorization: Basic header on the headerless path", async () => {
+    const basic = Buffer.from(`x:${SECRET}`).toString("base64");
+    const res = await app.request("/webhooks/email/ingest", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${basic}`,
+      },
+      // Missing required fields → 200 with `skipped`, but that means auth passed.
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.skipped).toBeDefined();
+  });
+
+  it("rejects a Basic header with the wrong password", async () => {
+    const basic = Buffer.from("x:not-the-secret").toString("base64");
+    const res = await app.request("/webhooks/email/ingest", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${basic}`,
+      },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a request with no credentials at all", async () => {
+    const res = await app.request("/webhooks/email/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("still accepts the secret in the legacy URL path", async () => {
+    const res = await app.request(`/webhooks/email/ingest/${SECRET}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a legacy URL with the wrong secret (timing-safe compare)", async () => {
+    const res = await app.request("/webhooks/email/ingest/not-the-secret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(401);
   });
 });

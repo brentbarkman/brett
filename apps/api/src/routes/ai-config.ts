@@ -16,12 +16,12 @@ const aiConfig = new Hono<AuthEnv>();
 // All routes require auth
 aiConfig.use("*", authMiddleware);
 
-/** Mask an encrypted key for display: show first 7 chars of the original key concept + "...xxxx" */
-function maskKey(encryptedKey: string): string {
-  // The encrypted key is in format "iv:encrypted:tag" — we can't recover the original.
-  // Show first 7 chars of the encrypted blob as an identifier + mask.
-  const display = encryptedKey.substring(0, 7);
-  return `${display}...xxxx`;
+/** Human-readable mask showing the saved key prefix (e.g. "sk-ant…xxxx"). */
+function maskKey(keyPrefix: string | null): string {
+  if (keyPrefix && keyPrefix.length > 0) {
+    return `${keyPrefix}…xxxx`;
+  }
+  return "…xxxx";
 }
 
 /** Validate an API key by making a lightweight, non-billing API call */
@@ -65,7 +65,7 @@ aiConfig.get("/config", async (c) => {
       provider: cfg.provider,
       isValid: cfg.isValid,
       isActive: cfg.isActive,
-      maskedKey: maskKey(cfg.encryptedKey),
+      maskedKey: maskKey(cfg.keyPrefix),
       createdAt: cfg.createdAt.toISOString(),
       updatedAt: cfg.updatedAt.toISOString(),
     })),
@@ -73,8 +73,10 @@ aiConfig.get("/config", async (c) => {
 });
 
 // POST /ai/config — Add/update a provider key (validates before saving)
-// Rate limited: max 5 per minute
-aiConfig.post("/config", rateLimiter(5), async (c) => {
+// Rate limited aggressively: validateApiKey() makes upstream calls to
+// Anthropic/OpenAI/Google, so this is the brute-force surface for a leaked
+// bearer token trying to enumerate valid third-party keys.
+aiConfig.post("/config", rateLimiter(3), async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
   const { provider, apiKey } = body as {
@@ -106,6 +108,7 @@ aiConfig.post("/config", rateLimiter(5), async (c) => {
   }
 
   const encryptedKey = encryptToken(apiKey);
+  const keyPrefix = apiKey.trim().slice(0, 6);
 
   // Upsert the config and activate it (deactivate all others) in a transaction
   const config = await prisma.$transaction(async (tx) => {
@@ -124,11 +127,13 @@ aiConfig.post("/config", rateLimiter(5), async (c) => {
         userId: user.id,
         provider: providerName,
         encryptedKey,
+        keyPrefix,
         isValid: true,
         isActive: true,
       },
       update: {
         encryptedKey,
+        keyPrefix,
         isValid: true,
         isActive: true,
       },
@@ -146,7 +151,7 @@ aiConfig.post("/config", rateLimiter(5), async (c) => {
       provider: config.provider,
       isValid: config.isValid,
       isActive: config.isActive,
-      maskedKey: maskKey(config.encryptedKey),
+      maskedKey: maskKey(config.keyPrefix),
       createdAt: config.createdAt.toISOString(),
       updatedAt: config.updatedAt.toISOString(),
     },

@@ -12,6 +12,7 @@ import {
 } from "@brett/business";
 import { solidColors } from "../data/solid-colors";
 import { useAppConfig } from "./useAppConfig";
+import { userStorage } from "../lib/userScopedStorage";
 import fallbackBg from "../assets/fallback-bg.webp";
 
 const SEGMENTS: TimeSegment[] = ["dawn", "morning", "afternoon", "goldenHour", "evening", "night"];
@@ -181,11 +182,11 @@ export function useBackground({
     if (baseUrl) {
       rotateImageRef.current();
     }
-  }, [baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: only run once when baseUrl becomes available; rotateImageRef.current always reads the latest
+  }, [baseUrl]);
 
   // Persist the current segment so next launch can do the awakening effect
   useEffect(() => {
-    try { localStorage.setItem(lastSegmentKey, segment); } catch { /* noop */ }
+    try { userStorage.setItem(lastSegmentKey, segment); } catch { /* noop */ }
   }, [segment]);
 
   // Rotation timer (10 min)

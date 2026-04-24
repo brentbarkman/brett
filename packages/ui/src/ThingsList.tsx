@@ -1,9 +1,10 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import type { Thing, NavList } from "@brett/types";
 import { ThingCard } from "./ThingCard";
 import { SectionHeader } from "./SectionHeader";
 import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
 import { useListKeyboardNav } from "./useListKeyboardNav";
+import { useDeferredToggle } from "./useDeferredToggle";
 
 interface ThingsListProps {
   things: Thing[];
@@ -12,7 +13,7 @@ interface ThingsListProps {
   onToggle?: (id: string) => void;
   onAdd: (title: string, listId: string | null) => void;
   onAddContent?: (url: string) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   /** Called when keyboard nav changes focused item (for live detail panel updates) */
   onFocusChange?: (thing: Thing) => void;
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
@@ -26,26 +27,9 @@ interface ThingsListProps {
 }
 
 export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare, onReconnect, reconnectPendingSourceId, onInstallUpdate }: ThingsListProps) {
-  // ── Deferred toggle: batch mutations so the list stays stable during rapid-fire ──
-  const pendingToggles = useRef<Set<string>>(new Set());
-  const freezeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleToggleWithFreeze = (id: string) => {
-    pendingToggles.current.add(id);
-    // Reset timer — fire all mutations 600ms after last click
-    if (freezeTimer.current) clearTimeout(freezeTimer.current);
-    freezeTimer.current = setTimeout(() => {
-      const ids = [...pendingToggles.current];
-      pendingToggles.current = new Set();
-      ids.forEach(toggleId => onToggle?.(toggleId));
-    }, 600);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (freezeTimer.current) clearTimeout(freezeTimer.current);
-    };
-  }, []);
+  // Shared across ThingsList, InboxView, and UpcomingView — see CLAUDE.md
+  // list-consistency rule.
+  const handleToggleWithFreeze = useDeferredToggle(onToggle);
 
   const { uncompleted, done, grouped, allItems } = (() => {
     const uncompleted = things.filter((t) => !t.isCompleted);
@@ -70,12 +54,12 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
       if (!focusedThing || !onTriageOpen) return false;
       if (e.key === "l") {
         e.preventDefault();
-        onTriageOpen("list-first", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        onTriageOpen("list-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
-        onTriageOpen("date-first", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        onTriageOpen("date-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
         return true;
       }
       return false;

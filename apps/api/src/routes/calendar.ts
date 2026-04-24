@@ -1,15 +1,14 @@
 import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
+import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { getCalendarClient, updateRsvp } from "../lib/google-calendar.js";
 import { onDemandFetch } from "../services/calendar-sync.js";
 import {
   validateRsvpInput,
   validateCalendarNoteInput,
-  validateCreateBrettMessage,
   getCalendarDateBounds,
 } from "@brett/business";
-import { generateId } from "@brett/utils";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
@@ -290,108 +289,10 @@ calendar.put("/events/:id/notes", async (c) => {
   });
 });
 
-// GET /events/:id/brett — Brett messages (paginated, cursor-based)
-calendar.get("/events/:id/brett", async (c) => {
-  const user = c.get("user");
-  const eventId = c.req.param("id");
-
-  const event = await prisma.calendarEvent.findFirst({
-    where: { id: eventId, userId: user.id },
-  });
-  if (!event) return c.json({ error: "Not found" }, 404);
-
-  const limit = Math.min(parseInt(c.req.query("limit") || "20", 10), 50);
-  const cursor = c.req.query("cursor");
-
-  if (cursor && isNaN(new Date(cursor).getTime())) {
-    return c.json({ error: "Invalid cursor" }, 400);
-  }
-
-  const [messages, totalCount] = await Promise.all([
-    prisma.brettMessage.findMany({
-      where: {
-        calendarEventId: eventId,
-        userId: user.id,
-        ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit + 1,
-    }),
-    prisma.brettMessage.count({ where: { calendarEventId: eventId, userId: user.id } }),
-  ]);
-
-  const hasMore = messages.length > limit;
-  const page = hasMore ? messages.slice(0, limit) : messages;
-
-  return c.json({
-    messages: page.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      createdAt: m.createdAt.toISOString(),
-    })),
-    hasMore,
-    cursor: hasMore ? page[page.length - 1].createdAt.toISOString() : null,
-    totalCount,
-  });
-});
-
-// POST /events/:id/brett — Send Brett message
-calendar.post("/events/:id/brett", async (c) => {
-  const user = c.get("user");
-  const eventId = c.req.param("id");
-
-  const event = await prisma.calendarEvent.findFirst({
-    where: { id: eventId, userId: user.id },
-  });
-  if (!event) return c.json({ error: "Not found" }, 404);
-
-  const body = await c.req.json();
-  const validation = validateCreateBrettMessage(body);
-  if (!validation.ok) return c.json({ error: validation.error }, 400);
-
-  const userMessage = await prisma.brettMessage.create({
-    data: {
-      id: generateId(),
-      calendarEventId: eventId,
-      userId: user.id,
-      role: "user",
-      content: validation.data.content,
-    },
-  });
-
-  const stubResponse = "I'll think about that and get back to you. (AI responses coming soon)";
-  const brettMessage = await prisma.brettMessage.create({
-    data: {
-      id: generateId(),
-      calendarEventId: eventId,
-      userId: user.id,
-      role: "brett",
-      content: stubResponse,
-    },
-  });
-
-  return c.json(
-    {
-      userMessage: {
-        id: userMessage.id,
-        role: userMessage.role,
-        content: userMessage.content,
-        createdAt: userMessage.createdAt.toISOString(),
-      },
-      brettMessage: {
-        id: brettMessage.id,
-        role: brettMessage.role,
-        content: brettMessage.content,
-        createdAt: brettMessage.createdAt.toISOString(),
-      },
-    },
-    201,
-  );
-});
-
-// POST /events/fetch-range — On-demand fetch for date ranges outside sync window
-calendar.post("/events/fetch-range", async (c) => {
+// POST /events/fetch-range — On-demand fetch for date ranges outside sync window.
+// Rate-limited because each call fans out to every connected Google account and
+// can burn Google Calendar quota fast if looped.
+calendar.post("/events/fetch-range", rateLimiter(10, 60_000), async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
   const { startDate, endDate } = body;

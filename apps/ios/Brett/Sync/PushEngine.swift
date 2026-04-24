@@ -156,7 +156,18 @@ final class PushEngine {
         }
 
         // Persist all the changes we made to @Model records + the conflict log.
-        try? context.save()
+        //
+        // If this save fails, the mutation queue status transitions AND the
+        // server-record upserts we applied are both rolled back by SwiftData
+        // (they're pending context changes). On next launch, `resetInFlight`
+        // flips in-flight rows back to pending, the push retries, and the
+        // server's idempotency key handles the duplicate. Logged at error
+        // level so sysdiagnose records the stuck-save condition.
+        do {
+            try context.save()
+        } catch {
+            BrettLog.push.error("push save failed: \(String(describing: error), privacy: .public)")
+        }
 
         let remaining = mutationQueue.pendingEntries(limit: 1).count
         let outcome = PushOutcome(
@@ -363,16 +374,24 @@ final class PushEngine {
             health.consecutiveFailures += 1
             health.lastError = error
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            BrettLog.push.error("updateSyncHealth save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// Count mutations whose status is `dead`. Queried directly rather than
     /// depending on a new `MutationQueueProtocol` method so we stay decoupled
     /// from W2-A's implementation.
     private func deadCount() -> Int {
-        let descriptor = FetchDescriptor<MutationQueueEntry>()
-        let all = (try? context.fetch(descriptor)) ?? []
-        return all.filter { $0.status == MutationStatus.dead.rawValue }.count
+        // Predicated fetchCount so SwiftData counts on its side instead of
+        // loading every queue entry into memory.
+        let deadRaw = MutationStatus.dead.rawValue
+        let descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate { $0.status == deadRaw }
+        )
+        return (try? context.fetchCount(descriptor)) ?? 0
     }
 
     /// Singleton SyncHealth row. Created lazily on first access.

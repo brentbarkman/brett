@@ -24,6 +24,12 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: FQUJNV9M6S
     CODE_SIGN_STYLE: Automatic
+    # INFOPLIST_FILE is overridden per-configuration below so Debug builds
+    # get Info-Debug.plist (which has ATS exceptions for the LAN dev API)
+    # while Release builds get Info.plist (no exceptions). Without this
+    # split, the TestFlight / App Store binary would ship with the LAN-IP
+    # ATS exception embedded — an App Store review concern plus a
+    # defense-in-depth hole.
     INFOPLIST_FILE: Brett/Info.plist
     PRODUCT_BUNDLE_IDENTIFIER: com.brett.app
     MARKETING_VERSION: "1.0.0"
@@ -42,11 +48,14 @@ settings:
     # whatever that IP resolved to on the tester's network.
     Debug:
       BRETT_API_URL: http://192.168.50.242:3001
+      # Debug-only Info.plist with NSExceptionDomains for the LAN dev API.
+      INFOPLIST_FILE: Brett/Info-Debug.plist
       # Dev Google Cloud project iOS OAuth client
       GOOGLE_IOS_CLIENT_ID: 1055113004459-1go91rointqkletog9sc2o4t3ivfph6u.apps.googleusercontent.com
       GOOGLE_IOS_URL_SCHEME: com.googleusercontent.apps.1055113004459-1go91rointqkletog9sc2o4t3ivfph6u
     Release:
       BRETT_API_URL: https://api.brett.brentbarkman.com
+      # Release Info.plist has no ATS exceptions (inherits base INFOPLIST_FILE).
       # Prod Google Cloud project iOS OAuth client (audience Railway's
       # GOOGLE_IOS_CLIENT_ID verifies against). Must match or sign-in 401s.
       GOOGLE_IOS_CLIENT_ID: 64916321230-ht3ctvt0kqc8o7a1s1gca2p1r5mmf3uj.apps.googleusercontent.com
@@ -159,9 +168,15 @@ schemes:
       config: Debug
     test:
       config: Debug
-      targets:
-        - BrettTests
-        - BrettUITests
+      # Use an explicit xctestplan so Swift Testing (`@Test` / `@Suite`)
+      # discovery works under Xcode 26. Without a test plan the XCTest
+      # runner silently ignores Swift Testing methods — the xcodebuild
+      # output shows "Executed 0 tests" for the whole unit target even
+      # though the bundle links against the Testing framework. See
+      # Brett.xctestplan at the project root.
+      testPlans:
+        - path: Brett.xctestplan
+          defaultPlan: true
   BrettUITestsOnly:
     build:
       targets:

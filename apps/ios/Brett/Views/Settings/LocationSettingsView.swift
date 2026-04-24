@@ -19,8 +19,9 @@ struct LocationSettingsView: View {
     @State private var assistantName: String = "Brett"
     @State private var isAssistantNameSaving = false
 
-    // ── Briefing ──
-    @AppStorage("briefing.enabled") private var briefingEnabled: Bool = true
+    // ── Briefing ── scoped per-user; @State + explicit UserDefaults because
+    // @AppStorage requires compile-time constant keys.
+    @State private var briefingEnabled: Bool = true
 
     // ── Memory ──
     @State private var memoryFacts: [MemoryFact] = []
@@ -188,6 +189,9 @@ struct LocationSettingsView: View {
                 }
             }
             .tint(BrettColors.gold)
+            .onChange(of: briefingEnabled) { _, newValue in
+                UserDefaults.standard.set(newValue, forKey: UserScopedStorage.key("briefing.enabled"))
+            }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
         }
@@ -645,6 +649,11 @@ struct LocationSettingsView: View {
     // MARK: - Hydrate
 
     private func hydrate() {
+        // Read the scoped briefing pref even when the user profile hasn't
+        // loaded yet — default to true (matches the old @AppStorage default).
+        let key = UserScopedStorage.key("briefing.enabled")
+        briefingEnabled = UserDefaults.standard.object(forKey: key) as? Bool ?? true
+
         guard let profile = store.current else { return }
         assistantName = profile.assistantName
         timezoneAuto = profile.timezoneAuto

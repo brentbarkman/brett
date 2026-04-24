@@ -31,15 +31,15 @@ struct DayTimeline: View {
             .sorted { $0.title < $1.title }
     }
 
-    private var startHour: Int {
+    private func resolveStartHour(timed: [CalendarEvent]) -> Int {
         let base = 6
-        let minHour = timedEvents.map { calendar.component(.hour, from: $0.startTime) }.min() ?? base
+        let minHour = timed.map { calendar.component(.hour, from: $0.startTime) }.min() ?? base
         return min(base, minHour)
     }
 
-    private var endHour: Int {
+    private func resolveEndHour(timed: [CalendarEvent]) -> Int {
         let base = 23
-        let maxHour = timedEvents.compactMap { evt -> Int? in
+        let maxHour = timed.compactMap { evt -> Int? in
             let endHour = calendar.component(.hour, from: evt.endTime)
             let endMin = calendar.component(.minute, from: evt.endTime)
             return endMin > 0 ? endHour + 1 : endHour
@@ -48,15 +48,25 @@ struct DayTimeline: View {
     }
 
     var body: some View {
+        // Compute the day-filtered event lists + visible hour window once
+        // per body pass, then thread them through to the grid and chips.
+        // Without hoisting, each chip's position math would retrigger the
+        // full-events filter that backs `timedEvents`, making grid render
+        // cost scale as O(events × chips) instead of O(events).
+        let allDay = allDayEvents
+        let timed = timedEvents
+        let visibleStart = resolveStartHour(timed: timed)
+        let visibleEnd = resolveEndHour(timed: timed)
+
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if !allDayEvents.isEmpty {
-                    allDayBand
+                if !allDay.isEmpty {
+                    allDayBand(events: allDay)
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
                         .padding(.bottom, 4)
                 }
-                timelineGrid
+                timelineGrid(timed: timed, startHour: visibleStart, endHour: visibleEnd)
             }
             .padding(.bottom, 120)
         }
@@ -64,14 +74,14 @@ struct DayTimeline: View {
     }
 
     @ViewBuilder
-    private var allDayBand: some View {
+    private func allDayBand(events: [CalendarEvent]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("ALL DAY")
                 .font(BrettTypography.sectionLabel)
                 .tracking(2.4)
                 .foregroundStyle(Color.white.opacity(0.40))
 
-            ForEach(allDayEvents) { event in
+            ForEach(events) { event in
                 NavigationLink(value: NavDestination.eventDetail(id: event.id)) {
                     HStack(spacing: 8) {
                         Rectangle()
@@ -102,7 +112,7 @@ struct DayTimeline: View {
     }
 
     @ViewBuilder
-    private var timelineGrid: some View {
+    private func timelineGrid(timed: [CalendarEvent], startHour: Int, endHour: Int) -> some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
                 ForEach(startHour...endHour, id: \.self) { hour in
@@ -120,18 +130,18 @@ struct DayTimeline: View {
                 }
             }
 
-            ForEach(timedEvents) { event in
-                eventChip(event)
+            ForEach(timed) { event in
+                eventChip(event, startHour: startHour)
             }
 
             if calendar.isDateInToday(selectedDate) {
-                currentTimeIndicator
+                currentTimeIndicator(startHour: startHour, endHour: endHour)
             }
         }
     }
 
     @ViewBuilder
-    private func eventChip(_ event: CalendarEvent) -> some View {
+    private func eventChip(_ event: CalendarEvent, startHour: Int) -> some View {
         let startHourD = Double(calendar.component(.hour, from: event.startTime))
         let startMin = Double(calendar.component(.minute, from: event.startTime))
         let offset = CGFloat((startHourD - Double(startHour)) * Double(hourHeight) + (startMin / 60.0) * Double(hourHeight))
@@ -188,7 +198,7 @@ struct DayTimeline: View {
     }
 
     @ViewBuilder
-    private var currentTimeIndicator: some View {
+    private func currentTimeIndicator(startHour: Int, endHour: Int) -> some View {
         let now = Date()
         let hour = calendar.component(.hour, from: now)
         let minute = calendar.component(.minute, from: now)

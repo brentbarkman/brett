@@ -53,18 +53,33 @@ final class PersistenceController {
             return
         }
 
-        // Migration or schema mismatch — wipe and retry. Dev-only policy; safe because
-        // data is recoverable by re-pulling from the server on next sync.
-        #if DEBUG
-        print("[PersistenceController] schema load failed — resetting SwiftData store")
-        #endif
+        // Schema mismatch (most often after a model change between builds).
+        // We wipe the on-disk store and retry so the next app launch starts
+        // clean. This blocks the main thread — the call runs inside the
+        // synchronous @main initializer before the first frame renders, so
+        // a slow wipe flashes a black launch screen a bit longer. Kept
+        // synchronous intentionally: proper async recovery needs a
+        // loading-splash UI that we haven't wired yet.
+        //
+        // Migrations on real user data will need this replaced with a
+        // proper SchemaMigrationPlan before v1 ships broadly — dropping
+        // the user's local mirror isn't OK when they have queued
+        // mutations that haven't pushed yet. For now the engineering
+        // cost/reward ratio argues for the log-loud-wipe approach since
+        // the fallback only fires on developer-machine schema drift.
+        BrettLog.app.error("PersistenceController schema load failed — wiping on-disk store and retrying")
 
         Self.wipeOnDiskStore()
 
         do {
             self.container = try ModelContainer(for: schema, configurations: [configuration])
         } catch {
-            fatalError("[PersistenceController] unable to create ModelContainer after reset: \(error)")
+            // Hard fatal: the container is required for any SwiftUI view
+            // to bind to @Query, so there's no sensible recovery if the
+            // second attempt also fails. At least surface the underlying
+            // error in the crash log instead of silently swallowing it.
+            BrettLog.app.error("PersistenceController post-wipe retry failed: \(String(describing: error), privacy: .public)")
+            fatalError("PersistenceController unable to create ModelContainer after reset: \(error)")
         }
     }
 
@@ -76,6 +91,8 @@ final class PersistenceController {
     // MARK: - Registered types
 
     /// Every `@Model` class the app uses. Keep in sync with `BrettApp`'s container.
+    /// When adding a new @Model here, also add it to `wipeAllData()` so sign-out
+    /// clears it on account switch.
     static let modelTypes: [any PersistentModel.Type] = [
         // Domain
         Item.self,
@@ -95,6 +112,54 @@ final class PersistenceController {
         SyncHealth.self,
         AttachmentUpload.self,
     ]
+
+    // MARK: - Sign-out wipe
+
+    /// Deletes every row from the shared model context and commits. Called
+    /// from `AuthManager.signOut` so a subsequent sign-in on the same
+    /// device starts with an empty local database — without this, views
+    /// that read live `@Query` results would briefly render the prior
+    /// user's rows before the sync engine overwrites them, and sync
+    /// cursors would falsely report "I already have everything up to X".
+    func wipeAllData() {
+        Self.wipeAllData(in: mainContext)
+    }
+
+    /// Static form exposed for tests — callers in production should use
+    /// the instance method against the shared `mainContext`.
+    static func wipeAllData(in context: ModelContext) {
+        deleteAll(Item.self, in: context)
+        deleteAll(ItemList.self, in: context)
+        deleteAll(CalendarEvent.self, in: context)
+        deleteAll(CalendarEventNote.self, in: context)
+        deleteAll(Scout.self, in: context)
+        deleteAll(ScoutFinding.self, in: context)
+        deleteAll(BrettMessage.self, in: context)
+        deleteAll(Attachment.self, in: context)
+        deleteAll(UserProfile.self, in: context)
+        deleteAll(MutationQueueEntry.self, in: context)
+        deleteAll(SyncCursor.self, in: context)
+        deleteAll(ConflictLogEntry.self, in: context)
+        deleteAll(SyncHealth.self, in: context)
+        deleteAll(AttachmentUpload.self, in: context)
+        do {
+            try context.save()
+        } catch {
+            // wipeAllData runs as part of sign-out. A silent failure here
+            // used to mean the next user's SwiftData still contained the
+            // previous user's rows — exactly the multi-user data-leak
+            // scenario CLAUDE.md forbids. Surface the error so it shows up
+            // in sysdiagnose and any future observability hook picks it up.
+            BrettLog.store.error("PersistenceController wipeAllData save failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private static func deleteAll<T: PersistentModel>(_ type: T.Type, in context: ModelContext) {
+        let rows = (try? context.fetch(FetchDescriptor<T>())) ?? []
+        for row in rows {
+            context.delete(row)
+        }
+    }
 
     // MARK: - Reset helper
 

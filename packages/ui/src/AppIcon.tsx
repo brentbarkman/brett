@@ -1,19 +1,20 @@
-/**
- * Brett brand mark — the gold-metallic app icon.
- * Kept in sync with apps/desktop/resources/icon.svg and the download page SVG.
- *
- * Uses a per-instance ID prefix so multiple marks on the same page don't collide
- * on gradient `url(#...)` references.
- */
-let instanceCounter = 0;
+import React from "react";
 
-interface BrettMarkProps {
+/**
+ * The gold-metallic app icon, at any render size. Mirrors
+ * apps/desktop/resources/icon.svg and the download-page SVG.
+ *
+ * This is the product/brand icon shown in splash + login states.
+ * Distinct from `BrettMark` (AI avatar — three dots + three lines).
+ */
+interface AppIconProps {
   size?: number;
   className?: string;
 }
 
-export function BrettMark({ size = 40, className }: BrettMarkProps) {
-  const id = `brett-mark-${++instanceCounter}`;
+export function AppIcon({ size = 40, className }: AppIconProps) {
+  const uid = React.useId();
+  const id = `app-icon-${uid}`;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

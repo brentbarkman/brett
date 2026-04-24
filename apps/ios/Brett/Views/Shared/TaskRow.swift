@@ -23,6 +23,14 @@ struct TaskRow: View {
     private let allowSwipeLeft: Bool
     private let allowDrag: Bool
 
+    // Multi-select mode (Inbox). When `isSelectMode` is true the leading
+    // glyph becomes a selection circle (gold check when isSelected, outline
+    // otherwise) and `onToggle` is interpreted as "toggle selection" by the
+    // caller. Defaults match single-select behaviour so existing call
+    // sites keep working unchanged.
+    private let isSelectMode: Bool
+    private let isSelected: Bool
+
     // Gesture handlers — called when swipe actions fire. Caller wires them
     // to their store (ItemStore.update/delete) so this leaf view stays free
     // of environment lookups.
@@ -48,6 +56,8 @@ struct TaskRow: View {
         allowSwipeRight: Bool = true,
         allowSwipeLeft: Bool = true,
         allowDrag: Bool = true,
+        isSelectMode: Bool = false,
+        isSelected: Bool = false,
         dragIDs: [String] = [],
         onToggle: @escaping () -> Void,
         onSelect: @escaping () -> Void,
@@ -60,6 +70,7 @@ struct TaskRow: View {
             id: item.id,
             title: item.title,
             isCompleted: item.isCompleted,
+            itemType: item.itemType,
             timeLabel: Self.timeLabel(for: item),
             capturedLabel: Self.capturedLabel(for: item),
             listName: listName,
@@ -71,6 +82,8 @@ struct TaskRow: View {
         self.allowSwipeRight = allowSwipeRight
         self.allowSwipeLeft = allowSwipeLeft
         self.allowDrag = allowDrag
+        self.isSelectMode = isSelectMode
+        self.isSelected = isSelected
         self.onSchedule = onSchedule
         self.onArchive = onArchive
         self.onDelete = onDelete
@@ -84,7 +97,10 @@ struct TaskRow: View {
         rowButton
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityLabelText)
-            .accessibilityHint("Double-tap to open details.")
+            .accessibilityHint(isSelectMode
+                ? "Double-tap to toggle selection."
+                : "Double-tap to open details.")
+            .accessibilityAddTraits(isSelectMode && isSelected ? .isSelected : [])
             // Stable identifier for XCUITest: title-based because UI tests
             // can't easily construct the random UUID at assertion time.
             // Sanitised (lowercase, spaces → underscores) so predicates like
@@ -157,47 +173,24 @@ struct TaskRow: View {
             onSelect()
         } label: {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            viewModel.isCompleted
-                                ? BrettColors.success.opacity(0.15)
-                                : Color.black.opacity(0.20)
-                        )
-                        .overlay {
-                            Circle()
-                                .strokeBorder(
-                                    viewModel.isCompleted
-                                        ? BrettColors.success.opacity(0.4)
-                                        : Color.white.opacity(0.10),
-                                    lineWidth: 1
-                                )
+                leadingGlyph
+                    // Both icon glyphs render at 13pt bold so completed and
+                    // incomplete rows have visually identical leading
+                    // anchors. Earlier 12pt vs 13pt + medium vs semibold
+                    // made the checkmark look smaller and pull left.
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(
+                        TapGesture().onEnded {
+                            if isSelectMode {
+                                HapticManager.light()
+                            } else {
+                                HapticManager.success()
+                                pulseTrigger &+= 1
+                            }
+                            onToggle()
                         }
-                        .frame(width: 30, height: 30)
-
-                    if viewModel.isCompleted {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(BrettColors.success)
-                    } else {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(BrettColors.gold.opacity(0.7))
-                    }
-                }
-                // Both icon glyphs render at 13pt bold so completed and
-                // incomplete rows have visually identical leading anchors.
-                // Earlier 12pt vs 13pt + medium vs semibold made the
-                // checkmark look smaller and pull left.
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-                .highPriorityGesture(
-                    TapGesture().onEnded {
-                        HapticManager.success()
-                        pulseTrigger &+= 1
-                        onToggle()
-                    }
-                )
+                    )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(viewModel.title)
@@ -250,6 +243,97 @@ struct TaskRow: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
+    }
+
+    /// Leading glyph, branched by mode. Order of precedence:
+    ///   1. Select mode → gold selection circle (with checkmark when chosen)
+    ///   2. Completed    → green checkmark (Today's "Done today" bucket)
+    ///   3. Content item → cerulean document glyph (newsletters, articles)
+    ///   4. Otherwise    → gold bolt (the default task icon)
+    ///
+    /// Merged from the old `InboxItemRow` which had its own `selectionCircle`
+    /// + content-type branches. Centralising the rules here keeps Today /
+    /// Inbox / Lists rows visually consistent per the CLAUDE.md rule and
+    /// means a future icon tweak is a one-place change.
+    @ViewBuilder
+    private var leadingGlyph: some View {
+        if isSelectMode {
+            selectionCircleGlyph
+        } else if viewModel.isCompleted {
+            completionGlyph
+        } else if viewModel.itemType == .content {
+            contentGlyph
+        } else {
+            taskGlyph
+        }
+    }
+
+    private var selectionCircleGlyph: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(
+                    isSelected ? BrettColors.gold : Color.white.opacity(0.25),
+                    lineWidth: 1.5
+                )
+                .background {
+                    Circle().fill(
+                        isSelected ? BrettColors.gold.opacity(0.25) : Color.clear
+                    )
+                }
+                .frame(width: 22, height: 22)
+
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(BrettColors.gold)
+            }
+        }
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var completionGlyph: some View {
+        ZStack {
+            Circle()
+                .fill(BrettColors.success.opacity(0.15))
+                .overlay {
+                    Circle().strokeBorder(BrettColors.success.opacity(0.4), lineWidth: 1)
+                }
+                .frame(width: 30, height: 30)
+
+            Image(systemName: "checkmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(BrettColors.success)
+        }
+    }
+
+    private var contentGlyph: some View {
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.20))
+                .overlay {
+                    Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                }
+                .frame(width: 30, height: 30)
+
+            Image(systemName: "doc.text")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(BrettColors.cerulean.opacity(0.7))
+        }
+    }
+
+    private var taskGlyph: some View {
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.20))
+                .overlay {
+                    Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                }
+                .frame(width: 30, height: 30)
+
+            Image(systemName: "bolt.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(BrettColors.gold.opacity(0.7))
+        }
     }
 
     @ViewBuilder
@@ -319,6 +403,7 @@ struct TaskRow: View {
         let id: String
         let title: String
         let isCompleted: Bool
+        let itemType: ItemType
         let timeLabel: String?
         let capturedLabel: String?
         let listName: String?

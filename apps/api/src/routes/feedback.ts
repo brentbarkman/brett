@@ -16,6 +16,7 @@ const MAX_BREADCRUMBS = 20;
 const MAX_ENTRY_LENGTH = 2000;
 const MAX_ISSUE_BODY = 65_000;
 const MAX_SCREENSHOT_BASE64 = 4_000_000; // ~3MB decoded
+const MAX_SCREENSHOT_BYTES = 3_000_000; // hard cap on the decoded buffer
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -116,8 +117,14 @@ feedback.post(
         } else {
           const imageBuffer = Buffer.from(diag.screenshot, "base64");
 
+          // Post-decode byte-size check. Base64 can encode payloads
+          // compactly, so the string-length cap above is a rough ceiling —
+          // this one is the actual file-size guard.
+          if (imageBuffer.length > MAX_SCREENSHOT_BYTES) {
+            console.error("[feedback] Screenshot decoded bytes exceed limit, skipping");
+          }
           // Validate PNG magic bytes
-          if (imageBuffer.length < 8 || !imageBuffer.subarray(0, 8).equals(PNG_MAGIC)) {
+          else if (imageBuffer.length < 8 || !imageBuffer.subarray(0, 8).equals(PNG_MAGIC)) {
             console.error("[feedback] Screenshot rejected: not a valid PNG");
           } else {
             const key = `feedback/${crypto.randomBytes(16).toString("hex")}.png`;

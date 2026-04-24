@@ -21,8 +21,23 @@ struct ListsPage: View {
         context: PersistenceController.shared.mainContext
     )
 
-    /// Bumped on mutations so the list re-reads.
-    @State private var refreshTick: Int = 0
+    /// Live reactive reads. @Query broadcasts SwiftData mutations so the
+    /// view rebuilds automatically on create/update/archive without any
+    /// manual re-render nudge. (The previous `refreshTick` counter
+    /// existed because these reads went through imperative store
+    /// fetches; switching to @Query makes it redundant.)
+    @Query(
+        filter: #Predicate<ItemList> {
+            $0.deletedAt == nil && $0.archivedAt == nil
+        },
+        sort: \ItemList.sortOrder
+    ) private var listsAnyUser: [ItemList]
+
+    @Query(
+        filter: #Predicate<Item> { $0.deletedAt == nil },
+        sort: \Item.createdAt,
+        order: .reverse
+    ) private var itemsAnyUser: [Item]
 
     /// Used by the empty-vs-skeleton gate, same pattern as the other pages.
     @Query private var syncHealthRows: [SyncHealth]
@@ -32,8 +47,17 @@ struct ListsPage: View {
     }
 
     private var lists: [ItemList] {
-        _ = refreshTick
-        return listStore.fetchAll(includeArchived: false)
+        guard let uid = authManager.currentUser?.id else { return [] }
+        return listsAnyUser.filter { $0.userId == uid }
+    }
+
+    /// Counts bucketed by `listId` in a single pass. Rendering N list
+    /// cards triggers one pass over `itemsAnyUser` instead of N SwiftData
+    /// fetches (the prior imperative pattern).
+    private var countsByList: [String: ListCounts.Entry] {
+        guard let uid = authManager.currentUser?.id else { return [:] }
+        let userItems = itemsAnyUser.filter { $0.userId == uid }
+        return ListCounts.groupByListId(userItems)
     }
 
     var body: some View {
@@ -62,8 +86,7 @@ struct ListsPage: View {
             }
             .scrollIndicators(.hidden)
             .refreshable {
-                try? await SyncManager.shared.pullToRefresh()
-                refreshTick &+= 1
+                try? await ActiveSession.syncManager?.pullToRefresh()
             }
 
             fab
@@ -96,10 +119,11 @@ struct ListsPage: View {
     // MARK: - Cards
 
     private var listCards: some View {
-        VStack(spacing: 8) {
+        let counts = countsByList
+        return VStack(spacing: 8) {
             ForEach(lists, id: \.id) { list in
                 NavigationLink(value: NavDestination.listView(id: list.id)) {
-                    listCard(list)
+                    listCard(list, counts: counts[list.id] ?? .empty)
                 }
                 .buttonStyle(.plain)
             }
@@ -107,9 +131,8 @@ struct ListsPage: View {
         .padding(.horizontal, 16)
     }
 
-    private func listCard(_ list: ItemList) -> some View {
+    private func listCard(_ list: ItemList, counts: ListCounts.Entry) -> some View {
         let color = ListColor(colorClass: list.colorClass)?.swiftUIColor ?? ListColor.slate.swiftUIColor
-        let counts = itemCounts(for: list.id)
 
         return HStack(spacing: 14) {
             // Progress ring fills clockwise as items are completed —
@@ -206,16 +229,8 @@ struct ListsPage: View {
         guard let userId = authManager.currentUser?.id else { return }
         HapticManager.light()
         _ = listStore.create(userId: userId, name: "Untitled")
-        refreshTick &+= 1
     }
 
-    private func itemCounts(for listId: String) -> (active: Int, completed: Int, total: Int) {
-        let items = itemStore.fetchAll(listId: listId, status: nil)
-            .filter { $0.itemStatus != .archived }
-        let active = items.filter { $0.itemStatus != .done }.count
-        let completed = items.filter { $0.itemStatus == .done }.count
-        return (active: active, completed: completed, total: items.count)
-    }
 }
 
 /// Tiny progress ring that fills clockwise as items in a list are

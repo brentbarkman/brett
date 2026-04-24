@@ -509,6 +509,41 @@ describe("Sync Push", () => {
     expect(body.results[0].conflictedFields).not.toContain("title");
   });
 
+  it("UPDATE (missing baseline): rejected so client can't silently lose edits", async () => {
+    // Regression for a silent-data-loss bug: when changedFields listed a
+    // field but previousValues didn't include it, the old merge logic
+    // treated it as a conflict (server-wins) and dropped the client's
+    // edit. We now reject the whole mutation so a buggy client gets a
+    // clear signal.
+    clearAllRateLimits();
+
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Missing Baseline", status: "active" }),
+    });
+    const created = (await createRes.json()) as any;
+
+    clearAllRateLimits();
+
+    const res = await pushRequest([{
+      idempotencyKey: `update-missing-baseline-${nonce}-${created.id}`,
+      entityType: "item",
+      entityId: created.id,
+      action: "UPDATE",
+      payload: { title: "New Title", description: "New Desc" },
+      changedFields: ["title", "description"],
+      // Note: description is NOT in previousValues — this is the bug case.
+      previousValues: { title: "Missing Baseline" },
+      baseUpdatedAt: created.updatedAt,
+    }]);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("error");
+    expect(body.results[0].error).toMatch(/previousValues/i);
+    expect(body.results[0].error).toMatch(/description/);
+  });
+
   it("DELETE: soft-deletes the record", async () => {
     clearAllRateLimits();
 

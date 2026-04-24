@@ -9,6 +9,7 @@ import { usePinnedDate } from "../hooks/usePinnedDate";
 import { CalendarDayView } from "../components/calendar/CalendarDayView";
 import { CalendarWeekView } from "../components/calendar/CalendarWeekView";
 import { CalendarMonthView } from "../components/calendar/CalendarMonthView";
+import { userStorage } from "../lib/userScopedStorage";
 
 interface CalendarPageProps {
   onEventClick: (event: CalendarEventRecord) => void;
@@ -39,13 +40,13 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   );
 
   const [view, setView] = useState<CalendarView>(() => {
-    const stored = localStorage.getItem("brett-calendar-view");
+    const stored = userStorage.getItem("brett-calendar-view");
     return (["day", "5day", "week", "month"].includes(stored ?? "") ? stored : "week") as CalendarView;
   });
   const [currentDate, setCurrentDate] = usePinnedDate();
 
   useEffect(() => {
-    localStorage.setItem("brett-calendar-view", view);
+    userStorage.setItem("brett-calendar-view", view);
   }, [view]);
 
   // Compute date range based on view

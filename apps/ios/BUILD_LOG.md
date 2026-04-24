@@ -153,4 +153,35 @@ What the `beta` lane does:
 
 **Version policy:** `MARKETING_VERSION` in `project.yml` is bumped manually when you want a new user-visible version (e.g. `1.0.0` → `1.1.0`). `CURRENT_PROJECT_VERSION` (build number) auto-increments on every `beta` run.
 
+---
+
+## Running the test suite
+
+The `BrettTests` target uses Swift Testing (`@Test` / `@Suite`). Tests share a `MockURLProtocol` singleton for HTTP stubbing, which means they must run sequentially — Swift Testing's default cross-suite parallelism causes false failures from leaked request logs.
+
+**Always run with `-parallel-testing-enabled NO`:**
+
+```bash
+cd apps/ios
+xcodebuild -scheme Brett \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -configuration Debug \
+  -parallel-testing-enabled NO \
+  test
+```
+
+The xctestplan's `parallelizable: false` key only disables _cross-target_ parallelism in Xcode 26 — it doesn't affect Swift Testing's within-target scheduling. CI scripts and local scripts that invoke `xcodebuild test` must pass the flag explicitly.
+
+For quickly running one suite or test:
+
+```bash
+# Entire suite (Swift Testing suite identifiers use the struct name)
+xcodebuild ... -only-testing:BrettTests/ItemStoreUpdateTests test
+
+# Single test
+xcodebuild ... -only-testing:BrettTests/ItemStoreUpdateTests/toggleStatusSnapshotsPreMutationState test
+```
+
+Isolated runs (`-only-testing:`) don't need the parallel-disable flag — the cross-suite-pollution problem only manifests when multiple suites run back-to-back.
+
 

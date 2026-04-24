@@ -39,6 +39,7 @@ RUN pnpm --filter @brett/api run build
 # Run
 FROM base AS runner
 WORKDIR /app
+RUN apk add --no-cache curl
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/packages/types packages/types
 COPY --from=build /app/packages/utils packages/utils
@@ -51,6 +52,10 @@ COPY --from=build /app/apps/api/prisma apps/api/prisma
 COPY --from=build /app/apps/api/prisma.config.ts apps/api/prisma.config.ts
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 WORKDIR /app/apps/api
+# Container-level healthcheck — surfaces crashed-but-not-exited states to
+# the orchestrator. Railway's own HTTP healthcheck complements this.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -sf "http://localhost:${PORT:-8080}/health" || exit 1
 # tsx handles .ts imports from shared packages (main: ./src/index.ts)
 # and missing .js extensions in ESM output (moduleResolution: bundler)
 CMD ["sh", "-c", "/app/node_modules/.bin/prisma migrate deploy && /app/node_modules/.bin/tsx dist/index.js"]

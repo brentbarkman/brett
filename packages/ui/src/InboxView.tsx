@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Inbox } from "lucide-react";
 import type { Thing, NavList, FilterType } from "@brett/types";
-import { computeRelativeAge } from "@brett/business";
+import { formatRelativeTime } from "@brett/utils";
 import { InboxItemRow } from "./InboxItemRow";
 import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
 import { ItemListShell } from "./ItemListShell";
@@ -19,7 +19,7 @@ interface InboxViewProps {
     ids: string[],
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
   onFocusChange?: (thing: Thing) => void;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
@@ -341,8 +341,12 @@ export function InboxView({
         return;
       }
 
-      // Quick add
-      if (key === "n") {
+      // Quick add — plain `n` only. cmd/ctrl+n is reserved for the global
+      // "open Spotlight with create preselected" shortcut registered in
+      // App.tsx; without this guard the single-letter handler shadows it and
+      // scrolls to the quick-add input instead (regression covered in
+      // InboxView.test.tsx).
+      if (key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         quickAddRef.current?.focus();
         return;
@@ -488,7 +492,7 @@ export function InboxView({
                           hideSource={allSameSource}
                           relativeAge={
                             thing.createdAt
-                              ? computeRelativeAge(new Date(thing.createdAt), now.current)
+                              ? formatRelativeTime(new Date(thing.createdAt), now.current)
                               : ""
                           }
                           onClick={() => onItemClick(thing)}

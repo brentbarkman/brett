@@ -121,9 +121,21 @@ function ErrorState({ sourceUrl, onRetry, isRetrying, assistantName = "Brett" }:
   );
 }
 
-function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sourceUrl?: string }) {
+function TweetPreview({
+  metadata,
+  sourceUrl,
+  contentTitle,
+  contentDescription,
+  contentImageUrl,
+}: {
+  metadata?: ContentMetadata;
+  sourceUrl?: string;
+  contentTitle?: string;
+  contentDescription?: string;
+  contentImageUrl?: string;
+}) {
   const author = metadata?.type === "tweet" ? metadata.author : undefined;
-  const text = metadata?.type === "tweet" ? metadata.tweetText : undefined;
+  const tweetText = metadata?.type === "tweet" ? metadata.tweetText : undefined;
   const embedHtml = metadata?.type === "tweet" ? metadata.embedHtml : undefined;
 
   // The oEmbed HTML is a <blockquote> with the tweet text + a <script> tag.
@@ -137,8 +149,15 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
     });
   })();
 
-  // If we have neither oEmbed HTML nor OG text, nothing to show
-  if (!sanitizedEmbed && !text) {
+  const bodyText = contentDescription ?? tweetText;
+  // "Tweet by @handle" is the fallback title when there's no article card —
+  // the @handle row already says that, so don't double-render it as a heading.
+  const headingTitle = contentTitle && (!author || contentTitle !== `Tweet by @${author}`)
+    ? contentTitle
+    : undefined;
+
+  // Nothing to render — preserve the existing "content unavailable" affordance.
+  if (!sanitizedEmbed && !bodyText && !contentImageUrl && !headingTitle) {
     return (
       <div className="bg-white/5 rounded-lg border border-white/10 p-4 space-y-2">
         {author && <span className="text-xs text-white/60 font-medium">@{author}</span>}
@@ -164,15 +183,29 @@ function TweetPreview({ metadata, sourceUrl }: { metadata?: ContentMetadata; sou
           </a>
         )}
       </div>
-      <div className="bg-white/5 rounded-lg border border-white/10 p-4">
-        {sanitizedEmbed ? (
-          <div
-            className="text-sm text-white/80 leading-relaxed [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_a]:text-brett-gold [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-brett-gold/80"
-            dangerouslySetInnerHTML={{ __html: sanitizedEmbed }}
+      <div className="bg-white/5 rounded-lg border border-white/10 overflow-hidden">
+        {contentImageUrl && (
+          <img
+            src={contentImageUrl}
+            alt=""
+            className="w-full max-h-80 object-cover"
           />
-        ) : (
-          <p className="text-sm text-white/80 leading-relaxed italic">{text}</p>
         )}
+        <div className="p-4 space-y-2">
+          {headingTitle && (
+            <h4 className="text-sm font-semibold text-white/90 leading-snug">
+              {headingTitle}
+            </h4>
+          )}
+          {sanitizedEmbed ? (
+            <div
+              className="text-sm text-white/80 leading-relaxed [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_a]:text-brett-gold [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-brett-gold/80"
+              dangerouslySetInnerHTML={{ __html: sanitizedEmbed }}
+            />
+          ) : bodyText ? (
+            <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -522,7 +555,15 @@ export function ContentPreview({
   // Render based on content type
   switch (contentType) {
     case "tweet":
-      return <TweetPreview metadata={contentMetadata} sourceUrl={sourceUrl} />;
+      return (
+        <TweetPreview
+          metadata={contentMetadata}
+          sourceUrl={sourceUrl}
+          contentTitle={contentTitle}
+          contentDescription={contentDescription}
+          contentImageUrl={contentImageUrl}
+        />
+      );
     case "video":
       return <VideoPreview metadata={contentMetadata} sourceUrl={sourceUrl} />;
     case "podcast":

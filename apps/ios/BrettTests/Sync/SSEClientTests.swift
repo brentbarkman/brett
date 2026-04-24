@@ -20,9 +20,12 @@ import Foundation
 /// - `APIClient.shared` is a @MainActor singleton with its own URLSession;
 ///   we build a dedicated APIClient in each test whose `session` injects
 ///   MockURLProtocol.
-@Suite("SSEClient", .tags(.sync))
+@Suite("SSEClient", .tags(.sync), .serialized)
 @MainActor
 struct SSEClientTests {
+    /// Reset MockURLProtocol before each test. See AttachmentUploaderTests.
+    init() { MockURLProtocol.reset() }
+
     // MARK: - Helpers
 
     /// Build a URLSession wired to MockURLProtocol. Keeps tests isolated and

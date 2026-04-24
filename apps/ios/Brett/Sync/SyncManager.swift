@@ -2,44 +2,22 @@ import Foundation
 import Observation
 import SwiftData
 
-// MARK: - Local protocol stubs for parallel Wave-2 agents
+// MARK: - Engine protocols
 
-/// Shape of a push result. Kept minimal so the concrete `PushEngine` from
-/// W2-B can drop in without any call-site changes. Real fields (successCount,
-/// errors, etc.) can be added without breaking the SyncManager contract.
-struct PushOutcome: Sendable {
-    var applied: Int
-    var failed: Int
-
-    init(applied: Int = 0, failed: Int = 0) {
-        self.applied = applied
-        self.failed = failed
-    }
-}
-
-/// Shape of a pull result. See `PushOutcome`.
-struct PullOutcome: Sendable {
-    var upserted: Int
-    var deleted: Int
-
-    init(upserted: Int = 0, deleted: Int = 0) {
-        self.upserted = upserted
-        self.deleted = deleted
-    }
-}
-
-/// The `PushEngine` surface SyncManager depends on. Defined here so this file
-/// compiles even when the real `PushEngine.swift` hasn't landed yet. When it
-/// does land, make `PushEngine` conform to this protocol.
+/// The push engine surface that `SyncManager` depends on. Returns the
+/// engine's rich `PushOutcome` (applied / merged / conflicts / errors /
+/// remaining) directly — no adapter shim.
 @MainActor
 protocol PushEngineProtocol: AnyObject {
-    func push() async throws -> PushOutcome
+    func push() async throws -> PushEngine.PushOutcome
 }
 
-/// The `PullEngine` surface SyncManager depends on. See `PushEngineProtocol`.
+/// The pull engine surface `SyncManager` depends on. Returns the engine's
+/// rich `PullOutcome` (per-table upsert/delete maps + `fullResync` flag) so
+/// `SyncManager` can react to a server-side cursor wipe by re-pulling.
 @MainActor
 protocol PullEngineProtocol: AnyObject {
-    func pull() async throws -> PullOutcome
+    func pull() async throws -> PullEngine.PullOutcome
 }
 
 // MARK: - Sync state
@@ -65,15 +43,16 @@ enum SyncState: Equatable, Sendable {
 ///  - On app launch, reset any mutations left in `in_flight` status from a
 ///    prior crash so they get retried.
 ///  - Run a best-effort 30s background poll while the app is in foreground.
+///
+/// Lifecycle: owned by `Session` (see `ActiveSession.swift`). A new instance
+/// is created on sign-in; `stop()` is called deterministically on sign-out
+/// before the underlying SwiftData store is wiped. Call sites reach the
+/// active instance via `ActiveSession.syncManager` — when nil, callers
+/// silently no-op (mutations still persist via the store and flush on the
+/// next session's first push).
 @MainActor
 @Observable
 final class SyncManager {
-    // MARK: - Shared instance
-
-    /// Default singleton wired to the real engines. Tests should construct a
-    /// fresh instance with their own doubles rather than touching `.shared`.
-    static let shared = SyncManager()
-
     // MARK: - Observable state
 
     private(set) var state: SyncState = .idle
@@ -113,20 +92,19 @@ final class SyncManager {
     /// if the auth state flips rapidly at launch.
     private var hasStarted = false
 
-    // MARK: - Init
+    /// Consecutive failures across the push+pull cycle. Used by the poll
+    /// loop to back off exponentially (1s → 2s → 4s → 8s → … capped at
+    /// 5 minutes). Debounced / user-initiated syncs are NOT throttled —
+    /// they fire immediately because the user just expressed intent.
+    /// Reset to 0 on any successful sync.
+    private var consecutiveFailures: Int = 0
 
-    /// Production initialiser — wires to real engines and the shared network
-    /// monitor. Tests should use the parameterised initialiser instead.
-    convenience init() {
-        self.init(
-            pushEngine: DefaultPushEngine.shared,
-            pullEngine: DefaultPullEngine.shared,
-            networkMonitor: NetworkMonitor.shared,
-            modelContext: PersistenceController.shared.mainContext,
-            pollInterval: 30,
-            debounceInterval: 1.0
-        )
-    }
+    /// Upper bound on the backoff window. Five minutes — longer than the
+    /// default 30s poll, but short enough that a user returning from a
+    /// flaky network doesn't wait forever for fresh state.
+    private static let maxBackoffSeconds: TimeInterval = 300
+
+    // MARK: - Init
 
     init(
         pushEngine: PushEngineProtocol,
@@ -210,10 +188,15 @@ final class SyncManager {
         }
 
         // Phase 2: pull. Always attempted so the server has the final say on
-        // state even if our push stalled.
+        // state even if our push stalled. When the server signals
+        // `fullResync`, cursors were just wiped — run one more pull so the
+        // current session reflects server state instead of frozen local data.
         state = .pulling
         do {
-            _ = try await pullEngine.pull()
+            let first = try await pullEngine.pull()
+            if first.fullResync {
+                _ = try await pullEngine.pull()
+            }
             lastSyncedAt = Date()
         } catch {
             // Preserve the push error if we had one — it's the more actionable
@@ -221,11 +204,15 @@ final class SyncManager {
             firstError = firstError ?? describe(error)
         }
 
-        // Final state reflects whether either phase errored.
+        // Final state reflects whether either phase errored. The backoff
+        // counter tracks consecutive failures so the poll loop can throttle
+        // repeated retries on a flaky network.
         if let message = firstError {
             state = .error(message)
+            consecutiveFailures += 1
         } else {
             state = .idle
+            consecutiveFailures = 0
         }
     }
 
@@ -252,7 +239,10 @@ final class SyncManager {
 
         state = .pulling
         do {
-            _ = try await pullEngine.pull()
+            let first = try await pullEngine.pull()
+            if first.fullResync {
+                _ = try await pullEngine.pull()
+            }
             state = .idle
             lastSyncedAt = Date()
         } catch {
@@ -308,16 +298,20 @@ final class SyncManager {
 
     // MARK: - Foreground poll
 
-    /// 30-second auto-poll while the app is in the foreground. Uses `Task.sleep`
-    /// so it naturally pauses when iOS suspends the app. Cancellation stops it
-    /// cleanly via `stop()`.
+    /// Periodic auto-poll while the app is in the foreground. Default
+    /// cadence is `pollInterval` (30s); after a failed sync the loop backs
+    /// off exponentially up to `maxBackoffSeconds` so we don't hammer a
+    /// server that's already returning errors or a network that's flapping.
+    /// `Task.sleep` pauses naturally when iOS suspends the app; `stop()`
+    /// cancels cleanly.
     private func startForegroundPoll() {
         pollTask?.cancel()
         pollTask = Task { @MainActor [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
+                let waitSeconds = self.nextPollDelay()
                 do {
-                    try await Task.sleep(nanoseconds: UInt64(self.pollInterval * 1_000_000_000))
+                    try await Task.sleep(nanoseconds: UInt64(waitSeconds * 1_000_000_000))
                 } catch {
                     return
                 }
@@ -327,6 +321,43 @@ final class SyncManager {
                 }
             }
         }
+    }
+
+    /// Compute the wait before the next poll. 0 failures → `pollInterval`
+    /// (the user-facing freshness guarantee). Each consecutive failure
+    /// at least doubles the wait — failure #1 waits `pollInterval * 2`,
+    /// not `pollInterval * 1` — so even a single blip yields a visible
+    /// backoff. Capped at five minutes with ±20% jitter to prevent a
+    /// thundering herd when many clients see the network flap together.
+    ///
+    /// Growth: 30s → 60s → 120s → 240s → 300s (cap) …
+    private func nextPollDelay() -> TimeInterval {
+        Self.backoffDelay(
+            forFailures: consecutiveFailures,
+            pollInterval: pollInterval,
+            maxBackoff: Self.maxBackoffSeconds,
+            jitter: Double.random(in: 0.8...1.2)
+        )
+    }
+
+    /// Pure, testable backoff math. `jitter` is injected so unit tests can
+    /// assert deterministic values; production code passes a random 0.8...1.2
+    /// multiplier. Exposed internally so `BackoffMathTests` can exercise
+    /// every tier without a full `SyncManager` instance. `nonisolated` so
+    /// tests can call it off the main actor (the function has no shared
+    /// state — it's pure arithmetic).
+    nonisolated static func backoffDelay(
+        forFailures consecutiveFailures: Int,
+        pollInterval: TimeInterval,
+        maxBackoff: TimeInterval,
+        jitter: Double
+    ) -> TimeInterval {
+        guard consecutiveFailures > 0 else { return pollInterval }
+        // `pow(2, failures)` — using `failures` (not `failures - 1`) so
+        // failure #1 doubles the interval instead of preserving it.
+        let base = pollInterval * pow(2.0, Double(min(consecutiveFailures, 10)))
+        let capped = min(base, maxBackoff)
+        return capped * jitter
     }
 
     // MARK: - Crash recovery
@@ -371,48 +402,8 @@ enum SyncError: LocalizedError {
     }
 }
 
-// MARK: - Default engine adapters
+// Engine adapters moved to `ActiveSession.swift` where they're constructed
+// per-session. Keeping them out of this file prevents the temptation to
+// bring back a process-wide singleton — `SyncManager` must always be
+// created with explicit engine instances bound to the current session.
 
-/// Thin adapter so the real `PushEngine` satisfies `PushEngineProtocol` —
-/// the two share a name but carry different `PushOutcome` shapes (the
-/// richer one on `PushEngine` isn't needed by `SyncManager`, so we collapse
-/// it into the minimal protocol-level outcome here).
-@MainActor
-private final class DefaultPushEngine: PushEngineProtocol {
-    static let shared = DefaultPushEngine()
-
-    private let real: PushEngine
-
-    private init() {
-        let context = PersistenceController.shared.mainContext
-        self.real = PushEngine(mutationQueue: MutationQueue(context: context))
-    }
-
-    func push() async throws -> PushOutcome {
-        let r = try await real.push()
-        // Roll the granular counts (applied / merged / conflicts / errors)
-        // into the simple applied/failed pair that SyncManager cares about.
-        return PushOutcome(
-            applied: r.applied + r.merged,
-            failed: r.errors + r.conflicts
-        )
-    }
-}
-
-/// Thin adapter so the real `PullEngine` satisfies `PullEngineProtocol`.
-/// Collapses the per-table upsert/delete maps into total counts for the
-/// protocol-level outcome.
-@MainActor
-private final class DefaultPullEngine: PullEngineProtocol {
-    static let shared = DefaultPullEngine()
-
-    private let real = PullEngine()
-
-    func pull() async throws -> PullOutcome {
-        let r = try await real.pull()
-        return PullOutcome(
-            upserted: r.tablesUpserted.values.reduce(0, +),
-            deleted: r.tablesDeleted.values.reduce(0, +)
-        )
-    }
-}

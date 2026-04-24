@@ -3,6 +3,11 @@ export const AI_CONFIG = {
     maxRounds: 5,
     maxTotalTokens: 50_000,
     maxToolResultSize: 4096,
+    // Absolute wall-clock budget for a single orchestrate() call. The
+    // provider already has a 2-minute per-chat timeout, but with maxRounds=5
+    // and tool execution between rounds, a runaway loop could block a worker
+    // for 10+ minutes. 2 minutes is plenty for any legitimate conversation.
+    maxDurationMs: 120_000,
   },
   context: {
     maxFacts: 20,

@@ -12,8 +12,10 @@ import Testing
 /// `MockURLProtocol` via a dedicated `APIClient`. We use a fresh ephemeral
 /// UserDefaults suite per test so recent-query persistence doesn't leak.
 @MainActor
-@Suite("SearchStore", .tags(.views))
+@Suite("SearchStore", .tags(.views), .serialized)
 struct SearchStoreTests {
+    /// Reset MockURLProtocol before each test. See AttachmentUploaderTests.
+    init() { MockURLProtocol.reset() }
 
     // MARK: - Fixtures
 
@@ -126,9 +128,10 @@ struct SearchStoreTests {
     @Test func debouncedSearchSkipsStaleQueries() async throws {
         MockURLProtocol.reset()
         let session = Self.makeSession()
-        // Longer debounce so we can observe cancellation clearly.
+        // Debounce is long enough that the first two tasks are still
+        // sleeping when the third arrives and cancels them.
         let (store, api, _) = Self.makeStore(
-            debounce: .milliseconds(50),
+            debounce: .milliseconds(100),
             session: session
         )
         let base = api.baseURL.appendingPathComponent("api/search")
@@ -153,11 +156,27 @@ struct SearchStoreTests {
             ])
         )
 
-        // Fire rapid queries — all but the last should be cancelled.
-        async let a: Void = store.search("fi")
-        async let b: Void = store.search("fin")
-        async let c: Void = store.search("final")
-        _ = await (a, b, c)
+        // Fire rapid queries in a GUARANTEED order. The earlier version
+        // used `async let a = search("fi") ; async let b = search("fin")
+        // ; async let c = search("final")` — but `async let` doesn't
+        // order which child task reaches the @MainActor first. If
+        // `search("final")` landed first and `search("fi")` last,
+        // the final (count < 2) call would cancel the valid task and
+        // zero HTTP requests would fire, failing the assertion.
+        //
+        // Launching through detached Tasks with a short sleep between
+        // each guarantees the sequence: "fi" runs and early-returns,
+        // then "fin" spawns an inner debounce Task, then "final"
+        // cancels "fin" and spawns its own debounce Task which actually
+        // fires HTTP after the 100ms debounce. 10ms between launches
+        // is well under the 100ms debounce window, so neither of the
+        // earlier tasks has had a chance to hit `performSearch`.
+        let t1 = Task { await store.search("fi") }
+        try? await Task.sleep(for: .milliseconds(10))
+        let t2 = Task { await store.search("fin") }
+        try? await Task.sleep(for: .milliseconds(10))
+        let t3 = Task { await store.search("final") }
+        _ = await (t1.value, t2.value, t3.value)
 
         #expect(store.isSearching == false)
         #expect(store.results.count == 1)

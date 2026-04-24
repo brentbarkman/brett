@@ -25,7 +25,7 @@ enum APIError: Error, CustomStringConvertible {
         case .unauthorized:
             return "Your session expired. Please sign in again."
         case .invalidCredentials(let detail):
-            return detail ?? "Invalid email or password."
+            return APIError.sanitiseUserFacing(detail) ?? "Invalid email or password."
         case .rateLimited(let retry):
             if let retry {
                 return "Too many attempts. Try again in \(retry)s."
@@ -34,7 +34,7 @@ enum APIError: Error, CustomStringConvertible {
         case .serverError(let status):
             return "Server error (\(status)). Please try again."
         case .validation(let message):
-            return message
+            return APIError.sanitiseUserFacing(message) ?? "That didn't look right. Please check and try again."
         case .decodingFailed:
             return "We couldn't read the server's response."
         case .unknown:
@@ -42,24 +42,60 @@ enum APIError: Error, CustomStringConvertible {
         }
     }
 
+    /// Scrubs PII before a server-originated message reaches the UI:
+    /// - Masks any email-looking substring (`user@host.com` → `[email]`).
+    /// - Caps length at 160 chars (notification banners truncate around
+    ///   here anyway; this prevents a verbose payload from leaking
+    ///   incidental user data past the first sentence).
+    /// - Returns nil when the trimmed input is empty, so callers can fall
+    ///   back to a generic category string.
+    static func sanitiseUserFacing(_ raw: String?) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        // Simple email pattern — matches the common case without being a
+        // full RFC5322 validator. Anything that looks like a local-part +
+        // '@' + domain label gets replaced.
+        let emailPattern = #"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#
+        let masked: String
+        if let regex = try? NSRegularExpression(pattern: emailPattern) {
+            let range = NSRange(raw.startIndex..., in: raw)
+            masked = regex.stringByReplacingMatches(
+                in: raw, range: range, withTemplate: "[email]"
+            )
+        } else {
+            masked = raw
+        }
+        if masked.count > 160 {
+            return String(masked.prefix(160)) + "…"
+        }
+        return masked
+    }
+
+    /// Redacted debug description — safe for OSLog / crash-reports.
+    /// User-typed fields (email in `invalidCredentials.detail`, server
+    /// messages in `validation(...)`, underlying error text from
+    /// `unknown(Error)`) are deliberately omitted because they may echo
+    /// back the user's email or other PII. The UI reaches for
+    /// `userFacingMessage` when it needs something to render; logs use
+    /// the category alone so support can correlate without leaking.
     var description: String {
         switch self {
         case .offline:
             return "APIError.offline"
         case .unauthorized:
             return "APIError.unauthorized"
-        case .invalidCredentials(let detail):
-            return "APIError.invalidCredentials(\(detail ?? "nil"))"
+        case .invalidCredentials:
+            return "APIError.invalidCredentials"
         case .rateLimited(let retry):
             return "APIError.rateLimited(retryAfter: \(retry.map(String.init) ?? "nil"))"
         case .serverError(let status):
             return "APIError.serverError(\(status))"
-        case .validation(let message):
-            return "APIError.validation(\(message))"
-        case .decodingFailed(let underlying):
-            return "APIError.decodingFailed(\(underlying))"
-        case .unknown(let underlying):
-            return "APIError.unknown(\(underlying))"
+        case .validation:
+            return "APIError.validation"
+        case .decodingFailed:
+            return "APIError.decodingFailed"
+        case .unknown:
+            return "APIError.unknown"
         }
     }
 }
