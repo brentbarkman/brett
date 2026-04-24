@@ -324,15 +324,39 @@ final class SyncManager {
     }
 
     /// Compute the wait before the next poll. 0 failures → `pollInterval`
-    /// (the user-facing freshness guarantee). Each additional consecutive
-    /// failure doubles the wait with ±20% jitter, capped at five minutes.
-    /// Jitter prevents a thundering herd when the network flaps for many
-    /// clients simultaneously.
+    /// (the user-facing freshness guarantee). Each consecutive failure
+    /// at least doubles the wait — failure #1 waits `pollInterval * 2`,
+    /// not `pollInterval * 1` — so even a single blip yields a visible
+    /// backoff. Capped at five minutes with ±20% jitter to prevent a
+    /// thundering herd when many clients see the network flap together.
+    ///
+    /// Growth: 30s → 60s → 120s → 240s → 300s (cap) …
     private func nextPollDelay() -> TimeInterval {
+        Self.backoffDelay(
+            forFailures: consecutiveFailures,
+            pollInterval: pollInterval,
+            maxBackoff: Self.maxBackoffSeconds,
+            jitter: Double.random(in: 0.8...1.2)
+        )
+    }
+
+    /// Pure, testable backoff math. `jitter` is injected so unit tests can
+    /// assert deterministic values; production code passes a random 0.8...1.2
+    /// multiplier. Exposed internally so `BackoffMathTests` can exercise
+    /// every tier without a full `SyncManager` instance. `nonisolated` so
+    /// tests can call it off the main actor (the function has no shared
+    /// state — it's pure arithmetic).
+    nonisolated static func backoffDelay(
+        forFailures consecutiveFailures: Int,
+        pollInterval: TimeInterval,
+        maxBackoff: TimeInterval,
+        jitter: Double
+    ) -> TimeInterval {
         guard consecutiveFailures > 0 else { return pollInterval }
-        let base = pollInterval * pow(2.0, Double(min(consecutiveFailures, 10) - 1))
-        let capped = min(base, Self.maxBackoffSeconds)
-        let jitter = Double.random(in: 0.8...1.2)
+        // `pow(2, failures)` — using `failures` (not `failures - 1`) so
+        // failure #1 doubles the interval instead of preserving it.
+        let base = pollInterval * pow(2.0, Double(min(consecutiveFailures, 10)))
+        let capped = min(base, maxBackoff)
         return capped * jitter
     }
 

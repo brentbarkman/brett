@@ -105,16 +105,5 @@ extension Item: MutableFieldModel {
 /// need to pre-convert.
 private func coerceDate(_ value: Any?) -> Date? {
     if let d = value as? Date { return d }
-    if let s = value as? String { return ISO8601DateFormatter.brettShared.date(from: s) }
-    return nil
-}
-
-extension ISO8601DateFormatter {
-    /// Shared formatter with the project's wire-format options (internet
-    /// date-time + fractional seconds). Immutable after init → Sendable-safe.
-    static let brettShared: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    return BrettDate.parseISO(value)
 }

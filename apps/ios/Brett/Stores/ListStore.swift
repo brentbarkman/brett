@@ -11,7 +11,11 @@ import SwiftData
 @Observable
 final class ListStore {
     private let context: ModelContext
-    private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
+    // `@ObservationIgnored` is required: @Observable + `lazy var` are
+    // incompatible (the macro's generated init accessor cannot reference
+    // lazy storage). The mutation queue is an implementation detail — views
+    // don't observe it — so ignoring it for observation is also correct.
+    @ObservationIgnored private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
     init(context: ModelContext) {
         self.context = context
@@ -44,9 +48,16 @@ final class ListStore {
         return lists.filter { includeArchived || $0.archivedAt == nil }
     }
 
-    func fetchById(_ id: String) -> ItemList? {
+    /// Fetch a single list by id. `userId` scopes the lookup so mutation
+    /// paths never target another user's row. Passing `nil` preserves
+    /// legacy behaviour (sync internals / tests only).
+    func fetchById(_ id: String, userId: String? = nil) -> ItemList? {
         var descriptor = FetchDescriptor<ItemList>()
-        descriptor.predicate = #Predicate { $0.id == id }
+        if let userId {
+            descriptor.predicate = #Predicate { $0.id == id && $0.userId == userId }
+        } else {
+            descriptor.predicate = #Predicate { $0.id == id }
+        }
         descriptor.fetchLimit = 1
         return fetch(descriptor).first
     }
@@ -76,7 +87,7 @@ final class ListStore {
     /// and `beforeSnapshot` from the model's current state — callers MUST
     /// NOT pre-mutate the model (see ItemStore for rationale).
     func update(id: String, changes: [String: Any]) {
-        guard let list = fetchById(id) else { return }
+        guard let list = fetchById(id, userId: ActiveSession.userId) else { return }
         let fields = Array(changes.keys)
         let capturedPrevious = list.previousValues(forFields: fields)
         applyUpdate(list: list, changes: changes, previousValues: capturedPrevious)
@@ -86,7 +97,7 @@ final class ListStore {
     /// the caller already captured the pre-edit state (e.g. a settings
     /// form snapshotted on open).
     func update(id: String, changes: [String: Any], previousValues: [String: Any]) {
-        guard let list = fetchById(id) else { return }
+        guard let list = fetchById(id, userId: ActiveSession.userId) else { return }
         applyUpdate(list: list, changes: changes, previousValues: previousValues)
     }
 
@@ -125,8 +136,9 @@ final class ListStore {
     }
 
     func reorder(ids: [String]) {
+        let uid = ActiveSession.userId
         for (index, id) in ids.enumerated() {
-            guard let list = fetchById(id), list.sortOrder != index else { continue }
+            guard let list = fetchById(id, userId: uid), list.sortOrder != index else { continue }
             update(id: id, changes: ["sortOrder": index])
         }
     }

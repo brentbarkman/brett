@@ -10,6 +10,14 @@ import SwiftData
 final class UserProfileStore {
     private let context: ModelContext
 
+    /// Cached profile row. Reading `current` used to fire a SwiftData
+    /// fetch on every access — including twice inside `update(from:)`,
+    /// which also opened a brief TOCTOU window where two concurrent
+    /// `update` calls could both take the "no existing profile" branch
+    /// and insert duplicate rows. The cache avoids both issues: reads are
+    /// O(1), and `update(from:)` resolves the row exactly once.
+    @ObservationIgnored private var cachedProfile: UserProfile?
+
     init(context: ModelContext) {
         self.context = context
     }
@@ -18,12 +26,16 @@ final class UserProfileStore {
         self.init(context: PersistenceController.shared.mainContext)
     }
 
-    /// Currently cached profile, if we have one.
+    /// Currently cached profile, if we have one. Hydrates the cache
+    /// lazily from SwiftData on first access.
     var current: UserProfile? {
+        if let cached = cachedProfile { return cached }
         var descriptor = FetchDescriptor<UserProfile>()
         descriptor.fetchLimit = 1
         do {
-            return try context.fetch(descriptor).first
+            let fetched = try context.fetch(descriptor).first
+            cachedProfile = fetched
+            return fetched
         } catch {
             BrettLog.store.error("UserProfileStore fetch failed: \(String(describing: error), privacy: .public)")
             return nil
@@ -38,13 +50,18 @@ final class UserProfileStore {
     func update(from payload: [String: Any]) {
         guard let id = payload["id"] as? String, let email = payload["email"] as? String else { return }
 
+        // Resolve the row exactly once. Two consecutive `update` calls
+        // that both fall through to the "insert" branch would otherwise
+        // leave duplicate rows in SwiftData.
+        let existing = current
         let profile: UserProfile
-        if let existing = current {
+        if let existing {
             profile = existing
             profile.email = email
         } else {
             profile = UserProfile(id: id, email: email)
             context.insert(profile)
+            cachedProfile = profile
         }
 
         profile.id = id
@@ -75,6 +92,7 @@ final class UserProfileStore {
     func clear() {
         guard let existing = current else { return }
         context.delete(existing)
+        cachedProfile = nil
         save()
     }
 

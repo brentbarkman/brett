@@ -31,10 +31,8 @@ extension ItemList: MutableFieldModel {
         case .archivedAt:
             if let d = v as? Date {
                 self.archivedAt = d
-            } else if let s = v as? String {
-                self.archivedAt = ISO8601DateFormatter.brettShared.date(from: s)
             } else {
-                self.archivedAt = nil
+                self.archivedAt = BrettDate.parseISO(v)
             }
         }
     }

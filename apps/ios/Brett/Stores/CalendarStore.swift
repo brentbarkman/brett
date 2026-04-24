@@ -46,19 +46,37 @@ final class CalendarStore {
         return fetch(descriptor)
     }
 
-    func fetchById(_ id: String) -> CalendarEvent? {
+    /// Fetch a single event by id. Pass `userId` to scope the lookup to the
+    /// authenticated user; `nil` preserves legacy unscoped behaviour for
+    /// sync internals.
+    func fetchById(_ id: String, userId: String? = nil) -> CalendarEvent? {
         var descriptor = FetchDescriptor<CalendarEvent>()
-        descriptor.predicate = #Predicate { $0.id == id }
+        if let userId {
+            descriptor.predicate = #Predicate { $0.id == id && $0.userId == userId }
+        } else {
+            descriptor.predicate = #Predicate { $0.id == id }
+        }
         descriptor.fetchLimit = 1
         return fetch(descriptor).first
     }
 
     // MARK: - Notes (read/write)
 
-    func fetchNote(for eventId: String) -> CalendarEventNote? {
+    /// Fetch the note for a given event. `userId` scopes the lookup so a
+    /// note belonging to a prior account (stale after an unfinished wipe)
+    /// can never be matched on sign-in of a new user.
+    func fetchNote(for eventId: String, userId: String? = nil) -> CalendarEventNote? {
         var descriptor = FetchDescriptor<CalendarEventNote>()
-        descriptor.predicate = #Predicate { note in
-            note.calendarEventId == eventId && note.deletedAt == nil
+        if let userId {
+            descriptor.predicate = #Predicate { note in
+                note.calendarEventId == eventId
+                    && note.userId == userId
+                    && note.deletedAt == nil
+            }
+        } else {
+            descriptor.predicate = #Predicate { note in
+                note.calendarEventId == eventId && note.deletedAt == nil
+            }
         }
         descriptor.fetchLimit = 1
         return fetch(descriptor).first
@@ -67,7 +85,9 @@ final class CalendarStore {
     /// Upsert a note's content for the given event. Enqueues CREATE or UPDATE.
     @discardableResult
     func upsertNote(eventId: String, userId: String, content: String) -> CalendarEventNote {
-        if let existing = fetchNote(for: eventId) {
+        // Pass the caller-supplied userId so a stale cross-user note
+        // cannot be mistaken for the current user's row.
+        if let existing = fetchNote(for: eventId, userId: userId) {
             let previous = existing.content
             existing.content = content
             existing.updatedAt = Date()

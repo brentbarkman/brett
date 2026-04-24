@@ -73,11 +73,26 @@ final class BackgroundUploadService: NSObject {
     /// tell iOS it's OK to return the app to suspended state.
     private var backgroundCompletionHandler: (() -> Void)?
 
+    /// App Group identifier shared between the main app and the share
+    /// extension. Declared on both targets' entitlements. The share
+    /// extension needs this same group to eventually write attachments
+    /// through the same background session without "identifier already
+    /// exists" conflicts. Keep in sync with the entitlements files.
+    private static let appGroupIdentifier = "group.com.brett.app"
+
     /// Lazy so we don't build the session — and trigger iOS's
     /// "any tasks for this identifier?" scan — until the app is actually
-    /// about to upload something.
+    /// about to upload something. That said, cold-launch reconciliation
+    /// via `handleEventsForBackgroundURLSession` MUST touch this before
+    /// iOS can deliver pending events — see `prepareForLaunch()`.
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
+        // Share-extension-ready: uploads initiated from the extension
+        // need the same container so iOS can deliver events to whichever
+        // process rehydrates the session. Set even if the extension
+        // doesn't upload yet — retrofitting later would leave in-flight
+        // sessions orphaned on the first build that flips the flag.
+        config.sharedContainerIdentifier = Self.appGroupIdentifier
         // `isDiscretionary = false` — users expect attachments they just
         // dropped into a task to start uploading immediately, not wait
         // for the device to be plugged in on Wi-Fi. iOS still pauses on
@@ -87,6 +102,15 @@ final class BackgroundUploadService: NSObject {
         config.allowsCellularAccess = true
         config.allowsExpensiveNetworkAccess = true
         config.allowsConstrainedNetworkAccess = true
+        // Defense-in-depth: main APIClient disables cookies because we're
+        // bearer-only. The background session builds its own config from
+        // scratch — apply the same policy so a redirect's Set-Cookie
+        // can't land in HTTPCookieStorage.shared and leak across
+        // requests. The presigned upload endpoint has no legitimate
+        // reason to set cookies on us.
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        config.httpCookieStorage = nil
         // Dedicated delegate queue — background callbacks can land at
         // any time, including while we're mid-hop to the main actor.
         let queue = OperationQueue()
@@ -121,24 +145,40 @@ final class BackgroundUploadService: NSObject {
     /// `application(_:handleEventsForBackgroundURLSession:completionHandler:)`.
     /// We invoke it later in `urlSessionDidFinishEvents(...)` once the
     /// session confirms there are no more events to deliver.
+    ///
+    /// IMPORTANT: touches `session` eagerly. When iOS relaunches the app
+    /// specifically to deliver pending background events, the delegate
+    /// callbacks (including `didCompleteWithError` for tasks finished
+    /// while the app was dead) won't fire until the URLSession object
+    /// with the matching identifier has been re-materialised. Without
+    /// this force-touch, `handleEventsForBackgroundURLSession` would
+    /// install a completion handler that never gets called because iOS
+    /// has nothing to deliver to.
     func storeBackgroundCompletionHandler(_ handler: @escaping () -> Void) {
         lock.lock()
         backgroundCompletionHandler = handler
         lock.unlock()
+        _ = session
+    }
+
+    /// Called from the app delegate during `didFinishLaunching` so the
+    /// background URLSession is rebuilt synchronously — iOS can then
+    /// re-deliver completion events for tasks finished while the app
+    /// was killed. Without this, a user who force-quits the app during
+    /// an upload won't see the upload marked as `done` until the next
+    /// time a foreground upload is enqueued (which re-touches `session`).
+    func prepareForLaunch() {
+        _ = session
     }
 
     /// Walk every task currently known to the background session and
-    /// publish a reconciliation callback for each one. Called on app
-    /// launch so `AttachmentUploader` can re-mark any row as
-    /// `uploading` / `done` / `failed` based on what iOS says.
-    ///
-    /// This is fire-and-forget — we don't await the session scan. The
-    /// caller typically triggers a UI refresh after a short delay.
+    /// log the in-flight count. The per-task completion delegate fires
+    /// `onUploadFinished` for each task iOS has a pending event for —
+    /// no explicit replay is needed here; iOS replays them automatically
+    /// once the session is materialised (which `prepareForLaunch` /
+    /// `storeBackgroundCompletionHandler` both ensure).
     func reconcilePendingTasks() {
         session.getAllTasks { tasks in
-            // `tasks` runs on the delegate queue, not main. Just log —
-            // the per-task completion delegate will fire eventually and
-            // update rows through the normal flow.
             BrettLog.attachments.info(
                 "Background upload session has \(tasks.count, privacy: .public) in-flight task(s) on launch"
             )

@@ -33,34 +33,44 @@ struct InboxPage: View {
     /// items. See TodayPage for the same pattern.
     @Query private var syncHealthRows: [SyncHealth]
 
-    /// Live reactive read of inbox items. SwiftData broadcasts mutations
-    /// to @Query consumers automatically, which is the whole point — the
-    /// previous `refreshTick` anti-pattern existed only because the page
-    /// fetched imperatively via `itemStore.fetchInbox()` and needed a
-    /// manual poke to re-render. Predicate mirrors ItemStore.fetchInbox:
-    /// no list, no due date, active status.
+    /// Live reactive read of non-deleted items. SwiftData broadcasts
+    /// mutations to @Query consumers automatically, which is the whole
+    /// point — the previous `refreshTick` anti-pattern existed only because
+    /// the page fetched imperatively via `itemStore.fetchInbox()` and
+    /// needed a manual poke to re-render.
     ///
-    /// Inbox-status is interpolated as a literal string because
-    /// #Predicate can't call `ItemStatus.active.rawValue` at macro
-    /// expansion time. If the enum's raw values ever drift, update both.
+    /// The @Query filter is intentionally narrow (`deletedAt == nil`) for
+    /// two reasons: (1) the broader 4-condition predicate that mirrors
+    /// `ItemStore.fetchInbox` times out Swift's type checker under newer
+    /// toolchains when combined with mixed `Date?` / `String?` nil checks,
+    /// and (2) we want the final filter to include the authenticated
+    /// `userId`, which can't be captured in a `@Query` initializer. The
+    /// remaining filters (inbox-shape + userId scoping) run in
+    /// `allInboxItems`. Row volume is bounded per user, so Swift-side
+    /// filtering is cheap.
     @Query(
-        filter: #Predicate<Item> {
-            $0.deletedAt == nil
-                && $0.listId == nil
-                && $0.dueDate == nil
-                && $0.status == "active"
-        },
+        filter: #Predicate<Item> { $0.deletedAt == nil },
         sort: \Item.createdAt,
         order: .reverse
-    ) private var inboxItemsAnyUser: [Item]
+    ) private var nonDeletedItemsAnyUser: [Item]
 
     private var hasCompletedInitialSync: Bool {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
     }
 
+    /// Inbox view mirrors `ItemStore.fetchInbox`: user-scoped, active
+    /// status, no list assignment, no due date. Applied in Swift so the
+    /// userId (dynamic) can participate in the filter alongside the
+    /// shape conditions.
     private var allInboxItems: [Item] {
         guard let uid = authManager.currentUser?.id else { return [] }
-        return inboxItemsAnyUser.filter { $0.userId == uid }
+        let activeStatus = ItemStatus.active.rawValue
+        return nonDeletedItemsAnyUser.filter { item in
+            item.userId == uid
+                && item.listId == nil
+                && item.dueDate == nil
+                && item.status == activeStatus
+        }
     }
 
     private var filteredItems: [Item] {

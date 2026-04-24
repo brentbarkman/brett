@@ -472,8 +472,14 @@ final class AttachmentUploader {
         var descriptor = FetchDescriptor<AttachmentUpload>(
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
+        // Exclude `uploading` rows so a concurrent `processQueue()` call
+        // doesn't pick up a row that already has an in-flight URLSession
+        // task. Without this, the inner Task bookkeeping (`inFlight[id]`)
+        // gets overwritten and both transfers race for the same row.
         descriptor.predicate = #Predicate { upload in
-            upload.stage != "done" && upload.stage != "failed"
+            upload.stage != "done"
+                && upload.stage != "failed"
+                && upload.stage != "uploading"
         }
         descriptor.fetchLimit = 1
         return (try? context.fetch(descriptor))?.first

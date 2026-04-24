@@ -197,6 +197,14 @@ final class SSEClient {
         reconnectAttempt = 0
     }
 
+    /// Hard cap on `reconnectAttempt`. Keeps the counter observable in
+    /// diagnostics (and the `2^attempt` math in `backoffDelay(for:)`
+    /// well inside Double's safe range) even against a server that opens
+    /// and closes streams rapidly for days. The backoff itself already
+    /// saturates at `maxBackoffSeconds`, but letting the counter climb
+    /// forever makes the diagnostic useless.
+    private static let maxReconnectAttempt = 10
+
     /// Called exactly once per stream close (clean or errored). Decides
     /// whether to reset-then-bump (healthy connection) or bump-only
     /// (unhealthy).
@@ -211,7 +219,7 @@ final class SSEClient {
         if wasSustainedHealthy {
             reconnectAttempt = 1
         } else {
-            reconnectAttempt += 1
+            reconnectAttempt = min(reconnectAttempt + 1, Self.maxReconnectAttempt)
         }
     }
 

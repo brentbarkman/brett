@@ -17,7 +17,14 @@ final class ItemStore {
     private let context: ModelContext
     // Lazy so tests/previews that never enqueue don't pay the allocation,
     // and so the queue always shares the store's ModelContext.
-    private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
+    //
+    // `@ObservationIgnored` is required: the `@Observable` macro generates
+    // init-accessor stored-property tracking for every stored property, and
+    // that machinery cannot coexist with `lazy var` (Swift rejects the
+    // auto-generated init accessor referencing `_mutationQueue`). Marking
+    // this ignored is correct for semantics too — the mutation queue is an
+    // internal implementation detail; view updates don't key off it.
+    @ObservationIgnored private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
     init(context: ModelContext) {
         self.context = context
@@ -44,21 +51,50 @@ final class ItemStore {
         var descriptor = FetchDescriptor<Item>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
-        if let userId {
+        // Build the predicate by combination to keep each #Predicate under
+        // Swift's type-checker budget (a chained 5-way conjunction with
+        // mixed Optional<Date>/Optional<String>/String types times out the
+        // macro). Each branch is a simple 2–4 clause predicate the SQLite
+        // store can evaluate without a post-fetch Swift filter.
+        let statusRaw = status?.rawValue
+        switch (userId, listId, statusRaw) {
+        case let (uid?, lid?, stat?):
             descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.userId == userId
+                item.deletedAt == nil
+                    && item.userId == uid
+                    && item.listId == lid
+                    && item.status == stat
             }
-        } else {
+        case let (uid?, lid?, nil):
+            descriptor.predicate = #Predicate { item in
+                item.deletedAt == nil && item.userId == uid && item.listId == lid
+            }
+        case let (uid?, nil, stat?):
+            descriptor.predicate = #Predicate { item in
+                item.deletedAt == nil && item.userId == uid && item.status == stat
+            }
+        case let (uid?, nil, nil):
+            descriptor.predicate = #Predicate { item in
+                item.deletedAt == nil && item.userId == uid
+            }
+        case let (nil, lid?, stat?):
+            descriptor.predicate = #Predicate { item in
+                item.deletedAt == nil && item.listId == lid && item.status == stat
+            }
+        case let (nil, lid?, nil):
+            descriptor.predicate = #Predicate { item in
+                item.deletedAt == nil && item.listId == lid
+            }
+        case let (nil, nil, stat?):
+            descriptor.predicate = #Predicate { item in
+                item.deletedAt == nil && item.status == stat
+            }
+        case (nil, nil, nil):
             descriptor.predicate = #Predicate { item in
                 item.deletedAt == nil
             }
         }
-        let items = fetch(descriptor)
-        return items.filter { item in
-            if let listId, item.listId != listId { return false }
-            if let status, item.status != status.rawValue { return false }
-            return true
-        }
+        return fetch(descriptor)
     }
 
     /// Inbox = items with no list assigned and no due date (spec §UI).
@@ -92,9 +128,18 @@ final class ItemStore {
             .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
     }
 
-    func fetchById(_ id: String) -> Item? {
+    /// Fetch a single `Item` by id. `userId` scopes the lookup so a call
+    /// from the signed-in user's flow can never target a row that belongs
+    /// to a different account lingering in SwiftData (e.g. between sign-out
+    /// and the wipe completing). Passing `nil` preserves the legacy
+    /// unscoped behaviour and is reserved for sync internals.
+    func fetchById(_ id: String, userId: String? = nil) -> Item? {
         var descriptor = FetchDescriptor<Item>()
-        descriptor.predicate = #Predicate { $0.id == id }
+        if let userId {
+            descriptor.predicate = #Predicate { $0.id == id && $0.userId == userId }
+        } else {
+            descriptor.predicate = #Predicate { $0.id == id }
+        }
         descriptor.fetchLimit = 1
         return fetch(descriptor).first
     }
@@ -143,7 +188,7 @@ final class ItemStore {
     /// kept for call sites (e.g. `ItemDraft`) that already captured the
     /// pre-edit state before the user began editing.
     func update(id: String, changes: [String: Any]) {
-        guard let item = fetchById(id) else { return }
+        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
         let fields = Array(changes.keys)
         let capturedPrevious = item.previousValues(forFields: fields)
         applyUpdate(item: item, changes: changes, previousValues: capturedPrevious)
@@ -159,7 +204,7 @@ final class ItemStore {
         changes: [String: Any],
         previousValues: [String: Any]
     ) {
-        guard let item = fetchById(id) else { return }
+        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
         applyUpdate(item: item, changes: changes, previousValues: previousValues)
     }
 
@@ -200,7 +245,7 @@ final class ItemStore {
     /// then passed old values explicitly, which produced a post-mutation
     /// `beforeSnapshot` and silently broke permanent-failure rollback.
     func toggleStatus(id: String) {
-        guard let item = fetchById(id) else { return }
+        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
         let wasDone = item.itemStatus == .done
         update(id: id, changes: [
             "status": wasDone ? ItemStatus.active.rawValue : ItemStatus.done.rawValue,
@@ -210,7 +255,7 @@ final class ItemStore {
 
     /// Soft-delete — sets `deletedAt` locally and enqueues a DELETE.
     func delete(id: String) {
-        guard let item = fetchById(id) else { return }
+        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
         let before = item.mutableFieldSnapshot()
         item.deletedAt = Date()
         item._syncStatus = SyncStatus.pendingDelete.rawValue
@@ -375,17 +420,10 @@ extension Optional: OptionalProtocol {
 }
 
 extension Date {
-    // Cached because this extension is called for every mutation payload
-    // (ItemStore.enqueue*, ListStore.enqueue*, JSONCodec.normaliseScalar).
-    // Immutable after init → safe to share.
-    private static let sharedISO8601Formatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
     /// ISO-8601 with fractional seconds — matches the server wire format.
+    /// Routes through the shared `BrettDate` formatter so there's a single
+    /// source of truth for format options.
     func iso8601String() -> String {
-        Date.sharedISO8601Formatter.string(from: self)
+        BrettDate.isoString(self)
     }
 }

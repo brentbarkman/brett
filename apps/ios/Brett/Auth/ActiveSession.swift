@@ -75,7 +75,15 @@ final class Session {
     /// Deterministic teardown. Called synchronously from `AuthManager.signOut`
     /// before it wipes SwiftData, so any in-flight push/pull completes (or is
     /// cancelled) before the underlying rows disappear.
+    ///
+    /// Order matters:
+    ///   1. Cancel every in-flight chat stream. A stream that's mid-response
+    ///      when the user signs out would otherwise land its final
+    ///      `persistAssistant` against the NEXT user's SwiftData context.
+    ///   2. Disconnect SSE so no new events arrive.
+    ///   3. Stop the sync manager so its poll loop ends.
     func tearDown() {
+        ChatStoreRegistry.cancelAllActive()
         sseClient.disconnect()
         sseHandler?.stop()
         sseHandler = nil

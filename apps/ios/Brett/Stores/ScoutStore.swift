@@ -209,17 +209,31 @@ final class ScoutStore {
 
     /// Upsert a batch of DTOs into the SwiftData cache. Best-effort — any
     /// failure is logged and swallowed.
+    ///
+    /// New rows are created with the currently authenticated `userId`. The
+    /// ScoutDTO wire format doesn't carry the user id (scouts are always
+    /// read within the authenticated caller's scope), so we lift it from
+    /// `ActiveSession.userId` at insert time. A freshly-created scout row
+    /// with an empty `userId` string would be unreachable via
+    /// `fetchScouts(userId:)` and accumulate as dead rows in the DB.
     private func upsertLocal(_ dtos: [APIClient.ScoutDTO]) {
         guard let context else { return }
+        let uid = ActiveSession.userId ?? ""
         for dto in dtos {
             let existing = fetchScout(id: dto.id)
             let row = existing ?? Scout(
                 id: dto.id,
-                userId: "",
+                userId: uid,
                 name: dto.name,
                 goal: dto.goal,
                 createdAt: dto.createdAt
             )
+            // On update: if an older row somehow landed with an empty
+            // userId (shipped before this fix), backfill it so the row
+            // becomes reachable again.
+            if row.userId.isEmpty && !uid.isEmpty {
+                row.userId = uid
+            }
             row.name = dto.name
             row.avatarLetter = dto.avatarLetter
             row.avatarGradientFrom = dto.avatarGradient.first ?? ""

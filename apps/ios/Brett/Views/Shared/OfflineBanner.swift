@@ -122,21 +122,21 @@ struct OfflineBanner: View {
 /// Reads the shared `NetworkMonitor` plus a live pending-count (refreshed on
 /// the same signal as the network state, with a best-effort timer backstop so
 /// mutation bursts show up even when connectivity hasn't flipped).
+///
+/// The banner is session-aware: `lastSyncedAt` comes from the currently
+/// active session's `SyncManager` via `ActiveSession.syncManager`. When
+/// no user is signed in the banner simply reports "no sync recorded yet,"
+/// which is the correct state for that case.
 struct OfflineBannerModifier: ViewModifier {
     @Environment(\.modelContext) private var modelContext
 
     private let networkMonitor: NetworkMonitor
-    private let syncManager: SyncManager
 
     @State private var pendingCount: Int = 0
     @State private var pollTask: Task<Void, Never>?
 
-    init(
-        networkMonitor: NetworkMonitor = .shared,
-        syncManager: SyncManager = .shared
-    ) {
+    init(networkMonitor: NetworkMonitor = .shared) {
         self.networkMonitor = networkMonitor
-        self.syncManager = syncManager
     }
 
     func body(content: Content) -> some View {
@@ -145,7 +145,7 @@ struct OfflineBannerModifier: ViewModifier {
                 OfflineBanner(
                     networkMonitor: networkMonitor,
                     pendingCount: pendingCount,
-                    lastSyncedAt: syncManager.lastSyncedAt
+                    lastSyncedAt: ActiveSession.syncManager?.lastSyncedAt
                 )
                 .animation(
                     .spring(response: 0.35, dampingFraction: 0.82),
@@ -200,13 +200,7 @@ struct OfflineBannerModifier: ViewModifier {
 
 extension View {
     /// Apply the sticky offline banner + pending-count indicator.
-    func offlineBanner(
-        networkMonitor: NetworkMonitor = .shared,
-        syncManager: SyncManager = .shared
-    ) -> some View {
-        modifier(OfflineBannerModifier(
-            networkMonitor: networkMonitor,
-            syncManager: syncManager
-        ))
+    func offlineBanner(networkMonitor: NetworkMonitor = .shared) -> some View {
+        modifier(OfflineBannerModifier(networkMonitor: networkMonitor))
     }
 }
