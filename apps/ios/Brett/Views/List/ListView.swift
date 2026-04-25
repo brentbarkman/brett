@@ -54,7 +54,17 @@ struct ListView: View {
             listId: listId,
             status: nil
         )
-        .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
+        // Sort by createdAt DESC to match the desktop /things route's
+        // `orderBy: [{ createdAt: "desc" }]`. Same items, same order
+        // across platforms — was previously `dueDate ASC` here, which
+        // produced visibly different ordering than desktop on the same
+        // list. Stable secondary by `id` to break ties deterministically.
+        .sorted {
+            if $0.createdAt != $1.createdAt {
+                return $0.createdAt > $1.createdAt
+            }
+            return $0.id < $1.id
+        }
     }
 
     private var activeCount: Int {

@@ -46,7 +46,14 @@ struct SyncStatusIndicator: View {
                     .onTapGesture { showErrorDetails = true }
             }
         }
-        .frame(width: 12, height: 12, alignment: .center) // 12pt hit target, 8pt dot
+        // 40pt hit target — matches the sibling search / scouts / settings
+        // buttons in MainContainer's top bar so the user can actually hit
+        // the dot when it goes red. The visible dot remains 8pt; the
+        // 40pt rectangle is invisible chrome for tap accuracy. iOS's
+        // recommended minimum touch target is 44pt — 40pt matches the
+        // existing icon row exactly.
+        .frame(width: 40, height: 40, alignment: .center)
+        .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.2), value: state)
         .onChange(of: state) { _, newValue in
             switch newValue {
@@ -69,6 +76,11 @@ struct SyncStatusIndicator: View {
 
     @ViewBuilder
     private func dot(color: Color, isInteractive: Bool, pulse: Bool) -> some View {
+        // The visible dot is 8pt — the 40pt hit target lives on the
+        // outer view body (see `.frame(width: 40, height: 40)` above).
+        // We don't need a separate hit-target frame here; the outer
+        // contentShape covers the whole 40pt and the .onTapGesture is
+        // attached to the case-error branch in `body`.
         Circle()
             .fill(color)
             .frame(width: 8, height: 8)
@@ -80,8 +92,6 @@ struct SyncStatusIndicator: View {
                     : .default,
                 value: isPulsing
             )
-            .contentShape(Rectangle())
-            .frame(width: 12, height: 12, alignment: .center)
             .allowsHitTesting(isInteractive)
             .accessibilityLabel(accessibilityLabel)
     }

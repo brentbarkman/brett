@@ -58,18 +58,24 @@ struct InboxPage: View {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
     }
 
-    /// Inbox view mirrors `ItemStore.fetchInbox`: user-scoped, active
-    /// status, no list assignment, no due date. Applied in Swift so the
-    /// userId (dynamic) can participate in the filter alongside the
-    /// shape conditions.
+    /// Inbox view mirrors the desktop `/things/inbox` filter
+    /// (`apps/api/src/routes/things.ts`): user-scoped, listId=null,
+    /// dueDate=null, status="active", AND `snoozedUntil` either null
+    /// or already in the past. The snoozedUntil check was the
+    /// previously-missing piece — without it, an active item the user
+    /// snoozed into the future was visible on iOS Inbox but hidden on
+    /// desktop, the most common "items appear different across
+    /// platforms" symptom.
     private var allInboxItems: [Item] {
         guard let uid = authManager.currentUser?.id else { return [] }
         let activeStatus = ItemStatus.active.rawValue
+        let now = Date()
         return nonDeletedItemsAnyUser.filter { item in
             item.userId == uid
                 && item.listId == nil
                 && item.dueDate == nil
                 && item.status == activeStatus
+                && (item.snoozedUntil == nil || item.snoozedUntil! <= now)
         }
     }
 
