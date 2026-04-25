@@ -7,6 +7,7 @@ import { fieldLevelMerge, findMissingBaselines } from "../lib/sync-merge.js";
 import { publishSSE } from "../lib/sse.js";
 import { detectContentType } from "@brett/utils";
 import { runExtraction } from "../lib/content-extractor.js";
+import { paginatedPull, parseCursor } from "../lib/sync/paginated-pull.js";
 import type {
   SyncPullRequest, SyncPullResponse, SyncTableChanges,
   SyncPushRequest, SyncPushResponse, SyncMutation, SyncMutationResult,
@@ -73,51 +74,51 @@ function filterCreatePayload(
 }
 
 const CURRENT_PROTOCOL_VERSION = 1;
-const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 1000;
 const STALE_CURSOR_DAYS = 30;
 const MAX_MUTATIONS = 50;
 const MAX_BODY_SIZE = 1_048_576; // 1MB
 
 /**
- * Cursor is `"<ISO-8601 timestamp>|<row id>"` or, for clients on the old
- * format, just `"<ISO-8601 timestamp>"`. We always emit the pipe form; we
- * still accept the old form so an existing client's stored cursor keeps
- * working across the deploy.
+ * Per-table default page sizes. The values are chosen so that the worst
+ * realistic per-row payload × per-table limit stays comfortably under
+ * 1 MB even for content-heavy users:
  *
- * Keyset pagination over `(updatedAt, id)` fixes a boundary bug where many
- * rows sharing the exact same `updatedAt` could get sliced across pages
- * and the skipped ones permanently missed on the next pull.
+ *   - `items` rows can include up to ~5–8 KB of extracted `contentBody`,
+ *     so 50 rows ≈ 250–400 KB worst case. Going higher (e.g. 200) risks
+ *     a single page exceeding 1 MB on power users.
+ *   - `brett_messages` rows include AI assistant responses + citations,
+ *     similar size class to items. 50 keeps memory and parse cost sane.
+ *   - All other tables hold lightweight metadata (≤1 KB / row), so 200
+ *     is comfortable and cuts the round-trip count for power users.
+ *
+ * If the client sends `body.limit`, it overrides ALL tables — that's
+ * the legacy single-limit knob and we keep honoring it for clients on
+ * older protocols. Modern clients should omit `limit` so the per-table
+ * defaults apply.
  */
-function parseCursor(raw: string | null | undefined): { ts: Date; id: string | null } | null {
-  if (!raw) return null;
-  const pipe = raw.indexOf("|");
-  if (pipe === -1) {
-    const ts = new Date(raw);
-    return Number.isNaN(ts.getTime()) ? null : { ts, id: null };
-  }
-  const ts = new Date(raw.slice(0, pipe));
-  if (Number.isNaN(ts.getTime())) return null;
-  return { ts, id: raw.slice(pipe + 1) };
-}
+const DEFAULT_LIMIT_BY_TABLE: Record<SyncTable, number> = {
+  items: 50,
+  brett_messages: 50,
+  lists: 200,
+  calendar_events: 200,
+  calendar_event_notes: 200,
+  scouts: 200,
+  scout_findings: 200,
+  attachments: 200,
+};
 
-function formatCursor(updatedAt: Date | string, id: string): string {
-  const iso = updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt;
-  return `${iso}|${id}`;
-}
+/**
+ * Fallback if a new table is added to `SYNC_TABLES` without being added
+ * to `DEFAULT_LIMIT_BY_TABLE`. Conservative — the small-table value, so
+ * a forgotten content-heavy addition wouldn't accidentally pump 200 rows.
+ */
+const FALLBACK_DEFAULT_LIMIT = 50;
 
-function applyCursorFilter(where: Record<string, unknown>, cursor: string | null | undefined): void {
-  const parsed = parseCursor(cursor);
-  if (!parsed) return;
-  if (parsed.id === null) {
-    where.updatedAt = { gt: parsed.ts };
-    return;
-  }
-  where.OR = [
-    { updatedAt: { gt: parsed.ts } },
-    { updatedAt: parsed.ts, id: { gt: parsed.id } },
-  ];
-}
+// Cursor parsing/formatting + keyset-merge pagination live in
+// `lib/sync/paginated-pull.ts`. See that file for the wire format and
+// the algorithm behind why we don't paginate upserts and tombstones
+// independently anymore.
 
 export const sync = new Hono<AuthEnv>()
   .use("/*", authMiddleware)
@@ -134,13 +135,17 @@ export const sync = new Hono<AuthEnv>()
       );
     }
 
-    // Validate limit
-    const limit = body.limit ?? DEFAULT_LIMIT;
-    if (limit < 1 || limit > MAX_LIMIT) {
-      return c.json(
-        { error: `limit must be between 1 and ${MAX_LIMIT}` },
-        400,
-      );
+    // Validate limit. `body.limit`, when present, is a single value that
+    // overrides every table's default. Modern clients should omit it and
+    // let the per-table defaults apply (see `DEFAULT_LIMIT_BY_TABLE`).
+    const overrideLimit = body.limit;
+    if (overrideLimit !== undefined && overrideLimit !== null) {
+      if (!Number.isInteger(overrideLimit) || overrideLimit < 1 || overrideLimit > MAX_LIMIT) {
+        return c.json(
+          { error: `limit must be between 1 and ${MAX_LIMIT}` },
+          400,
+        );
+      }
     }
 
     const cursors = body.cursors ?? {};
@@ -176,81 +181,47 @@ export const sync = new Hono<AuthEnv>()
       const modelAccessor = SYNC_TABLE_TO_MODEL[table];
       const model = (prisma as any)[modelAccessor];
 
-      // Runtime check — skip if model accessor is invalid
+      // Runtime check — skip if model accessor is invalid (defense against a
+      // future SYNC_TABLES entry that doesn't map to a real Prisma model).
       if (!model || typeof model.findMany !== "function") {
         changes[table] = { upserted: [], deleted: [], hasMore: false };
         continue;
       }
 
       const cursor = cursors[table] ?? null;
+      const tableLimit = overrideLimit ?? DEFAULT_LIMIT_BY_TABLE[table] ?? FALLBACK_DEFAULT_LIMIT;
 
-      // Every syncable model has a direct userId column, so sync pull
-      // hits the composite `(userId, updatedAt)` index without a join.
-      const where: any = { userId: user.id };
-      applyCursorFilter(where, cursor);
-
-      // Special handling for calendar_events: scope to last 90 days + future
+      // Per-table extra filters. Calendar events scope to last 90 days +
+      // future to keep mobile from pulling years of historical events.
+      const extraWhere: Record<string, unknown> = {};
       if (table === "calendar_events") {
-        where.startTime = { gte: ninetyDaysAgo };
+        extraWhere.startTime = { gte: ninetyDaysAgo };
       }
 
-      // Keyset pagination: order by (updatedAt, id) so rows sharing a
-      // millisecond don't get split across pages and silently lost.
-      const upserted = await model.findMany({
-        where,
-        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-        take: limit + 1, // +1 to detect hasMore
-      });
-
-      // Query tombstone IDs only (bypasses soft-delete extension via key existence)
-      const tombstoneWhere: any = {
+      // Keyset-merged pull: live + tombstones in one ordered stream, single
+      // monotonic cursor. See `paginated-pull.ts` for the algorithm and
+      // why the previous independent-pagination approach lost rows.
+      const result = await paginatedPull({
+        prismaModel: model,
         userId: user.id,
-        deletedAt: { not: null }, // key exists -> bypasses extension
-      };
-      applyCursorFilter(tombstoneWhere, cursor);
-      // Special handling for calendar_events tombstones
-      if (table === "calendar_events") {
-        tombstoneWhere.startTime = { gte: ninetyDaysAgo };
-      }
-
-      // Include updatedAt on tombstones so we can advance the cursor past them.
-      // Otherwise a high-volume upsert window would "hide" tombstones that fall
-      // later in the timestamp sequence: the cursor would jump to the last
-      // upsert's updatedAt, skipping tombstones whose updatedAt was further in
-      // the future. Soft-deletes would then never propagate to mobile.
-      const tombstones = await model.findMany({
-        where: tombstoneWhere,
-        select: { id: true, updatedAt: true },
-        take: limit,
-        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+        cursor,
+        limit: tableLimit,
+        extraWhere,
       });
-      const deleted = tombstones.map((r: any) => r.id);
 
-      // Check pagination
-      const hasMore = upserted.length > limit;
-      const records = hasMore ? upserted.slice(0, limit) : upserted;
-
-      // Compute new cursor from the latest row across upserts and tombstones.
-      // Cursor is `"<updatedAt>|<id>"` so clients can resume on the exact row
-      // boundary without skipping siblings that share a timestamp.
-      const lastUpserted = records.length > 0 ? records[records.length - 1] : null;
-      const lastTombstone = tombstones.length > 0 ? tombstones[tombstones.length - 1] : null;
-      let winner: { updatedAt: Date | string; id: string } | null = null;
-      if (lastUpserted && lastTombstone) {
-        const a = new Date(lastUpserted.updatedAt).getTime();
-        const b = new Date(lastTombstone.updatedAt).getTime();
-        winner = a >= b ? lastUpserted : lastTombstone;
-      } else {
-        winner = lastUpserted ?? lastTombstone;
-      }
-      if (winner) {
-        newCursors[table] = formatCursor(winner.updatedAt, winner.id);
+      changes[table] = {
+        upserted: result.upserted,
+        deleted: result.deleted,
+        hasMore: result.hasMore,
+      };
+      if (result.nextCursor) {
+        newCursors[table] = result.nextCursor;
       } else if (cursor) {
-        // Preserve existing cursor if no new records
+        // Preserve existing cursor when no rows were returned — without
+        // this, a temporarily empty page would reset the client to
+        // cursor=null and force a fresh full re-walk on the next pull.
         newCursors[table] = cursor;
       }
-
-      changes[table] = { upserted: records, deleted, hasMore };
     }
 
     const response: SyncPullResponse = {

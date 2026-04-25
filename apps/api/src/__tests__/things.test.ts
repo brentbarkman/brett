@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { createTestUser, authRequest } from "./helpers.js";
 import { app } from "../app.js";
 import { DEFAULT_LIST_NAME } from "@brett/business";
+import { prisma } from "../lib/prisma.js";
 
 describe("Things routes", () => {
   let token: string;
@@ -519,5 +520,171 @@ describe("GET /things?dueAfter", () => {
     expect(body.length).toBe(2);
     const titles = body.map((t: any) => t.title).sort();
     expect(titles).toEqual(["Past", "Today"]);
+  });
+});
+
+/**
+ * The shared `paginatedPull` core means /things and /sync/pull no longer
+ * have parallel pagination implementations, AND /things now walks until
+ * exhausted server-side instead of silently truncating at 500 rows. These
+ * tests pin both invariants — without them, a future regression could
+ * reintroduce either failure mode without obvious symptoms in dev.
+ */
+describe("GET /things — pagination correctness via shared sync core", () => {
+  let token: string;
+  let userId: string;
+  let seededIds: string[];
+
+  beforeAll(async () => {
+    const user = await createTestUser("Things Pagination");
+    token = user.token;
+    userId = user.userId;
+
+    // Bulk-seed 600 items — well past the old `take: 500` desktop cap —
+    // via direct Prisma to avoid serializing 600 HTTP POSTs (slow + would
+    // trip route rate limits inside the full test suite). Before the
+    // shared-core refactor, /things silently dropped the oldest 100 of
+    // these. The tests below pin that the full set now comes back.
+    const created = await prisma.item.createManyAndReturn({
+      data: Array.from({ length: 600 }, (_, i) => ({
+        userId,
+        type: "task",
+        status: "active",
+        title: `bulk-${i}`,
+      })),
+    });
+    seededIds = created.map((r) => r.id);
+  });
+
+  it("returns the full matching set for users above the legacy 500-row truncation", async () => {
+    const res = await authRequest("/things", token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any[];
+    // The full set should come back — no silent truncation. The 2000-row
+    // default cap on /things is well above 600 so we expect every row.
+    expect(body.length).toBe(seededIds.length);
+    expect(new Set(body.map((t: any) => t.id))).toEqual(new Set(seededIds));
+  });
+
+  it("returns identical id sets across two consecutive calls — determinism", async () => {
+    // Mirrors the "two iOS sign-ins disagree" guard from paginated-pull
+    // tests, but at the route level. If the cursor stream is deterministic
+    // for an unchanging dataset, both calls must produce identical sets.
+    const res1 = await authRequest("/things", token);
+    const res2 = await authRequest("/things", token);
+    const body1 = (await res1.json()) as any[];
+    const body2 = (await res2.json()) as any[];
+    expect(new Set(body1.map((t: any) => t.id))).toEqual(new Set(body2.map((t: any) => t.id)));
+  });
+
+  it("filters paginate correctly across the internal page size — `status=active` returns all matching rows", async () => {
+    // Mark 50 of the seeded rows complete so we have a mixed dataset
+    // that crosses the internal page boundary (200). If filtering were
+    // applied AFTER pagination instead of THROUGH it, the active count
+    // could come back wrong.
+    const toComplete = seededIds.slice(0, 50);
+    await prisma.item.updateMany({
+      where: { id: { in: toComplete } },
+      data: { status: "done", completedAt: new Date() },
+    });
+
+    const res = await authRequest("/things?status=active", token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any[];
+    expect(body.every((t: any) => t.status === "active")).toBe(true);
+    expect(body.length).toBe(seededIds.length - toComplete.length);
+
+    // Reset the dataset so subsequent tests in this describe see all 600
+    // again. Don't go through the route's PATCH (rate limit risk).
+    await prisma.item.updateMany({
+      where: { id: { in: toComplete } },
+      data: { status: "active", completedAt: null },
+    });
+  });
+
+  it("respects an explicit `?limit=` request below the default cap", async () => {
+    const res = await authRequest("/things?limit=37", token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any[];
+    expect(body.length).toBeLessThanOrEqual(37);
+  });
+
+  it("clamps an absurd `?limit=` to the hard maximum", async () => {
+    // 999_999 must not OOM the server — the route caps at 5000 internally.
+    const res = await authRequest("/things?limit=999999", token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any[];
+    expect(body.length).toBeLessThanOrEqual(5000);
+  });
+
+  it("never returns rows belonging to a different user — IDOR defense on the hydrate query", async () => {
+    // Defense-in-depth check: paginatedPull already scopes by user, but
+    // the route's hydrate findMany is the second line of defense. If a
+    // future bug let a foreign id leak into the accumulated set, the
+    // hydrate would still drop it because of the userId clause.
+    const otherUser = await createTestUser("Things Pagination Other");
+    await prisma.item.createMany({
+      data: Array.from({ length: 20 }, (_, i) => ({
+        userId: otherUser.userId,
+        type: "task",
+        status: "active",
+        title: `other-${i}`,
+      })),
+    });
+
+    const res = await authRequest("/things", token);
+    const body = (await res.json()) as any[];
+    const titles = new Set(body.map((t: any) => t.title));
+    for (let i = 0; i < 20; i++) {
+      expect(titles.has(`other-${i}`)).toBe(false);
+    }
+  });
+});
+
+/**
+ * Cross-route parity: /things and /sync/pull must surface the same id set
+ * for the items table when called with no filters and a fresh cursor.
+ * They diverged for years before the shared-core refactor, which was the
+ * architectural asymmetry behind the iOS-vs-Electron count divergence.
+ * Pin the parity here so a future drift can't sneak back in.
+ */
+describe("/things ↔ /sync/pull cross-route parity", () => {
+  let token: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    const user = await createTestUser("Sync Things Parity");
+    token = user.token;
+    userId = user.userId;
+    await prisma.item.createMany({
+      data: Array.from({ length: 75 }, (_, i) => ({
+        userId,
+        type: "task",
+        status: "active",
+        title: `parity-${i}`,
+      })),
+    });
+  });
+
+  it("both endpoints return the same id set when no filter is applied", async () => {
+    const thingsRes = await authRequest("/things", token);
+    const thingsBody = (await thingsRes.json()) as any[];
+
+    // Walk /sync/pull until exhausted, collecting items.
+    const seen = new Set<string>();
+    let cursors: Record<string, string> = {};
+    for (let safety = 0; safety < 50; safety++) {
+      const res = await authRequest("/sync/pull", token, {
+        method: "POST",
+        body: JSON.stringify({ protocolVersion: 1, cursors }),
+      });
+      const body = (await res.json()) as any;
+      for (const row of body.changes.items.upserted) seen.add(row.id);
+      const anyMore = Object.values(body.changes).some((c: any) => c.hasMore);
+      cursors = body.cursors;
+      if (!anyMore) break;
+    }
+
+    expect(new Set(thingsBody.map((t: any) => t.id))).toEqual(seen);
   });
 });

@@ -47,11 +47,22 @@ final class PullEngine {
 
     enum PullError: LocalizedError {
         case savePersistFailed(underlying: Error)
+        /// Detected when the server's pagination cursor for a table that
+        /// reported `hasMore=true` does not advance between rounds —
+        /// only possible if the server side regressed. Bail rather than
+        /// infinite-loop; the next sync cycle will retry from the
+        /// (unchanged) cursor against whatever the server's state is by
+        /// then. The `table` field tells you WHICH table is broken — a
+        /// single stuck table shouldn't drag the whole pull into a loop
+        /// just because OTHER tables still have legitimate work to do.
+        case cursorStuck(round: Int, table: String)
 
         var errorDescription: String? {
             switch self {
             case .savePersistFailed(let underlying):
                 return "Pull save failed: \(underlying.localizedDescription)"
+            case .cursorStuck(let round, let table):
+                return "Pull cursor for table '\(table)' stopped advancing on round \(round) — server pagination is broken."
             }
         }
     }
@@ -79,9 +90,25 @@ final class PullEngine {
 
     // MARK: - Pull
 
-    /// Run a single pull cycle. Loops internally (up to `maxRounds`) when
-    /// the server reports `hasMore` — one round per `limit` slice.
-    func pull(maxRounds: Int = 10) async throws -> PullOutcome {
+    /// Soft cap on round count for a single `pull()` invocation. With the
+    /// server-side keyset-merge fix, every round either consumes new
+    /// rows OR converges to `hasMore=false` — so this cap should never
+    /// fire under normal operation. It exists as a watchdog: if a future
+    /// regression breaks cursor monotonicity, the loop bails instead of
+    /// spinning forever. 1000 rounds × the smallest server page (50)
+    /// covers 50k rows per pull, far above any realistic dataset.
+    static let safetyRoundCap = 1000
+
+    /// Run a single pull cycle. Loops internally until every requested
+    /// table reports `hasMore=false`, OR a cursor-stuck safety check
+    /// fires, OR the safety round cap is exhausted.
+    ///
+    /// Cursor-stuck detection: if a round reports `anyHasMore=true` but
+    /// no table's cursor advanced, the server-side pagination is broken
+    /// and continuing would infinite-loop. Bail with an error so the
+    /// next foreground poll has a chance to retry against (presumably)
+    /// fixed server state.
+    func pull() async throws -> PullOutcome {
         var tablesUpserted: [String: Int] = [:]
         var tablesDeleted: [String: Int] = [:]
 
@@ -93,8 +120,12 @@ final class PullEngine {
         // upsertCursor) yielding O(tables × rounds) fetches per pull.
         var cursorCache = loadCursorCache()
 
-        for _ in 0..<maxRounds {
+        for round in 0..<Self.safetyRoundCap {
             let cursors = cursorMap(from: cursorCache)
+            // Snapshot pre-round cursors for the cursor-stuck safety
+            // check below. `Dictionary` has value semantics so this is
+            // a real snapshot, not a reference.
+            let cursorsBeforeRound = cursors
             let response: SyncPullResponse
 
             do {
@@ -125,6 +156,12 @@ final class PullEngine {
             var anyHasMore = false
             var pendingUpsertsThisRound: [String: Int] = [:]
             var pendingDeletesThisRound: [String: Int] = [:]
+            // Track per-table `hasMore` so the cursor-stuck check below
+            // can fire when ANY single table loops without advancing —
+            // a global "all cursors unchanged" check would miss the
+            // case where one table is stuck while another is still
+            // making real progress.
+            var hasMoreByTable: [String: Bool] = [:]
 
             // Yield every `yieldBatch` rows so a big pull doesn't lock up
             // the main actor. SyncEntityMapper.upsert is @MainActor, and on
@@ -172,6 +209,7 @@ final class PullEngine {
 
                 pendingUpsertsThisRound[table] = inserted
                 pendingDeletesThisRound[table] = deleted
+                hasMoreByTable[table] = slice.hasMore
                 if slice.hasMore { anyHasMore = true }
             }
 
@@ -208,6 +246,27 @@ final class PullEngine {
             }
 
             if !anyHasMore { break }
+
+            // Per-table cursor-stuck safety. With the server's keyset-
+            // merge pagination, every table that reports `hasMore=true`
+            // must advance its cursor on the next round. If ANY such
+            // table failed to advance, the server is broken on that
+            // table specifically — continuing would loop at the rate
+            // of (other-table progress) for as long as the bug persists.
+            // Fail loud rather than spin: the next foreground poll
+            // retries against whatever the server's state is by then.
+            // Counts as a real failure so the poll backoff kicks in.
+            let cursorsAfterRound = cursorMap(from: cursorCache)
+            for (table, hasMore) in hasMoreByTable where hasMore {
+                if cursorsBeforeRound[table] == cursorsAfterRound[table] {
+                    let stuckError = PullError.cursorStuck(round: round, table: table)
+                    BrettLog.pull.error(
+                        "pull cursor stuck for \(table, privacy: .public) on round \(round, privacy: .public)"
+                    )
+                    recordPullFailure(error: stuckError)
+                    throw stuckError
+                }
+            }
         }
 
         recordPullSuccess()
