@@ -117,20 +117,23 @@ struct TodaySectionsTests {
         #expect(sections.activeCount == 0)
     }
 
-    @Test func sortingPutsEarliestDueFirst() throws {
+    @Test func sortingPutsNewestCreatedFirst() throws {
+        // Within-bucket sort matches desktop's `/things` route — `createdAt
+        // DESC`, with stable secondary `id`. Was previously `dueDate ASC`,
+        // which produced visibly different ordering across platforms.
         let ctx = try makeContext()
-        let today = Calendar.current.startOfDay(for: Date())
-        let early = itemDue(today.addingTimeInterval(3600))
-        let late = itemDue(today.addingTimeInterval(7200))
-        ctx.insert(early)
-        ctx.insert(late)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let today = cal.startOfDay(for: Date())
+        let dueAt = today.addingTimeInterval(3600)
+        let earlierCreated = Item(userId: "u", title: "first", source: "test", dueDate: dueAt, createdAt: today.addingTimeInterval(-7200))
+        let laterCreated = Item(userId: "u", title: "second", source: "test", dueDate: dueAt, createdAt: today.addingTimeInterval(-3600))
+        ctx.insert(earlierCreated)
+        ctx.insert(laterCreated)
 
-        // Input order is reversed on purpose — bucket() must re-sort by
-        // dueDate ascending. Comparing on dueDate avoids mutating
-        // SwiftData-managed `id` after construction (safer across
-        // @Model macro quirks than explicitly overwriting the UUID).
-        let sections = TodaySections.bucket(items: [late, early], reflowKey: 0)
+        let sections = TodaySections.bucket(items: [earlierCreated, laterCreated], reflowKey: 0)
 
-        #expect(sections.today.map(\.dueDate) == [early.dueDate, late.dueDate])
+        // Newest first — laterCreated (created -3600) should precede earlierCreated.
+        #expect(sections.today.map(\.createdAt) == [laterCreated.createdAt, earlierCreated.createdAt])
     }
 }

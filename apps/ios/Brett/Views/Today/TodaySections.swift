@@ -38,8 +38,21 @@ struct TodaySections {
         return s.overdue.count + s.today.count + s.thisWeek.count
     }
 
+    /// UTC calendar — matches desktop's `getTodayUTC` / `getEndOfWeekUTC`
+    /// (`packages/business/src/index.ts`). Both clients now bucket on
+    /// the same UTC day boundaries so a row in "Today" on iOS is in
+    /// "Today" on desktop, regardless of where the user is. Trade-off:
+    /// users west of UTC see "today" roll over before local midnight;
+    /// users east see it roll over after. Acceptable cost for cross-
+    /// platform consistency, which is what the user explicitly asked for.
+    private static let utcCalendar: Calendar = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }()
+
     /// Bucket items into Overdue / Today / This Week / Next Week / Done Today
-    /// based on local-calendar date math.
+    /// based on UTC-calendar date math (matches desktop).
     ///
     /// - Parameters:
     ///   - items: the full set of live Items to bucket. Archived rows are
@@ -58,14 +71,16 @@ struct TodaySections {
         pendingDoneIDs: Set<String> = []
     ) -> TodaySections {
         _ = reflowKey // force re-derivation on change; see toggle() in the parent
-        let calendar = Calendar.current
+        let calendar = Self.utcCalendar
         let now = Date()
         let startOfToday = calendar.startOfDay(for: now)
         let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday.addingTimeInterval(86_400)
 
-        // End of this week = next Sunday midnight local time.
+        // End of this week = next Sunday midnight UTC. Mirrors
+        // `getEndOfWeekUTC` in packages/business: "if today is Sunday,
+        // next Sunday; otherwise the upcoming Sunday."
         let weekday = calendar.component(.weekday, from: now)
-        let daysUntilEndOfWeek = max(0, 8 - weekday) // Sunday = 1, Saturday = 7
+        let daysUntilEndOfWeek = weekday == 1 ? 7 : (8 - weekday) // Sunday = 1
         let endOfThisWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday) ?? endOfToday
         let endOfNextWeek = calendar.date(byAdding: .day, value: 7, to: endOfThisWeek) ?? endOfThisWeek.addingTimeInterval(7 * 86_400)
 
@@ -107,13 +122,28 @@ struct TodaySections {
             }
         }
 
+        // Sort within each bucket by `createdAt DESC` to match desktop
+        // (`apps/api/src/routes/things.ts:191` — `orderBy: [{ createdAt: "desc" }]`,
+        // never re-sorted client-side). Was previously `dueDate ASC`,
+        // which produced visibly different ordering vs desktop on the
+        // exact same task set. Stable secondary sort by `id` so ties
+        // don't flicker between renders.
+        let activeSort: (Item, Item) -> Bool = {
+            if $0.createdAt != $1.createdAt {
+                return $0.createdAt > $1.createdAt
+            }
+            return $0.id < $1.id
+        }
         return TodaySections(
-            overdue: overdue.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            today: today.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            thisWeek: thisWeek.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
-            nextWeek: nextWeek.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) },
+            overdue: overdue.sorted(by: activeSort),
+            today: today.sorted(by: activeSort),
+            thisWeek: thisWeek.sorted(by: activeSort),
+            nextWeek: nextWeek.sorted(by: activeSort),
             doneToday: doneToday.sorted {
-                ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
+                if let a = $0.completedAt, let b = $1.completedAt, a != b {
+                    return a > b
+                }
+                return $0.id < $1.id
             }
         )
     }
