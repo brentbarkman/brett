@@ -29,6 +29,17 @@ final class AuthManager {
     /// re-validating the session after real backgrounded gaps.
     private var lastRefreshedAt: Date?
 
+    /// True once we've established a working session in this process —
+    /// either via a successful keychain-hydrate refresh or a fresh sign-in.
+    /// Until then, a 401 from the launch-time refresh paths is treated as
+    /// potentially transient (server blip, deploy race, secret-rotation
+    /// race) and we KEEP the user's cached state. Without this gate, a
+    /// single cold-launch 401 wipes the bearer token AND the local
+    /// SwiftData mirror, producing a "I just hard-killed and now I'm
+    /// signed out with no tasks" failure mode. After the first successful
+    /// refresh, 401 escalates to `clearInvalidSession()` as before.
+    private var hasSuccessfullyRefreshed: Bool = false
+
     /// True when a token + user are present. Used by the app-level gate to
     /// decide between SignInView and MainContainer.
     var isAuthenticated: Bool {
@@ -167,9 +178,13 @@ final class AuthManager {
 
     // MARK: - Sign-out
 
-    /// Clears local state and the Keychain entry, then attempts to notify the
-    /// server (best effort). Order is important:
+    /// **User-initiated** sign-out. Wipes local SwiftData on the assumption
+    /// the device may be handed to a different person — the gentler variant
+    /// `clearInvalidSession()` is what we use when the SERVER rejects our
+    /// token (same user, just needs to re-auth, no reason to drop their
+    /// cached items).
     ///
+    /// Order matters:
     ///  1. End the active `Session` first. Cancels the SyncManager's tasks
     ///     (push, pull, poll, debounce) and disconnects SSE so no in-flight
     ///     network completion can race the wipe below and write old-user
@@ -183,11 +198,16 @@ final class AuthManager {
 
         token = nil
         currentUser = nil
+        hasSuccessfullyRefreshed = false
         try? KeychainStore.deleteToken()
         SelectionStore.shared.clear()
         // Clear the mirrored user-id in the App Group so a pending share
         // from this user can't leak into the next sign-in's account.
         SharedConfig.writeCurrentUserId(nil)
+        // Drop the user-switch sentinel too — a deliberate sign-out resets
+        // the device to "no signed-in user," and a future sign-in by the
+        // same person should not be flagged as a switch.
+        SharedConfig.clearLastSignedInUserId()
 
         // Wipe the local SwiftData store. Without this, the next user to
         // sign in on the same device sees the prior user's items / events /
@@ -200,6 +220,36 @@ final class AuthManager {
             try await endpoints.signOut()
         } catch {
             // Server might be offline or the session already gone. Not fatal.
+        }
+    }
+
+    /// **Server-rejected token.** Clears auth state but PRESERVES local
+    /// SwiftData — the user is the same person, they just need to re-auth.
+    /// Wiping their items / lists / events here would force a long full
+    /// re-pull on the next sign-in for no security benefit (the data
+    /// already lives on disk; re-authenticating doesn't change ownership).
+    ///
+    /// Multi-user safety is handled at the next `persist(session:)` call
+    /// instead: it compares the incoming user-id against
+    /// `SharedConfig.lastSignedInUserId` and wipes if they differ.
+    private func clearInvalidSession() async {
+        ActiveSession.end()
+
+        token = nil
+        currentUser = nil
+        hasSuccessfullyRefreshed = false
+        try? KeychainStore.deleteToken()
+        SelectionStore.shared.clear()
+        SharedConfig.writeCurrentUserId(nil)
+        // Note: we deliberately do NOT clear `lastSignedInUserId` here. It
+        // sticks around so persist() can detect a user-switch on the next
+        // sign-in and wipe stale rows defensively.
+
+        do {
+            try await endpoints.signOut()
+        } catch {
+            // The token is already invalid server-side — this call will
+            // likely 401 too. Not fatal.
         }
     }
 
@@ -232,14 +282,32 @@ final class AuthManager {
     /// user record from /users/me, and installs a fresh `Session` so the
     /// mutation queue + sync engine + SSE come alive for this account only.
     private func persist(session: AuthSession) async throws {
+        // User-switch defense. If the previous session ended via
+        // `clearInvalidSession()` (no SwiftData wipe) and a different user
+        // is now signing in, drop the stale rows here so user B's queries
+        // don't render user A's items between sign-in and the first sync
+        // round. Same-user re-sign-in (the common case after a token
+        // expiry) skips this and keeps the local cache warm.
+        if let lastId = SharedConfig.resolveLastSignedInUserId(),
+           lastId != session.user.id {
+            BrettLog.auth.info("User switch detected on sign-in — wiping prior user's local data")
+            PersistenceController.shared.wipeAllData()
+        }
+
         try KeychainStore.writeToken(session.token)
         self.token = session.token
         self.currentUser = session.user
+        // Sign-in counts as an established session — subsequent 401s in
+        // this process should escalate, not be deferred.
+        self.hasSuccessfullyRefreshed = true
 
         // Mirror the current user-id into the App Group so the share
         // extension can stamp captured payloads with the right account —
         // prevents cross-user contamination on account switches.
         SharedConfig.writeCurrentUserId(session.user.id)
+        // Persistent user-switch sentinel. Survives `clearInvalidSession()`
+        // so the next persist() can compare against it.
+        SharedConfig.writeLastSignedInUserId(session.user.id)
 
         installSession(for: session.user.id)
 
@@ -265,20 +333,31 @@ final class AuthManager {
     /// (`com.brett.app.auth`) survives app deletion, which means a token
     /// can persist across reinstalls — including from a build that pointed
     /// at a different API. If the stored token is invalid (expired, wrong
-    /// environment, revoked), we *must* sign out here. Otherwise the app
-    /// stays in a zombie state: `isAuthenticated == true`, UI past login,
-    /// every request 401s, sync fails silently, and there's no user-facing
-    /// escape hatch until Settings gets a sign-out button.
+    /// environment, revoked), we eventually need to clear it. Otherwise the
+    /// app stays in a zombie state: `isAuthenticated == true`, UI past
+    /// login, every request 401s.
+    ///
+    /// **Cold-launch lenience:** until `hasSuccessfullyRefreshed` flips
+    /// true (either via this method or `persist(session:)`), a 401 is
+    /// treated as potentially transient — we log and keep the cached
+    /// state so a one-off launch blip doesn't kick the user back to the
+    /// sign-in screen and force a full re-pull on next sign-in. Once we
+    /// HAVE established a session this process, a subsequent 401 is taken
+    /// at face value and `clearInvalidSession()` runs.
     func refreshCurrentUser() async {
         guard token != nil else { return }
         do {
             let me = try await endpoints.getMe()
             self.currentUser = me
             self.lastRefreshedAt = Date()
+            self.hasSuccessfullyRefreshed = true
             // Mirror to the App Group so the share extension sees the
             // right user-id even on the "already signed in at launch"
             // path (where `persist(session:)` wasn't called this run).
             SharedConfig.writeCurrentUserId(me.id)
+            // Keep the user-switch sentinel current too, in case the
+            // legacy install pre-dates persist() writing it.
+            SharedConfig.writeLastSignedInUserId(me.id)
             // Install a session if this is the keychain-hydrate path
             // (persist() already installed one on fresh sign-in; the call
             // is idempotent because ActiveSession.begin replaces any prior).
@@ -286,9 +365,16 @@ final class AuthManager {
                 installSession(for: me.id)
             }
         } catch APIError.unauthorized {
-            // Token is no good — fall back to the login screen.
-            BrettLog.auth.info("Token rejected — signing out")
-            await signOut()
+            guard hasSuccessfullyRefreshed else {
+                // Cold-launch path: don't clear anything yet. The next
+                // foreground refresh (or scene-active keepalive) will
+                // re-validate; once one of them succeeds, the gate flips
+                // and any later 401 escalates as before.
+                BrettLog.auth.info("Cold-launch /users/me 401 — keeping cached state until next refresh")
+                return
+            }
+            BrettLog.auth.info("Token rejected — clearing invalid session")
+            await clearInvalidSession()
         } catch {
             // Other errors (network, timeout) are transient — leave the
             // existing currentUser in place so the UI doesn't flicker out.
@@ -321,20 +407,30 @@ final class AuthManager {
         do {
             let session = try await endpoints.getSession()
             self.lastRefreshedAt = Date()
+            self.hasSuccessfullyRefreshed = true
             // Session token rotation isn't exposed by better-auth's bearer
             // plugin today (the token string stays the same across
             // extensions). If that changes in a future endpoint contract,
             // persist the new token here.
             if session.user.id != currentUser?.id {
-                // User id changed under us — sign out defensively. This
-                // shouldn't happen but covers the case where the server
-                // reassigned the token to a different account.
+                // User id changed under us — full sign-out (including data
+                // wipe). This shouldn't happen but covers the case where
+                // the server reassigned the token to a different account,
+                // and rendering the prior user's items to the new account
+                // is the exact failure mode we wipe to prevent.
                 BrettLog.auth.error("Session endpoint returned different user id — signing out")
                 await signOut()
             }
         } catch APIError.unauthorized {
-            BrettLog.auth.info("Session invalid — signing out")
-            await signOut()
+            guard hasSuccessfullyRefreshed else {
+                // Cold-launch path: same lenience as `refreshCurrentUser`.
+                // The user keeps their cached state; a later refresh will
+                // either succeed or escalate.
+                BrettLog.auth.info("Cold-launch /api/auth/ios/session 401 — keeping cached state until next refresh")
+                return
+            }
+            BrettLog.auth.info("Session invalid — clearing invalid session")
+            await clearInvalidSession()
         } catch {
             // Network / server blip — leave state in place. The next
             // keepalive will retry.
@@ -352,10 +448,18 @@ final class AuthManager {
     /// Injects a fake session for UI tests. Bypasses Keychain + network and
     /// flips `isAuthenticated` to true so the app transitions straight to
     /// `MainContainer`. DEBUG-only — never compiled into App Store builds.
+    ///
+    /// `hasRefreshed` controls whether the injected state counts as a
+    /// "successfully validated" session (the default — UI tests behave as
+    /// if the user has been signed in for a while). Unit tests that want
+    /// to exercise the cold-launch lenience path pass `false` to simulate
+    /// the "token loaded from keychain, /users/me hasn't returned yet"
+    /// state.
     @MainActor
-    func injectFakeSession(user: AuthUser, token: String) {
+    func injectFakeSession(user: AuthUser, token: String, hasRefreshed: Bool = true) {
         self.token = token
         self.currentUser = user
+        self.hasSuccessfullyRefreshed = hasRefreshed
     }
     #endif
 }
