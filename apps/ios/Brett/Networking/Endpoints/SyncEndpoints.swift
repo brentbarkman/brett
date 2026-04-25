@@ -21,9 +21,14 @@ enum SyncProtocol {
     /// with `CURRENT_PROTOCOL_VERSION` in `apps/api/src/routes/sync.ts`.
     static let version: Int = 1
 
-    /// Default page size for pulls. The server caps individual responses
-    /// regardless; we use a large value to reduce round-trips.
-    static let defaultPullLimit: Int = 500
+    /// Optional client-side override for the per-table page size. Nil
+    /// means "let the server pick per-table defaults" — that's the right
+    /// answer post the server's keyset-merge fix, where defaults are
+    /// items=50 (large rows) and others=200 (metadata). Setting this
+    /// non-nil applies one value to ALL tables (legacy single-knob
+    /// behavior; needed only for tests that want a deterministic page
+    /// boundary).
+    static let defaultPullLimit: Int? = nil
 
     /// The canonical list of tables the pull engine tracks. Order matches
     /// the server's `SYNC_TABLES` constant.
@@ -190,7 +195,10 @@ struct SyncPushRequestBody {
 /// POST body for `/sync/pull`. `null` cursors (first sync) are encoded as JSON null.
 struct SyncPullRequestBody {
     let cursors: [String: String?]
-    let limit: Int
+    /// Optional override applied uniformly to all tables. Nil omits the
+    /// `limit` field from the request entirely so the server's per-table
+    /// defaults kick in (items=50 vs lists=200, etc.).
+    let limit: Int?
 
     func encode() throws -> Data {
         // JSONSerialization requires NSNull for null values — wrap optionals.
@@ -201,11 +209,13 @@ struct SyncPullRequestBody {
                 acc[pair.key] = NSNull()
             }
         }
-        let dict: [String: Any] = [
+        var dict: [String: Any] = [
             "protocolVersion": SyncProtocol.version,
             "cursors": encodedCursors,
-            "limit": limit,
         ]
+        if let limit {
+            dict["limit"] = limit
+        }
         return try JSONSerialization.data(withJSONObject: dict, options: [])
     }
 }
@@ -227,10 +237,12 @@ extension APIClient {
     }
 
     /// POST to `/sync/pull` with per-table cursors. Pass `nil` for tables
-    /// that have never been synced.
+    /// that have never been synced. `limit` defaults to nil → server
+    /// applies per-table page sizes; set non-nil to force a uniform
+    /// page size across every table (rarely useful outside tests).
     func syncPull(
         cursors: [String: String?],
-        limit: Int = SyncProtocol.defaultPullLimit
+        limit: Int? = SyncProtocol.defaultPullLimit
     ) async throws -> SyncPullResponse {
         let body = try SyncPullRequestBody(cursors: cursors, limit: limit).encode()
         let (data, _) = try await rawRequest(
