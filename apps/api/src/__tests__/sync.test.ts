@@ -684,6 +684,62 @@ describe("Sync Push", () => {
     expect(body.results[0].error).toContain("userId");
   });
 
+  /**
+   * Prisma's raw error messages include schema details ("Unique
+   * constraint failed on the fields: (`id`)", "Record to update not
+   * found", etc.) that confirm the existence of soft-deleted rows on
+   * a guessed id and leak internal column names. Pin the sanitisation
+   * here so a future refactor that drops `sanitisePushError` can't
+   * silently re-expose them.
+   */
+  it("CREATE collision returns sanitised public error, not Prisma's raw message", async () => {
+    clearAllRateLimits();
+
+    // Pick an id, create it once, then attempt a second CREATE with the
+    // same id from the same user. Prisma throws P2002; the route must
+    // map that to a stable "duplicate" — never echo the column hint.
+    const collidingId = generateId();
+    const idempotencyKeyA = `dup-create-A-${nonce}-${collidingId}`;
+    const idempotencyKeyB = `dup-create-B-${nonce}-${collidingId}`;
+
+    const firstRes = await authRequest("/sync/push", token, {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: 1,
+        mutations: [{
+          idempotencyKey: idempotencyKeyA,
+          entityType: "item",
+          entityId: collidingId,
+          action: "CREATE",
+          payload: { type: "task", title: "First", status: "active" },
+        }],
+      }),
+    });
+    expect(firstRes.status).toBe(200);
+    expect(((await firstRes.json()) as SyncPushResponse).results[0].status).toBe("applied");
+
+    const secondRes = await authRequest("/sync/push", token, {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: 1,
+        mutations: [{
+          idempotencyKey: idempotencyKeyB,
+          entityType: "item",
+          entityId: collidingId,
+          action: "CREATE",
+          payload: { type: "task", title: "Second", status: "active" },
+        }],
+      }),
+    });
+    expect(secondRes.status).toBe(200);
+    const body = (await secondRes.json()) as SyncPushResponse;
+    expect(body.results[0].status).toBe("error");
+    // Public message must NOT contain Prisma's column hints.
+    expect(body.results[0].error).toBe("duplicate");
+    expect(body.results[0].error).not.toMatch(/Unique constraint/i);
+    expect(body.results[0].error).not.toMatch(/fields:/i);
+  });
+
   it("max mutations exceeded returns 400", async () => {
     clearAllRateLimits();
 

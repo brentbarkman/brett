@@ -65,6 +65,19 @@ export type PaginatedPullArgs = {
   /** Prisma model accessor (e.g. `prisma.item`). Must support `findMany`. */
   prismaModel: { findMany: (args: any) => Promise<any[]> };
 
+  /**
+   * Prisma client used to wrap the live + tombstone queries in a
+   * single transaction (`$transaction([...])`). Without the transaction,
+   * a row's state can change between the two queries — most innocuously
+   * appearing in BOTH `upserted` and `deleted` of the same page (the
+   * client merges then deletes, net correct), but in pathological
+   * timestamp-bump cases it could appear in NEITHER. The transaction
+   * gives both queries a consistent snapshot. Optional for
+   * back-compatibility; when omitted we fall back to two independent
+   * queries, which is correct under low-churn datasets.
+   */
+  prismaClient?: { $transaction: (queries: any[]) => Promise<any[]> };
+
   /** Always scoped to a single user. */
   userId: string;
 
@@ -174,7 +187,7 @@ function compareKeyset(a: { updatedAt: Date; id: string }, b: { updatedAt: Date;
 export async function paginatedPull<
   T extends { id: string; updatedAt: Date; deletedAt: Date | null },
 >(args: PaginatedPullArgs): Promise<PaginatedPullResult<T>> {
-  const { prismaModel, userId, cursor, limit, extraWhere = {}, includeTombstones = true } = args;
+  const { prismaModel, prismaClient, userId, cursor, limit, extraWhere = {}, includeTombstones = true } = args;
 
   if (!Number.isInteger(limit) || limit < 1) {
     throw new Error(`paginatedPull: limit must be a positive integer (got ${limit})`);
@@ -212,28 +225,45 @@ export async function paginatedPull<
     return clauses.length === 1 ? clauses[0] : { AND: clauses };
   }
 
+  // Build the two findMany argument objects up-front so we can either
+  // run them as a $transaction (consistent snapshot) or fall back to
+  // two sequential queries when the caller didn't pass a client.
+  //
   // Live query — soft-delete extension auto-filters to `deletedAt: null`
   // because the resulting `where` has no top-level `deletedAt` key.
-  const live = (await prismaModel.findMany({
+  const liveArgs = {
     where: buildWhere(),
     orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
     take: limit + 1,
-  })) as T[];
+  };
 
-  let dead: T[] = [];
-  if (includeTombstones) {
-    // Tombstone query — `deletedAt: { not: null }` lifted to the OUTER
-    // where (not inside the AND) so the soft-delete extension's bypass
-    // check (`"deletedAt" in where`) sees it. If we put it inside the
-    // AND, the extension would auto-add `deletedAt: null`, contradicting
-    // the tombstone filter and silently returning zero rows.
-    const deadWhere: Record<string, unknown> = { ...buildWhere(), deletedAt: { not: null } };
+  // Tombstone query — `deletedAt: { not: null }` lifted to the OUTER
+  // where (not inside the AND) so the soft-delete extension's bypass
+  // check (`"deletedAt" in where`) sees it. If we put it inside the
+  // AND, the extension would auto-add `deletedAt: null`, contradicting
+  // the tombstone filter and silently returning zero rows.
+  const deadArgs = includeTombstones
+    ? {
+        where: { ...buildWhere(), deletedAt: { not: null } },
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+        take: limit + 1,
+      }
+    : null;
 
-    dead = (await prismaModel.findMany({
-      where: deadWhere,
-      orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-      take: limit + 1,
-    })) as T[];
+  let live: T[];
+  let dead: T[];
+  if (prismaClient && deadArgs) {
+    // Single snapshot for both queries. Eliminates the window where a
+    // row's state can shift between live and tombstone reads.
+    const [liveRows, deadRows] = await prismaClient.$transaction([
+      prismaModel.findMany(liveArgs),
+      prismaModel.findMany(deadArgs),
+    ]);
+    live = liveRows as T[];
+    dead = deadRows as T[];
+  } else {
+    live = (await prismaModel.findMany(liveArgs)) as T[];
+    dead = deadArgs ? ((await prismaModel.findMany(deadArgs)) as T[]) : [];
   }
 
   // Two-way merge by `(updatedAt, id)` ASC. Both inputs are already in

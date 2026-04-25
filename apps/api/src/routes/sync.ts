@@ -120,6 +120,45 @@ const FALLBACK_DEFAULT_LIMIT = 50;
 // the algorithm behind why we don't paginate upserts and tombstones
 // independently anymore.
 
+/**
+ * Map a thrown error from a /sync/push mutation handler into a public
+ * response message safe to send back to the client. Raw Prisma errors
+ * include schema details (column names, constraint names, table
+ * structure) that should never leave the server — they confirm the
+ * existence of soft-deleted records on a guessed id, or hint at
+ * internal modelling that an attacker could pivot from.
+ *
+ * Returns:
+ * - `publicMessage` — what the client sees in `result.error`.
+ * - `logFull` — true when the caller should log the original error
+ *   message server-side. False for benign cases the route handler
+ *   already classified (so we don't spam ops with expected outcomes).
+ */
+function sanitisePushError(err: unknown): { publicMessage: string; logFull: boolean } {
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    switch (err.code) {
+      case "P2002":
+        // Unique constraint violation. Could be a CREATE colliding on
+        // an id (whether live or soft-deleted) — either way "duplicate"
+        // is the only safe public framing.
+        return { publicMessage: "duplicate", logFull: true };
+      case "P2025":
+        // Record to update/delete not found. Caller-facing equivalent
+        // of `not_found` — surface that without leaking the where
+        // clause Prisma echoes.
+        return { publicMessage: "not_found", logFull: false };
+      default:
+        // Any other known Prisma error — never echo it.
+        return { publicMessage: "database_error", logFull: true };
+    }
+  }
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    return { publicMessage: "invalid_payload", logFull: true };
+  }
+  // Genuinely unknown — keep public message generic.
+  return { publicMessage: "internal_error", logFull: true };
+}
+
 export const sync = new Hono<AuthEnv>()
   .use("/*", authMiddleware)
 
@@ -201,8 +240,13 @@ export const sync = new Hono<AuthEnv>()
       // Keyset-merged pull: live + tombstones in one ordered stream, single
       // monotonic cursor. See `paginated-pull.ts` for the algorithm and
       // why the previous independent-pagination approach lost rows.
+      // Pass `prismaClient` so the live + tombstone queries share a
+      // single snapshot — without it, a mutation between the two
+      // queries can leave a row in an inconsistent classification
+      // for that page.
       const result = await paginatedPull({
         prismaModel: model,
+        prismaClient: prisma,
         userId: user.id,
         cursor,
         limit: tableLimit,
@@ -310,10 +354,26 @@ export const sync = new Hono<AuthEnv>()
             };
         }
       } catch (err) {
+        // Don't leak Prisma's raw error messages to clients — they
+        // include schema/column hints (e.g. "Unique constraint failed
+        // on the fields: (`id`)") that confirm the existence of
+        // soft-deleted rows or expose internal column names. Map known
+        // Prisma error codes to stable, sanitised public messages;
+        // server logs keep the full detail for ops.
+        const sanitised = sanitisePushError(err);
+        if (err instanceof Error && sanitised.logFull) {
+          console.warn(
+            "[sync/push] mutation failed:",
+            mutation.action,
+            mutation.entityType,
+            mutation.entityId,
+            err.message,
+          );
+        }
         result = {
           idempotencyKey: mutation.idempotencyKey,
           status: "error",
-          error: err instanceof Error ? err.message : "Unknown error",
+          error: sanitised.publicMessage,
         };
       }
 

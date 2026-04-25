@@ -220,6 +220,7 @@ things.get("/", async (c) => {
     type Row = { id: string; updatedAt: Date; deletedAt: Date | null };
     const result: PaginatedPullResult<Row> = await paginatedPull({
       prismaModel: prisma.item,
+      prismaClient: prisma,
       userId: user.id,
       cursor,
       limit: pageLimit,

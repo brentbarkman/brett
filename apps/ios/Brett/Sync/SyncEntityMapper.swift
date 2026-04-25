@@ -32,6 +32,23 @@ enum SyncEntityMapper {
     ) {
         guard let id = record["id"] as? String, !id.isEmpty else { return }
 
+        // Defense in depth: drop rows whose `userId` doesn't match the
+        // active session. /sync/pull is server-side user-scoped, so under
+        // correct operation every row carries the current user's id.
+        // But if a stale response from a prior account were ever to land
+        // (sign-out → sign-in race, mock URL replay, malicious proxy),
+        // applying its rows would write a foreign userId onto local
+        // models — silent cross-user data leakage. Reject defensively.
+        if let activeUserId = ActiveSession.userId,
+           let recordUserId = record["userId"] as? String,
+           !recordUserId.isEmpty,
+           recordUserId != activeUserId {
+            BrettLog.pull.error(
+                "dropping incoming \(tableName, privacy: .public) row whose userId does not match active session — possible stale-response or cross-user leak"
+            )
+            return
+        }
+
         switch tableName {
         case "lists":
             upsertList(id: id, dict: record, context: context, respectLocalPending: respectLocalPending)

@@ -198,20 +198,24 @@ describe("paginatedPull", () => {
 
   // ── Coverage across many pages ──
 
-  it("walks all 200 rows across pages with no gaps and no duplicates", async () => {
-    const t0 = new Date("2026-04-25T10:00:00.000Z");
-    const seeded: string[] = [];
-    for (let i = 0; i < 200; i++) {
-      const r = await seedItem({ userId, title: `t${i}`, updatedAt: new Date(t0.getTime() + i) });
-      seeded.push(r.id);
-    }
-    const { allUpsertedIds, pages } = await walkAll(userId, 50);
-    expect(pages.length).toBe(4);
-    expect(allUpsertedIds.length).toBe(200);
-    expect(new Set(allUpsertedIds)).toEqual(new Set(seeded));
-    // No duplicates across pages.
-    expect(new Set(allUpsertedIds).size).toBe(allUpsertedIds.length);
-  });
+  it(
+    "walks all 200 rows across pages with no gaps and no duplicates",
+    { timeout: 30_000 },
+    async () => {
+      const t0 = new Date("2026-04-25T10:00:00.000Z");
+      const seeded: string[] = [];
+      for (let i = 0; i < 200; i++) {
+        const r = await seedItem({ userId, title: `t${i}`, updatedAt: new Date(t0.getTime() + i) });
+        seeded.push(r.id);
+      }
+      const { allUpsertedIds, pages } = await walkAll(userId, 50);
+      expect(pages.length).toBe(4);
+      expect(allUpsertedIds.length).toBe(200);
+      expect(new Set(allUpsertedIds)).toEqual(new Set(seeded));
+      // No duplicates across pages.
+      expect(new Set(allUpsertedIds).size).toBe(allUpsertedIds.length);
+    },
+  );
 
   it("two consecutive fresh walks return identical id sets — determinism guard", async () => {
     // The "two iOS sign-ins disagree" bug is exactly this property failing

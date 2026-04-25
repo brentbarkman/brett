@@ -294,10 +294,22 @@ final class MutationQueue: MutationQueueProtocol {
 
     /// HTTP status codes that are never worth retrying: the server will
     /// reject the payload deterministically no matter how many times we
-    /// resend it. Spec §2.4 + §RESILIENCE lists 400/422 as permanent; we
-    /// treat the other 4xx "client error" codes the same way.
+    /// resend it. Spec §2.4 + §RESILIENCE lists 400/422 as permanent.
+    /// Other 4xx codes are EITHER transient or permanent — we treat the
+    /// transient ones (`408`, `429`) and `5xx` the same as a network
+    /// error (retry on the next push cycle), and only the truly
+    /// permanent client errors (everything else in the 4xx band) as
+    /// dead-on-arrival.
+    ///
+    /// 429 in particular: a transient rate-limit blip used to be marked
+    /// dead, which silently dropped the user's mutation forever. The
+    /// next push cycle will retry instead.
     private static func isPermanent4xx(_ code: Int?) -> Bool {
         guard let code else { return false }
-        return (400...499).contains(code)
+        // Out of the 4xx band → not 4xx-permanent.
+        if !(400...499).contains(code) { return false }
+        // Transient throttling / timeout — retry, don't kill.
+        if code == 408 || code == 429 { return false }
+        return true
     }
 }
