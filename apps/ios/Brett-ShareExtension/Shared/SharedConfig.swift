@@ -106,6 +106,30 @@ enum SharedConfig {
         sharedDefaults?.string(forKey: userIdKey)
     }
 
+    // MARK: - Last signed-in user (user-switch sentinel)
+
+    private static let lastSignedInUserIdKey = "brett.lastSignedInUserId"
+
+    /// Persistent record of the most recently signed-in user. Distinct
+    /// from `currentUserId` in two ways: it survives a server-rejected
+    /// token clear (`AuthManager.clearInvalidSession`) and it's only
+    /// dropped by an explicit `signOut()`. The next sign-in's
+    /// `persist(session:)` reads this to detect "different user signing
+    /// in on this device" and wipe stale local data — without it, leaving
+    /// rows on disk during a token-rejection clear (cheap re-auth path)
+    /// would leak the previous user's items into the new account.
+    static func writeLastSignedInUserId(_ userId: String) {
+        sharedDefaults?.set(userId, forKey: lastSignedInUserIdKey)
+    }
+
+    static func resolveLastSignedInUserId() -> String? {
+        sharedDefaults?.string(forKey: lastSignedInUserIdKey)
+    }
+
+    static func clearLastSignedInUserId() {
+        sharedDefaults?.removeObject(forKey: lastSignedInUserIdKey)
+    }
+
     // MARK: - Share queue directory
 
     /// Absolute URL of the App Group directory where the extension writes

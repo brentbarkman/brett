@@ -9,6 +9,7 @@ import { enqueueEmbed, deleteEmbeddings, assembleItemText, assembleContentText, 
 import type { ItemAssemblerInput, ContentAssemblerInput } from "@brett/ai";
 import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
 import { getEmbeddingProvider } from "../lib/embedding-provider.js";
+import { paginatedPull, type PaginatedPullResult } from "../lib/sync/paginated-pull.js";
 
 const things = new Hono<AuthEnv>();
 
@@ -145,52 +146,129 @@ async function verifyListOwnership(listId: string, userId: string) {
 things.use("*", authMiddleware);
 
 // GET /things — list things with optional filters
+//
 // Supports date range filters:
 //   dueBefore=ISO   — items with dueDate <= value (inclusive)
 //   dueAfter=ISO    — items with dueDate > value (exclusive)
 //   completedAfter=ISO — items with completedAt >= value
-// Hard cap so a heavy-user load doesn't serialize the entire Item table on
-// every desktop open. `500` comfortably covers Today/Upcoming/Inbox working
-// sets; the clients paginate via the dueBefore/dueAfter/completedAfter filters
-// for historical data.
-const THINGS_LIST_DEFAULT_LIMIT = 500;
-const THINGS_LIST_MAX_LIMIT = 2000;
+//
+// Goes through the same `paginatedPull` core that /sync/pull uses so both
+// clients see the same correct, deterministic, no-row-skip data — the
+// previous direct `findMany({ take: 500 })` quietly truncated power
+// users and used a different code path than mobile, which was the
+// architectural asymmetry behind the Electron-vs-iOS divergence.
+//
+// `paginatedPull` returns rows in `(updatedAt, id)` ascending keyset
+// order; we accumulate across pages and re-sort by `createdAt` desc at
+// the end to preserve the existing UI ordering contract. Sorting in
+// memory is fine: the `limit` cap below bounds N.
+const THINGS_INTERNAL_PAGE_SIZE = 200;          // per-page server walk; metadata-light tables can use a bigger page
+const THINGS_LIST_DEFAULT_MAX_ROWS = 2000;      // upper bound on the accumulated walk per request
+const THINGS_LIST_HARD_MAX_ROWS = 5000;         // never let `?limit=` push past this — prevents server OOM on bad input
 
 things.get("/", async (c) => {
   const user = c.get("user");
   const { listId, type, status, source, dueBefore, dueAfter, completedAfter, search, limit } = c.req.query();
 
-  const where: Record<string, unknown> = { userId: user.id };
+  // `extraWhere` is layered AND with `userId` and the cursor inside
+  // `paginatedPull`. Keep `userId` and `deletedAt` out of here — those
+  // are owned by the pull function.
+  const extraWhere: Record<string, unknown> = {};
   if (search) {
-    where.OR = [
+    extraWhere.OR = [
       { title: { contains: search, mode: "insensitive" } },
       { notes: { contains: search, mode: "insensitive" } },
     ];
   }
-  if (listId) where.listId = listId;
-  if (type) where.type = type;
-  if (status) where.status = status;
-  if (source) where.source = source;
+  if (listId) extraWhere.listId = listId;
+  if (type) extraWhere.type = type;
+  if (status) extraWhere.status = status;
+  if (source) extraWhere.source = source;
   if (dueBefore && dueAfter) {
-    where.dueDate = { gt: new Date(dueAfter), lte: new Date(dueBefore) };
+    extraWhere.dueDate = { gt: new Date(dueAfter), lte: new Date(dueBefore) };
   } else if (dueBefore) {
-    where.dueDate = { lte: new Date(dueBefore) };
+    extraWhere.dueDate = { lte: new Date(dueBefore) };
   } else if (dueAfter) {
-    where.dueDate = { gt: new Date(dueAfter) };
+    extraWhere.dueDate = { gt: new Date(dueAfter) };
   }
-  if (completedAfter) where.completedAt = { gte: new Date(completedAfter) };
+  if (completedAfter) extraWhere.completedAt = { gte: new Date(completedAfter) };
 
-  const parsedLimit = limit ? parseInt(limit, 10) : THINGS_LIST_DEFAULT_LIMIT;
-  const take = Number.isFinite(parsedLimit) && parsedLimit > 0
-    ? Math.min(parsedLimit, THINGS_LIST_MAX_LIMIT)
-    : THINGS_LIST_DEFAULT_LIMIT;
+  // Resolve the "stop walking once we've collected N rows" cap. Honors
+  // `?limit=` if sane, else falls back to the default.
+  const parsedLimit = limit ? parseInt(limit, 10) : THINGS_LIST_DEFAULT_MAX_ROWS;
+  const maxRows = Number.isFinite(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, THINGS_LIST_HARD_MAX_ROWS)
+    : THINGS_LIST_DEFAULT_MAX_ROWS;
 
-  const items = await prisma.item.findMany({
-    where,
-    include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } } },
-    orderBy: [{ createdAt: "desc" }],
-    take,
-  });
+  // Walk paginatedPull until we've either collected `maxRows` ids or
+  // exhausted the user's matching set. `includeTombstones: false` —
+  // /things is a view-shaped read; deleted rows have nothing to show.
+  // We only collect ids here — the relation-aware re-fetch below
+  // produces the actual response payload.
+  const ids: string[] = [];
+  let cursor: string | null = null;
+  // Defensive watchdog: round-count cap that's far above any legitimate
+  // walk. With page size 200 and maxRows 5000, a healthy walk is at
+  // most 25 rounds. 100 rounds means something is wrong (e.g. a future
+  // bug where the cursor stops advancing) and we should bail rather
+  // than spin.
+  const ROUND_CAP = 100;
+  for (let round = 0; round < ROUND_CAP; round++) {
+    const remaining = maxRows - ids.length;
+    if (remaining <= 0) break;
+    const pageLimit = Math.min(THINGS_INTERNAL_PAGE_SIZE, remaining);
+    type Row = { id: string; updatedAt: Date; deletedAt: Date | null };
+    const result: PaginatedPullResult<Row> = await paginatedPull({
+      prismaModel: prisma.item,
+      prismaClient: prisma,
+      userId: user.id,
+      cursor,
+      limit: pageLimit,
+      extraWhere,
+      includeTombstones: false,
+    });
+    for (const row of result.upserted) {
+      ids.push(row.id);
+    }
+    if (!result.hasMore) break;
+    if (!result.nextCursor || cursor === result.nextCursor) {
+      // Belt-and-braces: paginatedPull guarantees monotonic advancement
+      // when hasMore is true, but if some future bug breaks that, fail
+      // closed instead of looping forever.
+      break;
+    }
+    cursor = result.nextCursor;
+  }
+
+  // Re-fetch with relations + ordering for the accumulated id set. Two
+  // round trips (paginatedPull then this hydrate) is the price for
+  // routing /things through the shared sync core; the alternative —
+  // accepting a `select`/`include` parameter on `paginatedPull` —
+  // would couple the sync engine to view-specific shaping. The id set
+  // is bounded by `maxRows`, so the second query stays cheap.
+  //
+  // Defense in depth: re-scope by `userId` even though `paginatedPull`
+  // already enforced it on the id collection step. If a future bug
+  // anywhere upstream (bad spread, refactor, prisma extension issue)
+  // let a foreign id leak into `ids`, the hydrate would happily return
+  // it. Belt-and-braces.
+  //
+  // Note on the live-vs-hydrate window: a row can be soft-deleted
+  // BETWEEN the paginatedPull walk and this query, in which case the
+  // soft-delete extension's auto-`deletedAt: null` filter drops it.
+  // The response then under-counts by one row vs the walk's id list.
+  // That's acceptable for a view-shaped read — the next sync round
+  // surfaces the tombstone — but worth knowing.
+  const items = ids.length === 0
+    ? []
+    : await prisma.item.findMany({
+        where: { id: { in: ids }, userId: user.id },
+        include: {
+          list: { select: { name: true } },
+          meetingNote: { select: { title: true, calendarEventId: true } },
+        },
+        orderBy: [{ createdAt: "desc" }],
+      });
 
   const enriched = await enrichWithScoutNames(items);
   const thingsList = enriched.map((item) => itemToThing(item as any));

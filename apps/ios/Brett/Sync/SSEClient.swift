@@ -67,6 +67,21 @@ final class SSEClient {
     /// cadence quickly. Exposed via init for tests.
     private let sustainedHealthyThreshold: TimeInterval
 
+    /// Maximum gap allowed between consecutive bytes from the SSE
+    /// server. The server sends a `: heartbeat` comment every ~30s, so
+    /// any silence past ≈2.5× that is a sign the connection has gone
+    /// dead at the network layer (broken intermediary, NAT timeout
+    /// without TCP RST). The default 75s strikes that balance:
+    /// resilient to a single missed heartbeat, fast enough that the
+    /// user isn't stranded on a phantom-connected stream for 10 min
+    /// (which is what the prior 600s timeout allowed).
+    ///
+    /// Wired into `URLRequest.timeoutInterval` — that value is the max
+    /// gap between received bytes for streaming requests, RESET on
+    /// every byte. So healthy heartbeats keep the connection alive
+    /// indefinitely; only true silence triggers a reconnect.
+    private let silentStreamWatchdog: TimeInterval
+
     // MARK: - Event stream
 
     /// Raw stream of parsed events. `SSEEventHandler.start()` is the primary
@@ -104,8 +119,10 @@ final class SSEClient {
         session: URLSession = .shared,
         maxBackoffSeconds: TimeInterval = 30,
         backoffMultiplier: TimeInterval = 1,
-        sustainedHealthyThreshold: TimeInterval = 300
+        sustainedHealthyThreshold: TimeInterval = 300,
+        silentStreamWatchdog: TimeInterval = 75
     ) {
+        self.silentStreamWatchdog = silentStreamWatchdog
         self.apiClient = apiClient
         self.session = session
         self.maxBackoffSeconds = maxBackoffSeconds
@@ -234,12 +251,19 @@ final class SSEClient {
         request.httpMethod = "GET"
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        // Long timeout — SSE streams are expected to stay open indefinitely.
-        // The server sends a heartbeat every ~30s, but URLSession's default
-        // timeout (60s) would still fire during lulls. Give ourselves plenty
-        // of headroom; if the connection truly dies, bytes iteration will
-        // throw and the outer loop handles the reconnect.
-        request.timeoutInterval = 600
+        // `timeoutInterval` on a streaming request is the max gap allowed
+        // between received bytes — it RESETS each time data arrives.
+        // The server sends `: heartbeat` every 30s, so any byte gap past
+        // `silentStreamWatchdog` (default 75s, ≈2.5× heartbeat) means
+        // the connection has gone dead at the network layer (broken NAT,
+        // intermediary that swallowed the FIN, etc.). When that timeout
+        // fires, `bytes(for:)` throws and the outer loop reconnects.
+        //
+        // The previous 600s value was a "give the stream lots of headroom"
+        // misread — heartbeats already reset the timer, so a healthy
+        // stream never trips a tighter timeout, and a dead stream
+        // shouldn't have to wait 10 minutes to be detected.
+        request.timeoutInterval = silentStreamWatchdog
 
         let (bytes, response) = try await session.bytes(for: request)
         try Self.validateStreamResponse(response)
