@@ -9,7 +9,7 @@ import SwiftData
 /// adding a mutable field is a one-place change.
 @MainActor
 @Observable
-final class ListStore {
+final class ListStore: Clearable {
     private let context: ModelContext
     // `@ObservationIgnored` is required: @Observable + `lazy var` are
     // incompatible (the macro's generated init accessor cannot reference
@@ -19,11 +19,19 @@ final class ListStore {
 
     init(context: ModelContext) {
         self.context = context
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
         self.init(context: PersistenceController.shared.mainContext)
     }
+
+    // MARK: - Clearable
+
+    /// No in-memory caches today — reads go through SwiftData. Conformance
+    /// exists so the regression-guard test passes; Wave B may flesh this
+    /// out if per-instance state appears.
+    func clearForSignOut() {}
 
     // MARK: - Fetch
 

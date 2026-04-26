@@ -13,7 +13,7 @@ import SwiftData
 /// the snapshot / apply / payload / previousValues helpers all read from it.
 @MainActor
 @Observable
-final class ItemStore {
+final class ItemStore: Clearable {
     private let context: ModelContext
     // Lazy so tests/previews that never enqueue don't pay the allocation,
     // and so the queue always shares the store's ModelContext.
@@ -28,11 +28,20 @@ final class ItemStore {
 
     init(context: ModelContext) {
         self.context = context
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
         self.init(context: PersistenceController.shared.mainContext)
     }
+
+    // MARK: - Clearable
+
+    /// No in-memory caches today — every read goes through SwiftData
+    /// `@Query` or `fetch()`. Conformance exists so the regression-guard
+    /// test in `ClearableConformanceTests` passes; Wave B may fill this in
+    /// if any per-instance caches get added.
+    func clearForSignOut() {}
 
     // MARK: - Fetch
 

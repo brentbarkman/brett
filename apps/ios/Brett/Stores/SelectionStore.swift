@@ -12,7 +12,7 @@ import Observation
 /// changes. Main-actor because every consumer is a view.
 @MainActor
 @Observable
-final class SelectionStore {
+final class SelectionStore: Clearable {
     /// The currently-selected task id. Non-nil triggers the task detail
     /// sheet in `MainContainer`.
     var selectedTaskId: String?
@@ -35,7 +35,9 @@ final class SelectionStore {
 
     static let shared = SelectionStore()
 
-    init() {}
+    init() {
+        ClearableStoreRegistry.register(self)
+    }
 
     /// Convenience: clear all selections. Called on sign-out.
     func clear() {
@@ -43,5 +45,13 @@ final class SelectionStore {
         selectedEventId = nil
         lastCreatedItemId = nil
         pendingSettingsTab = nil
+    }
+
+    // MARK: - Clearable
+
+    /// Sign-out hook. Delegates to the existing `clear()` so any direct
+    /// callers continue to work unchanged.
+    func clearForSignOut() {
+        clear()
     }
 }
