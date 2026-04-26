@@ -21,7 +21,7 @@ struct ContentPreview: View {
         // No meaningful content → render nothing at all. Keeps the detail
         // view visually tight for plain tasks.
         if hasRenderableContent {
-            variant
+            content
                 .sheet(item: $externalURL) { identified in
                     SafariView(url: identified.url)
                         .ignoresSafeArea()
@@ -31,6 +31,63 @@ struct ContentPreview: View {
                         ArticleReaderView(item: item)
                     }
                 }
+        }
+    }
+
+    /// Failed extractions render an explicit error card with an "Open
+    /// original" link, mirroring the desktop `ErrorState`. Without this,
+    /// failed items fell through into the per-type variant which showed
+    /// a misleading empty card (e.g. "Tweet content unavailable") with
+    /// no signal that anything went wrong server-side.
+    @ViewBuilder
+    private var content: some View {
+        if item.contentStatus == ContentStatus.failed.rawValue {
+            extractionFailedCard
+        } else {
+            variant
+        }
+    }
+
+    @ViewBuilder
+    private var extractionFailedCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(red: 0.95, green: 0.70, blue: 0.20).opacity(0.85))
+                Text("Preview unavailable")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.65))
+            }
+            if let raw = item.sourceUrl, let url = URL(string: raw) {
+                Button {
+                    HapticManager.light()
+                    externalURL = IdentifiedURL(url: url)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Open original")
+                            .font(.system(size: 12, weight: .medium))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(BrettColors.cerulean.opacity(0.90))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.thinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.03))
+                }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         }
     }
 
