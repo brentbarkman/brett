@@ -14,7 +14,7 @@ import Observation
 /// doesn't bring it back, but tomorrow's briefing will reappear.
 @MainActor
 @Observable
-final class BriefingStore {
+final class BriefingStore: Clearable {
     /// Raw Markdown content from the server. `nil` when no briefing exists yet
     /// for today.
     private(set) var briefing: String?
@@ -53,7 +53,26 @@ final class BriefingStore {
 
     init(api: APIClient = APIClient.shared) {
         self.api = api
+        ClearableStoreRegistry.register(self)
     }
+
+    // MARK: - Clearable
+
+    func clearForSignOut() {
+        briefing = nil
+        generatedAt = nil
+        lastError = nil
+        isGenerating = false
+    }
+
+    #if DEBUG
+    /// Test-only: populate in-memory state without touching the network.
+    func injectForTesting(briefing: String?, error: String? = nil) {
+        self.briefing = briefing
+        self.generatedAt = briefing != nil ? Date() : nil
+        self.lastError = error
+    }
+    #endif
 
     // MARK: - Public API
 
