@@ -381,6 +381,9 @@ struct SyncEntityMapperTests {
         try context.save()
 
         SyncEntityMapper.hardDelete(tableName: "items", id: "item-1", context: context)
+        // Caller owns the save now — `hardDelete` no longer flushes
+        // implicitly so the actor batch path can save once per round.
+        try context.save()
 
         let fetched: [Item] = (try? context.fetch(FetchDescriptor<Item>())) ?? []
         #expect(fetched.isEmpty)

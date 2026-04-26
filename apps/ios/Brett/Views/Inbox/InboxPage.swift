@@ -39,17 +39,16 @@ struct InboxPage: View {
     /// the page fetched imperatively via `itemStore.fetchInbox()` and
     /// needed a manual poke to re-render.
     ///
-    /// The @Query filter is intentionally narrow (`deletedAt == nil`) for
-    /// two reasons: (1) the broader 4-condition predicate that mirrors
-    /// `ItemStore.fetchInbox` times out Swift's type checker under newer
-    /// toolchains when combined with mixed `Date?` / `String?` nil checks,
-    /// and (2) we want the final filter to include the authenticated
-    /// `userId`, which can't be captured in a `@Query` initializer. The
-    /// remaining filters (inbox-shape + userId scoping) run in
-    /// `allInboxItems`. Row volume is bounded per user, so Swift-side
-    /// filtering is cheap.
+    /// The @Query filter is intentionally narrow (`deletedAt == nil` plus
+    /// the unbounded-side `dueDate == nil` shape). The full inbox
+    /// predicate (listId / status / snoozedUntil) trips the Swift 6
+    /// type checker once mixed `Date?` and `String?` nil checks land in
+    /// the same `#Predicate` body, so the remaining narrowing happens in
+    /// Swift via `allInboxItems`. The pre-filter at least cuts out every
+    /// item with a due date — typically the dominant share of a power
+    /// user's set, since most tasks get scheduled.
     @Query(
-        filter: #Predicate<Item> { $0.deletedAt == nil },
+        filter: #Predicate<Item> { $0.deletedAt == nil && $0.dueDate == nil },
         sort: \Item.createdAt,
         order: .reverse
     ) private var nonDeletedItemsAnyUser: [Item]
@@ -73,7 +72,6 @@ struct InboxPage: View {
         return nonDeletedItemsAnyUser.filter { item in
             item.userId == uid
                 && item.listId == nil
-                && item.dueDate == nil
                 && item.status == activeStatus
                 && (item.snoozedUntil == nil || item.snoozedUntil! <= now)
         }

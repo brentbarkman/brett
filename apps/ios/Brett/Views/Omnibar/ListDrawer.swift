@@ -300,13 +300,25 @@ struct ListDrawer: View {
     }
 
     private func pillModels(from lists: [ItemList]) -> [PillModel] {
-        lists.map { list in
-            let count = userItems.filter { $0.listId == list.id && $0.itemStatus != .done }.count
-            return PillModel(
+        // Bucket items by listId in one pass so the per-list count is
+        // O(1) lookup instead of O(items) re-filter. Prior shape was
+        // `lists.map { list in userItems.filter { ... }.count }` —
+        // O(lists × items) on every drawer render. With ~10 lists and
+        // a few hundred active items that's a few thousand string
+        // comparisons per render, enough to feel as drawer-open lag
+        // for power users.
+        var countsByListId: [String: Int] = [:]
+        countsByListId.reserveCapacity(lists.count)
+        for item in userItems where item.itemStatus != .done {
+            guard let listId = item.listId else { continue }
+            countsByListId[listId, default: 0] += 1
+        }
+        return lists.map { list in
+            PillModel(
                 id: list.id,
                 name: list.name,
                 color: ListColor(colorClass: list.colorClass) ?? .slate,
-                itemCount: count,
+                itemCount: countsByListId[list.id] ?? 0,
                 sortOrder: list.sortOrder
             )
         }

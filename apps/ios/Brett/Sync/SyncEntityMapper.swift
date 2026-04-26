@@ -23,7 +23,13 @@ enum SyncEntityMapper {
 
     /// Apply a server record to an existing local model or insert a new one.
     /// Mirrors the pull-engine behaviour: never clobbers local pending writes.
-    @MainActor
+    ///
+    /// Caller-actor agnostic: the function only mutates the passed
+    /// `ModelContext`, so it runs correctly on whatever actor owns that
+    /// context. Sync moved off `@MainActor` so this had to lose its
+    /// own annotation; the cross-user defense reads via `SharedConfig`,
+    /// which is nonisolated UserDefaults storage rather than the
+    /// main-actor `ActiveSession` registry.
     static func upsert(
         tableName: String,
         record: [String: Any],
@@ -39,7 +45,7 @@ enum SyncEntityMapper {
         // (sign-out → sign-in race, mock URL replay, malicious proxy),
         // applying its rows would write a foreign userId onto local
         // models — silent cross-user data leakage. Reject defensively.
-        if let activeUserId = ActiveSession.userId,
+        if let activeUserId = SharedConfig.resolveCurrentUserId(),
            let recordUserId = record["userId"] as? String,
            !recordUserId.isEmpty,
            recordUserId != activeUserId {
@@ -75,7 +81,12 @@ enum SyncEntityMapper {
 
     /// Hard-delete a record by (table, id). Pulls are authoritative for
     /// deletions, so we ignore local pending state here.
-    @MainActor
+    ///
+    /// Caller owns the save: this function only stages the delete on the
+    /// passed context. SyncDataActor batches dozens of deletes per round
+    /// and saves once at the end; saving inside this helper would amplify
+    /// to one save per row, defeating the batching. Standalone callers
+    /// (SSE event handler, ad-hoc cleanups) save their context explicitly.
     static func hardDelete(
         tableName: String,
         id: String,
@@ -101,8 +112,6 @@ enum SyncEntityMapper {
         default:
             return
         }
-        // Flush the delete so subsequent fetches don't return the ghost.
-        try? context.save()
     }
 
     // MARK: - Item
@@ -631,7 +640,6 @@ enum SyncEntityMapper {
 
     // MARK: - Per-table upsert wrappers
 
-    @MainActor
     private static func upsertItem(
         id: String,
         dict: [String: Any],
@@ -651,7 +659,6 @@ enum SyncEntityMapper {
         }
     }
 
-    @MainActor
     private static func upsertList(
         id: String,
         dict: [String: Any],
@@ -671,7 +678,6 @@ enum SyncEntityMapper {
         }
     }
 
-    @MainActor
     private static func upsertCalendarEvent(
         id: String,
         dict: [String: Any],
@@ -691,7 +697,6 @@ enum SyncEntityMapper {
         }
     }
 
-    @MainActor
     private static func upsertCalendarEventNote(
         id: String,
         dict: [String: Any],
@@ -711,7 +716,6 @@ enum SyncEntityMapper {
         }
     }
 
-    @MainActor
     private static func upsertScout(
         id: String,
         dict: [String: Any],
@@ -731,7 +735,6 @@ enum SyncEntityMapper {
         }
     }
 
-    @MainActor
     private static func upsertScoutFinding(
         id: String,
         dict: [String: Any],
@@ -751,7 +754,6 @@ enum SyncEntityMapper {
         }
     }
 
-    @MainActor
     private static func upsertBrettMessage(
         id: String,
         dict: [String: Any],
@@ -771,7 +773,6 @@ enum SyncEntityMapper {
         }
     }
 
-    @MainActor
     private static func upsertAttachment(
         id: String,
         dict: [String: Any],

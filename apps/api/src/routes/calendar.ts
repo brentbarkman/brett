@@ -246,7 +246,14 @@ calendar.get("/events/:id/notes", async (c) => {
     },
   });
 
+  // Include the note `id` so on-demand iOS clients (which no longer
+  // replicate calendar_event_notes via /sync/pull) can upsert into local
+  // SwiftData using the server's primary key. Without it, an offline
+  // edit followed by a push would CREATE a new row with a fresh local
+  // id and collide with the existing (calendarEventId, userId) unique
+  // constraint server-side.
   return c.json({
+    id: note?.id ?? null,
     content: note?.content ?? null,
     updatedAt: note?.updatedAt.toISOString() ?? null,
   });

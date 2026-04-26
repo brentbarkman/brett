@@ -384,7 +384,14 @@ final class SyncManager {
     // MARK: - Helpers
 
     private func describe(_ error: Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        // APIError gets its diagnostic-quality message: includes the
+        // URLError code for `.unknown` so the red-dot alert reveals the
+        // actual transport failure ("Timed out", "Connection lost", etc.)
+        // instead of bare "APIError.unknown" with no signal.
+        if let apiError = error as? APIError {
+            return apiError.diagnosticMessage
+        }
+        return (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
 }
 

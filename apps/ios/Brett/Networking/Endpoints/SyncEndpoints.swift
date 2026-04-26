@@ -30,17 +30,22 @@ enum SyncProtocol {
     /// boundary).
     static let defaultPullLimit: Int? = nil
 
-    /// The canonical list of tables the pull engine tracks. Order matches
-    /// the server's `SYNC_TABLES` constant.
+    /// The canonical list of tables the pull engine replicates locally.
+    ///
+    /// Hot path only — these are the tables every UI surface needs to render
+    /// immediately on cold launch, even offline. Server-side filters narrow
+    /// each one further (active/recent items, ±14d events, non-archived
+    /// lists/scouts) so the local mirror stays small.
+    ///
+    /// Cold tables fetched on-demand via the per-resource GET endpoints
+    /// (`brett-chat`, `scout findings`, `event notes`, item attachments)
+    /// are not in this list. The server's `/sync/pull` honors the omission
+    /// and skips those tables entirely for clients that don't request them.
     static let tables: [String] = [
         "lists",
         "items",
         "calendar_events",
-        "calendar_event_notes",
         "scouts",
-        "scout_findings",
-        "brett_messages",
-        "attachments",
     ]
 }
 

@@ -24,6 +24,13 @@ final class PushEngine {
     private let mutationQueue: MutationQueueProtocol
     private let apiClient: APIClient
     private let context: ModelContext
+    /// Background ModelActor for the per-row apply of server-confirmed
+    /// records. The mutation queue (status transitions, idempotency,
+    /// compaction) stays on main because `MutationCompactor` reasons
+    /// about the entire pending queue transactionally; only the domain
+    /// row apply moves off main. Optional only for the in-memory test
+    /// path.
+    private let syncData: SyncDataActor?
 
     // MARK: - Summary
 
@@ -52,15 +59,19 @@ final class PushEngine {
     init(
         mutationQueue: MutationQueueProtocol,
         apiClient: APIClient = .shared,
-        persistence: PersistenceController = .shared
+        persistence: PersistenceController = .shared,
+        syncData: SyncDataActor? = nil
     ) {
         self.mutationQueue = mutationQueue
         self.apiClient = apiClient
         self.context = persistence.mainContext
+        self.syncData = syncData ?? SyncDataActor(modelContainer: persistence.container)
     }
 
     /// Test-oriented init — accepts any `ModelContext` so in-memory
-    /// containers created by tests can be wired in directly.
+    /// containers created by tests can be wired in directly. Tests apply
+    /// server records through the test context (no background actor) so
+    /// existing test fixtures don't need to care about cross-actor scheduling.
     init(
         mutationQueue: MutationQueueProtocol,
         apiClient: APIClient,
@@ -69,6 +80,7 @@ final class PushEngine {
         self.mutationQueue = mutationQueue
         self.apiClient = apiClient
         self.context = context
+        self.syncData = nil
     }
 
     // MARK: - Push (single pass)
@@ -115,61 +127,164 @@ final class PushEngine {
 
         var applied = 0, merged = 0, conflicts = 0, errors = 0
 
+        // First pass — classify every result. Collect:
+        //   * records to apply on the background actor
+        //   * queue transitions to commit on main AFTER the apply lands
+        //   * conflict logs to write
+        // No queue mutations happen here yet; we want the domain row
+        // update to become observable BEFORE the queue says "applied,"
+        // otherwise a UI re-fetch in between could see stale data while
+        // the queue claims the mutation succeeded. Doing the classify
+        // pass first also lets us skip any queue work if the bg apply
+        // throws — the next push retries via the server's idempotency
+        // key and we never claim success against a row we couldn't
+        // commit.
+        var serverRecordsToApply: [SyncDataActor.ServerRecord] = []
+        // Snapshot the matched mutation so we don't have to re-query
+        // by idempotency key after the await (the queue may have
+        // shifted in the meantime if a debounced push landed).
+        struct PendingDecision {
+            enum Action { case complete, conflict(message: String), error(message: String) }
+            let mutationId: String
+            let action: Action
+            let conflictResult: SyncPushResult?
+            let mutation: MutationQueueEntry
+        }
+        var decisions: [PendingDecision] = []
+
         for result in response.results {
             guard let mutation = mutationQueue.getByIdempotencyKey(result.idempotencyKey) else {
-                // Server returned a result for a mutation we don't recognise;
-                // skip. This can happen in tests, or if the queue was wiped.
                 continue
             }
-
             switch result.status {
             case .applied:
-                applyServerRecord(result.record, to: mutation)
-                mutationQueue.complete(id: mutation.id)
+                if let record = result.record {
+                    serverRecordsToApply.append(SyncDataActor.ServerRecord(
+                        table: tableName(for: mutation.entityType),
+                        record: record
+                    ))
+                }
+                decisions.append(PendingDecision(
+                    mutationId: mutation.id,
+                    action: .complete,
+                    conflictResult: nil,
+                    mutation: mutation
+                ))
                 applied += 1
 
             case .merged:
-                applyServerRecord(result.record, to: mutation)
-                logMergeConflict(result: result, mutation: mutation)
-                mutationQueue.complete(id: mutation.id)
+                if let record = result.record {
+                    serverRecordsToApply.append(SyncDataActor.ServerRecord(
+                        table: tableName(for: mutation.entityType),
+                        record: record
+                    ))
+                }
+                decisions.append(PendingDecision(
+                    mutationId: mutation.id,
+                    action: .complete,
+                    conflictResult: result,
+                    mutation: mutation
+                ))
                 merged += 1
 
             case .conflict:
-                markLocalConflict(mutation: mutation)
-                logMergeConflict(result: result, mutation: mutation)
                 let message = result.error ?? "Server rejected mutation (conflict)."
-                mutationQueue.fail(id: mutation.id, error: message, errorCode: 409)
+                decisions.append(PendingDecision(
+                    mutationId: mutation.id,
+                    action: .conflict(message: message),
+                    conflictResult: result,
+                    mutation: mutation
+                ))
                 conflicts += 1
 
             case .notFound:
-                // The record already matches the client's desired state
-                // (a DELETE of a non-existent row, or a record the server
-                // reaped). Drop the mutation.
-                mutationQueue.complete(id: mutation.id)
+                decisions.append(PendingDecision(
+                    mutationId: mutation.id,
+                    action: .complete,
+                    conflictResult: nil,
+                    mutation: mutation
+                ))
                 applied += 1
 
             case .error:
                 let message = result.error ?? "Unknown server error."
-                mutationQueue.fail(id: mutation.id, error: message, errorCode: nil)
+                decisions.append(PendingDecision(
+                    mutationId: mutation.id,
+                    action: .error(message: message),
+                    conflictResult: nil,
+                    mutation: mutation
+                ))
                 errors += 1
             }
         }
 
-        // Persist all the changes we made to @Model records + the conflict log.
-        //
-        // If this save fails, the mutation queue status transitions AND the
-        // server-record upserts we applied are both rolled back by SwiftData
-        // (they're pending context changes). On next launch, `resetInFlight`
-        // flips in-flight rows back to pending, the push retries, and the
-        // server's idempotency key handles the duplicate. Logged at error
-        // level so sysdiagnose records the stuck-save condition.
+        // Apply the server-confirmed records FIRST on the background
+        // actor so the domain row update is committed (and observable to
+        // every @Query subscriber via SwiftData history) before we mark
+        // any mutation "applied." If this throws, we skip the
+        // corresponding queue transitions — the next push retries via
+        // the server's idempotency key, which is exactly what
+        // server-side dedupe is for. Better to redo the network round
+        // trip than to claim local-side success against a row that
+        // didn't materialise.
+        var bgApplyFailed = false
+        if !serverRecordsToApply.isEmpty {
+            do {
+                if let syncData {
+                    try await syncData.applyServerRecords(serverRecordsToApply)
+                } else {
+                    for r in serverRecordsToApply {
+                        SyncEntityMapper.upsert(
+                            tableName: r.table,
+                            record: r.record,
+                            context: context,
+                            respectLocalPending: false
+                        )
+                    }
+                }
+            } catch {
+                BrettLog.push.error("push server-record apply failed: \(String(describing: error), privacy: .public)")
+                bgApplyFailed = true
+            }
+        }
+
+        // Second pass — commit queue transitions + conflict logs on
+        // main. If the bg apply failed we skip the .complete actions
+        // for results that needed a row write so the queue stays
+        // pending and the next push retries. Conflicts and errors are
+        // safe to commit either way (they don't depend on a row write).
+        for decision in decisions {
+            switch decision.action {
+            case .complete:
+                if bgApplyFailed && decision.conflictResult?.record != nil {
+                    // This .applied/.merged depended on a row apply
+                    // that didn't land — leave the mutation pending.
+                    continue
+                }
+                if let result = decision.conflictResult {
+                    logMergeConflict(result: result, mutation: decision.mutation)
+                }
+                mutationQueue.complete(id: decision.mutationId)
+            case .conflict(let message):
+                markLocalConflict(mutation: decision.mutation)
+                if let result = decision.conflictResult {
+                    logMergeConflict(result: result, mutation: decision.mutation)
+                }
+                mutationQueue.fail(id: decision.mutationId, error: message, errorCode: 409)
+            case .error(let message):
+                mutationQueue.fail(id: decision.mutationId, error: message, errorCode: nil)
+            }
+        }
+
+        // Save main context: mutation queue transitions + conflict logs
+        // (and, in the test path, the in-line server records too).
         do {
             try context.save()
         } catch {
             BrettLog.push.error("push save failed: \(String(describing: error), privacy: .public)")
         }
 
-        let remaining = mutationQueue.pendingEntries(limit: 1).count
+        let remaining = mutationQueue.pendingCount()
         let outcome = PushOutcome(
             applied: applied,
             merged: merged,
@@ -248,20 +363,6 @@ final class PushEngine {
     }
 
     // MARK: - Record application / conflict bookkeeping
-
-    /// Write the server's authoritative record back into SwiftData, bypassing
-    /// the pending-write guard (we know the push succeeded, so local state
-    /// should catch up to the server).
-    private func applyServerRecord(_ record: [String: Any]?, to mutation: MutationQueueEntry) {
-        guard let record else { return }
-        let table = tableName(for: mutation.entityType)
-        SyncEntityMapper.upsert(
-            tableName: table,
-            record: record,
-            context: context,
-            respectLocalPending: false
-        )
-    }
 
     /// Set `_syncStatus = "conflict"` on the local record corresponding to
     /// a rejected mutation. If we can't find the record the mutation refers
@@ -364,7 +465,7 @@ final class PushEngine {
         health.isPushing = isPushing
         // We compute absolute counts rather than deltas — accurate across
         // app restarts and safe even if the delta drifts.
-        health.pendingMutationCount = mutationQueue.pendingEntries(limit: 10_000).count
+        health.pendingMutationCount = mutationQueue.pendingCount()
         health.deadMutationCount = deadCount()
         if success {
             health.lastSuccessfulPushAt = Date()

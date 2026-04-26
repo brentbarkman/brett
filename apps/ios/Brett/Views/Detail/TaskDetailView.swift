@@ -256,9 +256,36 @@ private struct TaskDetailBody: View {
         Task { await refreshFromServer() }
     }
 
+    /// Hydrate the chat panel from the server. Chat history is no longer
+    /// replicated via /sync/pull — the local `BrettMessage` table only
+    /// holds whatever assistant responses streamed during this install,
+    /// so it's an incomplete view (no user messages, no cross-device
+    /// history). Source of truth is `GET /brett/chat/:itemId`, cached
+    /// in `RemoteCache` for the lifetime of the process.
+    ///
+    /// Run order on a cold open:
+    ///   1. Show local SwiftData immediately (`MessageStore.fetchForItem`)
+    ///      so the panel renders without a network round-trip on
+    ///      reasonable connections — kept as a soft fallback for true
+    ///      offline.
+    ///   2. Fetch latest from server in a Task; replace the panel with
+    ///      the server's authoritative ordering when it lands.
     private func hydrateChat() {
         let persisted = messageStore.fetchForItem(itemId, userId: authManager.currentUser?.id)
         chatStore.hydrate(itemId: itemId, from: persisted)
+
+        Task {
+            do {
+                let page = try await RemoteCache.shared.chatHistoryForItem(itemId)
+                await MainActor.run {
+                    chatStore.hydrate(itemId: itemId, from: page.messages)
+                }
+            } catch {
+                // Network error — keep the local hydrate. The chat panel
+                // already renders SOMETHING; surfacing a banner here is
+                // worse than a quiet fallback.
+            }
+        }
     }
 
     private func refreshFromServer() async {

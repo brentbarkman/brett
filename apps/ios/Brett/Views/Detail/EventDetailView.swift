@@ -32,6 +32,13 @@ struct EventDetailView: View {
     @State private var relatedItems: [APIClient.RelatedItem] = []
     @State private var meetingHistory: APIClient.MeetingHistoryResponse?
     @State private var isLoadingAsides = false
+    /// Guard so back-and-forward navigation through the detail stack
+    /// doesn't re-hit `/events/:id/related-items` and
+    /// `/events/:id/meeting-history` on every re-appear. SwiftUI's
+    /// `.task` re-fires whenever the view is re-inserted; without this
+    /// flag a 3-deep navigation pop-push double-hits both endpoints.
+    /// Notes are cached separately by `RemoteCache`.
+    @State private var asidesLoaded = false
 
     private var api: APIClient { APIClient.shared }
 
@@ -392,16 +399,70 @@ struct EventDetailView: View {
     }
 
     private func loadAsides() async {
+        // Notes go through RemoteCache (TTL handles freshness). Related
+        // items + meeting history are fetched once per view-mount
+        // because they're stable for the duration of a session — no
+        // mutation path changes them — and re-fetching on every nav
+        // re-appear was a double-hit per stack pop-push.
+        guard !asidesLoaded else {
+            // Refresh notes only — those CAN change while the view is
+            // backgrounded (the user might have edited from desktop).
+            if let noteResp = try? await RemoteCache.shared.eventNote(eventId: eventId),
+               let id = noteResp.id,
+               let content = noteResp.content,
+               let updatedAt = noteResp.updatedAt {
+                let userId = authManager.currentUser?.id ?? event?.userId ?? ""
+                if !userId.isEmpty {
+                    calendarStore.applyServerNote(
+                        id: id,
+                        eventId: eventId,
+                        userId: userId,
+                        content: content,
+                        updatedAt: updatedAt
+                    )
+                    if !isNotesFocused && notesDraft.isEmpty {
+                        notesDraft = content
+                    }
+                }
+            }
+            return
+        }
         isLoadingAsides = true
         defer { isLoadingAsides = false }
         async let related = api.fetchEventRelatedItems(eventId: eventId)
         async let history = api.fetchEventMeetingHistory(eventId: eventId)
+        async let note = RemoteCache.shared.eventNote(eventId: eventId)
 
         if let relatedResp = try? await related {
             relatedItems = relatedResp.relatedItems
         }
         if let historyResp = try? await history {
             meetingHistory = historyResp
+        }
+        asidesLoaded = true
+        // Notes are no longer replicated via /sync/pull. Fetch on-open and
+        // mirror into local SwiftData using the server's primary id so a
+        // subsequent user edit pushes as an UPDATE (not a CREATE that
+        // would collide with the unique constraint).
+        if let noteResp = try? await note,
+           let id = noteResp.id,
+           let content = noteResp.content,
+           let updatedAt = noteResp.updatedAt {
+            let userId = authManager.currentUser?.id ?? event?.userId ?? ""
+            if !userId.isEmpty {
+                calendarStore.applyServerNote(
+                    id: id,
+                    eventId: eventId,
+                    userId: userId,
+                    content: content,
+                    updatedAt: updatedAt
+                )
+                // Sync the editor draft only if the user hasn't started
+                // typing — overwriting their input would feel hostile.
+                if !isNotesFocused && notesDraft.isEmpty {
+                    notesDraft = content
+                }
+            }
         }
     }
 

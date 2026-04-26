@@ -29,6 +29,11 @@ final class PullEngine {
 
     private let apiClient: APIClient
     private let context: ModelContext
+    /// Background actor that owns the per-row upsert/delete + save. Keeps
+    /// the dominant cost of a pull off the main run loop. Optional only
+    /// for the in-memory test path, which still drives applies through
+    /// the test context directly.
+    private let syncData: SyncDataActor?
 
     // MARK: - Summary
 
@@ -70,22 +75,29 @@ final class PullEngine {
     // MARK: - Init
 
     /// Production initialiser — borrows the shared persistence container.
+    /// `syncData` runs the per-row apply on a background `@ModelActor`
+    /// so the heavy work doesn't block the main run loop.
     init(
         apiClient: APIClient = .shared,
-        persistence: PersistenceController = .shared
+        persistence: PersistenceController = .shared,
+        syncData: SyncDataActor? = nil
     ) {
         self.apiClient = apiClient
         self.context = persistence.mainContext
+        self.syncData = syncData ?? SyncDataActor(modelContainer: persistence.container)
     }
 
     /// Test-oriented init — accepts any `ModelContext` for in-memory
-    /// containers in test suites.
+    /// containers in test suites. The test path applies rows directly
+    /// through the test context (no background actor) so existing
+    /// tests don't need to care about cross-actor scheduling.
     init(
         apiClient: APIClient,
         context: ModelContext
     ) {
         self.apiClient = apiClient
         self.context = context
+        self.syncData = nil
     }
 
     // MARK: - Pull
@@ -163,60 +175,76 @@ final class PullEngine {
             // making real progress.
             var hasMoreByTable: [String: Bool] = [:]
 
-            // Yield every `yieldBatch` rows so a big pull doesn't lock up
-            // the main actor. SyncEntityMapper.upsert is @MainActor, and on
-            // a 500-item page each row takes ~200-500µs — which sums to
-            // ~100-250ms of contiguous main-thread work without yields.
-            // `Task.yield()` lets UI gestures, @Query refreshes, and other
-            // main-actor tasks interleave. `isSyncing` in SyncManager
-            // prevents another pull from racing in.
-            let yieldBatch = 100
-            var sinceYield = 0
-
+            // Build the per-table slices for the round. The actual
+            // upsert + delete + save runs on `SyncDataActor` (a
+            // `@ModelActor` with its own background context) so the
+            // heaviest cost — fetch-by-id, apply fields, save —
+            // doesn't block the main run loop. Without that hop we'd
+            // sprinkle `Task.yield()` to let the UI breathe; the
+            // background actor obviates that, and the yields disappear.
+            var slices: [SyncDataActor.PullSlice] = []
+            slices.reserveCapacity(SyncProtocol.tables.count)
             for table in SyncProtocol.tables {
                 guard let slice = response.changes[table] else { continue }
-
-                var inserted = 0
-                for record in slice.upserted {
-                    SyncEntityMapper.upsert(
-                        tableName: table,
-                        record: record,
-                        context: context,
-                        respectLocalPending: true
-                    )
-                    inserted += 1
-                    sinceYield += 1
-                    if sinceYield >= yieldBatch {
-                        sinceYield = 0
-                        await Task.yield()
-                    }
-                }
-
-                var deleted = 0
-                for id in slice.deleted {
-                    SyncEntityMapper.hardDelete(
-                        tableName: table,
-                        id: id,
-                        context: context
-                    )
-                    deleted += 1
-                    sinceYield += 1
-                    if sinceYield >= yieldBatch {
-                        sinceYield = 0
-                        await Task.yield()
-                    }
-                }
-
-                pendingUpsertsThisRound[table] = inserted
-                pendingDeletesThisRound[table] = deleted
+                slices.append(SyncDataActor.PullSlice(
+                    table: table,
+                    upserts: slice.upserted,
+                    deletes: slice.deleted
+                ))
                 hasMoreByTable[table] = slice.hasMore
                 if slice.hasMore { anyHasMore = true }
             }
 
-            // Advance cursors in the same context transaction as the rows
-            // — save() below commits them atomically, so we can't end up
-            // with "cursor advanced, rows lost" or "rows inserted, cursor
-            // stale."
+            do {
+                if let syncData {
+                    let counts = try await syncData.applyPullRound(slices)
+                    for (table, c) in counts {
+                        pendingUpsertsThisRound[table] = c.upserted
+                        pendingDeletesThisRound[table] = c.deleted
+                    }
+                } else {
+                    // Test path — apply against the engine's own
+                    // (test-supplied) context so in-memory tests can
+                    // assert against a single shared store.
+                    for slice in slices {
+                        var inserted = 0
+                        for record in slice.upserts {
+                            SyncEntityMapper.upsert(
+                                tableName: slice.table,
+                                record: record,
+                                context: context,
+                                respectLocalPending: true
+                            )
+                            inserted += 1
+                        }
+                        var deleted = 0
+                        for id in slice.deletes {
+                            SyncEntityMapper.hardDelete(
+                                tableName: slice.table,
+                                id: id,
+                                context: context
+                            )
+                            deleted += 1
+                        }
+                        pendingUpsertsThisRound[slice.table] = inserted
+                        pendingDeletesThisRound[slice.table] = deleted
+                    }
+                    try context.save()
+                }
+            } catch {
+                BrettLog.pull.error("pull apply failed: \(String(describing: error), privacy: .public)")
+                recordPullFailure(error: error)
+                throw PullError.savePersistFailed(underlying: error)
+            }
+
+            // Advance cursors on the main context. Cursor rows are tiny
+            // and infrequently saved — keeping them on main avoids a
+            // second cross-actor hop on every round. The order
+            // (rows-first, cursors-second) is deliberate: if the cursor
+            // save fails after the row save succeeded, the next pull
+            // re-fetches the same rows and idempotent upsert handles
+            // the duplicate. The reverse failure mode (cursor advanced,
+            // rows lost) is impossible because rows save first.
             for (table, cursor) in response.cursors {
                 upsertCursor(
                     tableName: table,
@@ -228,9 +256,7 @@ final class PullEngine {
             do {
                 try context.save()
             } catch {
-                // Propagate: outer SyncManager will surface the error and
-                // the next sync starts from the same cursor (idempotent).
-                BrettLog.pull.error("pull save failed: \(String(describing: error), privacy: .public)")
+                BrettLog.pull.error("pull cursor save failed: \(String(describing: error), privacy: .public)")
                 recordPullFailure(error: error)
                 throw PullError.savePersistFailed(underlying: error)
             }
