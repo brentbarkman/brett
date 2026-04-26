@@ -228,7 +228,15 @@ struct ListsPage: View {
     private func createList() {
         guard let userId = authManager.currentUser?.id else { return }
         HapticManager.light()
-        _ = listStore.create(userId: userId, name: "Untitled")
+        do {
+            _ = try listStore.create(userId: userId, name: "Untitled")
+        } catch {
+            // Atomic create failed (SwiftData save threw). Surface a haptic
+            // so the user knows nothing happened rather than silently
+            // swallowing the error.
+            BrettLog.store.error("ListsPage createList failed: \(String(describing: error), privacy: .public)")
+            HapticManager.error()
+        }
     }
 
 }

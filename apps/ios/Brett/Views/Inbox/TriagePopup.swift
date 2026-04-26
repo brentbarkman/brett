@@ -300,7 +300,16 @@ struct TriagePopup: View {
     private func createAndMove() {
         let trimmed = newListName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let userId, !userId.isEmpty else { return }
-        let list = listStore.create(userId: userId, name: trimmed)
+        let list: ItemList
+        do {
+            list = try listStore.create(userId: userId, name: trimmed)
+        } catch {
+            // Atomic create failed — keep the popup open so the user can
+            // retry rather than silently swallowing the loss.
+            BrettLog.store.error("TriagePopup createAndMove failed: \(String(describing: error), privacy: .public)")
+            HapticManager.error()
+            return
+        }
         commitMove(listId: list.id)
     }
 }

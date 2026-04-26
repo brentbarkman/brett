@@ -115,4 +115,41 @@ struct MutationAtomicityTests {
         ).first
         #expect(refreshed?.status == ItemStatus.active.rawValue, "rollback should restore active status")
     }
+
+    // MARK: - ListStore
+
+    @Test func listCreateRollsBackOnSaveFailure() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let throwingSaver = ThrowingSaverWrappingLive(live: LiveSaver(context: context))
+        let store = ListStore(context: context, saver: throwingSaver)
+
+        #expect(throws: ThrowingSaverWrappingLive.InjectedError.self) {
+            _ = try store.create(userId: "alice", name: "Test rollback")
+        }
+
+        let lists = try context.fetch(FetchDescriptor<ItemList>())
+        #expect(lists.filter { $0.name == "Test rollback" }.isEmpty)
+
+        let queueEntries = try context.fetch(FetchDescriptor<MutationQueueEntry>())
+        #expect(queueEntries.filter { $0.entityType == "list" }.isEmpty)
+    }
+
+    @Test func listUpdateRollsBackOnSaveFailure() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let liveStore = ListStore(context: context, saver: LiveSaver(context: context))
+        let list = try liveStore.create(userId: "alice", name: "Original")
+        let originalName = list.name
+        let listId = list.id
+
+        let throwingStore = ListStore(
+            context: context,
+            saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context))
+        )
+        throwingStore.update(id: listId, changes: ["name": "Updated"])
+
+        let refreshed = try context.fetch(
+            FetchDescriptor<ItemList>(predicate: #Predicate { $0.id == listId })
+        ).first
+        #expect(refreshed?.name == originalName, "list update rollback should restore original name")
+    }
 }

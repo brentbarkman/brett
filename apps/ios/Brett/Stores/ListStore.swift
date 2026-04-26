@@ -11,14 +11,19 @@ import SwiftData
 @Observable
 final class ListStore: Clearable {
     private let context: ModelContext
+    /// Injection seam for `context.save()` so mutation atomicity tests can
+    /// simulate save failures and assert the store rolls back. Production
+    /// callers leave this defaulted to `LiveSaver(context: context)`.
+    @ObservationIgnored private let saver: ModelContextSaving
     // `@ObservationIgnored` is required: @Observable + `lazy var` are
     // incompatible (the macro's generated init accessor cannot reference
     // lazy storage). The mutation queue is an implementation detail — views
     // don't observe it — so ignoring it for observation is also correct.
     @ObservationIgnored private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
-    init(context: ModelContext) {
+    init(context: ModelContext, saver: ModelContextSaving? = nil) {
         self.context = context
+        self.saver = saver ?? LiveSaver(context: context)
         ClearableStoreRegistry.register(self)
     }
 
@@ -72,8 +77,15 @@ final class ListStore: Clearable {
 
     // MARK: - Mutate
 
+    /// Create a new list locally and enqueue a CREATE mutation.
+    ///
+    /// The optimistic insert + queued mutation are committed in a single
+    /// `context.save()`. If that save fails, the rollback discards both,
+    /// keeping the model and the mutation queue in lockstep — without
+    /// rollback, a partial-failure leaves a row visible to `@Query` with
+    /// no queue entry, and the create never reaches the server.
     @discardableResult
-    func create(userId: String, name: String, colorClass: String = "bg-gray-500") -> ItemList {
+    func create(userId: String, name: String, colorClass: String = "bg-gray-500") throws -> ItemList {
         let now = Date()
         let list = ItemList(
             userId: userId,
@@ -86,7 +98,17 @@ final class ListStore: Clearable {
         list._syncStatus = SyncStatus.pendingCreate.rawValue
         context.insert(list)
         enqueueCreate(list)
-        save()
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback discards both the optimistic list insert AND the
+            // queued mutation entry so model + queue stay aligned.
+            saver.rollback()
+            BrettLog.store.error("ListStore create save failed: \(String(describing: error), privacy: .public)")
+            throw error
+        }
+
         ActiveSession.syncManager?.schedulePushDebounced()
         return list
     }
@@ -131,7 +153,19 @@ final class ListStore: Clearable {
             previousValues: previousValues,
             beforeSnapshot: beforeSnapshot
         )
-        save()
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback the in-memory mutation AND the queued
+            // MutationQueueEntry insert together. Without this, the field
+            // change would remain visible to @Query while the queue had no
+            // entry, so the edit would never reach the server.
+            saver.rollback()
+            BrettLog.store.error("ListStore update save failed: \(String(describing: error), privacy: .public)")
+            return
+        }
+
         ActiveSession.syncManager?.schedulePushDebounced()
     }
 
@@ -171,14 +205,6 @@ final class ListStore: Clearable {
         }
     }
 
-    private func save() {
-        do {
-            try context.save()
-        } catch {
-            BrettLog.store.error("ListStore save failed: \(String(describing: error), privacy: .public)")
-        }
-    }
-
     private func enqueueCreate(_ list: ItemList) {
         var payload: [String: Any] = list.mutableFieldSnapshot()
         payload["id"] = list.id
@@ -186,7 +212,13 @@ final class ListStore: Clearable {
         payload["createdAt"] = list.createdAt
         payload["updatedAt"] = list.updatedAt
 
-        mutationQueue.enqueue(
+        // Insert directly rather than going through `MutationQueue.enqueue`:
+        // that helper does eager compaction + commits a save mid-method,
+        // which would split the model insert and queue-entry insert across
+        // two transactions and break the atomic-rollback guarantee. A
+        // brand-new CREATE never has anything to compact against, so the
+        // helper's savings don't apply here.
+        let entry = MutationQueueEntry(
             entityType: "list",
             entityId: list.id,
             action: .create,
@@ -194,6 +226,7 @@ final class ListStore: Clearable {
             method: .post,
             payload: JSONCodec.encode(payload)
         )
+        context.insert(entry)
     }
 
     private func enqueueUpdate(

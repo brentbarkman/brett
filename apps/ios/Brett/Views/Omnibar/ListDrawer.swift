@@ -355,11 +355,19 @@ struct ListDrawer: View {
             cancelDraft()
             return
         }
-        _ = listStore.create(
-            userId: userId,
-            name: trimmed,
-            colorClass: draftColor.rawValue
-        )
+        do {
+            _ = try listStore.create(
+                userId: userId,
+                name: trimmed,
+                colorClass: draftColor.rawValue
+            )
+        } catch {
+            // Atomic create failed — keep the draft open so the user can
+            // retry rather than silently dropping the input.
+            BrettLog.store.error("ListDrawer commitDraft failed: \(String(describing: error), privacy: .public)")
+            HapticManager.error()
+            return
+        }
         HapticManager.success()
         isCreating = false
         draftName = ""
