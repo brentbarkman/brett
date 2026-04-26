@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { safeFetch, _isPrivateIPForTesting as isPrivateIP } from "../lib/ssrf-guard.js";
+import {
+  safeFetch,
+  _isPrivateIPForTesting as isPrivateIP,
+  _guardedLookupForTesting as guardedLookup,
+} from "../lib/ssrf-guard.js";
 
 describe("isPrivateIP", () => {
   // IPv4 ranges that must be blocked
@@ -50,6 +54,61 @@ describe("isPrivateIP", () => {
   });
 });
 
+describe("guardedLookup callback shape", () => {
+  // undici 7's connect path calls our lookup with `{ all: true }` and expects
+  // the callback to return an ARRAY of `{address, family}` records. Returning
+  // the classic `(err, addressString, family)` shape causes undici to throw
+  // ERR_INVALID_IP_ADDRESS — silently breaks every safeFetch in production.
+  // These tests pin both call shapes.
+
+  function callLookup(
+    hostname: string,
+    options: any,
+  ): Promise<{ err: NodeJS.ErrnoException | null; result: unknown[] }> {
+    return new Promise((resolve) => {
+      // Capture all callback args so we can assert on the second-arg shape,
+      // not just (err, address, family). undici calls back with (err, addresses[]).
+      guardedLookup(hostname, options, (...args: unknown[]) => {
+        resolve({ err: args[0] as NodeJS.ErrnoException | null, result: args.slice(1) });
+      });
+    });
+  }
+
+  it("returns an array when called with { all: true } (undici 7 contract)", async () => {
+    const { err, result } = await callLookup("example.com", { all: true });
+    expect(err).toBeNull();
+    // Second callback arg must be an array of {address, family} records.
+    expect(Array.isArray(result[0])).toBe(true);
+    const addresses = result[0] as Array<{ address: string; family: number }>;
+    expect(addresses.length).toBeGreaterThan(0);
+    for (const addr of addresses) {
+      expect(typeof addr.address).toBe("string");
+      expect(addr.family).toBe(4);
+    }
+  });
+
+  it("returns (address, family) when called without all (classic Node contract)", async () => {
+    const { err, result } = await callLookup("example.com", {});
+    expect(err).toBeNull();
+    // Classic shape: callback(null, addressString, family).
+    expect(typeof result[0]).toBe("string");
+    expect(result[1]).toBe(4);
+  });
+
+  it("blocks single private IPv4 in classic shape", async () => {
+    // localhost resolves to 127.0.0.1 — must be rejected with EBLOCKED_PRIVATE_IP.
+    const { err } = await callLookup("localhost", {});
+    expect(err).not.toBeNull();
+    expect(err?.code).toBe("EBLOCKED_PRIVATE_IP");
+  });
+
+  it("blocks all-private results in array shape", async () => {
+    const { err } = await callLookup("localhost", { all: true });
+    expect(err).not.toBeNull();
+    expect(err?.code).toBe("EBLOCKED_PRIVATE_IP");
+  });
+});
+
 describe("safeFetch", () => {
   it("rejects non-http(s) protocols before resolving DNS", async () => {
     await expect(safeFetch("ftp://example.com/foo")).rejects.toThrow(/Blocked protocol/);
@@ -89,5 +148,15 @@ describe("safeFetch", () => {
       caught = err;
     }
     expect(caught).toBeDefined();
+  });
+
+  it("succeeds against a real public host (regression: undici 7 lookup contract)", async () => {
+    // Pins the bug where guardedLookup returned the classic shape while
+    // undici 7 called it with `{ all: true }` and expected an array — every
+    // safeFetch in production silently failed with ERR_INVALID_IP_ADDRESS.
+    // example.com is RFC-2606 reserved + IANA-stable, safe to hit from CI.
+    const res = await safeFetch("https://example.com/", { timeoutMs: 10_000 });
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(400);
   });
 });
