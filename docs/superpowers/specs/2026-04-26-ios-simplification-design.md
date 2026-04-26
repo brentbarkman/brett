@@ -64,11 +64,9 @@ Each wave ships as its own PR `main → release`. We do not start a wave until t
    - Each store conforms; `PersistenceController.wipeAllData()` (or, more precisely, `ActiveSession.tearDown`) calls `clearForSignOut()` on every registered store before wiping SwiftData.
    - Stores register themselves at init via a lightweight registry (extend the pattern `ChatStoreRegistry` already uses, or generalize it).
 
-4. **Delete dead scaffolding** (verify usage first)
-   - `RelinkTask.swift` — only the static `parse()` is referenced; verify with `git log -S "RelinkTask"`.
-   - `ConflictLogEntry` — only written, never surfaced. Delete model + writer in `PushEngine`.
-   - `SyncHealth` — same.
-   - If any are actually load-bearing for an unshipped feature, leave them and note it.
+4. **Delete dead scaffolding** — DROPPED.
+   - Verification before plan-writing showed all three candidates are live: `RelinkTask.parse` is called from `TaskRow`; `ConflictLogEntry` and `SyncHealth` are surfaced in `SyncHealthSettingsView` and consumed by Today/Inbox/Lists badge displays.
+   - Wave C may revisit if any remain unsurfaced after Wave B's view rework.
 
 ### What we explicitly do NOT do in Wave A
 
