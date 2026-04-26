@@ -127,6 +127,98 @@ struct TodaySectionsTests {
         #expect(sections.activeCount == 0)
     }
 
+    // MARK: - Boundary parity with desktop
+
+    /// Fixed UTC moments used by the boundary parity tests. Date math
+    /// here is fully deterministic — these tests must hold regardless of
+    /// what day or hour the suite runs.
+    private static func utcDate(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
+        var c = DateComponents()
+        c.year = y; c.month = m; c.day = d; c.hour = h
+        c.timeZone = TimeZone(identifier: "UTC")
+        return Calendar(identifier: .gregorian).date(from: c)!
+    }
+
+    @Test func sundayDueOnSaturdayBucketsAsThisWeek() throws {
+        // The exact bug we shipped against: on Saturday, a task due the
+        // upcoming Sunday must land in `thisWeek` to match desktop's
+        // `computeUrgency` (`packages/business/src/index.ts`), which treats
+        // `dueMs <= endOfThisWeek` (Sunday midnight UTC) as inclusive.
+        let ctx = try makeContext()
+        let saturday = Self.utcDate(2026, 4, 25, 12)         // Sat noon UTC
+        let sundayDue = Self.utcDate(2026, 4, 26, 0)         // Sun 00:00 UTC — boundary
+        let item = itemDue(sundayDue)
+        ctx.insert(item)
+
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
+
+        #expect(sections.thisWeek.map(\.id) == [item.id])
+        #expect(sections.nextWeek.isEmpty)
+    }
+
+    @Test func sundayDueLaterInDayOnSaturdayBucketsAsThisWeek() throws {
+        // Same day-of-week boundary, but with a non-midnight time on the
+        // due date. Desktop strips to `utcDay(dueDate)` so any moment on
+        // Sunday counts as "this week" today (Saturday).
+        let ctx = try makeContext()
+        let saturday = Self.utcDate(2026, 4, 25, 12)
+        let sundayLate = Self.utcDate(2026, 4, 26, 23)       // Sun 23:00 UTC
+        let item = itemDue(sundayLate)
+        ctx.insert(item)
+
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
+
+        #expect(sections.thisWeek.map(\.id) == [item.id])
+        #expect(sections.nextWeek.isEmpty)
+    }
+
+    @Test func mondayDueOnSaturdayBucketsAsNextWeek() throws {
+        // Sanity check the upper edge — Monday must still fall to
+        // `nextWeek`. Catches an over-correction (e.g. +2 days instead of
+        // +1) that would also pull Monday in.
+        let ctx = try makeContext()
+        let saturday = Self.utcDate(2026, 4, 25, 12)
+        let mondayDue = Self.utcDate(2026, 4, 27, 0)
+        let item = itemDue(mondayDue)
+        ctx.insert(item)
+
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
+
+        #expect(sections.nextWeek.map(\.id) == [item.id])
+        #expect(sections.thisWeek.isEmpty)
+    }
+
+    @Test func nextSundayDueOnSaturdayBucketsAsNextWeek() throws {
+        // Desktop puts a task on the *following* Sunday into `nextWeek`
+        // (`dueMs <= endOfNextWeek`, where `endOfNextWeek = endOfThisWeek
+        // + 7 days`). Before parity work iOS dropped this row entirely.
+        let ctx = try makeContext()
+        let saturday = Self.utcDate(2026, 4, 25, 12)
+        let nextSunday = Self.utcDate(2026, 5, 3, 0)
+        let item = itemDue(nextSunday)
+        ctx.insert(item)
+
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
+
+        #expect(sections.nextWeek.map(\.id) == [item.id])
+    }
+
+    @Test func sundayTodayPutsTodayItemInTodayNotThisWeek() throws {
+        // When today *is* Sunday, an item dated today must still land in
+        // `today`, not `thisWeek` — verifies the `weekday == 1` branch
+        // doesn't pull today's row forward.
+        let ctx = try makeContext()
+        let sunday = Self.utcDate(2026, 4, 26, 12)
+        let sundayDue = Self.utcDate(2026, 4, 26, 18)
+        let item = itemDue(sundayDue)
+        ctx.insert(item)
+
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: sunday)
+
+        #expect(sections.today.map(\.id) == [item.id])
+        #expect(sections.thisWeek.isEmpty)
+    }
+
     @Test func sortingPutsNewestCreatedFirst() throws {
         // Within-bucket sort matches desktop's `/things` route — `createdAt
         // DESC`, with stable secondary `id`. Was previously `dueDate ASC`,
