@@ -18,7 +18,7 @@ import SwiftData
 /// We inject `APIClient` so tests can swap in a stubbed URLSession.
 @MainActor
 @Observable
-final class ScoutStore {
+final class ScoutStore: Clearable {
     // MARK: - Public state
 
     private(set) var scouts: [APIClient.ScoutDTO] = []
@@ -31,6 +31,7 @@ final class ScoutStore {
     init(client: APIClient = .shared, context: ModelContext? = nil) {
         self.client = client
         self.context = context
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
@@ -39,6 +40,21 @@ final class ScoutStore {
             context: PersistenceController.shared.mainContext
         )
     }
+
+    // MARK: - Clearable
+
+    func clearForSignOut() {
+        scouts = []
+        isLoading = false
+        errorMessage = nil
+    }
+
+    #if DEBUG
+    /// Test-only: populate in-memory state without touching the network.
+    func injectForTesting(scouts: [APIClient.ScoutDTO]) {
+        self.scouts = scouts
+    }
+    #endif
 
     // MARK: - Legacy SwiftData readers (kept so existing callers compile)
 
