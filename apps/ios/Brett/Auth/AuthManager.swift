@@ -221,7 +221,7 @@ final class AuthManager {
         do {
             try await endpoints.signOut()
         } catch {
-            // Server might be offline or the session already gone. Not fatal.
+            BrettLog.auth.error("Server sign-out failed (non-fatal): \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -249,8 +249,9 @@ final class AuthManager {
         do {
             try await endpoints.signOut()
         } catch {
-            // The token is already invalid server-side — this call will
-            // likely 401 too. Not fatal.
+            // Token is already invalid server-side; this call will likely
+            // 401 too. Log at info because the failure is expected.
+            BrettLog.auth.info("Server sign-out after invalid-session 401 failed (expected): \(String(describing: error), privacy: .public)")
         }
     }
 
