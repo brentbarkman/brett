@@ -1,12 +1,22 @@
 import Foundation
 
 enum DateHelpers {
-    static func computeUrgency(dueDate: Date?, isCompleted: Bool) -> Urgency {
+    /// UTC calendar — matches `TodaySections.bucket()` and desktop's
+    /// `computeUrgency` (`packages/business/src/index.ts`). Switching off
+    /// `Calendar.current` makes this helper agree with the section
+    /// bucketer rather than disagreeing once UTC and local fall on
+    /// different days.
+    private static let utcCalendar: Calendar = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }()
+
+    static func computeUrgency(dueDate: Date?, isCompleted: Bool, now: Date = Date()) -> Urgency {
         if isCompleted { return .done }
         guard let dueDate else { return .later }
 
-        let calendar = Calendar.current
-        let now = Date()
+        let calendar = Self.utcCalendar
         let startOfToday = calendar.startOfDay(for: now)
         let startOfDueDay = calendar.startOfDay(for: dueDate)
 
@@ -14,17 +24,23 @@ enum DateHelpers {
             return .overdue
         }
 
-        if calendar.isDate(dueDate, inSameDayAs: now) {
+        if startOfDueDay == startOfToday {
             return .today
         }
 
-        // End of this week (Sunday)
-        let endOfWeek = calendar.date(byAdding: .day, value: 7 - calendar.component(.weekday, from: now), to: startOfToday)!
+        // Boundary mirrors desktop's `computeUrgency` exactly: "this week"
+        // is inclusive of the upcoming Sunday; on Sunday itself it
+        // extends a full 7 days. Same end-of-Sunday-UTC moment as
+        // `TodaySections.bucket()`, just compared with `<=` against
+        // `startOfDueDay` (also UTC-stripped) instead of `<` against
+        // start-of-Monday — equivalent semantics.
+        let weekday = calendar.component(.weekday, from: now)
+        let daysUntilEndOfWeek = weekday == 1 ? 7 : (8 - weekday) // Sunday = 1
+        let endOfWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday)!
         if startOfDueDay <= endOfWeek {
             return .thisWeek
         }
 
-        // End of next week
         let endOfNextWeek = calendar.date(byAdding: .day, value: 7, to: endOfWeek)!
         if startOfDueDay <= endOfNextWeek {
             return .nextWeek

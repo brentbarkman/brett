@@ -26,15 +26,12 @@ struct TodaySections {
 
     /// Count shown on the iOS home-screen badge and the macOS dock badge.
     /// Overdue + due today + due this week, excluding Next Week, completed,
-    /// archived, and items without a due date. Semantically equivalent to
-    /// desktop's `activeThingsForCount.length` in `apps/desktop/src/App.tsx`,
-    /// but the two can diverge at week boundaries for non-UTC timezones —
-    /// desktop uses UTC end-of-week (`getEndOfWeekUTC`) while iOS uses
-    /// `Calendar.current` (local time). Matches the existing iOS vs desktop
-    /// split in the Today view itself, so the badge stays consistent with
-    /// what each client shows on-screen.
-    static func badgeCount(items: [Item]) -> Int {
-        let s = bucket(items: items, reflowKey: 0)
+    /// archived, and items without a due date. Semantically identical to
+    /// desktop's `activeThingsForCount.length` in `apps/desktop/src/App.tsx`
+    /// — both bucket on the same UTC day/week boundaries, so a row that
+    /// counts on one client counts on the other.
+    static func badgeCount(items: [Item], now: Date = Date()) -> Int {
+        let s = bucket(items: items, reflowKey: 0, now: now)
         return s.overdue.count + s.today.count + s.thisWeek.count
     }
 
@@ -68,19 +65,28 @@ struct TodaySections {
     static func bucket(
         items: [Item],
         reflowKey: Int,
-        pendingDoneIDs: Set<String> = []
+        pendingDoneIDs: Set<String> = [],
+        now: Date = Date()
     ) -> TodaySections {
         _ = reflowKey // force re-derivation on change; see toggle() in the parent
         let calendar = Self.utcCalendar
-        let now = Date()
         let startOfToday = calendar.startOfDay(for: now)
         let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday.addingTimeInterval(86_400)
 
-        // End of this week = next Sunday midnight UTC. Mirrors
-        // `getEndOfWeekUTC` in packages/business: "if today is Sunday,
-        // next Sunday; otherwise the upcoming Sunday."
+        // Boundary mirrors desktop's `computeUrgency`
+        // (`packages/business/src/index.ts`) exactly: "this week" is
+        // inclusive of the upcoming Sunday; on Sunday itself it extends
+        // a full 7 days. Desktop achieves this with `dueMs <=
+        // endOfThisWeek` against start-of-Sunday UTC. We use `<` against
+        // start-of-Monday UTC (one day past Sunday) so the comparison
+        // stays symmetric with `endOfToday` and so a row stored anywhere
+        // on Sunday — including 00:00:00 UTC — buckets identically on
+        // both clients. The previous off-by-one (boundary at start-of-
+        // Sunday with `<`) was dropping every Sunday-due task into
+        // `nextWeek` and every following-Sunday task out of the bucket
+        // entirely.
         let weekday = calendar.component(.weekday, from: now)
-        let daysUntilEndOfWeek = weekday == 1 ? 7 : (8 - weekday) // Sunday = 1
+        let daysUntilEndOfWeek = weekday == 1 ? 8 : (9 - weekday) // Sunday = 1; +1 day past upcoming Sunday
         let endOfThisWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday) ?? endOfToday
         let endOfNextWeek = calendar.date(byAdding: .day, value: 7, to: endOfThisWeek) ?? endOfThisWeek.addingTimeInterval(7 * 86_400)
 

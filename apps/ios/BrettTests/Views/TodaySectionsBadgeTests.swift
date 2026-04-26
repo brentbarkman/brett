@@ -23,27 +23,20 @@ struct TodaySectionsBadgeTests {
     private var startOfToday: Date { calendar.startOfDay(for: Date()) }
     private var yesterday: Date { calendar.date(byAdding: .day, value: -1, to: startOfToday)! }
     private var noonToday: Date { calendar.date(byAdding: .hour, value: 12, to: startOfToday)! }
-    /// A date strictly inside "this week" but after today. If today is
-    /// Saturday (UTC), "+1 day" lands in next week — clamp to
-    /// end-of-week-minus-1h.
-    ///
-    /// NOTE: On Saturday the `thisWeek` bucket is structurally empty
-    /// (`endOfThisWeek == endOfToday` in `bucket()`), so this fixture
-    /// falls into `today` rather than `thisWeek`. `badgeCount` still
-    /// returns the right number because it sums overdue + today +
-    /// thisWeek, but `countsThisWeek` is effectively exercising the
-    /// `today` bucket on Saturdays. That's acceptable for this helper.
+    /// A date strictly inside "this week" but after today. Mirrors the
+    /// `bucket()` formula: end-of-this-week is start-of-Monday UTC (one
+    /// day past the upcoming Sunday, matching desktop's inclusive
+    /// `<= endOfThisWeek` boundary). Returning one hour before that lands
+    /// inside `thisWeek` on every weekday including Saturday and Sunday.
     private var laterThisWeek: Date {
         let weekday = calendar.component(.weekday, from: Date())
-        // Mirror bucket()'s "if Sunday, next Sunday; else upcoming Sunday"
-        let daysUntilEndOfWeek = weekday == 1 ? 7 : (8 - weekday)
+        let daysUntilEndOfWeek = weekday == 1 ? 8 : (9 - weekday)
         let endOfWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday)!
-        // One hour before end-of-week — guaranteed inside the bucket on every weekday.
         return calendar.date(byAdding: .hour, value: -1, to: endOfWeek)!
     }
     private var nextWeek: Date {
         let weekday = calendar.component(.weekday, from: Date())
-        let daysUntilEndOfWeek = weekday == 1 ? 7 : (8 - weekday)
+        let daysUntilEndOfWeek = weekday == 1 ? 8 : (9 - weekday)
         let endOfWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday)!
         return calendar.date(byAdding: .day, value: 2, to: endOfWeek)!
     }
