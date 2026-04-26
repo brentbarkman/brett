@@ -263,4 +263,24 @@ struct AttachmentUploaderTests {
             #expect(err == .missingMimeType)
         }
     }
+
+    @Test func processQueueDoesNotRetainSelfAcrossDrain() async throws {
+        weak var weakUploader: AttachmentUploader?
+        do {
+            let persistence = PersistenceController.makePreview()
+            let store = AttachmentStore(context: persistence.mainContext)
+            let uploader = AttachmentUploader(
+                apiClient: .shared,
+                attachmentStore: store,
+                persistence: persistence,
+                useBackgroundSession: false
+            )
+            weakUploader = uploader
+            uploader.processQueue()
+            // Let drain complete (queue is empty so it returns immediately).
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(weakUploader == nil, "AttachmentUploader should not be retained after going out of scope")
+    }
 }

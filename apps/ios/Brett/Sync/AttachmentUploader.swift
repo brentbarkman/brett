@@ -279,9 +279,10 @@ final class AttachmentUploader {
     func processQueue() {
         if let existing = queueTask, !existing.isCancelled { return }
         queueTask = Task { [weak self] in
-            guard let self else { return }
-            await self.drain()
-            await MainActor.run { self.queueTask = nil }
+            await self?.drain()
+            await MainActor.run { [weak self] in
+                self?.queueTask = nil
+            }
         }
     }
 
