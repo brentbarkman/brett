@@ -212,11 +212,40 @@ export const sync = new Hono<AuthEnv>()
     const changes: Record<string, SyncTableChanges> = {};
     const newCursors: Record<string, string> = {};
 
-    // Calendar events: scope to last 90 days + future
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    // Per-table windows so mobile only mirrors what the user might see
+    // imminently. Anything outside these windows is fetched on-demand
+    // via the per-resource GET endpoints (chat, findings, notes, etc.).
+    //
+    // Items: active/snoozed (open work, no cap) OR recently completed
+    // (last 36h to span any timezone's startOfToday). Local filter
+    // (TodaySections) narrows further to the user's local "today."
+    // Calendar events: ±14 days. Calendar page fetches outside-window
+    // ranges via /events/fetch-range when the user navigates.
+    const completedCutoff = new Date(Date.now() - 36 * 60 * 60 * 1000);
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const fourteenDaysAhead = new Date();
+    fourteenDaysAhead.setDate(fourteenDaysAhead.getDate() + 14);
 
-    for (const table of SYNC_TABLES) {
+    // Modern clients opt in to per-table sync by listing the table key
+    // in `cursors` (value `null` for first sync, cursor string for
+    // incremental). Cold tables (chat history, scout findings, event
+    // notes, attachment metadata) are fetched lazily via dedicated GET
+    // endpoints, so the iOS client trims those keys out of the request.
+    //
+    // Backward compat: when `cursors` is empty (`{}`), we process every
+    // SYNC_TABLE so legacy clients and tests that send `{cursors: {}}`
+    // still get a full first sync. Once a client sends ANY explicit
+    // cursor key, we treat that as the explicit list — clients that
+    // want a subset must enumerate it.
+    const cursorKeys = Object.keys(cursors);
+    const requestedTables = cursorKeys.length === 0
+      ? SYNC_TABLES
+      : SYNC_TABLES.filter((t) =>
+          Object.prototype.hasOwnProperty.call(cursors, t),
+        );
+
+    for (const table of requestedTables) {
       const modelAccessor = SYNC_TABLE_TO_MODEL[table];
       const model = (prisma as any)[modelAccessor];
 
@@ -230,11 +259,21 @@ export const sync = new Hono<AuthEnv>()
       const cursor = cursors[table] ?? null;
       const tableLimit = overrideLimit ?? DEFAULT_LIMIT_BY_TABLE[table] ?? FALLBACK_DEFAULT_LIMIT;
 
-      // Per-table extra filters. Calendar events scope to last 90 days +
-      // future to keep mobile from pulling years of historical events.
       const extraWhere: Record<string, unknown> = {};
       if (table === "calendar_events") {
-        extraWhere.startTime = { gte: ninetyDaysAgo };
+        extraWhere.startTime = { gte: fourteenDaysAgo, lte: fourteenDaysAhead };
+      } else if (table === "items") {
+        // Active work + just-completed. Excludes archived entirely;
+        // older done items are fetched on-demand via /things and via
+        // list-detail pagination on the server.
+        extraWhere.OR = [
+          { status: { in: ["active", "snoozed"] } },
+          { AND: [{ status: "done" }, { completedAt: { gte: completedCutoff } }] },
+        ];
+      } else if (table === "lists") {
+        extraWhere.archivedAt = null;
+      } else if (table === "scouts") {
+        extraWhere.status = { not: "archived" };
       }
 
       // Keyset-merged pull: live + tombstones in one ordered stream, single

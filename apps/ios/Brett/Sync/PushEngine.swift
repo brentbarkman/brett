@@ -24,6 +24,13 @@ final class PushEngine {
     private let mutationQueue: MutationQueueProtocol
     private let apiClient: APIClient
     private let context: ModelContext
+    /// Background ModelActor for the per-row apply of server-confirmed
+    /// records. The mutation queue (status transitions, idempotency,
+    /// compaction) stays on main because `MutationCompactor` reasons
+    /// about the entire pending queue transactionally; only the domain
+    /// row apply moves off main. Optional only for the in-memory test
+    /// path.
+    private let syncData: SyncDataActor?
 
     // MARK: - Summary
 
@@ -52,15 +59,19 @@ final class PushEngine {
     init(
         mutationQueue: MutationQueueProtocol,
         apiClient: APIClient = .shared,
-        persistence: PersistenceController = .shared
+        persistence: PersistenceController = .shared,
+        syncData: SyncDataActor? = nil
     ) {
         self.mutationQueue = mutationQueue
         self.apiClient = apiClient
         self.context = persistence.mainContext
+        self.syncData = syncData ?? SyncDataActor(modelContainer: persistence.container)
     }
 
     /// Test-oriented init — accepts any `ModelContext` so in-memory
-    /// containers created by tests can be wired in directly.
+    /// containers created by tests can be wired in directly. Tests apply
+    /// server records through the test context (no background actor) so
+    /// existing test fixtures don't need to care about cross-actor scheduling.
     init(
         mutationQueue: MutationQueueProtocol,
         apiClient: APIClient,
@@ -69,6 +80,7 @@ final class PushEngine {
         self.mutationQueue = mutationQueue
         self.apiClient = apiClient
         self.context = context
+        self.syncData = nil
     }
 
     // MARK: - Push (single pass)
@@ -114,6 +126,11 @@ final class PushEngine {
         }
 
         var applied = 0, merged = 0, conflicts = 0, errors = 0
+        // Collect server-confirmed records for a single batched apply on
+        // the background actor. Bypassing main for this loop is the
+        // dominant savings — each record otherwise costs a SwiftData
+        // fetchById + apply-fields + insert/update on the main run loop.
+        var serverRecordsToApply: [SyncDataActor.ServerRecord] = []
 
         for result in response.results {
             guard let mutation = mutationQueue.getByIdempotencyKey(result.idempotencyKey) else {
@@ -124,12 +141,22 @@ final class PushEngine {
 
             switch result.status {
             case .applied:
-                applyServerRecord(result.record, to: mutation)
+                if let record = result.record {
+                    serverRecordsToApply.append(SyncDataActor.ServerRecord(
+                        table: tableName(for: mutation.entityType),
+                        record: record
+                    ))
+                }
                 mutationQueue.complete(id: mutation.id)
                 applied += 1
 
             case .merged:
-                applyServerRecord(result.record, to: mutation)
+                if let record = result.record {
+                    serverRecordsToApply.append(SyncDataActor.ServerRecord(
+                        table: tableName(for: mutation.entityType),
+                        record: record
+                    ))
+                }
                 logMergeConflict(result: result, mutation: mutation)
                 mutationQueue.complete(id: mutation.id)
                 merged += 1
@@ -155,14 +182,38 @@ final class PushEngine {
             }
         }
 
-        // Persist all the changes we made to @Model records + the conflict log.
+        // Apply the server-confirmed records on the background actor.
+        // Domain row writes (Item, ItemList, CalendarEventNote, etc.) save
+        // on `SyncDataActor`'s context; the main context save below covers
+        // mutation-queue state transitions + conflict log entries.
         //
-        // If this save fails, the mutation queue status transitions AND the
-        // server-record upserts we applied are both rolled back by SwiftData
-        // (they're pending context changes). On next launch, `resetInFlight`
-        // flips in-flight rows back to pending, the push retries, and the
-        // server's idempotency key handles the duplicate. Logged at error
-        // level so sysdiagnose records the stuck-save condition.
+        // If the bg apply fails (rare — disk pressure or schema mismatch),
+        // we log and continue to save the main context anyway. The queue
+        // already records the mutation as completed/failed and the next
+        // pull will reconcile any drift. Re-throwing here would leave the
+        // queue rows stuck in inconsistent state.
+        if !serverRecordsToApply.isEmpty {
+            do {
+                if let syncData {
+                    try await syncData.applyServerRecords(serverRecordsToApply)
+                } else {
+                    // Test path — apply directly against the engine's context.
+                    for r in serverRecordsToApply {
+                        SyncEntityMapper.upsert(
+                            tableName: r.table,
+                            record: r.record,
+                            context: context,
+                            respectLocalPending: false
+                        )
+                    }
+                }
+            } catch {
+                BrettLog.push.error("push server-record apply failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+
+        // Save main context: mutation queue transitions + conflict logs
+        // (and, in the test path, the in-line server records too).
         do {
             try context.save()
         } catch {
@@ -248,20 +299,6 @@ final class PushEngine {
     }
 
     // MARK: - Record application / conflict bookkeeping
-
-    /// Write the server's authoritative record back into SwiftData, bypassing
-    /// the pending-write guard (we know the push succeeded, so local state
-    /// should catch up to the server).
-    private func applyServerRecord(_ record: [String: Any]?, to mutation: MutationQueueEntry) {
-        guard let record else { return }
-        let table = tableName(for: mutation.entityType)
-        SyncEntityMapper.upsert(
-            tableName: table,
-            record: record,
-            context: context,
-            respectLocalPending: false
-        )
-    }
 
     /// Set `_syncStatus = "conflict"` on the local record corresponding to
     /// a rejected mutation. If we can't find the record the mutation refers

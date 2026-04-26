@@ -11,6 +11,16 @@ import SwiftData
 @MainActor
 struct TodaySectionsTests {
 
+    /// UTC calendar — must match the calendar `TodaySections.bucket()`
+    /// uses internally, otherwise local-vs-UTC date math drifts and
+    /// fixtures land in the wrong bucket non-deterministically by
+    /// time of day the test suite runs.
+    private let utcCalendar: Calendar = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }()
+
     private func makeContext() throws -> ModelContext {
         let container = try InMemoryPersistenceController.makeContainer()
         return ModelContext(container)
@@ -25,7 +35,7 @@ struct TodaySectionsTests {
 
     @Test func itemDueYesterdayGoesToOverdue() throws {
         let ctx = try makeContext()
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        let yesterday = utcCalendar.date(byAdding: .day, value: -1, to: Date())!
         let item = itemDue(yesterday)
         ctx.insert(item)
 
@@ -38,7 +48,7 @@ struct TodaySectionsTests {
 
     @Test func itemDueTodayGoesToToday() throws {
         let ctx = try makeContext()
-        let today = Calendar.current.startOfDay(for: Date()).addingTimeInterval(3600)
+        let today = utcCalendar.startOfDay(for: Date()).addingTimeInterval(3600)
         let item = itemDue(today)
         ctx.insert(item)
 
@@ -62,7 +72,7 @@ struct TodaySectionsTests {
 
     @Test func itemCompletedYesterdayIsOmittedEntirely() throws {
         let ctx = try makeContext()
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        let yesterday = utcCalendar.date(byAdding: .day, value: -1, to: Date())!
         let item = itemDue(yesterday, completedAt: yesterday, status: .done)
         ctx.insert(item)
 
@@ -90,7 +100,7 @@ struct TodaySectionsTests {
         // prior section (not the "Done today" bucket) until the debounce
         // expires — lets the user tap nearby rows without the list jumping.
         let ctx = try makeContext()
-        let today = Calendar.current.startOfDay(for: Date()).addingTimeInterval(3600)
+        let today = utcCalendar.startOfDay(for: Date()).addingTimeInterval(3600)
         let item = itemDue(today, completedAt: Date(), status: .done)
         ctx.insert(item)
 

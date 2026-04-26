@@ -396,12 +396,37 @@ struct EventDetailView: View {
         defer { isLoadingAsides = false }
         async let related = api.fetchEventRelatedItems(eventId: eventId)
         async let history = api.fetchEventMeetingHistory(eventId: eventId)
+        async let note = RemoteCache.shared.eventNote(eventId: eventId)
 
         if let relatedResp = try? await related {
             relatedItems = relatedResp.relatedItems
         }
         if let historyResp = try? await history {
             meetingHistory = historyResp
+        }
+        // Notes are no longer replicated via /sync/pull. Fetch on-open and
+        // mirror into local SwiftData using the server's primary id so a
+        // subsequent user edit pushes as an UPDATE (not a CREATE that
+        // would collide with the unique constraint).
+        if let noteResp = try? await note,
+           let id = noteResp.id,
+           let content = noteResp.content,
+           let updatedAt = noteResp.updatedAt {
+            let userId = authManager.currentUser?.id ?? event?.userId ?? ""
+            if !userId.isEmpty {
+                calendarStore.applyServerNote(
+                    id: id,
+                    eventId: eventId,
+                    userId: userId,
+                    content: content,
+                    updatedAt: updatedAt
+                )
+                // Sync the editor draft only if the user hasn't started
+                // typing — overwriting their input would feel hostile.
+                if !isNotesFocused && notesDraft.isEmpty {
+                    notesDraft = content
+                }
+            }
         }
     }
 

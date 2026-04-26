@@ -96,6 +96,32 @@ final class ChatStore {
         }
     }
 
+    /// Seed from server-fetched chat history. The server returns messages in
+    /// `createdAt DESC` order (newest first); we sort ascending here so the
+    /// rendered panel reads top-down chronologically. We replace any
+    /// previously-hydrated bucket entirely — this is called after the local
+    /// hydrate runs, so the server view authoritatively wins. Streaming
+    /// bubbles in flight are blown away if they overlap, but in practice
+    /// the user can't open a thread mid-stream without first finishing it.
+    func hydrate(itemId: String, from messages: [APIClient.ChatHistoryMessage]) {
+        let sorted = messages.sorted(by: { $0.createdAt < $1.createdAt })
+        self.messages[itemId] = sorted.map { message in
+            ChatMessage(
+                id: message.id,
+                role: ChatMessage.Role(rawValue: message.role) ?? .brett,
+                content: message.content,
+                isStreaming: false,
+                createdAt: message.createdAt
+            )
+        }
+    }
+
+    /// Same as `hydrate(itemId:from:)` but for an event chat thread.
+    /// Separate keying so the same server method can drive both paths.
+    func hydrateEvent(eventId: String, from messages: [APIClient.ChatHistoryMessage]) {
+        hydrate(itemId: eventId, from: messages)
+    }
+
     /// POST `/brett/chat/:itemId` with `message`; append deltas into a
     /// trailing assistant bubble. Throws only on pre-flight failures (bad
     /// URL, missing auth); network errors are swallowed into `lastError`
@@ -280,6 +306,17 @@ final class ChatStore {
                         calendarEventId: calendarEventId,
                         userId: userId
                     )
+                    // Invalidate cached history so the next detail-view
+                    // open re-fetches from the server (which now holds
+                    // the messages we just streamed). Detached because
+                    // `RemoteCache` is an actor and we don't want to
+                    // block the stream-completion path on it.
+                    Task.detached {
+                        await RemoteCache.shared.invalidateChatHistory(
+                            itemId: itemId,
+                            eventId: calendarEventId
+                        )
+                    }
                 }
             }
         } catch {

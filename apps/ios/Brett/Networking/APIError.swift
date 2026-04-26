@@ -98,4 +98,62 @@ enum APIError: Error, CustomStringConvertible {
             return "APIError.unknown"
         }
     }
+
+    /// Diagnostic message intended for the in-app sync-error alert
+    /// (`SyncStatusIndicator`'s tap-to-reveal). Distinct from
+    /// `description` (log-safe, scrubbed) and `userFacingMessage`
+    /// (sign-in-screen-quality, polite). This includes the URLError
+    /// code for `.unknown` so support / the user can tell "timed out"
+    /// from "host unreachable" from "DNS failed" — none of which are
+    /// PII. Without this, the previous formatter rendered every
+    /// transport failure as bare "APIError.unknown" with no signal.
+    var diagnosticMessage: String {
+        switch self {
+        case .offline:
+            return "You're offline."
+        case .unauthorized:
+            return "Session expired."
+        case .invalidCredentials:
+            return "Invalid credentials."
+        case .rateLimited(let retry):
+            if let retry { return "Rate limited (retry in \(retry)s)." }
+            return "Rate limited."
+        case .serverError(let status):
+            return "Server error \(status)."
+        case .validation:
+            return "Invalid request."
+        case .decodingFailed:
+            return "Couldn't parse server response."
+        case .unknown(let underlying):
+            if let urlError = underlying as? URLError {
+                return Self.urlErrorMessage(urlError)
+            }
+            // Type name only — never the message string, since unknown
+            // wraps arbitrary Errors which may stringify to PII.
+            return "Network error (\(type(of: underlying)))."
+        }
+    }
+
+    /// Map a `URLError.Code` to a short human label. Codes are stable
+    /// across iOS versions and contain no PII. Unknown codes fall
+    /// through to the bare integer code so support can look it up.
+    private static func urlErrorMessage(_ error: URLError) -> String {
+        switch error.code {
+        case .timedOut: return "Timed out."
+        case .cannotConnectToHost: return "Couldn't reach the server."
+        case .cannotFindHost: return "Server hostname not found."
+        case .networkConnectionLost: return "Connection lost mid-request."
+        case .notConnectedToInternet: return "Not connected to internet."
+        case .dnsLookupFailed: return "DNS lookup failed."
+        case .secureConnectionFailed: return "Secure connection failed."
+        case .serverCertificateUntrusted: return "Server certificate untrusted."
+        case .badServerResponse: return "Bad server response."
+        case .resourceUnavailable: return "Resource unavailable."
+        case .dataNotAllowed: return "Cellular data disallowed for this app."
+        case .internationalRoamingOff: return "International roaming off."
+        case .callIsActive: return "Call active — network unavailable."
+        case .cancelled: return "Request cancelled."
+        default: return "Network error (URLError \(error.code.rawValue))."
+        }
+    }
 }

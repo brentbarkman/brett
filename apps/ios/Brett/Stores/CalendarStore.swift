@@ -62,6 +62,50 @@ final class CalendarStore {
 
     // MARK: - Notes (read/write)
 
+    /// Hydrate the local `CalendarEventNote` mirror from a server fetch.
+    /// Notes are no longer replicated via /sync/pull — they're fetched
+    /// on-demand when the user opens an event detail. We still keep a
+    /// local SwiftData copy so:
+    ///   1. The notes section renders instantly on the next open while
+    ///      the network refresh is in flight.
+    ///   2. User edits go through the existing offline-first mutation
+    ///      queue without races against the unique-constraint on
+    ///      `(calendarEventId, userId)`.
+    ///
+    /// Crucially, the local row is keyed by the SERVER's primary id.
+    /// A pending local edit (`_syncStatus != synced`) is preserved
+    /// untouched — applying server state on top of unpushed user input
+    /// would silently throw away that input.
+    func applyServerNote(
+        id: String,
+        eventId: String,
+        userId: String,
+        content: String,
+        updatedAt: Date
+    ) {
+        if let existing = fetchNote(for: eventId, userId: userId) {
+            // Pending writes belong to the user — never clobber.
+            if existing._syncStatus != SyncStatus.synced.rawValue { return }
+            existing.content = content
+            existing.updatedAt = updatedAt
+            existing._baseUpdatedAt = BrettDate.isoString(updatedAt)
+            save()
+            return
+        }
+        let note = CalendarEventNote(
+            id: id,
+            calendarEventId: eventId,
+            userId: userId,
+            content: content,
+            createdAt: updatedAt,
+            updatedAt: updatedAt
+        )
+        note._syncStatus = SyncStatus.synced.rawValue
+        note._baseUpdatedAt = BrettDate.isoString(updatedAt)
+        context.insert(note)
+        save()
+    }
+
     /// Fetch the note for a given event. `userId` scopes the lookup so a
     /// note belonging to a prior account (stale after an unfinished wipe)
     /// can never be matched on sign-in of a new user.

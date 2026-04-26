@@ -49,8 +49,16 @@ final class Session {
         self.sseClient = sseClient
 
         let context = persistence.mainContext
-        let pushEngine = PushEngine(mutationQueue: MutationQueue(context: context))
-        let pullEngine = PullEngine()
+        // Single background ModelActor shared by both engines so they
+        // both write through the same on-actor context. SyncManager
+        // serialises pull/push via a mutex, so there's no concurrent
+        // write race; sharing also avoids the second allocation cost.
+        let syncData = SyncDataActor(modelContainer: persistence.container)
+        let pushEngine = PushEngine(
+            mutationQueue: MutationQueue(context: context),
+            syncData: syncData
+        )
+        let pullEngine = PullEngine(syncData: syncData)
 
         self.syncManager = SyncManager(
             pushEngine: SessionPushEngineAdapter(pushEngine),
@@ -88,6 +96,11 @@ final class Session {
         sseHandler?.stop()
         sseHandler = nil
         syncManager.stop()
+        // Drop any on-demand cache entries from this session — chat
+        // history, event notes, etc. — so the next user can never
+        // observe the previous user's cached server data. Detached
+        // because `RemoteCache` is an actor; tearDown is synchronous.
+        Task.detached { await RemoteCache.shared.clear() }
     }
 }
 
