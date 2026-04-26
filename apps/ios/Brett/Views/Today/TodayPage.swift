@@ -3,16 +3,38 @@ import SwiftUI
 
 /// Today page — the home screen of the app.
 ///
-/// Data flows through `ItemStore` (SwiftData mutations + sync queue) + live
-/// `@Query` for reactive reads. The @Query predicates filter by the current
-/// user via computed `userItems` / `userLists` / `userEvents` — during a
-/// rapid account switch the sign-out wipe + session-owned SyncManager make
-/// cross-user rows nearly impossible, but this is defense-in-depth so that
-/// a late-arriving async task from a prior session can never render.
+/// Auth gate around `TodayPageBody`. The body is the work-doer; this
+/// outer view exists only to extract `userId` from the environment and
+/// hand it to a child whose `@Query` predicates capture it directly.
+///
+/// SwiftData's `#Predicate` macro can't read `@Environment` values, so
+/// the established workaround is an init-based subview where `userId`
+/// is a stored property and each `@Query` is constructed in `init` with
+/// the captured user. This pushes the user filter down into the
+/// SwiftData fetch instead of doing it in Swift after the fact —
+/// cheaper, and keeps cross-user rows from ever entering the working set.
 struct TodayPage: View {
-    // MARK: - Auth scope
-
     @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            TodayPageBody(userId: userId)
+        } else {
+            // Signed-out fallback. The auth gate upstream
+            // (`MainContainer`) usually prevents this branch, but render
+            // an empty state defensively rather than nil-fallback so the
+            // type system doesn't have to model a missing user here.
+            EmptyView()
+        }
+    }
+}
+
+/// Today's data + UI. Owned by `TodayPage`'s auth gate, so `userId` is
+/// guaranteed non-optional for this view's lifetime. Re-instantiated on
+/// account switch (because `userId` changes the parent's view identity),
+/// which gives us a fresh `@Query` with the new user's predicate.
+private struct TodayPageBody: View {
+    let userId: String
 
     // MARK: - Real stores
 
@@ -29,51 +51,42 @@ struct TodayPage: View {
 
     // MARK: - Reactive reads
 
-    /// Query every non-deleted item so SwiftData notifies us on every mutation.
-    /// Section computation filters down further — we deliberately do the
-    /// bucketing in Swift rather than four separate `FetchDescriptor`s so one
-    /// SwiftData change notification drives the whole view.
-    @Query(
-        filter: #Predicate<Item> { $0.deletedAt == nil },
-        sort: \Item.createdAt,
-        order: .reverse
-    ) private var allItems: [Item]
-
-    @Query(
-        filter: #Predicate<ItemList> { $0.deletedAt == nil },
-        sort: \ItemList.sortOrder
-    ) private var allLists: [ItemList]
-
-    @Query(
-        filter: #Predicate<CalendarEvent> { $0.deletedAt == nil },
-        sort: \CalendarEvent.startTime
-    ) private var allEvents: [CalendarEvent]
-
-    /// Auth-scoped views of the reactive reads. `@Query` can't take a
-    /// dynamic predicate without an init-based Query + view split, so the
-    /// userId filter lives here. Wave E can push this into the predicate
-    /// for perf once we're comfortable with a TodayPageBody subview.
-    private var userItems: [Item] {
-        guard let uid = authManager.currentUser?.id else { return [] }
-        return allItems.filter { $0.userId == uid }
-    }
-
-    private var userLists: [ItemList] {
-        guard let uid = authManager.currentUser?.id else { return [] }
-        return allLists.filter { $0.userId == uid }
-    }
-
-    private var userEvents: [CalendarEvent] {
-        guard let uid = authManager.currentUser?.id else { return [] }
-        return allEvents.filter { $0.userId == uid }
-    }
-
+    /// User-scoped, non-deleted items. Sorted reverse-chronological by
+    /// createdAt (the bucketing logic re-sorts inside each section by
+    /// the section's own ordering rule). We deliberately do the section
+    /// bucketing in Swift rather than five separate `FetchDescriptor`s
+    /// so one SwiftData change notification drives the whole view.
+    @Query private var items: [Item]
+    @Query private var lists: [ItemList]
+    @Query private var events: [CalendarEvent]
     /// 0 or 1 row. Used to distinguish "empty because the user has
     /// nothing" from "empty because the first sync hasn't landed yet" —
     /// the latter case shows a skeleton placeholder instead of the
     /// empty-state copy so the page doesn't briefly declare inbox-zero
-    /// during startup.
+    /// during startup. NOT user-scoped — `SyncHealth` is a sync-internal
+    /// row count that doesn't need cross-user isolation.
     @Query private var syncHealthRows: [SyncHealth]
+
+    init(userId: String) {
+        self.userId = userId
+
+        let itemPredicate = #Predicate<Item> { item in
+            item.deletedAt == nil && item.userId == userId
+        }
+        _items = Query(filter: itemPredicate, sort: \Item.createdAt, order: .reverse)
+
+        let listPredicate = #Predicate<ItemList> { list in
+            list.deletedAt == nil && list.userId == userId
+        }
+        _lists = Query(filter: listPredicate, sort: \ItemList.sortOrder)
+
+        let eventPredicate = #Predicate<CalendarEvent> { event in
+            event.deletedAt == nil && event.userId == userId
+        }
+        _events = Query(filter: eventPredicate, sort: \CalendarEvent.startTime)
+
+        _syncHealthRows = Query()
+    }
 
     private var hasCompletedInitialSync: Bool {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
@@ -196,7 +209,7 @@ struct TodayPage: View {
 
     private var sections: TodaySections {
         sectionsCache.sections(
-            items: userItems,
+            items: items,
             reflowKey: reflowSnapshotKey,
             pendingDoneIDs: pendingDoneIDs
         )
@@ -207,7 +220,7 @@ struct TodayPage: View {
     /// row does an O(1) dictionary read instead of triggering a rebuild of
     /// the full `[listId: name]` map per lookup.
     private func makeListNameProvider() -> (Item) -> String? {
-        let index = Dictionary(uniqueKeysWithValues: userLists.map { ($0.id, $0.name) })
+        let index = Dictionary(uniqueKeysWithValues: lists.map { ($0.id, $0.name) })
         return { item in
             guard let listId = item.listId else { return nil }
             return index[listId]
@@ -338,14 +351,14 @@ struct TodayPage: View {
         // `sections.*` reads share one bucket and the two event accesses
         // (count + duration sum) share one filter pass.
         let s = sections
-        let events = todaysEvents
+        let dayEvents = todaysEvents
         let total = s.activeCount + s.doneToday.count
         let done = s.doneToday.count
         let base = "\(done) of \(total) done"
-        guard !userEvents.isEmpty else { return base }
-        let meetingCount = events.count
+        guard !events.isEmpty else { return base }
+        let meetingCount = dayEvents.count
         let suffix = meetingCount == 1 ? "meeting" : "meetings"
-        return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: events)))"
+        return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: dayEvents)))"
     }
 
     private static func formatMeetingDuration(events: [CalendarEvent]) -> String {
@@ -363,11 +376,11 @@ struct TodayPage: View {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        return userEvents.filter { $0.startTime >= start && $0.startTime < end }
+        return events.filter { $0.startTime >= start && $0.startTime < end }
     }
 
     private var nextUpcomingEvent: CalendarEvent? {
-        userEvents.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
+        events.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
     }
 
     /// Only surface the card when the next event is genuinely soon. We use a
@@ -390,7 +403,7 @@ struct TodayPage: View {
     ///    completions all settle together.
     private func toggle(_ id: String) {
         HapticManager.success()
-        itemStore.toggleStatus(id: id, userId: authManager.currentUser?.id ?? "")
+        itemStore.toggleStatus(id: id, userId: userId)
 
         // Trigger the stats pulse. Flip true for a beat, then back false so
         // the spring animation actually runs.
@@ -433,7 +446,7 @@ struct TodayPage: View {
             id: id,
             changes: ["dueDate": dueDate as Any? ?? NSNull()],
             previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()],
-            userId: authManager.currentUser?.id ?? ""
+            userId: userId
         )
     }
 
@@ -447,7 +460,7 @@ struct TodayPage: View {
             id: id,
             changes: ["status": ItemStatus.archived.rawValue],
             previousValues: ["status": item.status],
-            userId: authManager.currentUser?.id ?? ""
+            userId: userId
         )
     }
 
@@ -455,7 +468,7 @@ struct TodayPage: View {
     /// the server treats as soft-delete (sets deletedAt).
     private func delete(_ id: String) {
         HapticManager.heavy()
-        itemStore.delete(id: id, userId: authManager.currentUser?.id ?? "")
+        itemStore.delete(id: id, userId: userId)
     }
 
     // MARK: - Ticker
