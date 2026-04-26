@@ -152,6 +152,27 @@ enum TestFixtures {
         )
     }
 
+    // MARK: - SearchResult
+
+    static func makeSearchResult(
+        entityType: SearchEntityType = .item,
+        entityId: String = UUID().uuidString,
+        title: String = "Test result",
+        snippet: String? = nil,
+        score: Double = 1.0,
+        matchType: SearchMatchType = .hybrid
+    ) -> SearchResult {
+        SearchResult(
+            entityType: entityType,
+            entityId: entityId,
+            title: title,
+            snippet: snippet,
+            score: score,
+            matchType: matchType,
+            metadata: nil
+        )
+    }
+
     // MARK: - ScoutDTO
 
     /// Build a `APIClient.ScoutDTO` for tests. The DTO is `Decodable`-only
