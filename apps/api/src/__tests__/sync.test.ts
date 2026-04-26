@@ -309,10 +309,187 @@ describe("POST /sync/pull", () => {
     const body = (await res.json()) as any;
 
     const eventIds = body.changes.calendar_events.upserted.map((e: any) => e.id);
-    // The old event must be excluded by the 90-day scope filter
+    // The old event must be excluded by the ±14d scope filter (was 90d
+    // back, narrowed when on-demand fetch landed for outside-window
+    // ranges via /events/fetch-range).
     expect(eventIds).not.toContain(oldEventId);
     // The recent event must be included
     expect(eventIds).toContain(recentEventId);
+  });
+
+  // ── On-demand sync filters (perf-driven hot/cold split) ──
+
+  it("items filter: archived items are excluded from sync", async () => {
+    clearAllRateLimits();
+
+    const archUser = await createTestUser("Archived Filter User");
+    // Active item (in)
+    const activeRes = await authRequest("/things", archUser.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Active task", status: "active" }),
+    });
+    const activeId = ((await activeRes.json()) as any).id;
+    // Archived item (out) — change status via mutation push
+    const archivedRes = await authRequest("/things", archUser.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Archived task", status: "active" }),
+    });
+    const archivedRow = (await archivedRes.json()) as any;
+    // Promote to archived directly (status mutation is allow-listed via push,
+    // but /things doesn't expose it; flip via Prisma to keep the test focused).
+    await prisma.item.update({
+      where: { id: archivedRow.id },
+      data: { status: "archived" },
+    });
+
+    clearAllRateLimits();
+    const res = await authRequest("/sync/pull", archUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    const body = (await res.json()) as any;
+    const ids = body.changes.items.upserted.map((r: any) => r.id);
+    expect(ids).toContain(activeId);
+    expect(ids).not.toContain(archivedRow.id);
+  });
+
+  it("items filter: completed-old items excluded, recent ones included", async () => {
+    clearAllRateLimits();
+
+    const completedUser = await createTestUser("Completed Filter User");
+    const recentRes = await authRequest("/things", completedUser.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Recent done", status: "active" }),
+    });
+    const recentId = ((await recentRes.json()) as any).id;
+    const oldRes = await authRequest("/things", completedUser.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Old done", status: "active" }),
+    });
+    const oldId = ((await oldRes.json()) as any).id;
+    // Mark both done via Prisma. Recent: completed 1h ago (in window).
+    // Old: completed 5d ago (outside the 48h window).
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    await prisma.item.update({
+      where: { id: recentId },
+      data: { status: "done", completedAt: oneHourAgo },
+    });
+    await prisma.item.update({
+      where: { id: oldId },
+      data: { status: "done", completedAt: fiveDaysAgo },
+    });
+
+    clearAllRateLimits();
+    const res = await authRequest("/sync/pull", completedUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    const body = (await res.json()) as any;
+    const ids = body.changes.items.upserted.map((r: any) => r.id);
+    expect(ids).toContain(recentId);
+    expect(ids).not.toContain(oldId);
+  });
+
+  it("lists filter: archived lists are excluded from sync", async () => {
+    clearAllRateLimits();
+
+    const listUser = await createTestUser("List Filter User");
+    const activeRes = await authRequest("/lists", listUser.token, {
+      method: "POST",
+      body: JSON.stringify({ name: "Active list", colorClass: "bg-blue-500" }),
+    });
+    const activeListId = ((await activeRes.json()) as any).id;
+    const archivedRes = await authRequest("/lists", listUser.token, {
+      method: "POST",
+      body: JSON.stringify({ name: "Archived list", colorClass: "bg-red-500" }),
+    });
+    const archivedListId = ((await archivedRes.json()) as any).id;
+    await prisma.list.update({
+      where: { id: archivedListId },
+      data: { archivedAt: new Date() },
+    });
+
+    clearAllRateLimits();
+    const res = await authRequest("/sync/pull", listUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    const body = (await res.json()) as any;
+    const ids = body.changes.lists.upserted.map((r: any) => r.id);
+    expect(ids).toContain(activeListId);
+    expect(ids).not.toContain(archivedListId);
+  });
+
+  it("cursor-key gating: tables omitted from cursors are skipped", async () => {
+    clearAllRateLimits();
+
+    const optInUser = await createTestUser("OptIn User");
+    // Seed both an item and a list so we'd see them under a full sync.
+    const itemRes = await authRequest("/things", optInUser.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Opt-in item", status: "active" }),
+    });
+    const itemId = ((await itemRes.json()) as any).id;
+    const listRes = await authRequest("/lists", optInUser.token, {
+      method: "POST",
+      body: JSON.stringify({ name: "Opt-in list", colorClass: "bg-blue-500" }),
+    });
+    const listId = ((await listRes.json()) as any).id;
+
+    clearAllRateLimits();
+    // Modern client: only request items. Server should skip lists entirely.
+    const res = await authRequest("/sync/pull", optInUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: { items: null } }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+
+    expect(body.changes.items).toBeDefined();
+    const itemIds = body.changes.items.upserted.map((r: any) => r.id);
+    expect(itemIds).toContain(itemId);
+
+    // Lists were not requested → must be absent from changes.
+    expect(body.changes.lists).toBeUndefined();
+    // Stale-but-untouched cursor for items still echoes; lists has none.
+    expect(body.cursors.lists).toBeUndefined();
+
+    // Sanity: the row exists, it just wasn't asked for. Confirm by asking
+    // for it explicitly in a follow-up call.
+    clearAllRateLimits();
+    const fullRes = await authRequest("/sync/pull", optInUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: { lists: null } }),
+    });
+    const fullBody = (await fullRes.json()) as any;
+    const listIds = fullBody.changes.lists.upserted.map((r: any) => r.id);
+    expect(listIds).toContain(listId);
+  });
+
+  it("cursor-key gating: empty cursors map preserves legacy full-sync behavior", async () => {
+    clearAllRateLimits();
+
+    const legacyUser = await createTestUser("Legacy Client User");
+    const itemRes = await authRequest("/things", legacyUser.token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Legacy item", status: "active" }),
+    });
+    const itemId = ((await itemRes.json()) as any).id;
+
+    clearAllRateLimits();
+    // Legacy client: empty cursors. Server should fall back to processing
+    // every SYNC_TABLE so old iOS builds keep working post-rollout.
+    const res = await authRequest("/sync/pull", legacyUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    const body = (await res.json()) as any;
+    for (const table of SYNC_TABLES) {
+      expect(body.changes[table]).toBeDefined();
+    }
+    const itemIds = body.changes.items.upserted.map((r: any) => r.id);
+    expect(itemIds).toContain(itemId);
   });
 });
 

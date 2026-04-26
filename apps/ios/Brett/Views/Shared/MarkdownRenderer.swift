@@ -123,20 +123,82 @@ struct MarkdownRenderer: View {
     }
 
     private func inline(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .inlineOnlyPreservingWhitespace
-        )
-        if let parsed = try? AttributedString(markdown: text, options: options) {
-            return parsed
-        }
-        return AttributedString(text)
+        MarkdownRenderer.attributedCache.inline(text)
     }
 
     // MARK: - Block parsing
 
     /// Public for testing so we can pin the parser's block segmentation.
     var blocks: [MarkdownBlock] {
-        MarkdownBlock.parse(source)
+        MarkdownRenderer.blockCache.blocks(for: source)
+    }
+
+    // MARK: - Caches
+
+    /// Process-wide LRU cache for `AttributedString(markdown:)` results.
+    /// Markdown parsing is one of the heaviest things SwiftUI does on a
+    /// MarkdownRenderer body — a chat thread with 30 messages parses 30+
+    /// inline strings on every render pass; a daily briefing with 10
+    /// blocks parses 10. Caching by source string short-circuits the
+    /// CommonMark parse on every render after the first. Bounded by
+    /// `countLimit` so a streaming briefing can't drift the cache
+    /// unbounded.
+    fileprivate static let attributedCache = AttributedStringCache(countLimit: 256)
+    fileprivate static let blockCache = BlockCache(countLimit: 64)
+}
+
+/// Thread-safe (`NSCache`) memo cache for inline-markdown parses.
+/// `NSCache` evicts on memory pressure and respects `countLimit`.
+fileprivate final class AttributedStringCache {
+    private let cache = NSCache<NSString, Box>()
+
+    init(countLimit: Int) {
+        cache.countLimit = countLimit
+    }
+
+    func inline(_ text: String) -> AttributedString {
+        let key = text as NSString
+        if let hit = cache.object(forKey: key) {
+            return hit.value
+        }
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace
+        )
+        let parsed = (try? AttributedString(markdown: text, options: options))
+            ?? AttributedString(text)
+        cache.setObject(Box(parsed), forKey: key)
+        return parsed
+    }
+
+    private final class Box: NSObject {
+        let value: AttributedString
+        init(_ value: AttributedString) { self.value = value }
+    }
+}
+
+/// Memo cache for full-source markdown block segmentation. Different
+/// instance from the inline cache because the keys are different
+/// shapes (full document vs single inline run).
+fileprivate final class BlockCache {
+    private let cache = NSCache<NSString, Box>()
+
+    init(countLimit: Int) {
+        cache.countLimit = countLimit
+    }
+
+    func blocks(for source: String) -> [MarkdownBlock] {
+        let key = source as NSString
+        if let hit = cache.object(forKey: key) {
+            return hit.value
+        }
+        let parsed = MarkdownBlock.parse(source)
+        cache.setObject(Box(parsed), forKey: key)
+        return parsed
+    }
+
+    private final class Box: NSObject {
+        let value: [MarkdownBlock]
+        init(_ value: [MarkdownBlock]) { self.value = value }
     }
 }
 

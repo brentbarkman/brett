@@ -149,6 +149,19 @@ final class MutationQueue: MutationQueueProtocol {
         return (try? context.fetch(descriptor)) ?? []
     }
 
+    /// Count of rows in `.pending` status — uses `fetchCount` so the
+    /// caller never has to materialise the full queue for a count.
+    /// Matters because SyncHealth telemetry on every push pass used
+    /// to call `pendingEntries(limit: 10_000)` and allocate up to
+    /// 10k SwiftData objects on main just to read `.count`.
+    func pendingCount() -> Int {
+        let pendingRaw = MutationStatus.pending.rawValue
+        let descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate { $0.status == pendingRaw }
+        )
+        return (try? context.fetchCount(descriptor)) ?? 0
+    }
+
     /// Look up an entry by its idempotency key — used by HTTP retry paths
     /// to detect duplicates before resubmitting.
     func getByIdempotencyKey(_ key: String) -> MutationQueueEntry? {

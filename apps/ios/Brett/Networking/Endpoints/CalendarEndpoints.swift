@@ -106,6 +106,12 @@ extension APIClient {
     }
 
     struct CalendarNoteResponse: Decodable, Sendable {
+        /// Server primary key — present when a note exists, nil otherwise.
+        /// Required for iOS clients that fetch notes on-demand: the local
+        /// SwiftData mirror has to be keyed by the server's id so a
+        /// subsequent user edit pushes as an UPDATE rather than colliding
+        /// with the (calendarEventId, userId) unique constraint as a CREATE.
+        let id: String?
         let content: String?
         let updatedAt: Date?
     }
