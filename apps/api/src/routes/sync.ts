@@ -276,9 +276,14 @@ export const sync = new Hono<AuthEnv>()
         ];
       } else if (table === "lists") {
         extraWhere.archivedAt = null;
-      } else if (table === "scouts") {
-        extraWhere.status = { not: "archived" };
       }
+      // No filter for scouts: the `ScoutStatus` enum is
+      // active|paused|completed|expired (no "archived"), so a `status:
+      // { not: "archived" }` clause throws Prisma validation. Soft-
+      // delete via `deletedAt` is the only mechanism that hides a
+      // scout, and `paginatedPull` handles tombstones natively. All
+      // other live statuses are still worth syncing — a completed
+      // or expired scout is read-only context the user may revisit.
 
       // Keyset-merged pull: live + tombstones in one ordered stream, single
       // monotonic cursor. See `paginated-pull.ts` for the algorithm and
