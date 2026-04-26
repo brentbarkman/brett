@@ -131,10 +131,16 @@ async function fetchTweetSyndication(url: string): Promise<TweetSyndicationResul
   const endpoint = `https://cdn.syndication.twimg.com/tweet-result?id=${id}&token=${token}&lang=en`;
   try {
     const res = await safeFetch(endpoint, { timeoutMs: 5000, maxSizeBytes: 500_000 });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[content-extractor] tweet syndication non-ok ${res.status} for ${url}`);
+      return null;
+    }
     const data = (await res.json()) as Record<string, any>;
     const handle = data?.user?.screen_name as string | undefined;
-    if (!handle) return null;
+    if (!handle) {
+      console.warn(`[content-extractor] tweet syndication missing user.screen_name for ${url}`);
+      return null;
+    }
 
     const article = (() => {
       const a = data?.article;
@@ -160,7 +166,11 @@ async function fetchTweetSyndication(url: string): Promise<TweetSyndicationResul
       article,
       mediaImageUrl,
     };
-  } catch {
+  } catch (err) {
+    const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    const cause = (err as { cause?: { code?: string; message?: string } })?.cause;
+    const causeStr = cause ? ` (cause: ${cause.code ?? cause.message ?? "?"})` : "";
+    console.warn(`[content-extractor] tweet syndication threw for ${url}: ${reason}${causeStr}`);
     return null;
   }
 }
@@ -178,14 +188,24 @@ async function fetchTweetOgTags(url: string): Promise<OgTags | null> {
         "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
       },
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`[content-extractor] tweet OG fallback non-ok ${response.status} for ${url}`);
+      return null;
+    }
     const html = await readBodyWithLimit(response, 2 * 1024 * 1024);
     const tags = parseOgTags(html, url);
     // Require at least a description OR an image — a lone title ("X") is
     // the generic homepage fallback and not worth returning.
-    if (!tags.description && !tags.imageUrl) return null;
+    if (!tags.description && !tags.imageUrl) {
+      console.warn(`[content-extractor] tweet OG fallback returned no description/image for ${url}`);
+      return null;
+    }
     return tags;
-  } catch {
+  } catch (err) {
+    const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    const cause = (err as { cause?: { code?: string; message?: string } })?.cause;
+    const causeStr = cause ? ` (cause: ${cause.code ?? cause.message ?? "?"})` : "";
+    console.warn(`[content-extractor] tweet OG fallback threw for ${url}: ${reason}${causeStr}`);
     return null;
   }
 }
