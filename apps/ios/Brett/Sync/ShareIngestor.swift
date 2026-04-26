@@ -158,7 +158,11 @@ final class ShareIngestor {
 
         // One save at the end rather than per-file — cheaper and keeps the
         // inserted Items + their mutation entries atomic from the UI's POV.
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            BrettLog.sync.error("ShareIngestor drain save failed: \(String(describing: error), privacy: .public)")
+        }
 
         // Opportunistically trim `failed/` — moved-aside payloads can
         // accumulate indefinitely otherwise. 30-day retention is plenty
