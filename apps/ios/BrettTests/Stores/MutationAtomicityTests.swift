@@ -59,7 +59,7 @@ struct MutationAtomicityTests {
             context: context,
             saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context))
         )
-        throwingStore.update(id: itemId, changes: ["title": "New title"])
+        throwingStore.update(id: itemId, changes: ["title": "New title"], userId: "alice")
 
         let refreshed = try context.fetch(
             FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemId })
@@ -83,7 +83,7 @@ struct MutationAtomicityTests {
             context: context,
             saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context))
         )
-        throwingStore.delete(id: itemId)
+        throwingStore.delete(id: itemId, userId: "alice")
 
         let refreshed = try context.fetch(
             FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemId })
@@ -108,7 +108,7 @@ struct MutationAtomicityTests {
             context: context,
             saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context))
         )
-        throwingStore.toggleStatus(id: itemId)
+        throwingStore.toggleStatus(id: itemId, userId: "alice")
 
         let refreshed = try context.fetch(
             FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemId })
@@ -151,5 +151,64 @@ struct MutationAtomicityTests {
             FetchDescriptor<ItemList>(predicate: #Predicate { $0.id == listId })
         ).first
         #expect(refreshed?.name == originalName, "list update rollback should restore original name")
+    }
+
+    // MARK: - SyncTrigger injection (Wave B Task 4)
+
+    /// Successful create must invoke `SyncTrigger.schedulePushDebounced()`
+    /// exactly once. This is the regression guard on the
+    /// `ActiveSession.syncManager` → injected `SyncTrigger` migration:
+    /// without injection there's no way to assert the push happened in
+    /// tests, and `ActiveSession` is nil under the test harness so the
+    /// real production path was previously a silent no-op.
+    @Test func successfulCreateInvokesSyncTriggerOnce() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let mockTrigger = MockSyncTrigger()
+        let store = ItemStore(
+            context: context,
+            saver: LiveSaver(context: context),
+            syncManager: mockTrigger
+        )
+
+        _ = try store.create(
+            userId: "alice",
+            title: "Push trigger test",
+            type: .task,
+            status: .active,
+            dueDate: nil,
+            listId: nil,
+            notes: nil,
+            source: "Brett"
+        )
+
+        #expect(mockTrigger.scheduleCallCount == 1)
+    }
+
+    /// Rolled-back create (save threw) must NOT invoke the sync trigger —
+    /// otherwise the push engine wakes up to find no queued mutation and
+    /// the next real mutation gets bumped a debounce interval.
+    @Test func rolledBackCreateDoesNotInvokeSyncTrigger() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let mockTrigger = MockSyncTrigger()
+        let store = ItemStore(
+            context: context,
+            saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context)),
+            syncManager: mockTrigger
+        )
+
+        #expect(throws: SaverError.self) {
+            _ = try store.create(
+                userId: "alice",
+                title: "Should not push",
+                type: .task,
+                status: .active,
+                dueDate: nil,
+                listId: nil,
+                notes: nil,
+                source: "Brett"
+            )
+        }
+
+        #expect(mockTrigger.scheduleCallCount == 0)
     }
 }

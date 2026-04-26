@@ -19,10 +19,21 @@ final class ItemStore: Clearable {
     /// simulate save failures and assert the store rolls back. Production
     /// callers leave this defaulted to `LiveSaver(context: context)`.
     @ObservationIgnored private let saver: ModelContextSaving
+    /// Sync trigger captured at init so the store stops reading
+    /// `ActiveSession.syncManager` on every mutation. `weak` because the
+    /// trigger (`SyncManager`) is owned by `Session`, which can be torn
+    /// down on sign-out before the store; we don't want to extend its
+    /// lifetime. Optional so tests/preview-only stores can omit it.
+    @ObservationIgnored private weak var syncManager: SyncTrigger?
 
-    init(context: ModelContext, saver: ModelContextSaving? = nil) {
+    init(
+        context: ModelContext,
+        saver: ModelContextSaving? = nil,
+        syncManager: SyncTrigger? = ActiveSession.syncManager
+    ) {
         self.context = context
         self.saver = saver ?? LiveSaver(context: context)
+        self.syncManager = syncManager
         ClearableStoreRegistry.register(self)
     }
 
@@ -196,7 +207,7 @@ final class ItemStore: Clearable {
             throw error
         }
 
-        ActiveSession.syncManager?.schedulePushDebounced()
+        syncManager?.schedulePushDebounced()
         return item
     }
 
@@ -207,8 +218,12 @@ final class ItemStore: Clearable {
     /// Preferred form for all new code. The 3-parameter overload below is
     /// kept for call sites (e.g. `ItemDraft`) that already captured the
     /// pre-edit state before the user began editing.
-    func update(id: String, changes: [String: Any]) {
-        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
+    ///
+    /// `userId` scopes the row lookup so a caller from one user's flow
+    /// can never mutate a row belonging to a different account that's
+    /// still lingering in SwiftData.
+    func update(id: String, changes: [String: Any], userId: String) {
+        guard let item = fetchById(id, userId: userId) else { return }
         let fields = Array(changes.keys)
         let capturedPrevious = item.previousValues(forFields: fields)
         applyUpdate(item: item, changes: changes, previousValues: capturedPrevious)
@@ -222,9 +237,10 @@ final class ItemStore: Clearable {
     func update(
         id: String,
         changes: [String: Any],
-        previousValues: [String: Any]
+        previousValues: [String: Any],
+        userId: String
     ) {
-        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
+        guard let item = fetchById(id, userId: userId) else { return }
         applyUpdate(item: item, changes: changes, previousValues: previousValues)
     }
 
@@ -268,26 +284,31 @@ final class ItemStore: Clearable {
             return
         }
 
-        ActiveSession.syncManager?.schedulePushDebounced()
+        syncManager?.schedulePushDebounced()
     }
 
     /// Toggle the done/active state of an item (common Inbox + Today action).
-    /// Routes through `update(id:changes:)` so `beforeSnapshot` is captured
-    /// from pre-mutation state — earlier versions mutated `item` first and
-    /// then passed old values explicitly, which produced a post-mutation
-    /// `beforeSnapshot` and silently broke permanent-failure rollback.
-    func toggleStatus(id: String) {
-        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
+    /// Routes through `update(id:changes:userId:)` so `beforeSnapshot` is
+    /// captured from pre-mutation state — earlier versions mutated `item`
+    /// first and then passed old values explicitly, which produced a
+    /// post-mutation `beforeSnapshot` and silently broke
+    /// permanent-failure rollback.
+    func toggleStatus(id: String, userId: String) {
+        guard let item = fetchById(id, userId: userId) else { return }
         let wasDone = item.itemStatus == .done
-        update(id: id, changes: [
-            "status": wasDone ? ItemStatus.active.rawValue : ItemStatus.done.rawValue,
-            "completedAt": wasDone ? NSNull() : Date(),
-        ])
+        update(
+            id: id,
+            changes: [
+                "status": wasDone ? ItemStatus.active.rawValue : ItemStatus.done.rawValue,
+                "completedAt": wasDone ? NSNull() : Date(),
+            ],
+            userId: userId
+        )
     }
 
     /// Soft-delete — sets `deletedAt` locally and enqueues a DELETE.
-    func delete(id: String) {
-        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
+    func delete(id: String, userId: String) {
+        guard let item = fetchById(id, userId: userId) else { return }
         let before = item.mutableFieldSnapshot()
         item.deletedAt = Date()
         item._syncStatus = SyncStatus.pendingDelete.rawValue
@@ -304,22 +325,22 @@ final class ItemStore: Clearable {
             return
         }
 
-        ActiveSession.syncManager?.schedulePushDebounced()
+        syncManager?.schedulePushDebounced()
     }
 
     // MARK: - Bulk mutate
 
     /// Apply the same changeset to every id. Per-item `previousValues` are
-    /// captured inside `update(id:changes:)` so each enqueued mutation has
-    /// the correct pre-mutation baseline.
+    /// captured inside `update(id:changes:userId:)` so each enqueued
+    /// mutation has the correct pre-mutation baseline.
     ///
     /// **Atomicity:** Per-item, not per-bulk. Each call invokes `update`,
     /// which is atomic for that item; if a save fails partway through, items
     /// already processed remain committed and the rest are skipped.
-    func bulkUpdate(ids: [String], changes: [String: Any]) {
+    func bulkUpdate(ids: [String], changes: [String: Any], userId: String) {
         guard !ids.isEmpty, !changes.isEmpty else { return }
         for id in ids {
-            update(id: id, changes: changes)
+            update(id: id, changes: changes, userId: userId)
         }
     }
 
@@ -328,9 +349,9 @@ final class ItemStore: Clearable {
     /// **Atomicity:** Per-item, not per-bulk. Each call invokes `delete`,
     /// which is atomic for that item; if a save fails partway through, items
     /// already processed remain committed and the rest are skipped.
-    func bulkDelete(ids: [String]) {
+    func bulkDelete(ids: [String], userId: String) {
         guard !ids.isEmpty else { return }
-        for id in ids { delete(id: id) }
+        for id in ids { delete(id: id, userId: userId) }
     }
 
     // MARK: - Internals

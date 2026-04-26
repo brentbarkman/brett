@@ -330,13 +330,13 @@ private struct TaskDetailBody: View {
         guard let item else { return }
         let diff = draft.diff(against: item)
         guard !diff.isEmpty else { return }
-        itemStore.commit(diff, to: item.id)
+        itemStore.commit(diff, to: item.id, userId: authManager.currentUser?.id ?? "")
         self.item = itemStore.fetchById(itemId)
     }
 
     private func toggleComplete() async {
         guard let item else { return }
-        itemStore.toggleStatus(id: item.id)
+        itemStore.toggleStatus(id: item.id, userId: authManager.currentUser?.id ?? "")
         self.item = itemStore.fetchById(itemId)
     }
 

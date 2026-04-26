@@ -247,7 +247,7 @@ struct InboxPage: View {
                             toggleSelection(item.id)
                         } else {
                             HapticManager.light()
-                            itemStore.toggleStatus(id: item.id)
+                            itemStore.toggleStatus(id: item.id, userId: authManager.currentUser?.id ?? "")
                         }
                     },
                     onSelect: {
@@ -275,7 +275,7 @@ struct InboxPage: View {
 
                 Button(role: .destructive) {
                     HapticManager.heavy()
-                    itemStore.delete(id: item.id)
+                    itemStore.delete(id: item.id, userId: authManager.currentUser?.id ?? "")
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -321,7 +321,7 @@ struct InboxPage: View {
     private func confirmBulkDelete() {
         let ids = Array(selectedIDs)
         guard !ids.isEmpty else { return }
-        itemStore.bulkDelete(ids: ids)
+        itemStore.bulkDelete(ids: ids, userId: authManager.currentUser?.id ?? "")
         exitSelectMode()
     }
 }

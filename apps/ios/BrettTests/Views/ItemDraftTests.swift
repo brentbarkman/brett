@@ -145,7 +145,7 @@ struct ItemDraftTests {
         draft.notes = "Fresh notes"
 
         let diff = draft.diff(against: item)
-        store.commit(diff, to: item.id)
+        store.commit(diff, to: item.id, userId: TestFixtures.defaultUserId)
 
         // Re-fetch and verify the update landed.
         let refetched = store.fetchById(item.id)
@@ -167,7 +167,7 @@ struct ItemDraftTests {
 
         let draft = ItemDraft(from: item)
         let diff = draft.diff(against: item)
-        store.commit(diff, to: item.id)
+        store.commit(diff, to: item.id, userId: TestFixtures.defaultUserId)
 
         // No mutation queue entry should have been written.
         let mutations = try context.fetch(FetchDescriptor<MutationQueueEntry>())

@@ -390,7 +390,7 @@ struct TodayPage: View {
     ///    completions all settle together.
     private func toggle(_ id: String) {
         HapticManager.success()
-        itemStore.toggleStatus(id: id)
+        itemStore.toggleStatus(id: id, userId: authManager.currentUser?.id ?? "")
 
         // Trigger the stats pulse. Flip true for a beat, then back false so
         // the spring animation actually runs.
@@ -432,7 +432,8 @@ struct TodayPage: View {
         itemStore.update(
             id: id,
             changes: ["dueDate": dueDate as Any? ?? NSNull()],
-            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()]
+            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()],
+            userId: authManager.currentUser?.id ?? ""
         )
     }
 
@@ -445,7 +446,8 @@ struct TodayPage: View {
         itemStore.update(
             id: id,
             changes: ["status": ItemStatus.archived.rawValue],
-            previousValues: ["status": item.status]
+            previousValues: ["status": item.status],
+            userId: authManager.currentUser?.id ?? ""
         )
     }
 
@@ -453,7 +455,7 @@ struct TodayPage: View {
     /// the server treats as soft-delete (sets deletedAt).
     private func delete(_ id: String) {
         HapticManager.heavy()
-        itemStore.delete(id: id)
+        itemStore.delete(id: id, userId: authManager.currentUser?.id ?? "")
     }
 
     // MARK: - Ticker

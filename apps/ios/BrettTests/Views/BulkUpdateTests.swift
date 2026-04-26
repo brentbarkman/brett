@@ -27,7 +27,7 @@ struct BulkUpdateTests {
         }
         try context.save()
 
-        store.bulkUpdate(ids: ids, changes: ["listId": "list-new"])
+        store.bulkUpdate(ids: ids, changes: ["listId": "list-new"], userId: TestFixtures.defaultUserId)
 
         let pending = try fetchMutationEntries(context: context)
             .filter { $0.actionEnum == .update && ids.contains($0.entityId) }
@@ -64,7 +64,8 @@ struct BulkUpdateTests {
 
         store.bulkUpdate(
             ids: fixtures.map(\.id),
-            changes: ["listId": "list-new"]
+            changes: ["listId": "list-new"],
+            userId: TestFixtures.defaultUserId
         )
 
         let pending = try fetchMutationEntries(context: context)
@@ -88,7 +89,7 @@ struct BulkUpdateTests {
         }
         try context.save()
 
-        store.bulkUpdate(ids: ids, changes: ["listId": "list-applied"])
+        store.bulkUpdate(ids: ids, changes: ["listId": "list-applied"], userId: TestFixtures.defaultUserId)
 
         for id in ids {
             let item = try #require(store.fetchById(id))
@@ -106,7 +107,8 @@ struct BulkUpdateTests {
 
         store.bulkUpdate(
             ids: ["d-1", "d-ghost"],
-            changes: ["listId": "list-x"]
+            changes: ["listId": "list-x"],
+            userId: TestFixtures.defaultUserId
         )
 
         let pending = try fetchMutationEntries(context: context)
@@ -120,7 +122,7 @@ struct BulkUpdateTests {
         let context = try InMemoryPersistenceController.makeContext()
         let store = ItemStore(context: context)
 
-        store.bulkUpdate(ids: [], changes: ["listId": "list-x"])
+        store.bulkUpdate(ids: [], changes: ["listId": "list-x"], userId: TestFixtures.defaultUserId)
 
         let pending = try fetchMutationEntries(context: context)
         #expect(pending.isEmpty)
@@ -134,7 +136,7 @@ struct BulkUpdateTests {
         context.insert(item)
         try context.save()
 
-        store.bulkUpdate(ids: ["e-1"], changes: [:])
+        store.bulkUpdate(ids: ["e-1"], changes: [:], userId: TestFixtures.defaultUserId)
 
         let pending = try fetchMutationEntries(context: context)
             .filter { $0.actionEnum == .update }
@@ -154,7 +156,7 @@ struct BulkUpdateTests {
         }
         try context.save()
 
-        store.bulkDelete(ids: ids)
+        store.bulkDelete(ids: ids, userId: TestFixtures.defaultUserId)
 
         let pending = try fetchMutationEntries(context: context)
             .filter { $0.actionEnum == .delete }

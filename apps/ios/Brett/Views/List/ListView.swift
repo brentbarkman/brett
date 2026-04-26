@@ -255,7 +255,7 @@ struct ListView: View {
 
     private func toggle(_ id: String) {
         HapticManager.success()
-        itemStore.toggleStatus(id: id)
+        itemStore.toggleStatus(id: id, userId: authManager.currentUser?.id ?? "")
     }
 
     private func schedule(_ id: String, dueDate: Date?) {
@@ -264,7 +264,8 @@ struct ListView: View {
         itemStore.update(
             id: id,
             changes: ["dueDate": dueDate as Any? ?? NSNull()],
-            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()]
+            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()],
+            userId: authManager.currentUser?.id ?? ""
         )
     }
 
@@ -274,13 +275,14 @@ struct ListView: View {
         itemStore.update(
             id: id,
             changes: ["status": ItemStatus.archived.rawValue],
-            previousValues: ["status": item.status]
+            previousValues: ["status": item.status],
+            userId: authManager.currentUser?.id ?? ""
         )
     }
 
     private func delete(_ id: String) {
         HapticManager.heavy()
-        itemStore.delete(id: id)
+        itemStore.delete(id: id, userId: authManager.currentUser?.id ?? "")
     }
 
     private func reorder(_ newOrder: [String]) {

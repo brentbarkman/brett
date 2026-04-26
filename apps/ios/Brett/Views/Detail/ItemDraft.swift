@@ -138,14 +138,16 @@ struct ItemDraft: Equatable {
 @MainActor
 extension ItemStore {
     /// Convert the typed `ItemDraft.Diff` into the `[String: Any]` dicts the
-    /// existing `update(...)` signature expects, then commit.
-    func commit(_ diff: ItemDraft.Diff, to id: String) {
+    /// existing `update(...)` signature expects, then commit. `userId`
+    /// scopes the row lookup so a draft for one user can never mutate
+    /// another user's row.
+    func commit(_ diff: ItemDraft.Diff, to id: String, userId: String) {
         guard !diff.isEmpty else { return }
 
         let changes = anyDict(diff.changes)
         let previousValues = anyDict(diff.previousValues)
 
-        update(id: id, changes: changes, previousValues: previousValues)
+        update(id: id, changes: changes, previousValues: previousValues, userId: userId)
     }
 
     /// Unwrap `AnyHashable` back into the `[String: Any]` shape `update(...)`

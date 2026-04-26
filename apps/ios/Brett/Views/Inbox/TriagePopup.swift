@@ -281,7 +281,8 @@ struct TriagePopup: View {
         HapticManager.heavy()
         itemStore.bulkUpdate(
             ids: Array(selectedIDs),
-            changes: ["dueDate": date]
+            changes: ["dueDate": date],
+            userId: userId ?? ""
         )
         isPresented = false
         onCommit()
@@ -291,7 +292,8 @@ struct TriagePopup: View {
         HapticManager.heavy()
         itemStore.bulkUpdate(
             ids: Array(selectedIDs),
-            changes: ["listId": listId]
+            changes: ["listId": listId],
+            userId: userId ?? ""
         )
         isPresented = false
         onCommit()

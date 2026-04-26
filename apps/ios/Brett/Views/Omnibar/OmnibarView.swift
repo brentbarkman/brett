@@ -226,7 +226,8 @@ struct OmnibarView: View {
             itemStore.update(
                 id: created.id,
                 changes: ["reminder": reminder],
-                previousValues: ["reminder": NSNull()]
+                previousValues: ["reminder": NSNull()],
+                userId: userId
             )
         }
 

@@ -24,7 +24,7 @@ struct ItemStoreUpdateTests {
         context.insert(item)
         try context.save()
 
-        store.update(id: item.id, changes: ["title": "edited", "notes": "after"])
+        store.update(id: item.id, changes: ["title": "edited", "notes": "after"], userId: "u1")
 
         // Find the resulting mutation queue entry and verify previousValues.
         // The id is hoisted into a local value — `#Predicate` captures only
@@ -62,7 +62,7 @@ struct ItemStoreUpdateTests {
         context.insert(item)
         try context.save()
 
-        store.toggleStatus(id: item.id)
+        store.toggleStatus(id: item.id, userId: "u1")
 
         let itemId = item.id
         let queueDescriptor = FetchDescriptor<MutationQueueEntry>(
@@ -98,7 +98,8 @@ struct ItemStoreUpdateTests {
         store.update(
             id: item.id,
             changes: ["title": "new"],
-            previousValues: ["title": "form-open-title"]
+            previousValues: ["title": "form-open-title"],
+            userId: "u1"
         )
 
         let itemId = item.id
