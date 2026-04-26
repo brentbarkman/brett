@@ -13,12 +13,26 @@ import SwiftUI
 /// the captured user. This pushes the user filter down into the
 /// SwiftData fetch instead of doing it in Swift after the fact —
 /// cheaper, and keeps cross-user rows from ever entering the working set.
+///
+/// View identity:
+/// `TodayPage` is a thin auth gate — when the user is authenticated it
+/// renders `TodayPageBody(userId:)` modified with `.id(userId)`. The
+/// `.id(...)` is the load-bearing piece: SwiftUI uses view identity to
+/// decide whether to reuse a view's storage or remount fresh, and
+/// pinning identity to `userId` guarantees that any future user-swap
+/// (multi-account, server-side reassignment, refresh-returning-different-id)
+/// triggers a full re-init of `TodayPageBody`'s `@Query` predicates,
+/// `@State` stores, and any cached state. Sign-out is also covered for
+/// free: `RootView`'s auth gate unmounts `MainContainer` entirely, which
+/// destroys the body via the structural path. The `.id` makes that
+/// invariant local instead of relying on a multi-component dance.
 struct TodayPage: View {
     @Environment(AuthManager.self) private var authManager
 
     var body: some View {
         if let userId = authManager.currentUser?.id {
             TodayPageBody(userId: userId)
+                .id(userId)
         } else {
             // Signed-out fallback. The auth gate upstream
             // (`MainContainer`) usually prevents this branch, but render
@@ -31,8 +45,10 @@ struct TodayPage: View {
 
 /// Today's data + UI. Owned by `TodayPage`'s auth gate, so `userId` is
 /// guaranteed non-optional for this view's lifetime. Re-instantiated on
-/// account switch (because `userId` changes the parent's view identity),
-/// which gives us a fresh `@Query` with the new user's predicate.
+/// account switch because the parent applies `.id(userId)` — SwiftUI
+/// treats a changed `id` as a new view identity and remounts this body
+/// from scratch, which gives us a fresh `@Query` with the new user's
+/// predicate (plus a clean slate for `@State` stores and caches).
 private struct TodayPageBody: View {
     let userId: String
 
@@ -85,6 +101,11 @@ private struct TodayPageBody: View {
         }
         _events = Query(filter: eventPredicate, sort: \CalendarEvent.startTime)
 
+        // Explicit reassignment to keep parallel structure with the
+        // user-scoped queries above. Functionally redundant — the
+        // property declaration's default `Query()` is identical — but
+        // keeping it makes the init read as a complete inventory of
+        // every `@Query` this view owns.
         _syncHealthRows = Query()
     }
 
@@ -495,30 +516,40 @@ private struct TodayPageBody: View {
     let calendar = Calendar.current
     let today = calendar.startOfDay(for: Date())
 
-    let workList = ItemList(userId: "preview-user", name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
-    let healthList = ItemList(userId: "preview-user", name: "Health", colorClass: "bg-green-500", sortOrder: 1)
+    // `TodayPage` is an auth gate that reads `userId` from `AuthManager`
+    // and pushes it into `TodayPageBody`'s `@Query` predicates. Previews
+    // need an injected `AuthManager` whose `currentUser.id` matches the
+    // userId used to seed the fixtures below — otherwise the page falls
+    // through to its signed-out `EmptyView()` branch and the preview
+    // renders blank. `injectFakeSession` is DEBUG-only.
+    let authManager = AuthManager()
+    authManager.injectFakeSession(user: .testUser, token: "preview")
+    let previewUserId = AuthUser.testUser.id
+
+    let workList = ItemList(userId: previewUserId, name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
+    let healthList = ItemList(userId: previewUserId, name: "Health", colorClass: "bg-green-500", sortOrder: 1)
     context.insert(workList)
     context.insert(healthList)
 
     let fixtures: [Item] = [
         // Overdue
-        .init(userId: "preview-user", title: "Submit Q1 expense report", dueDate: calendar.date(byAdding: .day, value: -2, to: today), listId: workList.id),
-        .init(userId: "preview-user", title: "Renew gym membership", dueDate: calendar.date(byAdding: .day, value: -1, to: today), listId: healthList.id),
+        .init(userId: previewUserId, title: "Submit Q1 expense report", dueDate: calendar.date(byAdding: .day, value: -2, to: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Renew gym membership", dueDate: calendar.date(byAdding: .day, value: -1, to: today), listId: healthList.id),
         // Today
-        .init(userId: "preview-user", title: "Prep slides for Q2 review", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today), listId: workList.id),
-        .init(userId: "preview-user", title: "Push mobile auth fix to staging", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today), listId: workList.id),
-        .init(userId: "preview-user", title: "Book physio appointment", dueDate: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today), listId: healthList.id),
+        .init(userId: previewUserId, title: "Prep slides for Q2 review", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Push mobile auth fix to staging", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Book physio appointment", dueDate: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today), listId: healthList.id),
         // This week
-        .init(userId: "preview-user", title: "Draft technical spec for sync v2", dueDate: calendar.date(byAdding: .day, value: 2, to: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Draft technical spec for sync v2", dueDate: calendar.date(byAdding: .day, value: 2, to: today), listId: workList.id),
         // Next week
-        .init(userId: "preview-user", title: "Annual performance self-review", dueDate: calendar.date(byAdding: .day, value: 7, to: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Annual performance self-review", dueDate: calendar.date(byAdding: .day, value: 7, to: today), listId: workList.id),
     ]
     for item in fixtures {
         context.insert(item)
     }
 
     // One done-today item so the Done section lights up.
-    let done = Item(userId: "preview-user", title: "Morning standup", dueDate: today, listId: workList.id)
+    let done = Item(userId: previewUserId, title: "Morning standup", dueDate: today, listId: workList.id)
     done.status = ItemStatus.done.rawValue
     done.completedAt = Date()
     context.insert(done)
@@ -529,16 +560,24 @@ private struct TodayPageBody: View {
         BackgroundView()
         TodayPage()
     }
+    .environment(authManager)
     .modelContainer(preview.container)
     .preferredColorScheme(.dark)
 }
 
 #Preview("Today — empty state") {
     let preview = PersistenceController.makePreview()
+    // Auth gate needs a user even in the empty-state preview — without
+    // one, `TodayPage` renders its signed-out `EmptyView()` branch
+    // instead of `TodayPageBody`'s empty state (the actual thing this
+    // preview exists to demonstrate).
+    let authManager = AuthManager()
+    authManager.injectFakeSession(user: .testUser, token: "preview")
     return ZStack {
         BackgroundView()
         TodayPage()
     }
+    .environment(authManager)
     .modelContainer(preview.container)
     .preferredColorScheme(.dark)
 }

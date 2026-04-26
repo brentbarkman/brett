@@ -52,5 +52,14 @@ struct UserScopedQueryTests {
         )
         #expect(aliceLists.count == 3)
         #expect(aliceLists.allSatisfy { $0.userId == "alice" })
+
+        let bobUid = "bob"
+        let bobLists = try context.fetch(
+            FetchDescriptor<ItemList>(
+                predicate: #Predicate { $0.deletedAt == nil && $0.userId == bobUid }
+            )
+        )
+        #expect(bobLists.count == 2)
+        #expect(bobLists.allSatisfy { $0.userId == "bob" })
     }
 }
