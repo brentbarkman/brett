@@ -22,7 +22,7 @@ import SwiftData
 /// back onto the main actor.
 @MainActor
 @Observable
-final class ChatStore {
+final class ChatStore: Clearable {
     /// Messages in the current UI, keyed by itemId or eventId. These are
     /// NOT the persisted `BrettMessage` rows — they're the live view model
     /// that lets streaming deltas mutate without fighting SwiftData.
@@ -54,6 +54,7 @@ final class ChatStore {
         self.session = session
         self.persistence = persistence
         ChatStoreRegistry.register(self)
+        ClearableStoreRegistry.register(self)
     }
 
     // No explicit deinit: the registry holds weak refs and compacts on
@@ -186,6 +187,42 @@ final class ChatStore {
         activeStreams.removeAll()
         for key in isStreaming.keys { isStreaming[key] = false }
     }
+
+    // MARK: - Clearable
+
+    /// Sign-out hook. Cancels every in-flight stream (same machinery as the
+    /// existing `cancelAll()`) and drops the in-memory message buffers so a
+    /// late SSE chunk can't repopulate them after the SwiftData wipe. The
+    /// per-key `isStreaming` flags are reset by `cancelAll()`; we also blow
+    /// away `lastError` so a stale banner from the prior session doesn't
+    /// flash on the next user's first chat open.
+    func clearForSignOut() {
+        cancelAll()
+        messages = [:]
+        isStreaming = [:]
+        lastError = [:]
+    }
+
+    #if DEBUG
+    /// Test-only: seed in-memory chat state without driving the streaming
+    /// pipeline. Only the keys passed here are written; existing keys are
+    /// untouched (mirrors `injectForTesting` shape on other stores).
+    func injectForTesting(
+        messages: [String: [ChatMessage]]? = nil,
+        isStreaming: [String: Bool]? = nil,
+        lastError: [String: String]? = nil
+    ) {
+        if let messages {
+            for (k, v) in messages { self.messages[k] = v }
+        }
+        if let isStreaming {
+            for (k, v) in isStreaming { self.isStreaming[k] = v }
+        }
+        if let lastError {
+            for (k, v) in lastError { self.lastError[k] = v }
+        }
+    }
+    #endif
 
     /// Wrap a stream launch so the inner Task is tracked in `activeStreams`
     /// and removed on completion. The caller `await`s the wrapped Task, so
