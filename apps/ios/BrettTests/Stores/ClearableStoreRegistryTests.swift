@@ -50,3 +50,28 @@ struct ClearableStoreRegistryTests {
         #expect(store.clears == 1)
     }
 }
+
+@Suite("ClearableStoreRegistry session integration", .tags(.auth, .smoke))
+@MainActor
+struct ClearableStoreRegistrySessionIntegrationTests {
+    @MainActor
+    private final class CountingStore: Clearable {
+        var clears: Int = 0
+        func clearForSignOut() { clears += 1 }
+    }
+
+    @Test func sessionTearDownClearsRegisteredStores() throws {
+        ClearableStoreRegistry.resetForTesting()
+        let store = CountingStore()
+        ClearableStoreRegistry.register(store)
+
+        let container = try InMemoryPersistenceController.makeContainer()
+        let persistence = PersistenceController.makePreview()
+        let session = Session(userId: "user-A", persistence: persistence)
+        session.start()
+        session.tearDown()
+
+        #expect(store.clears == 1)
+        _ = container // keep alive
+    }
+}

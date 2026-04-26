@@ -91,6 +91,15 @@ final class Session {
     ///   2. Disconnect SSE so no new events arrive.
     ///   3. Stop the sync manager so its poll loop ends.
     func tearDown() {
+        // Clear in-memory store caches first. SwiftData rows still exist at
+        // this point — `wipeAllData()` runs in `AuthManager.signOut` *after*
+        // we return — but stores that cache derived state in memory must
+        // drop it now so a stream/network completion arriving in the next
+        // few ms can't repopulate them with the prior user's data.
+        ClearableStoreRegistry.clearAll()
+        // Legacy chat-specific cancellation. Wave A keeps it; once every
+        // ChatStore is registered as Clearable in Task 10, this becomes
+        // redundant and gets removed.
         ChatStoreRegistry.cancelAllActive()
         sseClient.disconnect()
         sseHandler?.stop()
