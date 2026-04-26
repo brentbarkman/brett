@@ -53,6 +53,10 @@ struct PushEngineTests {
         func getByIdempotencyKey(_ key: String) -> MutationQueueEntry? {
             pending.first(where: { $0.idempotencyKey == key })
         }
+
+        func pendingCount() -> Int {
+            pending.count
+        }
     }
 
     /// Build an APIClient backed by `MockURLProtocol`. Does NOT reset the

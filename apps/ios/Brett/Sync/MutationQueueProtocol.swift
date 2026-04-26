@@ -30,6 +30,12 @@ protocol MutationQueueProtocol: AnyObject {
     /// Look up an entry by its idempotency key. Used to cross-reference
     /// push results (which echo the key) back to the originating mutation.
     func getByIdempotencyKey(_ key: String) -> MutationQueueEntry?
+
+    /// Count of pending entries — uses `fetchCount` on the underlying
+    /// store so SyncHealth telemetry never has to materialise the whole
+    /// queue just to know its depth. Important under retry storms when
+    /// the queue can pile up to thousands of entries.
+    func pendingCount() -> Int
 }
 
 extension MutationQueueProtocol {

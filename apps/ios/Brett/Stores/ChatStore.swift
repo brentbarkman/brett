@@ -308,15 +308,17 @@ final class ChatStore {
                     )
                     // Invalidate cached history so the next detail-view
                     // open re-fetches from the server (which now holds
-                    // the messages we just streamed). Detached because
-                    // `RemoteCache` is an actor and we don't want to
-                    // block the stream-completion path on it.
-                    Task.detached {
-                        await RemoteCache.shared.invalidateChatHistory(
-                            itemId: itemId,
-                            eventId: calendarEventId
-                        )
-                    }
+                    // the messages we just streamed). Awaited inline —
+                    // a detached Task here would yield, allowing a new
+                    // detail-view open to read the still-cached stale
+                    // entry between persistAssistant and the eviction.
+                    // The actor hop is cheap (one suspension) and we're
+                    // already inside a Task on the streaming path, so
+                    // there's nothing meaningful to "block."
+                    await RemoteCache.shared.invalidateChatHistory(
+                        itemId: itemId,
+                        eventId: calendarEventId
+                    )
                 }
             }
         } catch {

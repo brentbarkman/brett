@@ -81,6 +81,12 @@ enum SyncEntityMapper {
 
     /// Hard-delete a record by (table, id). Pulls are authoritative for
     /// deletions, so we ignore local pending state here.
+    ///
+    /// Caller owns the save: this function only stages the delete on the
+    /// passed context. SyncDataActor batches dozens of deletes per round
+    /// and saves once at the end; saving inside this helper would amplify
+    /// to one save per row, defeating the batching. Standalone callers
+    /// (SSE event handler, ad-hoc cleanups) save their context explicitly.
     static func hardDelete(
         tableName: String,
         id: String,
@@ -106,8 +112,6 @@ enum SyncEntityMapper {
         default:
             return
         }
-        // Flush the delete so subsequent fetches don't return the ghost.
-        try? context.save()
     }
 
     // MARK: - Item

@@ -217,11 +217,15 @@ export const sync = new Hono<AuthEnv>()
     // via the per-resource GET endpoints (chat, findings, notes, etc.).
     //
     // Items: active/snoozed (open work, no cap) OR recently completed
-    // (last 36h to span any timezone's startOfToday). Local filter
-    // (TodaySections) narrows further to the user's local "today."
+    // (last 48h to span any timezone's startOfToday with margin). Local
+    // filter (TodaySections) narrows further to the user's local "today."
+    // 48h was chosen over 24h because UTC-based cutoffs vs user-local
+    // "today" can drift up to ~14h either way; 48h gives a clean
+    // overlap on every timezone, including UTC-12 with a yesterday-late
+    // completion.
     // Calendar events: ±14 days. Calendar page fetches outside-window
     // ranges via /events/fetch-range when the user navigates.
-    const completedCutoff = new Date(Date.now() - 36 * 60 * 60 * 1000);
+    const completedCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     const fourteenDaysAhead = new Date();
