@@ -97,6 +97,28 @@ final class CalendarEvent {
         Int(endTime.timeIntervalSince(startTime) / 60)
     }
 
+    /// Whether this event blocks time on the user's calendar.
+    ///
+    /// Mirrors Google Calendar's `transparency` field: `"transparent"` means
+    /// the event does not block time (e.g. Gmail-derived flight / hotel
+    /// holds, working-location markers). `"opaque"` (the default) means the
+    /// user is busy. Anything else — including a missing field or a non-
+    /// Google event with no `rawGoogleEventJSON` — falls back to busy so we
+    /// don't silently drop manually-created events from totals.
+    ///
+    /// The transparency value is preserved server-side in the scrubbed
+    /// `rawGoogleEvent` JSON (see `apps/api/src/services/calendar-sync.ts`
+    /// `scrubRawEvent`) and shipped to clients via the standard sync pull.
+    var isBusy: Bool {
+        guard let json = rawGoogleEventJSON,
+              let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let transparency = dict["transparency"] as? String else {
+            return true
+        }
+        return transparency != "transparent"
+    }
+
     var syncStatusEnum: SyncStatus {
         SyncStatus(rawValue: _syncStatus) ?? .synced
     }
