@@ -15,6 +15,10 @@ import SwiftData
 @Observable
 final class ItemStore: Clearable {
     private let context: ModelContext
+    /// Injection seam for `context.save()` so mutation atomicity tests can
+    /// simulate save failures and assert the store rolls back. Production
+    /// callers leave this defaulted to `LiveSaver(context: context)`.
+    @ObservationIgnored private let saver: ModelContextSaving
     // Lazy so tests/previews that never enqueue don't pay the allocation,
     // and so the queue always shares the store's ModelContext.
     //
@@ -26,8 +30,9 @@ final class ItemStore: Clearable {
     // internal implementation detail; view updates don't key off it.
     @ObservationIgnored private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
-    init(context: ModelContext) {
+    init(context: ModelContext, saver: ModelContextSaving? = nil) {
         self.context = context
+        self.saver = saver ?? LiveSaver(context: context)
         ClearableStoreRegistry.register(self)
     }
 
@@ -156,6 +161,12 @@ final class ItemStore: Clearable {
     // MARK: - Mutate
 
     /// Create a new item locally and enqueue a CREATE mutation.
+    ///
+    /// The optimistic insert + queued mutation are committed in a single
+    /// `context.save()`. If that save fails the rollback discards both,
+    /// keeping the model and the mutation queue in lockstep — without
+    /// rollback, a partial-failure leaves a row visible to `@Query` with
+    /// no queue entry, and the create never reaches the server.
     @discardableResult
     func create(
         userId: String,
@@ -166,7 +177,7 @@ final class ItemStore: Clearable {
         listId: String? = nil,
         notes: String? = nil,
         source: String = "Brett"
-    ) -> Item {
+    ) throws -> Item {
         let now = Date()
         let item = Item(
             userId: userId,
@@ -184,7 +195,17 @@ final class ItemStore: Clearable {
         context.insert(item)
 
         enqueueCreate(item)
-        save()
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback discards both the optimistic item insert AND the
+            // queued mutation entry so model + queue stay aligned.
+            saver.rollback()
+            BrettLog.store.error("ItemStore create save failed: \(String(describing: error), privacy: .public)")
+            throw error
+        }
+
         ActiveSession.syncManager?.schedulePushDebounced()
         return item
     }
@@ -327,7 +348,14 @@ final class ItemStore: Clearable {
         payload["createdAt"] = item.createdAt
         payload["updatedAt"] = item.updatedAt
 
-        mutationQueue.enqueue(
+        // Insert directly rather than going through `MutationQueue.enqueue`:
+        // that helper does eager compaction + commits a save mid-method, which
+        // would split the model insert and queue-entry insert across two
+        // transactions and break the atomic-rollback guarantee. A brand-new
+        // CREATE never has anything to compact against (no prior pending rows
+        // for an entity that doesn't exist yet), so the helper's savings
+        // don't apply here.
+        let entry = MutationQueueEntry(
             entityType: "item",
             entityId: item.id,
             action: .create,
@@ -335,6 +363,7 @@ final class ItemStore: Clearable {
             method: .post,
             payload: JSONCodec.encode(payload)
         )
+        context.insert(entry)
     }
 
     private func enqueueUpdate(

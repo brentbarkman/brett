@@ -21,6 +21,11 @@ struct ClearableConformanceTests {
     /// Curated list. Add entries when new stores ship. Each is also referenced
     /// in `assertConformance` below — that reference is what enforces the
     /// `Clearable` constraint at compile time.
+    ///
+    /// Non-store helpers under `Stores/` (e.g. `ModelContextSaving.swift`,
+    /// `PersistenceController.swift`, `ClearableStoreRegistry.swift`) appear
+    /// here so the on-disk-vs-curated equality check passes, but they do not
+    /// need a `Clearable`-conformance entry below.
     private static let expectedStores: [String] = [
         "AIProviderStore.swift",
         "AttachmentStore.swift",
@@ -32,6 +37,7 @@ struct ClearableConformanceTests {
         "ItemStore.swift",
         "ListStore.swift",
         "MessageStore.swift",
+        "ModelContextSaving.swift",
         "NewsletterStore.swift",
         "PersistenceController.swift",
         "ScoutStore.swift",

@@ -194,13 +194,25 @@ struct OmnibarView: View {
             return nil
         }()
 
-        let created = itemStore.create(
-            userId: userId,
-            title: parsed.title,
-            type: itemType,
-            dueDate: resolvedDueDate,
-            listId: resolvedListId
-        )
+        let created: Item
+        do {
+            created = try itemStore.create(
+                userId: userId,
+                title: parsed.title,
+                type: itemType,
+                dueDate: resolvedDueDate,
+                listId: resolvedListId
+            )
+        } catch {
+            // Atomic create failed (SwiftData save threw). The row was
+            // rolled back, so the user sees nothing happen — flash the
+            // failure border + haptic to surface the loss instead of
+            // silently swallowing it.
+            BrettLog.store.error("Omnibar create failed: \(String(describing: error), privacy: .public)")
+            HapticManager.error()
+            flashParseFailure()
+            return
+        }
 
         // Hand the new id to SelectionStore so the host page can scroll
         // it into view. Without this, adding a task to a long list looks
