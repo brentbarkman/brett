@@ -148,3 +148,80 @@ struct TodaySections {
         )
     }
 }
+
+/// Memo-cache around `TodaySections.bucket(...)`. Held in a `@State`
+/// reference type on `TodayPage` so it survives across body passes.
+///
+/// Why: `TodayPage.sections` was a computed property calling
+/// `TodaySections.bucket(items:reflowKey:pendingDoneIDs:)` on every
+/// SwiftUI body re-evaluation, which fires on EVERY @Query update,
+/// every @State change (completionPulse, scenePhase, etc.), and every
+/// TabView selection. Bucket is O(n) classify + 5 small sorts; for
+/// 200 active items + 50 done that's a few hundred operations per
+/// render, including comparing dates. Adds up under a sync climb.
+///
+/// The cache is keyed by a hash of (id, status, dueDate, completedAt)
+/// across the items plus the reflow + pending-done state. Hash is
+/// also O(n), but ~10x cheaper than bucket because there's no sort.
+/// On cache hits (items stable, state changes only) we skip bucket
+/// entirely.
+///
+/// `@MainActor` because `TodayPage` is main-actor; the cache itself
+/// has no other reason to leave it.
+@MainActor
+final class TodaySectionsCache {
+    private var lastSignature: Int?
+    private var lastResult: TodaySections?
+
+    func sections(
+        items: [Item],
+        reflowKey: Int,
+        pendingDoneIDs: Set<String>
+    ) -> TodaySections {
+        let signature = Self.signature(
+            items: items,
+            reflowKey: reflowKey,
+            pendingDoneIDs: pendingDoneIDs
+        )
+        if let lastSignature, lastSignature == signature, let lastResult {
+            return lastResult
+        }
+        let result = TodaySections.bucket(
+            items: items,
+            reflowKey: reflowKey,
+            pendingDoneIDs: pendingDoneIDs
+        )
+        lastSignature = signature
+        lastResult = result
+        return result
+    }
+
+    /// Hash the inputs that could change the bucket output. Mirrors
+    /// the fields `bucket()` reads. Including pendingDoneIDs and
+    /// reflowKey so the debounce mechanic still re-derives correctly.
+    /// `Hasher.finalize()` collisions are vanishingly rare in this
+    /// shape — even if one happens, the only consequence is one
+    /// stale render before the next mutation re-keys it.
+    private static func signature(
+        items: [Item],
+        reflowKey: Int,
+        pendingDoneIDs: Set<String>
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(reflowKey)
+        // Set is hashable but its `hashValue` is unstable across
+        // launches; combine sorted elements for a deterministic hash
+        // within the process lifetime (we only need stability across
+        // back-to-back render passes, not across launches).
+        for id in pendingDoneIDs.sorted() {
+            hasher.combine(id)
+        }
+        for item in items {
+            hasher.combine(item.id)
+            hasher.combine(item.status)
+            hasher.combine(item.dueDate)
+            hasher.combine(item.completedAt)
+        }
+        return hasher.finalize()
+    }
+}

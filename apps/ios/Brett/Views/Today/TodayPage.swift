@@ -94,6 +94,13 @@ struct TodayPage: View {
     /// and the user's next tap lands on the wrong row. Cleared 2s after
     /// the last completion (any new tap resets the clock).
     @State private var pendingDoneIDs: Set<String> = []
+    /// Memo cache for `TodaySections.bucket(...)`. Without it, the
+    /// bucket runs on every SwiftUI body re-eval (sync save, scenePhase,
+    /// TabView selection, completionPulse, etc.) — a 200-item set
+    /// becomes hundreds of date comparisons + 5 sorts per render. The
+    /// cache short-circuits when items + reflow + pendingDone are
+    /// unchanged, which is the common case for state-only re-renders.
+    @State private var sectionsCache = TodaySectionsCache()
 
     /// Ticker driving NextUpCard's relative-time copy.
     @State private var tickerNow: Date = Date()
@@ -188,7 +195,7 @@ struct TodayPage: View {
     // MARK: - Section computation
 
     private var sections: TodaySections {
-        TodaySections.bucket(
+        sectionsCache.sections(
             items: userItems,
             reflowKey: reflowSnapshotKey,
             pendingDoneIDs: pendingDoneIDs
