@@ -15,11 +15,6 @@ final class ListStore: Clearable {
     /// simulate save failures and assert the store rolls back. Production
     /// callers leave this defaulted to `LiveSaver(context: context)`.
     @ObservationIgnored private let saver: ModelContextSaving
-    // `@ObservationIgnored` is required: @Observable + `lazy var` are
-    // incompatible (the macro's generated init accessor cannot reference
-    // lazy storage). The mutation queue is an implementation detail — views
-    // don't observe it — so ignoring it for observation is also correct.
-    @ObservationIgnored private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
     init(context: ModelContext, saver: ModelContextSaving? = nil) {
         self.context = context
@@ -105,7 +100,7 @@ final class ListStore: Clearable {
             // Rollback discards both the optimistic list insert AND the
             // queued mutation entry so model + queue stay aligned.
             saver.rollback()
-            BrettLog.store.error("ListStore create save failed: \(String(describing: error), privacy: .public)")
+            logSaveFailure("create", error)
             throw error
         }
 
@@ -162,7 +157,7 @@ final class ListStore: Clearable {
             // change would remain visible to @Query while the queue had no
             // entry, so the edit would never reach the server.
             saver.rollback()
-            BrettLog.store.error("ListStore update save failed: \(String(describing: error), privacy: .public)")
+            logSaveFailure("applyUpdate", error)
             return
         }
 
@@ -203,6 +198,13 @@ final class ListStore: Clearable {
             BrettLog.store.error("ListStore fetch failed: \(String(describing: error), privacy: .public)")
             return []
         }
+    }
+
+    /// Shared rollback-log shape so each catch site doesn't repeat the
+    /// store name + " save failed: " prefix. `Self.self` keeps the store
+    /// name auto-attached even if this is ever copied to another store.
+    private func logSaveFailure(_ operation: String, _ error: Error) {
+        BrettLog.store.error("\(Self.self) \(operation) save failed: \(String(describing: error), privacy: .public)")
     }
 
     private func enqueueCreate(_ list: ItemList) {

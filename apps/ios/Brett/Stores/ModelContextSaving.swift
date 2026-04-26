@@ -27,12 +27,15 @@ struct LiveSaver: ModelContextSaving {
 }
 
 #if DEBUG
+/// Test-only error thrown by the throwing saver variants. Hoisted so a
+/// test that doesn't care which variant it has can assert against one type.
+enum SaverError: Error, Equatable { case armed }
+
 /// Saver that always throws. Use when the test only cares that the store
 /// rejects the mutation and surfaces an error — not what `rollback()` does.
 @MainActor
 struct ThrowingSaver: ModelContextSaving {
-    enum InjectedError: Error, Equatable { case armed }
-    func save() throws { throw InjectedError.armed }
+    func save() throws { throw SaverError.armed }
     /// No-op: nothing was committed and there is no underlying context to
     /// rewind. Tests that need the production rollback to actually revert
     /// in-memory SwiftData state should use `ThrowingSaverWrappingLive`.
@@ -47,8 +50,7 @@ struct ThrowingSaver: ModelContextSaving {
 @MainActor
 struct ThrowingSaverWrappingLive: ModelContextSaving {
     let live: LiveSaver
-    enum InjectedError: Error, Equatable { case armed }
-    func save() throws { throw InjectedError.armed }
+    func save() throws { throw SaverError.armed }
     func rollback() { live.rollback() }
 }
 #endif

@@ -19,16 +19,6 @@ final class ItemStore: Clearable {
     /// simulate save failures and assert the store rolls back. Production
     /// callers leave this defaulted to `LiveSaver(context: context)`.
     @ObservationIgnored private let saver: ModelContextSaving
-    // Lazy so tests/previews that never enqueue don't pay the allocation,
-    // and so the queue always shares the store's ModelContext.
-    //
-    // `@ObservationIgnored` is required: the `@Observable` macro generates
-    // init-accessor stored-property tracking for every stored property, and
-    // that machinery cannot coexist with `lazy var` (Swift rejects the
-    // auto-generated init accessor referencing `_mutationQueue`). Marking
-    // this ignored is correct for semantics too — the mutation queue is an
-    // internal implementation detail; view updates don't key off it.
-    @ObservationIgnored private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
 
     init(context: ModelContext, saver: ModelContextSaving? = nil) {
         self.context = context
@@ -202,7 +192,7 @@ final class ItemStore: Clearable {
             // Rollback discards both the optimistic item insert AND the
             // queued mutation entry so model + queue stay aligned.
             saver.rollback()
-            BrettLog.store.error("ItemStore create save failed: \(String(describing: error), privacy: .public)")
+            logSaveFailure("create", error)
             throw error
         }
 
@@ -274,7 +264,7 @@ final class ItemStore: Clearable {
             // change would remain visible to @Query while the queue had no
             // entry, so the edit would never reach the server.
             saver.rollback()
-            BrettLog.store.error("ItemStore update save failed: \(String(describing: error), privacy: .public)")
+            logSaveFailure("applyUpdate", error)
             return
         }
 
@@ -310,7 +300,7 @@ final class ItemStore: Clearable {
             // Rollback restores `deletedAt = nil` and discards the queued
             // DELETE entry — model + queue stay in lockstep.
             saver.rollback()
-            BrettLog.store.error("ItemStore delete save failed: \(String(describing: error), privacy: .public)")
+            logSaveFailure("delete", error)
             return
         }
 
@@ -322,6 +312,10 @@ final class ItemStore: Clearable {
     /// Apply the same changeset to every id. Per-item `previousValues` are
     /// captured inside `update(id:changes:)` so each enqueued mutation has
     /// the correct pre-mutation baseline.
+    ///
+    /// **Atomicity:** Per-item, not per-bulk. Each call invokes `update`,
+    /// which is atomic for that item; if a save fails partway through, items
+    /// already processed remain committed and the rest are skipped.
     func bulkUpdate(ids: [String], changes: [String: Any]) {
         guard !ids.isEmpty, !changes.isEmpty else { return }
         for id in ids {
@@ -330,6 +324,10 @@ final class ItemStore: Clearable {
     }
 
     /// Soft-delete many items at once.
+    ///
+    /// **Atomicity:** Per-item, not per-bulk. Each call invokes `delete`,
+    /// which is atomic for that item; if a save fails partway through, items
+    /// already processed remain committed and the rest are skipped.
     func bulkDelete(ids: [String]) {
         guard !ids.isEmpty else { return }
         for id in ids { delete(id: id) }
@@ -344,6 +342,13 @@ final class ItemStore: Clearable {
             BrettLog.store.error("ItemStore fetch failed: \(String(describing: error), privacy: .public)")
             return []
         }
+    }
+
+    /// Shared rollback-log shape so each catch site doesn't repeat the
+    /// store name + " save failed: " prefix. `Self.self` keeps the store
+    /// name auto-attached even if this is ever copied to another store.
+    private func logSaveFailure(_ operation: String, _ error: Error) {
+        BrettLog.store.error("\(Self.self) \(operation) save failed: \(String(describing: error), privacy: .public)")
     }
 
     // MARK: - Mutation queue enqueue

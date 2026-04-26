@@ -17,7 +17,7 @@ struct MutationAtomicityTests {
         let throwingSaver = ThrowingSaverWrappingLive(live: liveSaver)
         let store = ItemStore(context: context, saver: throwingSaver)
 
-        #expect(throws: ThrowingSaverWrappingLive.InjectedError.self) {
+        #expect(throws: SaverError.self) {
             _ = try store.create(
                 userId: "alice",
                 title: "Test rollback",
@@ -123,7 +123,7 @@ struct MutationAtomicityTests {
         let throwingSaver = ThrowingSaverWrappingLive(live: LiveSaver(context: context))
         let store = ListStore(context: context, saver: throwingSaver)
 
-        #expect(throws: ThrowingSaverWrappingLive.InjectedError.self) {
+        #expect(throws: SaverError.self) {
             _ = try store.create(userId: "alice", name: "Test rollback")
         }
 
