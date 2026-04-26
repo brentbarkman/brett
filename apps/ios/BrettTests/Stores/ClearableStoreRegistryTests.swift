@@ -60,18 +60,19 @@ struct ClearableStoreRegistrySessionIntegrationTests {
         func clearForSignOut() { clears += 1 }
     }
 
-    @Test func sessionTearDownClearsRegisteredStores() throws {
+    @Test func sessionTearDownClearsRegisteredStores() {
         ClearableStoreRegistry.resetForTesting()
         let store = CountingStore()
         ClearableStoreRegistry.register(store)
 
-        let container = try InMemoryPersistenceController.makeContainer()
         let persistence = PersistenceController.makePreview()
         let session = Session(userId: "user-A", persistence: persistence)
-        session.start()
+        // Deliberately skip `session.start()` — it touches the real
+        // `SSEClient.shared` singleton and triggers a real push/pull cycle
+        // against the API, neither of which is needed to verify the
+        // invariant under test (`tearDown` calls `ClearableStoreRegistry.clearAll`).
         session.tearDown()
 
         #expect(store.clears == 1)
-        _ = container // keep alive
     }
 }
