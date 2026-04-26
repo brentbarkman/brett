@@ -67,10 +67,26 @@ struct MainContainer: View {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
     }
 
-    /// Full item set used for badge computation. Mirrors the query in
-    /// `TodayPage` — one notification drives the whole badge pipeline.
+    /// Items that could affect the iOS badge — active with a due date.
+    ///
+    /// Narrower than the prior "all non-deleted items" query because the
+    /// badge count only ever counts items in `(overdue, due today, this
+    /// week)`, which by definition excludes done/archived/snoozed and
+    /// items with no due date. SwiftData fires @Query updates whenever
+    /// any matched row changes, including transitions OUT of the result
+    /// set (e.g. an active item gets completed → row leaves → @Query
+    /// fires → badgeSignature recomputes → badge refresh fires). Items
+    /// without a due date never contribute to the badge regardless of
+    /// status, so filtering them out is purely a hash-cost optimisation.
+    ///
+    /// Why this matters: badgeSignature hashes every row in the result
+    /// set on every `body` pass. On a power user with hundreds of done
+    /// or no-due-date items the prior unbounded query made every TabView
+    /// swap cost O(n_total). The narrower predicate caps the iteration
+    /// at the active-with-due subset, which is bounded by the user's
+    /// open-work load (typically dozens, never hundreds).
     @Query(
-        filter: #Predicate<Item> { $0.deletedAt == nil },
+        filter: #Predicate<Item> { $0.deletedAt == nil && $0.status == "active" },
         sort: \Item.createdAt,
         order: .reverse
     ) private var allItems: [Item]
