@@ -140,6 +140,26 @@ struct BrettApp: App {
     }
 }
 
+/// Owns one in-flight `Task` at a time. Replaces the fire-and-forget
+/// `Task { ... }` pattern in scenePhase / isAuthenticated handlers. When a
+/// new task is started, the previous one is cancelled — so a rapid
+/// background↔active flap can't leave a stale "clear badge" coexisting
+/// with a "request authorization."
+@MainActor
+final class ScenePhaseTaskTracker {
+    private var current: Task<Void, Never>?
+
+    func start(_ work: @escaping () async -> Void) {
+        current?.cancel()
+        current = Task { await work() }
+    }
+
+    func cancel() {
+        current?.cancel()
+        current = nil
+    }
+}
+
 /// Top-level auth gate. Cross-fades between SignInView and MainContainer
 /// based on `AuthManager.isAuthenticated`.
 ///
@@ -154,6 +174,10 @@ private struct RootView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var lockManager = BiometricLockManager.shared
+
+    @State private var badgeTracker = ScenePhaseTaskTracker()
+    @State private var sessionRefreshTracker = ScenePhaseTaskTracker()
+    @State private var shareDrainTracker = ScenePhaseTaskTracker()
 
     var body: some View {
         ZStack {
@@ -215,14 +239,14 @@ private struct RootView: View {
                 // prompt the user for Face ID right after they typed
                 // their password.
                 lockManager.handleFreshSignIn()
-                Task { await BadgeManager.shared.requestAuthorization() }
+                badgeTracker.start { await BadgeManager.shared.requestAuthorization() }
             } else {
                 lockManager.handleSignOut()
                 // Fire-and-forget: sign-out is always a foreground action,
                 // so setBadgeCount(0) lands before the process suspends.
                 // Worst case on drop: stale badge until next launch, which
                 // the cold-launch refresh in MainContainer will overwrite.
-                Task { await BadgeManager.shared.clear() }
+                badgeTracker.start { await BadgeManager.shared.clear() }
             }
         }
         // Scene-phase drives the biometric re-lock. Backgrounding the
@@ -248,12 +272,14 @@ private struct RootView: View {
                 // App Group queue. Runs every time the app becomes
                 // active so in-foreground shares reconcile quickly too.
                 ShareIngestor.shared.configure(auth: authManager)
-                Task { await ShareIngestor.shared.drain() }
+                shareDrainTracker.start { await ShareIngestor.shared.drain() }
                 // Foreground keepalive: re-validate the session in case
                 // it was revoked server-side while we were backgrounded.
                 // Throttled to one call per 5 minutes inside AuthManager so
                 // rapid app-switches don't hammer /users/me.
-                Task { await authManager.refreshIfStale() }
+                sessionRefreshTracker.start { [authManager] in
+                    await authManager.refreshIfStale()
+                }
             default:
                 break
             }
@@ -267,7 +293,7 @@ private struct RootView: View {
             // where the user opens the app directly after a share and
             // the hook hasn't wired yet.
             ShareIngestor.shared.configure(auth: authManager)
-            Task { await ShareIngestor.shared.drain() }
+            shareDrainTracker.start { await ShareIngestor.shared.drain() }
         }
     }
 
