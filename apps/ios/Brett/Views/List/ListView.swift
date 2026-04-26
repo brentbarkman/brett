@@ -244,7 +244,8 @@ struct ListView: View {
             listStore.update(
                 id: listId,
                 changes: ["name": trimmed],
-                previousValues: ["name": existing.name]
+                previousValues: ["name": existing.name],
+                userId: authManager.currentUser?.id ?? ""
             )
         }
         isEditingName = false
@@ -350,7 +351,8 @@ struct ListView: View {
         listStore.update(
             id: listId,
             changes: ["archivedAt": NSNull()],
-            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()]
+            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()],
+            userId: authManager.currentUser?.id ?? ""
         )
         HapticManager.success()
     }
@@ -360,7 +362,8 @@ struct ListView: View {
         listStore.update(
             id: listId,
             changes: ["archivedAt": Date()],
-            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()]
+            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()],
+            userId: authManager.currentUser?.id ?? ""
         )
         HapticManager.success()
     }

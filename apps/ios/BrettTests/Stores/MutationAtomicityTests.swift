@@ -145,7 +145,7 @@ struct MutationAtomicityTests {
             context: context,
             saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context))
         )
-        throwingStore.update(id: listId, changes: ["name": "Updated"])
+        throwingStore.update(id: listId, changes: ["name": "Updated"], userId: "alice")
 
         let refreshed = try context.fetch(
             FetchDescriptor<ItemList>(predicate: #Predicate { $0.id == listId })
@@ -210,5 +210,23 @@ struct MutationAtomicityTests {
         }
 
         #expect(mockTrigger.scheduleCallCount == 0)
+    }
+
+    /// Mirror of `successfulCreateInvokesSyncTriggerOnce` for `ListStore`:
+    /// a successful list create must invoke the injected sync trigger once.
+    /// Same regression guard — without injection, the production path is a
+    /// silent no-op under tests since `ActiveSession.syncManager` is nil.
+    @Test func successfulListCreateInvokesSyncTriggerOnce() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let mockTrigger = MockSyncTrigger()
+        let store = ListStore(
+            context: context,
+            saver: LiveSaver(context: context),
+            syncManager: mockTrigger
+        )
+
+        _ = try store.create(userId: "alice", name: "Push trigger test")
+
+        #expect(mockTrigger.scheduleCallCount == 1)
     }
 }

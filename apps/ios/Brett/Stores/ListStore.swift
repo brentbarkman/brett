@@ -15,10 +15,21 @@ final class ListStore: Clearable {
     /// simulate save failures and assert the store rolls back. Production
     /// callers leave this defaulted to `LiveSaver(context: context)`.
     @ObservationIgnored private let saver: ModelContextSaving
+    /// Sync trigger captured at init so the store stops reading
+    /// `ActiveSession.syncManager` on every mutation. `weak` because the
+    /// trigger (`SyncManager`) is owned by `Session`, which can be torn
+    /// down on sign-out before the store; we don't want to extend its
+    /// lifetime. Optional so tests/preview-only stores can omit it.
+    @ObservationIgnored private weak var syncManager: SyncTrigger?
 
-    init(context: ModelContext, saver: ModelContextSaving? = nil) {
+    init(
+        context: ModelContext,
+        saver: ModelContextSaving? = nil,
+        syncManager: SyncTrigger? = ActiveSession.syncManager
+    ) {
         self.context = context
         self.saver = saver ?? LiveSaver(context: context)
+        self.syncManager = syncManager
         ClearableStoreRegistry.register(self)
     }
 
@@ -104,15 +115,15 @@ final class ListStore: Clearable {
             throw error
         }
 
-        ActiveSession.syncManager?.schedulePushDebounced()
+        syncManager?.schedulePushDebounced()
         return list
     }
 
     /// Apply a changeset to an existing list. Store captures `previousValues`
     /// and `beforeSnapshot` from the model's current state — callers MUST
     /// NOT pre-mutate the model (see ItemStore for rationale).
-    func update(id: String, changes: [String: Any]) {
-        guard let list = fetchById(id, userId: ActiveSession.userId) else { return }
+    func update(id: String, changes: [String: Any], userId: String) {
+        guard let list = fetchById(id, userId: userId) else { return }
         let fields = Array(changes.keys)
         let capturedPrevious = list.previousValues(forFields: fields)
         applyUpdate(list: list, changes: changes, previousValues: capturedPrevious)
@@ -121,8 +132,8 @@ final class ListStore: Clearable {
     /// Apply a changeset using caller-supplied `previousValues`. Use when
     /// the caller already captured the pre-edit state (e.g. a settings
     /// form snapshotted on open).
-    func update(id: String, changes: [String: Any], previousValues: [String: Any]) {
-        guard let list = fetchById(id, userId: ActiveSession.userId) else { return }
+    func update(id: String, changes: [String: Any], previousValues: [String: Any], userId: String) {
+        guard let list = fetchById(id, userId: userId) else { return }
         applyUpdate(list: list, changes: changes, previousValues: previousValues)
     }
 
@@ -161,22 +172,21 @@ final class ListStore: Clearable {
             return
         }
 
-        ActiveSession.syncManager?.schedulePushDebounced()
+        syncManager?.schedulePushDebounced()
     }
 
-    func archive(id: String) {
-        update(id: id, changes: ["archivedAt": Date()])
+    func archive(id: String, userId: String) {
+        update(id: id, changes: ["archivedAt": Date()], userId: userId)
     }
 
-    func unarchive(id: String) {
-        update(id: id, changes: ["archivedAt": NSNull()])
+    func unarchive(id: String, userId: String) {
+        update(id: id, changes: ["archivedAt": NSNull()], userId: userId)
     }
 
-    func reorder(ids: [String]) {
-        let uid = ActiveSession.userId
+    func reorder(ids: [String], userId: String) {
         for (index, id) in ids.enumerated() {
-            guard let list = fetchById(id, userId: uid), list.sortOrder != index else { continue }
-            update(id: id, changes: ["sortOrder": index])
+            guard let list = fetchById(id, userId: userId), list.sortOrder != index else { continue }
+            update(id: id, changes: ["sortOrder": index], userId: userId)
         }
     }
 

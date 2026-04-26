@@ -328,12 +328,12 @@ struct ListDrawer: View {
     // MARK: - Mutations
 
     private func archive(_ id: String) {
-        listStore.archive(id: id)
+        listStore.archive(id: id, userId: authManager.currentUser?.id ?? "")
         HapticManager.success()
     }
 
     private func unarchive(_ id: String) {
-        listStore.unarchive(id: id)
+        listStore.unarchive(id: id, userId: authManager.currentUser?.id ?? "")
         HapticManager.success()
     }
 
@@ -342,7 +342,8 @@ struct ListDrawer: View {
         listStore.update(
             id: id,
             changes: ["colorClass": color.rawValue],
-            previousValues: ["colorClass": list.colorClass]
+            previousValues: ["colorClass": list.colorClass],
+            userId: authManager.currentUser?.id ?? ""
         )
     }
 
