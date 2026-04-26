@@ -265,7 +265,19 @@ final class ItemStore: Clearable {
             previousValues: previousValues,
             beforeSnapshot: beforeSnapshot
         )
-        save()
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback the in-memory mutation AND the queued
+            // MutationQueueEntry insert together. Without this, the field
+            // change would remain visible to @Query while the queue had no
+            // entry, so the edit would never reach the server.
+            saver.rollback()
+            BrettLog.store.error("ItemStore update save failed: \(String(describing: error), privacy: .public)")
+            return
+        }
+
         ActiveSession.syncManager?.schedulePushDebounced()
     }
 
@@ -291,7 +303,17 @@ final class ItemStore: Clearable {
         item._syncStatus = SyncStatus.pendingDelete.rawValue
 
         enqueueDelete(item, beforeSnapshot: before)
-        save()
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback restores `deletedAt = nil` and discards the queued
+            // DELETE entry — model + queue stay in lockstep.
+            saver.rollback()
+            BrettLog.store.error("ItemStore delete save failed: \(String(describing: error), privacy: .public)")
+            return
+        }
+
         ActiveSession.syncManager?.schedulePushDebounced()
     }
 
@@ -321,16 +343,6 @@ final class ItemStore: Clearable {
         } catch {
             BrettLog.store.error("ItemStore fetch failed: \(String(describing: error), privacy: .public)")
             return []
-        }
-    }
-
-    private func save() {
-        do {
-            try context.save()
-        } catch {
-            // Silent failures here used to mean edits vanished on restart
-            // with no trace. Log at error level so sysdiagnose picks it up.
-            BrettLog.store.error("ItemStore save failed: \(String(describing: error), privacy: .public)")
         }
     }
 
