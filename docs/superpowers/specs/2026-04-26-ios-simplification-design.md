@@ -298,12 +298,12 @@ For every wave, before merging to `release`:
 
 File and fix separately. Do not absorb bug fixes into the refactor PRs — keeps blame easier and rollback cleaner.
 
-## Open questions
+## Resolved decisions
 
-- **Wave A — store registry:** Generalize `ChatStoreRegistry` in place, or extract a fresh protocol? Recommend the latter (it's not chat-specific). Decide during plan.
-- **Wave B — `ScoutStore` storage choice:** SwiftData (consistency) vs in-memory (matches scouts being transient API data). Recommend SwiftData. Final call during plan.
-- **Wave C — mapper approach:** Generic-Codable refactor vs Swift macro codegen. Spec proposes manual generic factoring; revisit if the manual approach hits a ceiling.
-- **Wave D — `SelectionStore` rename:** It becomes presentation-state-only; consider renaming to `NavStore` or `Router`. Decide during plan.
+- **Wave A — store registry:** Fresh `ClearableStoreRegistry` protocol (not chat-specific). `ChatStoreRegistry` continues to exist for chat-specific behavior; clearing fans out via the new protocol.
+- **Wave B — `ScoutStore` storage:** SwiftData. Drop the in-memory `[ScoutDTO]` array; views `@Query` `Scout` rows.
+- **Wave C — mapper approach:** Manual generic-Codable refactor. Each model owns its own ~30-line encode/decode; mapper file becomes a ~100-line dispatcher. No Swift macro tooling.
+- **Wave D — `SelectionStore` rename:** Rename to `NavStore`. Holds `currentDestination: NavDestination?` only.
 
 ## Out of scope (deferred)
 
