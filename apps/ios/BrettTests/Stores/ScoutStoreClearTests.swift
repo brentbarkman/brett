@@ -5,10 +5,10 @@ import Foundation
 @Suite("ScoutStore clear", .tags(.smoke))
 @MainActor
 struct ScoutStoreClearTests {
-    @Test func clearForSignOutDropsInMemoryScouts() {
+    @Test func clearForSignOutDropsInMemoryScouts() throws {
         ClearableStoreRegistry.resetForTesting()
         let store = ScoutStore(client: APIClient.shared, context: nil)
-        store.injectForTesting(scouts: [TestFixtures.makeScoutDTO(name: "S1")])
+        store.injectForTesting(scouts: [try TestFixtures.makeScoutDTO(name: "S1")])
         #expect(store.scouts.isEmpty == false)
 
         ClearableStoreRegistry.clearAll()

@@ -193,11 +193,11 @@ final class SearchStore: Clearable {
 
     // MARK: - Clearable
 
-    /// Drop in-memory state on sign-out. Crucially, cancels any in-flight
-    /// debounced search Task — without this, a network response from the
-    /// previous user could land in `results` after the new user has signed
-    /// in. Recent-query persistence in UserDefaults is wiped separately by
-    /// `UserScopedStorage` clearing during sign-out.
+    /// Clearable conformance — cancel any in-flight search task, drop the
+    /// in-memory result set, and wipe the user-private recent-search list
+    /// (both the in-memory copy and the UserDefaults persistence). Without
+    /// the UserDefaults wipe, a different user signing in on the same
+    /// device would see the previous user's search history.
     func clearForSignOut() {
         currentTask?.cancel()
         currentTask = nil
@@ -205,12 +205,19 @@ final class SearchStore: Clearable {
         query = ""
         isSearching = false
         error = nil
+        recentQueries = []
+        activeTypes = []
+        userDefaults.removeObject(forKey: Self.recentQueriesDefaultsKey)
     }
 
     #if DEBUG
     /// Test-only: populate in-memory state without touching the network.
-    func injectForTesting(results: [SearchResult]) {
-        self.results = results
+    func injectForTesting(
+        results: [SearchResult]? = nil,
+        activeTypes: Set<SearchEntityType>? = nil
+    ) {
+        if let results { self.results = results }
+        if let activeTypes { self.activeTypes = activeTypes }
     }
 
     /// Test-only: visibility into whether a debounced search Task is alive.

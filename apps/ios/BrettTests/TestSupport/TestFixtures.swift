@@ -204,7 +204,7 @@ enum TestFixtures {
         name: String = "Test scout",
         goal: String = "Monitor industry news",
         status: String = "active"
-    ) -> APIClient.ScoutDTO {
+    ) throws -> APIClient.ScoutDTO {
         let json: [String: Any] = [
             "id": id,
             "name": name,
@@ -230,10 +230,10 @@ enum TestFixtures {
             "findingsCount": 0,
             "createdAt": ISO8601DateFormatter().string(from: Date()),
         ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let data = try JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try! decoder.decode(APIClient.ScoutDTO.self, from: data)
+        return try decoder.decode(APIClient.ScoutDTO.self, from: data)
     }
 
     // MARK: - UserProfile
