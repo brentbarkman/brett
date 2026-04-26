@@ -81,7 +81,7 @@ final class AuthManager {
             // We don't have a user record yet (`/users/me` hasn't returned),
             // but we know there's a valid token. `refreshCurrentUser` hydrates
             // the user and, on success, installs the session.
-            Task { await self.refreshCurrentUser() }
+            Task { [weak self] in await self?.refreshCurrentUser() }
         }
     }
 
