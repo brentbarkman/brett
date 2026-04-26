@@ -131,6 +131,16 @@ targets:
     platform: iOS
     sources:
       - path: BrettTests
+      # Copy Sync source files into the test bundle as resources so
+      # SilentTrySaveGuardTests can grep them at runtime. iOS simulator
+      # sandboxing blocks reading host paths via #file resolution, so the
+      # only reliable way to scan a directory of source code in a unit test
+      # is to ship those files inside the bundle. `type: folder` preserves
+      # the on-disk file names verbatim (no compilation).
+      - path: Brett/Sync
+        name: SyncSourcesForGuard
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: Brett
     settings:
