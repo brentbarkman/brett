@@ -7,7 +7,7 @@ import SwiftData
 /// flow through their own endpoints that mutate and return fresh profile data.
 @MainActor
 @Observable
-final class UserProfileStore {
+final class UserProfileStore: Clearable {
     private let context: ModelContext
 
     /// Cached profile row. Reading `current` used to fire a SwiftData
@@ -20,10 +20,17 @@ final class UserProfileStore {
 
     init(context: ModelContext) {
         self.context = context
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
         self.init(context: PersistenceController.shared.mainContext)
+    }
+
+    // MARK: - Clearable
+
+    func clearForSignOut() {
+        cachedProfile = nil
     }
 
     /// Currently cached profile, if we have one. Hydrates the cache
