@@ -14,7 +14,7 @@ import Observation
 ///   optimistically and reconcile on the server response.
 @MainActor
 @Observable
-final class CalendarAccountsStore {
+final class CalendarAccountsStore: Clearable {
     /// Plain struct mirror of `APIClient.CalendarInfoResponse`. Kept as a
     /// distinct type (not a typealias) so upstream views don't need to import
     /// the endpoint extension directly.
@@ -53,7 +53,23 @@ final class CalendarAccountsStore {
 
     init(api: APIClient = .shared) {
         self.api = api
+        ClearableStoreRegistry.register(self)
     }
+
+    // MARK: - Clearable
+
+    func clearForSignOut() {
+        accounts = []
+        isLoading = false
+        lastError = nil
+    }
+
+    #if DEBUG
+    /// Test-only: populate in-memory state without touching the network.
+    func injectForTesting(accounts: [CalendarAccount]) {
+        self.accounts = accounts
+    }
+    #endif
 
     // MARK: - Derived
     /// All visible calendars across every connected account — useful for the

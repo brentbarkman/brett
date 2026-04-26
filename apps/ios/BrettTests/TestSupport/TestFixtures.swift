@@ -152,6 +152,26 @@ enum TestFixtures {
         )
     }
 
+    // MARK: - CalendarAccount
+
+    static func makeCalendarAccount(
+        id: String = UUID().uuidString,
+        googleEmail: String = "test@example.com",
+        connectedAt: Date = Date(),
+        hasMeetingNotesScope: Bool = false,
+        meetingNotesEnabled: Bool = false,
+        calendars: [CalendarAccountsStore.CalendarInfo] = []
+    ) -> CalendarAccountsStore.CalendarAccount {
+        CalendarAccountsStore.CalendarAccount(
+            id: id,
+            googleEmail: googleEmail,
+            connectedAt: connectedAt,
+            hasMeetingNotesScope: hasMeetingNotesScope,
+            meetingNotesEnabled: meetingNotesEnabled,
+            calendars: calendars
+        )
+    }
+
     // MARK: - SearchResult
 
     static func makeSearchResult(
