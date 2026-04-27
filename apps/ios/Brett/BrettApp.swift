@@ -37,10 +37,15 @@ struct BrettApp: App {
         self._authManager = State(wrappedValue: manager)
         // Route user-scoped UserDefaults reads through the live AuthManager.
         UserScopedStorage.configure { [weak manager] in manager?.currentUser?.id }
+        // Shake-to-report runs at the UIWindow level so it can present
+        // over any active sheet (TaskDetailView, SearchSheet, etc.). See
+        // FeedbackPresenter for why this isn't a SwiftUI .onShake.
+        FeedbackPresenter.shared.install(authManager: manager)
         #else
         let manager = AuthManager()
         self._authManager = State(wrappedValue: manager)
         UserScopedStorage.configure { [weak manager] in manager?.currentUser?.id }
+        FeedbackPresenter.shared.install(authManager: manager)
         #endif
     }
 

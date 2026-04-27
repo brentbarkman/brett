@@ -52,7 +52,6 @@ struct MainContainer: View {
     @State private var currentPage = 2
     @State private var path = NavigationPath()
     @State private var showSearch = false
-    @State private var showFeedback = false
 
     // MARK: - Awakening (cold-launch reveal)
     //
@@ -129,11 +128,10 @@ struct MainContainer: View {
                 BackgroundView()
                     .scaleEffect(kenBurnsScale, anchor: .center)
 
-                // Shake detection is now handled by `ShakeMonitor.shared`
-                // which polls CoreMotion at the app level — no in-tree
-                // detector needed. The `.onShake` modifier below still
-                // works; it just subscribes to the monitor's
-                // notification.
+                // Shake detection is handled by `ShakeMonitor.shared` (polls
+                // CoreMotion at the app level) and presented by
+                // `FeedbackPresenter.shared` (UIWindow-level present so
+                // it works over any active sheet). Nothing in-tree.
 
                 TabView(selection: $currentPage) {
                     ListsPage()
@@ -304,21 +302,12 @@ struct MainContainer: View {
                 .presentationBackground(Color.black.opacity(0.80))
                 .presentationCornerRadius(20)
             }
-            // Shake-to-report. Mirrors desktop's Cmd+Shift+. shortcut.
-            // Sheet opens with the type picker pre-set to Bug.
-            .onShake {
-                if !showFeedback {
-                    HapticManager.medium()
-                    showFeedback = true
-                }
-            }
-            .sheet(isPresented: $showFeedback) {
-                FeedbackSheet()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(Color.black)
-                    .presentationCornerRadius(20)
-            }
+            // Shake-to-report runs at the UIWindow level via FeedbackPresenter
+            // (installed from BrettApp.init). The prior in-tree .onShake +
+            // .sheet was anchored to this NavigationStack and therefore
+            // could not present while a TaskDetailView / SearchSheet was
+            // already up — which is exactly when a user wants to report
+            // a bug.
             // Settings deep-link from re-link task taps. `TaskRow`'s Reconnect
             // pill sets `selection.pendingSettingsTab`; we push `.settings`
             // plus the target tab onto the NavigationStack in one shot so the
