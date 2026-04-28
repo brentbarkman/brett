@@ -8,25 +8,71 @@ import SwiftData
 ///
 /// Data flows through the real `ListStore` + a `@Query` on `Item` so the
 /// pill counts stay accurate without manual invalidation.
+///
+/// Auth gate around `ListDrawerBody`. The body is the work-doer; this
+/// outer view exists only to extract `userId` from the environment and
+/// hand it to a child whose `@Query` predicates capture it directly.
+///
+/// SwiftData's `#Predicate` macro can't read `@Environment` values, so
+/// the established workaround is an init-based subview where `userId`
+/// is a stored property and each `@Query` is constructed in `init` with
+/// the captured user. This pushes the user filter down into the
+/// SwiftData fetch instead of doing it in Swift after the fact —
+/// cheaper, and keeps cross-user rows from ever entering the working set.
+///
+/// View identity:
+/// `ListDrawer` is a thin auth gate — when the user is authenticated it
+/// renders `ListDrawerBody(userId:)` modified with `.id(userId)`. The
+/// `.id(...)` is the load-bearing piece: SwiftUI uses view identity to
+/// decide whether to reuse a view's storage or remount fresh, and
+/// pinning identity to `userId` guarantees that any future user-swap
+/// triggers a full re-init of `ListDrawerBody`'s `@Query` predicates,
+/// `@State` stores, and any cached state. `userId` doesn't change while
+/// the drawer is on-screen, so the `.id` keeps stable identity for the
+/// sheet's lifetime — no accidental remount on parent re-renders.
 struct ListDrawer: View {
     var onSelectList: ((String) -> Void)? = nil
-    @Environment(\.dismiss) private var dismiss
     @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            ListDrawerBody(userId: userId, onSelectList: onSelectList)
+                .id(userId)
+        } else {
+            // Signed-out fallback. The omnibar that hosts this drawer is
+            // gated upstream, but render an empty state defensively
+            // rather than nil-fallback so the type system doesn't have
+            // to model a missing user here.
+            EmptyView()
+        }
+    }
+}
+
+/// List-drawer data + UI. Owned by `ListDrawer`'s auth gate, so
+/// `userId` is guaranteed non-optional for this view's lifetime.
+/// Re-instantiated on account switch because the parent applies
+/// `.id(userId)` — SwiftUI treats a changed `id` as a new view identity
+/// and remounts this body from scratch, which gives us a fresh `@Query`
+/// with the new user's predicate (plus a clean slate for `@State`
+/// stores and caches).
+private struct ListDrawerBody: View {
+    let userId: String
+    var onSelectList: ((String) -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
 
     @State private var listStore = ListStore()
 
-    /// Live read of all non-deleted lists. Sorted by sortOrder; archived vs
-    /// active are split in Swift since `@Query` can't dynamically filter on
-    /// a nil/non-nil `archivedAt`.
-    @Query(
-        filter: #Predicate<ItemList> { $0.deletedAt == nil },
-        sort: \ItemList.sortOrder
-    ) private var allLists: [ItemList]
+    /// Live read of the signed-in user's non-deleted lists. Sorted by
+    /// sortOrder; archived vs active are split in Swift since `@Query`
+    /// can't dynamically filter on a nil/non-nil `archivedAt`. The user
+    /// filter is captured at init and pushed into SQLite via the
+    /// predicate, so cross-user rows never enter the working set.
+    @Query private var lists: [ItemList]
 
-    /// Item counts per list — computed off the live item set so pill counts
-    /// refresh automatically when items are created/toggled/moved.
-    @Query(filter: #Predicate<Item> { $0.deletedAt == nil })
-    private var allItems: [Item]
+    /// Item counts per list — computed off the live, user-scoped item
+    /// set so pill counts refresh automatically when items are
+    /// created/toggled/moved.
+    @Query private var items: [Item]
 
     @State private var isCreating = false
     @State private var draftName: String = ""
@@ -35,26 +81,27 @@ struct ListDrawer: View {
     @State private var colorPickerListId: String? = nil
     @FocusState private var nameFieldFocused: Bool
 
-    /// Lists scoped to the signed-in user. Defense-in-depth: sign-out
-    /// wipes SwiftData and SyncManager is session-owned, but a late async
-    /// task from a prior session could briefly land a row here, so every
-    /// list-bearing surface filters by userId.
-    private var userLists: [ItemList] {
-        guard let uid = authManager.currentUser?.id else { return [] }
-        return allLists.filter { $0.userId == uid }
-    }
+    init(userId: String, onSelectList: ((String) -> Void)? = nil) {
+        self.userId = userId
+        self.onSelectList = onSelectList
 
-    private var userItems: [Item] {
-        guard let uid = authManager.currentUser?.id else { return [] }
-        return allItems.filter { $0.userId == uid }
+        let listPredicate = #Predicate<ItemList> { list in
+            list.deletedAt == nil && list.userId == userId
+        }
+        _lists = Query(filter: listPredicate, sort: \ItemList.sortOrder)
+
+        let itemPredicate = #Predicate<Item> { item in
+            item.deletedAt == nil && item.userId == userId
+        }
+        _items = Query(filter: itemPredicate)
     }
 
     private var activeLists: [PillModel] {
-        pillModels(from: userLists.filter { $0.archivedAt == nil })
+        pillModels(from: lists.filter { $0.archivedAt == nil })
     }
 
     private var archivedLists: [PillModel] {
-        pillModels(from: userLists.filter { $0.archivedAt != nil })
+        pillModels(from: lists.filter { $0.archivedAt != nil })
     }
 
     var body: some View {
@@ -302,14 +349,15 @@ struct ListDrawer: View {
     private func pillModels(from lists: [ItemList]) -> [PillModel] {
         // Bucket items by listId in one pass so the per-list count is
         // O(1) lookup instead of O(items) re-filter. Prior shape was
-        // `lists.map { list in userItems.filter { ... }.count }` —
+        // `lists.map { list in items.filter { ... }.count }` —
         // O(lists × items) on every drawer render. With ~10 lists and
         // a few hundred active items that's a few thousand string
         // comparisons per render, enough to feel as drawer-open lag
-        // for power users.
+        // for power users. The user filter is already applied at the
+        // `@Query` level, so this pass just groups.
         var countsByListId: [String: Int] = [:]
         countsByListId.reserveCapacity(lists.count)
-        for item in userItems where item.itemStatus != .done {
+        for item in items where item.itemStatus != .done {
             guard let listId = item.listId else { continue }
             countsByListId[listId, default: 0] += 1
         }
@@ -328,12 +376,12 @@ struct ListDrawer: View {
     // MARK: - Mutations
 
     private func archive(_ id: String) {
-        listStore.archive(id: id, userId: authManager.currentUser?.id ?? "")
+        listStore.archive(id: id, userId: userId)
         HapticManager.success()
     }
 
     private func unarchive(_ id: String) {
-        listStore.unarchive(id: id, userId: authManager.currentUser?.id ?? "")
+        listStore.unarchive(id: id, userId: userId)
         HapticManager.success()
     }
 
@@ -343,19 +391,13 @@ struct ListDrawer: View {
             id: id,
             changes: ["colorClass": color.rawValue],
             previousValues: ["colorClass": list.colorClass],
-            userId: authManager.currentUser?.id ?? ""
+            userId: userId
         )
     }
 
     private func commitDraft() {
         let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        // Require a signed-in user to create. For preview / unauthenticated
-        // the drawer is still visible but "Create" is effectively a no-op.
-        guard let userId = authManager.currentUser?.id else {
-            cancelDraft()
-            return
-        }
         do {
             _ = try listStore.create(
                 userId: userId,
