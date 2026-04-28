@@ -227,10 +227,10 @@ struct OmnibarView: View {
             return
         }
 
-        // Hand the new id to SelectionStore so the host page can scroll
+        // Hand the new id to NavStore so the host page can scroll
         // it into view. Without this, adding a task to a long list looks
         // like nothing happened — the row appears off-screen.
-        SelectionStore.shared.lastCreatedItemId = created.id
+        NavStore.shared.lastCreatedItemId = created.id
 
         // Reminder mapping: apply as a follow-up mutation so ItemStore.create
         // doesn't need a reminder parameter. Uses the just-created item id

@@ -173,7 +173,7 @@ private struct InboxPageBody: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "scroll")
-            .onChange(of: SelectionStore.shared.lastCreatedItemId) { _, newId in
+            .onChange(of: NavStore.shared.lastCreatedItemId) { _, newId in
                 guard newId != nil else { return }
                 // Inbox is sorted newest-first, so the new row lives at
                 // the top of the card. Scroll there with a soft spring.
@@ -181,7 +181,7 @@ private struct InboxPageBody: View {
                     proxy.scrollTo("inbox_top", anchor: .top)
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    SelectionStore.shared.lastCreatedItemId = nil
+                    NavStore.shared.lastCreatedItemId = nil
                 }
             }
         }
@@ -316,13 +316,10 @@ private struct InboxPageBody: View {
                         if isSelectMode {
                             toggleSelection(item.id)
                         } else {
-                            // Wave D: route via the unified sheet driver.
-                            // Phase 3 will retire the legacy
-                            // `selectedTaskId` mirror entirely; until
-                            // then keep the write so any reader that
-                            // still inspects it continues to work.
-                            SelectionStore.shared.selectedTaskId = item.id
-                            SelectionStore.shared.currentDestination = .taskDetail(id: item.id)
+                            // Wave D Phase 3: single source of truth —
+                            // `go(to:)` dispatches to `currentDestination`
+                            // because `.taskDetail` is a sheet case.
+                            NavStore.shared.go(to: .taskDetail(id: item.id))
                         }
                     }
                 )

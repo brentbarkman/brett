@@ -43,7 +43,7 @@ private struct ScoutDetailBody: View {
     @State private var isRunning: Bool = false
     @State private var pendingDelete: Bool = false
     @State private var errorMessage: String?
-    @State private var selection = SelectionStore.shared
+    @State private var selection = NavStore.shared
 
     /// Live reactive read of the scout for `(userId, scoutId)`. Replaces
     /// the prior `@State var scout: APIClient.ScoutDTO?` cache. `ScoutStore`

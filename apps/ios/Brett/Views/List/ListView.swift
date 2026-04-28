@@ -208,15 +208,11 @@ private struct ListViewBody: View {
                                         dragIDs: sortedItems.map(\.id),
                                         onToggle: { toggle(item.id) },
                                         onSelect: {
-                                            // Wave D: route via the unified
-                                            // sheet driver. Phase 3 will retire
-                                            // the legacy `selectedTaskId`
-                                            // mirror entirely; until then keep
-                                            // both writes so any reader that
-                                            // still inspects it continues to
-                                            // work.
-                                            SelectionStore.shared.selectedTaskId = item.id
-                                            SelectionStore.shared.currentDestination = .taskDetail(id: item.id)
+                                            // Wave D Phase 3: single source
+                                            // of truth — `go(to:)` dispatches
+                                            // to `currentDestination` because
+                                            // `.taskDetail` is a sheet case.
+                                            NavStore.shared.go(to: .taskDetail(id: item.id))
                                         },
                                         onSchedule: { dueDate in schedule(item.id, dueDate: dueDate) },
                                         onArchive: { archive(item.id) },

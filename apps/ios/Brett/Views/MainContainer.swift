@@ -83,7 +83,7 @@ enum Awakening {
 
 struct MainContainer: View {
     @State private var searchStore = SearchStore()
-    @State private var selection = SelectionStore.shared
+    @State private var selection = NavStore.shared
     /// 0=Lists, 1=Inbox, 2=Today, 3=Calendar. Default is Today (2) so the
     /// app opens to the same primary surface as the desktop. Watch out:
     /// the omnibar's date-injection logic depends on these indices —
@@ -160,7 +160,7 @@ struct MainContainer: View {
     var body: some View {
         // `@Bindable` projection so we can pass `$selection.currentDestination`
         // to `.sheet(item:)`. The `@State` wrapper alone gives us a
-        // `Binding<SelectionStore>`, not a sub-binding to a property
+        // `Binding<NavStore>`, not a sub-binding to a property
         // on the @Observable.
         @Bindable var selection = selection
         // Tint the whole stack gold so default toolbar items (back
@@ -395,18 +395,16 @@ struct MainContainer: View {
                     selection.currentDestination = .feedback
                 }
             }
-            // Settings deep-link from re-link task taps. `TaskRow`'s Reconnect
-            // pill sets `selection.pendingSettingsTab`; we push a single
-            // `.settingsTab(...)` onto the NavigationStack — `SettingsView`
-            // handles pre-loading the inner path so the user lands directly
-            // on the target tab with the back button returning correctly.
-            .onChange(of: selection.pendingSettingsTab) { _, tab in
-                guard let tab else { return }
-                // Wave D: single push via `.settingsTab(...)` instead of two
-                // separate `path.append` calls. Back button now correctly
-                // returns to the calling screen, not an empty Settings page.
-                path.append(NavDestination.settingsTab(tab))
-                selection.pendingSettingsTab = nil
+            // Push-style navigation queue. Call sites that use
+            // `selection.go(to:)` with a push-style destination set
+            // `pendingPushDestination`; we observe it here and append
+            // onto the navigation stack, then clear the slot. Decoupling
+            // the queue lets writers stay platform-agnostic about
+            // sheet-vs-push routing.
+            .onChange(of: selection.pendingPushDestination) { _, dest in
+                guard let dest else { return }
+                path.append(dest)
+                selection.pendingPushDestination = nil
             }
         }
         // Brand tint on the NavigationStack so default toolbar items
@@ -498,12 +496,10 @@ struct MainContainer: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             switch result.entityType {
             case .item:
-                // Wave D: route via the unified sheet driver. Phase 3
-                // will retire the legacy `selectedTaskId` mirror
-                // entirely; until then we keep the write so any reader
-                // that still inspects it continues to work.
-                selection.selectedTaskId = result.entityId
-                selection.currentDestination = .taskDetail(id: result.entityId)
+                // Wave D Phase 3: single source of truth — the
+                // unified sheet presenter reads `currentDestination`,
+                // which `go(to:)` sets after switching on `isSheet`.
+                selection.go(to: .taskDetail(id: result.entityId))
             case .calendarEvent, .meetingNote:
                 path.append(NavDestination.eventDetail(id: result.entityId))
             case .scoutFinding:
@@ -523,7 +519,7 @@ struct MainContainer: View {
 // unified `.sheet(item:)` presenter. Each owns its own `ScoutStore` so
 // the network + SwiftData writes that the underlying sheets trigger
 // stay self-contained — no need for `MainContainer` to hold scout
-// state, and no callback plumbing through `SelectionStore`.
+// state, and no callback plumbing through `NavStore`.
 
 /// Wraps `NewScoutSheet` so it can be presented from `MainContainer`'s
 /// unified sheet without relying on `ScoutsRosterView` to own the

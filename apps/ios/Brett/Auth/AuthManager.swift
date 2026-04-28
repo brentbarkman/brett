@@ -191,7 +191,7 @@ final class AuthManager {
     ///     rows into the new user's empty store.
     ///  2. Clear non-data state (token, currentUser, App Group mirror) so
     ///     the UI gates back to SignInView. Per-store in-memory caches
-    ///     (SelectionStore, ChatStore, etc.) are wiped by
+    ///     (NavStore, ChatStore, etc.) are wiped by
     ///     `ClearableStoreRegistry.clearAll()`, fanned out from
     ///     `Session.tearDown()` in step 1.
     ///  3. Wipe SwiftData. Safe now that no sync task is still running.

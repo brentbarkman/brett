@@ -40,9 +40,9 @@ struct ClearableConformanceTests {
         "ModelContextSaving.swift",
         "NewsletterStore.swift",
         "PersistenceController.swift",
+        "NavStore.swift",
         "ScoutStore.swift",
         "SearchStore.swift",
-        "SelectionStore.swift",
         "UserProfileStore.swift",
     ]
 
@@ -87,9 +87,9 @@ struct ClearableConformanceTests {
         assertConformance(ListStore.self)
         assertConformance(MessageStore.self)
         assertConformance(NewsletterStore.self)
+        assertConformance(NavStore.self)
         assertConformance(ScoutStore.self)
         assertConformance(SearchStore.self)
-        assertConformance(SelectionStore.self)
         assertConformance(UserProfileStore.self)
     }
 

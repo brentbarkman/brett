@@ -175,7 +175,7 @@ private struct TodayPageBody: View {
                 try? await ActiveSession.syncManager?.pullToRefresh()
                 await briefingStore.fetch()
             }
-            .onChange(of: SelectionStore.shared.lastCreatedItemId) { _, newId in
+            .onChange(of: NavStore.shared.lastCreatedItemId) { _, newId in
                 guard newId != nil else { return }
                 // Today section is the canonical landing zone for new tasks
                 // captured from this page (the omnibar injects dueDate=today
@@ -188,7 +188,7 @@ private struct TodayPageBody: View {
                 // Clear the trigger so subsequent identical creates still
                 // fire onChange. (Same id wouldn't otherwise re-trigger.)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    SelectionStore.shared.lastCreatedItemId = nil
+                    NavStore.shared.lastCreatedItemId = nil
                 }
             }
         }
@@ -454,12 +454,10 @@ private struct TodayPageBody: View {
     }
 
     private func select(_ id: String) {
-        // Wave D: route via the unified sheet driver. Phase 3 will
-        // retire the legacy `selectedTaskId` mirror entirely; until
-        // then keep the write so any reader that still inspects it
-        // continues to work.
-        SelectionStore.shared.selectedTaskId = id
-        SelectionStore.shared.currentDestination = .taskDetail(id: id)
+        // Wave D Phase 3: single source of truth — `go(to:)`
+        // dispatches to `currentDestination` because `.taskDetail`
+        // is a sheet-style case.
+        NavStore.shared.go(to: .taskDetail(id: id))
     }
 
     /// Swipe-to-schedule: update dueDate (nil clears it, "Someday").

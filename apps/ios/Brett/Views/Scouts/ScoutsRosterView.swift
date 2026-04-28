@@ -33,7 +33,7 @@ private struct ScoutsRosterBody: View {
     @State private var statusFilter: StatusFilter = .all
     @State private var showNoAIAlert = false
     @State private var pendingAction: PendingAction?
-    @State private var selection = SelectionStore.shared
+    @State private var selection = NavStore.shared
     @Environment(\.dismiss) private var dismiss
 
     /// Live reactive read of the user's non-deleted scouts. The roster used

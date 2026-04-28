@@ -235,7 +235,7 @@ struct TaskRow: View {
                 // Reconnect pill — only rendered on re-link tasks from broken
                 // integrations. Mirrors desktop's gold pill in
                 // `packages/ui/src/ThingCard.tsx`. Tap deep-links to the
-                // matching Settings tab via `SelectionStore.pendingSettingsTab`.
+                // matching Settings tab via `NavStore.go(to: .settingsTab(...))`.
                 if !viewModel.isCompleted, let relink = viewModel.relinkTask {
                     reconnectPill(for: relink.type)
                 }
@@ -354,7 +354,7 @@ struct TaskRow: View {
         .highPriorityGesture(
             TapGesture().onEnded {
                 HapticManager.light()
-                SelectionStore.shared.pendingSettingsTab = type.settingsTab
+                NavStore.shared.go(to: .settingsTab(type.settingsTab))
             }
         )
         .accessibilityLabel("Reconnect \(accessibleName(for: type))")
