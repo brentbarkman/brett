@@ -402,58 +402,60 @@ enum SyncEntityMapper {
     }
 
     // MARK: - Scout
+    //
+    // Codable-driven. The model owns its wire shape via the `Codable`
+    // conformance in `Models/Scout.swift`. The static helpers below stay
+    // so existing tests and call sites keep working — they're now thin
+    // shims over JSON{Encoder, Decoder} configured with the project's
+    // date strategy.
+    //
+    // JSON-blob field handling (`sources` ↔ `sourcesJSON`):
+    // Codable doesn't bridge `String?` ↔ untyped JSON cleanly, so the
+    // model's Codable contract treats `sources` as a `String?`. These
+    // shims handle the wire-format transform:
+    //   • Outbound: encode normally, then re-parse the `sources` string
+    //     back into a JSON dict/array (or NSNull for nil).
+    //   • Inbound: stringify the wire's `sources` JSON value into a
+    //     String before decoding, so Codable's `String?` reads cleanly.
 
     static func toServerPayload(_ scout: Scout) -> [String: Any] {
-        var dict: [String: Any] = [
-            "id": scout.id,
-            "userId": scout.userId,
-            "name": scout.name,
-            "avatarLetter": scout.avatarLetter,
-            "avatarGradientFrom": scout.avatarGradientFrom,
-            "avatarGradientTo": scout.avatarGradientTo,
-            "goal": scout.goal,
-            "sensitivity": scout.sensitivity,
-            "analysisTier": scout.analysisTier,
-            "cadenceIntervalHours": scout.cadenceIntervalHours,
-            "cadenceMinIntervalHours": scout.cadenceMinIntervalHours,
-            "cadenceCurrentIntervalHours": scout.cadenceCurrentIntervalHours,
-            "budgetTotal": scout.budgetTotal,
-            "budgetUsed": scout.budgetUsed,
-            "status": scout.status,
-            "bootstrapped": scout.bootstrapped,
-        ]
-        dict["context"] = scout.context ?? NSNull()
-        dict["sources"] = jsonDecoded(scout.sourcesJSON) ?? NSNull()
-        dict["cadenceReason"] = scout.cadenceReason ?? NSNull()
-        dict["budgetResetAt"] = isoString(scout.budgetResetAt) ?? NSNull()
-        dict["statusLine"] = scout.statusLine ?? NSNull()
-        dict["endDate"] = isoString(scout.endDate) ?? NSNull()
-        dict["nextRunAt"] = isoString(scout.nextRunAt) ?? NSNull()
-        dict["createdAt"] = isoString(scout.createdAt) ?? NSNull()
-        dict["updatedAt"] = isoString(scout.updatedAt) ?? NSNull()
-        return dict
+        do {
+            let data = try makeEncoder().encode(scout)
+            guard var json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [String: Any] else {
+                return [:]
+            }
+            // Re-attach the JSON-blob field as a parsed structure, not a string.
+            if let sourcesJSON = scout.sourcesJSON,
+               let sourcesData = sourcesJSON.data(using: .utf8),
+               let sources = try? JSONSerialization.jsonObject(with: sourcesData) {
+                json["sources"] = sources
+            } else {
+                json["sources"] = NSNull()
+            }
+            return json
+        } catch {
+            BrettLog.push.error("Encode Scout failed: \(String(describing: error), privacy: .public)")
+            return [:]
+        }
     }
 
     static func scoutFromServerJSON(_ dict: [String: Any]) -> Scout? {
-        guard let id = dict["id"] as? String,
-              let userId = dict["userId"] as? String,
-              let name = dict["name"] as? String,
-              let goal = dict["goal"] as? String else { return nil }
-        let scout = Scout(
-            id: id,
-            userId: userId,
-            name: name,
-            goal: goal,
-            context: dict["context"] as? String,
-            cadenceIntervalHours: (dict["cadenceIntervalHours"] as? Double) ?? 24,
-            budgetTotal: (dict["budgetTotal"] as? Int) ?? 100,
-            sensitivity: ScoutSensitivity(rawValue: (dict["sensitivity"] as? String) ?? "") ?? .medium,
-            analysisTier: AnalysisTier(rawValue: (dict["analysisTier"] as? String) ?? "") ?? .standard,
-            createdAt: parseDate(dict["createdAt"]) ?? Date(),
-            updatedAt: parseDate(dict["updatedAt"]) ?? Date()
-        )
-        applyScoutFields(scout, from: dict)
-        return scout
+        do {
+            var patched = dict
+            // Convert the parsed JSON `sources` value into the model's
+            // String? blob form before handing to Codable.
+            if let sources = patched["sources"], !(sources is NSNull) {
+                let data = try JSONSerialization.data(withJSONObject: sources)
+                patched["sources"] = String(data: data, encoding: .utf8)
+            } else {
+                patched.removeValue(forKey: "sources")
+            }
+            let data = try JSONSerialization.data(withJSONObject: patched)
+            return try makeDecoder().decode(Scout.self, from: data)
+        } catch {
+            BrettLog.pull.error("Decode Scout failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
     static func applyScoutFields(_ scout: Scout, from dict: [String: Any]) {
