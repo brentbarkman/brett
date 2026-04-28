@@ -298,6 +298,13 @@ struct MainContainer: View {
                 switch destination {
                 case .settings:
                     SettingsView()
+                case .settingsTab(let tab):
+                    // Unified single-step deep-link: pushing
+                    // `.settingsTab(.calendar)` lands directly on the
+                    // calendar sub-page with `Settings` as the back-button
+                    // parent. Avoids the prior two-`path.append` pattern
+                    // that left the back button in a half-state.
+                    SettingsView(initialTab: tab)
                 case .scoutsRoster:
                     ScoutsRosterView()
                 case .scoutDetail(let id):
@@ -306,10 +313,12 @@ struct MainContainer: View {
                     EventDetailView(eventId: id)
                 case .listView(let id):
                     ListView(listId: id)
-                default:
-                    // Other NavDestination cases (sheet-style + new push
-                    // cases) are handled in Task 2 of Wave D. Keeps the
-                    // switch exhaustive after the enum expansion.
+                case .taskDetail, .search, .feedback, .newScout, .editScout:
+                    // Sheet-style destinations are presented via
+                    // `.sheet(item:)` elsewhere on this view; reaching
+                    // them through the push stack is a programming error.
+                    // Render an `EmptyView` so a miswired `path.append`
+                    // is harmless rather than crashing.
                     EmptyView()
                 }
             }
@@ -355,13 +364,16 @@ struct MainContainer: View {
                     .presentationCornerRadius(20)
             }
             // Settings deep-link from re-link task taps. `TaskRow`'s Reconnect
-            // pill sets `selection.pendingSettingsTab`; we push `.settings`
-            // plus the target tab onto the NavigationStack in one shot so the
-            // back button returns to the task list, not an empty Settings.
+            // pill sets `selection.pendingSettingsTab`; we push a single
+            // `.settingsTab(...)` onto the NavigationStack — `SettingsView`
+            // handles pre-loading the inner path so the user lands directly
+            // on the target tab with the back button returning correctly.
             .onChange(of: selection.pendingSettingsTab) { _, tab in
                 guard let tab else { return }
-                path.append(NavDestination.settings)
-                path.append(tab)
+                // Wave D: single push via `.settingsTab(...)` instead of two
+                // separate `path.append` calls. Back button now correctly
+                // returns to the calling screen, not an empty Settings page.
+                path.append(NavDestination.settingsTab(tab))
                 selection.pendingSettingsTab = nil
             }
         }

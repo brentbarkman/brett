@@ -71,3 +71,24 @@ struct NavDestinationTests {
         #expect(NavDestination.listView(id: "x").isSheet == false)
     }
 }
+
+@Suite("Settings deep-link", .tags(.smoke))
+struct SettingsDeepLinkTests {
+    /// Wave D's central bug fix: settings deep-links push ONE thing
+    /// (`NavDestination.settingsTab(...)`) onto the stack, not two
+    /// (`NavDestination.settings` then `SettingsTab`). The
+    /// destination's `isSheet` is false — it's a push.
+    @Test func settingsTabDestinationIsPush() {
+        let dest = NavDestination.settingsTab(.calendar)
+        #expect(dest.isSheet == false)
+    }
+
+    @Test func settingsTabHashableAndEquatable() {
+        let a = NavDestination.settingsTab(.calendar)
+        let b = NavDestination.settingsTab(.calendar)
+        let c = NavDestination.settingsTab(.aiProviders)
+        #expect(a == b)
+        #expect(a != c)
+        #expect(a.hashValue == b.hashValue)
+    }
+}

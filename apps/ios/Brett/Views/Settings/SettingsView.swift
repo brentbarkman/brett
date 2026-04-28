@@ -16,9 +16,20 @@ import SwiftData
 struct SettingsView: View {
     @Environment(AuthManager.self) private var authManager
 
+    /// Optional deep-link target. When non-nil, `SettingsBody` immediately
+    /// pushes this tab onto its inner navigation stack on first appear, so
+    /// the user lands directly on the target tab (e.g. Calendar) with
+    /// "Settings" as the back-button parent. Used by the Reconnect pill on
+    /// re-link tasks; see `MainContainer`'s `.settingsTab(...)` route.
+    let initialTab: SettingsTab?
+
+    init(initialTab: SettingsTab? = nil) {
+        self.initialTab = initialTab
+    }
+
     var body: some View {
         if let userId = authManager.currentUser?.id {
-            SettingsBody(userId: userId)
+            SettingsBody(userId: userId, initialTab: initialTab)
                 .id(userId)
         } else {
             EmptyView()
@@ -37,17 +48,25 @@ private struct SettingsBody: View {
     @State private var showSignOutConfirm = false
     @State private var isSigningOut = false
 
+    /// Inner navigation path for settings. Owned here (not by
+    /// `MainContainer`) so a deep-link to a tab is one push on the outer
+    /// stack — `.settingsTab(tab)` — that mounts this view with the tab
+    /// pre-pushed on the inner stack. Back goes tab → Settings list →
+    /// previous outer screen.
+    @State private var path: [SettingsTab]
+
     /// Live reactive read of the signed-in user's profile. SwiftData only
     /// ever holds one row per session; the predicate is belt-and-suspenders
     /// against stale rows surviving a sign-out/sign-in cycle.
     @Query private var profiles: [UserProfile]
 
-    init(userId: String) {
+    init(userId: String, initialTab: SettingsTab? = nil) {
         self.userId = userId
         let predicate = #Predicate<UserProfile> { profile in
             profile.id == userId
         }
         _profiles = Query(filter: predicate, sort: \UserProfile.id)
+        _path = State(initialValue: initialTab.map { [$0] } ?? [])
     }
 
     private var currentProfile: UserProfile? { profiles.first }
@@ -58,22 +77,28 @@ private struct SettingsBody: View {
         // them. iOS Settings groups rows in a single section card with
         // hairlines; that's what `BrettSettingsCard` + `BrettSettingsDivider`
         // give us, with full control over spacing and material.
-        BrettSettingsScroll {
-            profileHeaderCard
+        //
+        // Wrapped in an inner `NavigationStack` so `MainContainer` can
+        // deep-link directly to a tab via a single `.settingsTab(...)`
+        // push — the inner stack pre-loads the path with that tab.
+        NavigationStack(path: $path) {
+            BrettSettingsScroll {
+                profileHeaderCard
 
-            accountCard
-            integrationsCard
-            preferencesCard
-            systemCard
+                accountCard
+                integrationsCard
+                preferencesCard
+                systemCard
 
-            signOutCard
-        }
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.large)
-        .navigationBarBackButtonHidden(false)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .navigationDestination(for: SettingsTab.self) { tab in
-            destination(for: tab)
+                signOutCard
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.large)
+            .navigationBarBackButtonHidden(false)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .navigationDestination(for: SettingsTab.self) { tab in
+                destination(for: tab)
+            }
         }
         // Hydrate profile on open. Without this the header card falls back
         // to `authManager.currentUser?.email`, which can be nil on a cold
