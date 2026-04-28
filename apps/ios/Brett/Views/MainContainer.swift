@@ -3,12 +3,42 @@ import SwiftUI
 
 // MARK: - Navigation value types
 
+/// Single source of truth for navigation across the app. Drives both
+/// `.sheet(item:)` (modal-style destinations) and
+/// `.navigationDestination(for: NavDestination.self)` (push-style
+/// destinations). Wave D unified the previous mix of three patterns
+/// (push, manual `path.append`, and ad-hoc booleans) into this enum
+/// so a single `NavStore.currentDestination` value drives every
+/// presentation decision in one place.
 enum NavDestination: Hashable {
+    // Push-style destinations (drive `.navigationDestination(for:)`).
     case settings
+    case settingsTab(SettingsTab)
     case scoutsRoster
     case scoutDetail(id: String)
     case eventDetail(id: String)
     case listView(id: String)
+
+    // Sheet-style destinations (drive `.sheet(item:)`).
+    case taskDetail(id: String)
+    case search
+    case feedback
+    case newScout
+    case editScout(id: String)
+
+    /// True for cases that should present as a sheet rather than a push.
+    /// `MainContainer` reads this to decide which presenter wraps the
+    /// destination — `.sheet(item:)` for `true`, the navigation stack
+    /// for `false`. Keeping the choice as a property on the enum
+    /// avoids scattering routing logic across views.
+    var isSheet: Bool {
+        switch self {
+        case .taskDetail, .search, .feedback, .newScout, .editScout:
+            return true
+        case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
+            return false
+        }
+    }
 }
 
 // MARK: - Awakening tokens
@@ -276,6 +306,11 @@ struct MainContainer: View {
                     EventDetailView(eventId: id)
                 case .listView(let id):
                     ListView(listId: id)
+                default:
+                    // Other NavDestination cases (sheet-style + new push
+                    // cases) are handled in Task 2 of Wave D. Keeps the
+                    // switch exhaustive after the enum expansion.
+                    EmptyView()
                 }
             }
             // Task detail as a near-full-screen sheet. Driven by the
