@@ -358,35 +358,40 @@ enum SyncEntityMapper {
     }
 
     // MARK: - CalendarEventNote
+    //
+    // Codable-driven (Wave C pilot). The model owns its wire shape via the
+    // `Codable` conformance in `Models/CalendarEvent.swift`. The static
+    // helpers below stay so existing tests (`SyncEntityMapperTests`) and
+    // call sites keep working — they're now thin shims over JSON{Encoder,
+    // Decoder} configured with the project's date strategy.
 
     static func toServerPayload(_ note: CalendarEventNote) -> [String: Any] {
-        [
-            "id": note.id,
-            "calendarEventId": note.calendarEventId,
-            "userId": note.userId,
-            "content": note.content,
-            "createdAt": isoString(note.createdAt) ?? NSNull(),
-            "updatedAt": isoString(note.updatedAt) ?? NSNull(),
-        ]
+        do {
+            let data = try makeEncoder().encode(note)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return [:]
+            }
+            return json
+        } catch {
+            BrettLog.push.error("Encode CalendarEventNote failed: \(String(describing: error), privacy: .public)")
+            return [:]
+        }
     }
 
     static func calendarEventNoteFromServerJSON(_ dict: [String: Any]) -> CalendarEventNote? {
-        guard let id = dict["id"] as? String,
-              let eventId = dict["calendarEventId"] as? String,
-              let userId = dict["userId"] as? String,
-              let content = dict["content"] as? String else { return nil }
-        let note = CalendarEventNote(
-            id: id,
-            calendarEventId: eventId,
-            userId: userId,
-            content: content,
-            createdAt: parseDate(dict["createdAt"]) ?? Date(),
-            updatedAt: parseDate(dict["updatedAt"]) ?? Date()
-        )
-        note.deletedAt = parseDate(dict["deletedAt"])
-        return note
+        do {
+            let data = try JSONSerialization.data(withJSONObject: dict)
+            return try makeDecoder().decode(CalendarEventNote.self, from: data)
+        } catch {
+            BrettLog.pull.error("Decode CalendarEventNote failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
+    /// Apply incoming server fields onto an existing local row. Kept as a
+    /// dict-driven helper (rather than decoding into a fresh row and copying)
+    /// so the partial-update semantics — only assign fields the server
+    /// actually sent — match what the legacy implementation did.
     static func applyCalendarEventNoteFields(_ note: CalendarEventNote, from dict: [String: Any]) {
         if let v = dict["content"] as? String { note.content = v }
         if let d = parseDate(dict["createdAt"]) { note.createdAt = d }
@@ -899,6 +904,51 @@ enum SyncEntityMapper {
 
     static func parseDate(_ raw: Any?) -> Date? {
         BrettDate.parseISO(raw)
+    }
+
+    // MARK: - Codable factories (Wave C migration)
+    //
+    // Per-model `Codable` conformances delegate to `JSONEncoder` /
+    // `JSONDecoder`, but Foundation's defaults disagree with our wire
+    // format on dates. These factories install the same ISO-8601-with-
+    // fractional-seconds strategy the hand-written mappers use, so a
+    // model's `Codable` round-trip stays byte-compatible with the legacy
+    // dict-based path.
+    //
+    // Date strategy:
+    //   • Decode: try `BrettDate.parseISO` (lenient — handles fractional
+    //     and non-fractional ISO-8601). Throws on unparseable strings so
+    //     the failure surfaces instead of silently defaulting to epoch.
+    //   • Encode: `BrettDate.isoString` (fractional ISO-8601 — what the
+    //     server's Zod parsers expect on inbound writes).
+    //
+    // Null-handling: keep nil dates out of the wire shape via
+    // `decodeIfPresent` / `encodeIfPresent` at the property level — the
+    // strategy itself never sees `nil`.
+
+    fileprivate static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let raw = try container.decode(String.self)
+            guard let date = BrettDate.parseISO(raw) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid ISO-8601 date string: \(raw)"
+                )
+            }
+            return date
+        }
+        return decoder
+    }
+
+    fileprivate static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(BrettDate.isoString(date))
+        }
+        return encoder
     }
 
     /// Decode a JSON string (as stored on-device) back into a dict/array so

@@ -149,3 +149,59 @@ final class CalendarEventNote {
         self.updatedAt = updatedAt
     }
 }
+
+// MARK: - Codable (sync wire format)
+//
+// The pilot for the SyncEntityMapper Codable migration. Encoding/decoding is
+// asymmetric on purpose: outbound payloads (`encode(to:)`) intentionally OMIT
+// `deletedAt` to match the legacy `toServerPayload(_ note:)` shape — the
+// server treats note deletes via the global `/sync/push` `deletes[]` envelope,
+// not a per-row tombstone. Inbound (`init(from:)`) DOES read `deletedAt` so
+// hydration from `/sync/pull` survives soft-deleted rows.
+//
+// Sync-metadata fields (`_syncStatus`, `_baseUpdatedAt`, `_lastError`) are
+// deliberately excluded from both directions: they are local-only state and
+// must not be round-tripped through the server.
+extension CalendarEventNote: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case calendarEventId
+        case userId
+        case content
+        case createdAt
+        case updatedAt
+        case deletedAt
+    }
+
+    public convenience init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decode(String.self, forKey: .id)
+        let calendarEventId = try container.decode(String.self, forKey: .calendarEventId)
+        let userId = try container.decode(String.self, forKey: .userId)
+        let content = try container.decode(String.self, forKey: .content)
+        let createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        let updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+
+        self.init(
+            id: id,
+            calendarEventId: calendarEventId,
+            userId: userId,
+            content: content,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(calendarEventId, forKey: .calendarEventId)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(content, forKey: .content)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        // Note: `deletedAt` is intentionally NOT encoded — the legacy
+        // `toServerPayload(_ note:)` did not include it on the wire.
+    }
+}
