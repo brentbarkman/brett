@@ -5,20 +5,17 @@ import Foundation
 /// in-memory state is a separate concern from clearing the on-disk
 /// SwiftData mirror — `wipeAllData()` handles the latter; this protocol
 /// handles the former.
-///
-/// Default impl is a no-op so stores that hold no in-memory state (or only
-/// state derived from `@Query`) opt in trivially and the conformance
-/// regression test in `ClearableConformanceTests` covers the whole layer.
 @MainActor
 protocol Clearable: AnyObject {
     /// Drop any in-memory state that should not survive a sign-out. Called
     /// from `ClearableStoreRegistry.clearAll()` immediately before
     /// `PersistenceController.wipeAllData()` runs.
+    ///
+    /// No default impl: every conforming type must declare its own body
+    /// explicitly. An empty body is acceptable for stores with no
+    /// per-instance state — but the explicitness ensures a future store
+    /// that gains state can't accidentally inherit a no-op clear.
     func clearForSignOut()
-}
-
-extension Clearable {
-    func clearForSignOut() {}
 }
 
 /// Weak-reference registry of every `Clearable` store the process has
