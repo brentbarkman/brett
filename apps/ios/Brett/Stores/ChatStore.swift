@@ -1,25 +1,26 @@
 import Foundation
 import Observation
-import SwiftData
 
-/// In-memory conductor for the Brett chat SSE stream on a single item or
-/// calendar event.
+/// Coordinator for the Brett chat SSE stream on a single item or calendar
+/// event.
 ///
-/// Responsibilities:
-///  - Holds per-item conversation state keyed by `itemId` / `eventId`.
-///  - Appends a provisional user message immediately, then opens a streaming
-///    POST to `/brett/chat/:itemId` (or `/brett/chat/event/:eventId`).
-///  - Parses the SSE wire format (`event: chunk`, `event: done`, `event: error`)
-///    off a raw `URLSession.bytes(for:)` response — same format as
-///    `SSEClient.parse` but with one-shot lifecycle instead of reconnect.
-///  - Appends text deltas into the trailing assistant message as they arrive
-///    so the UI sees the response unfold.
-///  - On completion, persists the final assistant message to the
-///    `BrettMessage` SwiftData table so the message survives app restarts.
+/// Composes three focused collaborators:
+///  - `ChatMessageBuffer` — in-memory message state + mutation primitives.
+///  - `StreamingChatClient` — SSE transport (URLSession + parser).
+///  - `ChatPersister` — SwiftData write of finalised assistant messages.
 ///
-/// This store is @MainActor because it mutates observable state; the
-/// streaming network work runs inside a `Task` but every state write hops
-/// back onto the main actor.
+/// Public API:
+///  - `messages` / `isStreaming` / `lastError` — observable view-model state
+///    proxied straight through to `ChatMessageBuffer`.
+///  - `send(itemId:message:userId:)` / `send(eventId:message:userId:)` —
+///    user-bubble + assistant-bubble + stream open + persist + cache invalidate.
+///  - `hydrate(itemId:from:)` / `hydrateEvent(eventId:from:)` — reseed from
+///    SwiftData rows or server history.
+///  - `cancelAll()` / `clearForSignOut()` — tear-down hooks so an in-flight
+///    stream can't land its final `BrettMessage` on the next user's rows.
+///
+/// `@MainActor` because it mutates observable state; the streaming work runs
+/// inside a `Task` but every state write hops back onto the main actor.
 @MainActor
 @Observable
 final class ChatStore: Clearable {
@@ -38,9 +39,6 @@ final class ChatStore: Clearable {
     /// `messages` / `isStreaming` / `lastError` triple. Public properties
     /// above proxy straight through so callers don't need to change.
     private let buffer = ChatMessageBuffer()
-
-    private let apiClient: APIClient
-    private let persistence: PersistenceController?
 
     /// SwiftData write path for finalised assistant messages.
     /// Built from `persistence?.mainContext` (or the shared default) at
@@ -64,8 +62,6 @@ final class ChatStore: Clearable {
         session: URLSession = StreamingChatClient.makeStreamingSession(),
         persistence: PersistenceController? = .shared
     ) {
-        self.apiClient = apiClient
-        self.persistence = persistence
         self.persister = ChatPersister(
             context: (persistence ?? PersistenceController.shared).mainContext
         )
@@ -85,16 +81,9 @@ final class ChatStore: Clearable {
     /// Seed the store with already-persisted messages for a scope. Called
     /// once by the detail view on appear so the user sees prior history.
     func hydrate(itemId: String, from messages: [BrettMessage]) {
-        let sorted = messages.sorted(by: { $0.createdAt < $1.createdAt })
-        let chatMessages = sorted.map { message in
-            ChatMessage(
-                id: message.id,
-                role: ChatMessage.Role(rawValue: message.role) ?? .brett,
-                content: message.content,
-                isStreaming: false,
-                createdAt: message.createdAt
-            )
-        }
+        let chatMessages = messages
+            .sorted(by: { $0.createdAt < $1.createdAt })
+            .map { Self.makeChatMessage(id: $0.id, role: $0.role, content: $0.content, createdAt: $0.createdAt) }
         buffer.setMessages(key: itemId, messages: chatMessages)
     }
 
@@ -106,16 +95,9 @@ final class ChatStore: Clearable {
     /// bubbles in flight are blown away if they overlap, but in practice
     /// the user can't open a thread mid-stream without first finishing it.
     func hydrate(itemId: String, from messages: [APIClient.ChatHistoryMessage]) {
-        let sorted = messages.sorted(by: { $0.createdAt < $1.createdAt })
-        let chatMessages = sorted.map { message in
-            ChatMessage(
-                id: message.id,
-                role: ChatMessage.Role(rawValue: message.role) ?? .brett,
-                content: message.content,
-                isStreaming: false,
-                createdAt: message.createdAt
-            )
-        }
+        let chatMessages = messages
+            .sorted(by: { $0.createdAt < $1.createdAt })
+            .map { Self.makeChatMessage(id: $0.id, role: $0.role, content: $0.content, createdAt: $0.createdAt) }
         buffer.setMessages(key: itemId, messages: chatMessages)
     }
 
@@ -125,15 +107,32 @@ final class ChatStore: Clearable {
         hydrate(itemId: eventId, from: messages)
     }
 
+    /// Build a non-streaming `ChatMessage` from a stored or server row.
+    /// Centralises the role parse + isStreaming/false defaulting so the
+    /// two hydrate paths can stay one-liners.
+    private static func makeChatMessage(
+        id: String,
+        role: String,
+        content: String,
+        createdAt: Date
+    ) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            role: ChatMessage.Role(rawValue: role) ?? .brett,
+            content: content,
+            isStreaming: false,
+            createdAt: createdAt
+        )
+    }
+
     /// POST `/brett/chat/:itemId` with `message`; append deltas into a
-    /// trailing assistant bubble. Throws only on pre-flight failures (bad
-    /// URL, missing auth); network errors are swallowed into `lastError`
-    /// so the UI can render a soft banner.
+    /// trailing assistant bubble. Network errors are swallowed into
+    /// `lastError` so the UI can render a soft banner.
     ///
     /// `userId` is captured here and plumbed all the way through to
-    /// `persistAssistant` so the final row is written with the caller's
-    /// authenticated id — never re-derived mid-stream from a potentially
-    /// swapped `UserProfile` row.
+    /// `ChatPersister.persistAssistant` so the final row is written with
+    /// the caller's authenticated id — never re-derived mid-stream from
+    /// a potentially swapped `UserProfile` row.
     func send(itemId: String, message: String, userId: String?) async {
         let key = itemId
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -181,7 +180,7 @@ final class ChatStore: Clearable {
 
     /// Cancel every in-flight chat stream. Called from `ActiveSession.tearDown()`
     /// so a stream that's mid-response when the user signs out can't land its
-    /// final `persistAssistant` against the *next* user's context.
+    /// final assistant message against the *next* user's context.
     func cancelAll() {
         for (_, task) in activeStreams {
             task.cancel()
@@ -414,7 +413,8 @@ enum ChatStoreRegistry {
 
     /// Cancel every in-flight stream across all live `ChatStore`s.
     /// Called from `ActiveSession.tearDown()` before SwiftData is wiped
-    /// so no stream can land `persistAssistant` on the next user's rows.
+    /// so no stream can land its final assistant message on the next
+    /// user's rows.
     static func cancelAllActive() {
         for ref in refs {
             ref.store?.cancelAll()
