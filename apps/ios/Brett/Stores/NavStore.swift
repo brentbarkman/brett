@@ -7,7 +7,7 @@ import Observation
 /// of three navigation patterns (manual `path.append`, ad-hoc Boolean
 /// sheet flags, and stack-driven push) collapses into one source of
 /// truth: `currentDestination` drives every sheet-style presentation,
-/// and `pendingPushDestination` queues a push onto `MainContainer`'s
+/// and `pendingPushDestinations` queues pushes onto `MainContainer`'s
 /// `NavigationStack`. Both go through the unified `NavDestination`
 /// enum, and `go(to:)` dispatches to the right slot based on the
 /// destination's `isSheet` property.
@@ -20,15 +20,16 @@ import Observation
 final class NavStore: Clearable {
     /// Current sheet-style destination. Setting this presents a sheet
     /// in `MainContainer`; clearing it dismisses. Push-style
-    /// destinations flow through `pendingPushDestination` instead.
+    /// destinations flow through `pendingPushDestinations` instead.
     var currentDestination: NavDestination?
 
-    /// Pending push destination. `MainContainer` observes this via
-    /// `.onChange(of:)` and appends it to the navigation stack, then
-    /// clears the slot. Decoupling lets call sites just say
-    /// `nav.go(to: .settingsTab(.calendar))` without knowing whether
-    /// the destination is sheet or push.
-    var pendingPushDestination: NavDestination?
+    /// Pending push destinations queue. `MainContainer` observes the
+    /// array and drains it via append-to-path on `.onChange`. A queue
+    /// (rather than a single slot) so two rapid back-to-back
+    /// `go(to: pushDest)` calls can't drop the first one before the
+    /// observer fires — mostly theoretical today but a sharp edge for
+    /// callers that don't know their write timing.
+    var pendingPushDestinations: [NavDestination] = []
 
     /// Id of the most-recently-created item — set by the Omnibar
     /// after a successful create. Pages observe this via `.onChange`
@@ -51,19 +52,19 @@ final class NavStore: Clearable {
     /// signal, and no stale ids.
     func clearForSignOut() {
         currentDestination = nil
-        pendingPushDestination = nil
+        pendingPushDestinations = []
         lastCreatedItemId = nil
     }
 
     /// Convenience: navigate to a destination. Dispatches to either
-    /// `currentDestination` (sheet) or `pendingPushDestination` (push)
-    /// based on `destination.isSheet`. Reads better at call sites
-    /// than the manual property assignment.
+    /// `currentDestination` (sheet) or appends to
+    /// `pendingPushDestinations` (push) based on `destination.isSheet`.
+    /// Reads better at call sites than the manual property assignment.
     func go(to destination: NavDestination) {
         if destination.isSheet {
             currentDestination = destination
         } else {
-            pendingPushDestination = destination
+            pendingPushDestinations.append(destination)
         }
     }
 

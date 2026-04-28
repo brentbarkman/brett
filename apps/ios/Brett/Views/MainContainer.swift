@@ -396,15 +396,19 @@ struct MainContainer: View {
                 }
             }
             // Push-style navigation queue. Call sites that use
-            // `selection.go(to:)` with a push-style destination set
-            // `pendingPushDestination`; we observe it here and append
-            // onto the navigation stack, then clear the slot. Decoupling
-            // the queue lets writers stay platform-agnostic about
-            // sheet-vs-push routing.
-            .onChange(of: selection.pendingPushDestination) { _, dest in
-                guard let dest else { return }
-                path.append(dest)
-                selection.pendingPushDestination = nil
+            // `selection.go(to:)` with a push-style destination append
+            // to `pendingPushDestinations`; we observe the array here,
+            // drain it onto the navigation stack, then reset to empty.
+            // A queue (rather than a single slot) is what lets two
+            // rapid back-to-back pushes both land — `.onChange(of:)`
+            // for `Equatable` arrays fires on any append, and the
+            // drain runs synchronously before any other observer work.
+            .onChange(of: selection.pendingPushDestinations) { _, queue in
+                guard !queue.isEmpty else { return }
+                for dest in queue {
+                    path.append(dest)
+                }
+                selection.pendingPushDestinations = []
             }
         }
         // Brand tint on the NavigationStack so default toolbar items
@@ -523,9 +527,10 @@ struct MainContainer: View {
 
 /// Wraps `NewScoutSheet` so it can be presented from `MainContainer`'s
 /// unified sheet without relying on `ScoutsRosterView` to own the
-/// `ScoutStore`. The sheet is its own create flow; success + error
-/// surfacing match the prior in-roster presentation (errors land on
-/// `scoutStore.errorMessage`, the sheet dismisses on completion).
+/// `ScoutStore`. The sheet's `onCreate` closure throws on failure; the
+/// sheet keeps itself open and renders the error in its review step
+/// when it catches. We rethrow here so the sheet sees the failure and
+/// don't dismiss — dismissal happens inside the sheet on success only.
 private struct NewScoutSheetContainer: View {
     @State private var scoutStore = ScoutStore()
 
@@ -534,8 +539,8 @@ private struct NewScoutSheetContainer: View {
             do {
                 _ = try await scoutStore.create(payload: payload)
             } catch {
-                // Error is surfaced via `scoutStore.errorMessage` after
-                // refresh — same behaviour as the prior in-roster sheet.
+                BrettLog.store.error("NewScoutSheet create failed: \(String(describing: error), privacy: .public)")
+                throw error
             }
         }
     }

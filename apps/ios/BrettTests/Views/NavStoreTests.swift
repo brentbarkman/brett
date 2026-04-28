@@ -100,14 +100,21 @@ struct NavStoreRoutingTests {
         let store = NavStore()
         store.go(to: .search)
         #expect(store.currentDestination == .search)
-        #expect(store.pendingPushDestination == nil)
+        #expect(store.pendingPushDestinations.isEmpty)
     }
 
     @Test func goToPushDestinationSetsPendingPush() {
         let store = NavStore()
         store.go(to: .settingsTab(.calendar))
-        #expect(store.pendingPushDestination == .settingsTab(.calendar))
+        #expect(store.pendingPushDestinations == [.settingsTab(.calendar)])
         #expect(store.currentDestination == nil)
+    }
+
+    @Test func multiplePushesAreQueued() {
+        let store = NavStore()
+        store.go(to: .settings)
+        store.go(to: .settingsTab(.calendar))
+        #expect(store.pendingPushDestinations == [.settings, .settingsTab(.calendar)])
     }
 
     @Test func dismissClearsCurrentDestination() {
@@ -120,11 +127,11 @@ struct NavStoreRoutingTests {
     @Test func clearForSignOutClearsEverything() {
         let store = NavStore()
         store.currentDestination = .search
-        store.pendingPushDestination = .settings
+        store.pendingPushDestinations = [.settings]
         store.lastCreatedItemId = "item-1"
         store.clearForSignOut()
         #expect(store.currentDestination == nil)
-        #expect(store.pendingPushDestination == nil)
+        #expect(store.pendingPushDestinations.isEmpty)
         #expect(store.lastCreatedItemId == nil)
     }
 }
