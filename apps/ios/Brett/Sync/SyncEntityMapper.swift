@@ -115,69 +115,61 @@ enum SyncEntityMapper {
     }
 
     // MARK: - Item
+    //
+    // Codable-driven. The model owns its wire shape via the `Codable`
+    // conformance in `Models/Item.swift`. The static helpers below stay
+    // so existing tests and call sites keep working — they're now thin
+    // shims over JSON{Encoder, Decoder} configured with the project's
+    // date strategy.
+    //
+    // JSON-blob field handling (`contentMetadata`):
+    // Codable doesn't bridge `String?` ↔ untyped JSON cleanly, so the
+    // model's Codable contract treats `contentMetadata` as a `String?`.
+    // These shims handle the wire-format transform:
+    //   • Outbound: encode normally, then re-parse the `contentMetadata`
+    //     string back into a JSON dict/array (or NSNull for nil).
+    //   • Inbound: stringify the wire's `contentMetadata` JSON value into
+    //     a String before decoding, so Codable's `String?` reads cleanly.
 
-    /// Local Item → server payload dict. Keys match Prisma `Item`.
     static func toServerPayload(_ item: Item) -> [String: Any] {
-        var dict: [String: Any] = [
-            "id": item.id,
-            "userId": item.userId,
-            "type": item.type,
-            "status": item.status,
-            "title": item.title,
-            "source": item.source,
-        ]
-        dict["description"] = item.itemDescription ?? NSNull()
-        dict["notes"] = item.notes ?? NSNull()
-        dict["sourceId"] = item.sourceId ?? NSNull()
-        dict["sourceUrl"] = item.sourceUrl ?? NSNull()
-        dict["dueDate"] = isoString(item.dueDate) ?? NSNull()
-        dict["dueDatePrecision"] = item.dueDatePrecision ?? NSNull()
-        dict["completedAt"] = isoString(item.completedAt) ?? NSNull()
-        dict["snoozedUntil"] = isoString(item.snoozedUntil) ?? NSNull()
-        dict["reminder"] = item.reminder ?? NSNull()
-        dict["recurrence"] = item.recurrence ?? NSNull()
-        dict["recurrenceRule"] = item.recurrenceRule ?? NSNull()
-        dict["brettObservation"] = item.brettObservation ?? NSNull()
-        dict["brettTakeGeneratedAt"] = isoString(item.brettTakeGeneratedAt) ?? NSNull()
-        dict["contentType"] = item.contentType ?? NSNull()
-        dict["contentStatus"] = item.contentStatus ?? NSNull()
-        dict["contentTitle"] = item.contentTitle ?? NSNull()
-        dict["contentDescription"] = item.contentDescription ?? NSNull()
-        dict["contentImageUrl"] = item.contentImageUrl ?? NSNull()
-        dict["contentBody"] = item.contentBody ?? NSNull()
-        dict["contentFavicon"] = item.contentFavicon ?? NSNull()
-        dict["contentDomain"] = item.contentDomain ?? NSNull()
-        dict["contentMetadata"] = jsonDecoded(item.contentMetadata) ?? NSNull()
-        dict["listId"] = item.listId ?? NSNull()
-        dict["meetingNoteId"] = item.meetingNoteId ?? NSNull()
-        dict["createdAt"] = isoString(item.createdAt) ?? NSNull()
-        dict["updatedAt"] = isoString(item.updatedAt) ?? NSNull()
-        return dict
+        do {
+            let data = try makeEncoder().encode(item)
+            guard var json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [String: Any] else {
+                return [:]
+            }
+            // Re-attach the JSON-blob field as a parsed structure, not a string.
+            if let metadata = item.contentMetadata,
+               let metadataData = metadata.data(using: .utf8),
+               let parsed = try? JSONSerialization.jsonObject(with: metadataData) {
+                json["contentMetadata"] = parsed
+            } else {
+                json["contentMetadata"] = NSNull()
+            }
+            return json
+        } catch {
+            BrettLog.push.error("Encode Item failed: \(String(describing: error), privacy: .public)")
+            return [:]
+        }
     }
 
     /// Server JSON → local Item. Returns nil if required fields are missing.
     static func itemFromServerJSON(_ dict: [String: Any]) -> Item? {
-        guard let id = dict["id"] as? String,
-              let userId = dict["userId"] as? String,
-              let title = dict["title"] as? String else {
+        do {
+            var patched = dict
+            // Convert the parsed JSON `contentMetadata` value into the model's
+            // String? blob form before handing to Codable.
+            if let metadata = patched["contentMetadata"], !(metadata is NSNull) {
+                let data = try JSONSerialization.data(withJSONObject: metadata)
+                patched["contentMetadata"] = String(data: data, encoding: .utf8)
+            } else {
+                patched.removeValue(forKey: "contentMetadata")
+            }
+            let data = try JSONSerialization.data(withJSONObject: patched)
+            return try makeDecoder().decode(Item.self, from: data)
+        } catch {
+            BrettLog.pull.error("Decode Item failed: \(String(describing: error), privacy: .public)")
             return nil
         }
-        let item = Item(
-            id: id,
-            userId: userId,
-            type: ItemType(rawValue: (dict["type"] as? String) ?? "") ?? .task,
-            status: ItemStatus(rawValue: (dict["status"] as? String) ?? "") ?? .active,
-            title: title,
-            source: (dict["source"] as? String) ?? "Brett",
-            dueDate: parseDate(dict["dueDate"]),
-            listId: dict["listId"] as? String,
-            notes: dict["notes"] as? String,
-            createdAt: parseDate(dict["createdAt"]) ?? Date(),
-            updatedAt: parseDate(dict["updatedAt"]) ?? Date()
-        )
-        // Apply fields not covered by the convenience init.
-        applyItemFields(item, from: dict)
-        return item
     }
 
     /// Copy every server-mirrored field from dict → existing model.
