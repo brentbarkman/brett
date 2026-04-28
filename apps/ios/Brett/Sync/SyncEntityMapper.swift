@@ -253,72 +253,62 @@ enum SyncEntityMapper {
     }
 
     // MARK: - CalendarEvent
+    //
+    // Codable-driven. The model owns its wire shape via the `Codable`
+    // conformance in `Models/CalendarEvent.swift`. The static helpers
+    // below stay so existing tests and call sites keep working — they're
+    // now thin shims over JSON{Encoder, Decoder} configured with the
+    // project's date strategy.
+    //
+    // Reserved-word remap: the wire key is `description`, the model
+    // property is `eventDescription` — handled via `CodingKeys` raw values.
+    //
+    // JSON-blob field handling (4 blobs: `organizer`, `attendees`,
+    // `attachments`, `rawGoogleEvent` ↔ `*JSON`):
+    // Codable doesn't bridge `String?` ↔ untyped JSON cleanly, so the
+    // model's Codable contract treats each as a `String?` under the wire
+    // key without the `JSON` suffix. These shims handle the wire transform:
+    //   • Outbound: encode normally, then re-parse each blob string back
+    //     into a JSON dict/array (or NSNull for nil).
+    //   • Inbound: stringify the wire's parsed JSON value into a String
+    //     before decoding, so Codable's `String?` reads cleanly.
 
     static func toServerPayload(_ event: CalendarEvent) -> [String: Any] {
-        var dict: [String: Any] = [
-            "id": event.id,
-            "userId": event.userId,
-            "googleAccountId": event.googleAccountId,
-            "calendarListId": event.calendarListId,
-            "googleEventId": event.googleEventId,
-            "title": event.title,
-            "startTime": isoString(event.startTime) ?? NSNull(),
-            "endTime": isoString(event.endTime) ?? NSNull(),
-            "isAllDay": event.isAllDay,
-            "status": event.status,
-            "myResponseStatus": event.myResponseStatus,
-        ]
-        dict["description"] = event.eventDescription ?? NSNull()
-        dict["location"] = event.location ?? NSNull()
-        dict["recurrence"] = event.recurrence ?? NSNull()
-        dict["recurringEventId"] = event.recurringEventId ?? NSNull()
-        dict["meetingLink"] = event.meetingLink ?? NSNull()
-        dict["conferenceId"] = event.conferenceId ?? NSNull()
-        dict["googleColorId"] = event.googleColorId ?? NSNull()
-        dict["organizer"] = jsonDecoded(event.organizerJSON) ?? NSNull()
-        dict["attendees"] = jsonDecoded(event.attendeesJSON) ?? NSNull()
-        dict["attachments"] = jsonDecoded(event.attachmentsJSON) ?? NSNull()
-        dict["rawGoogleEvent"] = jsonDecoded(event.rawGoogleEventJSON) ?? NSNull()
-        dict["brettObservation"] = event.brettObservation ?? NSNull()
-        dict["brettObservationAt"] = isoString(event.brettObservationAt) ?? NSNull()
-        dict["brettObservationHash"] = event.brettObservationHash ?? NSNull()
-        dict["syncedAt"] = isoString(event.syncedAt) ?? NSNull()
-        dict["createdAt"] = isoString(event.createdAt) ?? NSNull()
-        dict["updatedAt"] = isoString(event.updatedAt) ?? NSNull()
-        return dict
+        do {
+            let data = try makeEncoder().encode(event)
+            guard var json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [String: Any] else {
+                return [:]
+            }
+            // Re-attach JSON-blob fields as parsed structures, not strings.
+            json["organizer"] = blobOutbound(event.organizerJSON)
+            json["attendees"] = blobOutbound(event.attendeesJSON)
+            json["attachments"] = blobOutbound(event.attachmentsJSON)
+            json["rawGoogleEvent"] = blobOutbound(event.rawGoogleEventJSON)
+            return json
+        } catch {
+            BrettLog.push.error("Encode CalendarEvent failed: \(String(describing: error), privacy: .public)")
+            return [:]
+        }
     }
 
     static func calendarEventFromServerJSON(_ dict: [String: Any]) -> CalendarEvent? {
-        guard let id = dict["id"] as? String,
-              let userId = dict["userId"] as? String,
-              let googleAccountId = dict["googleAccountId"] as? String,
-              let calendarListId = dict["calendarListId"] as? String,
-              let googleEventId = dict["googleEventId"] as? String,
-              let title = dict["title"] as? String,
-              let start = parseDate(dict["startTime"]),
-              let end = parseDate(dict["endTime"]) else {
+        do {
+            var patched = dict
+            // Stringify each parsed JSON blob value into the model's
+            // String? blob form before handing to Codable.
+            for wireKey in ["organizer", "attendees", "attachments", "rawGoogleEvent"] {
+                if let blobString = blobInbound(patched[wireKey]) {
+                    patched[wireKey] = blobString
+                } else {
+                    patched.removeValue(forKey: wireKey)
+                }
+            }
+            let data = try JSONSerialization.data(withJSONObject: patched)
+            return try makeDecoder().decode(CalendarEvent.self, from: data)
+        } catch {
+            BrettLog.pull.error("Decode CalendarEvent failed: \(String(describing: error), privacy: .public)")
             return nil
         }
-        let event = CalendarEvent(
-            id: id,
-            userId: userId,
-            googleAccountId: googleAccountId,
-            calendarListId: calendarListId,
-            googleEventId: googleEventId,
-            title: title,
-            startTime: start,
-            endTime: end,
-            isAllDay: (dict["isAllDay"] as? Bool) ?? false,
-            location: dict["location"] as? String,
-            meetingLink: dict["meetingLink"] as? String,
-            myResponseStatus: MyResponseStatus(
-                rawValue: (dict["myResponseStatus"] as? String) ?? ""
-            ) ?? .needsAction,
-            createdAt: parseDate(dict["createdAt"]) ?? Date(),
-            updatedAt: parseDate(dict["updatedAt"]) ?? Date()
-        )
-        applyCalendarEventFields(event, from: dict)
-        return event
     }
 
     static func applyCalendarEventFields(_ event: CalendarEvent, from dict: [String: Any]) {
@@ -927,6 +917,34 @@ enum SyncEntityMapper {
             try container.encode(BrettDate.isoString(date))
         }
         return encoder
+    }
+
+    /// Outbound JSON-blob shim: the on-device `String?` form of a JSON
+    /// blob → the parsed dict/array form expected on the wire. Returns
+    /// `NSNull()` for nil / malformed so the field still appears on the
+    /// payload (matches legacy `?? NSNull()` behavior).
+    fileprivate static func blobOutbound(_ blob: String?) -> Any {
+        guard
+            let blob,
+            let data = blob.data(using: .utf8),
+            let parsed = try? JSONSerialization.jsonObject(with: data)
+        else {
+            return NSNull()
+        }
+        return parsed
+    }
+
+    /// Inbound JSON-blob shim: the wire's parsed JSON dict/array → the
+    /// on-device `String?` form. Returns nil for nil / `NSNull` /
+    /// non-serializable; callers should `removeValue(forKey:)` in that case
+    /// so Codable's `decodeIfPresent` skips the field cleanly.
+    fileprivate static func blobInbound(_ value: Any?) -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        // Already a string (rare, but possible on round-trips).
+        if let str = value as? String { return str }
+        guard JSONSerialization.isValidJSONObject(value) else { return nil }
+        guard let data = try? JSONSerialization.data(withJSONObject: value) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     /// Decode a JSON string (as stored on-device) back into a dict/array so
