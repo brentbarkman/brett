@@ -1,11 +1,38 @@
 import SwiftUI
+import SwiftData
 
 /// Scout detail — header, findings timeline, activity log, memory, settings.
+///
+/// Outer view is a thin auth gate. The body's `@Query` predicate needs a
+/// concrete `userId`, so we resolve it from `AuthManager` and remount the
+/// child via `.id("\(userId)-\(scoutId)")` whenever the active user OR the
+/// selected scout changes. This is the standard Wave-B pattern (see
+/// `TaskDetailView`, `ScoutsRosterView`).
 struct ScoutDetailView: View {
     let scoutId: String
 
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            ScoutDetailBody(userId: userId, scoutId: scoutId)
+                .id("\(userId)-\(scoutId)")
+        } else {
+            // Signed-out fallback. Upstream auth gate normally prevents this.
+            EmptyView()
+        }
+    }
+}
+
+/// Detail's data + UI. `userId` is guaranteed non-optional for this view's
+/// lifetime because the parent only renders us inside an auth check and
+/// applies a composite `.id` so SwiftUI remounts on account switch OR
+/// scout switch.
+private struct ScoutDetailBody: View {
+    let userId: String
+    let scoutId: String
+
     @State private var scoutStore = ScoutStore()
-    @State private var scout: APIClient.ScoutDTO?
     @State private var findings: [APIClient.FindingDTO] = []
     @State private var findingsCursor: String?
     @State private var findingsType: FindingFilter = .all
@@ -18,7 +45,25 @@ struct ScoutDetailView: View {
     @State private var pendingDelete: Bool = false
     @State private var errorMessage: String?
 
+    /// Live reactive read of the scout for `(userId, scoutId)`. Replaces
+    /// the prior `@State var scout: APIClient.ScoutDTO?` cache. `ScoutStore`
+    /// mutations write via `upsertLocal`, so edits / pause / resume / archive
+    /// land in SwiftData and the @Query republishes a fresh row to the view.
+    @Query private var matchedScouts: [Scout]
+
     @Environment(\.dismiss) private var dismiss
+
+    init(userId: String, scoutId: String) {
+        self.userId = userId
+        self.scoutId = scoutId
+
+        let predicate = #Predicate<Scout> { scout in
+            scout.id == scoutId && scout.userId == userId
+        }
+        _matchedScouts = Query(filter: predicate)
+    }
+
+    private var scout: Scout? { matchedScouts.first }
 
     enum FindingFilter: String, CaseIterable, Identifiable {
         case all, article, insight, task
@@ -45,14 +90,14 @@ struct ScoutDetailView: View {
                         findingsSection
                         activitySection
                         memorySection
-                        settingsSection
+                        settingsSection(scout)
                         Spacer(minLength: 100)
                     }
                     .padding(.top, 8)
                 }
                 .scrollIndicators(.hidden)
 
-                runFAB
+                runFAB(scout: scout)
             } else {
                 ProgressView().tint(BrettColors.gold)
             }
@@ -71,7 +116,7 @@ struct ScoutDetailView: View {
             if let scout {
                 ScoutEditSheet(scout: scout) { patch in
                     do {
-                        self.scout = try await scoutStore.update(id: scout.id, changes: patch)
+                        _ = try await scoutStore.update(id: scout.id, changes: patch)
                     } catch {
                         errorMessage = "Couldn't save changes."
                     }
@@ -83,10 +128,8 @@ struct ScoutDetailView: View {
         .alert("Delete scout?", isPresented: $pendingDelete) {
             Button("Delete", role: .destructive) {
                 Task {
-                    if let scout {
-                        try? await scoutStore.delete(id: scout.id)
-                        dismiss()
-                    }
+                    try? await scoutStore.delete(id: scoutId)
+                    dismiss()
                 }
             }
             Button("Cancel", role: .cancel) { }
@@ -98,7 +141,7 @@ struct ScoutDetailView: View {
     // MARK: - Header
 
     @ViewBuilder
-    private func headerCard(_ scout: APIClient.ScoutDTO) -> some View {
+    private func headerCard(_ scout: Scout) -> some View {
         GlassCard(tint: BrettColors.cerulean) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 14) {
@@ -143,7 +186,7 @@ struct ScoutDetailView: View {
     }
 
     @ViewBuilder
-    private func budgetBar(_ scout: APIClient.ScoutDTO) -> some View {
+    private func budgetBar(_ scout: Scout) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("BUDGET")
@@ -175,7 +218,7 @@ struct ScoutDetailView: View {
         }
     }
 
-    private func nextRunLabel(_ scout: APIClient.ScoutDTO) -> String {
+    private func nextRunLabel(_ scout: Scout) -> String {
         if let last = scout.lastRun {
             return "Last run \(FindingCard.relative(last)) ago"
         }
@@ -317,7 +360,7 @@ struct ScoutDetailView: View {
     // MARK: - Settings / Danger
 
     @ViewBuilder
-    private var settingsSection: some View {
+    private func settingsSection(_ scout: Scout) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionLabel("SETTINGS", trailing: nil)
 
@@ -344,20 +387,16 @@ struct ScoutDetailView: View {
 
                     Divider().overlay(BrettColors.hairline)
 
-                    if scout?.status == "paused" {
+                    if scout.status == "paused" {
                         settingsButton(icon: "play.circle", label: "Resume scout", color: BrettColors.emerald) {
                             Task {
-                                if let s = scout {
-                                    scout = try? await scoutStore.resume(id: s.id)
-                                }
+                                _ = try? await scoutStore.resume(id: scout.id)
                             }
                         }
-                    } else if scout?.status == "active" {
+                    } else if scout.status == "active" {
                         settingsButton(icon: "pause.circle", label: "Pause scout", color: BrettColors.textInactive) {
                             Task {
-                                if let s = scout {
-                                    scout = try? await scoutStore.pause(id: s.id)
-                                }
+                                _ = try? await scoutStore.pause(id: scout.id)
                             }
                         }
                     }
@@ -366,9 +405,7 @@ struct ScoutDetailView: View {
 
                     settingsButton(icon: "archivebox", label: "Archive", color: BrettColors.textInactive) {
                         Task {
-                            if let s = scout {
-                                scout = try? await scoutStore.archive(id: s.id)
-                            }
+                            _ = try? await scoutStore.archive(id: scout.id)
                         }
                     }
 
@@ -403,7 +440,7 @@ struct ScoutDetailView: View {
     // MARK: - FAB
 
     @ViewBuilder
-    private var runFAB: some View {
+    private func runFAB(scout: Scout) -> some View {
         VStack {
             Spacer()
             HStack {
@@ -431,7 +468,7 @@ struct ScoutDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .disabled(isRunning || scout?.status == "paused")
+                .disabled(isRunning || scout.status == "paused")
                 .padding(.trailing, 20)
                 .padding(.bottom, 20)
             }
@@ -460,8 +497,11 @@ struct ScoutDetailView: View {
     // MARK: - Data loading
 
     private func loadAll() async {
+        // Refresh the scout from the server. Result lands in SwiftData via
+        // upsertLocal and the @Query reactively re-renders — no need to
+        // hold the returned DTO locally.
         do {
-            scout = try await scoutStore.fetchDetail(id: scoutId)
+            _ = try await scoutStore.fetchDetail(id: scoutId)
         } catch {
             errorMessage = "Couldn't load scout."
         }

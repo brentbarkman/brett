@@ -269,6 +269,7 @@ final class ScoutStore: Clearable {
             row.bootstrapped = dto.bootstrapped ?? false
             row.endDate = dto.endDate
             row.nextRunAt = dto.nextRunAt
+            row.lastRun = dto.lastRun
             row.findingsCount = dto.findingsCount ?? 0
             row.updatedAt = Date()
 

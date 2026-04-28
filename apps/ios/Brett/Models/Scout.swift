@@ -38,6 +38,7 @@ final class Scout {
     var bootstrapped: Bool = false
     var endDate: Date?
     var nextRunAt: Date?
+    var lastRun: Date?
 
     // Server-computed denormalized count of non-deleted findings tied to
     // this scout. Mirrors `ScoutDTO.findingsCount` so roster cards can
