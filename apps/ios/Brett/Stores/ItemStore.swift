@@ -297,13 +297,6 @@ final class ItemStore: Clearable {
         payload["createdAt"] = item.createdAt
         payload["updatedAt"] = item.updatedAt
 
-        // Insert directly rather than going through `MutationQueue.enqueue`:
-        // that helper does eager compaction + commits a save mid-method, which
-        // would split the model insert and queue-entry insert across two
-        // transactions and break the atomic-rollback guarantee. A brand-new
-        // CREATE never has anything to compact against (no prior pending rows
-        // for an entity that doesn't exist yet), so the helper's savings
-        // don't apply here.
         let entry = MutationQueueEntry(
             entityType: "item",
             entityId: item.id,
@@ -312,7 +305,7 @@ final class ItemStore: Clearable {
             method: .post,
             payload: JSONCodec.encode(payload)
         )
-        context.insert(entry)
+        applyCompacted(entityType: "item", entityId: item.id, incoming: entry)
     }
 
     private func enqueueUpdate(
@@ -335,7 +328,7 @@ final class ItemStore: Clearable {
             baseUpdatedAt: item._baseUpdatedAt,
             beforeSnapshot: JSONCodec.encode(beforeSnapshot)
         )
-        context.insert(entry)
+        applyCompacted(entityType: "item", entityId: item.id, incoming: entry)
     }
 
     private func enqueueDelete(_ item: Item, beforeSnapshot: [String: Any]) {
@@ -349,7 +342,69 @@ final class ItemStore: Clearable {
             baseUpdatedAt: item._baseUpdatedAt,
             beforeSnapshot: JSONCodec.encode(beforeSnapshot)
         )
-        context.insert(entry)
+        applyCompacted(entityType: "item", entityId: item.id, incoming: entry)
+    }
+
+    /// Run eager compaction for the given entity, then apply the resulting
+    /// deltas to `context` WITHOUT calling save. `MutationCompactor.compact`
+    /// is a pure value function — it returns ids to delete, an existing entry
+    /// it mutated in place, and/or a new entry to insert.
+    ///
+    /// This used to live inside `MutationQueue.enqueue`, but that helper
+    /// commits a save mid-method, which split the optimistic SwiftData write
+    /// from the queue-entry insert across two transactions and broke the
+    /// atomic-rollback guarantee. By doing the compaction here — between the
+    /// optimistic write and the outer `saver.save()` — the whole thing
+    /// commits or rolls back together.
+    ///
+    /// Without compaction, 10 rapid edits to the same field produce 10 queue
+    /// rows that the push engine then has to round-trip individually. With
+    /// it, they collapse to a single UPDATE.
+    private func applyCompacted(
+        entityType: String,
+        entityId: String,
+        incoming: MutationQueueEntry
+    ) {
+        let pending = fetchPendingMutations(entityType: entityType, entityId: entityId)
+        let result = MutationCompactor.compact(pending: pending, incoming: incoming)
+
+        for id in result.toDelete {
+            if let entry = fetchMutationEntry(id: id) {
+                context.delete(entry)
+            }
+        }
+        // `result.toUpdate`, if non-nil, is an already-persisted entry the
+        // compactor mutated in place. SwiftData re-persists the dirty fields
+        // on the next save, so we don't need to do anything explicit here.
+        if let toInsert = result.toInsert {
+            context.insert(toInsert)
+        }
+    }
+
+    private func fetchPendingMutations(
+        entityType: String,
+        entityId: String
+    ) -> [MutationQueueEntry] {
+        let pendingRaw = MutationStatus.pending.rawValue
+        var descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate {
+                $0.entityType == entityType
+                    && $0.entityId == entityId
+                    && $0.status == pendingRaw
+            },
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        )
+        descriptor.includePendingChanges = true
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    private func fetchMutationEntry(id: String) -> MutationQueueEntry? {
+        var descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        descriptor.includePendingChanges = true
+        return try? context.fetch(descriptor).first
     }
 }
 

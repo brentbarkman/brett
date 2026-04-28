@@ -309,4 +309,82 @@ struct MutationAtomicityTests {
 
         #expect(mockTrigger.scheduleCallCount == baselineCount + 1, "successful update should invoke sync trigger exactly once")
     }
+
+    // MARK: - Compaction integration
+
+    /// 10 rapid title updates on a brand-new (still-pending-CREATE) item must
+    /// collapse into the original CREATE row. This is the headline benefit of
+    /// wiring `MutationCompactor` into the store's enqueue path: the push
+    /// engine sees a single CREATE with the latest title, not a CREATE plus
+    /// 10 UPDATEs. Without this, every keystroke during initial entry would
+    /// fan out into its own HTTP round-trip.
+    @Test func tenRapidUpdatesAfterCreateProduceOneCompactedQueueEntry() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let store = ItemStore(
+            context: context,
+            saver: LiveSaver(context: context)
+        )
+
+        let item = try store.create(
+            userId: "alice", title: "Original", type: .task,
+            status: .active, dueDate: nil, listId: nil, notes: nil, source: "Brett"
+        )
+        let itemId = item.id
+
+        for i in 0..<10 {
+            store.update(id: itemId, changes: ["title": "Version \(i)"], userId: "alice")
+        }
+
+        let entries = try context.fetch(
+            FetchDescriptor<MutationQueueEntry>(
+                predicate: #Predicate { $0.entityType == "item" && $0.entityId == itemId }
+            )
+        )
+        #expect(entries.count == 1, "expected 1 entry after compaction; got \(entries.count)")
+        #expect(entries.first?.actionEnum == .create, "the surviving row should be the CREATE with the latest title merged in")
+
+        // And the merged payload should carry the latest title.
+        let payloadJSON = entries.first?.payload ?? ""
+        let payload = (try? JSONSerialization.jsonObject(with: Data(payloadJSON.utf8))) as? [String: Any]
+        #expect(payload?["title"] as? String == "Version 9")
+    }
+
+    /// 10 rapid updates on an already-synced row collapse into a single
+    /// pending UPDATE. `previousValues` keeps the EARLIEST baseline (the
+    /// pre-edit value the server has) so server-side conflict detection
+    /// still works after compaction.
+    @Test func tenRapidUpdatesOnSyncedRowProduceOneUpdate() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let store = ItemStore(
+            context: context,
+            saver: LiveSaver(context: context)
+        )
+
+        // Seed an item that's already synced (no CREATE in queue).
+        let item = TestFixtures.makeItem(userId: "alice", title: "Original")
+        item._syncStatus = SyncStatus.synced.rawValue
+        context.insert(item)
+        try context.save()
+        let itemId = item.id
+
+        for i in 0..<10 {
+            store.update(id: itemId, changes: ["title": "V\(i)"], userId: "alice")
+        }
+
+        let entries = try context.fetch(
+            FetchDescriptor<MutationQueueEntry>(
+                predicate: #Predicate { $0.entityType == "item" && $0.entityId == itemId }
+            )
+        )
+        #expect(entries.count == 1, "expected 1 UPDATE after compaction; got \(entries.count)")
+        let entry = try #require(entries.first)
+        #expect(entry.actionEnum == .update)
+
+        // previousValues retains the earliest baseline so the server can
+        // still detect divergence — that's the per-field semantic the
+        // compactor preserves on UPDATE+UPDATE.
+        let prevJSON = entry.previousValues ?? "{}"
+        let prev = (try? JSONSerialization.jsonObject(with: Data(prevJSON.utf8))) as? [String: Any]
+        #expect(prev?["title"] as? String == "Original", "earliest previous title should win after compaction")
+    }
 }
