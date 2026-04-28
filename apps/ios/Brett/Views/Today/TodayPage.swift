@@ -338,11 +338,15 @@ struct TodayPage: View {
         // `sections.*` reads share one bucket and the two event accesses
         // (count + duration sum) share one filter pass.
         let s = sections
-        let events = todaysEvents
+        // Only include events that block time on the calendar. Google
+        // auto-creates `transparent` events for flights / hotels / working
+        // location from Gmail; counting those as meetings (and summing
+        // their hours) confuses the day's commitment summary.
+        let events = todaysEvents.filter { $0.isBusy }
         let total = s.activeCount + s.doneToday.count
         let done = s.doneToday.count
         let base = "\(done) of \(total) done"
-        guard !userEvents.isEmpty else { return base }
+        guard !events.isEmpty else { return base }
         let meetingCount = events.count
         let suffix = meetingCount == 1 ? "meeting" : "meetings"
         return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: events)))"
