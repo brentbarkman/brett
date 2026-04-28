@@ -19,35 +19,11 @@ import UIKit
 /// with the verify request — `URLSession.shared`'s default cookie storage
 /// carries it automatically.
 struct SecuritySettingsView: View {
-    // Scoped per-user so two accounts on the same device don't share the
-    // Face ID toggle — @State + explicit UserDefaults bridge because
-    // @AppStorage keys must be compile-time constants.
-    @State private var faceIDEnabled: Bool = false
-    @State private var biometryAvailable: Bool = LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
-    @State private var biometryType: String = SecuritySettingsView.resolveBiometryLabel()
-
-    // MARK: - Account type detection
+    // MARK: - Account type detection (parent-owned so the body can decide
+    // whether to show the password-change section).
 
     @State private var providerIds: [String] = []
     @State private var isLoadingAccounts = true
-
-    // MARK: - Password change form
-
-    @State private var currentPassword: String = ""
-    @State private var newPassword: String = ""
-    @State private var isChangingPassword = false
-    @State private var passwordSuccessMessage: String?
-    @State private var passwordErrorMessage: String?
-
-    // MARK: - Passkeys
-
-    @State private var passkeys: [Passkey] = []
-    @State private var isLoadingPasskeys = true
-    @State private var passkeyErrorMessage: String?
-    @State private var passkeySuccessMessage: String?
-    @State private var isRegisteringPasskey = false
-    @State private var passkeyIdPendingConfirm: String?
-    @State private var passkeyIdDeleting: String?
 
     private let client: APIClient
 
@@ -60,101 +36,167 @@ struct SecuritySettingsView: View {
         providerIds.contains("credential")
     }
 
-    /// True when at least one linked account uses Google.
-    private var isGoogleAccount: Bool {
-        providerIds.contains { $0.lowercased().contains("google") }
-    }
-
     var body: some View {
         BrettSettingsScroll {
-            // App Lock
-            BrettSettingsSection("App Lock") {
-                Toggle(isOn: $faceIDEnabled) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(biometryAvailable ? "\(biometryType) app lock" : "Biometrics unavailable")
-                            .foregroundStyle(BrettColors.textCardTitle)
-                        Text(biometryAvailable
-                             ? "Require \(biometryType) when opening Brett"
-                             : "This device doesn't support biometric authentication.")
-                            .font(BrettTypography.taskMeta)
-                            .foregroundStyle(BrettColors.textMeta)
-                    }
-                }
-                .tint(BrettColors.gold)
-                .disabled(!biometryAvailable)
-                .onChange(of: faceIDEnabled) { _, newValue in
-                    UserDefaults.standard.set(newValue, forKey: BiometricLockManager.faceIDEnabledKey)
-                    BiometricLockManager.shared.settingsDidChange()
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-            }
+            AppLockSection()
 
             // Sign-in method
             if !isLoadingAccounts {
-                BrettSettingsSection("Sign-in Method") {
-                    if isGoogleAccount {
-                        HStack(spacing: 10) {
-                            Image(systemName: "g.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(BrettColors.gold)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Signed in with Google")
-                                    .foregroundStyle(BrettColors.textCardTitle)
-                                Text("Password changes are managed through your Google account.")
-                                    .font(BrettTypography.taskMeta)
-                                    .foregroundStyle(BrettColors.textMeta)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                    } else if isCredentialAccount {
-                        HStack(spacing: 10) {
-                            Image(systemName: "envelope.fill")
-                                .font(.system(size: 16))
-                                .foregroundStyle(BrettColors.gold)
-                            Text("Email & Password")
-                                .foregroundStyle(BrettColors.textCardTitle)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                    } else {
-                        // Fallback for unknown provider types
-                        HStack {
-                            Text(providerIds.joined(separator: ", "))
-                                .foregroundStyle(BrettColors.textCardTitle)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                    }
-                }
+                SignInMethodSection(providerIds: providerIds)
             }
 
             // Passkeys
-            passkeysSection
+            PasskeysSection(client: client)
 
             // Password change (credential accounts only)
             if isCredentialAccount {
-                passwordChangeSection
+                PasswordChangeSection(client: client)
             }
         }
         .navigationTitle("Security")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .task { await loadAccounts() }
+    }
+
+    // MARK: - Network
+
+    private func loadAccounts() async {
+        isLoadingAccounts = true
+        defer { isLoadingAccounts = false }
+
+        do {
+            let response: ListAccountsResponse = try await client.request(
+                path: "/api/auth/list-accounts",
+                method: "GET"
+            )
+            providerIds = response.data.map(\.providerId)
+        } catch {
+            // Non-fatal — the section just won't show. The Face ID toggle
+            // still works regardless.
+        }
+    }
+}
+
+// MARK: - App lock section
+
+private struct AppLockSection: View {
+    // Scoped per-user so two accounts on the same device don't share the
+    // Face ID toggle — @State + explicit UserDefaults bridge because
+    // @AppStorage keys must be compile-time constants.
+    @State private var faceIDEnabled: Bool = false
+    @State private var biometryAvailable: Bool = LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+    @State private var biometryType: String = AppLockSection.resolveBiometryLabel()
+
+    var body: some View {
+        BrettSettingsSection("App Lock") {
+            Toggle(isOn: $faceIDEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(biometryAvailable ? "\(biometryType) app lock" : "Biometrics unavailable")
+                        .foregroundStyle(BrettColors.textCardTitle)
+                    Text(biometryAvailable
+                         ? "Require \(biometryType) when opening Brett"
+                         : "This device doesn't support biometric authentication.")
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(BrettColors.textMeta)
+                }
+            }
+            .tint(BrettColors.gold)
+            .disabled(!biometryAvailable)
+            .onChange(of: faceIDEnabled) { _, newValue in
+                UserDefaults.standard.set(newValue, forKey: BiometricLockManager.faceIDEnabledKey)
+                BiometricLockManager.shared.settingsDidChange()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+        }
         .onAppear {
             faceIDEnabled = UserDefaults.standard.bool(forKey: BiometricLockManager.faceIDEnabledKey)
         }
-        .task { await loadAccounts() }
-        .task { await loadPasskeys() }
     }
 
-    // MARK: - Password change section
+    /// Returns "Face ID", "Touch ID", "Optic ID", or a generic fallback.
+    private static func resolveBiometryLabel() -> String {
+        let ctx = LAContext()
+        _ = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+        switch ctx.biometryType {
+        case .faceID: return "Face ID"
+        case .touchID: return "Touch ID"
+        case .opticID: return "Optic ID"
+        case .none: return "Biometrics"
+        @unknown default: return "Biometrics"
+        }
+    }
+}
 
-    @ViewBuilder
-    private var passwordChangeSection: some View {
+// MARK: - Sign-in method section
+
+private struct SignInMethodSection: View {
+    let providerIds: [String]
+
+    private var isCredentialAccount: Bool {
+        providerIds.contains("credential")
+    }
+
+    private var isGoogleAccount: Bool {
+        providerIds.contains { $0.lowercased().contains("google") }
+    }
+
+    var body: some View {
+        BrettSettingsSection("Sign-in Method") {
+            if isGoogleAccount {
+                HStack(spacing: 10) {
+                    Image(systemName: "g.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(BrettColors.gold)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Signed in with Google")
+                            .foregroundStyle(BrettColors.textCardTitle)
+                        Text("Password changes are managed through your Google account.")
+                            .font(BrettTypography.taskMeta)
+                            .foregroundStyle(BrettColors.textMeta)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            } else if isCredentialAccount {
+                HStack(spacing: 10) {
+                    Image(systemName: "envelope.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(BrettColors.gold)
+                    Text("Email & Password")
+                        .foregroundStyle(BrettColors.textCardTitle)
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            } else {
+                // Fallback for unknown provider types
+                HStack {
+                    Text(providerIds.joined(separator: ", "))
+                        .foregroundStyle(BrettColors.textCardTitle)
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+}
+
+// MARK: - Password change section
+
+private struct PasswordChangeSection: View {
+    let client: APIClient
+
+    @State private var currentPassword: String = ""
+    @State private var newPassword: String = ""
+    @State private var isChangingPassword = false
+    @State private var passwordSuccessMessage: String?
+    @State private var passwordErrorMessage: String?
+
+    var body: some View {
         BrettSettingsSection("Change Password") {
             SecureField("Current password", text: $currentPassword)
                 .foregroundStyle(.white)
@@ -209,10 +251,48 @@ struct SecuritySettingsView: View {
         }
     }
 
-    // MARK: - Passkeys section
+    private func changePassword() async {
+        isChangingPassword = true
+        passwordSuccessMessage = nil
+        passwordErrorMessage = nil
+        defer { isChangingPassword = false }
 
-    @ViewBuilder
-    private var passkeysSection: some View {
+        do {
+            let body = ChangePasswordBody(
+                currentPassword: currentPassword,
+                newPassword: newPassword
+            )
+            let encoded = try JSONEncoder().encode(body)
+            _ = try await client.rawRequest(
+                path: "/api/auth/change-password",
+                method: "POST",
+                body: encoded
+            )
+            passwordSuccessMessage = "Password updated successfully."
+            currentPassword = ""
+            newPassword = ""
+        } catch let apiError as APIError {
+            passwordErrorMessage = apiError.userFacingMessage
+        } catch {
+            passwordErrorMessage = "Couldn't update password. Please try again."
+        }
+    }
+}
+
+// MARK: - Passkeys section
+
+private struct PasskeysSection: View {
+    let client: APIClient
+
+    @State private var passkeys: [Passkey] = []
+    @State private var isLoadingPasskeys = true
+    @State private var passkeyErrorMessage: String?
+    @State private var passkeySuccessMessage: String?
+    @State private var isRegisteringPasskey = false
+    @State private var passkeyIdPendingConfirm: String?
+    @State private var passkeyIdDeleting: String?
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             BrettSettingsSection("Passkeys") {
                 if isLoadingPasskeys {
@@ -287,6 +367,7 @@ struct SecuritySettingsView: View {
                 .foregroundStyle(BrettColors.textMeta)
                 .padding(.horizontal, 4)
         }
+        .task { await loadPasskeys() }
     }
 
     @ViewBuilder
@@ -368,51 +449,6 @@ struct SecuritySettingsView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-    }
-
-    // MARK: - Network
-
-    private func loadAccounts() async {
-        isLoadingAccounts = true
-        defer { isLoadingAccounts = false }
-
-        do {
-            let response: ListAccountsResponse = try await client.request(
-                path: "/api/auth/list-accounts",
-                method: "GET"
-            )
-            providerIds = response.data.map(\.providerId)
-        } catch {
-            // Non-fatal — the section just won't show. The Face ID toggle
-            // still works regardless.
-        }
-    }
-
-    private func changePassword() async {
-        isChangingPassword = true
-        passwordSuccessMessage = nil
-        passwordErrorMessage = nil
-        defer { isChangingPassword = false }
-
-        do {
-            let body = ChangePasswordBody(
-                currentPassword: currentPassword,
-                newPassword: newPassword
-            )
-            let encoded = try JSONEncoder().encode(body)
-            _ = try await client.rawRequest(
-                path: "/api/auth/change-password",
-                method: "POST",
-                body: encoded
-            )
-            passwordSuccessMessage = "Password updated successfully."
-            currentPassword = ""
-            newPassword = ""
-        } catch let apiError as APIError {
-            passwordErrorMessage = apiError.userFacingMessage
-        } catch {
-            passwordErrorMessage = "Couldn't update password. Please try again."
-        }
     }
 
     // MARK: - Passkey networking
@@ -589,21 +625,6 @@ struct SecuritySettingsView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter.string(from: date)
-    }
-
-    // MARK: - Biometry label
-
-    /// Returns "Face ID", "Touch ID", "Optic ID", or a generic fallback.
-    private static func resolveBiometryLabel() -> String {
-        let ctx = LAContext()
-        _ = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
-        switch ctx.biometryType {
-        case .faceID: return "Face ID"
-        case .touchID: return "Touch ID"
-        case .opticID: return "Optic ID"
-        case .none: return "Biometrics"
-        @unknown default: return "Biometrics"
-        }
     }
 }
 
