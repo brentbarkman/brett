@@ -92,3 +92,39 @@ struct SettingsDeepLinkTests {
         #expect(a.hashValue == b.hashValue)
     }
 }
+
+@Suite("NavStore routing", .tags(.smoke))
+@MainActor
+struct NavStoreRoutingTests {
+    @Test func goToSheetDestinationSetsCurrentDestination() {
+        let store = NavStore()
+        store.go(to: .search)
+        #expect(store.currentDestination == .search)
+        #expect(store.pendingPushDestination == nil)
+    }
+
+    @Test func goToPushDestinationSetsPendingPush() {
+        let store = NavStore()
+        store.go(to: .settingsTab(.calendar))
+        #expect(store.pendingPushDestination == .settingsTab(.calendar))
+        #expect(store.currentDestination == nil)
+    }
+
+    @Test func dismissClearsCurrentDestination() {
+        let store = NavStore()
+        store.currentDestination = .search
+        store.dismiss()
+        #expect(store.currentDestination == nil)
+    }
+
+    @Test func clearForSignOutClearsEverything() {
+        let store = NavStore()
+        store.currentDestination = .search
+        store.pendingPushDestination = .settings
+        store.lastCreatedItemId = "item-1"
+        store.clearForSignOut()
+        #expect(store.currentDestination == nil)
+        #expect(store.pendingPushDestination == nil)
+        #expect(store.lastCreatedItemId == nil)
+    }
+}
