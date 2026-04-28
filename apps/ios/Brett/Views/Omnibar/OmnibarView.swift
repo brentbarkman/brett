@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 /// Glass pill at the bottom of the screen — the entry point for every
@@ -22,9 +23,9 @@ struct OmnibarView: View {
     @State private var itemStore = ItemStore(
         context: PersistenceController.shared.container.mainContext
     )
-    @State private var listStore = ListStore(
-        context: PersistenceController.shared.container.mainContext
-    )
+    // ListStore previously held here for `fetchAll`-based name resolution.
+    // The parser now runs a direct `FetchDescriptor<ItemList>` inside
+    // `submit()` (see below), so the store is unnecessary here.
 
     @State private var inputText = ""
     @State private var isVoiceMode = false
@@ -147,8 +148,20 @@ struct OmnibarView: View {
         // Scope to the current user — #listname tags should only resolve
         // against lists the signed-in account owns. Without userId, a
         // late-arriving sync row from a prior session could capture the
-        // tag intent.
-        let realLists = listStore.fetchAll(userId: authManager.currentUser?.id)
+        // tag intent. Direct `FetchDescriptor` instead of going through
+        // the soon-to-be-deleted `ListStore.fetchAll`; this is a
+        // submit-time read with no need to subscribe to changes.
+        let realLists: [ItemList] = {
+            guard let uid = authManager.currentUser?.id else { return [] }
+            let context = PersistenceController.shared.mainContext
+            var descriptor = FetchDescriptor<ItemList>(
+                sortBy: [SortDescriptor(\.sortOrder)]
+            )
+            descriptor.predicate = #Predicate { list in
+                list.deletedAt == nil && list.userId == uid
+            }
+            return (try? context.fetch(descriptor)) ?? []
+        }()
         let lists = realLists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
         let parsed = SmartParser.parse(
             trimmed,

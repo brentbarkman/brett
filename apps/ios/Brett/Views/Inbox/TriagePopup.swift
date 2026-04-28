@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 /// Which triage operation the popup is performing on the selected items.
@@ -15,10 +16,17 @@ enum TriageMode: Equatable {
 ///
 /// The caller owns `isPresented`. When the user confirms, the popup calls
 /// `itemStore.bulkUpdate(ids:, changes:)` and dismisses. Cancel just dismisses.
+///
+/// `userId` is non-optional because the only call site is
+/// `InboxPageBody`, whose own auth gate guarantees a signed-in user.
+/// Lists for the move-to-list picker are read reactively via `@Query`
+/// with the captured `userId` baked into the predicate, so the picker
+/// refreshes automatically when a list is created / renamed elsewhere
+/// without a manual nudge.
 struct TriagePopup: View {
     let mode: TriageMode
     let selectedIDs: Set<String>
-    let userId: String?
+    let userId: String
     @Bindable var itemStore: ItemStore
     @Bindable var listStore: ListStore
     @Binding var isPresented: Bool
@@ -31,8 +39,31 @@ struct TriagePopup: View {
     @State private var newListName: String = ""
     @State private var creatingList: Bool = false
 
-    private var lists: [ItemList] {
-        listStore.fetchAll(userId: userId)
+    /// Live reactive read of the user's non-deleted lists. Replaces the
+    /// prior imperative `listStore.fetchAll(userId:)` call.
+    @Query private var lists: [ItemList]
+
+    init(
+        mode: TriageMode,
+        selectedIDs: Set<String>,
+        userId: String,
+        itemStore: ItemStore,
+        listStore: ListStore,
+        isPresented: Binding<Bool>,
+        onCommit: @escaping () -> Void
+    ) {
+        self.mode = mode
+        self.selectedIDs = selectedIDs
+        self.userId = userId
+        self._itemStore = Bindable(wrappedValue: itemStore)
+        self._listStore = Bindable(wrappedValue: listStore)
+        self._isPresented = isPresented
+        self.onCommit = onCommit
+
+        let predicate = #Predicate<ItemList> { list in
+            list.deletedAt == nil && list.userId == userId
+        }
+        _lists = Query(filter: predicate, sort: \ItemList.sortOrder)
     }
 
     var body: some View {
@@ -282,7 +313,7 @@ struct TriagePopup: View {
         itemStore.bulkUpdate(
             ids: Array(selectedIDs),
             changes: ["dueDate": date],
-            userId: userId ?? ""
+            userId: userId
         )
         isPresented = false
         onCommit()
@@ -293,7 +324,7 @@ struct TriagePopup: View {
         itemStore.bulkUpdate(
             ids: Array(selectedIDs),
             changes: ["listId": listId],
-            userId: userId ?? ""
+            userId: userId
         )
         isPresented = false
         onCommit()
@@ -301,7 +332,7 @@ struct TriagePopup: View {
 
     private func createAndMove() {
         let trimmed = newListName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let userId, !userId.isEmpty else { return }
+        guard !trimmed.isEmpty, !userId.isEmpty else { return }
         let list: ItemList
         do {
             list = try listStore.create(userId: userId, name: trimmed)
