@@ -220,7 +220,7 @@ Treated separately in the AI deep-dive doc. Key shape:
 | api | Vitest, drives `app.request()` directly | 619 tests across 58 files — auth, sync push/pull, items/lists, calendar, scouts, scout memory, embeddings, knowledge graph, content extraction, newsletters, AI config |
 | desktop | Vitest + Testing Library | 121 tests — omnibar, SSE, settings, account deletion dialog, SimpleMarkdown, smoke |
 | packages | Vitest | ai (24), business (6), ui (3), utils (4) |
-| ios | XCTest + XCUITest | 405 tests — sync engines, conflict resolver, SSE client, SmartParser, views, accessibility, E2E flow |
+| ios | Swift Testing + XCUITest | 648 tests across 90 suites — mutation atomicity, sync engines, conflict resolver, SSE client, SmartParser, store conformance + read guards, user-scoped @Query predicates, NavStore routing, Codable round-trips per model, accessibility, E2E flow |
 | evals | Custom runner (`evals/runner.ts`) | intent classification, parameter extraction, briefing quality (LLM-judge), action-item extraction |
 
 **Known gaps worth tests:** rate-limit cleanup, scout consolidation multi-run sequences, full SSE streaming end-to-end over HTTP (currently via `app.request()`), optimistic-update revert on error paths in desktop, scout runner with mocked providers.
