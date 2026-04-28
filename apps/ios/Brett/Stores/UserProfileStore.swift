@@ -5,18 +5,15 @@ import SwiftData
 /// Singleton user profile. Populated from `/users/me` at boot and after
 /// settings mutations. Not synced through the mutation queue — settings
 /// flow through their own endpoints that mutate and return fresh profile data.
+///
+/// Mutation-only: views read the profile via `@Query<UserProfile>` directly
+/// against SwiftData (the canonical store). This type owns the write paths
+/// — `update(from:)` upserts a row from a `/users/me` payload, and
+/// `refresh(client:)` is the network entry point that wraps it.
 @MainActor
 @Observable
 final class UserProfileStore: Clearable {
     private let context: ModelContext
-
-    /// Cached profile row. Reading `current` used to fire a SwiftData
-    /// fetch on every access — including twice inside `update(from:)`,
-    /// which also opened a brief TOCTOU window where two concurrent
-    /// `update` calls could both take the "no existing profile" branch
-    /// and insert duplicate rows. The cache avoids both issues: reads are
-    /// O(1), and `update(from:)` resolves the row exactly once.
-    @ObservationIgnored private var cachedProfile: UserProfile?
 
     init(context: ModelContext) {
         self.context = context
@@ -29,27 +26,13 @@ final class UserProfileStore: Clearable {
 
     // MARK: - Clearable
 
-    func clearForSignOut() {
-        cachedProfile = nil
-    }
+    /// No in-memory state to drop — the SwiftData row is wiped by
+    /// `PersistenceController.wipeAllData()` on sign-out, and views
+    /// read live via `@Query`. Kept on `Clearable` for protocol
+    /// conformance and so future observable state has a hook.
+    func clearForSignOut() {}
 
-    /// Currently cached profile, if we have one. Hydrates the cache
-    /// lazily from SwiftData on first access.
-    var current: UserProfile? {
-        if let cached = cachedProfile { return cached }
-        var descriptor = FetchDescriptor<UserProfile>()
-        descriptor.fetchLimit = 1
-        do {
-            let fetched = try context.fetch(descriptor).first
-            cachedProfile = fetched
-            return fetched
-        } catch {
-            BrettLog.store.error("UserProfileStore fetch failed: \(String(describing: error), privacy: .public)")
-            return nil
-        }
-    }
-
-    /// Replace the cached profile with fresh values.
+    /// Upsert the local `UserProfile` row from a `/users/me` payload.
     ///
     /// `update(from:)` is called with a dictionary decoded from `/users/me`
     /// — we keep it loose here rather than coupling to a concrete `AuthUser`
@@ -57,10 +40,17 @@ final class UserProfileStore: Clearable {
     func update(from payload: [String: Any]) {
         guard let id = payload["id"] as? String, let email = payload["email"] as? String else { return }
 
-        // Resolve the row exactly once. Two consecutive `update` calls
-        // that both fall through to the "insert" branch would otherwise
-        // leave duplicate rows in SwiftData.
-        let existing = current
+        // Resolve the row exactly once via direct fetch. Two consecutive
+        // update calls that both fall through to the "insert" branch
+        // would otherwise leave duplicate rows in SwiftData.
+        var descriptor = FetchDescriptor<UserProfile>(
+            predicate: #Predicate { profile in
+                profile.id == id
+            }
+        )
+        descriptor.fetchLimit = 1
+        let existing = try? context.fetch(descriptor).first
+
         let profile: UserProfile
         if let existing {
             profile = existing
@@ -68,7 +58,6 @@ final class UserProfileStore: Clearable {
         } else {
             profile = UserProfile(id: id, email: email)
             context.insert(profile)
-            cachedProfile = profile
         }
 
         profile.id = id
@@ -93,13 +82,6 @@ final class UserProfileStore: Clearable {
 
         profile.updatedAt = Date()
 
-        save()
-    }
-
-    func clear() {
-        guard let existing = current else { return }
-        context.delete(existing)
-        cachedProfile = nil
         save()
     }
 
