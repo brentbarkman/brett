@@ -387,4 +387,38 @@ struct MutationAtomicityTests {
         let prev = (try? JSONSerialization.jsonObject(with: Data(prevJSON.utf8))) as? [String: Any]
         #expect(prev?["title"] as? String == "Original", "earliest previous title should win after compaction")
     }
+
+    /// Mirror of the item-side compaction integration test, for `ListStore`:
+    /// 5 rapid name updates on a synced list collapse into a single UPDATE
+    /// row with the earliest `previousValues` baseline preserved.
+    @Test func rapidListUpdatesProduceOneCompactedUpdate() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let store = ListStore(
+            context: context,
+            saver: LiveSaver(context: context)
+        )
+
+        let list = TestFixtures.makeList(userId: "alice", name: "Original")
+        list._syncStatus = SyncStatus.synced.rawValue
+        context.insert(list)
+        try context.save()
+        let listId = list.id
+
+        for i in 0..<5 {
+            store.update(id: listId, changes: ["name": "V\(i)"], userId: "alice")
+        }
+
+        let entries = try context.fetch(
+            FetchDescriptor<MutationQueueEntry>(
+                predicate: #Predicate { $0.entityType == "list" && $0.entityId == listId }
+            )
+        )
+        #expect(entries.count == 1, "expected 1 UPDATE after compaction; got \(entries.count)")
+        let entry = try #require(entries.first)
+        #expect(entry.actionEnum == .update)
+
+        let prevJSON = entry.previousValues ?? "{}"
+        let prev = (try? JSONSerialization.jsonObject(with: Data(prevJSON.utf8))) as? [String: Any]
+        #expect(prev?["name"] as? String == "Original", "earliest previous name should win after compaction")
+    }
 }

@@ -218,12 +218,6 @@ final class ListStore: Clearable {
         payload["createdAt"] = list.createdAt
         payload["updatedAt"] = list.updatedAt
 
-        // Insert directly rather than going through `MutationQueue.enqueue`:
-        // that helper does eager compaction + commits a save mid-method,
-        // which would split the model insert and queue-entry insert across
-        // two transactions and break the atomic-rollback guarantee. A
-        // brand-new CREATE never has anything to compact against, so the
-        // helper's savings don't apply here.
         let entry = MutationQueueEntry(
             entityType: "list",
             entityId: list.id,
@@ -232,7 +226,7 @@ final class ListStore: Clearable {
             method: .post,
             payload: JSONCodec.encode(payload)
         )
-        context.insert(entry)
+        applyCompacted(entityType: "list", entityId: list.id, incoming: entry)
     }
 
     private func enqueueUpdate(
@@ -255,6 +249,59 @@ final class ListStore: Clearable {
             baseUpdatedAt: list._baseUpdatedAt,
             beforeSnapshot: JSONCodec.encode(beforeSnapshot)
         )
-        context.insert(entry)
+        applyCompacted(entityType: "list", entityId: list.id, incoming: entry)
+    }
+
+    /// Run eager compaction for the given entity, then apply the resulting
+    /// deltas to `context` WITHOUT calling save. Mirrors `ItemStore`'s
+    /// helper — see that one for the full rationale. Short version: the
+    /// compactor is a pure value function; we apply its deltas inline so
+    /// the outer `saver.save()` commits or rolls back the optimistic
+    /// SwiftData write and the queue mutation together.
+    private func applyCompacted(
+        entityType: String,
+        entityId: String,
+        incoming: MutationQueueEntry
+    ) {
+        let pending = fetchPendingMutations(entityType: entityType, entityId: entityId)
+        let result = MutationCompactor.compact(pending: pending, incoming: incoming)
+
+        for id in result.toDelete {
+            if let entry = fetchMutationEntry(id: id) {
+                context.delete(entry)
+            }
+        }
+        // `result.toUpdate`, if non-nil, is an already-persisted entry the
+        // compactor mutated in place. SwiftData re-persists the dirty fields
+        // on the next save, so we don't need to do anything explicit here.
+        if let toInsert = result.toInsert {
+            context.insert(toInsert)
+        }
+    }
+
+    private func fetchPendingMutations(
+        entityType: String,
+        entityId: String
+    ) -> [MutationQueueEntry] {
+        let pendingRaw = MutationStatus.pending.rawValue
+        var descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate {
+                $0.entityType == entityType
+                    && $0.entityId == entityId
+                    && $0.status == pendingRaw
+            },
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        )
+        descriptor.includePendingChanges = true
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    private func fetchMutationEntry(id: String) -> MutationQueueEntry? {
+        var descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        descriptor.includePendingChanges = true
+        return try? context.fetch(descriptor).first
     }
 }
