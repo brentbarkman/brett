@@ -4,16 +4,16 @@ import SwiftData
 
 /// Facade over the `/scouts/*` API. Scouts + findings live server-side and
 /// reach the iOS client via REST (this store) and SSE (live status updates,
-/// handled elsewhere). SwiftData is used as a cache so the roster can render
-/// instantly on cold launch while a network refresh happens in the background.
+/// handled elsewhere). SwiftData is the canonical local cache so the roster
+/// can render instantly on cold launch while a network refresh happens in
+/// the background.
 ///
 /// Responsibility split:
-/// - Reads return API DTOs directly (`APIClient.ScoutDTO`, etc.) — views
-///   render DTOs, not SwiftData rows, because the server is authoritative
-///   and the extra upsert layer adds complexity without meaningful offline
-///   gains for scouts.
-/// - Local `@Model` rows are kept in sync opportunistically so that tests
-///   and any remaining SwiftData consumers keep working.
+/// - Reads write through to SwiftData via `upsertLocal`. Views read the
+///   resulting rows reactively via `@Query<Scout>` — the store no longer
+///   holds an in-memory `[ScoutDTO]` cache.
+/// - Mutations call the API, then write the returned DTO into SwiftData.
+///   `@Query` consumers automatically re-render.
 ///
 /// We inject `APIClient` so tests can swap in a stubbed URLSession.
 @MainActor
@@ -21,7 +21,6 @@ import SwiftData
 final class ScoutStore: Clearable {
     // MARK: - Public state
 
-    private(set) var scouts: [APIClient.ScoutDTO] = []
     private(set) var isLoading: Bool = false
     var errorMessage: String?
 
@@ -44,17 +43,12 @@ final class ScoutStore: Clearable {
     // MARK: - Clearable
 
     func clearForSignOut() {
-        scouts = []
+        // SwiftData rows are wiped by `PersistenceController.wipeAllData()`
+        // on sign-out separately; here we just reset the @Observable
+        // surface state so the next sign-in starts clean.
         isLoading = false
         errorMessage = nil
     }
-
-    #if DEBUG
-    /// Test-only: populate in-memory state without touching the network.
-    func injectForTesting(scouts: [APIClient.ScoutDTO]) {
-        self.scouts = scouts
-    }
-    #endif
 
     // MARK: - Legacy SwiftData readers (kept so existing callers compile)
 
@@ -110,7 +104,6 @@ final class ScoutStore: Clearable {
 
         do {
             let dtos = try await client.fetchScoutList(status: status)
-            self.scouts = dtos
             upsertLocal(dtos)
         } catch let apiError as APIError {
             errorMessage = apiError.userFacingMessage
@@ -122,7 +115,6 @@ final class ScoutStore: Clearable {
     func fetchDetail(id: String) async throws -> APIClient.ScoutDTO {
         let dto = try await client.fetchScoutDetail(id: id)
         upsertLocal([dto])
-        replaceInRoster(dto)
         return dto
     }
 
@@ -152,42 +144,36 @@ final class ScoutStore: Clearable {
 
     func create(payload: APIClient.NewScoutPayload) async throws -> APIClient.ScoutDTO {
         let dto = try await client.createScout(payload)
-        scouts.insert(dto, at: 0)
         upsertLocal([dto])
         return dto
     }
 
     func update(id: String, changes: APIClient.ScoutUpdatePayload) async throws -> APIClient.ScoutDTO {
         let dto = try await client.updateScout(id: id, changes: changes)
-        replaceInRoster(dto)
         upsertLocal([dto])
         return dto
     }
 
     func pause(id: String) async throws -> APIClient.ScoutDTO {
         let dto = try await client.pauseScout(id: id)
-        replaceInRoster(dto)
         upsertLocal([dto])
         return dto
     }
 
     func resume(id: String) async throws -> APIClient.ScoutDTO {
         let dto = try await client.resumeScout(id: id)
-        replaceInRoster(dto)
         upsertLocal([dto])
         return dto
     }
 
     func archive(id: String) async throws -> APIClient.ScoutDTO {
         let dto = try await client.archiveScout(id: id)
-        replaceInRoster(dto)
         upsertLocal([dto])
         return dto
     }
 
     func delete(id: String) async throws {
         try await client.deleteScout(id: id)
-        scouts.removeAll { $0.id == id }
         if let context, let row = fetchScout(id: id) {
             context.delete(row)
             saveContext(context)
@@ -216,12 +202,6 @@ final class ScoutStore: Clearable {
     }
 
     // MARK: - Private helpers
-
-    private func replaceInRoster(_ dto: APIClient.ScoutDTO) {
-        if let idx = scouts.firstIndex(where: { $0.id == dto.id }) {
-            scouts[idx] = dto
-        }
-    }
 
     /// Upsert a batch of DTOs into the SwiftData cache. Best-effort — any
     /// failure is logged and swallowed.
