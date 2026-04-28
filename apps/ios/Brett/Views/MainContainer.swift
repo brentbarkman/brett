@@ -41,6 +41,15 @@ enum NavDestination: Hashable {
     }
 }
 
+/// `Identifiable` conformance so `NavDestination` can drive
+/// `.sheet(item:)`. The enum is already `Hashable`, and each case is
+/// self-identifying for sheet purposes — switching e.g.
+/// `.taskDetail(id: A)` to `.taskDetail(id: B)` correctly tears down
+/// and re-presents the sheet because the value compares unequal.
+extension NavDestination: Identifiable {
+    var id: Self { self }
+}
+
 // MARK: - Awakening tokens
 //
 // Cold-launch reveal: on first launch of each app process the wallpaper zooms
@@ -81,8 +90,6 @@ struct MainContainer: View {
     /// search for `currentPage` consumers if you re-order.
     @State private var currentPage = 2
     @State private var path = NavigationPath()
-    @State private var showSearch = false
-    @State private var showFeedback = false
 
     // MARK: - Awakening (cold-launch reveal)
     //
@@ -151,10 +158,15 @@ struct MainContainer: View {
     private let pages = ["Lists", "Inbox", "Today", "Calendar"]
 
     var body: some View {
+        // `@Bindable` projection so we can pass `$selection.currentDestination`
+        // to `.sheet(item:)`. The `@State` wrapper alone gives us a
+        // `Binding<SelectionStore>`, not a sub-binding to a property
+        // on the @Observable.
+        @Bindable var selection = selection
         // Tint the whole stack gold so default toolbar items (back
         // buttons, trailing buttons) match the brand without each
         // screen having to override per-item tints.
-        NavigationStack(path: $path) {
+        return NavigationStack(path: $path) {
             ZStack {
                 BackgroundView()
                     .scaleEffect(kenBurnsScale, anchor: .center)
@@ -243,7 +255,7 @@ struct MainContainer: View {
                         SyncStatusIndicator()
 
                         Button {
-                            showSearch = true
+                            selection.currentDestination = .search
                         } label: {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 15, weight: .medium))
@@ -322,46 +334,66 @@ struct MainContainer: View {
                     EmptyView()
                 }
             }
-            // Task detail as a near-full-screen sheet. Driven by the
-            // app-wide `SelectionStore` — any row tap across the app
-            // writes `selection.selectedTaskId = id` to present this.
-            .sheet(isPresented: Binding(
-                get: { selection.selectedTaskId != nil },
-                set: { if !$0 { selection.selectedTaskId = nil } }
-            )) {
-                if let taskId = selection.selectedTaskId {
-                    TaskDetailView(itemId: taskId)
+            // Unified sheet presenter. Wave D folded the previous three
+            // separate `.sheet(...)` modifiers (task detail, search,
+            // feedback) plus the per-child sheets (new scout, edit
+            // scout) into this single `.sheet(item:)` driven by
+            // `selection.currentDestination`. Any view that wants to
+            // present a sheet writes a `NavDestination` here; SwiftUI
+            // tears down + re-presents on case change and clears the
+            // property when the user dismisses. Per-case presentation
+            // modifiers (background opacity, detents) live inside each
+            // branch since the cases differ on chrome.
+            .sheet(item: $selection.currentDestination) { destination in
+                switch destination {
+                case .taskDetail(let id):
+                    TaskDetailView(itemId: id)
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
                         .presentationBackground(Color.black.opacity(0.80))
                         .presentationCornerRadius(20)
+                case .search:
+                    SearchSheet(store: searchStore) { result in
+                        // Clear the destination first so the sheet
+                        // dismisses immediately, then route the
+                        // selection on the next runloop tick (matches
+                        // the prior `showSearch = false` behaviour).
+                        selection.currentDestination = nil
+                        handleSearchSelection(result)
+                    }
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(Color.black.opacity(0.80))
+                    .presentationCornerRadius(20)
+                case .feedback:
+                    FeedbackSheet()
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                        .presentationBackground(Color.black)
+                        .presentationCornerRadius(20)
+                case .newScout:
+                    NewScoutSheetContainer()
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                case .editScout(let id):
+                    EditScoutSheetContainer(scoutId: id)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
+                    // Push-style destinations are not sheet-presentable.
+                    // Render `EmptyView` so a misrouted sheet drive
+                    // doesn't crash; the `isSheet` property on the enum
+                    // documents the contract callers should follow.
+                    EmptyView()
                 }
-            }
-            // Search sheet — Spotlight-style modal overlay.
-            .sheet(isPresented: $showSearch) {
-                SearchSheet(store: searchStore) { result in
-                    showSearch = false
-                    handleSearchSelection(result)
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(Color.black.opacity(0.80))
-                .presentationCornerRadius(20)
             }
             // Shake-to-report. Mirrors desktop's Cmd+Shift+. shortcut.
             // Sheet opens with the type picker pre-set to Bug.
             .onShake {
-                if !showFeedback {
+                if selection.currentDestination != .feedback {
                     HapticManager.medium()
-                    showFeedback = true
+                    selection.currentDestination = .feedback
                 }
-            }
-            .sheet(isPresented: $showFeedback) {
-                FeedbackSheet()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(Color.black)
-                    .presentationCornerRadius(20)
             }
             // Settings deep-link from re-link task taps. `TaskRow`'s Reconnect
             // pill sets `selection.pendingSettingsTab`; we push a single
@@ -466,7 +498,12 @@ struct MainContainer: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             switch result.entityType {
             case .item:
+                // Wave D: route via the unified sheet driver. Phase 3
+                // will retire the legacy `selectedTaskId` mirror
+                // entirely; until then we keep the write so any reader
+                // that still inspects it continues to work.
                 selection.selectedTaskId = result.entityId
+                selection.currentDestination = .taskDetail(id: result.entityId)
             case .calendarEvent, .meetingNote:
                 path.append(NavDestination.eventDetail(id: result.entityId))
             case .scoutFinding:
@@ -475,6 +512,90 @@ struct MainContainer: View {
                 // metadata surfaces it, otherwise fall back to the roster.
                 path.append(NavDestination.scoutsRoster)
             }
+        }
+    }
+}
+
+// MARK: - Scout sheet containers
+//
+// Tiny wrappers that adapt the existing `NewScoutSheet` /
+// `ScoutEditSheet` views (which take onCreate / onSave callbacks) to the
+// unified `.sheet(item:)` presenter. Each owns its own `ScoutStore` so
+// the network + SwiftData writes that the underlying sheets trigger
+// stay self-contained — no need for `MainContainer` to hold scout
+// state, and no callback plumbing through `SelectionStore`.
+
+/// Wraps `NewScoutSheet` so it can be presented from `MainContainer`'s
+/// unified sheet without relying on `ScoutsRosterView` to own the
+/// `ScoutStore`. The sheet is its own create flow; success + error
+/// surfacing match the prior in-roster presentation (errors land on
+/// `scoutStore.errorMessage`, the sheet dismisses on completion).
+private struct NewScoutSheetContainer: View {
+    @State private var scoutStore = ScoutStore()
+
+    var body: some View {
+        NewScoutSheet { payload in
+            do {
+                _ = try await scoutStore.create(payload: payload)
+            } catch {
+                // Error is surfaced via `scoutStore.errorMessage` after
+                // refresh — same behaviour as the prior in-roster sheet.
+            }
+        }
+    }
+}
+
+/// Wraps `ScoutEditSheet` for the unified sheet presenter. Reads the
+/// scout row by id via `@Query` so the sheet can populate its initial
+/// values, then hands the patch to the local `ScoutStore` on save —
+/// same flow as the prior in-detail-view sheet.
+private struct EditScoutSheetContainer: View {
+    let scoutId: String
+
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            EditScoutSheetBody(userId: userId, scoutId: scoutId)
+                .id("\(userId)-\(scoutId)")
+        } else {
+            // Auth gate upstream usually prevents this; render empty
+            // rather than nil-fallback so the type system stays simple.
+            EmptyView()
+        }
+    }
+}
+
+private struct EditScoutSheetBody: View {
+    let userId: String
+    let scoutId: String
+
+    @State private var scoutStore = ScoutStore()
+    @Query private var matchedScouts: [Scout]
+
+    init(userId: String, scoutId: String) {
+        self.userId = userId
+        self.scoutId = scoutId
+        let predicate = #Predicate<Scout> { scout in
+            scout.id == scoutId && scout.userId == userId
+        }
+        _matchedScouts = Query(filter: predicate)
+    }
+
+    var body: some View {
+        if let scout = matchedScouts.first {
+            ScoutEditSheet(scout: scout) { patch in
+                do {
+                    _ = try await scoutStore.update(id: scout.id, changes: patch)
+                } catch {
+                    // Error surfaces via store; sheet stays open on
+                    // failure so the user can retry without losing input.
+                }
+            }
+        } else {
+            // Scout vanished (deleted, or row not yet hydrated). Drop
+            // the sheet rather than show a half-populated form.
+            EmptyView()
         }
     }
 }

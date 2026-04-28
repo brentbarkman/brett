@@ -454,7 +454,12 @@ private struct TodayPageBody: View {
     }
 
     private func select(_ id: String) {
+        // Wave D: route via the unified sheet driver. Phase 3 will
+        // retire the legacy `selectedTaskId` mirror entirely; until
+        // then keep the write so any reader that still inspects it
+        // continues to work.
         SelectionStore.shared.selectedTaskId = id
+        SelectionStore.shared.currentDestination = .taskDetail(id: id)
     }
 
     /// Swipe-to-schedule: update dueDate (nil clears it, "Someday").

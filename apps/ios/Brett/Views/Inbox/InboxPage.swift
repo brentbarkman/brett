@@ -316,7 +316,13 @@ private struct InboxPageBody: View {
                         if isSelectMode {
                             toggleSelection(item.id)
                         } else {
+                            // Wave D: route via the unified sheet driver.
+                            // Phase 3 will retire the legacy
+                            // `selectedTaskId` mirror entirely; until
+                            // then keep the write so any reader that
+                            // still inspects it continues to work.
                             SelectionStore.shared.selectedTaskId = item.id
+                            SelectionStore.shared.currentDestination = .taskDetail(id: item.id)
                         }
                     }
                 )

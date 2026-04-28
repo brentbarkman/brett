@@ -207,7 +207,17 @@ private struct ListViewBody: View {
                                         allowDrag: true,
                                         dragIDs: sortedItems.map(\.id),
                                         onToggle: { toggle(item.id) },
-                                        onSelect: { SelectionStore.shared.selectedTaskId = item.id },
+                                        onSelect: {
+                                            // Wave D: route via the unified
+                                            // sheet driver. Phase 3 will retire
+                                            // the legacy `selectedTaskId`
+                                            // mirror entirely; until then keep
+                                            // both writes so any reader that
+                                            // still inspects it continues to
+                                            // work.
+                                            SelectionStore.shared.selectedTaskId = item.id
+                                            SelectionStore.shared.currentDestination = .taskDetail(id: item.id)
+                                        },
                                         onSchedule: { dueDate in schedule(item.id, dueDate: dueDate) },
                                         onArchive: { archive(item.id) },
                                         onDelete: { delete(item.id) },

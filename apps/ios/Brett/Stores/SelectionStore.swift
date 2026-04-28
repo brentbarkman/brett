@@ -33,6 +33,16 @@ final class SelectionStore: Clearable {
     /// clears it. Used by the TaskRow "Reconnect" pill on re-link tasks.
     var pendingSettingsTab: SettingsTab?
 
+    /// Current sheet-style destination. Wave D added this to drive the
+    /// unified `.sheet(item:)` on `MainContainer`. Push-style navigation
+    /// continues to flow through `NavigationStack.path` for now; only
+    /// sheet presentation reads this property. Writers (row taps,
+    /// magnifying-glass tap, scout edit button, etc.) set this; the
+    /// single sheet presenter on `MainContainer` switches on the case
+    /// to render the appropriate view. Setting back to `nil` (or
+    /// SwiftUI clearing it on dismiss) tears the sheet down.
+    var currentDestination: NavDestination?
+
     static let shared = SelectionStore()
 
     init() {
@@ -45,6 +55,7 @@ final class SelectionStore: Clearable {
         selectedEventId = nil
         lastCreatedItemId = nil
         pendingSettingsTab = nil
+        currentDestination = nil
     }
 
     // MARK: - Clearable
