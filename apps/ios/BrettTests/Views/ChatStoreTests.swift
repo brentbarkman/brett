@@ -2,13 +2,19 @@ import Foundation
 import Testing
 @testable import Brett
 
-/// Tests for `ChatStore.parseSSE` — the pure parser that turns an async line
-/// stream into typed `StreamEvent`s.
+/// Tests for `StreamingChatClient.parse` — the pure parser that turns an
+/// async line stream into typed `StreamEvent`s, plus a small integration
+/// test for `ChatStore.send(...)` empty-message no-op.
 ///
 /// We test the parser in isolation (not behind a real URLSession) so we can
 /// drive it with scripted line sequences and assert on the emitted event
 /// list. Happy-path streaming, error events, comment lines, and trailing
 /// content without a terminator are all covered here.
+///
+/// Historical note: this test file used to drive `ChatStore.parseSSE`
+/// directly. Wave C / Task 3 moved the parser into `StreamingChatClient`;
+/// the parser tests now point there. Behavioural parity is enforced both
+/// here and in `StreamingChatClientTests.swift`.
 @MainActor
 @Suite("ChatStore", .tags(.views))
 struct ChatStoreTests {
@@ -34,9 +40,9 @@ struct ChatStoreTests {
         }
     }
 
-    private func collect(lines: [String]) async throws -> [ChatStore.StreamEvent] {
+    private func collect(lines: [String]) async throws -> [StreamEvent] {
         let collector = EventCollector()
-        try await ChatStore.parseSSE(lines: ScriptedLines(lines: lines)) { event in
+        try await StreamingChatClient.parse(lines: ScriptedLines(lines: lines)) { event in
             await collector.append(event)
         }
         return await collector.events
@@ -134,13 +140,13 @@ struct ChatStoreTests {
     }
 }
 
-/// Actor-wrapped event collector so the async callback from parseSSE can
-/// safely append from any task. The test reads `events` back from the main
-/// actor after the parser finishes.
+/// Actor-wrapped event collector so the async callback from
+/// `StreamingChatClient.parse` can safely append from any task. The test
+/// reads `events` back from the main actor after the parser finishes.
 private actor EventCollector {
-    var events: [ChatStore.StreamEvent] = []
+    var events: [StreamEvent] = []
 
-    func append(_ event: ChatStore.StreamEvent) {
+    func append(_ event: StreamEvent) {
         events.append(event)
     }
 }

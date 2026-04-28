@@ -40,13 +40,17 @@ final class ChatStore: Clearable {
     private let buffer = ChatMessageBuffer()
 
     private let apiClient: APIClient
-    private let session: URLSession
     private let persistence: PersistenceController?
 
     /// SwiftData write path for finalised assistant messages.
     /// Built from `persistence?.mainContext` (or the shared default) at
     /// init so the streaming finaliser doesn't re-derive context per call.
     private let persister: ChatPersister
+
+    /// SSE transport — owns the URLSession + parser. ChatStore is now
+    /// purely the orchestrator: open a stream, route events into the
+    /// buffer, persist on completion.
+    private let streaming: StreamingChatClient
 
     /// In-flight streaming tasks keyed by chat key. Tracked so
     /// `cancelAll()` can tear them down synchronously on sign-out —
@@ -57,15 +61,15 @@ final class ChatStore: Clearable {
 
     init(
         apiClient: APIClient = .shared,
-        session: URLSession = ChatStore.makeStreamingSession(),
+        session: URLSession = StreamingChatClient.makeStreamingSession(),
         persistence: PersistenceController? = .shared
     ) {
         self.apiClient = apiClient
-        self.session = session
         self.persistence = persistence
         self.persister = ChatPersister(
             context: (persistence ?? PersistenceController.shared).mainContext
         )
+        self.streaming = StreamingChatClient(apiClient: apiClient, session: session)
         ChatStoreRegistry.register(self)
         ClearableStoreRegistry.register(self)
     }
@@ -75,23 +79,6 @@ final class ChatStore: Clearable {
     // that touched the registry would need to hop to the main actor
     // (because ChatStore is @MainActor), which Swift 6 rejects for
     // synchronous nonisolated deinit contexts.
-
-    /// Build a URLSession tuned for SSE streaming. The default
-    /// `URLSession.shared` aggressively buffers responses on iOS — chunks
-    /// arrive in big bursts (or never) for `text/event-stream` traffic
-    /// over LAN HTTP. A dedicated configuration with a long resource
-    /// timeout + disabled cookie/cache machinery streams reliably.
-    private static func makeStreamingSession() -> URLSession {
-        let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 120         // wait up to 2 min for FIRST byte
-        cfg.timeoutIntervalForResource = 600        // total stream lifetime cap
-        cfg.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        cfg.urlCache = nil
-        cfg.httpCookieStorage = nil
-        cfg.httpShouldUsePipelining = false
-        cfg.waitsForConnectivity = false
-        return URLSession(configuration: cfg)
-    }
 
     // MARK: - Public API
 
@@ -263,68 +250,18 @@ final class ChatStore: Clearable {
     ) async {
         buffer.setError(key: key, message: nil)
 
-        guard let url = URL(string: apiClient.baseURL.absoluteString + path) else {
-            buffer.setError(key: key, message: "Invalid URL")
-            buffer.markAssistantComplete(key: key, index: assistantIndex)
-            return
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        if let token = apiClient.tokenProvider?(), !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
         do {
             #if DEBUG
-            print("[ChatStore] POST \(url) — opening stream")
-            #endif
-            let (bytes, response) = try await session.bytes(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                buffer.setError(key: key, message: "Chat request returned a non-HTTP response")
-                buffer.markAssistantComplete(key: key, index: assistantIndex)
-                return
-            }
-            guard (200...299).contains(http.statusCode) else {
-                #if DEBUG
-                print("[ChatStore] HTTP \(http.statusCode) — abandoning stream")
-                #endif
-                // Try to read whatever JSON the server returned so the
-                // user gets a useful message instead of "Chat request
-                // failed". Particularly important for 403 (no AI key)
-                // and 429 (rate limit). Drained via a manual for-await
-                // loop because `AsyncSequence.reduce(into:)` takes a
-                // non-`@Sendable` closure that Swift 6 strict
-                // concurrency rejects in this `Task`-isolated context.
-                var bodyData = Data()
-                if let drained = try? await drainBytes(from: bytes) {
-                    bodyData = drained
-                }
-                let bodyText = String(data: bodyData, encoding: .utf8) ?? ""
-                if let json = bodyText.data(using: .utf8).flatMap({ try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any],
-                   let msg = json["message"] as? String {
-                    buffer.setError(key: key, message: msg)
-                } else {
-                    buffer.setError(key: key, message: "Chat request failed (HTTP \(http.statusCode))")
-                }
-                buffer.markAssistantComplete(key: key, index: assistantIndex)
-                return
-            }
-
-            #if DEBUG
-            print("[ChatStore] HTTP 200 — streaming…")
+            print("[ChatStore] POST \(path) — opening stream")
             // Reference-type counter so the @Sendable closure passed to
-            // parseSSE can mutate it under Swift 6 strict concurrency.
-            // (parseSSE invokes the closure sequentially per line, but
-            // the compiler can't prove that — the box keeps the data race
-            // checker happy without us pulling in an actor.)
+            // the streaming parser can mutate it under Swift 6 strict
+            // concurrency. The parser invokes the closure sequentially
+            // per line, but the compiler can't prove that — the box keeps
+            // the data race checker happy without pulling in an actor.
             let chunkCount = ChunkBox()
             #endif
 
-            try await Self.parseSSE(lines: bytes.lines) { [weak self] event in
+            try await streaming.stream(path: path, body: body) { [weak self] event in
                 guard let self else { return }
                 #if DEBUG
                 if case .chunk = event { chunkCount.increment() }
@@ -380,6 +317,12 @@ final class ChatStore: Clearable {
                 // sign-out clear) make sure the streaming flag clears.
                 buffer.markAssistantComplete(key: key, index: assistantIndex)
             }
+        } catch let streamingError as StreamingChatError {
+            #if DEBUG
+            print("[ChatStore] stream error: \(streamingError)")
+            #endif
+            buffer.setError(key: key, message: streamingError.errorDescription ?? "Chat request failed")
+            buffer.markAssistantComplete(key: key, index: assistantIndex)
         } catch {
             #if DEBUG
             print("[ChatStore] stream error: \(error)")
@@ -417,92 +360,6 @@ final class ChatStore: Clearable {
         case .error(let message):
             buffer.setError(key: key, message: message)
         }
-    }
-
-    /// Drain an `URLSession.AsyncBytes` sequence into a `Data` buffer.
-    /// Used to read the body of error responses (4xx/5xx) so we can
-    /// surface the server's message text to the user. The manual
-    /// for-await loop avoids `AsyncSequence.reduce`'s non-`@Sendable`
-    /// closure parameter, which Swift 6 won't let us pass from a
-    /// `Task`-isolated context.
-    private func drainBytes(from bytes: URLSession.AsyncBytes) async throws -> Data {
-        var buffer = Data()
-        for try await byte in bytes {
-            buffer.append(byte)
-        }
-        return buffer
-    }
-
-    // MARK: - SSE parser (internal so tests can exercise it)
-
-    enum StreamEvent: Equatable {
-        case chunk(String)
-        case done(String?)
-        case error(String)
-    }
-
-    static func parseSSE<S: AsyncSequence>(
-        lines: S,
-        onEvent: @Sendable @escaping (StreamEvent) async -> Void
-    ) async throws where S.Element == String {
-        var currentEvent: String?
-        var dataBuffer: String = ""
-
-        for try await line in lines {
-            if line.isEmpty {
-                // Blank line → dispatch.
-                if let event = currentEvent {
-                    switch event {
-                    case "chunk":
-                        await onEvent(.chunk(dataBuffer))
-                    case "done":
-                        await onEvent(.done(dataBuffer.isEmpty ? nil : dataBuffer))
-                    case "error":
-                        let message = extractErrorMessage(from: dataBuffer)
-                        await onEvent(.error(message))
-                    default:
-                        break
-                    }
-                }
-                currentEvent = nil
-                dataBuffer = ""
-                continue
-            }
-
-            if line.hasPrefix(":") { continue }
-
-            if line.hasPrefix("event:") {
-                currentEvent = line.dropFirst("event:".count).trimmingCharacters(in: .whitespaces)
-            } else if line.hasPrefix("data:") {
-                let value = line.dropFirst("data:".count).trimmingCharacters(in: .whitespaces)
-                if dataBuffer.isEmpty {
-                    dataBuffer = String(value)
-                } else {
-                    dataBuffer += "\n" + value
-                }
-            }
-        }
-
-        // Tail — if the stream ends without a blank-line terminator, flush.
-        if let event = currentEvent, !dataBuffer.isEmpty {
-            switch event {
-            case "chunk": await onEvent(.chunk(dataBuffer))
-            case "done": await onEvent(.done(dataBuffer))
-            case "error": await onEvent(.error(extractErrorMessage(from: dataBuffer)))
-            default: break
-            }
-        }
-    }
-
-    private static func extractErrorMessage(from data: String) -> String {
-        guard
-            let bytes = data.data(using: .utf8),
-            let json = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-            let message = json["message"] as? String
-        else {
-            return "Something went wrong."
-        }
-        return message
     }
 }
 
