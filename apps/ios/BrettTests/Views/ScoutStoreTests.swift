@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftData
 @testable import Brett
 
 /// Exercises `ScoutStore` against a stubbed `APIClient`.
@@ -222,6 +223,38 @@ struct ScoutStoreTests {
     }
 
     // MARK: - Run trigger
+
+    // MARK: - upsertLocal field round-trip
+
+    /// Refreshing the roster must populate the SwiftData-backed cache fields
+    /// that the `@Query`-driven `ScoutsRosterView` reads — particularly the
+    /// denormalized `findingsCount` and the split avatar-gradient hex pair.
+    /// Regression guard: if upsertLocal ever forgets to copy these, the
+    /// roster's findings badge and avatar colors silently break.
+    @Test func refreshScoutsUpsertsFindingsCountAndGradientLocally() async throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let client = APIClient(session: URLSession(configuration: config))
+        let store = ScoutStore(client: client, context: context)
+
+        MockURLProtocol.reset()
+        let body = try JSONSerialization.data(withJSONObject: [
+            sampleScoutJSON(id: "fcs-1", name: "Findings Counter", findings: 7),
+        ])
+        let url = encodedURL(client, path: "/scouts?status=all")
+        MockURLProtocol.stub(url: url, statusCode: 200, body: body)
+
+        await store.refreshScouts(status: "all")
+
+        var descriptor = FetchDescriptor<Scout>()
+        descriptor.predicate = #Predicate { $0.id == "fcs-1" }
+        descriptor.fetchLimit = 1
+        let row = try context.fetch(descriptor).first
+        #expect(row != nil)
+        #expect(row?.findingsCount == 7)
+        #expect(row?.avatarGradient == ["#E8B931", "#4682C3"])
+    }
 
     @Test func triggerRunPostsAndAcceptsOKResponse() async throws {
         let (store, client) = makeStore()

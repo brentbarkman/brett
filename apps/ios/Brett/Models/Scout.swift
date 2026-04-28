@@ -39,6 +39,12 @@ final class Scout {
     var endDate: Date?
     var nextRunAt: Date?
 
+    // Server-computed denormalized count of non-deleted findings tied to
+    // this scout. Mirrors `ScoutDTO.findingsCount` so roster cards can
+    // render a count badge without a per-row `@Query<ScoutFinding>`.
+    // Default 0 keeps existing rows valid through the migration.
+    var findingsCount: Int = 0
+
     // Timestamps
     var createdAt: Date
     var updatedAt: Date
@@ -80,6 +86,13 @@ final class Scout {
     var scoutStatus: ScoutStatus { ScoutStatus(rawValue: status) ?? .active }
     var scoutSensitivity: ScoutSensitivity { ScoutSensitivity(rawValue: sensitivity) ?? .medium }
     var scoutAnalysisTier: AnalysisTier { AnalysisTier(rawValue: analysisTier) ?? .standard }
+
+    /// Convenience: rebuild the two-stop gradient as the wire-format array
+    /// (`[from, to]`) so views can pass it straight to `ScoutAvatar`. Mirrors
+    /// `ScoutDTO.avatarGradient`.
+    var avatarGradient: [String] {
+        [avatarGradientFrom, avatarGradientTo]
+    }
 
     var syncStatusEnum: SyncStatus {
         SyncStatus(rawValue: _syncStatus) ?? .synced
