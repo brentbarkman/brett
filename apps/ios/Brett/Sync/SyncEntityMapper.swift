@@ -947,13 +947,6 @@ enum SyncEntityMapper {
         return String(data: data, encoding: .utf8)
     }
 
-    /// Decode a JSON string (as stored on-device) back into a dict/array so
-    /// we can slot it into a server payload. Returns nil for nil / malformed.
-    static func jsonDecoded(_ rawString: String?) -> Any? {
-        guard let rawString, let data = rawString.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data)
-    }
-
     /// Encode a dict/array back to a JSON string for on-device storage.
     static func jsonEncoded(_ any: Any?) -> String? {
         guard let any, !(any is NSNull) else { return nil }
