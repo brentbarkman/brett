@@ -41,9 +41,9 @@ private struct ScoutDetailBody: View {
     @State private var memoryFilter: MemoryFilter = .all
     @State private var localFeedback: [String: Bool?] = [:]
     @State private var isRunning: Bool = false
-    @State private var isPresentingEdit: Bool = false
     @State private var pendingDelete: Bool = false
     @State private var errorMessage: String?
+    @State private var selection = SelectionStore.shared
 
     /// Live reactive read of the scout for `(userId, scoutId)`. Replaces
     /// the prior `@State var scout: APIClient.ScoutDTO?` cache. `ScoutStore`
@@ -112,19 +112,6 @@ private struct ScoutDetailBody: View {
         .task { await loadAll() }
         .onChange(of: findingsType) { _, _ in Task { await refreshFindings() } }
         .onChange(of: memoryFilter) { _, _ in Task { await refreshMemories() } }
-        .sheet(isPresented: $isPresentingEdit) {
-            if let scout {
-                ScoutEditSheet(scout: scout) { patch in
-                    do {
-                        _ = try await scoutStore.update(id: scout.id, changes: patch)
-                    } catch {
-                        errorMessage = "Couldn't save changes."
-                    }
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-            }
-        }
         .alert("Delete scout?", isPresented: $pendingDelete) {
             Button("Delete", role: .destructive) {
                 Task {
@@ -367,7 +354,13 @@ private struct ScoutDetailBody: View {
             GlassCard {
                 VStack(spacing: 0) {
                     Button {
-                        isPresentingEdit = true
+                        // Wave D: route the edit sheet through the
+                        // unified `MainContainer` sheet presenter. The
+                        // sheet contents (with their own `ScoutStore`
+                        // for the update call and a `@Query` to
+                        // re-resolve the scout row) live in
+                        // `MainContainer`'s `EditScoutSheetContainer`.
+                        selection.currentDestination = .editScout(id: scoutId)
                     } label: {
                         HStack {
                             Image(systemName: "pencil")

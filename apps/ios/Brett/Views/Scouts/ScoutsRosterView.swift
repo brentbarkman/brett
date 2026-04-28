@@ -31,9 +31,9 @@ private struct ScoutsRosterBody: View {
     @State private var scoutStore = ScoutStore()
     @State private var aiStore = AIProviderStore.shared
     @State private var statusFilter: StatusFilter = .all
-    @State private var isPresentingNewScout = false
     @State private var showNoAIAlert = false
     @State private var pendingAction: PendingAction?
+    @State private var selection = SelectionStore.shared
     @Environment(\.dismiss) private var dismiss
 
     /// Live reactive read of the user's non-deleted scouts. The roster used
@@ -165,17 +165,6 @@ private struct ScoutsRosterBody: View {
             Button("Got it") {}
         } message: {
             Text("You'll need to add an AI provider key before scouts can run. Open Settings → AI Providers to add one.")
-        }
-        .sheet(isPresented: $isPresentingNewScout) {
-            NewScoutSheet { payload in
-                do {
-                    _ = try await scoutStore.create(payload: payload)
-                } catch {
-                    // error already surfaced via store.errorMessage after refresh
-                }
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
         .alert(item: $pendingAction) { action in
             switch action {
@@ -323,7 +312,12 @@ private struct ScoutsRosterBody: View {
         if aiStore.hasActiveProvider == false {
             showNoAIAlert = true
         } else {
-            isPresentingNewScout = true
+            // Wave D: route the new-scout sheet through the unified
+            // `MainContainer` sheet presenter rather than a local
+            // `@State` boolean. The sheet contents (with their own
+            // `ScoutStore` for the create call) live in
+            // `MainContainer`'s `NewScoutSheetContainer`.
+            selection.currentDestination = .newScout
         }
     }
 
