@@ -11,31 +11,16 @@ export function useGranolaAccount() {
 }
 
 export function useConnectGranola() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const { url } = await apiFetch<{ url: string }>("/granola/auth/connect", {
         method: "POST",
       });
-      // Open in system browser (same pattern as Google Calendar OAuth)
+      // Open in system browser (same pattern as Google Calendar OAuth).
+      // The completed connection arrives via the `connection.synced` SSE
+      // event after the server's initial Granola sync — see api/sse.ts.
       window.open(url, "_blank");
       return url;
-    },
-    onSuccess: () => {
-      // Poll for connection status after OAuth flow
-      const interval = setInterval(async () => {
-        try {
-          const status = await apiFetch<GranolaAccountStatus>("/granola/auth");
-          if (status.connected) {
-            clearInterval(interval);
-            queryClient.invalidateQueries({ queryKey: ["granola"] });
-          }
-        } catch {
-          // Ignore polling errors
-        }
-      }, 2000);
-      // Stop polling after 2 minutes
-      setTimeout(() => clearInterval(interval), 120_000);
     },
   });
 }

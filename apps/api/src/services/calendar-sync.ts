@@ -154,6 +154,10 @@ export async function initialSync(googleAccountId: string): Promise<void> {
     type: "calendar.sync.complete",
     payload: { googleAccountId, changeset },
   });
+  publishSSE(account.userId, {
+    type: "connection.synced",
+    payload: { type: "google-calendar", googleAccountId },
+  });
 
   // Fire-and-forget: generate Brett's Takes for qualifying upcoming events
   generatePendingTakes(account.userId).catch((err) =>
@@ -291,6 +295,10 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
     publishSSE(account.userId, {
       type: "calendar.sync.complete",
       payload: { googleAccountId, changeset },
+    });
+    publishSSE(account.userId, {
+      type: "connection.synced",
+      payload: { type: "google-calendar", googleAccountId },
     });
 
     // Fire-and-forget: generate Brett's Takes for qualifying upcoming events
