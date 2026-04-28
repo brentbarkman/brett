@@ -229,4 +229,84 @@ struct MutationAtomicityTests {
 
         #expect(mockTrigger.scheduleCallCount == 1)
     }
+
+    /// Symmetry coverage with the create cases: a rolled-back update must
+    /// NOT invoke the sync trigger. The seed-via-live-store baseline
+    /// captures the create's increment so the assertion is "no NEW push
+    /// scheduled by the failed update" rather than "no pushes ever."
+    @Test func rolledBackUpdateDoesNotInvokeSyncTrigger() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let mockTrigger = MockSyncTrigger()
+
+        // Seed via a live store (so the create's trigger increment lands).
+        let liveStore = ItemStore(
+            context: context,
+            saver: LiveSaver(context: context),
+            syncManager: mockTrigger
+        )
+        let item = try liveStore.create(
+            userId: "alice", title: "Original", type: .task,
+            status: .active, dueDate: nil, listId: nil, notes: nil, source: "Brett"
+        )
+        let baselineCount = mockTrigger.scheduleCallCount  // 1 (from create)
+
+        // Now exercise update via a throwing store on the same context.
+        let throwingStore = ItemStore(
+            context: context,
+            saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context)),
+            syncManager: mockTrigger
+        )
+        throwingStore.update(id: item.id, changes: ["title": "New title"], userId: "alice")
+
+        #expect(mockTrigger.scheduleCallCount == baselineCount, "rolled-back update should NOT invoke sync trigger")
+    }
+
+    /// Symmetry coverage with the create cases: a rolled-back delete must
+    /// NOT invoke the sync trigger.
+    @Test func rolledBackDeleteDoesNotInvokeSyncTrigger() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let mockTrigger = MockSyncTrigger()
+
+        let liveStore = ItemStore(
+            context: context,
+            saver: LiveSaver(context: context),
+            syncManager: mockTrigger
+        )
+        let item = try liveStore.create(
+            userId: "alice", title: "Goner", type: .task,
+            status: .active, dueDate: nil, listId: nil, notes: nil, source: "Brett"
+        )
+        let baselineCount = mockTrigger.scheduleCallCount
+
+        let throwingStore = ItemStore(
+            context: context,
+            saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context)),
+            syncManager: mockTrigger
+        )
+        throwingStore.delete(id: item.id, userId: "alice")
+
+        #expect(mockTrigger.scheduleCallCount == baselineCount, "rolled-back delete should NOT invoke sync trigger")
+    }
+
+    /// Positive symmetry: a successful update must invoke the sync trigger
+    /// exactly once on top of the baseline (the create's increment).
+    @Test func successfulUpdateInvokesSyncTriggerOnce() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let mockTrigger = MockSyncTrigger()
+        let store = ItemStore(
+            context: context,
+            saver: LiveSaver(context: context),
+            syncManager: mockTrigger
+        )
+
+        let item = try store.create(
+            userId: "alice", title: "Original", type: .task,
+            status: .active, dueDate: nil, listId: nil, notes: nil, source: "Brett"
+        )
+        let baselineCount = mockTrigger.scheduleCallCount  // 1
+
+        store.update(id: item.id, changes: ["title": "Updated"], userId: "alice")
+
+        #expect(mockTrigger.scheduleCallCount == baselineCount + 1, "successful update should invoke sync trigger exactly once")
+    }
 }
