@@ -547,41 +547,40 @@ enum SyncEntityMapper {
     }
 
     // MARK: - BrettMessage
+    //
+    // Codable-driven. The model owns its wire shape via the `Codable`
+    // conformance in `Models/BrettMessage.swift`. The static helpers below
+    // stay so existing tests and call sites keep working — they're now
+    // thin shims over JSON{Encoder, Decoder} configured with the
+    // project's date strategy.
 
     static func toServerPayload(_ msg: BrettMessage) -> [String: Any] {
-        var dict: [String: Any] = [
-            "id": msg.id,
-            "userId": msg.userId,
-            "role": msg.role,
-            "content": msg.content,
-        ]
-        dict["itemId"] = msg.itemId ?? NSNull()
-        dict["calendarEventId"] = msg.calendarEventId ?? NSNull()
-        dict["createdAt"] = isoString(msg.createdAt) ?? NSNull()
-        dict["updatedAt"] = isoString(msg.updatedAt) ?? NSNull()
-        return dict
+        do {
+            let data = try makeEncoder().encode(msg)
+            guard let json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [String: Any] else {
+                return [:]
+            }
+            return json
+        } catch {
+            BrettLog.push.error("Encode BrettMessage failed: \(String(describing: error), privacy: .public)")
+            return [:]
+        }
     }
 
     static func brettMessageFromServerJSON(_ dict: [String: Any]) -> BrettMessage? {
-        guard let id = dict["id"] as? String,
-              let userId = dict["userId"] as? String,
-              let roleStr = dict["role"] as? String,
-              let content = dict["content"] as? String else { return nil }
-        let role = MessageRole(rawValue: roleStr) ?? .user
-        let msg = BrettMessage(
-            id: id,
-            userId: userId,
-            role: role,
-            content: content,
-            itemId: dict["itemId"] as? String,
-            calendarEventId: dict["calendarEventId"] as? String,
-            createdAt: parseDate(dict["createdAt"]) ?? Date(),
-            updatedAt: parseDate(dict["updatedAt"]) ?? Date()
-        )
-        msg.deletedAt = parseDate(dict["deletedAt"])
-        return msg
+        do {
+            let data = try JSONSerialization.data(withJSONObject: dict)
+            return try makeDecoder().decode(BrettMessage.self, from: data)
+        } catch {
+            BrettLog.pull.error("Decode BrettMessage failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
+    /// Apply incoming server fields onto an existing local row. Kept as a
+    /// dict-driven helper (rather than decoding into a fresh row and copying)
+    /// so the partial-update semantics — only assign fields the server
+    /// actually sent — match what the legacy implementation did.
     static func applyBrettMessageFields(_ msg: BrettMessage, from dict: [String: Any]) {
         if let v = dict["role"] as? String { msg.role = v }
         if let v = dict["content"] as? String { msg.content = v }
