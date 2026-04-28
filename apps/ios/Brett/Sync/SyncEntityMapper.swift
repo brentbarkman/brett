@@ -484,50 +484,37 @@ enum SyncEntityMapper {
     }
 
     // MARK: - ScoutFinding
+    //
+    // Codable-driven. The model owns its wire shape via the `Codable`
+    // conformance in `Models/ScoutFinding.swift`. The static helpers below
+    // stay so existing tests and call sites keep working — they're now
+    // thin shims over JSON{Encoder, Decoder} configured with the
+    // project's date strategy.
+    //
+    // Reserved-word remap: the wire key is `description`, the model property
+    // is `findingDescription` — handled via `CodingKeys` raw values.
 
     static func toServerPayload(_ finding: ScoutFinding) -> [String: Any] {
-        var dict: [String: Any] = [
-            "id": finding.id,
-            "scoutId": finding.scoutId,
-            "type": finding.type,
-            "title": finding.title,
-            "description": finding.findingDescription,
-            "sourceName": finding.sourceName,
-            "reasoning": finding.reasoning,
-        ]
-        dict["scoutRunId"] = finding.scoutRunId ?? NSNull()
-        dict["sourceUrl"] = finding.sourceUrl ?? NSNull()
-        dict["relevanceScore"] = finding.relevanceScore ?? NSNull()
-        dict["itemId"] = finding.itemId ?? NSNull()
-        dict["feedbackUseful"] = finding.feedbackUseful ?? NSNull()
-        dict["feedbackAt"] = isoString(finding.feedbackAt) ?? NSNull()
-        dict["createdAt"] = isoString(finding.createdAt) ?? NSNull()
-        dict["updatedAt"] = isoString(finding.updatedAt) ?? NSNull()
-        return dict
+        do {
+            let data = try makeEncoder().encode(finding)
+            guard let json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [String: Any] else {
+                return [:]
+            }
+            return json
+        } catch {
+            BrettLog.push.error("Encode ScoutFinding failed: \(String(describing: error), privacy: .public)")
+            return [:]
+        }
     }
 
     static func scoutFindingFromServerJSON(_ dict: [String: Any]) -> ScoutFinding? {
-        guard let id = dict["id"] as? String,
-              let scoutId = dict["scoutId"] as? String,
-              let title = dict["title"] as? String,
-              let description = dict["description"] as? String,
-              let sourceName = dict["sourceName"] as? String else { return nil }
-        let finding = ScoutFinding(
-            id: id,
-            scoutId: scoutId,
-            scoutRunId: dict["scoutRunId"] as? String,
-            type: FindingType(rawValue: (dict["type"] as? String) ?? "") ?? .insight,
-            title: title,
-            description: description,
-            sourceName: sourceName,
-            sourceUrl: dict["sourceUrl"] as? String,
-            relevanceScore: dict["relevanceScore"] as? Double,
-            reasoning: (dict["reasoning"] as? String) ?? "",
-            createdAt: parseDate(dict["createdAt"]) ?? Date(),
-            updatedAt: parseDate(dict["updatedAt"]) ?? Date()
-        )
-        applyScoutFindingFields(finding, from: dict)
-        return finding
+        do {
+            let data = try JSONSerialization.data(withJSONObject: dict)
+            return try makeDecoder().decode(ScoutFinding.self, from: data)
+        } catch {
+            BrettLog.pull.error("Decode ScoutFinding failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
     static func applyScoutFindingFields(_ finding: ScoutFinding, from dict: [String: Any]) {
