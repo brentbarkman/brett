@@ -12,10 +12,9 @@ import Observation
 /// Public API:
 ///  - `messages` / `isStreaming` / `lastError` — observable view-model state
 ///    proxied straight through to `ChatMessageBuffer`.
-///  - `send(itemId:message:userId:)` / `send(eventId:message:userId:)` —
-///    user-bubble + assistant-bubble + stream open + persist + cache invalidate.
-///  - `hydrate(itemId:from:)` / `hydrateEvent(eventId:from:)` — reseed from
-///    SwiftData rows or server history.
+///  - `send(itemId:message:userId:)` — user-bubble + assistant-bubble + stream
+///    open + persist + cache invalidate.
+///  - `hydrate(itemId:from:)` — reseed from SwiftData rows or server history.
 ///  - `cancelAll()` / `clearForSignOut()` — tear-down hooks so an in-flight
 ///    stream can't land its final `BrettMessage` on the next user's rows.
 ///
@@ -66,7 +65,6 @@ final class ChatStore: Clearable {
             context: (persistence ?? PersistenceController.shared).mainContext
         )
         self.streaming = StreamingChatClient(apiClient: apiClient, session: session)
-        ChatStoreRegistry.register(self)
         ClearableStoreRegistry.register(self)
     }
 
@@ -99,12 +97,6 @@ final class ChatStore: Clearable {
             .sorted(by: { $0.createdAt < $1.createdAt })
             .map { Self.makeChatMessage(id: $0.id, role: $0.role, content: $0.content, createdAt: $0.createdAt) }
         buffer.setMessages(key: itemId, messages: chatMessages)
-    }
-
-    /// Same as `hydrate(itemId:from:)` but for an event chat thread.
-    /// Separate keying so the same server method can drive both paths.
-    func hydrateEvent(eventId: String, from messages: [APIClient.ChatHistoryMessage]) {
-        hydrate(itemId: eventId, from: messages)
     }
 
     /// Build a non-streaming `ChatMessage` from a stored or server row.
@@ -149,30 +141,6 @@ final class ChatStore: Clearable {
                 assistantIndex: assistantIndex,
                 itemId: itemId,
                 calendarEventId: nil,
-                userId: userId
-            )
-        }
-    }
-
-    /// POST `/brett/chat/event/:eventId` — parallel method for Calendar.
-    /// Kept here rather than forking a separate store so both UIs share the
-    /// same streaming machinery.
-    func send(eventId: String, message: String, userId: String?) async {
-        let key = eventId
-        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        buffer.appendUser(key: key, content: trimmed)
-        let assistantIndex = buffer.beginAssistant(key: key)
-
-        await runTrackedStream(key: key) { [weak self] in
-            await self?.stream(
-                path: "/brett/chat/event/\(eventId)",
-                body: ["message": trimmed],
-                key: key,
-                assistantIndex: assistantIndex,
-                itemId: nil,
-                calendarEventId: eventId,
                 userId: userId
             )
         }
@@ -381,43 +349,3 @@ private final class ChunkBox: @unchecked Sendable {
     func increment() { value += 1 }
 }
 #endif
-
-// MARK: - Registry
-
-/// Weak-reference registry of live `ChatStore` instances. Lets
-/// `ActiveSession.tearDown()` cancel every in-flight chat stream in the
-/// process without introducing a singleton or plumbing a reference
-/// through every view that hosts a chat.
-///
-/// Why a registry instead of a singleton: chat state is per-view
-/// (`@State private var chatStore = ChatStore()` in `TaskDetailView`),
-/// so there may be several concurrent stores at once. The registry
-/// fans the cancellation out to all of them.
-@MainActor
-enum ChatStoreRegistry {
-    /// Weak-box wrapper so stores can be registered without pinning them
-    /// in memory past their view's lifetime. The registry is itself
-    /// main-actor-isolated, so no locking is required.
-    private final class WeakRef {
-        weak var store: ChatStore?
-        init(_ store: ChatStore) { self.store = store }
-    }
-
-    private static var refs: [WeakRef] = []
-
-    static func register(_ store: ChatStore) {
-        // Opportunistic compact: drop empty weak boxes while we're here.
-        refs.removeAll { $0.store == nil }
-        refs.append(WeakRef(store))
-    }
-
-    /// Cancel every in-flight stream across all live `ChatStore`s.
-    /// Called from `ActiveSession.tearDown()` before SwiftData is wiped
-    /// so no stream can land its final assistant message on the next
-    /// user's rows.
-    static func cancelAllActive() {
-        for ref in refs {
-            ref.store?.cancelAll()
-        }
-    }
-}

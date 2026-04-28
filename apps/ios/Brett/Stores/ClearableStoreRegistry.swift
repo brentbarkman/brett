@@ -22,8 +22,7 @@ extension Clearable {
 }
 
 /// Weak-reference registry of every `Clearable` store the process has
-/// instantiated. Modeled on `ChatStoreRegistry` (which is now a thin wrapper
-/// over this) so we have one cancellation/clear primitive to maintain.
+/// instantiated. Single fan-out point for sign-out clearing.
 ///
 /// Why a registry instead of a singleton list passed to `Session.tearDown`:
 /// stores live at different layers — some are app-scoped singletons
