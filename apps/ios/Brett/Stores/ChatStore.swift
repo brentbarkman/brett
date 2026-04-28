@@ -26,13 +26,18 @@ final class ChatStore: Clearable {
     /// Messages in the current UI, keyed by itemId or eventId. These are
     /// NOT the persisted `BrettMessage` rows — they're the live view model
     /// that lets streaming deltas mutate without fighting SwiftData.
-    var messages: [String: [ChatMessage]] = [:]
+    var messages: [String: [ChatMessage]] { buffer.messages }
 
     /// True while we're streaming a response into `messages[key]`.
-    var isStreaming: [String: Bool] = [:]
+    var isStreaming: [String: Bool] { buffer.isStreaming }
 
     /// Last error for each key, if any. Cleared on next successful send.
-    var lastError: [String: String] = [:]
+    var lastError: [String: String] { buffer.lastError }
+
+    /// In-memory state + mutation primitives. Owns the per-key
+    /// `messages` / `isStreaming` / `lastError` triple. Public properties
+    /// above proxy straight through so callers don't need to change.
+    private let buffer = ChatMessageBuffer()
 
     private let apiClient: APIClient
     private let session: URLSession
@@ -86,7 +91,7 @@ final class ChatStore: Clearable {
     /// once by the detail view on appear so the user sees prior history.
     func hydrate(itemId: String, from messages: [BrettMessage]) {
         let sorted = messages.sorted(by: { $0.createdAt < $1.createdAt })
-        self.messages[itemId] = sorted.map { message in
+        let chatMessages = sorted.map { message in
             ChatMessage(
                 id: message.id,
                 role: ChatMessage.Role(rawValue: message.role) ?? .brett,
@@ -95,6 +100,7 @@ final class ChatStore: Clearable {
                 createdAt: message.createdAt
             )
         }
+        buffer.setMessages(key: itemId, messages: chatMessages)
     }
 
     /// Seed from server-fetched chat history. The server returns messages in
@@ -106,7 +112,7 @@ final class ChatStore: Clearable {
     /// the user can't open a thread mid-stream without first finishing it.
     func hydrate(itemId: String, from messages: [APIClient.ChatHistoryMessage]) {
         let sorted = messages.sorted(by: { $0.createdAt < $1.createdAt })
-        self.messages[itemId] = sorted.map { message in
+        let chatMessages = sorted.map { message in
             ChatMessage(
                 id: message.id,
                 role: ChatMessage.Role(rawValue: message.role) ?? .brett,
@@ -115,6 +121,7 @@ final class ChatStore: Clearable {
                 createdAt: message.createdAt
             )
         }
+        buffer.setMessages(key: itemId, messages: chatMessages)
     }
 
     /// Same as `hydrate(itemId:from:)` but for an event chat thread.
@@ -137,8 +144,8 @@ final class ChatStore: Clearable {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        appendUser(key: key, content: trimmed)
-        let assistantIndex = beginAssistant(key: key)
+        buffer.appendUser(key: key, content: trimmed)
+        let assistantIndex = buffer.beginAssistant(key: key)
 
         await runTrackedStream(key: key) { [weak self] in
             await self?.stream(
@@ -161,8 +168,8 @@ final class ChatStore: Clearable {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        appendUser(key: key, content: trimmed)
-        let assistantIndex = beginAssistant(key: key)
+        buffer.appendUser(key: key, content: trimmed)
+        let assistantIndex = buffer.beginAssistant(key: key)
 
         await runTrackedStream(key: key) { [weak self] in
             await self?.stream(
@@ -185,7 +192,7 @@ final class ChatStore: Clearable {
             task.cancel()
         }
         activeStreams.removeAll()
-        for key in isStreaming.keys { isStreaming[key] = false }
+        buffer.clearStreamingFlags()
     }
 
     // MARK: - Clearable
@@ -198,9 +205,7 @@ final class ChatStore: Clearable {
     /// flash on the next user's first chat open.
     func clearForSignOut() {
         cancelAll()
-        messages = [:]
-        isStreaming = [:]
-        lastError = [:]
+        buffer.clear()
     }
 
     #if DEBUG
@@ -213,13 +218,13 @@ final class ChatStore: Clearable {
         lastError: [String: String]? = nil
     ) {
         if let messages {
-            for (k, v) in messages { self.messages[k] = v }
+            for (k, v) in messages { buffer.setMessages(key: k, messages: v) }
         }
         if let isStreaming {
-            for (k, v) in isStreaming { self.isStreaming[k] = v }
+            for (k, v) in isStreaming { buffer.injectStreamingFlag(key: k, value: v) }
         }
         if let lastError {
-            for (k, v) in lastError { self.lastError[k] = v }
+            for (k, v) in lastError { buffer.setError(key: k, message: v) }
         }
     }
     #endif
@@ -248,12 +253,11 @@ final class ChatStore: Clearable {
         calendarEventId: String?,
         userId: String?
     ) async {
-        isStreaming[key] = true
-        lastError[key] = nil
-        defer { isStreaming[key] = false }
+        buffer.setError(key: key, message: nil)
 
         guard let url = URL(string: apiClient.baseURL.absoluteString + path) else {
-            lastError[key] = "Invalid URL"
+            buffer.setError(key: key, message: "Invalid URL")
+            buffer.markAssistantComplete(key: key, index: assistantIndex)
             return
         }
 
@@ -272,8 +276,8 @@ final class ChatStore: Clearable {
             #endif
             let (bytes, response) = try await session.bytes(for: request)
             guard let http = response as? HTTPURLResponse else {
-                lastError[key] = "Chat request returned a non-HTTP response"
-                markAssistantComplete(key: key, index: assistantIndex)
+                buffer.setError(key: key, message: "Chat request returned a non-HTTP response")
+                buffer.markAssistantComplete(key: key, index: assistantIndex)
                 return
             }
             guard (200...299).contains(http.statusCode) else {
@@ -294,11 +298,11 @@ final class ChatStore: Clearable {
                 let bodyText = String(data: bodyData, encoding: .utf8) ?? ""
                 if let json = bodyText.data(using: .utf8).flatMap({ try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any],
                    let msg = json["message"] as? String {
-                    lastError[key] = msg
+                    buffer.setError(key: key, message: msg)
                 } else {
-                    lastError[key] = "Chat request failed (HTTP \(http.statusCode))"
+                    buffer.setError(key: key, message: "Chat request failed (HTTP \(http.statusCode))")
                 }
-                markAssistantComplete(key: key, index: assistantIndex)
+                buffer.markAssistantComplete(key: key, index: assistantIndex)
                 return
             }
 
@@ -329,13 +333,15 @@ final class ChatStore: Clearable {
             // Finalise: persist the assistant text to BrettMessage + mark
             // the UI bubble as no-longer streaming.
             if let final = messages[key]?[safe: assistantIndex] {
-                markAssistantComplete(key: key, index: assistantIndex)
+                buffer.markAssistantComplete(key: key, index: assistantIndex)
                 if final.content.isEmpty {
                     // Stream finished but produced nothing. Keeping a
                     // blank assistant bubble is a worse failure than
                     // surfacing what happened — leave a soft message so
                     // the user knows to retry.
-                    lastError[key] = lastError[key] ?? "No response — try again."
+                    if lastError[key] == nil {
+                        buffer.setError(key: key, message: "No response — try again.")
+                    }
                 } else {
                     persistAssistant(
                         content: final.content,
@@ -357,13 +363,18 @@ final class ChatStore: Clearable {
                         eventId: calendarEventId
                     )
                 }
+            } else {
+                // Defensive: if the bucket vanished mid-stream (e.g. a
+                // sign-out clear) make sure the streaming flag clears.
+                buffer.markAssistantComplete(key: key, index: assistantIndex)
             }
         } catch {
             #if DEBUG
             print("[ChatStore] stream error: \(error)")
             #endif
-            lastError[key] = (error as? APIError)?.userFacingMessage ?? error.localizedDescription
-            markAssistantComplete(key: key, index: assistantIndex)
+            let message = (error as? APIError)?.userFacingMessage ?? error.localizedDescription
+            buffer.setError(key: key, message: message)
+            buffer.markAssistantComplete(key: key, index: assistantIndex)
         }
     }
 
@@ -378,13 +389,13 @@ final class ChatStore: Clearable {
             else { return }
 
             if type == "text", let text = json["content"] as? String {
-                appendAssistantDelta(key: key, index: assistantIndex, delta: text)
+                buffer.appendAssistantDelta(key: key, index: assistantIndex, delta: text)
             } else if type == "tool_result", let msg = json["message"] as? String {
                 // Tool-result messages get appended too so the UI reflects
                 // whatever Brett found. Matches desktop behaviour.
-                appendAssistantDelta(key: key, index: assistantIndex, delta: msg + "\n")
+                buffer.appendAssistantDelta(key: key, index: assistantIndex, delta: msg + "\n")
             } else if type == "error", let msg = json["message"] as? String {
-                lastError[key] = msg
+                buffer.setError(key: key, message: msg)
             }
         case .done:
             // Server signals the stream is finished; no-op here — the outer
@@ -392,51 +403,8 @@ final class ChatStore: Clearable {
             // terminates.
             break
         case .error(let message):
-            lastError[key] = message
+            buffer.setError(key: key, message: message)
         }
-    }
-
-    // MARK: - Message ops
-
-    private func appendUser(key: String, content: String) {
-        var bucket = messages[key] ?? []
-        bucket.append(
-            ChatMessage(
-                id: UUID().uuidString,
-                role: .user,
-                content: content,
-                isStreaming: false,
-                createdAt: Date()
-            )
-        )
-        messages[key] = bucket
-    }
-
-    private func beginAssistant(key: String) -> Int {
-        var bucket = messages[key] ?? []
-        bucket.append(
-            ChatMessage(
-                id: UUID().uuidString,
-                role: .brett,
-                content: "",
-                isStreaming: true,
-                createdAt: Date()
-            )
-        )
-        messages[key] = bucket
-        return bucket.count - 1
-    }
-
-    private func appendAssistantDelta(key: String, index: Int, delta: String) {
-        guard var bucket = messages[key], index < bucket.count else { return }
-        bucket[index].content += delta
-        messages[key] = bucket
-    }
-
-    private func markAssistantComplete(key: String, index: Int) {
-        guard var bucket = messages[key], index < bucket.count else { return }
-        bucket[index].isStreaming = false
-        messages[key] = bucket
     }
 
     // MARK: - SwiftData persistence
@@ -568,23 +536,6 @@ final class ChatStore: Clearable {
         }
         return message
     }
-}
-
-// MARK: - View model
-
-struct ChatMessage: Identifiable, Equatable {
-    enum Role: String {
-        case user
-        case brett
-        case assistant
-        case system
-    }
-
-    let id: String
-    let role: Role
-    var content: String
-    var isStreaming: Bool
-    let createdAt: Date
 }
 
 // MARK: - Array safe subscript
