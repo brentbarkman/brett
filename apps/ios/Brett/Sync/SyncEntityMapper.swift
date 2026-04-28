@@ -217,37 +217,39 @@ enum SyncEntityMapper {
 
     // MARK: - ItemList
 
+    // ItemList is Codable-driven. The model owns its wire shape via the
+    // `Codable` conformance in `Models/ItemList.swift`. The static
+    // helpers below stay so existing tests and call sites keep working —
+    // they're now thin shims over JSON{Encoder, Decoder} configured with
+    // the project's date strategy.
+
     static func toServerPayload(_ list: ItemList) -> [String: Any] {
-        [
-            "id": list.id,
-            "userId": list.userId,
-            "name": list.name,
-            "colorClass": list.colorClass,
-            "sortOrder": list.sortOrder,
-            "archivedAt": isoString(list.archivedAt) ?? NSNull(),
-            "createdAt": isoString(list.createdAt) ?? NSNull(),
-            "updatedAt": isoString(list.updatedAt) ?? NSNull(),
-        ]
+        do {
+            let data = try makeEncoder().encode(list)
+            guard let json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [String: Any] else {
+                return [:]
+            }
+            return json
+        } catch {
+            BrettLog.push.error("Encode ItemList failed: \(String(describing: error), privacy: .public)")
+            return [:]
+        }
     }
 
     static func listFromServerJSON(_ dict: [String: Any]) -> ItemList? {
-        guard let id = dict["id"] as? String,
-              let userId = dict["userId"] as? String,
-              let name = dict["name"] as? String else { return nil }
-        let list = ItemList(
-            id: id,
-            userId: userId,
-            name: name,
-            colorClass: (dict["colorClass"] as? String) ?? "bg-gray-500",
-            sortOrder: (dict["sortOrder"] as? Int) ?? 0,
-            createdAt: parseDate(dict["createdAt"]) ?? Date(),
-            updatedAt: parseDate(dict["updatedAt"]) ?? Date()
-        )
-        list.archivedAt = parseDate(dict["archivedAt"])
-        list.deletedAt = parseDate(dict["deletedAt"])
-        return list
+        do {
+            let data = try JSONSerialization.data(withJSONObject: dict)
+            return try makeDecoder().decode(ItemList.self, from: data)
+        } catch {
+            BrettLog.pull.error("Decode ItemList failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
+    /// Apply incoming server fields onto an existing local row. Kept as a
+    /// dict-driven helper (rather than decoding into a fresh row and copying)
+    /// so the partial-update semantics — only assign fields the server
+    /// actually sent — match what the legacy implementation did.
     static func applyListFields(_ list: ItemList, from dict: [String: Any]) {
         if let v = dict["name"] as? String { list.name = v }
         if let v = dict["colorClass"] as? String { list.colorClass = v }
