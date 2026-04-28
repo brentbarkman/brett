@@ -593,44 +593,40 @@ enum SyncEntityMapper {
     }
 
     // MARK: - Attachment
+    //
+    // Codable-driven. The model owns its wire shape via the `Codable`
+    // conformance in `Models/Attachment.swift`. The static helpers below
+    // stay so existing tests and call sites keep working — they're now
+    // thin shims over JSON{Encoder, Decoder} configured with the
+    // project's date strategy.
 
     static func toServerPayload(_ att: Attachment) -> [String: Any] {
-        [
-            "id": att.id,
-            "filename": att.filename,
-            "mimeType": att.mimeType,
-            "sizeBytes": att.sizeBytes,
-            "storageKey": att.storageKey,
-            "itemId": att.itemId,
-            "userId": att.userId,
-            "createdAt": isoString(att.createdAt) ?? NSNull(),
-            "updatedAt": isoString(att.updatedAt) ?? NSNull(),
-        ]
+        do {
+            let data = try makeEncoder().encode(att)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return [:]
+            }
+            return json
+        } catch {
+            BrettLog.push.error("Encode Attachment failed: \(String(describing: error), privacy: .public)")
+            return [:]
+        }
     }
 
     static func attachmentFromServerJSON(_ dict: [String: Any]) -> Attachment? {
-        guard let id = dict["id"] as? String,
-              let filename = dict["filename"] as? String,
-              let mimeType = dict["mimeType"] as? String,
-              let sizeBytes = dict["sizeBytes"] as? Int,
-              let storageKey = dict["storageKey"] as? String,
-              let itemId = dict["itemId"] as? String,
-              let userId = dict["userId"] as? String else { return nil }
-        let att = Attachment(
-            id: id,
-            filename: filename,
-            mimeType: mimeType,
-            sizeBytes: sizeBytes,
-            storageKey: storageKey,
-            itemId: itemId,
-            userId: userId,
-            createdAt: parseDate(dict["createdAt"]) ?? Date(),
-            updatedAt: parseDate(dict["updatedAt"]) ?? Date()
-        )
-        att.deletedAt = parseDate(dict["deletedAt"])
-        return att
+        do {
+            let data = try JSONSerialization.data(withJSONObject: dict)
+            return try makeDecoder().decode(Attachment.self, from: data)
+        } catch {
+            BrettLog.pull.error("Decode Attachment failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
+    /// Apply incoming server fields onto an existing local row. Kept as a
+    /// dict-driven helper (rather than decoding into a fresh row and copying)
+    /// so the partial-update semantics — only assign fields the server
+    /// actually sent — match what the legacy implementation did.
     static func applyAttachmentFields(_ att: Attachment, from dict: [String: Any]) {
         if let v = dict["filename"] as? String { att.filename = v }
         if let v = dict["mimeType"] as? String { att.mimeType = v }
