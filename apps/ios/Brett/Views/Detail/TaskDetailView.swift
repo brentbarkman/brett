@@ -142,6 +142,34 @@ private struct TaskDetailBody: View {
     @State private var uploader: AttachmentUploader?
     @State private var downloader: AttachmentDownloader?
 
+    /// In-flight debounce task for picker-style draft commits (due date,
+    /// list, reminder, recurrence). Cancelled and reset on each new
+    /// change so a flurry of rapid edits collapses to a single commit
+    /// after the trailing 500 ms of quiet. Title and notes commit via
+    /// their own blur/submit handlers and bypass this path.
+    @State private var commitDebounceTask: Task<Void, Never>?
+
+    /// Watched tuple of the picker-style draft axes. Folding the four
+    /// `.onChange(of:)` blocks into one watch-by-tuple keeps the commit
+    /// path single-sourced and lets the debounce coalesce edits across
+    /// fields (e.g. setting a due date *and* a reminder in the same
+    /// breath emits one PATCH instead of two).
+    private struct DraftChangeAxes: Equatable {
+        let dueDate: Date?
+        let listId: String?
+        let reminder: String?
+        let recurrence: String?
+    }
+
+    private var draftChangeAxes: DraftChangeAxes {
+        DraftChangeAxes(
+            dueDate: draft.dueDate,
+            listId: draft.listId,
+            reminder: draft.reminder,
+            recurrence: draft.recurrence
+        )
+    }
+
     init(userId: String, itemId: String, onOpenLinkedItem: @escaping (String) -> Void) {
         self.userId = userId
         self.itemId = itemId
@@ -186,6 +214,13 @@ private struct TaskDetailBody: View {
         // `item` is still nil, and this onChange picks it up on first match.
         .onChange(of: item?.id) { _, _ in
             seedDraftIfNeeded()
+        }
+        // Cancel any in-flight debounce on dismiss so a stale commit
+        // doesn't fire after the view tears down. Pending edits at
+        // dismissal are intentionally dropped — the user can't see them
+        // any more, and the next field change will re-arm the debounce.
+        .onDisappear {
+            commitDebounceTask?.cancel()
         }
     }
 
@@ -261,10 +296,7 @@ private struct TaskDetailBody: View {
     @ViewBuilder
     private var detailsCardSection: some View {
         DetailsCard(draft: $draft, lists: lists)
-            .onChange(of: draft.dueDate) { _, _ in commitDraft() }
-            .onChange(of: draft.listId) { _, _ in commitDraft() }
-            .onChange(of: draft.reminder) { _, _ in commitDraft() }
-            .onChange(of: draft.recurrence) { _, _ in commitDraft() }
+            .onChange(of: draftChangeAxes) { _, _ in scheduleDebouncedCommit() }
     }
 
     @ViewBuilder
@@ -425,6 +457,23 @@ private struct TaskDetailBody: View {
         itemStore.commit(diff, to: item.id, userId: userId)
         // No manual reload needed — `@Query` reactively republishes the
         // matched row through `matchedItems` after the save lands.
+    }
+
+    /// Coalesce picker-style draft changes into a single trailing commit.
+    /// Replaces the prior four-`.onChange`-each-firing-`commitDraft`
+    /// pattern: a date/list/reminder/recurrence edit re-arms a 500 ms
+    /// quiet timer and the subsequent commit captures the latest state,
+    /// so back-to-back tweaks (e.g. picking a due date and immediately
+    /// setting a reminder) produce one PATCH instead of two.
+    private func scheduleDebouncedCommit() {
+        commitDebounceTask?.cancel()
+        commitDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                commitDraft()
+            }
+        }
     }
 
     private func toggleComplete() async {
