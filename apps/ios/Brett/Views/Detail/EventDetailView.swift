@@ -43,7 +43,7 @@ struct EventDetailView: View {
     private var api: APIClient { APIClient.shared }
 
     var body: some View {
-        ScrollView {
+        DetailViewContainer(bottomPadding: 120) {
             if let event {
                 VStack(alignment: .leading, spacing: 18) {
                     header(event)
@@ -54,15 +54,10 @@ struct EventDetailView: View {
                     meetingHistorySection
                     brettTakeSection(event)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 120)
             } else {
                 loadingPlaceholder
             }
         }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Calendar")
         .navigationBarTitleDisplayMode(.inline)
         .task {

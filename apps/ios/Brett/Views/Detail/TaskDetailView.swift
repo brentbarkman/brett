@@ -161,7 +161,7 @@ private struct TaskDetailBody: View {
     private var item: Item? { matchedItems.first }
 
     var body: some View {
-        ScrollView {
+        DetailViewContainer(bottomPadding: 40) {
             VStack(alignment: .leading, spacing: 12) {
                 headerSection
                 contentPreviewSection
@@ -171,12 +171,7 @@ private struct TaskDetailBody: View {
                 linksSectionView
                 brettSection
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 40)
         }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
         .background(Color.clear)
         .task {
             await initializeIfNeeded()
