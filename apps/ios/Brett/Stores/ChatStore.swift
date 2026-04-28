@@ -43,6 +43,11 @@ final class ChatStore: Clearable {
     private let session: URLSession
     private let persistence: PersistenceController?
 
+    /// SwiftData write path for finalised assistant messages.
+    /// Built from `persistence?.mainContext` (or the shared default) at
+    /// init so the streaming finaliser doesn't re-derive context per call.
+    private let persister: ChatPersister
+
     /// In-flight streaming tasks keyed by chat key. Tracked so
     /// `cancelAll()` can tear them down synchronously on sign-out —
     /// without this, a stream that's mid-flight when the user signs out
@@ -58,6 +63,9 @@ final class ChatStore: Clearable {
         self.apiClient = apiClient
         self.session = session
         self.persistence = persistence
+        self.persister = ChatPersister(
+            context: (persistence ?? PersistenceController.shared).mainContext
+        )
         ChatStoreRegistry.register(self)
         ClearableStoreRegistry.register(self)
     }
@@ -343,12 +351,16 @@ final class ChatStore: Clearable {
                         buffer.setError(key: key, message: "No response — try again.")
                     }
                 } else {
-                    persistAssistant(
-                        content: final.content,
-                        itemId: itemId,
-                        calendarEventId: calendarEventId,
-                        userId: userId
-                    )
+                    do {
+                        try persister.persistAssistant(
+                            content: final.content,
+                            itemId: itemId,
+                            calendarEventId: calendarEventId,
+                            userId: userId
+                        )
+                    } catch {
+                        BrettLog.store.error("ChatStore persistAssistant failed: \(String(describing: error), privacy: .public)")
+                    }
                     // Invalidate cached history so the next detail-view
                     // open re-fetches from the server (which now holds
                     // the messages we just streamed). Awaited inline —
@@ -404,50 +416,6 @@ final class ChatStore: Clearable {
             break
         case .error(let message):
             buffer.setError(key: key, message: message)
-        }
-    }
-
-    // MARK: - SwiftData persistence
-
-    /// Persist the final assistant message. `userId` is captured by the
-    /// caller (`send(...)`) at the top of the turn and plumbed through —
-    /// we never re-derive it inside the persistence path, because between
-    /// the send and the stream's end the user might have signed out, a new
-    /// `UserProfile` row might have landed from a pull, and a late-arriving
-    /// assistant chunk could otherwise be tagged with the wrong owner.
-    ///
-    /// If `userId` is nil (the caller signed out mid-stream), we skip the
-    /// write entirely — there's no authenticated owner to attribute the
-    /// message to, and the cancellation in `ActiveSession.tearDown()`
-    /// should have short-circuited this path anyway.
-    private func persistAssistant(
-        content: String,
-        itemId: String?,
-        calendarEventId: String?,
-        userId: String?
-    ) {
-        guard !content.trimmingCharacters(in: .whitespaces).isEmpty,
-              let persistence else { return }
-        guard let userId, !userId.isEmpty else {
-            BrettLog.store.info("ChatStore: dropped assistant persist — no authenticated userId")
-            return
-        }
-        let context = persistence.mainContext
-
-        let message = BrettMessage(
-            userId: userId,
-            role: .brett,
-            content: content,
-            itemId: itemId,
-            calendarEventId: calendarEventId,
-            createdAt: Date(),
-            updatedAt: Date()
-        )
-        context.insert(message)
-        do {
-            try context.save()
-        } catch {
-            BrettLog.store.error("ChatStore persistAssistant save failed: \(String(describing: error), privacy: .public)")
         }
     }
 
