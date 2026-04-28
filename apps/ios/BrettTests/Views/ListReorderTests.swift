@@ -32,7 +32,12 @@ struct ListReorderTests {
         store.reorder(ids: ["c", "a", "b"], userId: "u")
 
         // Assert: sortOrder on each list reflects its new index.
-        let fetched = store.fetchAll(includeArchived: true)
+        // Direct `FetchDescriptor` because Wave B made `ListStore.fetchAll`
+        // private — tests inspect post-mutation state without going through
+        // the store's mutation surface.
+        let fetched = try context.fetch(
+            FetchDescriptor<ItemList>(predicate: #Predicate { $0.deletedAt == nil })
+        )
         let byId = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
 
         #expect(byId["c"]?.sortOrder == 0)
@@ -62,7 +67,13 @@ struct ListReorderTests {
         let after = try context.fetch(FetchDescriptor<MutationQueueEntry>()).count
 
         #expect(after == before, "no-op reorder must not enqueue any mutations")
-        #expect(store.fetchAll(includeArchived: true).map(\.sortOrder) == [0, 1])
+        let fetched = try context.fetch(
+            FetchDescriptor<ItemList>(
+                predicate: #Predicate { $0.deletedAt == nil },
+                sortBy: [SortDescriptor(\.sortOrder)]
+            )
+        )
+        #expect(fetched.map(\.sortOrder) == [0, 1])
     }
 
     @MainActor
@@ -105,7 +116,9 @@ struct ListReorderTests {
         // update the real one to its new index (0, since it's first).
         store.reorder(ids: ["a", "ghost-1", "ghost-2"], userId: "u")
 
-        let fetched = store.fetchAll(includeArchived: true)
+        let fetched = try context.fetch(
+            FetchDescriptor<ItemList>(predicate: #Predicate { $0.deletedAt == nil })
+        )
         #expect(fetched.count == 1)
         #expect(fetched.first?.sortOrder == 0)
     }

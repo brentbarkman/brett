@@ -44,39 +44,22 @@ final class ListStore: Clearable {
     /// out if per-instance state appears.
     func clearForSignOut() {}
 
-    // MARK: - Fetch
+    // MARK: - Internal lookup
 
-    /// All non-deleted lists, ordered by `sortOrder`. `userId` scopes the
-    /// query so a prior account's lists never appear after an account
-    /// switch (CLAUDE.md multi-user rule). `nil` returns every user's rows;
-    /// reserved for sync internals and tests.
-    func fetchAll(userId: String? = nil, includeArchived: Bool = false) -> [ItemList] {
+    /// Locate the row a mutation is about to act on.
+    ///
+    /// Private — the only callers are the store's own `update` /
+    /// `archive` / `unarchive` / `reorder` paths. Views read lists via
+    /// `@Query` directly; the previous public `fetchAll` / `fetchById`
+    /// methods were removed in Wave B.
+    ///
+    /// `userId` scopes the lookup so a mutation issued from one user's flow
+    /// can never target a row belonging to a different account that's still
+    /// lingering in SwiftData.
+    private func findById(_ id: String, userId: String) -> ItemList? {
         var descriptor = FetchDescriptor<ItemList>(
-            sortBy: [SortDescriptor(\.sortOrder)]
+            predicate: #Predicate { $0.id == id && $0.userId == userId }
         )
-        if let userId {
-            descriptor.predicate = #Predicate { list in
-                list.deletedAt == nil && list.userId == userId
-            }
-        } else {
-            descriptor.predicate = #Predicate { list in
-                list.deletedAt == nil
-            }
-        }
-        let lists = fetch(descriptor)
-        return lists.filter { includeArchived || $0.archivedAt == nil }
-    }
-
-    /// Fetch a single list by id. `userId` scopes the lookup so mutation
-    /// paths never target another user's row. Passing `nil` preserves
-    /// legacy behaviour (sync internals / tests only).
-    func fetchById(_ id: String, userId: String? = nil) -> ItemList? {
-        var descriptor = FetchDescriptor<ItemList>()
-        if let userId {
-            descriptor.predicate = #Predicate { $0.id == id && $0.userId == userId }
-        } else {
-            descriptor.predicate = #Predicate { $0.id == id }
-        }
         descriptor.fetchLimit = 1
         return fetch(descriptor).first
     }
@@ -123,7 +106,7 @@ final class ListStore: Clearable {
     /// and `beforeSnapshot` from the model's current state — callers MUST
     /// NOT pre-mutate the model (see ItemStore for rationale).
     func update(id: String, changes: [String: Any], userId: String) {
-        guard let list = fetchById(id, userId: userId) else { return }
+        guard let list = findById(id, userId: userId) else { return }
         let fields = Array(changes.keys)
         let capturedPrevious = list.previousValues(forFields: fields)
         applyUpdate(list: list, changes: changes, previousValues: capturedPrevious)
@@ -133,7 +116,7 @@ final class ListStore: Clearable {
     /// the caller already captured the pre-edit state (e.g. a settings
     /// form snapshotted on open).
     func update(id: String, changes: [String: Any], previousValues: [String: Any], userId: String) {
-        guard let list = fetchById(id, userId: userId) else { return }
+        guard let list = findById(id, userId: userId) else { return }
         applyUpdate(list: list, changes: changes, previousValues: previousValues)
     }
 
@@ -185,7 +168,7 @@ final class ListStore: Clearable {
 
     func reorder(ids: [String], userId: String) {
         for (index, id) in ids.enumerated() {
-            guard let list = fetchById(id, userId: userId), list.sortOrder != index else { continue }
+            guard let list = findById(id, userId: userId), list.sortOrder != index else { continue }
             update(id: id, changes: ["sortOrder": index], userId: userId)
         }
     }
@@ -196,9 +179,20 @@ final class ListStore: Clearable {
     /// a new user's first list would inherit a large sortOrder from the
     /// previous account's lists still resident in SwiftData between sign-in
     /// and the first pull.
+    ///
+    /// Inlines the `FetchDescriptor` (rather than going through a helper)
+    /// because Wave B removed `fetchAll` and there's exactly one caller —
+    /// pulling the highest existing `sortOrder` for new-list creation.
     private func nextSortOrder(userId: String) -> Int {
-        let existing = fetchAll(userId: userId, includeArchived: true)
-        return (existing.map(\.sortOrder).max() ?? -1) + 1
+        var descriptor = FetchDescriptor<ItemList>(
+            predicate: #Predicate { list in
+                list.deletedAt == nil && list.userId == userId
+            },
+            sortBy: [SortDescriptor(\.sortOrder, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        let highest = (try? context.fetch(descriptor))?.first?.sortOrder ?? -1
+        return highest + 1
     }
 
     private func fetch<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> [T] {

@@ -92,7 +92,7 @@ struct BulkUpdateTests {
         store.bulkUpdate(ids: ids, changes: ["listId": "list-applied"], userId: TestFixtures.defaultUserId)
 
         for id in ids {
-            let item = try #require(store.fetchById(id))
+            let item = try #require(try fetchItem(id, in: context))
             #expect(item.listId == "list-applied")
         }
     }
@@ -166,13 +166,23 @@ struct BulkUpdateTests {
 
         // Items are soft-deleted locally.
         for id in ids {
-            let item = try #require(store.fetchById(id))
+            let item = try #require(try fetchItem(id, in: context))
             #expect(item.deletedAt != nil)
             #expect(item.syncStatusEnum == .pendingDelete)
         }
     }
 
     // MARK: - Helpers
+
+    /// Direct `FetchDescriptor` lookup — replaces `ItemStore.fetchById`,
+    /// which Wave B made private. Tests own their inspection of post-mutation
+    /// state and don't need to go through the store's mutation surface.
+    private func fetchItem(_ id: String, in context: ModelContext) throws -> Item? {
+        let descriptor = FetchDescriptor<Item>(
+            predicate: #Predicate { $0.id == id }
+        )
+        return try context.fetch(descriptor).first
+    }
 
     private func fetchMutationEntries(context: ModelContext) throws -> [MutationQueueEntry] {
         let descriptor = FetchDescriptor<MutationQueueEntry>(

@@ -460,8 +460,11 @@ private struct TodayPageBody: View {
     /// Swipe-to-schedule: update dueDate (nil clears it, "Someday").
     /// We snapshot the current value into `previousValues` so the push engine
     /// can field-level merge if the server changed dueDate in the meantime.
+    /// The pre-edit row comes from this view's `@Query`-backed `items`
+    /// array, which is already user-scoped — no need for a separate store
+    /// fetch (those public read methods were removed in Wave B).
     private func schedule(_ id: String, dueDate: Date?) {
-        guard let item = itemStore.fetchById(id) else { return }
+        guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         itemStore.update(
             id: id,
@@ -475,7 +478,7 @@ private struct TodayPageBody: View {
     /// soft-archive semantics — record stays on the server, hidden from
     /// active views.
     private func archive(_ id: String) {
-        guard let item = itemStore.fetchById(id) else { return }
+        guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         itemStore.update(
             id: id,

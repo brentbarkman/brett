@@ -339,8 +339,11 @@ private struct ListViewBody: View {
         itemStore.toggleStatus(id: id, userId: userId)
     }
 
+    /// Pre-edit row comes from this view's `@Query`-backed `items` array,
+    /// which is already user-scoped — no need for a separate store fetch
+    /// (those public read methods were removed in Wave B).
     private func schedule(_ id: String, dueDate: Date?) {
-        guard let item = itemStore.fetchById(id) else { return }
+        guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         itemStore.update(
             id: id,
@@ -351,7 +354,7 @@ private struct ListViewBody: View {
     }
 
     private func archive(_ id: String) {
-        guard let item = itemStore.fetchById(id) else { return }
+        guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         itemStore.update(
             id: id,

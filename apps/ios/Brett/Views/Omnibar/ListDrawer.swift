@@ -385,8 +385,11 @@ private struct ListDrawerBody: View {
         HapticManager.success()
     }
 
+    /// Pre-edit list row comes from this view's `@Query`-backed `lists`
+    /// array, already user-scoped — no need for a separate store fetch
+    /// (those public read methods were removed in Wave B).
     private func recolor(_ id: String, to color: ListColor) {
-        guard let list = listStore.fetchById(id) else { return }
+        guard let list = lists.first(where: { $0.id == id }) else { return }
         listStore.update(
             id: id,
             changes: ["colorClass": color.rawValue],

@@ -49,112 +49,23 @@ final class ItemStore: Clearable {
     /// if any per-instance caches get added.
     func clearForSignOut() {}
 
-    // MARK: - Fetch
+    // MARK: - Internal lookup
 
-    /// All non-deleted items for the current user, newest first.
+    /// Locate the row a mutation is about to act on.
     ///
-    /// `userId` scopes the query so data from a previous account never
-    /// leaks into the current session — critical for shared-device and
-    /// sign-out-then-sign-in flows (CLAUDE.md multi-user rule).
-    /// Passing `nil` preserves legacy behavior (returns every user's rows)
-    /// but should only be used by tests or sync internals.
-    func fetchAll(
-        userId: String? = nil,
-        listId: String? = nil,
-        status: ItemStatus? = nil
-    ) -> [Item] {
+    /// Private — the only callers are the store's own `update` / `delete` /
+    /// `toggleStatus` paths plus the `commit` extension. Views read items
+    /// via `@Query` directly; the previous public `fetchById(_:userId:)` was
+    /// removed in Wave B along with `fetchAll` / `fetchInbox` / `fetchToday`
+    /// / `fetchUpcoming`.
+    ///
+    /// `userId` scopes the lookup so a mutation issued from one user's flow
+    /// can never target a row belonging to a different account that's still
+    /// lingering in SwiftData (e.g. between sign-out and the wipe completing).
+    private func findById(_ id: String, userId: String) -> Item? {
         var descriptor = FetchDescriptor<Item>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+            predicate: #Predicate { $0.id == id && $0.userId == userId }
         )
-        // Build the predicate by combination to keep each #Predicate under
-        // Swift's type-checker budget (a chained 5-way conjunction with
-        // mixed Optional<Date>/Optional<String>/String types times out the
-        // macro). Each branch is a simple 2–4 clause predicate the SQLite
-        // store can evaluate without a post-fetch Swift filter.
-        let statusRaw = status?.rawValue
-        switch (userId, listId, statusRaw) {
-        case let (uid?, lid?, stat?):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil
-                    && item.userId == uid
-                    && item.listId == lid
-                    && item.status == stat
-            }
-        case let (uid?, lid?, nil):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.userId == uid && item.listId == lid
-            }
-        case let (uid?, nil, stat?):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.userId == uid && item.status == stat
-            }
-        case let (uid?, nil, nil):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.userId == uid
-            }
-        case let (nil, lid?, stat?):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.listId == lid && item.status == stat
-            }
-        case let (nil, lid?, nil):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.listId == lid
-            }
-        case let (nil, nil, stat?):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.status == stat
-            }
-        case (nil, nil, nil):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil
-            }
-        }
-        return fetch(descriptor)
-    }
-
-    /// Inbox = items with no list assigned and no due date (spec §UI).
-    func fetchInbox(userId: String? = nil) -> [Item] {
-        fetchAll(userId: userId).filter {
-            $0.listId == nil && $0.dueDate == nil && $0.itemStatus == .active
-        }
-    }
-
-    /// Today = due today or overdue, not yet done.
-    func fetchToday(userId: String? = nil) -> [Item] {
-        let calendar = Calendar.current
-        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date()) ?? Date()
-        return fetchAll(userId: userId).filter { item in
-            guard let due = item.dueDate,
-                  item.itemStatus != .done,
-                  item.itemStatus != .archived else { return false }
-            return due <= endOfToday
-        }
-    }
-
-    /// Upcoming = due after today, not yet done.
-    func fetchUpcoming(userId: String? = nil) -> [Item] {
-        let calendar = Calendar.current
-        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date()) ?? Date()
-        return fetchAll(userId: userId)
-            .filter { item in
-                guard let due = item.dueDate else { return false }
-                return due > endOfToday && item.itemStatus != .done && item.itemStatus != .archived
-            }
-            .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
-    }
-
-    /// Fetch a single `Item` by id. `userId` scopes the lookup so a call
-    /// from the signed-in user's flow can never target a row that belongs
-    /// to a different account lingering in SwiftData (e.g. between sign-out
-    /// and the wipe completing). Passing `nil` preserves the legacy
-    /// unscoped behaviour and is reserved for sync internals.
-    func fetchById(_ id: String, userId: String? = nil) -> Item? {
-        var descriptor = FetchDescriptor<Item>()
-        if let userId {
-            descriptor.predicate = #Predicate { $0.id == id && $0.userId == userId }
-        } else {
-            descriptor.predicate = #Predicate { $0.id == id }
-        }
         descriptor.fetchLimit = 1
         return fetch(descriptor).first
     }
@@ -223,7 +134,7 @@ final class ItemStore: Clearable {
     /// can never mutate a row belonging to a different account that's
     /// still lingering in SwiftData.
     func update(id: String, changes: [String: Any], userId: String) {
-        guard let item = fetchById(id, userId: userId) else { return }
+        guard let item = findById(id, userId: userId) else { return }
         let fields = Array(changes.keys)
         let capturedPrevious = item.previousValues(forFields: fields)
         applyUpdate(item: item, changes: changes, previousValues: capturedPrevious)
@@ -240,7 +151,7 @@ final class ItemStore: Clearable {
         previousValues: [String: Any],
         userId: String
     ) {
-        guard let item = fetchById(id, userId: userId) else { return }
+        guard let item = findById(id, userId: userId) else { return }
         applyUpdate(item: item, changes: changes, previousValues: previousValues)
     }
 
@@ -294,7 +205,7 @@ final class ItemStore: Clearable {
     /// post-mutation `beforeSnapshot` and silently broke
     /// permanent-failure rollback.
     func toggleStatus(id: String, userId: String) {
-        guard let item = fetchById(id, userId: userId) else { return }
+        guard let item = findById(id, userId: userId) else { return }
         let wasDone = item.itemStatus == .done
         update(
             id: id,
@@ -308,7 +219,7 @@ final class ItemStore: Clearable {
 
     /// Soft-delete — sets `deletedAt` locally and enqueues a DELETE.
     func delete(id: String, userId: String) {
-        guard let item = fetchById(id, userId: userId) else { return }
+        guard let item = findById(id, userId: userId) else { return }
         let before = item.mutableFieldSnapshot()
         item.deletedAt = Date()
         item._syncStatus = SyncStatus.pendingDelete.rawValue
