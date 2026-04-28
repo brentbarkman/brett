@@ -42,35 +42,18 @@ private struct LocationSettingsBody: View {
     let userId: String
     @Bindable var store: UserProfileStore
 
-    // ── Assistant ──
-    @State private var assistantName: String = "Brett"
-    @State private var isAssistantNameSaving = false
-
-    // ── Briefing ── scoped per-user; @State + explicit UserDefaults because
-    // @AppStorage requires compile-time constant keys.
-    @State private var briefingEnabled: Bool = true
-
-    // ── Memory ──
-    @State private var memoryFacts: [MemoryFact] = []
-    @State private var isLoadingMemory = true
-    @State private var memoryErrorMessage: String?
-    @State private var factIdPendingConfirm: String?
-    @State private var factIdDeleting: String?
-
-    // ── Timezone ──
+    // ── Timezone ── owned here so the toolbar Save button can submit
+    // them via `saveTimezone()`. Bound into `TimezoneSection`.
     @State private var timezoneAuto: Bool = true
     @State private var selectedTimezone: String = TimeZone.current.identifier
-    @State private var searchText: String = ""
 
-    // ── Weather & location ──
+    // ── Weather & location ── same rationale: parent owns the canonical
+    // values so the global Save can read them. Bound into
+    // `WeatherLocationSection`.
     @State private var weatherEnabled: Bool = true
     @State private var selectedTempUnit: TempUnit = .auto
-    @State private var cityQuery: String = ""
-    @State private var geocodeResults: [GeocodeCityResult] = []
-    @State private var isSearching = false
-    @State private var debounceTask: Task<Void, Never>?
 
-    // ── General ──
+    // ── General (shared error/success banner + saving spinner) ──
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
@@ -79,13 +62,11 @@ private struct LocationSettingsBody: View {
     private var currentProfile: UserProfile? { profiles.first }
 
     private let client: APIClient
-    private let allTimezones: [String]
 
     init(userId: String, store: UserProfileStore, client: APIClient) {
         self.userId = userId
         self.store = store
         self.client = client
-        self.allTimezones = TimeZone.knownTimeZoneIdentifiers.filter { $0.contains("/") }
         let predicate = #Predicate<UserProfile> { profile in
             profile.id == userId
         }
@@ -115,16 +96,37 @@ private struct LocationSettingsBody: View {
             }
 
             // ═══ Assistant ═══
-            assistantSection
+            AssistantPersonaSection(
+                currentProfile: currentProfile,
+                client: client,
+                errorMessage: $errorMessage,
+                successMessage: $successMessage,
+                onRefreshProfile: { await refreshProfile() },
+                clearMessagesAfterDelay: clearMessagesAfterDelay
+            )
 
             // ═══ Memory ═══
-            memorySection
+            MemoryFactsSection(client: client)
 
             // ═══ Timezone ═══
-            timezoneSection
+            TimezoneSection(
+                timezoneAuto: $timezoneAuto,
+                selectedTimezone: $selectedTimezone
+            )
 
             // ═══ Weather & Location ═══
-            weatherLocationSection
+            WeatherLocationSection(
+                currentProfile: currentProfile,
+                client: client,
+                weatherEnabled: $weatherEnabled,
+                selectedTempUnit: $selectedTempUnit,
+                timezoneAuto: timezoneAuto,
+                selectedTimezone: $selectedTimezone,
+                errorMessage: $errorMessage,
+                successMessage: $successMessage,
+                onRefreshProfile: { await refreshProfile() },
+                clearMessagesAfterDelay: clearMessagesAfterDelay
+            )
         }
         .navigationTitle("Timezone & Location")
         .navigationBarTitleDisplayMode(.large)
@@ -146,13 +148,147 @@ private struct LocationSettingsBody: View {
             }
         }
         .onAppear { hydrate() }
-        .task { await loadMemory() }
     }
 
-    // MARK: - Assistant section
+    // MARK: - Hydrate
 
-    @ViewBuilder
-    private var assistantSection: some View {
+    private func hydrate() {
+        guard let profile = currentProfile else { return }
+        timezoneAuto = profile.timezoneAuto
+        selectedTimezone = profile.timezone
+        weatherEnabled = profile.weatherEnabled
+        selectedTempUnit = LocationTempUnitMapping.fromAPI(profile.tempUnit)
+    }
+
+    // MARK: - Save (toolbar button)
+
+    private func save() async {
+        isSaving = true
+        errorMessage = nil
+        successMessage = nil
+        defer { isSaving = false }
+
+        do {
+            try await saveTimezone()
+            try await saveWeatherLocation()
+            successMessage = "Saved."
+            clearMessagesAfterDelay()
+        } catch let apiError as APIError {
+            errorMessage = apiError.userFacingMessage
+        } catch {
+            errorMessage = "Couldn't save preferences."
+        }
+    }
+
+    // MARK: - Save timezone
+
+    private func saveTimezone() async throws {
+        struct Payload: Encodable { let timezone: String; let auto: Bool }
+        let effective = timezoneAuto ? TimeZone.current.identifier : selectedTimezone
+        struct GenericResponse: Decodable {}
+        let _: GenericResponse = try await client.request(
+            path: "/users/timezone",
+            method: "PATCH",
+            body: Payload(timezone: effective, auto: timezoneAuto)
+        )
+    }
+
+    // MARK: - Save weather & location
+
+    private func saveWeatherLocation() async throws {
+        struct LocationPayload: Encodable {
+            let weatherEnabled: Bool
+            let tempUnit: String
+        }
+        struct GenericResponse: Decodable {}
+        let _: GenericResponse = try await client.request(
+            path: "/users/location",
+            method: "PATCH",
+            body: LocationPayload(
+                weatherEnabled: weatherEnabled,
+                tempUnit: LocationTempUnitMapping.toAPI(selectedTempUnit)
+            )
+        )
+    }
+
+    // MARK: - Profile refresh
+
+    private func refreshProfile() async {
+        struct UserMeResponse: Decodable {
+            let id: String
+            let email: String
+            let name: String?
+            let image: String?
+            let assistantName: String?
+            let timezone: String?
+            let timezoneAuto: Bool?
+            let city: String?
+            let countryCode: String?
+            let tempUnit: String?
+            let weatherEnabled: Bool?
+            let backgroundStyle: String?
+            let pinnedBackground: String?
+            let avgBusynessScore: Double?
+        }
+
+        do {
+            let response: UserMeResponse = try await client.request(
+                path: "/users/me",
+                method: "GET"
+            )
+            // Build a dictionary to match UserProfileStore.update(from:)
+            var payload: [String: Any] = [
+                "id": response.id,
+                "email": response.email,
+            ]
+            if let name = response.name { payload["name"] = name }
+            if let image = response.image { payload["image"] = image }
+            if let an = response.assistantName { payload["assistantName"] = an }
+            if let tz = response.timezone { payload["timezone"] = tz }
+            if let tza = response.timezoneAuto { payload["timezoneAuto"] = tza }
+            if let city = response.city { payload["city"] = city }
+            if let cc = response.countryCode { payload["countryCode"] = cc }
+            if let tu = response.tempUnit { payload["tempUnit"] = tu }
+            if let we = response.weatherEnabled { payload["weatherEnabled"] = we }
+            if let bs = response.backgroundStyle { payload["backgroundStyle"] = bs }
+            payload["pinnedBackground"] = response.pinnedBackground as Any
+            if let abs = response.avgBusynessScore { payload["avgBusynessScore"] = abs }
+
+            store.update(from: payload)
+        } catch {
+            // Silent — we already showed a success or error for the mutation itself.
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func clearMessagesAfterDelay() {
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            successMessage = nil
+            errorMessage = nil
+        }
+    }
+}
+
+// MARK: - Assistant section
+
+private struct AssistantPersonaSection: View {
+    let currentProfile: UserProfile?
+    let client: APIClient
+    @Binding var errorMessage: String?
+    @Binding var successMessage: String?
+    let onRefreshProfile: () async -> Void
+    let clearMessagesAfterDelay: () -> Void
+
+    @State private var assistantName: String = "Brett"
+    @State private var isAssistantNameSaving = false
+
+    // ── Briefing ── scoped per-user; @State + explicit UserDefaults because
+    // @AppStorage requires compile-time constant keys.
+    @State private var briefingEnabled: Bool = true
+
+    var body: some View {
         BrettSettingsSection("Assistant") {
             // Name field
             VStack(alignment: .leading, spacing: 6) {
@@ -230,12 +366,60 @@ private struct LocationSettingsBody: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
         }
+        .onAppear { hydrate() }
     }
 
-    // MARK: - Memory section
+    private func hydrate() {
+        // Read the scoped briefing pref even when the user profile hasn't
+        // loaded yet — default to true (matches the old @AppStorage default).
+        let key = UserScopedStorage.key("briefing.enabled")
+        briefingEnabled = UserDefaults.standard.object(forKey: key) as? Bool ?? true
 
-    @ViewBuilder
-    private var memorySection: some View {
+        if let profile = currentProfile {
+            assistantName = profile.assistantName
+        }
+    }
+
+    private func saveAssistantName() async {
+        let trimmed = assistantName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        guard trimmed != (currentProfile?.assistantName ?? "Brett") else { return }
+
+        isAssistantNameSaving = true
+        errorMessage = nil
+        defer { isAssistantNameSaving = false }
+
+        do {
+            struct Payload: Encodable { let assistantName: String }
+            struct GenericResponse: Decodable {}
+            let _: GenericResponse = try await client.request(
+                path: "/users/me",
+                method: "PATCH",
+                body: Payload(assistantName: trimmed)
+            )
+            await onRefreshProfile()
+            successMessage = "Assistant name updated."
+            clearMessagesAfterDelay()
+        } catch let apiError as APIError {
+            errorMessage = apiError.userFacingMessage
+        } catch {
+            errorMessage = "Couldn't update assistant name."
+        }
+    }
+}
+
+// MARK: - Memory section
+
+private struct MemoryFactsSection: View {
+    let client: APIClient
+
+    @State private var memoryFacts: [MemoryFact] = []
+    @State private var isLoadingMemory = true
+    @State private var memoryErrorMessage: String?
+    @State private var factIdPendingConfirm: String?
+    @State private var factIdDeleting: String?
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             BrettSettingsSection("Memory") {
                 if isLoadingMemory {
@@ -275,6 +459,7 @@ private struct LocationSettingsBody: View {
                 .foregroundStyle(BrettColors.textMeta)
                 .padding(.horizontal, 4)
         }
+        .task { await loadMemory() }
     }
 
     @ViewBuilder
@@ -406,11 +591,19 @@ private struct LocationSettingsBody: View {
             memoryErrorMessage = "Couldn't remove that memory."
         }
     }
+}
 
-    // MARK: - Timezone section
+// MARK: - Timezone section
 
-    @ViewBuilder
-    private var timezoneSection: some View {
+private struct TimezoneSection: View {
+    @Binding var timezoneAuto: Bool
+    @Binding var selectedTimezone: String
+
+    @State private var searchText: String = ""
+
+    private let allTimezones: [String] = TimeZone.knownTimeZoneIdentifiers.filter { $0.contains("/") }
+
+    var body: some View {
         BrettSettingsSection("Timezone") {
             Toggle(isOn: $timezoneAuto) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -451,10 +644,66 @@ private struct LocationSettingsBody: View {
         }
     }
 
-    // MARK: - Weather & Location section
-
     @ViewBuilder
-    private var weatherLocationSection: some View {
+    private var timezonePickerScreen: some View {
+        ZStack {
+            BackgroundView()
+            Form {
+                Section {
+                    ForEach(filteredTimezones, id: \.self) { tz in
+                        Button {
+                            selectedTimezone = tz
+                        } label: {
+                            HStack {
+                                Text(tz)
+                                    .foregroundStyle(BrettColors.textCardTitle)
+                                Spacer()
+                                if tz == selectedTimezone {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(BrettColors.gold)
+                                }
+                            }
+                        }
+                        .brettSettingsRowBackground()
+                    }
+                }
+            }
+            .brettSettingsForm()
+            .searchable(text: $searchText, prompt: "Search timezones")
+        }
+        .navigationTitle("Timezone")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var filteredTimezones: [String] {
+        guard !searchText.isEmpty else { return allTimezones }
+        return allTimezones.filter { $0.localizedCaseInsensitiveContains(searchText) }
+    }
+}
+
+// MARK: - Weather & Location section
+
+private struct WeatherLocationSection: View {
+    let currentProfile: UserProfile?
+    let client: APIClient
+
+    @Binding var weatherEnabled: Bool
+    @Binding var selectedTempUnit: TempUnit
+
+    let timezoneAuto: Bool
+    @Binding var selectedTimezone: String
+
+    @Binding var errorMessage: String?
+    @Binding var successMessage: String?
+    let onRefreshProfile: () async -> Void
+    let clearMessagesAfterDelay: () -> Void
+
+    @State private var cityQuery: String = ""
+    @State private var geocodeResults: [GeocodeCityResult] = []
+    @State private var isSearching = false
+    @State private var debounceTask: Task<Void, Never>?
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             BrettSettingsSection("Weather & Location") {
                 // Weather toggle
@@ -570,44 +819,6 @@ private struct LocationSettingsBody: View {
         }
     }
 
-    // MARK: - Timezone picker
-
-    @ViewBuilder
-    private var timezonePickerScreen: some View {
-        ZStack {
-            BackgroundView()
-            Form {
-                Section {
-                    ForEach(filteredTimezones, id: \.self) { tz in
-                        Button {
-                            selectedTimezone = tz
-                        } label: {
-                            HStack {
-                                Text(tz)
-                                    .foregroundStyle(BrettColors.textCardTitle)
-                                Spacer()
-                                if tz == selectedTimezone {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(BrettColors.gold)
-                                }
-                            }
-                        }
-                        .brettSettingsRowBackground()
-                    }
-                }
-            }
-            .brettSettingsForm()
-            .searchable(text: $searchText, prompt: "Search timezones")
-        }
-        .navigationTitle("Timezone")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var filteredTimezones: [String] {
-        guard !searchText.isEmpty else { return allTimezones }
-        return allTimezones.filter { $0.localizedCaseInsensitiveContains(searchText) }
-    }
-
     // MARK: - City search
 
     private func debouncedCitySearch(_ query: String) {
@@ -670,7 +881,7 @@ private struct LocationSettingsBody: View {
                 }
 
                 // Refresh profile to pick up new city
-                await refreshProfile()
+                await onRefreshProfile()
                 successMessage = "Location updated."
                 clearMessagesAfterDelay()
             } catch let apiError as APIError {
@@ -680,109 +891,15 @@ private struct LocationSettingsBody: View {
             }
         }
     }
+}
 
-    // MARK: - Hydrate
+// MARK: - Temp unit mapping
+//
+// iOS enum: .auto / .c / .f
+// API values: "auto" / "celsius" / "fahrenheit"
 
-    private func hydrate() {
-        // Read the scoped briefing pref even when the user profile hasn't
-        // loaded yet — default to true (matches the old @AppStorage default).
-        let key = UserScopedStorage.key("briefing.enabled")
-        briefingEnabled = UserDefaults.standard.object(forKey: key) as? Bool ?? true
-
-        guard let profile = currentProfile else { return }
-        assistantName = profile.assistantName
-        timezoneAuto = profile.timezoneAuto
-        selectedTimezone = profile.timezone
-        weatherEnabled = profile.weatherEnabled
-        selectedTempUnit = Self.tempUnitFromAPI(profile.tempUnit)
-    }
-
-    // MARK: - Save (toolbar button)
-
-    private func save() async {
-        isSaving = true
-        errorMessage = nil
-        successMessage = nil
-        defer { isSaving = false }
-
-        do {
-            try await saveTimezone()
-            try await saveWeatherLocation()
-            successMessage = "Saved."
-            clearMessagesAfterDelay()
-        } catch let apiError as APIError {
-            errorMessage = apiError.userFacingMessage
-        } catch {
-            errorMessage = "Couldn't save preferences."
-        }
-    }
-
-    // MARK: - Save assistant name
-
-    private func saveAssistantName() async {
-        let trimmed = assistantName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        guard trimmed != (currentProfile?.assistantName ?? "Brett") else { return }
-
-        isAssistantNameSaving = true
-        errorMessage = nil
-        defer { isAssistantNameSaving = false }
-
-        do {
-            struct Payload: Encodable { let assistantName: String }
-            struct GenericResponse: Decodable {}
-            let _: GenericResponse = try await client.request(
-                path: "/users/me",
-                method: "PATCH",
-                body: Payload(assistantName: trimmed)
-            )
-            await refreshProfile()
-            successMessage = "Assistant name updated."
-            clearMessagesAfterDelay()
-        } catch let apiError as APIError {
-            errorMessage = apiError.userFacingMessage
-        } catch {
-            errorMessage = "Couldn't update assistant name."
-        }
-    }
-
-    // MARK: - Save timezone
-
-    private func saveTimezone() async throws {
-        struct Payload: Encodable { let timezone: String; let auto: Bool }
-        let effective = timezoneAuto ? TimeZone.current.identifier : selectedTimezone
-        struct GenericResponse: Decodable {}
-        let _: GenericResponse = try await client.request(
-            path: "/users/timezone",
-            method: "PATCH",
-            body: Payload(timezone: effective, auto: timezoneAuto)
-        )
-    }
-
-    // MARK: - Save weather & location
-
-    private func saveWeatherLocation() async throws {
-        struct LocationPayload: Encodable {
-            let weatherEnabled: Bool
-            let tempUnit: String
-        }
-        struct GenericResponse: Decodable {}
-        let _: GenericResponse = try await client.request(
-            path: "/users/location",
-            method: "PATCH",
-            body: LocationPayload(
-                weatherEnabled: weatherEnabled,
-                tempUnit: Self.tempUnitToAPI(selectedTempUnit)
-            )
-        )
-    }
-
-    // MARK: - Temp unit mapping
-    //
-    // iOS enum: .auto / .c / .f
-    // API values: "auto" / "celsius" / "fahrenheit"
-
-    private static func tempUnitFromAPI(_ raw: String) -> TempUnit {
+private enum LocationTempUnitMapping {
+    static func fromAPI(_ raw: String) -> TempUnit {
         switch raw {
         case "fahrenheit": return .f
         case "celsius": return .c
@@ -793,99 +910,11 @@ private struct LocationSettingsBody: View {
         }
     }
 
-    private static func tempUnitToAPI(_ unit: TempUnit) -> String {
+    static func toAPI(_ unit: TempUnit) -> String {
         switch unit {
         case .auto: return "auto"
         case .c: return "celsius"
         case .f: return "fahrenheit"
-        }
-    }
-
-    // MARK: - Profile refresh
-
-    private func refreshProfile() async {
-        struct UserMeResponse: Decodable {
-            let id: String
-            let email: String
-            let name: String?
-            let image: String?
-            let assistantName: String?
-            let timezone: String?
-            let timezoneAuto: Bool?
-            let city: String?
-            let countryCode: String?
-            let tempUnit: String?
-            let weatherEnabled: Bool?
-            let backgroundStyle: String?
-            let pinnedBackground: String?
-            let avgBusynessScore: Double?
-        }
-
-        do {
-            let response: UserMeResponse = try await client.request(
-                path: "/users/me",
-                method: "GET"
-            )
-            // Build a dictionary to match UserProfileStore.update(from:)
-            var payload: [String: Any] = [
-                "id": response.id,
-                "email": response.email,
-            ]
-            if let name = response.name { payload["name"] = name }
-            if let image = response.image { payload["image"] = image }
-            if let an = response.assistantName { payload["assistantName"] = an }
-            if let tz = response.timezone { payload["timezone"] = tz }
-            if let tza = response.timezoneAuto { payload["timezoneAuto"] = tza }
-            if let city = response.city { payload["city"] = city }
-            if let cc = response.countryCode { payload["countryCode"] = cc }
-            if let tu = response.tempUnit { payload["tempUnit"] = tu }
-            if let we = response.weatherEnabled { payload["weatherEnabled"] = we }
-            if let bs = response.backgroundStyle { payload["backgroundStyle"] = bs }
-            payload["pinnedBackground"] = response.pinnedBackground as Any
-            if let abs = response.avgBusynessScore { payload["avgBusynessScore"] = abs }
-
-            store.update(from: payload)
-        } catch {
-            // Silent — we already showed a success or error for the mutation itself.
-        }
-    }
-
-    // MARK: - CoreLocation fallback geocoding
-
-    private struct CoreLocationResult {
-        let latitude: Double
-        let longitude: Double
-        let locality: String?
-    }
-
-    private func geocodeFallback(_ address: String) async throws -> CoreLocationResult {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CoreLocationResult, Error>) in
-            CLGeocoder().geocodeAddressString(address) { placemarks, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                guard let place = placemarks?.first,
-                      let coord = place.location?.coordinate else {
-                    continuation.resume(throwing: APIError.validation("Couldn't resolve that address."))
-                    return
-                }
-                continuation.resume(returning: CoreLocationResult(
-                    latitude: coord.latitude,
-                    longitude: coord.longitude,
-                    locality: place.locality
-                ))
-            }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func clearMessagesAfterDelay() {
-        Task {
-            try? await Task.sleep(for: .seconds(3))
-            successMessage = nil
-            errorMessage = nil
         }
     }
 }
