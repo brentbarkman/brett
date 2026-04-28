@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Top-level settings navigation. Uses iOS-native `List` + `Section` with
 /// glass materials layered underneath via the `BackgroundView`. Each row is
@@ -7,7 +8,27 @@ import SwiftUI
 /// Sign Out is a destructive button at the bottom (not a NavigationLink) so
 /// the action fires immediately. Account deletion lives inside the Account
 /// screen behind a double-confirm dialog.
+///
+/// Outer view is a thin auth gate: the body's `@Query` predicate needs a
+/// concrete `userId`, so we resolve it from `AuthManager` and remount the
+/// child via `.id(userId)` whenever the active user changes. Standard
+/// Wave-B pattern (see `InboxPage`, `TodayPage`, `ScoutsRosterView`).
 struct SettingsView: View {
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            SettingsBody(userId: userId)
+                .id(userId)
+        } else {
+            EmptyView()
+        }
+    }
+}
+
+private struct SettingsBody: View {
+    let userId: String
+
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthManager.self) private var authManager
 
@@ -15,6 +36,21 @@ struct SettingsView: View {
 
     @State private var showSignOutConfirm = false
     @State private var isSigningOut = false
+
+    /// Live reactive read of the signed-in user's profile. SwiftData only
+    /// ever holds one row per session; the predicate is belt-and-suspenders
+    /// against stale rows surviving a sign-out/sign-in cycle.
+    @Query private var profiles: [UserProfile]
+
+    init(userId: String) {
+        self.userId = userId
+        let predicate = #Predicate<UserProfile> { profile in
+            profile.id == userId
+        }
+        _profiles = Query(filter: predicate, sort: \UserProfile.id)
+    }
+
+    private var currentProfile: UserProfile? { profiles.first }
 
     var body: some View {
         // Custom layout — moved off `List` because per-row backgrounds
@@ -93,7 +129,7 @@ struct SettingsView: View {
                 tab: .location,
                 icon: "location",
                 label: "Timezone & Location",
-                detail: profileStore.current?.timezone ?? TimeZone.current.identifier
+                detail: currentProfile?.timezone ?? TimeZone.current.identifier
             )
             BrettSettingsDivider()
             navRow(
@@ -109,7 +145,7 @@ struct SettingsView: View {
     /// desktop — "Smart" when not pinned, the solid color's label when
     /// solid, or the style name + "pinned" suffix for a pinned photo.
     private var currentBackgroundDisplay: String {
-        guard let profile = profileStore.current else { return "Smart" }
+        guard let profile = currentProfile else { return "Smart" }
         let style = BackgroundService.Style(rawValue: profile.backgroundStyle) ?? .photography
         if let pinned = profile.pinnedBackground {
             if pinned.hasPrefix("solid:") {
@@ -306,14 +342,14 @@ struct SettingsView: View {
     }
 
     private var userName: String {
-        profileStore.current?.name
+        currentProfile?.name
             ?? authManager.currentUser?.name
             ?? authManager.currentUser?.email
             ?? "You"
     }
 
     private var userEmail: String {
-        profileStore.current?.email
+        currentProfile?.email
             ?? authManager.currentUser?.email
             ?? "—"
     }

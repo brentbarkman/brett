@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import CoreLocation
 
 /// Assistant, memory, timezone, weather, and location preferences.
@@ -12,7 +13,33 @@ import CoreLocation
 /// - `DELETE /brett/memory/facts/:id` — delete a single fact
 ///
 /// Briefing preference is local-only (`@AppStorage`).
+///
+/// Outer view is a thin auth gate: the body's `@Query` predicate needs a
+/// concrete `userId`, so we resolve it from `AuthManager` and remount the
+/// child via `.id(userId)` whenever the active user changes.
 struct LocationSettingsView: View {
+    @Environment(AuthManager.self) private var authManager
+
+    let store: UserProfileStore
+    let client: APIClient
+
+    init(store: UserProfileStore, client: APIClient = .shared) {
+        self.store = store
+        self.client = client
+    }
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            LocationSettingsBody(userId: userId, store: store, client: client)
+                .id(userId)
+        } else {
+            EmptyView()
+        }
+    }
+}
+
+private struct LocationSettingsBody: View {
+    let userId: String
     @Bindable var store: UserProfileStore
 
     // ── Assistant ──
@@ -48,13 +75,21 @@ struct LocationSettingsView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
 
+    @Query private var profiles: [UserProfile]
+    private var currentProfile: UserProfile? { profiles.first }
+
     private let client: APIClient
     private let allTimezones: [String]
 
-    init(store: UserProfileStore, client: APIClient = .shared) {
+    init(userId: String, store: UserProfileStore, client: APIClient) {
+        self.userId = userId
         self.store = store
         self.client = client
         self.allTimezones = TimeZone.knownTimeZoneIdentifiers.filter { $0.contains("/") }
+        let predicate = #Predicate<UserProfile> { profile in
+            profile.id == userId
+        }
+        _profiles = Query(filter: predicate, sort: \UserProfile.id)
     }
 
     var body: some View {
@@ -169,7 +204,7 @@ struct LocationSettingsView: View {
                 .disabled(
                     isAssistantNameSaving
                     || assistantName.trimmingCharacters(in: .whitespaces).isEmpty
-                    || assistantName.trimmingCharacters(in: .whitespaces) == (store.current?.assistantName ?? "Brett")
+                    || assistantName.trimmingCharacters(in: .whitespaces) == (currentProfile?.assistantName ?? "Brett")
                 )
                 .buttonStyle(.plain)
             }
@@ -459,7 +494,7 @@ struct LocationSettingsView: View {
 
                     // City search
                     VStack(alignment: .leading, spacing: 8) {
-                        if let city = store.current?.city, !city.isEmpty {
+                        if let city = currentProfile?.city, !city.isEmpty {
                             HStack(spacing: 6) {
                                 Image(systemName: "mappin.and.ellipse")
                                     .font(.system(size: 12))
@@ -654,7 +689,7 @@ struct LocationSettingsView: View {
         let key = UserScopedStorage.key("briefing.enabled")
         briefingEnabled = UserDefaults.standard.object(forKey: key) as? Bool ?? true
 
-        guard let profile = store.current else { return }
+        guard let profile = currentProfile else { return }
         assistantName = profile.assistantName
         timezoneAuto = profile.timezoneAuto
         selectedTimezone = profile.timezone
@@ -687,7 +722,7 @@ struct LocationSettingsView: View {
     private func saveAssistantName() async {
         let trimmed = assistantName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        guard trimmed != (store.current?.assistantName ?? "Brett") else { return }
+        guard trimmed != (currentProfile?.assistantName ?? "Brett") else { return }
 
         isAssistantNameSaving = true
         errorMessage = nil
