@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Push-navigation detail view for a single `CalendarEvent`.
 ///
@@ -10,15 +11,100 @@ import SwiftUI
 /// 5. Related items (from `/api/events/:id/related-items`).
 /// 6. Meeting history ("You've met N times…").
 /// 7. Brett's Take (cerulean glass card) when `event.brettObservation` is present.
+///
+/// Auth gate around `EventDetailBody`. The body is the work-doer; this
+/// outer view exists only to extract `userId` from the environment and
+/// hand it to a child whose `@Query` predicates capture it directly.
+///
+/// Why this shape: SwiftData's `#Predicate` macro can't read
+/// `@Environment` values, so the established workaround is an init-based
+/// subview where `userId` is a stored property and each `@Query` is
+/// constructed in `init` with the captured user. This pushes the user
+/// filter down into the SwiftData fetch instead of doing it in Swift
+/// after the fact — cheaper, and keeps cross-user rows from ever
+/// entering the working set. Critically, this fixes the prior unscoped
+/// `calendarStore.fetchById(eventId)` + `calendarStore.fetchNote(for:)`
+/// calls that could resolve a row belonging to a different account
+/// lingering in SwiftData (e.g. between sign-out and the wipe completing) —
+/// the same cross-user defense gap that Wave B closed for `TaskDetailView`.
 struct EventDetailView: View {
+    let eventId: String
+
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            EventDetailBody(userId: userId, eventId: eventId)
+                .id("\(userId)-\(eventId)")
+        } else {
+            // Signed-out fallback. The auth gate upstream usually prevents
+            // this branch; render an empty state defensively rather than
+            // nil-fallback so the type system doesn't have to model a
+            // missing user here.
+            EmptyView()
+        }
+    }
+
+    // MARK: - Pure formatting helpers
+    //
+    // These are exposed as static members on the outer view (rather than
+    // the private body) so the existing `EventFormattingTests` suite
+    // can reach them by their public-facing name. The body forwards to
+    // these so production calls stay co-located with the section that
+    // uses them.
+
+    static func formatTimeBlock(_ event: CalendarEvent) -> String {
+        if event.isAllDay {
+            return "All day · \(event.startTime.formatted(.dateTime.weekday(.abbreviated).month().day()))"
+        }
+        let dayFormat: Date.FormatStyle = .dateTime.weekday(.abbreviated).month().day()
+        let timeFormat: Date.FormatStyle = .dateTime.hour().minute()
+        return "\(event.startTime.formatted(dayFormat)) · \(event.startTime.formatted(timeFormat)) – \(event.endTime.formatted(timeFormat))"
+    }
+
+    static func formatHistory(_ history: APIClient.MeetingHistoryResponse) -> String {
+        let count = history.pastOccurrences.count
+        guard let last = history.pastOccurrences.first else { return "" }
+        let lastFormatted = last.startTime.formatted(.dateTime.month().day().year())
+        if count == 1 {
+            return "You've met once before. Last met \(lastFormatted)."
+        }
+        return "You've met \(count) times. Last met \(lastFormatted)."
+    }
+}
+
+// MARK: - Body (the actual content)
+
+/// Detail data + UI. Owned by `EventDetailView`'s auth gate, so `userId`
+/// is guaranteed non-optional for this view's lifetime. Re-instantiated
+/// on account switch OR `eventId` change because the parent applies
+/// `.id("\(userId)-\(eventId)")` — SwiftUI treats a changed `id` as a new
+/// view identity and remounts this body from scratch, which gives us a
+/// fresh `@Query` with the new user/event predicate (plus a clean slate
+/// for `@State` stores and caches).
+private struct EventDetailBody: View {
+    let userId: String
     let eventId: String
 
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
-    @Environment(AuthManager.self) private var authManager
 
     @State private var calendarStore = CalendarStore()
-    @State private var event: CalendarEvent?
+
+    /// Single-row reactive read of the event for `(userId, eventId)`.
+    /// Replaces the prior unscoped `calendarStore.fetchById(eventId)`
+    /// lookup — that legacy form could match a row belonging to a
+    /// different account that was still lingering in SwiftData. The
+    /// user-scoped predicate guarantees cross-user isolation.
+    @Query private var matchedEvents: [CalendarEvent]
+
+    /// Single-row reactive read of the event's note for the current user.
+    /// Replaces the prior unscoped `calendarStore.fetchNote(for: fetched.id)`
+    /// lookup. `applyServerNote` and `upsertNote` writes are still routed
+    /// through `CalendarStore` (which now reads back through this same
+    /// scoped predicate), so the editor refreshes automatically when the
+    /// server hydrate lands.
+    @Query private var matchedNotes: [CalendarEventNote]
 
     @State private var rsvpDraft: CalendarRsvpStatus = .needsAction
     @State private var rsvpComment = ""
@@ -40,7 +126,33 @@ struct EventDetailView: View {
     /// Notes are cached separately by `RemoteCache`.
     @State private var asidesLoaded = false
 
+    /// Snapshot guard so a SwiftData republish (driven by every commit)
+    /// doesn't re-seed the draft fields on top of in-flight user input.
+    /// We re-seed only on the first transition from "no row" to "row
+    /// present" — same pattern as `TaskDetailBody.hasSeededDraft`.
+    @State private var hasSeededDraft = false
+
     private var api: APIClient { APIClient.shared }
+
+    private var event: CalendarEvent? { matchedEvents.first }
+    private var note: CalendarEventNote? { matchedNotes.first }
+
+    init(userId: String, eventId: String) {
+        self.userId = userId
+        self.eventId = eventId
+
+        let eventPredicate = #Predicate<CalendarEvent> { event in
+            event.id == eventId && event.userId == userId
+        }
+        _matchedEvents = Query(filter: eventPredicate)
+
+        let notePredicate = #Predicate<CalendarEventNote> { note in
+            note.calendarEventId == eventId
+                && note.userId == userId
+                && note.deletedAt == nil
+        }
+        _matchedNotes = Query(filter: notePredicate)
+    }
 
     var body: some View {
         DetailViewContainer(bottomPadding: 120) {
@@ -61,8 +173,16 @@ struct EventDetailView: View {
         .navigationTitle("Calendar")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            loadEvent()
+            seedDraftIfNeeded()
             await loadAsides()
+        }
+        // Re-seed the draft when the event first lands. This handles
+        // the cold-open case where `task` runs before SwiftData's
+        // @Query has resolved the row — the seed inside `.task` then
+        // no-ops because `event` is still nil, and this onChange picks
+        // it up on first match.
+        .onChange(of: event?.id) { _, _ in
+            seedDraftIfNeeded()
         }
     }
 
@@ -92,7 +212,7 @@ struct EventDetailView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
                         .font(.system(size: 11, weight: .medium))
-                    Text(Self.formatTimeBlock(event))
+                    Text(EventDetailView.formatTimeBlock(event))
                         .font(BrettTypography.taskMeta)
                 }
                 .foregroundStyle(Color.white.opacity(0.50))
@@ -307,9 +427,10 @@ struct EventDetailView: View {
 
     private func saveNotes() {
         guard let event else { return }
-        let userId = authManager.currentUser?.id ?? event.userId
         let trimmed = notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty && calendarStore.fetchNote(for: event.id) == nil { return }
+        // No-op when there's nothing to save and no row to clear: avoids
+        // creating an empty note on a blank field.
+        if trimmed.isEmpty && note == nil { return }
         calendarStore.upsertNote(eventId: event.id, userId: userId, content: notesDraft)
     }
 
@@ -346,7 +467,7 @@ struct EventDetailView: View {
     private var meetingHistorySection: some View {
         if let meetingHistory, !meetingHistory.pastOccurrences.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text(Self.formatHistory(meetingHistory))
+                Text(EventDetailView.formatHistory(meetingHistory))
                     .font(BrettTypography.taskMeta)
                     .foregroundStyle(Color.white.opacity(0.50))
             }
@@ -382,15 +503,17 @@ struct EventDetailView: View {
         }
     }
 
-    private func loadEvent() {
-        let fetched = calendarStore.fetchById(eventId)
-        event = fetched
-        if let fetched {
-            rsvpDraft = fetched.rsvpStatus
-            if let note = calendarStore.fetchNote(for: fetched.id) {
-                notesDraft = note.content
-            }
+    /// Seed the edit buffers from the matched event the first time it
+    /// appears. Subsequent SwiftData republishes (driven by RSVP saves
+    /// or note hydrates) leave the drafts alone so the user's in-flight
+    /// edits aren't trampled.
+    private func seedDraftIfNeeded() {
+        guard !hasSeededDraft, let event else { return }
+        rsvpDraft = event.rsvpStatus
+        if let note {
+            notesDraft = note.content
         }
+        hasSeededDraft = true
     }
 
     private func loadAsides() async {
@@ -406,18 +529,15 @@ struct EventDetailView: View {
                let id = noteResp.id,
                let content = noteResp.content,
                let updatedAt = noteResp.updatedAt {
-                let userId = authManager.currentUser?.id ?? event?.userId ?? ""
-                if !userId.isEmpty {
-                    calendarStore.applyServerNote(
-                        id: id,
-                        eventId: eventId,
-                        userId: userId,
-                        content: content,
-                        updatedAt: updatedAt
-                    )
-                    if !isNotesFocused && notesDraft.isEmpty {
-                        notesDraft = content
-                    }
+                calendarStore.applyServerNote(
+                    id: id,
+                    eventId: eventId,
+                    userId: userId,
+                    content: content,
+                    updatedAt: updatedAt
+                )
+                if !isNotesFocused && notesDraft.isEmpty {
+                    notesDraft = content
                 }
             }
             return
@@ -426,7 +546,7 @@ struct EventDetailView: View {
         defer { isLoadingAsides = false }
         async let related = api.fetchEventRelatedItems(eventId: eventId)
         async let history = api.fetchEventMeetingHistory(eventId: eventId)
-        async let note = RemoteCache.shared.eventNote(eventId: eventId)
+        async let serverNote = RemoteCache.shared.eventNote(eventId: eventId)
 
         if let relatedResp = try? await related {
             relatedItems = relatedResp.relatedItems
@@ -439,44 +559,22 @@ struct EventDetailView: View {
         // mirror into local SwiftData using the server's primary id so a
         // subsequent user edit pushes as an UPDATE (not a CREATE that
         // would collide with the unique constraint).
-        if let noteResp = try? await note,
+        if let noteResp = try? await serverNote,
            let id = noteResp.id,
            let content = noteResp.content,
            let updatedAt = noteResp.updatedAt {
-            let userId = authManager.currentUser?.id ?? event?.userId ?? ""
-            if !userId.isEmpty {
-                calendarStore.applyServerNote(
-                    id: id,
-                    eventId: eventId,
-                    userId: userId,
-                    content: content,
-                    updatedAt: updatedAt
-                )
-                // Sync the editor draft only if the user hasn't started
-                // typing — overwriting their input would feel hostile.
-                if !isNotesFocused && notesDraft.isEmpty {
-                    notesDraft = content
-                }
+            calendarStore.applyServerNote(
+                id: id,
+                eventId: eventId,
+                userId: userId,
+                content: content,
+                updatedAt: updatedAt
+            )
+            // Sync the editor draft only if the user hasn't started
+            // typing — overwriting their input would feel hostile.
+            if !isNotesFocused && notesDraft.isEmpty {
+                notesDraft = content
             }
         }
-    }
-
-    static func formatTimeBlock(_ event: CalendarEvent) -> String {
-        if event.isAllDay {
-            return "All day · \(event.startTime.formatted(.dateTime.weekday(.abbreviated).month().day()))"
-        }
-        let dayFormat: Date.FormatStyle = .dateTime.weekday(.abbreviated).month().day()
-        let timeFormat: Date.FormatStyle = .dateTime.hour().minute()
-        return "\(event.startTime.formatted(dayFormat)) · \(event.startTime.formatted(timeFormat)) – \(event.endTime.formatted(timeFormat))"
-    }
-
-    static func formatHistory(_ history: APIClient.MeetingHistoryResponse) -> String {
-        let count = history.pastOccurrences.count
-        guard let last = history.pastOccurrences.first else { return "" }
-        let lastFormatted = last.startTime.formatted(.dateTime.month().day().year())
-        if count == 1 {
-            return "You've met once before. Last met \(lastFormatted)."
-        }
-        return "You've met \(count) times. Last met \(lastFormatted)."
     }
 }
