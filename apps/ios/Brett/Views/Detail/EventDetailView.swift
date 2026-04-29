@@ -325,7 +325,19 @@ private struct EventDetailBody: View {
             )
             if let event {
                 event.myResponseStatus = status.rawValue
-                try? event.modelContext?.save()
+                do {
+                    try event.modelContext?.save()
+                } catch {
+                    // The server already accepted the change, but the
+                    // local mirror failed to persist. Surface this — a
+                    // silent `try?` here was leaving the row in-memory-
+                    // only, so the next cold-launch query would show
+                    // the pre-RSVP state and look like the submission
+                    // never happened.
+                    BrettLog.store.error("EventDetailView RSVP local save failed: \(String(describing: error), privacy: .public)")
+                    rsvpError = "Could not save your response locally. Try again."
+                    return
+                }
             }
             isShowingRsvpComment = false
             rsvpComment = ""
