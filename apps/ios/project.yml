@@ -131,8 +131,8 @@ targets:
     platform: iOS
     sources:
       - path: BrettTests
-      # Copy Sync + Stores source files into the test bundle as resources so
-      # the regression-guard tests (SilentTrySaveGuardTests,
+      # Copy Sync + Stores + Views source files into the test bundle as
+      # resources so the regression-guard tests (SilentTrySaveGuardTests,
       # ClearableConformanceTests) can list/grep them at runtime. iOS
       # simulator sandboxing blocks reading host paths via #file resolution,
       # so the only reliable way to scan a directory of source code in a
@@ -144,6 +144,10 @@ targets:
         buildPhase: resources
       - path: Brett/Stores
         name: StoresSourcesForGuard
+        type: folder
+        buildPhase: resources
+      - path: Brett/Views
+        name: ViewsSourcesForGuard
         type: folder
         buildPhase: resources
     dependencies:
