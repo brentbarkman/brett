@@ -13,133 +13,59 @@ import SwiftData
 /// the snapshot / apply / payload / previousValues helpers all read from it.
 @MainActor
 @Observable
-final class ItemStore {
+final class ItemStore: Clearable {
     private let context: ModelContext
-    // Lazy so tests/previews that never enqueue don't pay the allocation,
-    // and so the queue always shares the store's ModelContext.
-    //
-    // `@ObservationIgnored` is required: the `@Observable` macro generates
-    // init-accessor stored-property tracking for every stored property, and
-    // that machinery cannot coexist with `lazy var` (Swift rejects the
-    // auto-generated init accessor referencing `_mutationQueue`). Marking
-    // this ignored is correct for semantics too — the mutation queue is an
-    // internal implementation detail; view updates don't key off it.
-    @ObservationIgnored private lazy var mutationQueue: MutationQueue = MutationQueue(context: context)
+    /// Injection seam for `context.save()` so mutation atomicity tests can
+    /// simulate save failures and assert the store rolls back. Production
+    /// callers leave this defaulted to `LiveSaver(context: context)`.
+    @ObservationIgnored private let saver: ModelContextSaving
+    /// Sync trigger captured at init so the store stops reading
+    /// `ActiveSession.syncManager` on every mutation. `weak` because the
+    /// trigger (`SyncManager`) is owned by `Session`, which can be torn
+    /// down on sign-out before the store; we don't want to extend its
+    /// lifetime. Optional so tests/preview-only stores can omit it.
+    @ObservationIgnored private weak var syncManager: SyncTrigger?
 
-    init(context: ModelContext) {
+    init(
+        context: ModelContext,
+        saver: ModelContextSaving? = nil,
+        syncManager: SyncTrigger? = ActiveSession.syncManager
+    ) {
         self.context = context
+        self.saver = saver ?? LiveSaver(context: context)
+        self.syncManager = syncManager
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
         self.init(context: PersistenceController.shared.mainContext)
     }
 
-    // MARK: - Fetch
+    // MARK: - Clearable
 
-    /// All non-deleted items for the current user, newest first.
+    /// No in-memory caches today — every read goes through SwiftData
+    /// `@Query` or `fetch()`. Conformance exists so the regression-guard
+    /// test in `ClearableConformanceTests` passes; Wave B may fill this in
+    /// if any per-instance caches get added.
+    func clearForSignOut() {}
+
+    // MARK: - Internal lookup
+
+    /// Locate the row a mutation is about to act on.
     ///
-    /// `userId` scopes the query so data from a previous account never
-    /// leaks into the current session — critical for shared-device and
-    /// sign-out-then-sign-in flows (CLAUDE.md multi-user rule).
-    /// Passing `nil` preserves legacy behavior (returns every user's rows)
-    /// but should only be used by tests or sync internals.
-    func fetchAll(
-        userId: String? = nil,
-        listId: String? = nil,
-        status: ItemStatus? = nil
-    ) -> [Item] {
+    /// Private — the only callers are the store's own `update` / `delete` /
+    /// `toggleStatus` paths plus the `commit` extension. Views read items
+    /// via `@Query` directly; the previous public `fetchById(_:userId:)` was
+    /// removed in Wave B along with `fetchAll` / `fetchInbox` / `fetchToday`
+    /// / `fetchUpcoming`.
+    ///
+    /// `userId` scopes the lookup so a mutation issued from one user's flow
+    /// can never target a row belonging to a different account that's still
+    /// lingering in SwiftData (e.g. between sign-out and the wipe completing).
+    private func findById(_ id: String, userId: String) -> Item? {
         var descriptor = FetchDescriptor<Item>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+            predicate: #Predicate { $0.id == id && $0.userId == userId }
         )
-        // Build the predicate by combination to keep each #Predicate under
-        // Swift's type-checker budget (a chained 5-way conjunction with
-        // mixed Optional<Date>/Optional<String>/String types times out the
-        // macro). Each branch is a simple 2–4 clause predicate the SQLite
-        // store can evaluate without a post-fetch Swift filter.
-        let statusRaw = status?.rawValue
-        switch (userId, listId, statusRaw) {
-        case let (uid?, lid?, stat?):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil
-                    && item.userId == uid
-                    && item.listId == lid
-                    && item.status == stat
-            }
-        case let (uid?, lid?, nil):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.userId == uid && item.listId == lid
-            }
-        case let (uid?, nil, stat?):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.userId == uid && item.status == stat
-            }
-        case let (uid?, nil, nil):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.userId == uid
-            }
-        case let (nil, lid?, stat?):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.listId == lid && item.status == stat
-            }
-        case let (nil, lid?, nil):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.listId == lid
-            }
-        case let (nil, nil, stat?):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil && item.status == stat
-            }
-        case (nil, nil, nil):
-            descriptor.predicate = #Predicate { item in
-                item.deletedAt == nil
-            }
-        }
-        return fetch(descriptor)
-    }
-
-    /// Inbox = items with no list assigned and no due date (spec §UI).
-    func fetchInbox(userId: String? = nil) -> [Item] {
-        fetchAll(userId: userId).filter {
-            $0.listId == nil && $0.dueDate == nil && $0.itemStatus == .active
-        }
-    }
-
-    /// Today = due today or overdue, not yet done.
-    func fetchToday(userId: String? = nil) -> [Item] {
-        let calendar = Calendar.current
-        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date()) ?? Date()
-        return fetchAll(userId: userId).filter { item in
-            guard let due = item.dueDate,
-                  item.itemStatus != .done,
-                  item.itemStatus != .archived else { return false }
-            return due <= endOfToday
-        }
-    }
-
-    /// Upcoming = due after today, not yet done.
-    func fetchUpcoming(userId: String? = nil) -> [Item] {
-        let calendar = Calendar.current
-        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date()) ?? Date()
-        return fetchAll(userId: userId)
-            .filter { item in
-                guard let due = item.dueDate else { return false }
-                return due > endOfToday && item.itemStatus != .done && item.itemStatus != .archived
-            }
-            .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
-    }
-
-    /// Fetch a single `Item` by id. `userId` scopes the lookup so a call
-    /// from the signed-in user's flow can never target a row that belongs
-    /// to a different account lingering in SwiftData (e.g. between sign-out
-    /// and the wipe completing). Passing `nil` preserves the legacy
-    /// unscoped behaviour and is reserved for sync internals.
-    func fetchById(_ id: String, userId: String? = nil) -> Item? {
-        var descriptor = FetchDescriptor<Item>()
-        if let userId {
-            descriptor.predicate = #Predicate { $0.id == id && $0.userId == userId }
-        } else {
-            descriptor.predicate = #Predicate { $0.id == id }
-        }
         descriptor.fetchLimit = 1
         return fetch(descriptor).first
     }
@@ -147,6 +73,12 @@ final class ItemStore {
     // MARK: - Mutate
 
     /// Create a new item locally and enqueue a CREATE mutation.
+    ///
+    /// The optimistic insert + queued mutation are committed in a single
+    /// `context.save()`. If that save fails the rollback discards both,
+    /// keeping the model and the mutation queue in lockstep — without
+    /// rollback, a partial-failure leaves a row visible to `@Query` with
+    /// no queue entry, and the create never reaches the server.
     @discardableResult
     func create(
         userId: String,
@@ -157,7 +89,7 @@ final class ItemStore {
         listId: String? = nil,
         notes: String? = nil,
         source: String = "Brett"
-    ) -> Item {
+    ) throws -> Item {
         let now = Date()
         let item = Item(
             userId: userId,
@@ -175,8 +107,18 @@ final class ItemStore {
         context.insert(item)
 
         enqueueCreate(item)
-        save()
-        ActiveSession.syncManager?.schedulePushDebounced()
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback discards both the optimistic item insert AND the
+            // queued mutation entry so model + queue stay aligned.
+            saver.rollback()
+            logSaveFailure("create", error)
+            throw error
+        }
+
+        syncManager?.schedulePushDebounced()
         return item
     }
 
@@ -187,8 +129,12 @@ final class ItemStore {
     /// Preferred form for all new code. The 3-parameter overload below is
     /// kept for call sites (e.g. `ItemDraft`) that already captured the
     /// pre-edit state before the user began editing.
-    func update(id: String, changes: [String: Any]) {
-        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
+    ///
+    /// `userId` scopes the row lookup so a caller from one user's flow
+    /// can never mutate a row belonging to a different account that's
+    /// still lingering in SwiftData.
+    func update(id: String, changes: [String: Any], userId: String) {
+        guard let item = findById(id, userId: userId) else { return }
         let fields = Array(changes.keys)
         let capturedPrevious = item.previousValues(forFields: fields)
         applyUpdate(item: item, changes: changes, previousValues: capturedPrevious)
@@ -202,9 +148,10 @@ final class ItemStore {
     func update(
         id: String,
         changes: [String: Any],
-        previousValues: [String: Any]
+        previousValues: [String: Any],
+        userId: String
     ) {
-        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
+        guard let item = findById(id, userId: userId) else { return }
         applyUpdate(item: item, changes: changes, previousValues: previousValues)
     }
 
@@ -235,52 +182,87 @@ final class ItemStore {
             previousValues: previousValues,
             beforeSnapshot: beforeSnapshot
         )
-        save()
-        ActiveSession.syncManager?.schedulePushDebounced()
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback the in-memory mutation AND the queued
+            // MutationQueueEntry insert together. Without this, the field
+            // change would remain visible to @Query while the queue had no
+            // entry, so the edit would never reach the server.
+            saver.rollback()
+            logSaveFailure("applyUpdate", error)
+            return
+        }
+
+        syncManager?.schedulePushDebounced()
     }
 
     /// Toggle the done/active state of an item (common Inbox + Today action).
-    /// Routes through `update(id:changes:)` so `beforeSnapshot` is captured
-    /// from pre-mutation state — earlier versions mutated `item` first and
-    /// then passed old values explicitly, which produced a post-mutation
-    /// `beforeSnapshot` and silently broke permanent-failure rollback.
-    func toggleStatus(id: String) {
-        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
+    /// Routes through `update(id:changes:userId:)` so `beforeSnapshot` is
+    /// captured from pre-mutation state — earlier versions mutated `item`
+    /// first and then passed old values explicitly, which produced a
+    /// post-mutation `beforeSnapshot` and silently broke
+    /// permanent-failure rollback.
+    func toggleStatus(id: String, userId: String) {
+        guard let item = findById(id, userId: userId) else { return }
         let wasDone = item.itemStatus == .done
-        update(id: id, changes: [
-            "status": wasDone ? ItemStatus.active.rawValue : ItemStatus.done.rawValue,
-            "completedAt": wasDone ? NSNull() : Date(),
-        ])
+        update(
+            id: id,
+            changes: [
+                "status": wasDone ? ItemStatus.active.rawValue : ItemStatus.done.rawValue,
+                "completedAt": wasDone ? NSNull() : Date(),
+            ],
+            userId: userId
+        )
     }
 
     /// Soft-delete — sets `deletedAt` locally and enqueues a DELETE.
-    func delete(id: String) {
-        guard let item = fetchById(id, userId: ActiveSession.userId) else { return }
+    func delete(id: String, userId: String) {
+        guard let item = findById(id, userId: userId) else { return }
         let before = item.mutableFieldSnapshot()
         item.deletedAt = Date()
         item._syncStatus = SyncStatus.pendingDelete.rawValue
 
         enqueueDelete(item, beforeSnapshot: before)
-        save()
-        ActiveSession.syncManager?.schedulePushDebounced()
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback restores `deletedAt = nil` and discards the queued
+            // DELETE entry — model + queue stay in lockstep.
+            saver.rollback()
+            logSaveFailure("delete", error)
+            return
+        }
+
+        syncManager?.schedulePushDebounced()
     }
 
     // MARK: - Bulk mutate
 
     /// Apply the same changeset to every id. Per-item `previousValues` are
-    /// captured inside `update(id:changes:)` so each enqueued mutation has
-    /// the correct pre-mutation baseline.
-    func bulkUpdate(ids: [String], changes: [String: Any]) {
+    /// captured inside `update(id:changes:userId:)` so each enqueued
+    /// mutation has the correct pre-mutation baseline.
+    ///
+    /// **Atomicity:** Per-item, not per-bulk. Each call invokes `update`,
+    /// which is atomic for that item; if a save fails partway through, items
+    /// already processed remain committed and the rest are skipped.
+    func bulkUpdate(ids: [String], changes: [String: Any], userId: String) {
         guard !ids.isEmpty, !changes.isEmpty else { return }
         for id in ids {
-            update(id: id, changes: changes)
+            update(id: id, changes: changes, userId: userId)
         }
     }
 
     /// Soft-delete many items at once.
-    func bulkDelete(ids: [String]) {
+    ///
+    /// **Atomicity:** Per-item, not per-bulk. Each call invokes `delete`,
+    /// which is atomic for that item; if a save fails partway through, items
+    /// already processed remain committed and the rest are skipped.
+    func bulkDelete(ids: [String], userId: String) {
         guard !ids.isEmpty else { return }
-        for id in ids { delete(id: id) }
+        for id in ids { delete(id: id, userId: userId) }
     }
 
     // MARK: - Internals
@@ -294,14 +276,11 @@ final class ItemStore {
         }
     }
 
-    private func save() {
-        do {
-            try context.save()
-        } catch {
-            // Silent failures here used to mean edits vanished on restart
-            // with no trace. Log at error level so sysdiagnose picks it up.
-            BrettLog.store.error("ItemStore save failed: \(String(describing: error), privacy: .public)")
-        }
+    /// Shared rollback-log shape so each catch site doesn't repeat the
+    /// store name + " save failed: " prefix. `Self.self` keeps the store
+    /// name auto-attached even if this is ever copied to another store.
+    private func logSaveFailure(_ operation: String, _ error: Error) {
+        BrettLog.store.error("\(Self.self) \(operation) save failed: \(String(describing: error), privacy: .public)")
     }
 
     // MARK: - Mutation queue enqueue
@@ -318,7 +297,7 @@ final class ItemStore {
         payload["createdAt"] = item.createdAt
         payload["updatedAt"] = item.updatedAt
 
-        mutationQueue.enqueue(
+        let entry = MutationQueueEntry(
             entityType: "item",
             entityId: item.id,
             action: .create,
@@ -326,6 +305,7 @@ final class ItemStore {
             method: .post,
             payload: JSONCodec.encode(payload)
         )
+        MutationCompactor.compactAndApply(entry, in: context)
     }
 
     private func enqueueUpdate(
@@ -348,7 +328,7 @@ final class ItemStore {
             baseUpdatedAt: item._baseUpdatedAt,
             beforeSnapshot: JSONCodec.encode(beforeSnapshot)
         )
-        context.insert(entry)
+        MutationCompactor.compactAndApply(entry, in: context)
     }
 
     private func enqueueDelete(_ item: Item, beforeSnapshot: [String: Any]) {
@@ -362,8 +342,9 @@ final class ItemStore {
             baseUpdatedAt: item._baseUpdatedAt,
             beforeSnapshot: JSONCodec.encode(beforeSnapshot)
         )
-        context.insert(entry)
+        MutationCompactor.compactAndApply(entry, in: context)
     }
+
 }
 
 // MARK: - Shared JSON helper

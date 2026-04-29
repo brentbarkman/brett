@@ -3,16 +3,54 @@ import SwiftUI
 
 /// Today page — the home screen of the app.
 ///
-/// Data flows through `ItemStore` (SwiftData mutations + sync queue) + live
-/// `@Query` for reactive reads. The @Query predicates filter by the current
-/// user via computed `userItems` / `userLists` / `userEvents` — during a
-/// rapid account switch the sign-out wipe + session-owned SyncManager make
-/// cross-user rows nearly impossible, but this is defense-in-depth so that
-/// a late-arriving async task from a prior session can never render.
+/// Auth gate around `TodayPageBody`. The body is the work-doer; this
+/// outer view exists only to extract `userId` from the environment and
+/// hand it to a child whose `@Query` predicates capture it directly.
+///
+/// SwiftData's `#Predicate` macro can't read `@Environment` values, so
+/// the established workaround is an init-based subview where `userId`
+/// is a stored property and each `@Query` is constructed in `init` with
+/// the captured user. This pushes the user filter down into the
+/// SwiftData fetch instead of doing it in Swift after the fact —
+/// cheaper, and keeps cross-user rows from ever entering the working set.
+///
+/// View identity:
+/// `TodayPage` is a thin auth gate — when the user is authenticated it
+/// renders `TodayPageBody(userId:)` modified with `.id(userId)`. The
+/// `.id(...)` is the load-bearing piece: SwiftUI uses view identity to
+/// decide whether to reuse a view's storage or remount fresh, and
+/// pinning identity to `userId` guarantees that any future user-swap
+/// (multi-account, server-side reassignment, refresh-returning-different-id)
+/// triggers a full re-init of `TodayPageBody`'s `@Query` predicates,
+/// `@State` stores, and any cached state. Sign-out is also covered for
+/// free: `RootView`'s auth gate unmounts `MainContainer` entirely, which
+/// destroys the body via the structural path. The `.id` makes that
+/// invariant local instead of relying on a multi-component dance.
 struct TodayPage: View {
-    // MARK: - Auth scope
-
     @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            TodayPageBody(userId: userId)
+                .id(userId)
+        } else {
+            // Signed-out fallback. The auth gate upstream
+            // (`MainContainer`) usually prevents this branch, but render
+            // an empty state defensively rather than nil-fallback so the
+            // type system doesn't have to model a missing user here.
+            EmptyView()
+        }
+    }
+}
+
+/// Today's data + UI. Owned by `TodayPage`'s auth gate, so `userId` is
+/// guaranteed non-optional for this view's lifetime. Re-instantiated on
+/// account switch because the parent applies `.id(userId)` — SwiftUI
+/// treats a changed `id` as a new view identity and remounts this body
+/// from scratch, which gives us a fresh `@Query` with the new user's
+/// predicate (plus a clean slate for `@State` stores and caches).
+private struct TodayPageBody: View {
+    let userId: String
 
     // MARK: - Real stores
 
@@ -29,51 +67,47 @@ struct TodayPage: View {
 
     // MARK: - Reactive reads
 
-    /// Query every non-deleted item so SwiftData notifies us on every mutation.
-    /// Section computation filters down further — we deliberately do the
-    /// bucketing in Swift rather than four separate `FetchDescriptor`s so one
-    /// SwiftData change notification drives the whole view.
-    @Query(
-        filter: #Predicate<Item> { $0.deletedAt == nil },
-        sort: \Item.createdAt,
-        order: .reverse
-    ) private var allItems: [Item]
-
-    @Query(
-        filter: #Predicate<ItemList> { $0.deletedAt == nil },
-        sort: \ItemList.sortOrder
-    ) private var allLists: [ItemList]
-
-    @Query(
-        filter: #Predicate<CalendarEvent> { $0.deletedAt == nil },
-        sort: \CalendarEvent.startTime
-    ) private var allEvents: [CalendarEvent]
-
-    /// Auth-scoped views of the reactive reads. `@Query` can't take a
-    /// dynamic predicate without an init-based Query + view split, so the
-    /// userId filter lives here. Wave E can push this into the predicate
-    /// for perf once we're comfortable with a TodayPageBody subview.
-    private var userItems: [Item] {
-        guard let uid = authManager.currentUser?.id else { return [] }
-        return allItems.filter { $0.userId == uid }
-    }
-
-    private var userLists: [ItemList] {
-        guard let uid = authManager.currentUser?.id else { return [] }
-        return allLists.filter { $0.userId == uid }
-    }
-
-    private var userEvents: [CalendarEvent] {
-        guard let uid = authManager.currentUser?.id else { return [] }
-        return allEvents.filter { $0.userId == uid }
-    }
-
+    /// User-scoped, non-deleted items. Sorted reverse-chronological by
+    /// createdAt (the bucketing logic re-sorts inside each section by
+    /// the section's own ordering rule). We deliberately do the section
+    /// bucketing in Swift rather than five separate `FetchDescriptor`s
+    /// so one SwiftData change notification drives the whole view.
+    @Query private var items: [Item]
+    @Query private var lists: [ItemList]
+    @Query private var events: [CalendarEvent]
     /// 0 or 1 row. Used to distinguish "empty because the user has
     /// nothing" from "empty because the first sync hasn't landed yet" —
     /// the latter case shows a skeleton placeholder instead of the
     /// empty-state copy so the page doesn't briefly declare inbox-zero
-    /// during startup.
+    /// during startup. NOT user-scoped — `SyncHealth` is a sync-internal
+    /// row count that doesn't need cross-user isolation.
     @Query private var syncHealthRows: [SyncHealth]
+
+    init(userId: String) {
+        self.userId = userId
+
+        let itemPredicate = #Predicate<Item> { item in
+            item.deletedAt == nil && item.userId == userId
+        }
+        _items = Query(filter: itemPredicate, sort: \Item.createdAt, order: .reverse)
+
+        let listPredicate = #Predicate<ItemList> { list in
+            list.deletedAt == nil && list.userId == userId
+        }
+        _lists = Query(filter: listPredicate, sort: \ItemList.sortOrder)
+
+        let eventPredicate = #Predicate<CalendarEvent> { event in
+            event.deletedAt == nil && event.userId == userId
+        }
+        _events = Query(filter: eventPredicate, sort: \CalendarEvent.startTime)
+
+        // Explicit reassignment to keep parallel structure with the
+        // user-scoped queries above. Functionally redundant — the
+        // property declaration's default `Query()` is identical — but
+        // keeping it makes the init read as a complete inventory of
+        // every `@Query` this view owns.
+        _syncHealthRows = Query()
+    }
 
     private var hasCompletedInitialSync: Bool {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
@@ -141,7 +175,7 @@ struct TodayPage: View {
                 try? await ActiveSession.syncManager?.pullToRefresh()
                 await briefingStore.fetch()
             }
-            .onChange(of: SelectionStore.shared.lastCreatedItemId) { _, newId in
+            .onChange(of: NavStore.shared.lastCreatedItemId) { _, newId in
                 guard newId != nil else { return }
                 // Today section is the canonical landing zone for new tasks
                 // captured from this page (the omnibar injects dueDate=today
@@ -154,7 +188,7 @@ struct TodayPage: View {
                 // Clear the trigger so subsequent identical creates still
                 // fire onChange. (Same id wouldn't otherwise re-trigger.)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    SelectionStore.shared.lastCreatedItemId = nil
+                    NavStore.shared.lastCreatedItemId = nil
                 }
             }
         }
@@ -196,7 +230,7 @@ struct TodayPage: View {
 
     private var sections: TodaySections {
         sectionsCache.sections(
-            items: userItems,
+            items: items,
             reflowKey: reflowSnapshotKey,
             pendingDoneIDs: pendingDoneIDs
         )
@@ -207,7 +241,7 @@ struct TodayPage: View {
     /// row does an O(1) dictionary read instead of triggering a rebuild of
     /// the full `[listId: name]` map per lookup.
     private func makeListNameProvider() -> (Item) -> String? {
-        let index = Dictionary(uniqueKeysWithValues: userLists.map { ($0.id, $0.name) })
+        let index = Dictionary(uniqueKeysWithValues: lists.map { ($0.id, $0.name) })
         return { item in
             guard let listId = item.listId else { return nil }
             return index[listId]
@@ -337,19 +371,20 @@ struct TodayPage: View {
         // Hoist the bucket and the day-filtered event list so the three
         // `sections.*` reads share one bucket and the two event accesses
         // (count + duration sum) share one filter pass.
-        let s = sections
+        //
         // Only include events that block time on the calendar. Google
         // auto-creates `transparent` events for flights / hotels / working
         // location from Gmail; counting those as meetings (and summing
         // their hours) confuses the day's commitment summary.
-        let events = todaysEvents.filter { $0.isBusy }
+        let s = sections
+        let dayEvents = todaysEvents.filter { $0.isBusy }
         let total = s.activeCount + s.doneToday.count
         let done = s.doneToday.count
         let base = "\(done) of \(total) done"
-        guard !events.isEmpty else { return base }
-        let meetingCount = events.count
+        guard !dayEvents.isEmpty else { return base }
+        let meetingCount = dayEvents.count
         let suffix = meetingCount == 1 ? "meeting" : "meetings"
-        return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: events)))"
+        return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: dayEvents)))"
     }
 
     private static func formatMeetingDuration(events: [CalendarEvent]) -> String {
@@ -367,11 +402,11 @@ struct TodayPage: View {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        return userEvents.filter { $0.startTime >= start && $0.startTime < end }
+        return events.filter { $0.startTime >= start && $0.startTime < end }
     }
 
     private var nextUpcomingEvent: CalendarEvent? {
-        userEvents.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
+        events.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
     }
 
     /// Only surface the card when the next event is genuinely soon. We use a
@@ -394,7 +429,7 @@ struct TodayPage: View {
     ///    completions all settle together.
     private func toggle(_ id: String) {
         HapticManager.success()
-        itemStore.toggleStatus(id: id)
+        itemStore.toggleStatus(id: id, userId: userId)
 
         // Trigger the stats pulse. Flip true for a beat, then back false so
         // the spring animation actually runs.
@@ -424,19 +459,26 @@ struct TodayPage: View {
     }
 
     private func select(_ id: String) {
-        SelectionStore.shared.selectedTaskId = id
+        // Wave D Phase 3: single source of truth — `go(to:)`
+        // dispatches to `currentDestination` because `.taskDetail`
+        // is a sheet-style case.
+        NavStore.shared.go(to: .taskDetail(id: id))
     }
 
     /// Swipe-to-schedule: update dueDate (nil clears it, "Someday").
     /// We snapshot the current value into `previousValues` so the push engine
     /// can field-level merge if the server changed dueDate in the meantime.
+    /// The pre-edit row comes from this view's `@Query`-backed `items`
+    /// array, which is already user-scoped — no need for a separate store
+    /// fetch (those public read methods were removed in Wave B).
     private func schedule(_ id: String, dueDate: Date?) {
-        guard let item = itemStore.fetchById(id) else { return }
+        guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         itemStore.update(
             id: id,
             changes: ["dueDate": dueDate as Any? ?? NSNull()],
-            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()]
+            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()],
+            userId: userId
         )
     }
 
@@ -444,12 +486,13 @@ struct TodayPage: View {
     /// soft-archive semantics — record stays on the server, hidden from
     /// active views.
     private func archive(_ id: String) {
-        guard let item = itemStore.fetchById(id) else { return }
+        guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         itemStore.update(
             id: id,
             changes: ["status": ItemStatus.archived.rawValue],
-            previousValues: ["status": item.status]
+            previousValues: ["status": item.status],
+            userId: userId
         )
     }
 
@@ -457,7 +500,7 @@ struct TodayPage: View {
     /// the server treats as soft-delete (sets deletedAt).
     private func delete(_ id: String) {
         HapticManager.heavy()
-        itemStore.delete(id: id)
+        itemStore.delete(id: id, userId: userId)
     }
 
     // MARK: - Ticker
@@ -484,30 +527,40 @@ struct TodayPage: View {
     let calendar = Calendar.current
     let today = calendar.startOfDay(for: Date())
 
-    let workList = ItemList(userId: "preview-user", name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
-    let healthList = ItemList(userId: "preview-user", name: "Health", colorClass: "bg-green-500", sortOrder: 1)
+    // `TodayPage` is an auth gate that reads `userId` from `AuthManager`
+    // and pushes it into `TodayPageBody`'s `@Query` predicates. Previews
+    // need an injected `AuthManager` whose `currentUser.id` matches the
+    // userId used to seed the fixtures below — otherwise the page falls
+    // through to its signed-out `EmptyView()` branch and the preview
+    // renders blank. `injectFakeSession` is DEBUG-only.
+    let authManager = AuthManager()
+    authManager.injectFakeSession(user: .testUser, token: "preview")
+    let previewUserId = AuthUser.testUser.id
+
+    let workList = ItemList(userId: previewUserId, name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
+    let healthList = ItemList(userId: previewUserId, name: "Health", colorClass: "bg-green-500", sortOrder: 1)
     context.insert(workList)
     context.insert(healthList)
 
     let fixtures: [Item] = [
         // Overdue
-        .init(userId: "preview-user", title: "Submit Q1 expense report", dueDate: calendar.date(byAdding: .day, value: -2, to: today), listId: workList.id),
-        .init(userId: "preview-user", title: "Renew gym membership", dueDate: calendar.date(byAdding: .day, value: -1, to: today), listId: healthList.id),
+        .init(userId: previewUserId, title: "Submit Q1 expense report", dueDate: calendar.date(byAdding: .day, value: -2, to: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Renew gym membership", dueDate: calendar.date(byAdding: .day, value: -1, to: today), listId: healthList.id),
         // Today
-        .init(userId: "preview-user", title: "Prep slides for Q2 review", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today), listId: workList.id),
-        .init(userId: "preview-user", title: "Push mobile auth fix to staging", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today), listId: workList.id),
-        .init(userId: "preview-user", title: "Book physio appointment", dueDate: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today), listId: healthList.id),
+        .init(userId: previewUserId, title: "Prep slides for Q2 review", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Push mobile auth fix to staging", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Book physio appointment", dueDate: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today), listId: healthList.id),
         // This week
-        .init(userId: "preview-user", title: "Draft technical spec for sync v2", dueDate: calendar.date(byAdding: .day, value: 2, to: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Draft technical spec for sync v2", dueDate: calendar.date(byAdding: .day, value: 2, to: today), listId: workList.id),
         // Next week
-        .init(userId: "preview-user", title: "Annual performance self-review", dueDate: calendar.date(byAdding: .day, value: 7, to: today), listId: workList.id),
+        .init(userId: previewUserId, title: "Annual performance self-review", dueDate: calendar.date(byAdding: .day, value: 7, to: today), listId: workList.id),
     ]
     for item in fixtures {
         context.insert(item)
     }
 
     // One done-today item so the Done section lights up.
-    let done = Item(userId: "preview-user", title: "Morning standup", dueDate: today, listId: workList.id)
+    let done = Item(userId: previewUserId, title: "Morning standup", dueDate: today, listId: workList.id)
     done.status = ItemStatus.done.rawValue
     done.completedAt = Date()
     context.insert(done)
@@ -518,16 +571,24 @@ struct TodayPage: View {
         BackgroundView()
         TodayPage()
     }
+    .environment(authManager)
     .modelContainer(preview.container)
     .preferredColorScheme(.dark)
 }
 
 #Preview("Today — empty state") {
     let preview = PersistenceController.makePreview()
+    // Auth gate needs a user even in the empty-state preview — without
+    // one, `TodayPage` renders its signed-out `EmptyView()` branch
+    // instead of `TodayPageBody`'s empty state (the actual thing this
+    // preview exists to demonstrate).
+    let authManager = AuthManager()
+    authManager.injectFakeSession(user: .testUser, token: "preview")
     return ZStack {
         BackgroundView()
         TodayPage()
     }
+    .environment(authManager)
     .modelContainer(preview.container)
     .preferredColorScheme(.dark)
 }

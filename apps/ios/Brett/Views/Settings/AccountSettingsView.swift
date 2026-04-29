@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Account management: read-only email + delete.
 ///
@@ -9,6 +10,10 @@ import SwiftUI
 /// Data export is intentionally absent here — it's a desktop-only surface
 /// (Electron file-save dialog), and the iOS settings shouldn't advertise
 /// a feature it can't deliver.
+///
+/// Reads the profile via `@Query<UserProfile>` (`SwiftData` is canonical
+/// for the row); only ever one row in the DB at a time, so we read `.first`
+/// without a userId predicate. Sign-out wipes the row.
 struct AccountSettingsView: View {
     @Bindable var store: UserProfileStore
     @Environment(AuthManager.self) private var authManager
@@ -17,6 +22,9 @@ struct AccountSettingsView: View {
     @State private var showDeleteDialog = false
     @State private var isDeleting = false
     @State private var errorMessage: String?
+
+    @Query(sort: \UserProfile.id) private var profiles: [UserProfile]
+    private var currentProfile: UserProfile? { profiles.first }
 
     private let client: APIClient
 
@@ -42,7 +50,7 @@ struct AccountSettingsView: View {
                     Text("Email")
                         .foregroundStyle(BrettColors.textMeta)
                     Spacer()
-                    Text(store.current?.email ?? "—")
+                    Text(currentProfile?.email ?? "—")
                         .foregroundStyle(BrettColors.textCardTitle)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -50,7 +58,7 @@ struct AccountSettingsView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
 
-                if let userId = store.current?.id {
+                if let userId = currentProfile?.id {
                     BrettSettingsDivider()
 
                     HStack {

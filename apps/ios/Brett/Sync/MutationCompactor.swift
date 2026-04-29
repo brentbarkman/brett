@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 /// Pure compaction logic — no I/O, no persistence. Given the current list of
 /// pending mutations for a single entity and a new incoming mutation, returns
@@ -203,5 +204,78 @@ struct MutationCompactor {
     private static func encodeStringArray(_ array: [String]) -> String? {
         guard let data = try? JSONSerialization.data(withJSONObject: array) else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+}
+
+// MARK: - Compact + apply (single source of truth)
+
+extension MutationCompactor {
+    /// Compact `incoming` against the pool of pending entries for the same
+    /// entity, then stage the resulting deltas (delete / mutate-in-place /
+    /// insert) on `context`. **Does not call `save()`** — the caller owns
+    /// the surrounding transaction so the optimistic SwiftData write and
+    /// the queue-entry change commit (or roll back) together.
+    ///
+    /// This is the single source of truth used by `ItemStore.enqueueCreate`
+    /// / `enqueueUpdate` / `enqueueDelete`, the equivalent helpers on
+    /// `ListStore`, and `ShareIngestor.enqueueMutation`. The pure
+    /// `compact(pending:incoming:)` value function is still callable on its
+    /// own for tests that don't want to set up a `ModelContext`.
+    @MainActor
+    static func compactAndApply(
+        _ incoming: MutationQueueEntry,
+        in context: ModelContext
+    ) {
+        let pending = fetchPendingMutations(
+            entityType: incoming.entityType,
+            entityId: incoming.entityId,
+            in: context
+        )
+        let result = compact(pending: pending, incoming: incoming)
+
+        // Apply deltas. Order: delete first, then insert — so a delete-then-
+        // insert for the same entity can't conflict at the SwiftData layer.
+        // `result.toUpdate` is mutated in place by the compactor; SwiftData
+        // re-persists the dirty fields on the next save, no explicit step.
+        for id in result.toDelete {
+            if let entry = fetchMutationEntry(id: id, in: context) {
+                context.delete(entry)
+            }
+        }
+        if let toInsert = result.toInsert {
+            context.insert(toInsert)
+        }
+    }
+
+    @MainActor
+    private static func fetchPendingMutations(
+        entityType: String,
+        entityId: String,
+        in context: ModelContext
+    ) -> [MutationQueueEntry] {
+        let pendingRaw = MutationStatus.pending.rawValue
+        var descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate {
+                $0.entityType == entityType
+                    && $0.entityId == entityId
+                    && $0.status == pendingRaw
+            },
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        )
+        descriptor.includePendingChanges = true
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    @MainActor
+    private static func fetchMutationEntry(
+        id: String,
+        in context: ModelContext
+    ) -> MutationQueueEntry? {
+        var descriptor = FetchDescriptor<MutationQueueEntry>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        descriptor.includePendingChanges = true
+        return try? context.fetch(descriptor).first
     }
 }

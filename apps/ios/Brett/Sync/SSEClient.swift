@@ -109,6 +109,11 @@ final class SSEClient {
     /// not yet finished.
     private var loopTask: Task<Void, Never>?
 
+    #if DEBUG
+    /// Test-only inspection: is the connect loop currently running?
+    var hasLoopTask: Bool { loopTask != nil }
+    #endif
+
     // MARK: - Init
 
     /// Designated initializer. Tests inject a stubbed `URLSession` (via
@@ -203,7 +208,14 @@ final class SSEClient {
 
             let delay = backoffDelay(for: reconnectAttempt)
             if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } catch is CancellationError {
+                    break
+                } catch {
+                    BrettLog.sse.error("SSE backoff sleep failed: \(String(describing: error), privacy: .public)")
+                    break
+                }
             }
         }
         // Loop ended — either cancelled explicitly, or the task itself was

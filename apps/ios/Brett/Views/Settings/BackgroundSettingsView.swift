@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Background picker — iOS counterpart to the desktop `BackgroundSection`.
 ///
@@ -11,8 +12,15 @@ import SwiftUI
 /// fields. After the mutation lands we re-fetch `/users/me` so the
 /// `UserProfileStore` (and therefore the live `BackgroundView`)
 /// updates immediately.
+///
+/// Reads the profile via `@Query<UserProfile>` (`SwiftData` is canonical
+/// for the row); only ever one row in the DB at a time, so we read `.first`
+/// without a userId predicate. Sign-out wipes the row.
 struct BackgroundSettingsView: View {
     @Bindable var store: UserProfileStore
+
+    @Query(sort: \UserProfile.id) private var profiles: [UserProfile]
+    private var currentProfile: UserProfile? { profiles.first }
 
     private let client: APIClient
 
@@ -351,7 +359,7 @@ struct BackgroundSettingsView: View {
     // MARK: - Hydrate
 
     private func hydrateFromProfile() {
-        guard let profile = store.current else { return }
+        guard let profile = currentProfile else { return }
         let style = BackgroundService.Style(rawValue: profile.backgroundStyle) ?? .photography
         activeStyle = style
         viewingStyle = style

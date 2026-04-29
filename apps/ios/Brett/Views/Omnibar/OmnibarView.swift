@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 /// Glass pill at the bottom of the screen — the entry point for every
@@ -22,9 +23,9 @@ struct OmnibarView: View {
     @State private var itemStore = ItemStore(
         context: PersistenceController.shared.container.mainContext
     )
-    @State private var listStore = ListStore(
-        context: PersistenceController.shared.container.mainContext
-    )
+    // ListStore previously held here for `fetchAll`-based name resolution.
+    // The parser now runs a direct `FetchDescriptor<ItemList>` inside
+    // `submit()` (see below), so the store is unnecessary here.
 
     @State private var inputText = ""
     @State private var isVoiceMode = false
@@ -147,8 +148,20 @@ struct OmnibarView: View {
         // Scope to the current user — #listname tags should only resolve
         // against lists the signed-in account owns. Without userId, a
         // late-arriving sync row from a prior session could capture the
-        // tag intent.
-        let realLists = listStore.fetchAll(userId: authManager.currentUser?.id)
+        // tag intent. Direct `FetchDescriptor` instead of going through
+        // the soon-to-be-deleted `ListStore.fetchAll`; this is a
+        // submit-time read with no need to subscribe to changes.
+        let realLists: [ItemList] = {
+            guard let uid = authManager.currentUser?.id else { return [] }
+            let context = PersistenceController.shared.mainContext
+            var descriptor = FetchDescriptor<ItemList>(
+                sortBy: [SortDescriptor(\.sortOrder)]
+            )
+            descriptor.predicate = #Predicate { list in
+                list.deletedAt == nil && list.userId == uid
+            }
+            return (try? context.fetch(descriptor)) ?? []
+        }()
         let lists = realLists.map { SmartParser.ListRef(id: $0.id, name: $0.name) }
         let parsed = SmartParser.parse(
             trimmed,
@@ -194,18 +207,30 @@ struct OmnibarView: View {
             return nil
         }()
 
-        let created = itemStore.create(
-            userId: userId,
-            title: parsed.title,
-            type: itemType,
-            dueDate: resolvedDueDate,
-            listId: resolvedListId
-        )
+        let created: Item
+        do {
+            created = try itemStore.create(
+                userId: userId,
+                title: parsed.title,
+                type: itemType,
+                dueDate: resolvedDueDate,
+                listId: resolvedListId
+            )
+        } catch {
+            // Atomic create failed (SwiftData save threw). The row was
+            // rolled back, so the user sees nothing happen — flash the
+            // failure border + haptic to surface the loss instead of
+            // silently swallowing it.
+            BrettLog.store.error("Omnibar create failed: \(String(describing: error), privacy: .public)")
+            HapticManager.error()
+            flashParseFailure()
+            return
+        }
 
-        // Hand the new id to SelectionStore so the host page can scroll
+        // Hand the new id to NavStore so the host page can scroll
         // it into view. Without this, adding a task to a long list looks
         // like nothing happened — the row appears off-screen.
-        SelectionStore.shared.lastCreatedItemId = created.id
+        NavStore.shared.lastCreatedItemId = created.id
 
         // Reminder mapping: apply as a follow-up mutation so ItemStore.create
         // doesn't need a reminder parameter. Uses the just-created item id
@@ -214,7 +239,8 @@ struct OmnibarView: View {
             itemStore.update(
                 id: created.id,
                 changes: ["reminder": reminder],
-                previousValues: ["reminder": NSNull()]
+                previousValues: ["reminder": NSNull()],
+                userId: userId
             )
         }
 

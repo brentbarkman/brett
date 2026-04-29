@@ -145,10 +145,17 @@ struct ItemDraftTests {
         draft.notes = "Fresh notes"
 
         let diff = draft.diff(against: item)
-        store.commit(diff, to: item.id)
+        store.commit(diff, to: item.id, userId: TestFixtures.defaultUserId)
 
-        // Re-fetch and verify the update landed.
-        let refetched = store.fetchById(item.id)
+        // Re-fetch and verify the update landed. Direct `FetchDescriptor`
+        // because Wave B made `ItemStore.fetchById` private — tests inspect
+        // post-mutation state without going through the store's mutation
+        // surface.
+        let itemId = item.id
+        let descriptor = FetchDescriptor<Item>(
+            predicate: #Predicate { $0.id == itemId }
+        )
+        let refetched = try context.fetch(descriptor).first
         #expect(refetched?.title == "Updated")
         #expect(refetched?.notes == "Fresh notes")
 
@@ -167,7 +174,7 @@ struct ItemDraftTests {
 
         let draft = ItemDraft(from: item)
         let diff = draft.diff(against: item)
-        store.commit(diff, to: item.id)
+        store.commit(diff, to: item.id, userId: TestFixtures.defaultUserId)
 
         // No mutation queue entry should have been written.
         let mutations = try context.fetch(FetchDescriptor<MutationQueueEntry>())

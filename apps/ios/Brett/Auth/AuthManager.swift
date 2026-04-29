@@ -81,7 +81,7 @@ final class AuthManager {
             // We don't have a user record yet (`/users/me` hasn't returned),
             // but we know there's a valid token. `refreshCurrentUser` hydrates
             // the user and, on success, installs the session.
-            Task { await self.refreshCurrentUser() }
+            Task { [weak self] in await self?.refreshCurrentUser() }
         }
     }
 
@@ -189,8 +189,11 @@ final class AuthManager {
     ///     (push, pull, poll, debounce) and disconnects SSE so no in-flight
     ///     network completion can race the wipe below and write old-user
     ///     rows into the new user's empty store.
-    ///  2. Clear non-data state (token, currentUser, SelectionStore, App
-    ///     Group mirror) so the UI gates back to SignInView.
+    ///  2. Clear non-data state (token, currentUser, App Group mirror) so
+    ///     the UI gates back to SignInView. Per-store in-memory caches
+    ///     (NavStore, ChatStore, etc.) are wiped by
+    ///     `ClearableStoreRegistry.clearAll()`, fanned out from
+    ///     `Session.tearDown()` in step 1.
     ///  3. Wipe SwiftData. Safe now that no sync task is still running.
     ///  4. Best-effort server sign-out.
     func signOut() async {
@@ -200,7 +203,6 @@ final class AuthManager {
         currentUser = nil
         hasSuccessfullyRefreshed = false
         try? KeychainStore.deleteToken()
-        SelectionStore.shared.clear()
         // Clear the mirrored user-id in the App Group so a pending share
         // from this user can't leak into the next sign-in's account.
         SharedConfig.writeCurrentUserId(nil)
@@ -219,7 +221,7 @@ final class AuthManager {
         do {
             try await endpoints.signOut()
         } catch {
-            // Server might be offline or the session already gone. Not fatal.
+            BrettLog.auth.error("Server sign-out failed (non-fatal): \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -239,7 +241,6 @@ final class AuthManager {
         currentUser = nil
         hasSuccessfullyRefreshed = false
         try? KeychainStore.deleteToken()
-        SelectionStore.shared.clear()
         SharedConfig.writeCurrentUserId(nil)
         // Note: we deliberately do NOT clear `lastSignedInUserId` here. It
         // sticks around so persist() can detect a user-switch on the next
@@ -248,8 +249,9 @@ final class AuthManager {
         do {
             try await endpoints.signOut()
         } catch {
-            // The token is already invalid server-side — this call will
-            // likely 401 too. Not fatal.
+            // Token is already invalid server-side; this call will likely
+            // 401 too. Log at info because the failure is expected.
+            BrettLog.auth.info("Server sign-out after invalid-session 401 failed (expected): \(String(describing: error), privacy: .public)")
         }
     }
 

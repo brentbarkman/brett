@@ -3,8 +3,19 @@ import SwiftUI
 /// Inline sheet for editing an existing scout. Lets the user tweak the
 /// name / goal / context / sensitivity / cadence. On save, hands the patch
 /// back via `onSave` which is responsible for calling the store.
+///
+/// Initialized from either a SwiftData `Scout` row or an API `ScoutDTO`
+/// — both expose the same five edit fields, but `ScoutDetailView` now
+/// reads the SwiftData row via `@Query`, so we accept the field values
+/// directly and provide convenience initializers for both shapes.
 struct ScoutEditSheet: View {
-    let scout: APIClient.ScoutDTO
+    /// Original values, used by `hasChanges` to detect dirty fields.
+    let originalName: String
+    let originalGoal: String
+    let originalContext: String?
+    let originalSensitivity: String
+    let originalCadenceIntervalHours: Double
+
     let onSave: (APIClient.ScoutUpdatePayload) async -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -16,14 +27,47 @@ struct ScoutEditSheet: View {
     @State private var isSaving: Bool = false
     @State private var errorMessage: String?
 
-    init(scout: APIClient.ScoutDTO, onSave: @escaping (APIClient.ScoutUpdatePayload) async -> Void) {
-        self.scout = scout
+    init(
+        name: String,
+        goal: String,
+        context: String?,
+        sensitivity: String,
+        cadenceIntervalHours: Double,
+        onSave: @escaping (APIClient.ScoutUpdatePayload) async -> Void
+    ) {
+        self.originalName = name
+        self.originalGoal = goal
+        self.originalContext = context
+        self.originalSensitivity = sensitivity
+        self.originalCadenceIntervalHours = cadenceIntervalHours
         self.onSave = onSave
-        _name = State(initialValue: scout.name)
-        _goal = State(initialValue: scout.goal)
-        _context = State(initialValue: scout.context ?? "")
-        _sensitivity = State(initialValue: scout.sensitivity)
-        _cadenceHours = State(initialValue: scout.cadenceIntervalHours)
+        _name = State(initialValue: name)
+        _goal = State(initialValue: goal)
+        _context = State(initialValue: context ?? "")
+        _sensitivity = State(initialValue: sensitivity)
+        _cadenceHours = State(initialValue: cadenceIntervalHours)
+    }
+
+    init(scout: APIClient.ScoutDTO, onSave: @escaping (APIClient.ScoutUpdatePayload) async -> Void) {
+        self.init(
+            name: scout.name,
+            goal: scout.goal,
+            context: scout.context,
+            sensitivity: scout.sensitivity,
+            cadenceIntervalHours: scout.cadenceIntervalHours,
+            onSave: onSave
+        )
+    }
+
+    init(scout: Scout, onSave: @escaping (APIClient.ScoutUpdatePayload) async -> Void) {
+        self.init(
+            name: scout.name,
+            goal: scout.goal,
+            context: scout.context,
+            sensitivity: scout.sensitivity,
+            cadenceIntervalHours: scout.cadenceIntervalHours,
+            onSave: onSave
+        )
     }
 
     var body: some View {
@@ -136,11 +180,11 @@ struct ScoutEditSheet: View {
     // MARK: - Logic
 
     private var hasChanges: Bool {
-        name != scout.name
-            || goal != scout.goal
-            || context != (scout.context ?? "")
-            || sensitivity != scout.sensitivity
-            || cadenceHours != scout.cadenceIntervalHours
+        name != originalName
+            || goal != originalGoal
+            || context != (originalContext ?? "")
+            || sensitivity != originalSensitivity
+            || cadenceHours != originalCadenceIntervalHours
     }
 
     private var cadenceLabel: String {
@@ -154,11 +198,11 @@ struct ScoutEditSheet: View {
         defer { isSaving = false }
 
         var patch = APIClient.ScoutUpdatePayload()
-        if name != scout.name { patch.name = name }
-        if goal != scout.goal { patch.goal = goal }
-        if context != (scout.context ?? "") { patch.context = context }
-        if sensitivity != scout.sensitivity { patch.sensitivity = sensitivity }
-        if cadenceHours != scout.cadenceIntervalHours {
+        if name != originalName { patch.name = name }
+        if goal != originalGoal { patch.goal = goal }
+        if context != (originalContext ?? "") { patch.context = context }
+        if sensitivity != originalSensitivity { patch.sensitivity = sensitivity }
+        if cadenceHours != originalCadenceIntervalHours {
             patch.cadenceIntervalHours = cadenceHours
         }
 

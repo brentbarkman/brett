@@ -15,7 +15,7 @@ import Observation
 /// - POST /newsletters/senders/block — blocklist sender (by email, idempotent)
 @MainActor
 @Observable
-final class NewsletterStore {
+final class NewsletterStore: Clearable {
     // Public state
     private(set) var ingestAddress: String? = nil
     private(set) var senders: [NewsletterSender] = []
@@ -27,7 +27,31 @@ final class NewsletterStore {
 
     init(client: APIClient = .shared) {
         self.client = client
+        ClearableStoreRegistry.register(self)
     }
+
+    // MARK: - Clearable
+
+    func clearForSignOut() {
+        ingestAddress = nil
+        senders = []
+        pending = []
+        isLoading = false
+        errorMessage = nil
+    }
+
+    #if DEBUG
+    /// Test-only: populate in-memory state without touching the network.
+    func injectForTesting(
+        ingestAddress: String?,
+        senders: [NewsletterSender],
+        pending: [PendingNewsletterSender]
+    ) {
+        self.ingestAddress = ingestAddress
+        self.senders = senders
+        self.pending = pending
+    }
+    #endif
 
     // MARK: - Fetch
 

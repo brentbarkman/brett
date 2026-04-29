@@ -1,13 +1,48 @@
 import SwiftUI
+import SwiftData
 
 /// Top-level settings navigation. Uses iOS-native `List` + `Section` with
 /// glass materials layered underneath via the `BackgroundView`. Each row is
-/// a `NavigationLink` that pushes a dedicated settings screen onto the stack.
+/// a `NavigationLink` that pushes a dedicated settings screen onto the
+/// OUTER `MainContainer` `NavigationStack` via `NavDestination.settingsTab(...)`.
 ///
 /// Sign Out is a destructive button at the bottom (not a NavigationLink) so
 /// the action fires immediately. Account deletion lives inside the Account
 /// screen behind a double-confirm dialog.
+///
+/// Outer view is a thin auth gate: the body's `@Query` predicate needs a
+/// concrete `userId`, so we resolve it from `AuthManager` and remount the
+/// child via `.id(userId)` whenever the active user changes. Standard
+/// Wave-B pattern (see `InboxPage`, `TodayPage`, `ScoutsRosterView`).
 struct SettingsView: View {
+    @Environment(AuthManager.self) private var authManager
+
+    /// Optional deep-link target. When non-nil, this view renders the
+    /// requested tab's content directly (no Settings list shown), so the
+    /// outer `MainContainer` stack's back chevron returns to the calling
+    /// screen — e.g. the Reconnect pill on Today → Calendar settings →
+    /// back → Today, in one tap. When nil, the Settings list is rendered
+    /// and each row pushes `.settingsTab(tab)` onto the outer stack.
+    let initialTab: SettingsTab?
+
+    init(initialTab: SettingsTab? = nil) {
+        self.initialTab = initialTab
+    }
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            SettingsBody(userId: userId, initialTab: initialTab)
+                .id(userId)
+        } else {
+            EmptyView()
+        }
+    }
+}
+
+private struct SettingsBody: View {
+    let userId: String
+    let initialTab: SettingsTab?
+
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthManager.self) private var authManager
 
@@ -16,12 +51,53 @@ struct SettingsView: View {
     @State private var showSignOutConfirm = false
     @State private var isSigningOut = false
 
+    /// Live reactive read of the signed-in user's profile. SwiftData only
+    /// ever holds one row per session; the predicate is belt-and-suspenders
+    /// against stale rows surviving a sign-out/sign-in cycle.
+    @Query private var profiles: [UserProfile]
+
+    init(userId: String, initialTab: SettingsTab? = nil) {
+        self.userId = userId
+        self.initialTab = initialTab
+        let predicate = #Predicate<UserProfile> { profile in
+            profile.id == userId
+        }
+        _profiles = Query(filter: predicate, sort: \UserProfile.id)
+    }
+
+    private var currentProfile: UserProfile? { profiles.first }
+
     var body: some View {
-        // Custom layout — moved off `List` because per-row backgrounds
-        // produced floating-capsule rows with awkward gaps between
-        // them. iOS Settings groups rows in a single section card with
-        // hairlines; that's what `BrettSettingsCard` + `BrettSettingsDivider`
-        // give us, with full control over spacing and material.
+        // ONE NavigationStack policy: this view owns no inner stack. Both
+        // entry paths feed the OUTER `MainContainer` stack:
+        //
+        // - `initialTab == nil` (gear icon): render the Settings list.
+        //   Each row pushes `.settingsTab(tab)` onto the outer stack.
+        // - `initialTab != nil` (deep-link, e.g. Today's Reconnect pill):
+        //   render that single tab directly so the outer stack's back
+        //   chevron returns to the calling screen in one tap.
+        Group {
+            if let initialTab {
+                tabContent(for: initialTab)
+            } else {
+                settingsList
+            }
+        }
+        // Hydrate profile on open. Without this the header card falls back
+        // to `authManager.currentUser?.email`, which can be nil on a cold
+        // launch that hits Settings before `/users/me` resolves — hence
+        // the "email doesn't show" bug.
+        .task { await profileStore.refresh() }
+    }
+
+    /// Settings list (gear-icon entry path). Custom layout — moved off
+    /// `List` because per-row backgrounds produced floating-capsule rows
+    /// with awkward gaps between them. iOS Settings groups rows in a
+    /// single section card with hairlines; that's what `BrettSettingsCard`
+    /// + `BrettSettingsDivider` give us, with full control over spacing
+    /// and material.
+    @ViewBuilder
+    private var settingsList: some View {
         BrettSettingsScroll {
             profileHeaderCard
 
@@ -36,14 +112,38 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.large)
         .navigationBarBackButtonHidden(false)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .navigationDestination(for: SettingsTab.self) { tab in
-            destination(for: tab)
+    }
+
+    /// View for a single settings tab. Same content the outer stack
+    /// renders when it pushes `.settingsTab(tab)`. Used both by the
+    /// deep-link path (this view's `body`) and indirectly by the gear-
+    /// icon path (each list row pushes `.settingsTab(tab)` which the
+    /// outer stack hands to a fresh `SettingsView(initialTab:)` instance,
+    /// which lands in this same helper).
+    @ViewBuilder
+    private func tabContent(for tab: SettingsTab) -> some View {
+        switch tab {
+        case .profile:
+            ProfileSettingsView(store: profileStore)
+        case .security:
+            SecuritySettingsView()
+        case .calendar:
+            CalendarSettingsView()
+        case .aiProviders:
+            AIProviderSettingsView()
+        case .newsletters:
+            NewsletterSettingsView()
+        case .location:
+            LocationSettingsView(store: profileStore)
+        case .background:
+            BackgroundSettingsView(store: profileStore)
+        case .account:
+            AccountSettingsView(store: profileStore)
+        case .updates:
+            UpdatesSettingsView()
+        case .syncHealth:
+            SyncHealthSettingsView()
         }
-        // Hydrate profile on open. Without this the header card falls back
-        // to `authManager.currentUser?.email`, which can be nil on a cold
-        // launch that hits Settings before `/users/me` resolves — hence
-        // the "email doesn't show" bug.
-        .task { await profileStore.refresh() }
     }
 
     // MARK: - Cards (one per section)
@@ -93,7 +193,7 @@ struct SettingsView: View {
                 tab: .location,
                 icon: "location",
                 label: "Timezone & Location",
-                detail: profileStore.current?.timezone ?? TimeZone.current.identifier
+                detail: currentProfile?.timezone ?? TimeZone.current.identifier
             )
             BrettSettingsDivider()
             navRow(
@@ -109,7 +209,7 @@ struct SettingsView: View {
     /// desktop — "Smart" when not pinned, the solid color's label when
     /// solid, or the style name + "pinned" suffix for a pinned photo.
     private var currentBackgroundDisplay: String {
-        guard let profile = profileStore.current else { return "Smart" }
+        guard let profile = currentProfile else { return "Smart" }
         let style = BackgroundService.Style(rawValue: profile.backgroundStyle) ?? .photography
         if let pinned = profile.pinnedBackground {
             if pinned.hasPrefix("solid:") {
@@ -193,13 +293,17 @@ struct SettingsView: View {
         }
     }
 
-    /// Tappable row that pushes a settings tab onto the navigation
-    /// stack. NavigationLink only auto-adds a disclosure chevron when
-    /// it lives inside a List — we render a manual chevron here so the
-    /// row reads as navigable in our custom card layout.
+    /// Tappable row that pushes a settings tab onto the OUTER navigation
+    /// stack via `NavDestination.settingsTab(tab)`. The outer stack's
+    /// `.navigationDestination(for: NavDestination.self)` switch in
+    /// `MainContainer` mounts `SettingsView(initialTab: tab)` for this
+    /// value, which renders just the tab's content (no inner stack).
+    /// NavigationLink only auto-adds a disclosure chevron when it lives
+    /// inside a List — we render a manual chevron here so the row reads
+    /// as navigable in our custom card layout.
     @ViewBuilder
     private func navRow(tab: SettingsTab, icon: String, label: String, detail: String? = nil) -> some View {
-        NavigationLink(value: tab) {
+        NavigationLink(value: NavDestination.settingsTab(tab)) {
             HStack(spacing: 0) {
                 settingsRowLabel(icon: icon, label: label, detail: detail)
 
@@ -210,32 +314,6 @@ struct SettingsView: View {
             }
         }
         .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private func destination(for tab: SettingsTab) -> some View {
-        switch tab {
-        case .profile:
-            ProfileSettingsView(store: profileStore)
-        case .security:
-            SecuritySettingsView()
-        case .calendar:
-            CalendarSettingsView()
-        case .aiProviders:
-            AIProviderSettingsView()
-        case .newsletters:
-            NewsletterSettingsView()
-        case .location:
-            LocationSettingsView(store: profileStore)
-        case .background:
-            BackgroundSettingsView(store: profileStore)
-        case .account:
-            AccountSettingsView(store: profileStore)
-        case .updates:
-            UpdatesSettingsView()
-        case .syncHealth:
-            SyncHealthSettingsView()
-        }
     }
 
     @ViewBuilder
@@ -306,14 +384,14 @@ struct SettingsView: View {
     }
 
     private var userName: String {
-        profileStore.current?.name
+        currentProfile?.name
             ?? authManager.currentUser?.name
             ?? authManager.currentUser?.email
             ?? "You"
     }
 
     private var userEmail: String {
-        profileStore.current?.email
+        currentProfile?.email
             ?? authManager.currentUser?.email
             ?? "—"
     }

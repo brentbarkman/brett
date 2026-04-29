@@ -57,6 +57,11 @@ private struct TaskAccessibilityStoreActionsModifier: ViewModifier {
     let store: ItemStore?
 
     func body(content: Content) -> some View {
+        // The row already belongs to a single user (Item.userId), so we
+        // scope the store mutations to that owner. There's no risk of
+        // accidentally mutating a different account's row from a rotor
+        // action — the row this modifier wraps was loaded for `userId`
+        // and that's the same id we hand back to the store.
         content
             .accessibilityAction(named: Text("Schedule for today")) {
                 guard let store else { return }
@@ -64,7 +69,8 @@ private struct TaskAccessibilityStoreActionsModifier: ViewModifier {
                 store.update(
                     id: item.id,
                     changes: ["dueDate": today],
-                    previousValues: ["dueDate": item.dueDate as Any]
+                    previousValues: ["dueDate": item.dueDate as Any],
+                    userId: item.userId
                 )
             }
             .accessibilityAction(named: Text("Schedule for tomorrow")) {
@@ -77,7 +83,8 @@ private struct TaskAccessibilityStoreActionsModifier: ViewModifier {
                 store.update(
                     id: item.id,
                     changes: ["dueDate": tomorrow],
-                    previousValues: ["dueDate": item.dueDate as Any]
+                    previousValues: ["dueDate": item.dueDate as Any],
+                    userId: item.userId
                 )
             }
             .accessibilityAction(named: Text("Archive")) {
@@ -85,12 +92,13 @@ private struct TaskAccessibilityStoreActionsModifier: ViewModifier {
                 store.update(
                     id: item.id,
                     changes: ["status": ItemStatus.archived.rawValue],
-                    previousValues: ["status": item.status]
+                    previousValues: ["status": item.status],
+                    userId: item.userId
                 )
             }
             .accessibilityAction(named: Text("Delete")) {
                 guard let store else { return }
-                store.delete(id: item.id)
+                store.delete(id: item.id, userId: item.userId)
             }
     }
 }

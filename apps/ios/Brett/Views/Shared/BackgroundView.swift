@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Full-screen wallpaper that drives the app's glass aesthetic.
 ///
@@ -21,8 +22,15 @@ struct BackgroundView: View {
     /// pin a specific asset-catalog image and skip the service entirely.
     var imageName: String? = nil
 
-    @State private var profileStore = UserProfileStore()
     @State private var service = BackgroundService.shared
+
+    /// Live read of the user's profile. SwiftData is canonical;
+    /// `UserProfileStore` is mutation-only after Wave-B Phase 5. The
+    /// background view may render on the auth screen with no profile
+    /// row present — `.first` is safely nil in that case and the
+    /// fallback asset path takes over.
+    @Query(sort: \UserProfile.id) private var profiles: [UserProfile]
+    private var currentProfile: UserProfile? { profiles.first }
 
     /// Image key currently being rendered. Drives the crossfade via
     /// `.animation(_, value:)`. For remote images the key is the URL
@@ -126,10 +134,10 @@ struct BackgroundView: View {
         .onReceive(tick) { _ in
             refresh(initial: false)
         }
-        .onChange(of: profileStore.current?.backgroundStyle) { _, _ in
+        .onChange(of: currentProfile?.backgroundStyle) { _, _ in
             refresh(initial: false)
         }
-        .onChange(of: profileStore.current?.pinnedBackground) { _, _ in
+        .onChange(of: currentProfile?.pinnedBackground) { _, _ in
             refresh(initial: false)
         }
     }
@@ -187,7 +195,7 @@ struct BackgroundView: View {
             return
         }
 
-        let profile = profileStore.current
+        let profile = currentProfile
         let style = profile?.backgroundStyle ?? BackgroundStyle.photography.rawValue
         let pinned = profile?.pinnedBackground
 

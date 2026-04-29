@@ -85,13 +85,23 @@ final class Session {
     /// cancelled) before the underlying rows disappear.
     ///
     /// Order matters:
-    ///   1. Cancel every in-flight chat stream. A stream that's mid-response
-    ///      when the user signs out would otherwise land its final
-    ///      `persistAssistant` against the NEXT user's SwiftData context.
+    ///   1. Clear every `Clearable` store. The fan-out invokes
+    ///      `ChatStore.clearForSignOut()` — which cancels every in-flight
+    ///      chat stream — along with any other store that caches derived
+    ///      state in memory. A stream that's mid-response when the user
+    ///      signs out would otherwise land its final `persistAssistant`
+    ///      against the NEXT user's SwiftData context.
     ///   2. Disconnect SSE so no new events arrive.
     ///   3. Stop the sync manager so its poll loop ends.
     func tearDown() {
-        ChatStoreRegistry.cancelAllActive()
+        // Clear in-memory store caches first. SwiftData rows still exist at
+        // this point — `wipeAllData()` runs in `AuthManager.signOut` *after*
+        // we return — but stores that cache derived state in memory must
+        // drop it now so a stream/network completion arriving in the next
+        // few ms can't repopulate them with the prior user's data.
+        // Notably, ChatStore.clearForSignOut() cancels every in-flight chat
+        // stream as part of the fan-out.
+        ClearableStoreRegistry.clearAll()
         sseClient.disconnect()
         sseHandler?.stop()
         sseHandler = nil

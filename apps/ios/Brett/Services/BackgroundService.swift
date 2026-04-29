@@ -162,18 +162,14 @@ final class BackgroundService {
     private func loadManifestIfNeeded() {
         guard manifest == nil else { return }
         guard let url = Bundle.main.url(forResource: "background-manifest", withExtension: "json") else {
-            #if DEBUG
-            print("[BackgroundService] Missing background-manifest.json in bundle")
-            #endif
+            BrettLog.app.error("BackgroundService: missing background-manifest.json in bundle")
             return
         }
         do {
             let data = try Data(contentsOf: url)
             self.manifest = try JSONDecoder().decode(BackgroundManifest.self, from: data)
         } catch {
-            #if DEBUG
-            print("[BackgroundService] Failed to decode manifest: \(error)")
-            #endif
+            BrettLog.app.error("BackgroundService: failed to decode manifest: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -196,9 +192,7 @@ final class BackgroundService {
                 self.storageBaseUrl = parsed
             }
         } catch {
-            #if DEBUG
-            print("[BackgroundService] Failed to load /config: \(error)")
-            #endif
+            BrettLog.app.error("BackgroundService: failed to load /config: \(String(describing: error), privacy: .public)")
         }
     }
 

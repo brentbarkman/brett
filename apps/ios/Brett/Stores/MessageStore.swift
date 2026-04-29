@@ -11,16 +11,24 @@ import SwiftData
 /// Callers that have a user in context should always pass it.
 @MainActor
 @Observable
-final class MessageStore {
+final class MessageStore: Clearable {
     private let context: ModelContext
 
     init(context: ModelContext) {
         self.context = context
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
         self.init(context: PersistenceController.shared.mainContext)
     }
+
+    // MARK: - Clearable
+
+    /// No in-memory caches today — every read hits SwiftData. Conformance
+    /// exists so the regression-guard test passes; Wave B may fill this
+    /// in if per-instance state appears.
+    func clearForSignOut() {}
 
     func fetchForItem(_ itemId: String, userId: String? = nil) -> [BrettMessage] {
         var descriptor = FetchDescriptor<BrettMessage>(

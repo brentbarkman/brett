@@ -4,24 +4,23 @@ import SwiftData
 
 /// Facade over the `/scouts/*` API. Scouts + findings live server-side and
 /// reach the iOS client via REST (this store) and SSE (live status updates,
-/// handled elsewhere). SwiftData is used as a cache so the roster can render
-/// instantly on cold launch while a network refresh happens in the background.
+/// handled elsewhere). SwiftData is the canonical local cache so the roster
+/// can render instantly on cold launch while a network refresh happens in
+/// the background.
 ///
 /// Responsibility split:
-/// - Reads return API DTOs directly (`APIClient.ScoutDTO`, etc.) — views
-///   render DTOs, not SwiftData rows, because the server is authoritative
-///   and the extra upsert layer adds complexity without meaningful offline
-///   gains for scouts.
-/// - Local `@Model` rows are kept in sync opportunistically so that tests
-///   and any remaining SwiftData consumers keep working.
+/// - Reads write through to SwiftData via `upsertLocal`. Views read the
+///   resulting rows reactively via `@Query<Scout>` — the store no longer
+///   holds an in-memory `[ScoutDTO]` cache.
+/// - Mutations call the API, then write the returned DTO into SwiftData.
+///   `@Query` consumers automatically re-render.
 ///
 /// We inject `APIClient` so tests can swap in a stubbed URLSession.
 @MainActor
 @Observable
-final class ScoutStore {
+final class ScoutStore: Clearable {
     // MARK: - Public state
 
-    private(set) var scouts: [APIClient.ScoutDTO] = []
     private(set) var isLoading: Bool = false
     var errorMessage: String?
 
@@ -31,6 +30,7 @@ final class ScoutStore {
     init(client: APIClient = .shared, context: ModelContext? = nil) {
         self.client = client
         self.context = context
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
@@ -38,6 +38,16 @@ final class ScoutStore {
             client: .shared,
             context: PersistenceController.shared.mainContext
         )
+    }
+
+    // MARK: - Clearable
+
+    func clearForSignOut() {
+        // SwiftData rows are wiped by `PersistenceController.wipeAllData()`
+        // on sign-out separately; here we just reset the @Observable
+        // surface state so the next sign-in starts clean.
+        isLoading = false
+        errorMessage = nil
     }
 
     // MARK: - Legacy SwiftData readers (kept so existing callers compile)
@@ -63,12 +73,27 @@ final class ScoutStore {
         return rows.filter { $0.status != ScoutStatus.archived.rawValue }
     }
 
-    func fetchScout(id: String) -> Scout? {
+    /// User-scoped row lookup. Private — internal callers
+    /// (`delete`, `upsertLocal`) supply the active user's id so a row from
+    /// a different account that's still lingering in SwiftData (e.g.
+    /// between sign-out and the wipe completing) can never be targeted.
+    ///
+    /// The previous public `fetchScout(id:)` ignored `userId` entirely,
+    /// which was the multi-user invariant gap flagged in the Wave B review.
+    private func findById(_ id: String, userId: String) -> Scout? {
         guard let context else { return nil }
-        var descriptor = FetchDescriptor<Scout>()
-        descriptor.predicate = #Predicate { $0.id == id }
+        var descriptor = FetchDescriptor<Scout>(
+            predicate: #Predicate { scout in
+                scout.id == id && scout.userId == userId
+            }
+        )
         descriptor.fetchLimit = 1
-        return fetch(descriptor).first
+        do {
+            return try context.fetch(descriptor).first
+        } catch {
+            BrettLog.store.error("ScoutStore findById fetch failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
     /// Legacy local-only findings read (pre-API). New UI should call
@@ -94,7 +119,6 @@ final class ScoutStore {
 
         do {
             let dtos = try await client.fetchScoutList(status: status)
-            self.scouts = dtos
             upsertLocal(dtos)
         } catch let apiError as APIError {
             errorMessage = apiError.userFacingMessage
@@ -106,7 +130,6 @@ final class ScoutStore {
     func fetchDetail(id: String) async throws -> APIClient.ScoutDTO {
         let dto = try await client.fetchScoutDetail(id: id)
         upsertLocal([dto])
-        replaceInRoster(dto)
         return dto
     }
 
@@ -136,43 +159,41 @@ final class ScoutStore {
 
     func create(payload: APIClient.NewScoutPayload) async throws -> APIClient.ScoutDTO {
         let dto = try await client.createScout(payload)
-        scouts.insert(dto, at: 0)
         upsertLocal([dto])
         return dto
     }
 
     func update(id: String, changes: APIClient.ScoutUpdatePayload) async throws -> APIClient.ScoutDTO {
         let dto = try await client.updateScout(id: id, changes: changes)
-        replaceInRoster(dto)
         upsertLocal([dto])
         return dto
     }
 
     func pause(id: String) async throws -> APIClient.ScoutDTO {
         let dto = try await client.pauseScout(id: id)
-        replaceInRoster(dto)
         upsertLocal([dto])
         return dto
     }
 
     func resume(id: String) async throws -> APIClient.ScoutDTO {
         let dto = try await client.resumeScout(id: id)
-        replaceInRoster(dto)
         upsertLocal([dto])
         return dto
     }
 
     func archive(id: String) async throws -> APIClient.ScoutDTO {
         let dto = try await client.archiveScout(id: id)
-        replaceInRoster(dto)
         upsertLocal([dto])
         return dto
     }
 
     func delete(id: String) async throws {
         try await client.deleteScout(id: id)
-        scouts.removeAll { $0.id == id }
-        if let context, let row = fetchScout(id: id) {
+        // Wave-A leftover: ScoutStore mutations still read the active
+        // session for userId rather than taking it as an explicit
+        // parameter (slated for cleanup in a follow-up wave).
+        let uid = ActiveSession.userId ?? ""
+        if let context, let row = findById(id, userId: uid) {
             context.delete(row)
             saveContext(context)
         }
@@ -201,12 +222,6 @@ final class ScoutStore {
 
     // MARK: - Private helpers
 
-    private func replaceInRoster(_ dto: APIClient.ScoutDTO) {
-        if let idx = scouts.firstIndex(where: { $0.id == dto.id }) {
-            scouts[idx] = dto
-        }
-    }
-
     /// Upsert a batch of DTOs into the SwiftData cache. Best-effort — any
     /// failure is logged and swallowed.
     ///
@@ -218,9 +233,13 @@ final class ScoutStore {
     /// `fetchScouts(userId:)` and accumulate as dead rows in the DB.
     private func upsertLocal(_ dtos: [APIClient.ScoutDTO]) {
         guard let context else { return }
+        // Wave-A leftover: ScoutDTO doesn't carry userId on the wire, and
+        // ScoutStore mutations still lift the id from ActiveSession rather
+        // than taking it as an explicit parameter. Pass it through to
+        // findById so the existing-row lookup is properly user-scoped.
         let uid = ActiveSession.userId ?? ""
         for dto in dtos {
-            let existing = fetchScout(id: dto.id)
+            let existing = findById(dto.id, userId: uid)
             let row = existing ?? Scout(
                 id: dto.id,
                 userId: uid,
@@ -253,6 +272,8 @@ final class ScoutStore {
             row.bootstrapped = dto.bootstrapped ?? false
             row.endDate = dto.endDate
             row.nextRunAt = dto.nextRunAt
+            row.lastRun = dto.lastRun
+            row.findingsCount = dto.findingsCount ?? 0
             row.updatedAt = Date()
 
             if existing == nil {

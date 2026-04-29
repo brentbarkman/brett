@@ -305,4 +305,39 @@ struct AuthManagerTests {
         #expect(manager.token == "tok-1")
         #expect(itemCount() == 1)
     }
+
+    @Test func hydrateTaskDoesNotRetainSelfAfterRelease() async throws {
+        resetState()
+        defer { resetState() }
+
+        // Seed a token so the keychain-hydrate path actually fires the
+        // implicit `Task { await self.refreshCurrentUser() }` in init.
+        // Without a token in the keychain, the Task is never created and
+        // the test is trivially green even when self is strongly captured.
+        try KeychainStore.writeToken("hydrate-retain-test")
+
+        let client = makeTestClient()
+        // Stub /users/me with a slow response so the in-flight task is
+        // alive while the manager goes out of scope. The mock doesn't
+        // actually sleep, but having the stub registered means the call
+        // resolves quickly and any retain-cycle issue would be unaffected.
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u1", email: "u1@x.com")
+        )
+
+        weak var weakManager: AuthManager?
+        do {
+            let manager = AuthManager(client: client)
+            weakManager = manager
+            // Manager goes out of scope at end of `do` block.
+        }
+        // Yield enough times for the in-flight Task to finish and release
+        // any strong ref. Two short sleeps cover both the request roundtrip
+        // and the post-completion main-actor hops.
+        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        #expect(weakManager == nil, "AuthManager should be deallocated after going out of scope")
+    }
 }

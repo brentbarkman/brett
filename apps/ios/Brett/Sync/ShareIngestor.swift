@@ -108,7 +108,6 @@ final class ShareIngestor {
         let files = listQueueFiles(in: queueDir)
         guard !files.isEmpty else { return 0 }
 
-        let queue = MutationQueue(context: context)
         let now = Date()
         var processed = 0
 
@@ -149,7 +148,7 @@ final class ShareIngestor {
             insertItem(payload: payload, userId: userId, syncedViaExtension: isPosted)
 
             if !isPosted {
-                enqueueMutation(payload: payload, userId: userId, queue: queue)
+                enqueueMutation(payload: payload, userId: userId)
             }
 
             try? FileManager.default.removeItem(at: file)
@@ -158,7 +157,11 @@ final class ShareIngestor {
 
         // One save at the end rather than per-file — cheaper and keeps the
         // inserted Items + their mutation entries atomic from the UI's POV.
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            BrettLog.sync.error("ShareIngestor drain save failed: \(String(describing: error), privacy: .public)")
+        }
 
         // Opportunistically trim `failed/` — moved-aside payloads can
         // accumulate indefinitely otherwise. 30-day retention is plenty
@@ -271,8 +274,7 @@ final class ShareIngestor {
 
     private func enqueueMutation(
         payload: SharePayload,
-        userId: String,
-        queue: MutationQueue
+        userId: String
     ) {
         var itemPayload: [String: Any] = [
             "id": payload.id,
@@ -291,15 +293,20 @@ final class ShareIngestor {
             itemPayload["notes"] = notes
         }
 
-        queue.enqueue(
+        let entry = MutationQueueEntry(
+            idempotencyKey: payload.idempotencyKey,
             entityType: "item",
             entityId: payload.id,
             action: .create,
             endpoint: "/things",          // Informational only; PushEngine routes to /sync/push
             method: .post,
-            payload: JSONCodec.encode(itemPayload),
-            idempotencyKey: payload.idempotencyKey
+            payload: JSONCodec.encode(itemPayload)
         )
+        // Stage compaction-aware deltas — same code path the stores use.
+        // The outer `context.save()` after the drain loop persists everything
+        // (the inserted Item, this entry, any compactor-triggered deletes)
+        // in a single transaction, matching the store atomicity guarantee.
+        MutationCompactor.compactAndApply(entry, in: context)
     }
 
     // MARK: - Failure handling

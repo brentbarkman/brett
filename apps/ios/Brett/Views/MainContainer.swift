@@ -3,12 +3,55 @@ import SwiftUI
 
 // MARK: - Navigation value types
 
+/// Single source of truth for navigation across the app. Drives both
+/// `.sheet(item:)` (modal-style destinations) and
+/// `.navigationDestination(for: NavDestination.self)` (push-style
+/// destinations). Wave D unified the previous mix of three patterns
+/// (push, manual `path.append`, and ad-hoc booleans) into this enum
+/// so a single `NavStore.currentDestination` value drives every
+/// presentation decision in one place.
 enum NavDestination: Hashable {
+    // Push-style destinations (drive `.navigationDestination(for:)`).
     case settings
+    case settingsTab(SettingsTab)
     case scoutsRoster
     case scoutDetail(id: String)
     case eventDetail(id: String)
     case listView(id: String)
+
+    // Sheet-style destinations (drive `.sheet(item:)`).
+    // Note: feedback (shake-to-report) is intentionally NOT a NavDestination.
+    // It's presented at the UIWindow level by `FeedbackPresenter` so the
+    // sheet works above any other modal (TaskDetailView, SearchSheet,
+    // etc.). A SwiftUI `.sheet(item:)` anchored here can't open a second
+    // sheet while the first is presented.
+    case taskDetail(id: String)
+    case search
+    case newScout
+    case editScout(id: String)
+
+    /// True for cases that should present as a sheet rather than a push.
+    /// `MainContainer` reads this to decide which presenter wraps the
+    /// destination — `.sheet(item:)` for `true`, the navigation stack
+    /// for `false`. Keeping the choice as a property on the enum
+    /// avoids scattering routing logic across views.
+    var isSheet: Bool {
+        switch self {
+        case .taskDetail, .search, .newScout, .editScout:
+            return true
+        case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
+            return false
+        }
+    }
+}
+
+/// `Identifiable` conformance so `NavDestination` can drive
+/// `.sheet(item:)`. The enum is already `Hashable`, and each case is
+/// self-identifying for sheet purposes — switching e.g.
+/// `.taskDetail(id: A)` to `.taskDetail(id: B)` correctly tears down
+/// and re-presents the sheet because the value compares unequal.
+extension NavDestination: Identifiable {
+    var id: Self { self }
 }
 
 // MARK: - Awakening tokens
@@ -44,14 +87,13 @@ enum Awakening {
 
 struct MainContainer: View {
     @State private var searchStore = SearchStore()
-    @State private var selection = SelectionStore.shared
+    @State private var selection = NavStore.shared
     /// 0=Lists, 1=Inbox, 2=Today, 3=Calendar. Default is Today (2) so the
     /// app opens to the same primary surface as the desktop. Watch out:
     /// the omnibar's date-injection logic depends on these indices —
     /// search for `currentPage` consumers if you re-order.
     @State private var currentPage = 2
     @State private var path = NavigationPath()
-    @State private var showSearch = false
 
     // MARK: - Awakening (cold-launch reveal)
     //
@@ -120,10 +162,15 @@ struct MainContainer: View {
     private let pages = ["Lists", "Inbox", "Today", "Calendar"]
 
     var body: some View {
+        // `@Bindable` projection so we can pass `$selection.currentDestination`
+        // to `.sheet(item:)`. The `@State` wrapper alone gives us a
+        // `Binding<NavStore>`, not a sub-binding to a property
+        // on the @Observable.
+        @Bindable var selection = selection
         // Tint the whole stack gold so default toolbar items (back
         // buttons, trailing buttons) match the brand without each
         // screen having to override per-item tints.
-        NavigationStack(path: $path) {
+        return NavigationStack(path: $path) {
             ZStack {
                 BackgroundView()
                     .scaleEffect(kenBurnsScale, anchor: .center)
@@ -211,7 +258,7 @@ struct MainContainer: View {
                         SyncStatusIndicator()
 
                         Button {
-                            showSearch = true
+                            selection.currentDestination = .search
                         } label: {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 15, weight: .medium))
@@ -266,6 +313,13 @@ struct MainContainer: View {
                 switch destination {
                 case .settings:
                     SettingsView()
+                case .settingsTab(let tab):
+                    // Unified single-step deep-link: pushing
+                    // `.settingsTab(.calendar)` lands directly on the
+                    // calendar sub-page with `Settings` as the back-button
+                    // parent. Avoids the prior two-`path.append` pattern
+                    // that left the back button in a half-state.
+                    SettingsView(initialTab: tab)
                 case .scoutsRoster:
                     ScoutsRosterView()
                 case .scoutDetail(let id):
@@ -274,49 +328,88 @@ struct MainContainer: View {
                     EventDetailView(eventId: id)
                 case .listView(let id):
                     ListView(listId: id)
+                case .taskDetail, .search, .newScout, .editScout:
+                    // Sheet-style destinations are presented via
+                    // `.sheet(item:)` elsewhere on this view; reaching
+                    // them through the push stack is a programming error.
+                    // Render an `EmptyView` so a miswired `path.append`
+                    // is harmless rather than crashing.
+                    EmptyView()
                 }
             }
-            // Task detail as a near-full-screen sheet. Driven by the
-            // app-wide `SelectionStore` — any row tap across the app
-            // writes `selection.selectedTaskId = id` to present this.
-            .sheet(isPresented: Binding(
-                get: { selection.selectedTaskId != nil },
-                set: { if !$0 { selection.selectedTaskId = nil } }
-            )) {
-                if let taskId = selection.selectedTaskId {
-                    TaskDetailView(itemId: taskId)
+            // Unified sheet presenter. Folds the previous separate
+            // `.sheet(...)` modifiers (task detail, search) plus the
+            // per-child sheets (new scout, edit scout) into this
+            // single `.sheet(item:)` driven by
+            // `selection.currentDestination`. Any view that wants to
+            // present a sheet writes a `NavDestination` here; SwiftUI
+            // tears down + re-presents on case change and clears the
+            // property when the user dismisses. Per-case presentation
+            // modifiers (background opacity, detents) live inside each
+            // branch since the cases differ on chrome.
+            //
+            // Feedback (shake-to-report) is intentionally NOT routed
+            // here — `FeedbackPresenter` shows it at the UIWindow
+            // level so it works above any other sheet.
+            .sheet(item: $selection.currentDestination) { destination in
+                switch destination {
+                case .taskDetail(let id):
+                    TaskDetailView(itemId: id)
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
                         .presentationBackground(Color.black.opacity(0.80))
                         .presentationCornerRadius(20)
+                case .search:
+                    SearchSheet(store: searchStore) { result in
+                        // Clear the destination first so the sheet
+                        // dismisses immediately, then route the
+                        // selection on the next runloop tick (matches
+                        // the prior `showSearch = false` behaviour).
+                        selection.currentDestination = nil
+                        handleSearchSelection(result)
+                    }
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(Color.black.opacity(0.80))
+                    .presentationCornerRadius(20)
+                case .newScout:
+                    NewScoutSheetContainer()
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                case .editScout(let id):
+                    EditScoutSheetContainer(scoutId: id)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
+                    // Push-style destinations are not sheet-presentable.
+                    // Render `EmptyView` so a misrouted sheet drive
+                    // doesn't crash; the `isSheet` property on the enum
+                    // documents the contract callers should follow.
+                    EmptyView()
                 }
             }
-            // Search sheet — Spotlight-style modal overlay.
-            .sheet(isPresented: $showSearch) {
-                SearchSheet(store: searchStore) { result in
-                    showSearch = false
-                    handleSearchSelection(result)
+            // Shake-to-report runs at the UIWindow level via
+            // `FeedbackPresenter` (installed from `BrettApp.init`). A
+            // SwiftUI `.onShake` + `.sheet` anchored here cannot
+            // present while a TaskDetailView / SearchSheet is already
+            // up — which is exactly when a user wants to report a bug.
+            // The presenter bypasses SwiftUI's sheet anchoring and
+            // shows from the topmost view controller.
+            //
+            // Push-style navigation queue. Call sites that use
+            // `selection.go(to:)` with a push-style destination append
+            // to `pendingPushDestinations`; we observe the array here,
+            // drain it onto the navigation stack, then reset to empty.
+            // A queue (rather than a single slot) is what lets two
+            // rapid back-to-back pushes both land — `.onChange(of:)`
+            // for `Equatable` arrays fires on any append, and the
+            // drain runs synchronously before any other observer work.
+            .onChange(of: selection.pendingPushDestinations) { _, queue in
+                guard !queue.isEmpty else { return }
+                for dest in queue {
+                    path.append(dest)
                 }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(Color.black.opacity(0.80))
-                .presentationCornerRadius(20)
-            }
-            // Shake-to-report runs at the UIWindow level via FeedbackPresenter
-            // (installed from BrettApp.init). The prior in-tree .onShake +
-            // .sheet was anchored to this NavigationStack and therefore
-            // could not present while a TaskDetailView / SearchSheet was
-            // already up — which is exactly when a user wants to report
-            // a bug.
-            // Settings deep-link from re-link task taps. `TaskRow`'s Reconnect
-            // pill sets `selection.pendingSettingsTab`; we push `.settings`
-            // plus the target tab onto the NavigationStack in one shot so the
-            // back button returns to the task list, not an empty Settings.
-            .onChange(of: selection.pendingSettingsTab) { _, tab in
-                guard let tab else { return }
-                path.append(NavDestination.settings)
-                path.append(tab)
-                selection.pendingSettingsTab = nil
+                selection.pendingPushDestinations = []
             }
         }
         // Brand tint on the NavigationStack so default toolbar items
@@ -408,7 +501,10 @@ struct MainContainer: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             switch result.entityType {
             case .item:
-                selection.selectedTaskId = result.entityId
+                // Wave D Phase 3: single source of truth — the
+                // unified sheet presenter reads `currentDestination`,
+                // which `go(to:)` sets after switching on `isSheet`.
+                selection.go(to: .taskDetail(id: result.entityId))
             case .calendarEvent, .meetingNote:
                 path.append(NavDestination.eventDetail(id: result.entityId))
             case .scoutFinding:
@@ -417,6 +513,91 @@ struct MainContainer: View {
                 // metadata surfaces it, otherwise fall back to the roster.
                 path.append(NavDestination.scoutsRoster)
             }
+        }
+    }
+}
+
+// MARK: - Scout sheet containers
+//
+// Tiny wrappers that adapt the existing `NewScoutSheet` /
+// `ScoutEditSheet` views (which take onCreate / onSave callbacks) to the
+// unified `.sheet(item:)` presenter. Each owns its own `ScoutStore` so
+// the network + SwiftData writes that the underlying sheets trigger
+// stay self-contained — no need for `MainContainer` to hold scout
+// state, and no callback plumbing through `NavStore`.
+
+/// Wraps `NewScoutSheet` so it can be presented from `MainContainer`'s
+/// unified sheet without relying on `ScoutsRosterView` to own the
+/// `ScoutStore`. The sheet's `onCreate` closure throws on failure; the
+/// sheet keeps itself open and renders the error in its review step
+/// when it catches. We rethrow here so the sheet sees the failure and
+/// don't dismiss — dismissal happens inside the sheet on success only.
+private struct NewScoutSheetContainer: View {
+    @State private var scoutStore = ScoutStore()
+
+    var body: some View {
+        NewScoutSheet { payload in
+            do {
+                _ = try await scoutStore.create(payload: payload)
+            } catch {
+                BrettLog.store.error("NewScoutSheet create failed: \(String(describing: error), privacy: .public)")
+                throw error
+            }
+        }
+    }
+}
+
+/// Wraps `ScoutEditSheet` for the unified sheet presenter. Reads the
+/// scout row by id via `@Query` so the sheet can populate its initial
+/// values, then hands the patch to the local `ScoutStore` on save —
+/// same flow as the prior in-detail-view sheet.
+private struct EditScoutSheetContainer: View {
+    let scoutId: String
+
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            EditScoutSheetBody(userId: userId, scoutId: scoutId)
+                .id("\(userId)-\(scoutId)")
+        } else {
+            // Auth gate upstream usually prevents this; render empty
+            // rather than nil-fallback so the type system stays simple.
+            EmptyView()
+        }
+    }
+}
+
+private struct EditScoutSheetBody: View {
+    let userId: String
+    let scoutId: String
+
+    @State private var scoutStore = ScoutStore()
+    @Query private var matchedScouts: [Scout]
+
+    init(userId: String, scoutId: String) {
+        self.userId = userId
+        self.scoutId = scoutId
+        let predicate = #Predicate<Scout> { scout in
+            scout.id == scoutId && scout.userId == userId
+        }
+        _matchedScouts = Query(filter: predicate)
+    }
+
+    var body: some View {
+        if let scout = matchedScouts.first {
+            ScoutEditSheet(scout: scout) { patch in
+                do {
+                    _ = try await scoutStore.update(id: scout.id, changes: patch)
+                } catch {
+                    // Error surfaces via store; sheet stays open on
+                    // failure so the user can retry without losing input.
+                }
+            }
+        } else {
+            // Scout vanished (deleted, or row not yet hydrated). Drop
+            // the sheet rather than show a half-populated form.
+            EmptyView()
         }
     }
 }

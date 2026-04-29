@@ -10,9 +10,56 @@ import SwiftUI
 ///   3. StickyCardSection with all items in the list — list-specific quick
 ///      capture sits at the top of the card.
 ///   4. Empty state when the card has zero items.
+///
+/// Auth gate around `ListViewBody`. The body is the work-doer; this
+/// outer view exists only to extract `userId` from the environment and
+/// hand it to a child whose `@Query` predicates capture it directly.
+///
+/// SwiftData's `#Predicate` macro can't read `@Environment` values, so
+/// the established workaround is an init-based subview where `userId`
+/// is a stored property and each `@Query` is constructed in `init` with
+/// the captured user. This pushes the user filter down into the
+/// SwiftData fetch instead of doing it in Swift after the fact —
+/// cheaper, and keeps cross-user rows from ever entering the working set.
+///
+/// View identity:
+/// `ListView` is a thin auth gate — when the user is authenticated it
+/// renders `ListViewBody(userId:listId:)` modified with
+/// `.id("\(userId)-\(listId)")`. The composite identity is intentional:
+/// switching from one list to another should remount the body so the
+/// `listId`-bound predicates re-bind, and a user-swap should also
+/// remount for the same reason as on `TodayPage` / `InboxPage` /
+/// `ListsPage`. Sign-out is covered for free: `RootView`'s auth gate
+/// unmounts `MainContainer` entirely, which destroys the body via the
+/// structural path.
 struct ListView: View {
     let listId: String
     @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            ListViewBody(userId: userId, listId: listId)
+                .id("\(userId)-\(listId)")
+        } else {
+            // Signed-out fallback. The auth gate upstream
+            // (`MainContainer`) usually prevents this branch, but render
+            // an empty state defensively rather than nil-fallback so the
+            // type system doesn't have to model a missing user here.
+            EmptyView()
+        }
+    }
+}
+
+/// List-detail data + UI. Owned by `ListView`'s auth gate, so `userId`
+/// is guaranteed non-optional for this view's lifetime. Re-instantiated
+/// on account switch OR `listId` change because the parent applies
+/// `.id("\(userId)-\(listId)")` — SwiftUI treats a changed `id` as a new
+/// view identity and remounts this body from scratch, which gives us a
+/// fresh `@Query` with the new user/list predicate (plus a clean slate
+/// for `@State` stores and caches).
+private struct ListViewBody: View {
+    let userId: String
+    let listId: String
 
     @State private var itemStore = ItemStore(
         context: PersistenceController.shared.container.mainContext
@@ -25,16 +72,55 @@ struct ListView: View {
     @State private var isEditingName = false
     @FocusState private var nameFocused: Bool
 
-    /// See TodayPage — used to decide skeleton-vs-empty-state when this
-    /// list has zero items on first render.
+    /// Single-row reactive read of the list metadata for `(userId, listId)`.
+    /// Replaces the prior imperative `listStore.fetchById(listId)` lookup
+    /// so the header + archived state refresh automatically when the row
+    /// changes (rename, recolor, archive, unarchive) without manual nudges.
+    @Query private var listsMatch: [ItemList]
+
+    /// Live reactive read of this list's non-deleted items, scoped to the
+    /// signed-in user. Replaces the prior imperative
+    /// `itemStore.fetchAll(userId:listId:)` call so the card refreshes
+    /// automatically on create/toggle/delete without a manual re-render.
+    /// Sorted reverse-chronological by `createdAt` to match the desktop
+    /// `/things` route's `orderBy: [{ createdAt: "desc" }]`.
+    @Query private var items: [Item]
+
+    /// Used to decide skeleton-vs-empty-state when this list has zero
+    /// items on first render. NOT user-scoped — `SyncHealth` is a
+    /// sync-internal row count that doesn't need cross-user isolation.
     @Query private var syncHealthRows: [SyncHealth]
+
+    init(userId: String, listId: String) {
+        self.userId = userId
+        self.listId = listId
+
+        let listPredicate = #Predicate<ItemList> { list in
+            list.id == listId && list.userId == userId
+        }
+        _listsMatch = Query(filter: listPredicate)
+
+        let itemPredicate = #Predicate<Item> { item in
+            item.deletedAt == nil &&
+            item.userId == userId &&
+            item.listId == listId
+        }
+        _items = Query(filter: itemPredicate, sort: \Item.createdAt, order: .reverse)
+
+        // Explicit reassignment to keep parallel structure with the
+        // user-scoped queries above. Functionally redundant — the
+        // property declaration's default `Query()` is identical — but
+        // keeping it makes the init read as a complete inventory of
+        // every `@Query` this view owns.
+        _syncHealthRows = Query()
+    }
 
     private var hasCompletedInitialSync: Bool {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
     }
 
     private var realList: ItemList? {
-        listStore.fetchById(listId)
+        listsMatch.first
     }
 
     private var listName: String {
@@ -48,18 +134,12 @@ struct ListView: View {
         return .slate
     }
 
-    private var items: [Item] {
-        itemStore.fetchAll(
-            userId: authManager.currentUser?.id,
-            listId: listId,
-            status: nil
-        )
-        // Sort by createdAt DESC to match the desktop /things route's
-        // `orderBy: [{ createdAt: "desc" }]`. Same items, same order
-        // across platforms — was previously `dueDate ASC` here, which
-        // produced visibly different ordering than desktop on the same
-        // list. Stable secondary by `id` to break ties deterministically.
-        .sorted {
+    /// Stable secondary by `id` to break createdAt ties deterministically.
+    /// The primary sort already happens at the `@Query` level
+    /// (`createdAt` desc); this re-sort only kicks in when two rows share
+    /// a `createdAt` value, which is rare but possible for batch creates.
+    private var sortedItems: [Item] {
+        items.sorted {
             if $0.createdAt != $1.createdAt {
                 return $0.createdAt > $1.createdAt
             }
@@ -68,7 +148,7 @@ struct ListView: View {
     }
 
     private var activeCount: Int {
-        items.filter { $0.itemStatus != .done }.count
+        sortedItems.filter { $0.itemStatus != .done }.count
     }
 
     private var isArchived: Bool {
@@ -103,7 +183,7 @@ struct ListView: View {
                             // now passed `listId: listId` so typing there
                             // lands items in this list by default.
 
-                            if items.isEmpty {
+                            if sortedItems.isEmpty {
                                 if hasCompletedInitialSync {
                                     VStack(spacing: 6) {
                                         Text("No items yet")
@@ -120,14 +200,20 @@ struct ListView: View {
                                         .padding(.vertical, 16)
                                 }
                             } else {
-                                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                                ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
                                     TaskRow(
                                         item: item,
                                         listName: nil,
                                         allowDrag: true,
-                                        dragIDs: items.map(\.id),
+                                        dragIDs: sortedItems.map(\.id),
                                         onToggle: { toggle(item.id) },
-                                        onSelect: { SelectionStore.shared.selectedTaskId = item.id },
+                                        onSelect: {
+                                            // Wave D Phase 3: single source
+                                            // of truth — `go(to:)` dispatches
+                                            // to `currentDestination` because
+                                            // `.taskDetail` is a sheet case.
+                                            NavStore.shared.go(to: .taskDetail(id: item.id))
+                                        },
                                         onSchedule: { dueDate in schedule(item.id, dueDate: dueDate) },
                                         onArchive: { archive(item.id) },
                                         onDelete: { delete(item.id) },
@@ -135,7 +221,7 @@ struct ListView: View {
                                     )
                                     .padding(.horizontal, 16)
 
-                                    if index < items.count - 1 {
+                                    if index < sortedItems.count - 1 {
                                         Divider()
                                             .background(BrettColors.hairline)
                                             .padding(.horizontal, 16)
@@ -230,7 +316,7 @@ struct ListView: View {
     }
 
     private var subtitleText: String {
-        let count = items.count
+        let count = sortedItems.count
         let noun = count == 1 ? "item" : "items"
         if activeCount != count {
             return "\(count) \(noun) · \(activeCount) active"
@@ -244,7 +330,8 @@ struct ListView: View {
             listStore.update(
                 id: listId,
                 changes: ["name": trimmed],
-                previousValues: ["name": existing.name]
+                previousValues: ["name": existing.name],
+                userId: userId
             )
         }
         isEditingName = false
@@ -255,32 +342,37 @@ struct ListView: View {
 
     private func toggle(_ id: String) {
         HapticManager.success()
-        itemStore.toggleStatus(id: id)
+        itemStore.toggleStatus(id: id, userId: userId)
     }
 
+    /// Pre-edit row comes from this view's `@Query`-backed `items` array,
+    /// which is already user-scoped — no need for a separate store fetch
+    /// (those public read methods were removed in Wave B).
     private func schedule(_ id: String, dueDate: Date?) {
-        guard let item = itemStore.fetchById(id) else { return }
+        guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         itemStore.update(
             id: id,
             changes: ["dueDate": dueDate as Any? ?? NSNull()],
-            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()]
+            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()],
+            userId: userId
         )
     }
 
     private func archive(_ id: String) {
-        guard let item = itemStore.fetchById(id) else { return }
+        guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         itemStore.update(
             id: id,
             changes: ["status": ItemStatus.archived.rawValue],
-            previousValues: ["status": item.status]
+            previousValues: ["status": item.status],
+            userId: userId
         )
     }
 
     private func delete(_ id: String) {
         HapticManager.heavy()
-        itemStore.delete(id: id)
+        itemStore.delete(id: id, userId: userId)
     }
 
     private func reorder(_ newOrder: [String]) {
@@ -337,7 +429,7 @@ struct ListView: View {
 
             Spacer()
 
-            Text("\(items.count)")
+            Text("\(sortedItems.count)")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.40))
         }
@@ -348,7 +440,8 @@ struct ListView: View {
         listStore.update(
             id: listId,
             changes: ["archivedAt": NSNull()],
-            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()]
+            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()],
+            userId: userId
         )
         HapticManager.success()
     }
@@ -358,7 +451,8 @@ struct ListView: View {
         listStore.update(
             id: listId,
             changes: ["archivedAt": Date()],
-            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()]
+            previousValues: ["archivedAt": existing.archivedAt as Any? ?? NSNull()],
+            userId: userId
         )
         HapticManager.success()
     }

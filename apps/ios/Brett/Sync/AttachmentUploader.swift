@@ -261,7 +261,11 @@ final class AttachmentUploader {
         // find the file. `createUpload` picks a fresh UUID internally, so we
         // overwrite the id with ours.
         upload.id = uploadId
-        try? persistence.mainContext.save()
+        do {
+            try persistence.mainContext.save()
+        } catch {
+            BrettLog.attachments.error("AttachmentUploader enqueue save failed: \(String(describing: error), privacy: .public)")
+        }
 
         emit(
             uploadId: uploadId,
@@ -279,9 +283,10 @@ final class AttachmentUploader {
     func processQueue() {
         if let existing = queueTask, !existing.isCancelled { return }
         queueTask = Task { [weak self] in
-            guard let self else { return }
-            await self.drain()
-            await MainActor.run { self.queueTask = nil }
+            await self?.drain()
+            await MainActor.run { [weak self] in
+                self?.queueTask = nil
+            }
         }
     }
 
@@ -317,14 +322,22 @@ final class AttachmentUploader {
         // Retry guard — don't pick up rows that have exhausted their attempts.
         if upload.retryCount >= Self.maxRetryCount {
             upload.stage = AttachmentUploadStage.failed.rawValue
-            try? persistence.mainContext.save()
+            do {
+                try persistence.mainContext.save()
+            } catch {
+                BrettLog.attachments.error("AttachmentUploader retry-cap save failed: \(String(describing: error), privacy: .public)")
+            }
             emit(uploadId: uploadId, itemId: itemId, fraction: 0, stage: .failed)
             return
         }
 
         upload.stage = AttachmentUploadStage.uploading.rawValue
         upload.uploadProgress = 0
-        try? persistence.mainContext.save()
+        do {
+            try persistence.mainContext.save()
+        } catch {
+            BrettLog.attachments.error("AttachmentUploader start-upload save failed: \(String(describing: error), privacy: .public)")
+        }
         emit(uploadId: uploadId, itemId: itemId, fraction: 0, stage: .uploading)
 
         let fileURL = URL(fileURLWithPath: filePath)
@@ -442,7 +455,11 @@ final class AttachmentUploader {
         // past the cap so `processUpload` won't pick it up again.
         if permanent, let upload = fetchUpload(id: uploadId) {
             upload.retryCount = Self.maxRetryCount
-            try? persistence.mainContext.save()
+            do {
+                try persistence.mainContext.save()
+            } catch {
+                BrettLog.attachments.error("AttachmentUploader finalizeFailure save failed: \(String(describing: error), privacy: .public)")
+            }
         }
         attachmentStore.markFailed(uploadId: uploadId, error: error)
         // For transient failures, keep the staged file so retries can re-read it.
@@ -460,7 +477,11 @@ final class AttachmentUploader {
     private func updateProgress(uploadId: String, itemId: String, fraction: Double) {
         if let upload = fetchUpload(id: uploadId) {
             upload.uploadProgress = fraction
-            try? persistence.mainContext.save()
+            do {
+                try persistence.mainContext.save()
+            } catch {
+                BrettLog.attachments.error("AttachmentUploader updateProgress save failed: \(String(describing: error), privacy: .public)")
+            }
         }
         emit(uploadId: uploadId, itemId: itemId, fraction: fraction, stage: .uploading)
     }
