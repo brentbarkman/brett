@@ -4,6 +4,7 @@ import { apiFetch } from "./client";
 import { streamingFetch } from "./streaming";
 import type { StreamChunk, DisplayHint } from "@brett/types";
 import { useAIConfigs } from "./ai-config";
+import { applyUsageDelta, sessionUsageQueryKey } from "./ai-usage";
 
 // ─── Types ───
 
@@ -214,6 +215,7 @@ export function useBrettChat(opts: {
             case "done":
               if (chunk.sessionId) {
                 setSessionId(chunk.sessionId);
+                applyUsageDelta(qc, chunk.sessionId, chunk.usage);
               }
               break;
 
@@ -253,6 +255,14 @@ export function useBrettChat(opts: {
         // Invalidate to pick up the persisted messages from server
         if (entityId) {
           qc.invalidateQueries({ queryKey: ["brett-chat", entityId] });
+        }
+        // Reconcile the running token total against the server aggregate.
+        // The per-round deltas keep the counter ticking live during the
+        // turn; a final invalidate covers any drift (e.g. background
+        // fact-extraction usage that the server filters out, or a missed
+        // chunk during a reconnect mid-stream).
+        if (sessionId) {
+          qc.invalidateQueries({ queryKey: sessionUsageQueryKey(sessionId) });
         }
       }
   };

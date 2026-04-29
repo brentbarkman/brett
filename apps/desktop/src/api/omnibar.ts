@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { streamingFetch } from "./streaming";
 import { useAIConfigs } from "./ai-config";
 import { apiFetch } from "./client";
+import { applyUsageDelta, sessionUsageQueryKey } from "./ai-usage";
 import type { StreamChunk, DisplayHint } from "@brett/types";
 
 export interface OmnibarMessage {
@@ -266,6 +267,7 @@ export function useOmnibar() {
               flushPendingText();
               if (chunk.sessionId) {
                 setSessionId(chunk.sessionId);
+                applyUsageDelta(queryClient, chunk.sessionId, chunk.usage);
               }
               break;
 
@@ -306,6 +308,12 @@ export function useOmnibar() {
         flushPendingText(); // idempotent safety net — no-op if catch already drained
         for (const key of pendingInvalidations) {
           queryClient.invalidateQueries({ queryKey: [key] });
+        }
+        // Reconcile the running token total against the server aggregate —
+        // see the matching block in brett-chat.ts for rationale.
+        const finalSessionId = stateRef.current.sessionId;
+        if (finalSessionId) {
+          queryClient.invalidateQueries({ queryKey: sessionUsageQueryKey(finalSessionId) });
         }
         setIsStreaming(false);
         abortRef.current = null;

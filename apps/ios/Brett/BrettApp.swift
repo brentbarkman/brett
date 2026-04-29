@@ -37,10 +37,15 @@ struct BrettApp: App {
         self._authManager = State(wrappedValue: manager)
         // Route user-scoped UserDefaults reads through the live AuthManager.
         UserScopedStorage.configure { [weak manager] in manager?.currentUser?.id }
+        // Shake-to-report runs at the UIWindow level so it can present
+        // over any active sheet (TaskDetailView, SearchSheet, etc.). See
+        // FeedbackPresenter for why this isn't a SwiftUI .onShake.
+        FeedbackPresenter.shared.install(authManager: manager)
         #else
         let manager = AuthManager()
         self._authManager = State(wrappedValue: manager)
         UserScopedStorage.configure { [weak manager] in manager?.currentUser?.id }
+        FeedbackPresenter.shared.install(authManager: manager)
         #endif
     }
 
@@ -215,14 +220,24 @@ private struct RootView: View {
             // thumbnail. Without this overlay, that snapshot shows whatever
             // the user had open — inbox contents, calendar events, chat
             // threads — to anyone who swipes to the app switcher while the
-            // phone is unlocked. Opaque BackgroundView matches our brand
-            // atmospheric chrome and avoids a flash of black.
+            // phone is unlocked.
+            //
+            // Why a Material instead of a fresh BackgroundView? A second
+            // BackgroundView spins up its own UserProfileStore, service
+            // load, displayedKey, and 60s tick timer, so it can land on a
+            // different image than MainContainer's BackgroundView and
+            // trigger a 1.5s crossfade just as the privacy cover fades in
+            // — the user-reported "background changes back and forth" on
+            // backgrounding. A Material blur sits over whatever's already
+            // mounted (MainContainer's wallpaper, SignInView, lock view)
+            // and obscures content without re-running the image pipeline.
             //
             // Intentionally outside the auth/lock switch so it covers
             // SignInView too (email field) and BiometricLockView (less
             // sensitive, but we may add recent-activity glances later).
             if scenePhase != .active {
-                BackgroundView()
+                Rectangle()
+                    .fill(.ultraThinMaterial)
                     .ignoresSafeArea()
                     .transition(.opacity)
                     .zIndex(1000)

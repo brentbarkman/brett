@@ -5,26 +5,45 @@ import SwiftUI
 /// Rendering:
 /// - Cerulean-bordered glass card with a generic 𝕏 glyph (we don't sync
 ///   avatars today, so using a brand glyph keeps the card honest).
-/// - Tweet text at 16pt with 1.4× line height.
+/// - Heading title (X Article title or `contentTitle` from server) when
+///   meaningful — suppressed when the title is just `Tweet by @handle`,
+///   since the @handle row already says that.
+/// - Body text from `contentBody` → `contentDescription` → `tweetText` in
+///   metadata, in that order.
 /// - Optional inline media from `contentImageUrl`.
-/// - Tap opens the tweet's original URL in `SafariView`.
+/// - Tap opens the tweet's source URL via the SwiftUI `\.openURL`
+///   environment, which respects Apple's universal-link handoff — if the
+///   X app is installed it opens there, otherwise falls back to Safari.
+///   `SFSafariViewController` (the default for other content types) bypasses
+///   universal links, so we explicitly route around it for tweets.
 struct TweetPreview: View {
     let item: Item
+    /// Retained for API symmetry with sibling previews. Tweets bypass it
+    /// in favour of `\.openURL` so the X universal link can take over.
     var onOpenURL: (URL) -> Void
 
+    @Environment(\.openURL) private var systemOpenURL
+
+    private var meta: ContentMetadata.TweetMeta? { item.tweetMetadata }
+
     private var handle: String? {
-        if let metadata = item.contentMetadataDecoded,
-           let username = metadata["username"] as? String {
-            return "@\(username)"
-        }
-        return nil
+        guard let author = meta?.author, !author.isEmpty else { return nil }
+        return "@\(author)"
     }
 
-    private var timestampText: String? {
-        if let metadata = item.contentMetadataDecoded,
-           let iso = metadata["timestamp"] as? String {
-            return iso
-        }
+    /// Server fallback title is `Tweet by @<handle>`; the @handle row
+    /// already conveys that, so don't re-render it as a heading. Mirrors
+    /// the suppression rule in the desktop ContentPreview.
+    private var headingTitle: String? {
+        guard let title = item.contentTitle, !title.isEmpty else { return nil }
+        if let author = meta?.author, title == "Tweet by @\(author)" { return nil }
+        return title
+    }
+
+    private var bodyText: String? {
+        if let body = item.contentBody, !body.isEmpty { return body }
+        if let desc = item.contentDescription, !desc.isEmpty { return desc }
+        if let mt = meta?.tweetText, !mt.isEmpty { return mt }
         return nil
     }
 
@@ -32,14 +51,16 @@ struct TweetPreview: View {
         VStack(alignment: .leading, spacing: 12) {
             profileRow
 
-            if let body = item.contentBody, !body.isEmpty {
-                Text(body)
-                    .font(.system(size: 16))
-                    .foregroundStyle(Color.white.opacity(0.92))
-                    .lineSpacing(5)
+            if let headingTitle {
+                Text(headingTitle)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(BrettColors.textCardTitle)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if let description = item.contentDescription, !description.isEmpty {
-                Text(description)
+            }
+
+            if let bodyText {
+                Text(bodyText)
                     .font(.system(size: 16))
                     .foregroundStyle(Color.white.opacity(0.92))
                     .lineSpacing(5)
@@ -70,7 +91,11 @@ struct TweetPreview: View {
         .onTapGesture {
             if let raw = item.sourceUrl, let url = URL(string: raw) {
                 HapticManager.light()
-                onOpenURL(url)
+                // Bypass SafariView for tweets: `systemOpenURL` invokes
+                // UIApplication.openURL under the hood, which respects the
+                // X app's universal-link claim. SafariView would always
+                // render in-app and never hand off.
+                systemOpenURL(url)
             }
         }
     }
@@ -106,12 +131,6 @@ struct TweetPreview: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(BrettColors.textCardTitle)
                 }
-
-                if let timestampText {
-                    Text(timestampText)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.40))
-                }
             }
 
             Spacer()
@@ -142,8 +161,13 @@ struct TweetPreview: View {
                 Color.white.opacity(0.06)
             }
         }
-        .aspectRatio(16.0/10.0, contentMode: .fill)
+        // Fixed crop height instead of a 16:10 aspect-ratio frame: at full
+        // phone width, 16:10 lands at ~244pt and dominates the card. 200pt
+        // matches the visual proportion of desktop's `max-h-80` article
+        // previews and stops linked-article hero shots from making the
+        // tweet card disproportionately tall.
         .frame(maxWidth: .infinity)
+        .frame(height: 200)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)

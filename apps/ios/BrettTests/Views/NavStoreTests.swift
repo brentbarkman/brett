@@ -21,10 +21,9 @@ struct NavDestinationTests {
         if case .search = dest {} else { Issue.record("expected .search") }
     }
 
-    @Test func feedbackHasNoAssociatedValue() {
-        let dest = NavDestination.feedback
-        if case .feedback = dest {} else { Issue.record("expected .feedback") }
-    }
+    // Feedback is intentionally NOT a NavDestination case — `FeedbackPresenter`
+    // shows the feedback sheet at the UIWindow level so it works above any
+    // other modal. See `apps/ios/Brett/Views/Shared/FeedbackPresenter.swift`.
 
     @Test func newScoutHasNoAssociatedValue() {
         let dest = NavDestination.newScout
@@ -58,7 +57,6 @@ struct NavDestinationTests {
         // Sheet-style destinations.
         #expect(NavDestination.taskDetail(id: "x").isSheet == true)
         #expect(NavDestination.search.isSheet == true)
-        #expect(NavDestination.feedback.isSheet == true)
         #expect(NavDestination.newScout.isSheet == true)
         #expect(NavDestination.editScout(id: "x").isSheet == true)
 

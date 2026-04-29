@@ -58,13 +58,29 @@ class MockEventSource {
 }
 
 // ── Test harness ─────────────────────────────────────────────────────────────
-function createWrapper() {
+function createWrapperWithClient(): {
+  Wrapper: (props: { children: React.ReactNode }) => React.ReactElement;
+  qc: QueryClient;
+} {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 0 } },
   });
-  return function Wrapper({ children }: { children: React.ReactNode }) {
-    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
-  };
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+  return { Wrapper, qc };
+}
+
+function createWrapper() {
+  return createWrapperWithClient().Wrapper;
+}
+
+function setVisibility(state: "visible" | "hidden") {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => state,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
 }
 
 /**
@@ -94,6 +110,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  setVisibility("visible");
 });
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -147,6 +164,93 @@ describe("useEventStream", () => {
     // The prior bug would produce 101 ticket POSTs + 101 EventSource instances.
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(MockEventSource.instances).toHaveLength(1);
+  });
+
+  it("closes the EventSource when the document becomes hidden", async () => {
+    const bumpRef = { current: null as (() => void) | null };
+    const Wrapper = createWrapper();
+    render(
+      <Wrapper>
+        <Harness bumpRef={bumpRef} />
+      </Wrapper>,
+    );
+
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(MockEventSource.instances).toHaveLength(1);
+    const es = MockEventSource.instances[0]!;
+    expect(es.closed).toBe(false);
+
+    await act(async () => { setVisibility("hidden"); });
+    expect(es.closed).toBe(true);
+    // No reconnect attempted while hidden.
+    expect(MockEventSource.instances).toHaveLength(1);
+  });
+
+  it("re-opens and runs catch-up invalidation on becoming visible", async () => {
+    const { Wrapper, qc } = createWrapperWithClient();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const bumpRef = { current: null as (() => void) | null };
+    render(
+      <Wrapper>
+        <Harness bumpRef={bumpRef} />
+      </Wrapper>,
+    );
+
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(MockEventSource.instances).toHaveLength(1);
+
+    invalidateSpy.mockClear();
+
+    await act(async () => { setVisibility("hidden"); });
+    await act(async () => { setVisibility("visible"); });
+    // Wait for the async connect() to resolve and onopen to fire
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+
+    // Second EventSource opened.
+    expect(MockEventSource.instances).toHaveLength(2);
+
+    // Catch-up invalidation covers everything SSE could have updated while
+    // we were hidden — not just calendar.
+    const invalidatedKeys = invalidateSpy.mock.calls.map((c) =>
+      JSON.stringify((c[0] as { queryKey: unknown[] }).queryKey),
+    );
+    expect(invalidatedKeys).toEqual(expect.arrayContaining([
+      JSON.stringify(["things"]),
+      JSON.stringify(["inbox"]),
+      JSON.stringify(["lists"]),
+      JSON.stringify(["calendar-events"]),
+      JSON.stringify(["broken-connections"]),
+    ]));
+  });
+
+  it("invalidates connection-state queries on connection.synced events", async () => {
+    const { Wrapper, qc } = createWrapperWithClient();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const bumpRef = { current: null as (() => void) | null };
+    render(
+      <Wrapper>
+        <Harness bumpRef={bumpRef} />
+      </Wrapper>,
+    );
+
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    const es = MockEventSource.instances[0]!;
+
+    invalidateSpy.mockClear();
+    await act(async () => {
+      es.dispatch("connection.synced", { type: "google-calendar", googleAccountId: "ga_1" });
+    });
+
+    const invalidatedKeys = invalidateSpy.mock.calls.map((c) =>
+      JSON.stringify((c[0] as { queryKey: unknown[] }).queryKey),
+    );
+    expect(invalidatedKeys).toEqual(expect.arrayContaining([
+      JSON.stringify(["calendar-accounts"]),
+      JSON.stringify(["calendar-events"]),
+      JSON.stringify(["granola"]),
+      JSON.stringify(["things"]),
+      JSON.stringify(["broken-connections"]),
+    ]));
   });
 
   it("does NOT reconnect when many SSE events fire in quick succession", async () => {

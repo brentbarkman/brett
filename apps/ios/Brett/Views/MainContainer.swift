@@ -20,9 +20,13 @@ enum NavDestination: Hashable {
     case listView(id: String)
 
     // Sheet-style destinations (drive `.sheet(item:)`).
+    // Note: feedback (shake-to-report) is intentionally NOT a NavDestination.
+    // It's presented at the UIWindow level by `FeedbackPresenter` so the
+    // sheet works above any other modal (TaskDetailView, SearchSheet,
+    // etc.). A SwiftUI `.sheet(item:)` anchored here can't open a second
+    // sheet while the first is presented.
     case taskDetail(id: String)
     case search
-    case feedback
     case newScout
     case editScout(id: String)
 
@@ -33,7 +37,7 @@ enum NavDestination: Hashable {
     /// avoids scattering routing logic across views.
     var isSheet: Bool {
         switch self {
-        case .taskDetail, .search, .feedback, .newScout, .editScout:
+        case .taskDetail, .search, .newScout, .editScout:
             return true
         case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
             return false
@@ -171,11 +175,10 @@ struct MainContainer: View {
                 BackgroundView()
                     .scaleEffect(kenBurnsScale, anchor: .center)
 
-                // Shake detection is now handled by `ShakeMonitor.shared`
-                // which polls CoreMotion at the app level — no in-tree
-                // detector needed. The `.onShake` modifier below still
-                // works; it just subscribes to the monitor's
-                // notification.
+                // Shake detection is handled by `ShakeMonitor.shared` (polls
+                // CoreMotion at the app level) and presented by
+                // `FeedbackPresenter.shared` (UIWindow-level present so
+                // it works over any active sheet). Nothing in-tree.
 
                 TabView(selection: $currentPage) {
                     ListsPage()
@@ -325,7 +328,7 @@ struct MainContainer: View {
                     EventDetailView(eventId: id)
                 case .listView(let id):
                     ListView(listId: id)
-                case .taskDetail, .search, .feedback, .newScout, .editScout:
+                case .taskDetail, .search, .newScout, .editScout:
                     // Sheet-style destinations are presented via
                     // `.sheet(item:)` elsewhere on this view; reaching
                     // them through the push stack is a programming error.
@@ -334,16 +337,20 @@ struct MainContainer: View {
                     EmptyView()
                 }
             }
-            // Unified sheet presenter. Wave D folded the previous three
-            // separate `.sheet(...)` modifiers (task detail, search,
-            // feedback) plus the per-child sheets (new scout, edit
-            // scout) into this single `.sheet(item:)` driven by
+            // Unified sheet presenter. Folds the previous separate
+            // `.sheet(...)` modifiers (task detail, search) plus the
+            // per-child sheets (new scout, edit scout) into this
+            // single `.sheet(item:)` driven by
             // `selection.currentDestination`. Any view that wants to
             // present a sheet writes a `NavDestination` here; SwiftUI
             // tears down + re-presents on case change and clears the
             // property when the user dismisses. Per-case presentation
             // modifiers (background opacity, detents) live inside each
             // branch since the cases differ on chrome.
+            //
+            // Feedback (shake-to-report) is intentionally NOT routed
+            // here — `FeedbackPresenter` shows it at the UIWindow
+            // level so it works above any other sheet.
             .sheet(item: $selection.currentDestination) { destination in
                 switch destination {
                 case .taskDetail(let id):
@@ -365,12 +372,6 @@ struct MainContainer: View {
                     .presentationDragIndicator(.visible)
                     .presentationBackground(Color.black.opacity(0.80))
                     .presentationCornerRadius(20)
-                case .feedback:
-                    FeedbackSheet()
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.visible)
-                        .presentationBackground(Color.black)
-                        .presentationCornerRadius(20)
                 case .newScout:
                     NewScoutSheetContainer()
                         .presentationDetents([.large])
@@ -387,14 +388,14 @@ struct MainContainer: View {
                     EmptyView()
                 }
             }
-            // Shake-to-report. Mirrors desktop's Cmd+Shift+. shortcut.
-            // Sheet opens with the type picker pre-set to Bug.
-            .onShake {
-                if selection.currentDestination != .feedback {
-                    HapticManager.medium()
-                    selection.currentDestination = .feedback
-                }
-            }
+            // Shake-to-report runs at the UIWindow level via
+            // `FeedbackPresenter` (installed from `BrettApp.init`). A
+            // SwiftUI `.onShake` + `.sheet` anchored here cannot
+            // present while a TaskDetailView / SearchSheet is already
+            // up — which is exactly when a user wants to report a bug.
+            // The presenter bypasses SwiftUI's sheet anchoring and
+            // shows from the topmost view controller.
+            //
             // Push-style navigation queue. Call sites that use
             // `selection.go(to:)` with a push-style destination append
             // to `pendingPushDestinations`; we observe the array here,

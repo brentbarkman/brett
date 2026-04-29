@@ -1,5 +1,5 @@
 import { lookup as dnsLookup } from "node:dns/promises";
-import type { LookupOptions } from "node:dns";
+import type { LookupAddress, LookupOptions } from "node:dns";
 import type { LookupFunction } from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
 
@@ -41,20 +41,42 @@ export const _isPrivateIPForTesting = isPrivateIP;
  * resolution happens, closing the DNS-rebinding TOCTOU window that a
  * separate "resolve, check, then fetch by hostname" sequence leaves open.
  *
- * Signature matches Node's `net.LookupFunction`.
+ * Two callback shapes, dispatched on `options.all`:
+ *  - `all !== true` (classic Node `net.LookupFunction`): `cb(err, address, family)`
+ *  - `all === true` (undici 7 `connect.lookup`): `cb(err, [{address, family}, ...])`
+ *
+ * Returning the wrong shape yields `ERR_INVALID_IP_ADDRESS` and silently
+ * breaks every outbound fetch. Pinned by tests in `ssrf-guard.test.ts`.
  */
 const guardedLookup: LookupFunction = (
   hostname: string,
   options: LookupOptions,
-  callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
+  callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void,
 ): void => {
-  // Ignore caller-provided family; force IPv4 so `isPrivateIP`'s IPv4
-  // table is authoritative. Dropping the caller's family prevents an
-  // attacker who can influence `hints`/`family` from coaxing undici into
-  // an IPv6 path where our checks are weaker.
-  void options;
-  dnsLookup(hostname, { family: 4 })
-    .then(({ address, family }) => {
+  // Force IPv4 regardless of caller hints/family so `isPrivateIP`'s IPv4
+  // table is authoritative — prevents an attacker who can influence
+  // `hints`/`family` from coaxing undici onto an IPv6 path where our
+  // checks are weaker.
+  const wantAll = (options as { all?: boolean })?.all === true;
+
+  dnsLookup(hostname, { family: 4, all: wantAll })
+    .then((result) => {
+      if (wantAll) {
+        const addresses = result as LookupAddress[];
+        const safe = addresses.filter((a) => !isPrivateIP(a.address));
+        if (safe.length === 0) {
+          const err = new Error(
+            `Blocked private IP(s): ${addresses.map((a) => a.address).join(", ") || "none"}`
+          ) as NodeJS.ErrnoException;
+          err.code = "EBLOCKED_PRIVATE_IP";
+          callback(err, []);
+          return;
+        }
+        callback(null, safe);
+        return;
+      }
+
+      const { address, family } = result as LookupAddress;
       if (isPrivateIP(address)) {
         const err = new Error(`Blocked private IP: ${address}`) as NodeJS.ErrnoException;
         err.code = "EBLOCKED_PRIVATE_IP";
@@ -63,7 +85,13 @@ const guardedLookup: LookupFunction = (
       }
       callback(null, address, family);
     })
-    .catch((err) => callback(err as NodeJS.ErrnoException, "", 0));
+    .catch((err) => {
+      if (wantAll) {
+        callback(err as NodeJS.ErrnoException, []);
+      } else {
+        callback(err as NodeJS.ErrnoException, "", 0);
+      }
+    });
 };
 
 /**
@@ -76,6 +104,18 @@ const ssrfAgent = new Agent({
     lookup: guardedLookup,
   },
 });
+
+/**
+ * Exported for unit testing the lookup-callback contract. Undici 7's connect
+ * path calls `lookup(hostname, { all: true }, cb)` and expects `cb(null, [
+ * {address, family}, ...])`. Earlier undici / classic Node use `cb(null,
+ * addressString, family)`. Returning the wrong shape yields
+ * `ERR_INVALID_IP_ADDRESS` and silently breaks every outbound fetch in
+ * production. Tests cover both call shapes — do not delete.
+ *
+ * Not for production use — go through `safeFetch`.
+ */
+export const _guardedLookupForTesting = guardedLookup;
 
 export interface SafeFetchOptions {
   timeoutMs?: number;

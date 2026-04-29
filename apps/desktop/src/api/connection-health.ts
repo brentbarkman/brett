@@ -1,18 +1,25 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "./client";
-import type { GranolaAccountStatus } from "@brett/types";
 
 interface BrokenConnections {
   count: number;
   types: string[];
 }
 
+/**
+ * Broken-integration count for the Today re-link card.
+ *
+ * No `refetchInterval` — the server emits a `connection.synced` SSE event
+ * whenever a calendar/granola connection completes a sync, and the SSE
+ * client at api/sse.ts invalidates this query in response. Polling every
+ * 60s on top of that was redundant and woke the renderer when the user
+ * had no broken connections at all.
+ */
 export function useBrokenConnections() {
   return useQuery({
     queryKey: ["broken-connections"],
     queryFn: () => apiFetch<BrokenConnections>("/things/broken-connections"),
-    refetchInterval: 60_000,
   });
 }
 
@@ -24,8 +31,16 @@ function parseConnectionType(sourceId: string): ConnectionType | null {
   return null;
 }
 
+/**
+ * Initiate an OAuth reconnect for the given connection.
+ *
+ * No client-side polling after the OAuth window opens — the server emits a
+ * `connection.synced` SSE event when the post-OAuth initial sync completes
+ * (see calendar-sync.ts and granola-sync.ts), and the SSE client invalidates
+ * the relevant queries. The previous design polled every 2–3 seconds for two
+ * minutes and was a major background-battery offender.
+ */
 export function useReconnect() {
-  const qc = useQueryClient();
   const navigate = useNavigate();
 
   const mutation = useMutation({
@@ -52,42 +67,6 @@ export function useReconnect() {
         return type;
       }
       return null;
-    },
-    onSuccess: (type) => {
-      if (type === "granola") {
-        const interval = setInterval(async () => {
-          try {
-            const status = await apiFetch<GranolaAccountStatus>("/granola/auth");
-            if (status.connected) {
-              clearInterval(interval);
-              qc.invalidateQueries({ queryKey: ["granola"] });
-              qc.invalidateQueries({ queryKey: ["things"] });
-              qc.invalidateQueries({ queryKey: ["broken-connections"] });
-            }
-          } catch {
-            // Ignore polling errors
-          }
-        }, 2000);
-        setTimeout(() => clearInterval(interval), 120_000);
-      } else if (type === "google-calendar") {
-        const poll = setInterval(() => {
-          qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
-          qc.invalidateQueries({ queryKey: ["calendar-events"] });
-          qc.invalidateQueries({ queryKey: ["things"] });
-          qc.invalidateQueries({ queryKey: ["broken-connections"] });
-        }, 3000);
-        const onFocus = () => {
-          qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
-          qc.invalidateQueries({ queryKey: ["calendar-events"] });
-          qc.invalidateQueries({ queryKey: ["things"] });
-          qc.invalidateQueries({ queryKey: ["broken-connections"] });
-        };
-        window.addEventListener("focus", onFocus);
-        setTimeout(() => {
-          clearInterval(poll);
-          window.removeEventListener("focus", onFocus);
-        }, 120_000);
-      }
     },
   });
 
