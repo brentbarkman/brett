@@ -406,10 +406,26 @@ struct MainContainer: View {
             // drain runs synchronously before any other observer work.
             .onChange(of: selection.pendingPushDestinations) { _, queue in
                 guard !queue.isEmpty else { return }
+                let drained = queue.count
                 for dest in queue {
                     path.append(dest)
                 }
-                selection.pendingPushDestinations = []
+                // Drain by length, not by wipe — if a pushed view's
+                // `.task` / `.onAppear` calls `selection.go(to:
+                // anotherPushDest)` synchronously during the loop, the
+                // new destination got APPENDED to the live queue after
+                // our snapshot. Removing only the drained prefix lets
+                // it survive to the next `.onChange` fire. The prior
+                // `pendingPushDestinations = []` form silently dropped
+                // any destination written mid-drain.
+                if selection.pendingPushDestinations.count >= drained {
+                    selection.pendingPushDestinations.removeFirst(drained)
+                } else {
+                    // Defensive: someone reassigned the array out from
+                    // under us. Just clear — losing entries is the
+                    // lesser evil vs a crash on out-of-bounds.
+                    selection.pendingPushDestinations = []
+                }
             }
         }
         // Brand tint on the NavigationStack so default toolbar items
