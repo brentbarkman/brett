@@ -95,6 +95,8 @@ struct MainContainer: View {
     @State private var currentPage = 2
     @State private var path = NavigationPath()
 
+    @Environment(AuthManager.self) private var authManager
+
     // MARK: - Awakening (cold-launch reveal)
     //
     // On first launch of each app process, the wallpaper zooms from 1.15 → 1.0
@@ -108,52 +110,13 @@ struct MainContainer: View {
         syncHealthRows.first?.lastSuccessfulPullAt != nil
     }
 
-    /// Items that could affect the iOS badge — active with a due date.
-    ///
-    /// Narrower than the prior "all non-deleted items" query because the
-    /// badge count only ever counts items in `(overdue, due today, this
-    /// week)`, which by definition excludes done/archived/snoozed and
-    /// items with no due date. SwiftData fires @Query updates whenever
-    /// any matched row changes, including transitions OUT of the result
-    /// set (e.g. an active item gets completed → row leaves → @Query
-    /// fires → badgeSignature recomputes → badge refresh fires). Items
-    /// without a due date never contribute to the badge regardless of
-    /// status, so filtering them out is purely a hash-cost optimisation.
-    ///
-    /// Why this matters: badgeSignature hashes every row in the result
-    /// set on every `body` pass. On a power user with hundreds of done
-    /// or no-due-date items the prior unbounded query made every TabView
-    /// swap cost O(n_total). The narrower predicate caps the iteration
-    /// at the active-with-due subset, which is bounded by the user's
-    /// open-work load (typically dozens, never hundreds).
-    @Query(
-        filter: #Predicate<Item> { $0.deletedAt == nil && $0.status == "active" },
-        sort: \Item.createdAt,
-        order: .reverse
-    ) private var allItems: [Item]
-
-    @Environment(\.scenePhase) private var scenePhase
-
-    /// Stable hash that changes whenever something affecting the badge count
-    /// changes (id, status, or dueDate on any item). `Item` is an `@Model`
-    /// class and not `Equatable`, so we observe this `Int` in `onChange`
-    /// rather than `allItems` directly.
-    ///
-    /// Tradeoff: this is a computed property, so SwiftUI re-evaluates it on
-    /// every `body` pass, not only on SwiftData pushes. For a user with
-    /// thousands of items the extra cost is still negligible (hashing is
-    /// O(n) with a tiny constant), and `onChange(of: badgeSignature)` still
-    /// fires only on real changes. Caching in `@State` adds complexity for
-    /// no measurable win; if a profile ever shows this hot, revisit then.
-    private var badgeSignature: Int {
-        var hasher = Hasher()
-        for item in allItems {
-            hasher.combine(item.id)
-            hasher.combine(item.itemStatus)
-            hasher.combine(item.dueDate)
-        }
-        return hasher.finalize()
-    }
+    // The badge `@Query<Item>` lives in `BadgeRefreshController` (mounted
+    // below as a hidden child). That controller's predicate captures the
+    // signed-in `userId` so the home-screen badge count can never leak
+    // another user's active items during sign-out drains, user-switches,
+    // or the brief window between a wipe and the next sync. The previous
+    // unscoped @Query here was a cross-user defense gap — see
+    // `BadgeRefreshController.swift` for the rationale and pattern.
 
     @State private var kenBurnsScale: CGFloat = Awakening.sessionPlayed ? 1.0 : Awakening.startScale
     @State private var coverOpacity: Double = Awakening.sessionPlayed ? 0.0 : 1.0
@@ -201,25 +164,16 @@ struct MainContainer: View {
                     fireAwakening()
                 }
             }
-            // Badge sync — fires on any add, delete, or edit that touches
-            // id/status/dueDate. `badgeSignature` is an `Int` (Equatable)
-            // that hashes the fields affecting the Today bucket count, so
-            // we avoid conforming `Item` to `Equatable`.
-            .onChange(of: badgeSignature) { _, _ in
-                Task { await BadgeManager.shared.refresh(items: allItems) }
-            }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
-                    Task { await BadgeManager.shared.refresh(items: allItems) }
+            // Badge refresh runs in `BadgeRefreshController` mounted below
+            // — it owns the user-scoped `@Query<Item>` plus the signature
+            // onChange, scenePhase onChange, and cold-launch seed task. The
+            // controller is gated on `authManager.currentUser?.id` so its
+            // predicate always captures the right user.
+            .background {
+                if let userId = authManager.currentUser?.id {
+                    BadgeRefreshController(userId: userId)
+                        .id(userId)
                 }
-            }
-            .task {
-                // Cold-launch badge seed. `onChange(of: badgeSignature)` does
-                // not fire for the initial value, so we push once here to cover
-                // the case where the item set is already loaded when the view
-                // mounts. Uses a separate task from the awakening task above so
-                // neither blocks the other.
-                await BadgeManager.shared.refresh(items: allItems)
             }
             // Tap-to-dismiss the keyboard. `simultaneousGesture` runs in
             // parallel with TabView's swipe + every button's own tap so
