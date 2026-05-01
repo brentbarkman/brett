@@ -421,4 +421,108 @@ struct MutationAtomicityTests {
         let prev = (try? JSONSerialization.jsonObject(with: Data(prevJSON.utf8))) as? [String: Any]
         #expect(prev?["name"] as? String == "Original", "earliest previous name should win after compaction")
     }
+
+    // MARK: - Bulk atomicity (I6)
+
+    /// Bulk update is now per-bulk atomic, not per-item: either every row's
+    /// title updates AND every queued mutation lands, or `saver.rollback()`
+    /// reverts everything. The previous loop-of-`update` implementation
+    /// could leave the user with N-of-M items committed and no UI signal
+    /// when save failed mid-batch.
+    @Test func bulkUpdateRollsBackAllRowsOnSaveFailure() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let liveStore = ItemStore(context: context, saver: LiveSaver(context: context))
+
+        // Seed 5 items
+        var ids: [String] = []
+        for i in 0..<5 {
+            let item = try liveStore.create(
+                userId: "alice", title: "Original \(i)", type: .task,
+                status: .active, dueDate: nil, listId: nil, notes: nil, source: "Brett"
+            )
+            ids.append(item.id)
+        }
+
+        // Now use throwing saver — bulkUpdate should rollback ALL rows.
+        let throwingStore = ItemStore(
+            context: context,
+            saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context))
+        )
+
+        #expect(throws: SaverError.self) {
+            try throwingStore.bulkUpdate(ids: ids, changes: ["title": "New"], userId: "alice")
+        }
+
+        // Every row's title should be unchanged.
+        for (i, id) in ids.enumerated() {
+            let row = try context.fetch(
+                FetchDescriptor<Item>(predicate: #Predicate { $0.id == id })
+            ).first
+            #expect(row?.title == "Original \(i)", "row \(i) should have rolled back")
+        }
+    }
+
+    /// Mirror of `bulkUpdateRollsBackAllRowsOnSaveFailure` for `bulkDelete`:
+    /// no row should be soft-deleted if the bulk save fails.
+    @Test func bulkDeleteRollsBackAllRowsOnSaveFailure() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let liveStore = ItemStore(context: context, saver: LiveSaver(context: context))
+
+        var ids: [String] = []
+        for i in 0..<5 {
+            let item = try liveStore.create(
+                userId: "alice", title: "Item \(i)", type: .task,
+                status: .active, dueDate: nil, listId: nil, notes: nil, source: "Brett"
+            )
+            ids.append(item.id)
+        }
+
+        let throwingStore = ItemStore(
+            context: context,
+            saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context))
+        )
+
+        #expect(throws: SaverError.self) {
+            try throwingStore.bulkDelete(ids: ids, userId: "alice")
+        }
+
+        // No row should be soft-deleted.
+        for id in ids {
+            let row = try context.fetch(
+                FetchDescriptor<Item>(predicate: #Predicate { $0.id == id })
+            ).first
+            #expect(row?.deletedAt == nil, "deletedAt should still be nil after rollback")
+        }
+    }
+
+    /// Positive path: bulk update succeeds atomically across every row and
+    /// returns the count actually updated. Catches a regression where the
+    /// new throwing implementation accidentally drops a row.
+    @Test func bulkUpdateSucceedsAtomicallyForAllRows() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let store = ItemStore(context: context, saver: LiveSaver(context: context))
+
+        var ids: [String] = []
+        for i in 0..<3 {
+            let item = try store.create(
+                userId: "alice", title: "Original \(i)", type: .task,
+                status: .active, dueDate: nil, listId: nil, notes: nil, source: "Brett"
+            )
+            ids.append(item.id)
+        }
+
+        let updated = try store.bulkUpdate(
+            ids: ids,
+            changes: ["title": "New title"],
+            userId: "alice"
+        )
+        #expect(updated == 3)
+
+        for id in ids {
+            let row = try context.fetch(
+                FetchDescriptor<Item>(predicate: #Predicate { $0.id == id })
+            ).first
+            #expect(row?.title == "New title")
+        }
+    }
 }

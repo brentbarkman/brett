@@ -241,28 +241,104 @@ final class ItemStore: Clearable {
 
     // MARK: - Bulk mutate
 
-    /// Apply the same changeset to every id. Per-item `previousValues` are
-    /// captured inside `update(id:changes:userId:)` so each enqueued
-    /// mutation has the correct pre-mutation baseline.
+    /// Apply the same changeset to every id, in a single transaction.
     ///
-    /// **Atomicity:** Per-item, not per-bulk. Each call invokes `update`,
-    /// which is atomic for that item; if a save fails partway through, items
-    /// already processed remain committed and the rest are skipped.
-    func bulkUpdate(ids: [String], changes: [String: Any], userId: String) {
-        guard !ids.isEmpty, !changes.isEmpty else { return }
-        for id in ids {
-            update(id: id, changes: changes, userId: userId)
+    /// **Atomicity:** Per-bulk. All rows + queue entries land or none do —
+    /// if `saver.save()` throws, `saver.rollback()` reverts every model
+    /// mutation AND every queued `MutationQueueEntry` together. The error
+    /// is rethrown so callers can show a haptic-error fallback. Replaces
+    /// the previous per-item-loop implementation, which committed each
+    /// item in its own save and could leave the user with partial
+    /// completion (e.g. items 1-4 committed, items 5-10 dropped) and no
+    /// UI signal.
+    ///
+    /// Per-item `previousValues` are captured before any mutation so each
+    /// enqueued UPDATE carries the correct pre-mutation baseline for
+    /// server-side conflict resolution.
+    @discardableResult
+    func bulkUpdate(ids: [String], changes: [String: Any], userId: String) throws -> Int {
+        guard !ids.isEmpty, !changes.isEmpty else { return 0 }
+        let rows = ids.compactMap { findById($0, userId: userId) }
+        guard !rows.isEmpty else { return 0 }
+
+        let fields = Array(changes.keys)
+
+        // Capture pre-mutation `previousValues` + `beforeSnapshot` for each
+        // row BEFORE applying the changes. Doing this in a separate pass
+        // means a row's enqueued mutation always sees its own pristine
+        // baseline, never a sibling's post-mutation state.
+        var perRow: [(item: Item, previousValues: [String: Any], beforeSnapshot: [String: Any])] = []
+        perRow.reserveCapacity(rows.count)
+        for row in rows {
+            let capturedPrevious = row.previousValues(forFields: fields)
+            var beforeSnapshot = row.mutableFieldSnapshot()
+            for (field, oldValue) in capturedPrevious {
+                beforeSnapshot[field] = oldValue
+            }
+            perRow.append((item: row, previousValues: capturedPrevious, beforeSnapshot: beforeSnapshot))
         }
+
+        // Apply the optimistic mutation + enqueue + compact-and-apply for
+        // each row. No `saver.save()` inside the loop — one save at the
+        // end commits everything atomically.
+        let now = Date()
+        for entry in perRow {
+            entry.item.apply(changes: changes)
+            entry.item.updatedAt = now
+            if entry.item._syncStatus == SyncStatus.synced.rawValue {
+                entry.item._syncStatus = SyncStatus.pendingUpdate.rawValue
+            }
+            enqueueUpdate(
+                entry.item,
+                changedFields: fields,
+                previousValues: entry.previousValues,
+                beforeSnapshot: entry.beforeSnapshot
+            )
+        }
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback reverts every row's field changes AND every queued
+            // MutationQueueEntry — model + queue stay in lockstep across
+            // the whole batch.
+            saver.rollback()
+            logSaveFailure("bulkUpdate", error)
+            throw error
+        }
+
+        syncManager?.schedulePushDebounced()
+        return rows.count
     }
 
-    /// Soft-delete many items at once.
+    /// Soft-delete many items at once, in a single transaction.
     ///
-    /// **Atomicity:** Per-item, not per-bulk. Each call invokes `delete`,
-    /// which is atomic for that item; if a save fails partway through, items
-    /// already processed remain committed and the rest are skipped.
-    func bulkDelete(ids: [String], userId: String) {
-        guard !ids.isEmpty else { return }
-        for id in ids { delete(id: id, userId: userId) }
+    /// **Atomicity:** Per-bulk. Either every row's `deletedAt` is set and
+    /// every DELETE entry lands, or `saver.rollback()` reverts everything.
+    /// The error is rethrown so callers can show a haptic-error fallback.
+    @discardableResult
+    func bulkDelete(ids: [String], userId: String) throws -> Int {
+        guard !ids.isEmpty else { return 0 }
+        let rows = ids.compactMap { findById($0, userId: userId) }
+        guard !rows.isEmpty else { return 0 }
+
+        for row in rows {
+            let before = row.mutableFieldSnapshot()
+            row.deletedAt = Date()
+            row._syncStatus = SyncStatus.pendingDelete.rawValue
+            enqueueDelete(row, beforeSnapshot: before)
+        }
+
+        do {
+            try saver.save()
+        } catch {
+            saver.rollback()
+            logSaveFailure("bulkDelete", error)
+            throw error
+        }
+
+        syncManager?.schedulePushDebounced()
+        return rows.count
     }
 
     // MARK: - Internals

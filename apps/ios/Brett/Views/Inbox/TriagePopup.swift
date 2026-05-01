@@ -310,22 +310,37 @@ struct TriagePopup: View {
 
     private func commitSchedule(date: Date) {
         HapticManager.heavy()
-        itemStore.bulkUpdate(
-            ids: Array(selectedIDs),
-            changes: ["dueDate": date],
-            userId: userId
-        )
+        do {
+            try itemStore.bulkUpdate(
+                ids: Array(selectedIDs),
+                changes: ["dueDate": date],
+                userId: userId
+            )
+        } catch {
+            // Atomic bulk-update failed — surface the error so the user
+            // can retry. The popup stays open since dismissal happens
+            // only on success.
+            BrettLog.store.error("TriagePopup commitSchedule failed: \(String(describing: error), privacy: .public)")
+            HapticManager.error()
+            return
+        }
         isPresented = false
         onCommit()
     }
 
     private func commitMove(listId: String) {
         HapticManager.heavy()
-        itemStore.bulkUpdate(
-            ids: Array(selectedIDs),
-            changes: ["listId": listId],
-            userId: userId
-        )
+        do {
+            try itemStore.bulkUpdate(
+                ids: Array(selectedIDs),
+                changes: ["listId": listId],
+                userId: userId
+            )
+        } catch {
+            BrettLog.store.error("TriagePopup commitMove failed: \(String(describing: error), privacy: .public)")
+            HapticManager.error()
+            return
+        }
         isPresented = false
         onCommit()
     }

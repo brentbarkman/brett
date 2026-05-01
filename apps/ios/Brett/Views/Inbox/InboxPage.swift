@@ -386,7 +386,16 @@ private struct InboxPageBody: View {
     private func confirmBulkDelete() {
         let ids = Array(selectedIDs)
         guard !ids.isEmpty else { return }
-        itemStore.bulkDelete(ids: ids, userId: userId)
+        do {
+            try itemStore.bulkDelete(ids: ids, userId: userId)
+        } catch {
+            // Atomic bulk-delete failed — surface the error so the user
+            // sees something happened. Stay in select-mode so they can
+            // retry.
+            BrettLog.store.error("InboxPage confirmBulkDelete failed: \(String(describing: error), privacy: .public)")
+            HapticManager.error()
+            return
+        }
         exitSelectMode()
     }
 }
