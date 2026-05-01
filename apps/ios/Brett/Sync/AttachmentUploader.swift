@@ -19,7 +19,7 @@ import SwiftData
 /// binding (a detail sheet that shows a progress bar per item).
 @MainActor
 @Observable
-final class AttachmentUploader {
+final class AttachmentUploader: Clearable {
     /// Max retries before a row is abandoned on `failed`.
     static let maxRetryCount = 5
 
@@ -122,6 +122,35 @@ final class AttachmentUploader {
             // callbacks flow through `onUploadFinished` as iOS replays them.
             backgroundService.reconcilePendingTasks()
         }
+
+        ClearableStoreRegistry.register(self)
+    }
+
+    // MARK: - Clearable
+
+    /// Cancels in-flight uploads and resumes any pending background-session
+    /// continuations with `CancellationError` so callers awaiting them don't
+    /// hang past sign-out. Without the resume, iOS logs a leaked-continuation
+    /// warning when the uploader deallocates with an un-resumed
+    /// `CheckedContinuation` still in `pendingContinuations`.
+    ///
+    /// Note: we don't tear down `progressContinuation` here — the AsyncStream
+    /// is owned for the lifetime of the uploader and consumed by the UI. If
+    /// the UI re-binds at the next sign-in we want it intact.
+    func clearForSignOut() {
+        // Resume + clear async/await callers waiting on background uploads.
+        for (_, continuation) in pendingContinuations {
+            continuation.resume(throwing: CancellationError())
+        }
+        pendingContinuations.removeAll()
+
+        // Cancel the queue drain loop.
+        queueTask?.cancel()
+        queueTask = nil
+
+        // Cancel any per-row in-flight Task handles.
+        inFlight.values.forEach { $0.cancel() }
+        inFlight.removeAll()
     }
 
     /// Route the shared background service's callbacks into this uploader.
