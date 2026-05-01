@@ -49,6 +49,11 @@ enum ClearableStoreRegistry {
     /// Fan out `clearForSignOut()` across every live registered store.
     /// Called from `Session.tearDown()` before SwiftData is wiped.
     static func clearAll() {
+        // Compact dead boxes opportunistically — same pattern as
+        // `register(_:)`. Without this, view-scoped stores (e.g. a per-
+        // detail-view ChatStore) accumulate as dead WeakRefs across a
+        // long session and clearAll iterates over them every sign-out.
+        refs.removeAll { $0.store == nil }
         for ref in refs {
             ref.store?.clearForSignOut()
         }
