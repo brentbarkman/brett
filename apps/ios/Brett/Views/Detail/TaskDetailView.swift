@@ -232,11 +232,20 @@ private struct TaskDetailBody: View {
             }
             seedDraftIfNeeded()
         }
-        // Cancel any in-flight debounce on dismiss so a stale commit
-        // doesn't fire after the view tears down. Pending edits at
-        // dismissal are intentionally dropped — the user can't see them
-        // any more, and the next field change will re-arm the debounce.
+        // Flush any pending in-flight text edits BEFORE cancelling the
+        // debounce. Without this, drag-to-dismiss the sheet loses
+        // unsaved title changes — the title TextField commits only on
+        // .onSubmit (return key), and the title in the sheet header is
+        // the most common edit path.
+        //
+        // Gated on `hasUserEdited` so a sheet that's only being viewed
+        // (no edits) doesn't trigger spurious diffs. `commitDraft()` is
+        // itself idempotent (early-returns when the diff is empty), but
+        // skipping it for view-only dismissals keeps the trace clean.
         .onDisappear {
+            if hasUserEdited {
+                commitDraft()
+            }
             commitDebounceTask?.cancel()
         }
     }
