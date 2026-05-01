@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 
 /// The single source of truth for auth state in the app.
 ///
@@ -290,10 +291,40 @@ final class AuthManager {
         // don't render user A's items between sign-in and the first sync
         // round. Same-user re-sign-in (the common case after a token
         // expiry) skips this and keeps the local cache warm.
-        if let lastId = SharedConfig.resolveLastSignedInUserId(),
-           lastId != session.user.id {
+        //
+        // Three branches:
+        //   1. Sentinel matches incoming user → same user, skip wipe
+        //      (warm cache).
+        //   2. Sentinel exists but differs → user switch, wipe.
+        //   3. Sentinel is nil → can't prove ownership of any local rows.
+        //      App Group might be misconfigured (ad-hoc build, post-
+        //      uninstall reinstall), or the sentinel migration race lost
+        //      it. If there's any non-trivial local data on disk,
+        //      defensively wipe so the incoming user can never observe a
+        //      prior user's MutationQueueEntry / ConflictLogEntry /
+        //      SyncHealth rows that aren't yet user-scoped. On a clean
+        //      device this is a no-op.
+        let lastId = SharedConfig.resolveLastSignedInUserId()
+        if let lastId, lastId != session.user.id {
             BrettLog.auth.info("User switch detected on sign-in — wiping prior user's local data")
             PersistenceController.shared.wipeAllData()
+        } else if lastId == nil {
+            let context = PersistenceController.shared.mainContext
+            // Probe representative tables — if any have rows, the device
+            // isn't clean and we can't trust them to belong to the
+            // incoming user. We check a handful (UserProfile, Item,
+            // MutationQueueEntry) so a single empty table doesn't mask
+            // leftover state in the others.
+            let hasRows: Bool = {
+                if let row = (try? context.fetch(FetchDescriptor<UserProfile>()))?.first { _ = row; return true }
+                if let row = (try? context.fetch(FetchDescriptor<Item>()))?.first { _ = row; return true }
+                if let row = (try? context.fetch(FetchDescriptor<MutationQueueEntry>()))?.first { _ = row; return true }
+                return false
+            }()
+            if hasRows {
+                BrettLog.auth.info("Sign-in with missing last-user sentinel + non-empty local data — wiping defensively")
+                PersistenceController.shared.wipeAllData()
+            }
         }
 
         try KeychainStore.writeToken(session.token)
@@ -462,6 +493,15 @@ final class AuthManager {
         self.token = token
         self.currentUser = user
         self.hasSuccessfullyRefreshed = hasRefreshed
+    }
+
+    /// Test-only entry into the `persist(session:)` path. Lets the
+    /// AuthManager test suite exercise the user-switch + missing-sentinel
+    /// defensive wipe branches without standing up a full mock auth
+    /// provider chain.
+    @MainActor
+    func persistForTesting(session: AuthSession) async throws {
+        try await persist(session: session)
     }
     #endif
 }

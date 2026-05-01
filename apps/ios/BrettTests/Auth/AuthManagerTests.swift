@@ -351,6 +351,100 @@ struct AuthManagerTests {
                 "tokenProvider must reflect the new user's token after re-injection")
     }
 
+    // MARK: - Defensive wipe on missing sentinel
+
+    /// Sentinel is missing AND non-empty local data exists → wipe.
+    /// This is the App-Group-misconfigured / post-uninstall-reinstall /
+    /// sentinel-migration-race path: we can't prove the leftover rows
+    /// belong to the incoming user, so they must go.
+    @Test func persistWithMissingSentinelAndExistingDataWipes() async throws {
+        resetState()
+        defer { resetState() }
+
+        // Sentinel is intentionally absent (resetState already cleared it).
+        #expect(SharedConfig.resolveLastSignedInUserId() == nil)
+
+        // Seed leftover rows from a prior session. These could be from
+        // any user; without the sentinel we can't tell.
+        seedItem(userId: "unknown-prior-user", title: "leftover")
+        seedItem(userId: "unknown-prior-user", title: "another leftover")
+        #expect(itemCount() == 2)
+
+        let client = makeTestClient()
+        let manager = AuthManager(client: client)
+        // Stub /users/me so the post-persist hydrate doesn't blow up.
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u-new", email: "new@x.com")
+        )
+
+        let session = AuthSession(
+            token: "tok-new",
+            user: AuthUser(id: "u-new", email: "new@x.com")
+        )
+        try await manager.persistForTesting(session: session)
+
+        #expect(itemCount() == 0,
+                "missing-sentinel + non-empty data must trigger defensive wipe")
+        #expect(SharedConfig.resolveLastSignedInUserId() == "u-new",
+                "persist should also stamp the sentinel for next time")
+    }
+
+    /// Sentinel is missing AND device is clean → no wipe needed (no-op).
+    /// Fresh install path: nothing to wipe, sign-in proceeds normally.
+    @Test func persistWithMissingSentinelAndCleanDeviceDoesNotWipe() async throws {
+        resetState()
+        defer { resetState() }
+
+        #expect(SharedConfig.resolveLastSignedInUserId() == nil)
+        #expect(itemCount() == 0)
+
+        let client = makeTestClient()
+        let manager = AuthManager(client: client)
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u-fresh", email: "fresh@x.com")
+        )
+
+        let session = AuthSession(
+            token: "tok-fresh",
+            user: AuthUser(id: "u-fresh", email: "fresh@x.com")
+        )
+        try await manager.persistForTesting(session: session)
+
+        // No wipe was needed. Sentinel is now set.
+        #expect(SharedConfig.resolveLastSignedInUserId() == "u-fresh")
+    }
+
+    /// Sentinel matches the incoming user → warm cache preserved (no wipe).
+    /// Same-user re-sign-in after token expiry: keep their data.
+    @Test func persistWithMatchingSentinelPreservesData() async throws {
+        resetState()
+        defer { resetState() }
+
+        SharedConfig.writeLastSignedInUserId("u-same")
+        seedItem(userId: "u-same", title: "warm cache item")
+        #expect(itemCount() == 1)
+
+        let client = makeTestClient()
+        let manager = AuthManager(client: client)
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u-same", email: "same@x.com")
+        )
+
+        let session = AuthSession(
+            token: "tok-same",
+            user: AuthUser(id: "u-same", email: "same@x.com")
+        )
+        try await manager.persistForTesting(session: session)
+
+        #expect(itemCount() == 1, "same-user re-sign-in keeps cached data warm")
+    }
+
     @Test func hydrateTaskDoesNotRetainSelfAfterRelease() async throws {
         resetState()
         defer { resetState() }
