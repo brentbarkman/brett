@@ -236,7 +236,24 @@ final class ShareIngestor {
         (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
     }
 
+    /// Hard ceiling on share-payload file size. The extension's own caps
+    /// (`SharePayload.Limits`) keep notes ≤10KB and URLs ≤2KB, so a real
+    /// payload is well under 50KB. 100KB is a generous defence against a
+    /// hostile / buggy process with App Group access writing a multi-GB
+    /// file — `Data(contentsOf:)` would otherwise eat memory before the
+    /// JSON decoder rejected.
+    private static let maxSharePayloadBytes = 100 * 1024
+
     private func decodePayload(at file: URL) -> SharePayload? {
+        // Pre-flight size check. Bail before allocating.
+        if let attrs = try? file.resourceValues(forKeys: [.fileSizeKey]),
+           let size = attrs.fileSize,
+           size > Self.maxSharePayloadBytes {
+            BrettLog.sync.error(
+                "ShareIngestor: rejecting oversized payload \(file.lastPathComponent, privacy: .public) (\(size, privacy: .public) bytes)"
+            )
+            return nil
+        }
         guard let data = try? Data(contentsOf: file) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
