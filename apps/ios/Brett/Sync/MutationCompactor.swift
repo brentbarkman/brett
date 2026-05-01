@@ -251,6 +251,25 @@ extension MutationCompactor {
         if let toInsert = result.toInsert {
             context.insert(toInsert)
         }
+
+        // Contract guard: `result.toUpdate` is only safe to mutate-in-place
+        // because `pending` was fetched on this same `context` — its dirty-
+        // tracking will pick up the in-place changes at the next save. If a
+        // future refactor passes in a list fetched on a different context
+        // (or detached), the in-place writes would silently no-op. Assert in
+        // DEBUG so a contract violation crashes the moment it happens.
+        #if DEBUG
+        if let toUpdate = result.toUpdate {
+            assert(
+                toUpdate.modelContext === context,
+                """
+                MutationCompactor: toUpdate entry's modelContext must match the call context.
+                Caller is bypassing the pending-fetch contract — in-place mutations on a
+                detached or foreign-context entry will be lost.
+                """
+            )
+        }
+        #endif
     }
 
     @MainActor
