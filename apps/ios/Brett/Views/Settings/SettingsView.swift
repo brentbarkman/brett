@@ -136,9 +136,9 @@ private struct SettingsBody: View {
         case .location:
             LocationSettingsView(store: profileStore)
         case .background:
-            BackgroundSettingsView(store: profileStore)
+            BackgroundSettingsView(userId: userId, store: profileStore)
         case .account:
-            AccountSettingsView(store: profileStore)
+            AccountSettingsView(userId: userId, store: profileStore)
         case .updates:
             UpdatesSettingsView()
         case .syncHealth:

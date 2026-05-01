@@ -11,10 +11,12 @@ import SwiftData
 /// (Electron file-save dialog), and the iOS settings shouldn't advertise
 /// a feature it can't deliver.
 ///
-/// Reads the profile via `@Query<UserProfile>` (`SwiftData` is canonical
-/// for the row); only ever one row in the DB at a time, so we read `.first`
-/// without a userId predicate. Sign-out wipes the row.
+/// Reads the profile via `@Query<UserProfile>` scoped to the signed-in
+/// `userId`. Belt-and-suspenders against the brief window between
+/// `Session.tearDown()` starting and `wipeAllData()` finishing where a
+/// stale row from a prior user could still be visible.
 struct AccountSettingsView: View {
+    let userId: String
     @Bindable var store: UserProfileStore
     @Environment(AuthManager.self) private var authManager
 
@@ -23,14 +25,19 @@ struct AccountSettingsView: View {
     @State private var isDeleting = false
     @State private var errorMessage: String?
 
-    @Query(sort: \UserProfile.id) private var profiles: [UserProfile]
+    @Query private var profiles: [UserProfile]
     private var currentProfile: UserProfile? { profiles.first }
 
     private let client: APIClient
 
-    init(store: UserProfileStore, client: APIClient = .shared) {
+    init(userId: String, store: UserProfileStore, client: APIClient = .shared) {
+        self.userId = userId
         self.store = store
         self.client = client
+        let predicate = #Predicate<UserProfile> { profile in
+            profile.id == userId
+        }
+        _profiles = Query(filter: predicate, sort: \UserProfile.id)
     }
 
     var body: some View {

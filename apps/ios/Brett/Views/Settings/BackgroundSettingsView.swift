@@ -13,20 +13,27 @@ import SwiftData
 /// `UserProfileStore` (and therefore the live `BackgroundView`)
 /// updates immediately.
 ///
-/// Reads the profile via `@Query<UserProfile>` (`SwiftData` is canonical
-/// for the row); only ever one row in the DB at a time, so we read `.first`
-/// without a userId predicate. Sign-out wipes the row.
+/// Reads the profile via `@Query<UserProfile>` scoped to the signed-in
+/// `userId`. Belt-and-suspenders against the brief window between
+/// `Session.tearDown()` starting and `wipeAllData()` finishing where a
+/// stale row from a prior user could still be visible.
 struct BackgroundSettingsView: View {
+    let userId: String
     @Bindable var store: UserProfileStore
 
-    @Query(sort: \UserProfile.id) private var profiles: [UserProfile]
+    @Query private var profiles: [UserProfile]
     private var currentProfile: UserProfile? { profiles.first }
 
     private let client: APIClient
 
-    init(store: UserProfileStore? = nil, client: APIClient = .shared) {
+    init(userId: String, store: UserProfileStore? = nil, client: APIClient = .shared) {
+        self.userId = userId
         self.store = store ?? UserProfileStore()
         self.client = client
+        let predicate = #Predicate<UserProfile> { profile in
+            profile.id == userId
+        }
+        _profiles = Query(filter: predicate, sort: \UserProfile.id)
     }
 
     // MARK: - State

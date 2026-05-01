@@ -27,10 +27,18 @@ struct BackgroundView: View {
     /// Live read of the user's profile. SwiftData is canonical;
     /// `UserProfileStore` is mutation-only after Wave-B Phase 5. The
     /// background view may render on the auth screen with no profile
-    /// row present — `.first` is safely nil in that case and the
-    /// fallback asset path takes over.
+    /// row present, AND it may render briefly during a sign-out drain
+    /// where `Session.tearDown()` has started but `wipeAllData()`
+    /// hasn't finished — so >1 row could be visible if a fresh sign-in
+    /// races the wipe. `BackgroundView` has no `@Environment(AuthManager)`
+    /// (it's used at the auth boundary too), so a userId predicate
+    /// isn't available. Defensive: only consume the row when exactly
+    /// one is present; multi-row → fall through to the asset fallback
+    /// rather than picking up a stale user's preference.
     @Query(sort: \UserProfile.id) private var profiles: [UserProfile]
-    private var currentProfile: UserProfile? { profiles.first }
+    private var currentProfile: UserProfile? {
+        profiles.count == 1 ? profiles.first : nil
+    }
 
     /// Image key currently being rendered. Drives the crossfade via
     /// `.animation(_, value:)`. For remote images the key is the URL
