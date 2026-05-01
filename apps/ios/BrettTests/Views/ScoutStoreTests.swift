@@ -22,7 +22,13 @@ import SwiftData
 @MainActor
 struct ScoutStoreTests {
     /// Reset MockURLProtocol before each test. See AttachmentUploaderTests.
-    init() { MockURLProtocol.reset() }
+    /// Also seed a fake `ActiveSession.userId` so `ScoutStore.upsertLocal`
+    /// (which guards against nil userId to prevent orphan rows on real
+    /// auth gaps) actually persists rows in the test fixture.
+    init() {
+        MockURLProtocol.reset()
+        ActiveSession.installFakeUserIdForTesting("test-user")
+    }
 
     // MARK: - Fixtures
 

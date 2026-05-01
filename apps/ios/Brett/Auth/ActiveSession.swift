@@ -146,7 +146,30 @@ enum ActiveSession {
     /// correct behaviour (nothing to sync without an account).
     static var syncManager: SyncManager? { current?.syncManager }
 
-    static var userId: String? { current?.userId }
+    static var userId: String? {
+        #if DEBUG
+        if let fake = fakeUserIdForTesting { return fake }
+        #endif
+        return current?.userId
+    }
+
+    #if DEBUG
+    /// Test-only: directly seed `userId` without constructing a real
+    /// `Session`. Store tests that need an authenticated context but
+    /// don't want to start sync engines (which `Session.start()` does)
+    /// call this in setup. Pair with `endTestingSession()` in teardown
+    /// to avoid leaks across test cases.
+    static func installFakeUserIdForTesting(_ userId: String) {
+        fakeUserIdForTesting = userId
+    }
+
+    /// Test-only counterpart to `installFakeUserIdForTesting`.
+    static func endTestingSession() {
+        fakeUserIdForTesting = nil
+    }
+
+    private static var fakeUserIdForTesting: String?
+    #endif
 }
 
 // MARK: - Engine adapters

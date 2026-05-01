@@ -189,11 +189,15 @@ final class ScoutStore: Clearable {
 
     func delete(id: String) async throws {
         try await client.deleteScout(id: id)
-        // Wave-A leftover: ScoutStore mutations still read the active
-        // session for userId rather than taking it as an explicit
-        // parameter (slated for cleanup in a follow-up wave).
-        let uid = ActiveSession.userId ?? ""
-        if let context, let row = findById(id, userId: uid) {
+        // A nil `ActiveSession.userId` is treated as "do not write" rather
+        // than "write unscoped" — refusing to operate without a known
+        // userId prevents orphan-row drift during the brief auth-gap
+        // windows (cold-launch keychain hydrate, sign-out drain).
+        guard let userId = ActiveSession.userId else {
+            BrettLog.store.error("ScoutStore.delete called without ActiveSession.userId — refusing to operate on unscoped row")
+            return
+        }
+        if let context, let row = findById(id, userId: userId) {
             context.delete(row)
             saveContext(context)
         }
@@ -228,16 +232,22 @@ final class ScoutStore: Clearable {
     /// New rows are created with the currently authenticated `userId`. The
     /// ScoutDTO wire format doesn't carry the user id (scouts are always
     /// read within the authenticated caller's scope), so we lift it from
-    /// `ActiveSession.userId` at insert time. A freshly-created scout row
+    /// `ActiveSession.userId` at insert time. A nil `ActiveSession.userId`
+    /// is treated as "do not write" rather than "write unscoped" — a row
     /// with an empty `userId` string would be unreachable via
     /// `fetchScouts(userId:)` and accumulate as dead rows in the DB.
     private func upsertLocal(_ dtos: [APIClient.ScoutDTO]) {
         guard let context else { return }
-        // Wave-A leftover: ScoutDTO doesn't carry userId on the wire, and
-        // ScoutStore mutations still lift the id from ActiveSession rather
-        // than taking it as an explicit parameter. Pass it through to
-        // findById so the existing-row lookup is properly user-scoped.
-        let uid = ActiveSession.userId ?? ""
+        // Refuse to upsert during the brief auth-gap windows where
+        // `ActiveSession.userId` is nil (cold-launch keychain hydrate,
+        // `clearInvalidSession()`, sign-out drain). The DTOs we're
+        // iterating over carry no userId (server-side they're per-account
+        // already), so `ActiveSession` is the only userId source here —
+        // dropping the upsert beats inserting orphan rows.
+        guard let uid = ActiveSession.userId else {
+            BrettLog.store.error("ScoutStore.upsertLocal called without ActiveSession.userId — dropping upsert to avoid unscoped rows")
+            return
+        }
         for dto in dtos {
             let existing = findById(dto.id, userId: uid)
             let row = existing ?? Scout(
@@ -250,7 +260,7 @@ final class ScoutStore: Clearable {
             // On update: if an older row somehow landed with an empty
             // userId (shipped before this fix), backfill it so the row
             // becomes reachable again.
-            if row.userId.isEmpty && !uid.isEmpty {
+            if row.userId.isEmpty {
                 row.userId = uid
             }
             row.name = dto.name
