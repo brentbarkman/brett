@@ -63,9 +63,15 @@ final class GoogleSignInProvider: AuthProvider {
         // client-ID audience + Google's JWKS and hands back a bearer token.
         let session = try await endpoints.signInIOSGoogle(idToken: idToken)
 
-        // AuthManager persists the token via Keychain; we just return the
-        // populated session so the provider contract matches Email / Apple.
-        APIClient.shared.tokenProvider = { session.token }
+        // Just return the populated session — AuthManager handles the rest.
+        // It persists the token to Keychain in `persist(session:)` and its
+        // own `tokenProvider` closure (set once in init) chases the live
+        // `self.token`. We deliberately do NOT overwrite
+        // `APIClient.shared.tokenProvider` here: a value-captured closure
+        // (`{ session.token }`) freezes a single token, so a later sign-out
+        // would clear `AuthManager.token` while the API client kept handing
+        // out the captured Google token to every outgoing request — a
+        // cross-user contract violation across sign-in/sign-out cycles.
         return session
     }
 

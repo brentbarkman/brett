@@ -306,6 +306,51 @@ struct AuthManagerTests {
         #expect(itemCount() == 1)
     }
 
+    // MARK: - tokenProvider contract
+    //
+    // The Google provider used to overwrite `APIClient.shared.tokenProvider`
+    // with a value-captured closure (`{ session.token }`) at sign-in. That
+    // froze a single token: after sign-out the captured token would still
+    // ship on every outgoing request even though `AuthManager.token` had
+    // been cleared. This test pins the actual contract — AuthManager's
+    // tokenProvider is set ONCE in init and chases the live `self.token`
+    // across sign-in/sign-out cycles — so any future provider that
+    // re-introduces the override regresses here.
+    @Test func tokenProviderChasesCurrentTokenAcrossSignOut() async {
+        resetState()
+        defer { resetState() }
+
+        let client = makeTestClient()
+        let manager = AuthManager(client: client)
+
+        // Pre-condition: tokenProvider was wired in init.
+        #expect(client.tokenProvider != nil, "AuthManager.init must install a tokenProvider")
+
+        manager.injectFakeSession(
+            user: AuthUser(id: "u1", email: "u1@x.com"),
+            token: "live-token-1",
+            hasRefreshed: true
+        )
+        #expect(client.tokenProvider?() == "live-token-1",
+                "tokenProvider must read the freshly-injected token")
+
+        // Sign-out clears manager.token. The closure is the SAME identity
+        // (set once in init) and must reflect the cleared state.
+        MockURLProtocol.stub(url: signOutURL(for: client), statusCode: 200, body: Data())
+        await manager.signOut()
+        #expect(client.tokenProvider?() == nil,
+                "after signOut the tokenProvider must chase to nil — not return a stale captured value")
+
+        // Sign in as a different user. Same closure, same chase.
+        manager.injectFakeSession(
+            user: AuthUser(id: "u2", email: "u2@x.com"),
+            token: "live-token-2",
+            hasRefreshed: true
+        )
+        #expect(client.tokenProvider?() == "live-token-2",
+                "tokenProvider must reflect the new user's token after re-injection")
+    }
+
     @Test func hydrateTaskDoesNotRetainSelfAfterRelease() async throws {
         resetState()
         defer { resetState() }
