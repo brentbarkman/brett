@@ -236,7 +236,13 @@ final class AttachmentUploader {
         }
 
         let uploadId = UUID().uuidString
-        let stagedName = "\(uploadId)-\(filename)"
+        // Normalize via lastPathComponent so a hostile / buggy caller can't
+        // smuggle path separators into the staged filename. iOS's
+        // `appendingPathComponent` doesn't traverse `..`, but a `filename`
+        // containing `/` would otherwise produce a multi-segment URL whose
+        // parent doesn't exist — `copyItem` would then fail at runtime.
+        let safeName = (filename as NSString).lastPathComponent
+        let stagedName = "\(uploadId)-\(safeName)"
         let stagedURL = uploadStagingDirectory.appendingPathComponent(stagedName)
 
         do {
