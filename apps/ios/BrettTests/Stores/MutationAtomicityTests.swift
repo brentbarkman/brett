@@ -69,14 +69,15 @@ struct MutationAtomicityTests {
 
     @Test func deleteRollsBackOnSaveFailure() throws {
         let context = try InMemoryPersistenceController.makeContext()
-        let liveStore = ItemStore(
-            context: context,
-            saver: LiveSaver(context: context)
-        )
-        let item = try liveStore.create(
-            userId: "alice", title: "Goner", type: .task,
-            status: .active, dueDate: nil, listId: nil, notes: nil, source: "Brett"
-        )
+        // Seed a row that's already SYNCED — no pending CREATE in the
+        // queue. This is the case where `delete` actually inserts a new
+        // DELETE entry into the queue (rather than the CREATE+DELETE
+        // compaction net-zero). Without it, the queue-rollback assertion
+        // below is trivially true.
+        let item = TestFixtures.makeItem(userId: "alice", title: "Goner")
+        item._syncStatus = SyncStatus.synced.rawValue
+        context.insert(item)
+        try context.save()
         let itemId = item.id
 
         let throwingStore = ItemStore(
@@ -90,6 +91,19 @@ struct MutationAtomicityTests {
         ).first
         #expect(refreshed != nil, "delete rolled back; item should still exist")
         #expect(refreshed?.deletedAt == nil, "deletedAt should be nil after rollback")
+
+        // Symmetry with `createRollsBackBothItemAndQueueOnSaveFailure`: the
+        // queued DELETE entry must also be rolled back. Without this, the
+        // model rolls back to "active" while the queue keeps the DELETE —
+        // the next push round wipes the row server-side, losing the user's
+        // data without a UI signal.
+        let deleteAction = MutationAction.delete.rawValue
+        let queueEntries = try context.fetch(
+            FetchDescriptor<MutationQueueEntry>(
+                predicate: #Predicate { $0.entityId == itemId && $0.action == deleteAction }
+            )
+        )
+        #expect(queueEntries.isEmpty, "delete rollback should remove the queued DELETE entry")
     }
 
     @Test func toggleStatusRollsBackOnSaveFailure() throws {
