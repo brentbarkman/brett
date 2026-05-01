@@ -444,7 +444,9 @@ private struct TaskDetailBody: View {
             } catch {
                 // Network error — keep the local hydrate. The chat panel
                 // already renders SOMETHING; surfacing a banner here is
-                // worse than a quiet fallback.
+                // worse than a quiet fallback. Still log so real errors
+                // are observable in Console.app.
+                BrettLog.ui.info("TaskDetailView hydrateChat fetch failed (kept local): \(String(describing: error), privacy: .public)")
             }
         }
     }
@@ -464,7 +466,10 @@ private struct TaskDetailBody: View {
                 }
             }
         } catch {
-            // Non-fatal — keep whatever we had from local state.
+            // Non-fatal — keep whatever we had from local state. Logged at
+            // info so transient network blips don't pollute the error
+            // signal, but the failure is still observable in Console.app.
+            BrettLog.ui.info("TaskDetailView refreshFromServer failed (non-fatal): \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -529,7 +534,12 @@ private struct TaskDetailBody: View {
             )
             await refreshFromServer()
         } catch {
-            // swallow
+            // Surface in logs rather than swallowing — without this, a
+            // failed link tap looks identical to a successful one (no UI
+            // state changes) and the user has no signal anything went
+            // wrong. Until a banner hook lands here, this at least makes
+            // the failure visible in Console.app and to telemetry.
+            BrettLog.ui.error("TaskDetailView addLink failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -538,7 +548,9 @@ private struct TaskDetailBody: View {
             try await APIClient.shared.deleteLink(fromItemId: itemId, linkId: link.linkId)
             await refreshFromServer()
         } catch {
-            // swallow
+            // Same rationale as addLink — a silent failure leaves the link
+            // visible in the panel and the user assumes the unlink worked.
+            BrettLog.ui.error("TaskDetailView removeLink failed: \(String(describing: error), privacy: .public)")
         }
     }
 }
