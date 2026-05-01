@@ -509,6 +509,72 @@ struct MutationAtomicityTests {
         }
     }
 
+    /// `ListStore.reorder` is per-bulk atomic: either every row's
+    /// `sortOrder` updates AND every queued mutation lands, or
+    /// `saver.rollback()` reverts everything. The previous loop-of-`update`
+    /// implementation could leave the user with a partial reorder (rows 1-3
+    /// committed, rows 4-N at their old positions) and no UI signal when
+    /// save failed mid-batch.
+    @Test func listReorderRollsBackAllRowsOnSaveFailure() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let liveStore = ListStore(context: context, saver: LiveSaver(context: context))
+
+        var ids: [String] = []
+        var originalOrders: [Int] = []
+        for i in 0..<5 {
+            let list = try liveStore.create(userId: "alice", name: "List \(i)")
+            ids.append(list.id)
+            originalOrders.append(list.sortOrder)
+        }
+
+        let throwingStore = ListStore(
+            context: context,
+            saver: ThrowingSaverWrappingLive(live: LiveSaver(context: context))
+        )
+
+        // Reorder in reverse — every row should change. With save failing,
+        // ALL rows must roll back to their original sortOrder.
+        let reversedIds = Array(ids.reversed())
+        #expect(throws: SaverError.self) {
+            try throwingStore.reorder(ids: reversedIds, userId: "alice")
+        }
+
+        for (i, id) in ids.enumerated() {
+            let row = try context.fetch(
+                FetchDescriptor<ItemList>(predicate: #Predicate { $0.id == id })
+            ).first
+            #expect(row?.sortOrder == originalOrders[i], "row \(i) should have rolled back to original sortOrder")
+        }
+    }
+
+    /// Positive path: list reorder succeeds atomically across every row and
+    /// returns the count of rows that actually changed. Catches a
+    /// regression where the new throwing implementation accidentally drops
+    /// a row. Uses 4 rows + a reverse so every row's sortOrder changes
+    /// (with an odd row count the middle row stays put on a reverse).
+    @Test func listReorderSucceedsAtomicallyForAllRows() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let store = ListStore(context: context, saver: LiveSaver(context: context))
+
+        var ids: [String] = []
+        for i in 0..<4 {
+            let list = try store.create(userId: "alice", name: "List \(i)")
+            ids.append(list.id)
+        }
+
+        // Reverse the order — every row's sortOrder changes for an even count.
+        let reversed = Array(ids.reversed())
+        let updated = try store.reorder(ids: reversed, userId: "alice")
+        #expect(updated == 4)
+
+        for (i, id) in reversed.enumerated() {
+            let row = try context.fetch(
+                FetchDescriptor<ItemList>(predicate: #Predicate { $0.id == id })
+            ).first
+            #expect(row?.sortOrder == i, "row \(id) should have new sortOrder \(i)")
+        }
+    }
+
     /// Positive path: bulk update succeeds atomically across every row and
     /// returns the count actually updated. Catches a regression where the
     /// new throwing implementation accidentally drops a row.

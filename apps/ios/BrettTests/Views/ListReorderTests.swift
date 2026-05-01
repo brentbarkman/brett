@@ -29,7 +29,7 @@ struct ListReorderTests {
         try context.save()
 
         // Act: move c to the front, push a + b down one slot each.
-        store.reorder(ids: ["c", "a", "b"], userId: "u")
+        try store.reorder(ids: ["c", "a", "b"], userId: "u")
 
         // Assert: sortOrder on each list reflects its new index.
         // Direct `FetchDescriptor` because Wave B made `ListStore.fetchAll`
@@ -63,7 +63,7 @@ struct ListReorderTests {
         // treat this as a no-op. Count mutation queue entries before and
         // after to prove it.
         let before = try context.fetch(FetchDescriptor<MutationQueueEntry>()).count
-        store.reorder(ids: ["a", "b"], userId: "u")
+        try store.reorder(ids: ["a", "b"], userId: "u")
         let after = try context.fetch(FetchDescriptor<MutationQueueEntry>()).count
 
         #expect(after == before, "no-op reorder must not enqueue any mutations")
@@ -89,7 +89,7 @@ struct ListReorderTests {
         try context.save()
 
         // Swap a and b → both rows change sortOrder, c stays put.
-        store.reorder(ids: ["b", "a", "c"], userId: "u")
+        try store.reorder(ids: ["b", "a", "c"], userId: "u")
 
         let mutations = try context.fetch(FetchDescriptor<MutationQueueEntry>())
         let updateMutationIds = mutations
@@ -114,7 +114,7 @@ struct ListReorderTests {
 
         // Supplying unknown ids around a real one must still succeed and
         // update the real one to its new index (0, since it's first).
-        store.reorder(ids: ["a", "ghost-1", "ghost-2"], userId: "u")
+        try store.reorder(ids: ["a", "ghost-1", "ghost-2"], userId: "u")
 
         let fetched = try context.fetch(
             FetchDescriptor<ItemList>(predicate: #Predicate { $0.deletedAt == nil })

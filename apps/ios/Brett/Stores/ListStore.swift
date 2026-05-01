@@ -166,11 +166,79 @@ final class ListStore: Clearable {
         update(id: id, changes: ["archivedAt": NSNull()], userId: userId)
     }
 
-    func reorder(ids: [String], userId: String) {
+    /// Rewrite `sortOrder` on every list to match its index in `ids`.
+    ///
+    /// **Atomicity:** Per-bulk. All affected rows + queue entries land or
+    /// none do — if `saver.save()` throws, `saver.rollback()` reverts every
+    /// model mutation AND every queued `MutationQueueEntry` together. The
+    /// error is rethrown so callers can show a haptic-error fallback.
+    /// Replaces the previous loop-of-`update` implementation, which
+    /// committed each row in its own save and could leave the user with
+    /// rows 1-3 reordered and rows 4-N at their old positions, with no UI
+    /// signal. Mirrors `ItemStore.bulkUpdate`.
+    @discardableResult
+    func reorder(ids: [String], userId: String) throws -> Int {
+        // Find rows whose sortOrder actually needs to change. Skipping
+        // already-correct rows mirrors the old behavior and keeps the
+        // mutation queue lean (a no-op reorder enqueues nothing).
+        var rowsToUpdate: [(list: ItemList, newIndex: Int)] = []
         for (index, id) in ids.enumerated() {
             guard let list = findById(id, userId: userId), list.sortOrder != index else { continue }
-            update(id: id, changes: ["sortOrder": index], userId: userId)
+            rowsToUpdate.append((list: list, newIndex: index))
         }
+        guard !rowsToUpdate.isEmpty else { return 0 }
+
+        // Capture pre-mutation `previousValues` + `beforeSnapshot` for each
+        // row BEFORE applying any changes. Mirrors `ItemStore.bulkUpdate`
+        // so each enqueued mutation carries its own pristine baseline.
+        let fields = ["sortOrder"]
+        var perRow: [(list: ItemList, newIndex: Int, previousValues: [String: Any], beforeSnapshot: [String: Any])] = []
+        perRow.reserveCapacity(rowsToUpdate.count)
+        for entry in rowsToUpdate {
+            let capturedPrevious = entry.list.previousValues(forFields: fields)
+            var beforeSnapshot = entry.list.mutableFieldSnapshot()
+            for (field, oldValue) in capturedPrevious {
+                beforeSnapshot[field] = oldValue
+            }
+            perRow.append((
+                list: entry.list,
+                newIndex: entry.newIndex,
+                previousValues: capturedPrevious,
+                beforeSnapshot: beforeSnapshot
+            ))
+        }
+
+        // Apply optimistic mutation + enqueue + compact-and-apply for each
+        // row. No `saver.save()` inside the loop — one save at the end
+        // commits everything atomically.
+        let now = Date()
+        for entry in perRow {
+            entry.list.sortOrder = entry.newIndex
+            entry.list.updatedAt = now
+            if entry.list._syncStatus == SyncStatus.synced.rawValue {
+                entry.list._syncStatus = SyncStatus.pendingUpdate.rawValue
+            }
+            enqueueUpdate(
+                entry.list,
+                changedFields: fields,
+                previousValues: entry.previousValues,
+                beforeSnapshot: entry.beforeSnapshot
+            )
+        }
+
+        do {
+            try saver.save()
+        } catch {
+            // Rollback reverts every row's sortOrder change AND every queued
+            // MutationQueueEntry — model + queue stay in lockstep across
+            // the whole batch.
+            saver.rollback()
+            logSaveFailure("reorder", error)
+            throw error
+        }
+
+        syncManager?.schedulePushDebounced()
+        return perRow.count
     }
 
     // MARK: - Helpers
