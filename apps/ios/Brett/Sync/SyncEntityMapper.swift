@@ -173,7 +173,7 @@ enum SyncEntityMapper {
     }
 
     /// Copy every server-mirrored field from dict → existing model.
-    static func applyItemFields(_ item: Item, from dict: [String: Any]) {
+    private static func applyItemFields(_ item: Item, from dict: [String: Any]) {
         if let v = dict["type"] as? String { item.type = v }
         if let v = dict["status"] as? String { item.status = v }
         if let v = dict["title"] as? String { item.title = v }
@@ -242,7 +242,7 @@ enum SyncEntityMapper {
     /// dict-driven helper (rather than decoding into a fresh row and copying)
     /// so the partial-update semantics — only assign fields the server
     /// actually sent — match what the legacy implementation did.
-    static func applyListFields(_ list: ItemList, from dict: [String: Any]) {
+    private static func applyListFields(_ list: ItemList, from dict: [String: Any]) {
         if let v = dict["name"] as? String { list.name = v }
         if let v = dict["colorClass"] as? String { list.colorClass = v }
         if let v = dict["sortOrder"] as? Int { list.sortOrder = v }
@@ -311,7 +311,7 @@ enum SyncEntityMapper {
         }
     }
 
-    static func applyCalendarEventFields(_ event: CalendarEvent, from dict: [String: Any]) {
+    private static func applyCalendarEventFields(_ event: CalendarEvent, from dict: [String: Any]) {
         if let v = dict["googleAccountId"] as? String { event.googleAccountId = v }
         if let v = dict["calendarListId"] as? String { event.calendarListId = v }
         if let v = dict["googleEventId"] as? String { event.googleEventId = v }
@@ -376,7 +376,7 @@ enum SyncEntityMapper {
     /// dict-driven helper (rather than decoding into a fresh row and copying)
     /// so the partial-update semantics — only assign fields the server
     /// actually sent — match what the legacy implementation did.
-    static func applyCalendarEventNoteFields(_ note: CalendarEventNote, from dict: [String: Any]) {
+    private static func applyCalendarEventNoteFields(_ note: CalendarEventNote, from dict: [String: Any]) {
         if let v = dict["content"] as? String { note.content = v }
         if let d = parseDate(dict["createdAt"]) { note.createdAt = d }
         if let d = parseDate(dict["updatedAt"]) { note.updatedAt = d }
@@ -440,7 +440,7 @@ enum SyncEntityMapper {
         }
     }
 
-    static func applyScoutFields(_ scout: Scout, from dict: [String: Any]) {
+    private static func applyScoutFields(_ scout: Scout, from dict: [String: Any]) {
         if let v = dict["name"] as? String { scout.name = v }
         if let v = dict["avatarLetter"] as? String { scout.avatarLetter = v }
         if let v = dict["avatarGradientFrom"] as? String { scout.avatarGradientFrom = v }
@@ -501,7 +501,7 @@ enum SyncEntityMapper {
         }
     }
 
-    static func applyScoutFindingFields(_ finding: ScoutFinding, from dict: [String: Any]) {
+    private static func applyScoutFindingFields(_ finding: ScoutFinding, from dict: [String: Any]) {
         if let v = dict["scoutId"] as? String { finding.scoutId = v }
         finding.scoutRunId = dict["scoutRunId"] as? String
         if let v = dict["type"] as? String { finding.type = v }
@@ -554,7 +554,7 @@ enum SyncEntityMapper {
     /// dict-driven helper (rather than decoding into a fresh row and copying)
     /// so the partial-update semantics — only assign fields the server
     /// actually sent — match what the legacy implementation did.
-    static func applyBrettMessageFields(_ msg: BrettMessage, from dict: [String: Any]) {
+    private static func applyBrettMessageFields(_ msg: BrettMessage, from dict: [String: Any]) {
         if let v = dict["role"] as? String { msg.role = v }
         if let v = dict["content"] as? String { msg.content = v }
         msg.itemId = dict["itemId"] as? String
@@ -599,7 +599,7 @@ enum SyncEntityMapper {
     /// dict-driven helper (rather than decoding into a fresh row and copying)
     /// so the partial-update semantics — only assign fields the server
     /// actually sent — match what the legacy implementation did.
-    static func applyAttachmentFields(_ att: Attachment, from dict: [String: Any]) {
+    private static func applyAttachmentFields(_ att: Attachment, from dict: [String: Any]) {
         if let v = dict["filename"] as? String { att.filename = v }
         if let v = dict["mimeType"] as? String { att.mimeType = v }
         if let v = dict["sizeBytes"] as? Int { att.sizeBytes = v }
