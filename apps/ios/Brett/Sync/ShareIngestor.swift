@@ -132,9 +132,25 @@ final class ShareIngestor {
             // signed in (user A shared → signed out → user B signed in),
             // refuse to import. Quarantines to failed/ so the payload is
             // visible to debug but can't leak into the wrong account.
-            if let payloadUserId = payload.userId, payloadUserId != userId {
-                moveToFailed(file, reason: "user-mismatch")
-                continue
+            if let payloadUserId = payload.userId {
+                if payloadUserId != userId {
+                    moveToFailed(file, reason: "user-mismatch")
+                    continue
+                }
+            } else {
+                // Nil payload userId — the share extension wrote the payload
+                // before the App Group userId sentinel was hydrated (cold-
+                // launch race; main app has never run since install). Be
+                // conservative: only accept if no prior user is recorded on
+                // this device, or that prior user matches the current
+                // sign-in. Otherwise the share could be silently stamped
+                // with the wrong account. Matches `SharePayload`'s
+                // documented contract.
+                if let lastKnown = SharedConfig.resolveLastSignedInUserId(),
+                   lastKnown != userId {
+                    moveToFailed(file, reason: "nil-userId-with-known-prior-user")
+                    continue
+                }
             }
 
             if itemAlreadyExists(id: payload.id) {
