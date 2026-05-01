@@ -50,36 +50,17 @@ final class ScoutStore: Clearable {
         errorMessage = nil
     }
 
-    // MARK: - Legacy SwiftData readers (kept so existing callers compile)
-
-    /// Legacy read-through: returns SwiftData-backed rows for any code that
-    /// still reads from the local store. `userId` scopes to the active
-    /// account so cached rows from a prior session don't surface after an
-    /// account switch. Prefer the API-backed methods below for new views.
-    func fetchScouts(userId: String? = nil, includeArchived: Bool = false) -> [Scout] {
-        guard let context else { return [] }
-        var descriptor = FetchDescriptor<Scout>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
-        )
-        if let userId {
-            descriptor.predicate = #Predicate { scout in
-                scout.deletedAt == nil && scout.userId == userId
-            }
-        } else {
-            descriptor.predicate = #Predicate { $0.deletedAt == nil }
-        }
-        let rows = fetch(descriptor)
-        if includeArchived { return rows }
-        return rows.filter { $0.status != ScoutStatus.archived.rawValue }
-    }
+    // MARK: - Internal lookup
 
     /// User-scoped row lookup. Private — internal callers
     /// (`delete`, `upsertLocal`) supply the active user's id so a row from
     /// a different account that's still lingering in SwiftData (e.g.
     /// between sign-out and the wipe completing) can never be targeted.
     ///
-    /// The previous public `fetchScout(id:)` ignored `userId` entirely,
-    /// which was the multi-user invariant gap flagged in the Wave B review.
+    /// Views read scouts via `@Query<Scout>` directly; this store only
+    /// exists for mutations + API-backed reads. The previous public
+    /// `fetchScouts(userId:includeArchived:)` and `fetchFindings(scoutId:)`
+    /// readers were retired (Wave B follow-up) — no production callers.
     private func findById(_ id: String, userId: String) -> Scout? {
         guard let context else { return nil }
         var descriptor = FetchDescriptor<Scout>(
@@ -94,19 +75,6 @@ final class ScoutStore: Clearable {
             BrettLog.store.error("ScoutStore findById fetch failed: \(String(describing: error), privacy: .public)")
             return nil
         }
-    }
-
-    /// Legacy local-only findings read (pre-API). New UI should call
-    /// `fetchFindingsPage(scoutId:)` instead.
-    func fetchFindings(scoutId: String) -> [ScoutFinding] {
-        guard let context else { return [] }
-        var descriptor = FetchDescriptor<ScoutFinding>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
-        )
-        descriptor.predicate = #Predicate { finding in
-            finding.scoutId == scoutId && finding.deletedAt == nil
-        }
-        return fetch(descriptor)
     }
 
     // MARK: - API-backed reads
@@ -294,16 +262,6 @@ final class ScoutStore: Clearable {
     }
 
     // MARK: - Internals
-
-    private func fetch<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> [T] {
-        guard let context else { return [] }
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            BrettLog.store.error("ScoutStore fetch failed: \(String(describing: error), privacy: .public)")
-            return []
-        }
-    }
 
     private func saveContext(_ context: ModelContext) {
         do {
