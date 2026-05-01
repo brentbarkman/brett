@@ -155,9 +155,16 @@ final class PersistenceController {
     }
 
     private static func deleteAll<T: PersistentModel>(_ type: T.Type, in context: ModelContext) {
-        let rows = (try? context.fetch(FetchDescriptor<T>())) ?? []
-        for row in rows {
-            context.delete(row)
+        // Bulk-delete via the SwiftData API — a single DELETE against the
+        // store, no row materialization. Faster + lower memory than the
+        // prior fetch-and-iterate pattern, matters on power users with
+        // thousands of items at sign-out time.
+        do {
+            try context.delete(model: type)
+        } catch {
+            BrettLog.store.error(
+                "PersistenceController deleteAll(\(String(describing: type), privacy: .public)) failed: \(String(describing: error), privacy: .public)"
+            )
         }
     }
 
