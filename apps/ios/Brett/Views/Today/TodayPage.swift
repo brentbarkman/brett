@@ -534,7 +534,12 @@ private struct TodayPageBody: View {
 //
 // The `TodaySections` bucketing logic lives in `TodaySections.swift` so it
 // can be unit-tested without this view's SwiftUI dependencies.
+//
+// Wrapped in `#if DEBUG` because `AuthManager.injectFakeSession` and
+// `AuthUser.testUser` are themselves DEBUG-only — without the gate the
+// Release build (TestFlight, App Store) fails to compile the preview.
 
+#if DEBUG
 #Preview("Today — with fixture items") {
     let preview = PersistenceController.makePreview()
     let context = preview.mainContext
@@ -581,7 +586,7 @@ private struct TodayPageBody: View {
 
     try? context.save()
 
-    return ZStack {
+    ZStack {
         BackgroundView()
         TodayPage()
     }
@@ -589,7 +594,9 @@ private struct TodayPageBody: View {
     .modelContainer(preview.container)
     .preferredColorScheme(.dark)
 }
+#endif
 
+#if DEBUG
 #Preview("Today — empty state") {
     let preview = PersistenceController.makePreview()
     // Auth gate needs a user even in the empty-state preview — without
@@ -598,7 +605,7 @@ private struct TodayPageBody: View {
     // preview exists to demonstrate).
     let authManager = AuthManager()
     authManager.injectFakeSession(user: .testUser, token: "preview")
-    return ZStack {
+    ZStack {
         BackgroundView()
         TodayPage()
     }
@@ -606,3 +613,4 @@ private struct TodayPageBody: View {
     .modelContainer(preview.container)
     .preferredColorScheme(.dark)
 }
+#endif
