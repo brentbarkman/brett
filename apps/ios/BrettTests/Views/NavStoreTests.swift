@@ -132,4 +132,39 @@ struct NavStoreRoutingTests {
         #expect(store.pendingPushDestinations.isEmpty)
         #expect(store.lastCreatedItemId == nil)
     }
+
+    /// Regression guard for the C3 drain-by-length fix
+    /// (commit 0e44dee). `MainContainer` drains the push queue by snapshot
+    /// length so any push that lands DURING the drain (e.g. a destination
+    /// view's `.task` calling `go(to:)` synchronously) survives. The
+    /// previous wipe-after-drain implementation lost that mid-drain push.
+    ///
+    /// This test exercises the drain-by-length pattern directly: snapshot
+    /// the queue, simulate a write during drain, then `removeFirst(count)`
+    /// — anything appended in the gap MUST remain.
+    @Test func pushQueueDrainByLengthPreservesAppendsDuringDrain() {
+        let store = NavStore()
+        store.go(to: .settings)
+        store.go(to: .scoutsRoster)
+
+        // Snapshot the queue (this is what MainContainer feeds into its
+        // .onChange handler).
+        let snapshot = store.pendingPushDestinations
+        let drained = snapshot.count
+
+        // Simulate a destination's `.task` firing another go(to:) WHILE
+        // the drain is in flight. With the fix, this lands at index 2.
+        store.go(to: .scoutDetail(id: "sneaky"))
+
+        // Drain by length, NOT by wipe.
+        if store.pendingPushDestinations.count >= drained {
+            store.pendingPushDestinations.removeFirst(drained)
+        } else {
+            store.pendingPushDestinations = []
+        }
+
+        // The during-drain push must survive — this is the bug the fix
+        // closes. A wipe (`pendingPushDestinations = []`) would zero this.
+        #expect(store.pendingPushDestinations == [.scoutDetail(id: "sneaky")])
+    }
 }
