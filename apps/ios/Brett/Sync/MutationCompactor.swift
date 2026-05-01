@@ -55,6 +55,12 @@ struct MutationCompactor {
         case .create:
             // A second CREATE for the same entity is nonsensical — let it
             // pass through; the push engine can surface the server's 409.
+            // Debug builds catch this early so the source of the duplicate
+            // CREATE is obvious in development.
+            assert(
+                existingCreate == nil,
+                "MutationCompactor: duplicate CREATE for \(incoming.entityType) \(incoming.entityId) — investigate caller"
+            )
             return CompactionResult(toInsert: incoming)
 
         case .update:
