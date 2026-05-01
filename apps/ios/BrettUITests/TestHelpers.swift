@@ -89,6 +89,17 @@ extension XCUIApplication {
         buttons["settings.signout"]
     }
 
+    var settingsSignOutConfirmButton: XCUIElement {
+        // SwiftUI's `confirmationDialog` wraps the destructive `Button` in
+        // an outer accessibility container that shares the inner button's
+        // identifier, so a bare `buttons[id]` query resolves two matches
+        // and any direct `.tap()` raises "multiple matching elements".
+        // Take the first descendant match — both wrap the same action.
+        descendants(matching: .button)
+            .matching(identifier: "settings.signout.confirm")
+            .firstMatch
+    }
+
     var detailTitleField: XCUIElement {
         // Can surface as either a textField (single-line) or textView
         // (multi-line, axis: .vertical). Try both.

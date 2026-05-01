@@ -279,6 +279,7 @@ private struct SettingsBody: View {
                     Spacer()
                 }
                 .padding(.vertical, 14)
+                .contentShape(Rectangle())
             }
             .disabled(isSigningOut)
             .accessibilityIdentifier("settings.signout")
@@ -287,6 +288,7 @@ private struct SettingsBody: View {
             Button("Sign Out", role: .destructive) {
                 Task { await signOut() }
             }
+            .accessibilityIdentifier("settings.signout.confirm")
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You'll need to sign in again to access your tasks.")
