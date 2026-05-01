@@ -21,6 +21,20 @@ import AuthenticationServices
 ///   renders a page that calls `window.close()`, which the auth session
 ///   also interprets as completion.
 struct CalendarSettingsView: View {
+    var body: some View {
+        BrettSettingsScroll {
+            GoogleCalendarSection()
+            GranolaIntegrationSection()
+        }
+        .navigationTitle("Calendar")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(.hidden, for: .navigationBar)
+    }
+}
+
+// MARK: - Google Calendar section
+
+private struct GoogleCalendarSection: View {
     @State private var store = CalendarAccountsStore()
     @State private var isConnecting = false
     @State private var errorMessage: String?
@@ -31,16 +45,8 @@ struct CalendarSettingsView: View {
     /// button can show a spinner without freezing the whole list.
     @State private var reauthingAccountId: String?
 
-    // Granola integration — fetched once on appear and after any mutation.
-    @State private var granolaStatus: GranolaAuthStatus?
-    @State private var isGranolaLoading = false
-    @State private var isConnectingGranola = false
-    @State private var isDisconnectingGranola = false
-    @State private var pendingDisconnectGranola = false
-    @State private var granolaErrorMessage: String?
-
     var body: some View {
-        BrettSettingsScroll {
+        Group {
             if let errorMessage {
                 BrettSettingsSection {
                     Text(errorMessage)
@@ -107,15 +113,9 @@ struct CalendarSettingsView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
-
-            granolaSection
         }
-        .navigationTitle("Calendar")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbarBackground(.hidden, for: .navigationBar)
         .task {
             await store.fetchAccounts()
-            await refreshGranolaStatus()
         }
         .confirmationDialog(
             "Disconnect this calendar account?",
@@ -135,21 +135,9 @@ struct CalendarSettingsView: View {
         } message: {
             Text("Events from this account will no longer sync.")
         }
-        .confirmationDialog(
-            "Disconnect Granola?",
-            isPresented: $pendingDisconnectGranola,
-            titleVisibility: .visible
-        ) {
-            Button("Disconnect", role: .destructive) {
-                Task { await disconnectGranola() }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Meeting notes and any tasks auto-created from them will stop syncing. Past synced data will be removed.")
-        }
     }
 
-    // MARK: - Rows (Google Calendar)
+    // MARK: - Rows
 
     @ViewBuilder
     private func accountHeaderRow(_ account: CalendarAccountsStore.CalendarAccount) -> some View {
@@ -294,16 +282,90 @@ struct CalendarSettingsView: View {
         .padding(.vertical, 12)
     }
 
-    // MARK: - Granola section
+    // MARK: - Helpers
 
-    @ViewBuilder
-    private var granolaSection: some View {
+    private func swatchColor(_ hex: String?) -> Color {
+        guard let hex, let c = BrettColors.fromHex(hex) else { return BrettColors.gold }
+        return c
+    }
+
+    // MARK: - Actions
+
+    private func connect() async {
+        isConnecting = true
+        defer { isConnecting = false }
+        errorMessage = nil
+
+        do {
+            let url = try await store.connect(meetingNotes: false)
+            try await WebAuthRunner.run(url: url, callbackScheme: "brett")
+            await store.fetchAccounts()
+        } catch WebAuthError.cancelled {
+            // User closed the sheet — nothing to do.
+        } catch {
+            errorMessage = "Couldn't connect. Please try again."
+        }
+    }
+
+    private func disconnect(accountId: String) async {
+        do {
+            try await store.disconnect(accountId: accountId)
+        } catch {
+            errorMessage = "Couldn't disconnect."
+        }
+    }
+
+    /// Runs the incremental-consent flow to add Docs/Drive scope to an
+    /// existing Google account. After the session closes we re-fetch the
+    /// account list so `hasMeetingNotesScope` flips to true and the row
+    /// switches to a toggle.
+    private func enableMeetingNotes(accountId: String) async {
+        reauthingAccountId = accountId
+        defer { reauthingAccountId = nil }
+        errorMessage = nil
+
+        do {
+            let url = try await store.reauthAccount(accountId: accountId)
+            try await WebAuthRunner.run(url: url, callbackScheme: "brett")
+            await store.fetchAccounts()
+        } catch WebAuthError.cancelled {
+            // User closed the sheet — nothing to do.
+        } catch {
+            errorMessage = "Couldn't enable meeting notes. Please try again."
+        }
+    }
+}
+
+// MARK: - Granola integration section
+
+private struct GranolaIntegrationSection: View {
+    @State private var granolaStatus: GranolaAuthStatus?
+    @State private var isGranolaLoading = false
+    @State private var isConnectingGranola = false
+    @State private var isDisconnectingGranola = false
+    @State private var pendingDisconnectGranola = false
+    @State private var granolaErrorMessage: String?
+
+    var body: some View {
         BrettSettingsSection("Meeting Notes") {
             if let status = granolaStatus, status.connected, let account = status.account {
                 granolaConnectedRows(account)
             } else {
                 granolaDisconnectedRows
             }
+        }
+        .task { await refreshGranolaStatus() }
+        .confirmationDialog(
+            "Disconnect Granola?",
+            isPresented: $pendingDisconnectGranola,
+            titleVisibility: .visible
+        ) {
+            Button("Disconnect", role: .destructive) {
+                Task { await disconnectGranola() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Meeting notes and any tasks auto-created from them will stop syncing. Past synced data will be removed.")
         }
     }
 
@@ -469,11 +531,6 @@ struct CalendarSettingsView: View {
 
     // MARK: - Helpers
 
-    private func swatchColor(_ hex: String?) -> Color {
-        guard let hex, let c = BrettColors.fromHex(hex) else { return BrettColors.gold }
-        return c
-    }
-
     /// "Last synced 2h ago" style string. The API returns an ISO-8601
     /// string so we parse it locally rather than relying on the generic
     /// `.iso8601` decoder (which would require the field to be a Date on
@@ -511,53 +568,7 @@ struct CalendarSettingsView: View {
         return "\(months)mo"
     }
 
-    // MARK: - Actions (Google Calendar)
-
-    private func connect() async {
-        isConnecting = true
-        defer { isConnecting = false }
-        errorMessage = nil
-
-        do {
-            let url = try await store.connect(meetingNotes: false)
-            try await WebAuthRunner.run(url: url, callbackScheme: "brett")
-            await store.fetchAccounts()
-        } catch WebAuthError.cancelled {
-            // User closed the sheet — nothing to do.
-        } catch {
-            errorMessage = "Couldn't connect. Please try again."
-        }
-    }
-
-    private func disconnect(accountId: String) async {
-        do {
-            try await store.disconnect(accountId: accountId)
-        } catch {
-            errorMessage = "Couldn't disconnect."
-        }
-    }
-
-    /// Runs the incremental-consent flow to add Docs/Drive scope to an
-    /// existing Google account. After the session closes we re-fetch the
-    /// account list so `hasMeetingNotesScope` flips to true and the row
-    /// switches to a toggle.
-    private func enableMeetingNotes(accountId: String) async {
-        reauthingAccountId = accountId
-        defer { reauthingAccountId = nil }
-        errorMessage = nil
-
-        do {
-            let url = try await store.reauthAccount(accountId: accountId)
-            try await WebAuthRunner.run(url: url, callbackScheme: "brett")
-            await store.fetchAccounts()
-        } catch WebAuthError.cancelled {
-            // User closed the sheet — nothing to do.
-        } catch {
-            errorMessage = "Couldn't enable meeting notes. Please try again."
-        }
-    }
-
-    // MARK: - Actions (Granola)
+    // MARK: - Actions
 
     private func refreshGranolaStatus() async {
         isGranolaLoading = true

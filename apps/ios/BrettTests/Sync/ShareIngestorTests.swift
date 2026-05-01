@@ -280,9 +280,12 @@ struct ShareIngestorTests {
                 "mismatched-user payload should be quarantined to failed/, not deleted or imported")
     }
 
-    @Test func payloadWithNoUserId_importedUnderCurrentUser() async throws {
+    @Test func payloadWithNoUserId_importedWhenNoPriorUserKnown() async throws {
         // Backwards-compat: payloads written by an older extension (no
-        // userId stamped) still import under whoever is signed in now.
+        // userId stamped) still import under the current user, but only
+        // when the App Group has no record of a prior signed-in user.
+        // Otherwise we can't tell whose share this is and quarantine it.
+        SharedConfig.clearLastSignedInUserId()
         let h = try makeHarness()
         defer { h.cleanup() }
 
@@ -298,6 +301,60 @@ struct ShareIngestorTests {
         let items = try fetchItems(in: h.context)
         #expect(items.count == 1)
         #expect(items[0].userId == Self.testUserId)
+    }
+
+    @Test func payloadWithNoUserId_andCurrentUserIsSameAsLastKnown_imports() async throws {
+        // Same device, same user signing back in. The sentinel matches the
+        // current user, so a nil-userId payload is unambiguously theirs.
+        SharedConfig.writeLastSignedInUserId(Self.testUserId)
+        defer { SharedConfig.clearLastSignedInUserId() }
+
+        let h = try makeHarness()
+        defer { h.cleanup() }
+
+        let legacy = SharePayload.build(
+            url: URL(string: "https://example.com/legacy"),
+            text: nil,
+            userId: nil
+        )!
+        try writePendingFile(payload: legacy, to: h.queueDir)
+
+        _ = await h.ingestor.drain()
+
+        let items = try fetchItems(in: h.context)
+        #expect(items.count == 1)
+        #expect(items[0].userId == Self.testUserId)
+    }
+
+    @Test func payloadWithNoUserId_andDifferentPriorUser_quarantinedNotImported() async throws {
+        // Account-switch scenario: the last-known user differs from the
+        // current sign-in. Without a stamped userId on the payload we
+        // can't prove ownership, so the share is moved to failed/.
+        SharedConfig.writeLastSignedInUserId("some-other-prior-user")
+        defer { SharedConfig.clearLastSignedInUserId() }
+
+        let h = try makeHarness()
+        defer { h.cleanup() }
+
+        let legacy = SharePayload.build(
+            url: URL(string: "https://example.com/legacy"),
+            text: nil,
+            userId: nil
+        )!
+        let pendingPath = h.queueDir.appendingPathComponent("\(legacy.id).pending.json")
+        try writePendingFile(payload: legacy, to: h.queueDir)
+
+        _ = await h.ingestor.drain()
+
+        // No item should be inserted under the current user.
+        let items = try fetchItems(in: h.context)
+        #expect(items.isEmpty)
+
+        // Original file should be moved to failed/, not deleted.
+        #expect(!FileManager.default.fileExists(atPath: pendingPath.path))
+        let failed = try FileManager.default.contentsOfDirectory(atPath: h.failedDir.path)
+        #expect(failed.contains(where: { $0.contains(legacy.id) }),
+                "nil-userId payload with mismatched prior user should be quarantined")
     }
 
     // MARK: - Not signed in → no-op

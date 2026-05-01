@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Edit the user's display name.
 ///
@@ -9,18 +10,52 @@ import SwiftUI
 ///
 /// Name is persisted via `PATCH /users/me`. We save eagerly on the Save
 /// toolbar button so users don't lose edits if they bail out of the screen.
+///
+/// Outer view is a thin auth gate: the body's `@Query` predicate needs a
+/// concrete `userId`, so we resolve it from `AuthManager` and remount the
+/// child via `.id(userId)` whenever the active user changes.
 struct ProfileSettingsView: View {
+    @Environment(AuthManager.self) private var authManager
+
+    let store: UserProfileStore
+    let client: APIClient
+
+    init(store: UserProfileStore, client: APIClient = .shared) {
+        self.store = store
+        self.client = client
+    }
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            ProfileSettingsBody(userId: userId, store: store, client: client)
+                .id(userId)
+        } else {
+            EmptyView()
+        }
+    }
+}
+
+private struct ProfileSettingsBody: View {
+    let userId: String
     @Bindable var store: UserProfileStore
 
     @State private var name: String = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
 
+    @Query private var profiles: [UserProfile]
+    private var currentProfile: UserProfile? { profiles.first }
+
     private let client: APIClient
 
-    init(store: UserProfileStore, client: APIClient = .shared) {
+    init(userId: String, store: UserProfileStore, client: APIClient) {
+        self.userId = userId
         self.store = store
         self.client = client
+        let predicate = #Predicate<UserProfile> { profile in
+            profile.id == userId
+        }
+        _profiles = Query(filter: predicate, sort: \UserProfile.id)
     }
 
     var body: some View {
@@ -40,7 +75,7 @@ struct ProfileSettingsView: View {
                     Text("Email")
                         .foregroundStyle(BrettColors.textMeta)
                     Spacer()
-                    Text(store.current?.email ?? "—")
+                    Text(currentProfile?.email ?? "—")
                         .foregroundStyle(BrettColors.textCardTitle)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -117,12 +152,12 @@ struct ProfileSettingsView: View {
     }
 
     private var hasChanges: Bool {
-        guard let current = store.current else { return !name.isEmpty }
+        guard let current = currentProfile else { return !name.isEmpty }
         return (current.name ?? "") != name
     }
 
     private func hydrate() {
-        guard let profile = store.current else { return }
+        guard let profile = currentProfile else { return }
         name = profile.name ?? ""
     }
 

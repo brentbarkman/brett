@@ -3,10 +3,12 @@ import SwiftUI
 /// Multi-step bottom-sheet to create a new scout.
 ///
 /// Steps: Basics → Sources → Behaviour → Review. Keeps state in a local
-/// `@State` draft so the user can step back without losing input. On Create
-/// we hand the payload to `onCreate` and dismiss.
+/// `@State` draft so the user can step back without losing input. On
+/// Create we hand the payload to `onCreate`; if it throws we keep the
+/// sheet open with the user's input intact and surface the error in the
+/// review step. The container dismisses on success.
 struct NewScoutSheet: View {
-    let onCreate: (APIClient.NewScoutPayload) async -> Void
+    let onCreate: (APIClient.NewScoutPayload) async throws -> Void
     @Environment(\.dismiss) private var dismiss
 
     // Draft state
@@ -352,8 +354,17 @@ struct NewScoutSheet: View {
             budgetTotal: budgetTotal
         )
 
-        await onCreate(payload)
-        dismiss()
+        // Clear any prior error before retrying so the review-step
+        // banner doesn't lie if the second attempt succeeds.
+        errorMessage = nil
+        do {
+            try await onCreate(payload)
+            dismiss()
+        } catch let apiError as APIError {
+            errorMessage = apiError.userFacingMessage
+        } catch {
+            errorMessage = "Couldn't create the scout. Try again."
+        }
     }
 
     // MARK: - Fragments

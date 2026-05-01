@@ -229,7 +229,7 @@ struct SearchStoreTests {
         #expect(store.recentQueries.count == SearchStore.maxRecentQueries)
 
         // Persisted
-        let stored = defaults.stringArray(forKey: SearchStore.recentQueriesDefaultsKey) ?? []
+        let stored = defaults.stringArray(forKey: SearchStore.recentQueriesDefaultsKey()) ?? []
         #expect(stored.count == SearchStore.maxRecentQueries)
     }
 
@@ -258,14 +258,14 @@ struct SearchStoreTests {
 
         store.clearRecent()
         #expect(store.recentQueries.isEmpty)
-        #expect(defaults.stringArray(forKey: SearchStore.recentQueriesDefaultsKey) == nil)
+        #expect(defaults.stringArray(forKey: SearchStore.recentQueriesDefaultsKey()) == nil)
     }
 
     @Test func recentQueriesRehydrateFromUserDefaultsOnInit() {
         MockURLProtocol.reset()
         let suite = "brett.search.rehydrate.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        defaults.set(["alpha", "beta"], forKey: SearchStore.recentQueriesDefaultsKey)
+        defaults.set(["alpha", "beta"], forKey: SearchStore.recentQueriesDefaultsKey())
 
         let api = APIClient(session: Self.makeSession())
         api.tokenProvider = { "t" }

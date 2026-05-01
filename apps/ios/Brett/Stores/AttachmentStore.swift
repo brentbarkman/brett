@@ -8,16 +8,24 @@ import SwiftData
 /// real `Attachment` row is created locally with `storageKey`.
 @MainActor
 @Observable
-final class AttachmentStore {
+final class AttachmentStore: Clearable {
     private let context: ModelContext
 
     init(context: ModelContext) {
         self.context = context
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
         self.init(context: PersistenceController.shared.mainContext)
     }
+
+    // MARK: - Clearable
+
+    /// No in-memory caches today — reads go through SwiftData. Conformance
+    /// exists so the regression-guard test passes; Wave B may fill this
+    /// in if per-instance state appears.
+    func clearForSignOut() {}
 
     // MARK: - Attachment queries
 

@@ -3,14 +3,17 @@ import Foundation
 import SwiftData
 @testable import Brett
 
-/// Multi-user scoping tests — the Wave A.4 invariant that "user A's rows
-/// never surface in a fetch scoped to user B." Before the refactor every
-/// store's fetchAll/fetchInbox/fetchToday returned every row regardless
-/// of which account was asking, violating CLAUDE.md's multi-user rule.
+/// Multi-user scoping tests for stores that still expose public read
+/// methods (Calendar / Message / Attachment). The Wave A.4 invariant —
+/// "user A's rows never surface in a fetch scoped to user B" — is the
+/// same one `UserScopedQueryTests` enforces for `Item`/`ItemList` (now
+/// served via `@Query` directly).
 ///
-/// These tests exercise the stores directly with an in-memory container
-/// holding rows for two distinct users, then assert the fetch APIs
-/// correctly scope their output.
+/// Wave B deleted the public `fetchAll`/`fetchInbox`/`fetchToday`/
+/// `fetchUpcoming` methods on `ItemStore` and `fetchAll` on `ListStore`;
+/// the equivalent multi-user scoping invariants are now covered by:
+///   - `UserScopedQueryTests` (predicate-shape on `Item` + `ItemList`)
+///   - `SyncInternalQueryTests` (unscoped lookups for sync internals)
 @Suite("Multi-user scoping")
 @MainActor
 struct UserScopedFetchTests {
@@ -20,8 +23,6 @@ struct UserScopedFetchTests {
     struct Harness {
         let container: ModelContainer
         let context: ModelContext
-        let itemStore: ItemStore
-        let listStore: ListStore
         let calendarStore: CalendarStore
         let messageStore: MessageStore
         let attachmentStore: AttachmentStore
@@ -33,83 +34,10 @@ struct UserScopedFetchTests {
         return Harness(
             container: container,
             context: context,
-            itemStore: ItemStore(context: context),
-            listStore: ListStore(context: context),
             calendarStore: CalendarStore(context: context),
             messageStore: MessageStore(context: context),
             attachmentStore: AttachmentStore(context: context)
         )
-    }
-
-    // MARK: - ItemStore
-
-    @Test func fetchAllScopedToUser() throws {
-        let h = try makeHarness()
-        h.context.insert(Item(userId: "alice", title: "alice-task-1"))
-        h.context.insert(Item(userId: "alice", title: "alice-task-2"))
-        h.context.insert(Item(userId: "bob", title: "bob-task"))
-        try h.context.save()
-
-        let aliceItems = h.itemStore.fetchAll(userId: "alice")
-        #expect(aliceItems.count == 2)
-        #expect(aliceItems.allSatisfy { $0.userId == "alice" })
-
-        let bobItems = h.itemStore.fetchAll(userId: "bob")
-        #expect(bobItems.count == 1)
-        #expect(bobItems.first?.title == "bob-task")
-    }
-
-    @Test func fetchInboxScopedToUser() throws {
-        let h = try makeHarness()
-        // Inbox = no listId, no dueDate, active status. Keep these in the
-        // inbox bucket so they'd match if scoping was broken.
-        h.context.insert(Item(userId: "alice", title: "a1"))
-        h.context.insert(Item(userId: "bob", title: "b1"))
-        h.context.insert(Item(userId: "bob", title: "b2"))
-        try h.context.save()
-
-        #expect(h.itemStore.fetchInbox(userId: "alice").count == 1)
-        #expect(h.itemStore.fetchInbox(userId: "bob").count == 2)
-    }
-
-    @Test func fetchTodayScopedToUser() throws {
-        let h = try makeHarness()
-        let now = Date()
-        let alice = Item(userId: "alice", title: "a-today", dueDate: now)
-        let bob = Item(userId: "bob", title: "b-today", dueDate: now)
-        h.context.insert(alice)
-        h.context.insert(bob)
-        try h.context.save()
-
-        #expect(h.itemStore.fetchToday(userId: "alice").map(\.title) == ["a-today"])
-        #expect(h.itemStore.fetchToday(userId: "bob").map(\.title) == ["b-today"])
-    }
-
-    @Test func fetchAllNilUserReturnsAllRowsForSyncInternals() throws {
-        // The nil-userId path is preserved intentionally: sync internals
-        // (e.g. MutationQueue scan, integration fixtures) legitimately
-        // need cross-user reads. Production view code must always pass a
-        // userId — this test documents the escape hatch so a future
-        // tightening is a deliberate choice.
-        let h = try makeHarness()
-        h.context.insert(Item(userId: "alice", title: "a"))
-        h.context.insert(Item(userId: "bob", title: "b"))
-        try h.context.save()
-
-        #expect(h.itemStore.fetchAll(userId: nil).count == 2)
-    }
-
-    // MARK: - ListStore
-
-    @Test func listFetchAllScopedToUser() throws {
-        let h = try makeHarness()
-        h.context.insert(ItemList(userId: "alice", name: "Alice Work"))
-        h.context.insert(ItemList(userId: "bob", name: "Bob Work"))
-        h.context.insert(ItemList(userId: "bob", name: "Bob Home"))
-        try h.context.save()
-
-        #expect(h.listStore.fetchAll(userId: "alice").map(\.name) == ["Alice Work"])
-        #expect(Set(h.listStore.fetchAll(userId: "bob").map(\.name)) == ["Bob Work", "Bob Home"])
     }
 
     // MARK: - CalendarStore

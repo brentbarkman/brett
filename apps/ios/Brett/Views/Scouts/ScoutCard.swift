@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// Glass card used on the scout roster. Self-contained renderer for a single
-/// `APIClient.ScoutDTO` — no store dependencies so it's cheap to preview and
-/// drop into a grid.
+/// `Scout` — no store dependencies so it's cheap to preview and drop into a
+/// grid. Reads the SwiftData row directly so the roster reactively reflects
+/// upsertLocal writes from the API refresh path.
 struct ScoutCard: View {
-    let scout: APIClient.ScoutDTO
+    let scout: Scout
 
     var body: some View {
         GlassCard {
@@ -54,7 +55,7 @@ struct ScoutCard: View {
 
     @ViewBuilder
     private var findingsBadge: some View {
-        let count = scout.findingsCount ?? 0
+        let count = scout.findingsCount
         if count > 0 {
             HStack(spacing: 3) {
                 Image(systemName: "sparkle")

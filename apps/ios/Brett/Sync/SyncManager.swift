@@ -378,7 +378,11 @@ final class SyncManager {
         for entry in entries {
             entry.status = pending
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            BrettLog.sync.error("SyncManager resetInFlightMutations save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     // MARK: - Helpers

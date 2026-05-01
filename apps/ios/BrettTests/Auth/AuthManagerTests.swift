@@ -305,4 +305,178 @@ struct AuthManagerTests {
         #expect(manager.token == "tok-1")
         #expect(itemCount() == 1)
     }
+
+    // MARK: - tokenProvider contract
+    //
+    // The Google provider used to overwrite `APIClient.shared.tokenProvider`
+    // with a value-captured closure (`{ session.token }`) at sign-in. That
+    // froze a single token: after sign-out the captured token would still
+    // ship on every outgoing request even though `AuthManager.token` had
+    // been cleared. This test pins the actual contract — AuthManager's
+    // tokenProvider is set ONCE in init and chases the live `self.token`
+    // across sign-in/sign-out cycles — so any future provider that
+    // re-introduces the override regresses here.
+    @Test func tokenProviderChasesCurrentTokenAcrossSignOut() async {
+        resetState()
+        defer { resetState() }
+
+        let client = makeTestClient()
+        let manager = AuthManager(client: client)
+
+        // Pre-condition: tokenProvider was wired in init.
+        #expect(client.tokenProvider != nil, "AuthManager.init must install a tokenProvider")
+
+        manager.injectFakeSession(
+            user: AuthUser(id: "u1", email: "u1@x.com"),
+            token: "live-token-1",
+            hasRefreshed: true
+        )
+        #expect(client.tokenProvider?() == "live-token-1",
+                "tokenProvider must read the freshly-injected token")
+
+        // Sign-out clears manager.token. The closure is the SAME identity
+        // (set once in init) and must reflect the cleared state.
+        MockURLProtocol.stub(url: signOutURL(for: client), statusCode: 200, body: Data())
+        await manager.signOut()
+        #expect(client.tokenProvider?() == nil,
+                "after signOut the tokenProvider must chase to nil — not return a stale captured value")
+
+        // Sign in as a different user. Same closure, same chase.
+        manager.injectFakeSession(
+            user: AuthUser(id: "u2", email: "u2@x.com"),
+            token: "live-token-2",
+            hasRefreshed: true
+        )
+        #expect(client.tokenProvider?() == "live-token-2",
+                "tokenProvider must reflect the new user's token after re-injection")
+    }
+
+    // MARK: - Defensive wipe on missing sentinel
+
+    /// Sentinel is missing AND non-empty local data exists → wipe.
+    /// This is the App-Group-misconfigured / post-uninstall-reinstall /
+    /// sentinel-migration-race path: we can't prove the leftover rows
+    /// belong to the incoming user, so they must go.
+    @Test func persistWithMissingSentinelAndExistingDataWipes() async throws {
+        resetState()
+        defer { resetState() }
+
+        // Sentinel is intentionally absent (resetState already cleared it).
+        #expect(SharedConfig.resolveLastSignedInUserId() == nil)
+
+        // Seed leftover rows from a prior session. These could be from
+        // any user; without the sentinel we can't tell.
+        seedItem(userId: "unknown-prior-user", title: "leftover")
+        seedItem(userId: "unknown-prior-user", title: "another leftover")
+        #expect(itemCount() == 2)
+
+        let client = makeTestClient()
+        let manager = AuthManager(client: client)
+        // Stub /users/me so the post-persist hydrate doesn't blow up.
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u-new", email: "new@x.com")
+        )
+
+        let session = AuthSession(
+            token: "tok-new",
+            user: AuthUser(id: "u-new", email: "new@x.com")
+        )
+        try await manager.persistForTesting(session: session)
+
+        #expect(itemCount() == 0,
+                "missing-sentinel + non-empty data must trigger defensive wipe")
+        #expect(SharedConfig.resolveLastSignedInUserId() == "u-new",
+                "persist should also stamp the sentinel for next time")
+    }
+
+    /// Sentinel is missing AND device is clean → no wipe needed (no-op).
+    /// Fresh install path: nothing to wipe, sign-in proceeds normally.
+    @Test func persistWithMissingSentinelAndCleanDeviceDoesNotWipe() async throws {
+        resetState()
+        defer { resetState() }
+
+        #expect(SharedConfig.resolveLastSignedInUserId() == nil)
+        #expect(itemCount() == 0)
+
+        let client = makeTestClient()
+        let manager = AuthManager(client: client)
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u-fresh", email: "fresh@x.com")
+        )
+
+        let session = AuthSession(
+            token: "tok-fresh",
+            user: AuthUser(id: "u-fresh", email: "fresh@x.com")
+        )
+        try await manager.persistForTesting(session: session)
+
+        // No wipe was needed. Sentinel is now set.
+        #expect(SharedConfig.resolveLastSignedInUserId() == "u-fresh")
+    }
+
+    /// Sentinel matches the incoming user → warm cache preserved (no wipe).
+    /// Same-user re-sign-in after token expiry: keep their data.
+    @Test func persistWithMatchingSentinelPreservesData() async throws {
+        resetState()
+        defer { resetState() }
+
+        SharedConfig.writeLastSignedInUserId("u-same")
+        seedItem(userId: "u-same", title: "warm cache item")
+        #expect(itemCount() == 1)
+
+        let client = makeTestClient()
+        let manager = AuthManager(client: client)
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u-same", email: "same@x.com")
+        )
+
+        let session = AuthSession(
+            token: "tok-same",
+            user: AuthUser(id: "u-same", email: "same@x.com")
+        )
+        try await manager.persistForTesting(session: session)
+
+        #expect(itemCount() == 1, "same-user re-sign-in keeps cached data warm")
+    }
+
+    @Test func hydrateTaskDoesNotRetainSelfAfterRelease() async throws {
+        resetState()
+        defer { resetState() }
+
+        // Seed a token so the keychain-hydrate path actually fires the
+        // implicit `Task { await self.refreshCurrentUser() }` in init.
+        // Without a token in the keychain, the Task is never created and
+        // the test is trivially green even when self is strongly captured.
+        try KeychainStore.writeToken("hydrate-retain-test")
+
+        let client = makeTestClient()
+        // Stub /users/me with a slow response so the in-flight task is
+        // alive while the manager goes out of scope. The mock doesn't
+        // actually sleep, but having the stub registered means the call
+        // resolves quickly and any retain-cycle issue would be unaffected.
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u1", email: "u1@x.com")
+        )
+
+        weak var weakManager: AuthManager?
+        do {
+            let manager = AuthManager(client: client)
+            weakManager = manager
+            // Manager goes out of scope at end of `do` block.
+        }
+        // Yield enough times for the in-flight Task to finish and release
+        // any strong ref. Two short sleeps cover both the request roundtrip
+        // and the post-completion main-actor hops.
+        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        #expect(weakManager == nil, "AuthManager should be deallocated after going out of scope")
+    }
 }

@@ -165,11 +165,20 @@ final class BiometricLockManager {
 
         var policyError: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &policyError) else {
-            // No biometry AND no passcode set (possible on jailbroken or
-            // freshly-wiped devices). Don't leave the user permanently
-            // locked out — unlock and let them use the app.
-            isLocked = false
-            lastError = nil
+            // FAIL CLOSED. The user explicitly enabled the app lock — if
+            // the system can no longer evaluate device-owner auth (no
+            // biometry AND no device passcode), we must NOT silently
+            // disengage that protection. The most common cause is the
+            // user removing their device passcode after enabling the
+            // app lock; biometry is removed as a side effect, and the
+            // previous fail-open behaviour would have left the app
+            // unlocked to anyone holding the device.
+            //
+            // The user can disable the app lock explicitly via Settings
+            // → Security; until they do, we keep `isLocked = true` and
+            // surface a clear message telling them what to fix.
+            isLocked = true
+            lastError = "Set a device passcode in Settings to unlock Brett. The app lock stays on until then."
             return
         }
 
@@ -198,10 +207,13 @@ final class BiometricLockManager {
             case .biometryLockout:
                 lastError = "Too many failed attempts. Use your device passcode to retry."
             case .passcodeNotSet:
-                // No passcode = no biometry gate. Unlock rather than
-                // strand the user.
-                isLocked = false
-                lastError = nil
+                // FAIL CLOSED — same rationale as the canEvaluatePolicy
+                // branch above. A user-enabled security control must
+                // not silently disengage when the system removes the
+                // backing capability. The user can disable the app lock
+                // explicitly in Settings → Security.
+                isLocked = true
+                lastError = "Set a device passcode in Settings to unlock Brett. The app lock stays on until then."
             default:
                 lastError = "Couldn't verify. Tap to try again."
             }

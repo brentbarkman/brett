@@ -151,12 +151,15 @@ struct TwoUserSignOutTests {
 
     @Test func scopedFetchIsolatesUsersWithoutWipe() throws {
         // This is the defense-in-depth layer Wave A.4 added: even before
-        // the wipe has run (or if it silently fails), the scoped fetch
+        // the wipe has run (or if it silently fails), a scoped fetch
         // returns only the current user's rows.
+        //
+        // Wave B Phase 3 made `ItemStore.fetchAll` and `ListStore.fetchAll`
+        // private; views read via `@Query` directly. The same invariant
+        // applies to `@Query`'s underlying predicate, exercised here with
+        // direct `FetchDescriptor` queries that match the shape views use.
         let container = try InMemoryPersistenceController.makeContainer()
         let context = ModelContext(container)
-        let itemStore = ItemStore(context: context)
-        let listStore = ListStore(context: context)
 
         context.insert(Item(userId: "alice", title: "alice only"))
         context.insert(Item(userId: "bob", title: "bob only"))
@@ -164,11 +167,21 @@ struct TwoUserSignOutTests {
         context.insert(ItemList(userId: "bob", name: "bob list"))
         try context.save()
 
-        let aliceItems = itemStore.fetchAll(userId: "alice")
+        let aliceUid = "alice"
+        let aliceItems = try context.fetch(
+            FetchDescriptor<Item>(
+                predicate: #Predicate { $0.deletedAt == nil && $0.userId == aliceUid }
+            )
+        )
         #expect(aliceItems.count == 1)
         #expect(aliceItems.first?.title == "alice only")
 
-        let bobLists = listStore.fetchAll(userId: "bob")
+        let bobUid = "bob"
+        let bobLists = try context.fetch(
+            FetchDescriptor<ItemList>(
+                predicate: #Predicate { $0.deletedAt == nil && $0.userId == bobUid }
+            )
+        )
         #expect(bobLists.count == 1)
         #expect(bobLists.first?.name == "bob list")
     }
