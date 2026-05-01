@@ -151,7 +151,7 @@ Electron 28 + Vite + React 19 + Tailwind. Two TS compilation targets:
 
 ## 4. iOS — `apps/ios`
 
-XcodeGen (`project.yml`), iOS 18 minimum, Swift 6 strict concurrency, 4 targets (app, share extension, tests, UI tests), ~220 Swift files in `apps/ios/Brett/`, 648 tests across 90 suites under `apps/ios/BrettTests/`.
+XcodeGen (`project.yml`), iOS 18 minimum, Swift 6 strict concurrency, 4 targets (app, share extension, tests, UI tests), ~220 Swift files in `apps/ios/Brett/`, 680 tests across 94 suites under `apps/ios/BrettTests/`.
 
 - **Persistence:** SwiftData, single `ModelContainer` via `PersistenceController.shared`. Domain `@Model`s (`Item`, `ItemList`, `CalendarEvent`, `CalendarEventNote`, `Scout`, `ScoutFinding`, `BrettMessage`, `Attachment`) mirror server entities and carry sync columns `_syncStatus` / `_baseUpdatedAt` / `_lastError`. Sync-specific models: `MutationQueueEntry`, `ConflictLogEntry`, `SyncHealth`.
 - **Stores are mutation-only facades.** `ItemStore` and `ListStore` expose `create` / `update` / `delete` / `toggleStatus` and nothing else — `fetchAll` / `fetchById` are not in the public surface. Views read via SwiftData `@Query` directly; sync-internal lookups use `FetchDescriptor`. Each store keeps a `private findById(_:userId:)` helper for its own mutations. `BrettTests/Stores/StoreReadGuardTests.swift` is a regression guard against drift.
@@ -220,7 +220,7 @@ Treated separately in the AI deep-dive doc. Key shape:
 | api | Vitest, drives `app.request()` directly | 619 tests across 58 files — auth, sync push/pull, items/lists, calendar, scouts, scout memory, embeddings, knowledge graph, content extraction, newsletters, AI config |
 | desktop | Vitest + Testing Library | 121 tests — omnibar, SSE, settings, account deletion dialog, SimpleMarkdown, smoke |
 | packages | Vitest | ai (24), business (6), ui (3), utils (4) |
-| ios | Swift Testing + XCUITest | 648 tests across 90 suites — mutation atomicity, sync engines, conflict resolver, SSE client, SmartParser, store conformance + read guards, user-scoped @Query predicates, NavStore routing, Codable round-trips per model, accessibility, E2E flow |
+| ios | Swift Testing + XCUITest | 680 tests across 94 suites — mutation atomicity, sync engines, conflict resolver, SSE client, SmartParser, store conformance + read guards, user-scoped @Query predicates, NavStore routing, Codable round-trips per model, accessibility, E2E flow |
 | evals | Custom runner (`evals/runner.ts`) | intent classification, parameter extraction, briefing quality (LLM-judge), action-item extraction |
 
 **Known gaps worth tests:** rate-limit cleanup, scout consolidation multi-run sequences, full SSE streaming end-to-end over HTTP (currently via `app.request()`), optimistic-update revert on error paths in desktop, scout runner with mocked providers.
