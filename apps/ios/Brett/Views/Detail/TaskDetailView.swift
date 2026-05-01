@@ -139,6 +139,14 @@ private struct TaskDetailBody: View {
     /// first match — and otherwise let the user's draft stay in flight.
     @State private var hasSeededDraft: Bool = false
 
+    /// True once the user has touched any draft field. Without this guard
+    /// a late-arriving `@Query` result (cold open / slow disk / tap into
+    /// a freshly-pulled item where `.task` runs before the row resolves)
+    /// would re-fire `.onChange(of: item?.id)` and re-seed the draft —
+    /// trampling the typed characters. Reset alongside `hasSeededDraft`
+    /// when the underlying item identity transitions to a different row.
+    @State private var hasUserEdited: Bool = false
+
     @State private var uploader: AttachmentUploader?
     @State private var downloader: AttachmentDownloader?
 
@@ -212,7 +220,16 @@ private struct TaskDetailBody: View {
         // cold-open case where `task` runs before SwiftData's @Query has
         // resolved the row — the seed inside `.task` then no-ops because
         // `item` is still nil, and this onChange picks it up on first match.
-        .onChange(of: item?.id) { _, _ in
+        //
+        // If the user navigated to a DIFFERENT task (id transition between
+        // two non-nil values), reset both gates so the new row's values
+        // can land fresh. The cold-open race itself (nil → some) keeps
+        // `hasUserEdited` honest because seedDraftIfNeeded checks both.
+        .onChange(of: item?.id) { oldId, newId in
+            if oldId != nil, newId != nil, oldId != newId {
+                hasSeededDraft = false
+                hasUserEdited = false
+            }
             seedDraftIfNeeded()
         }
         // Cancel any in-flight debounce on dismiss so a stale commit
@@ -255,6 +272,7 @@ private struct TaskDetailBody: View {
                     .tint(BrettColors.gold)
                     .lineLimit(1...4)
                     .submitLabel(.done)
+                    .onChange(of: draft.title) { _, _ in hasUserEdited = true }
                     .onSubmit { commitDraft() }
                     .accessibilityIdentifier("detail.titleField")
             }
@@ -296,12 +314,16 @@ private struct TaskDetailBody: View {
     @ViewBuilder
     private var detailsCardSection: some View {
         DetailsCard(draft: $draft, lists: lists)
-            .onChange(of: draftChangeAxes) { _, _ in scheduleDebouncedCommit() }
+            .onChange(of: draftChangeAxes) { _, _ in
+                hasUserEdited = true
+                scheduleDebouncedCommit()
+            }
     }
 
     @ViewBuilder
     private var notesSection: some View {
         NotesEditor(text: $draft.notes) { _ in
+            hasUserEdited = true
             commitDraft()
         }
     }
@@ -374,8 +396,14 @@ private struct TaskDetailBody: View {
     /// appears. Subsequent SwiftData republishes (driven by every
     /// commit) leave the draft alone so the user's in-flight edits
     /// aren't trampled.
+    ///
+    /// Also bails if the user has already started typing — protects
+    /// against the cold-open race where `.task` runs before SwiftData's
+    /// @Query resolves the row, the user starts typing into the empty
+    /// title, and THEN the row arrives and re-fires this seed via
+    /// `.onChange(of: item?.id)`.
     private func seedDraftIfNeeded() {
-        guard !hasSeededDraft, let item else { return }
+        guard !hasSeededDraft, !hasUserEdited, let item else { return }
         draft = ItemDraft(from: item)
         hasSeededDraft = true
     }
