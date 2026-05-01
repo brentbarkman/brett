@@ -19,7 +19,7 @@ import SwiftData
 /// binding (a detail sheet that shows a progress bar per item).
 @MainActor
 @Observable
-final class AttachmentUploader {
+final class AttachmentUploader: Clearable {
     /// Max retries before a row is abandoned on `failed`.
     static let maxRetryCount = 5
 
@@ -122,6 +122,35 @@ final class AttachmentUploader {
             // callbacks flow through `onUploadFinished` as iOS replays them.
             backgroundService.reconcilePendingTasks()
         }
+
+        ClearableStoreRegistry.register(self)
+    }
+
+    // MARK: - Clearable
+
+    /// Cancels in-flight uploads and resumes any pending background-session
+    /// continuations with `CancellationError` so callers awaiting them don't
+    /// hang past sign-out. Without the resume, iOS logs a leaked-continuation
+    /// warning when the uploader deallocates with an un-resumed
+    /// `CheckedContinuation` still in `pendingContinuations`.
+    ///
+    /// Note: we don't tear down `progressContinuation` here — the AsyncStream
+    /// is owned for the lifetime of the uploader and consumed by the UI. If
+    /// the UI re-binds at the next sign-in we want it intact.
+    func clearForSignOut() {
+        // Resume + clear async/await callers waiting on background uploads.
+        for (_, continuation) in pendingContinuations {
+            continuation.resume(throwing: CancellationError())
+        }
+        pendingContinuations.removeAll()
+
+        // Cancel the queue drain loop.
+        queueTask?.cancel()
+        queueTask = nil
+
+        // Cancel any per-row in-flight Task handles.
+        inFlight.values.forEach { $0.cancel() }
+        inFlight.removeAll()
     }
 
     /// Route the shared background service's callbacks into this uploader.
@@ -236,7 +265,13 @@ final class AttachmentUploader {
         }
 
         let uploadId = UUID().uuidString
-        let stagedName = "\(uploadId)-\(filename)"
+        // Normalize via lastPathComponent so a hostile / buggy caller can't
+        // smuggle path separators into the staged filename. iOS's
+        // `appendingPathComponent` doesn't traverse `..`, but a `filename`
+        // containing `/` would otherwise produce a multi-segment URL whose
+        // parent doesn't exist — `copyItem` would then fail at runtime.
+        let safeName = (filename as NSString).lastPathComponent
+        let stagedName = "\(uploadId)-\(safeName)"
         let stagedURL = uploadStagingDirectory.appendingPathComponent(stagedName)
 
         do {
@@ -261,7 +296,11 @@ final class AttachmentUploader {
         // find the file. `createUpload` picks a fresh UUID internally, so we
         // overwrite the id with ours.
         upload.id = uploadId
-        try? persistence.mainContext.save()
+        do {
+            try persistence.mainContext.save()
+        } catch {
+            BrettLog.attachments.error("AttachmentUploader enqueue save failed: \(String(describing: error), privacy: .public)")
+        }
 
         emit(
             uploadId: uploadId,
@@ -279,9 +318,10 @@ final class AttachmentUploader {
     func processQueue() {
         if let existing = queueTask, !existing.isCancelled { return }
         queueTask = Task { [weak self] in
-            guard let self else { return }
-            await self.drain()
-            await MainActor.run { self.queueTask = nil }
+            await self?.drain()
+            await MainActor.run { [weak self] in
+                self?.queueTask = nil
+            }
         }
     }
 
@@ -317,14 +357,22 @@ final class AttachmentUploader {
         // Retry guard — don't pick up rows that have exhausted their attempts.
         if upload.retryCount >= Self.maxRetryCount {
             upload.stage = AttachmentUploadStage.failed.rawValue
-            try? persistence.mainContext.save()
+            do {
+                try persistence.mainContext.save()
+            } catch {
+                BrettLog.attachments.error("AttachmentUploader retry-cap save failed: \(String(describing: error), privacy: .public)")
+            }
             emit(uploadId: uploadId, itemId: itemId, fraction: 0, stage: .failed)
             return
         }
 
         upload.stage = AttachmentUploadStage.uploading.rawValue
         upload.uploadProgress = 0
-        try? persistence.mainContext.save()
+        do {
+            try persistence.mainContext.save()
+        } catch {
+            BrettLog.attachments.error("AttachmentUploader start-upload save failed: \(String(describing: error), privacy: .public)")
+        }
         emit(uploadId: uploadId, itemId: itemId, fraction: 0, stage: .uploading)
 
         let fileURL = URL(fileURLWithPath: filePath)
@@ -442,7 +490,11 @@ final class AttachmentUploader {
         // past the cap so `processUpload` won't pick it up again.
         if permanent, let upload = fetchUpload(id: uploadId) {
             upload.retryCount = Self.maxRetryCount
-            try? persistence.mainContext.save()
+            do {
+                try persistence.mainContext.save()
+            } catch {
+                BrettLog.attachments.error("AttachmentUploader finalizeFailure save failed: \(String(describing: error), privacy: .public)")
+            }
         }
         attachmentStore.markFailed(uploadId: uploadId, error: error)
         // For transient failures, keep the staged file so retries can re-read it.
@@ -460,7 +512,11 @@ final class AttachmentUploader {
     private func updateProgress(uploadId: String, itemId: String, fraction: Double) {
         if let upload = fetchUpload(id: uploadId) {
             upload.uploadProgress = fraction
-            try? persistence.mainContext.save()
+            do {
+                try persistence.mainContext.save()
+            } catch {
+                BrettLog.attachments.error("AttachmentUploader updateProgress save failed: \(String(describing: error), privacy: .public)")
+            }
         }
         emit(uploadId: uploadId, itemId: itemId, fraction: fraction, stage: .uploading)
     }
@@ -492,16 +548,23 @@ final class AttachmentUploader {
         return (try? persistence.mainContext.fetch(descriptor))?.first
     }
 
-    /// Best-effort userId resolution. If we have the current signed-in user
-    /// stashed elsewhere we could wire it through init; for now we read the
-    /// UserProfile table which is populated on sign-in.
+    /// Stamp the upload with the currently-signed-in user's id, sourced from
+    /// `ActiveSession.userId`. The previous implementation read the first
+    /// `UserProfile` row in SwiftData with no predicate — after Wave B,
+    /// multiple `UserProfile` rows can transiently coexist during an
+    /// account switch, so an unscoped fetch could pick up a prior user's
+    /// id and stamp the upload (and the Attachment row created via
+    /// `markComplete`) with the wrong owner.
+    ///
+    /// Returns nil when no session is active. Callers fall back to an empty
+    /// string today (the next sync pull backfills the real userId from the
+    /// server response), but logging here lets us spot the gap in telemetry.
     private func userIdForUpload(id: String) -> String? {
-        var descriptor = FetchDescriptor<UserProfile>()
-        descriptor.fetchLimit = 1
-        if let profile = (try? persistence.mainContext.fetch(descriptor))?.first {
-            return profile.id
+        guard let userId = ActiveSession.userId else {
+            BrettLog.attachments.error("AttachmentUploader.userIdForUpload — no ActiveSession.userId; skipping userId stamp on upload \(id, privacy: .public)")
+            return nil
         }
-        return nil
+        return userId
     }
 
     // MARK: - Progress emit

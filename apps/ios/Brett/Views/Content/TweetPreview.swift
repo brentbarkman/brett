@@ -161,8 +161,13 @@ struct TweetPreview: View {
                 Color.white.opacity(0.06)
             }
         }
-        .aspectRatio(16.0/10.0, contentMode: .fill)
+        // Fixed crop height instead of a 16:10 aspect-ratio frame: at full
+        // phone width, 16:10 lands at ~244pt and dominates the card. 200pt
+        // matches the visual proportion of desktop's `max-h-80` article
+        // previews and stops linked-article hero shots from making the
+        // tweet card disproportionately tall.
         .frame(maxWidth: .infinity)
+        .frame(height: 200)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)

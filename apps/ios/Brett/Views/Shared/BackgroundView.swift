@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Full-screen wallpaper that drives the app's glass aesthetic.
 ///
@@ -21,8 +22,23 @@ struct BackgroundView: View {
     /// pin a specific asset-catalog image and skip the service entirely.
     var imageName: String? = nil
 
-    @State private var profileStore = UserProfileStore()
     @State private var service = BackgroundService.shared
+
+    /// Live read of the user's profile. SwiftData is canonical;
+    /// `UserProfileStore` is mutation-only after Wave-B Phase 5. The
+    /// background view may render on the auth screen with no profile
+    /// row present, AND it may render briefly during a sign-out drain
+    /// where `Session.tearDown()` has started but `wipeAllData()`
+    /// hasn't finished — so >1 row could be visible if a fresh sign-in
+    /// races the wipe. `BackgroundView` has no `@Environment(AuthManager)`
+    /// (it's used at the auth boundary too), so a userId predicate
+    /// isn't available. Defensive: only consume the row when exactly
+    /// one is present; multi-row → fall through to the asset fallback
+    /// rather than picking up a stale user's preference.
+    @Query(sort: \UserProfile.id) private var profiles: [UserProfile]
+    private var currentProfile: UserProfile? {
+        profiles.count == 1 ? profiles.first : nil
+    }
 
     /// Image key currently being rendered. Drives the crossfade via
     /// `.animation(_, value:)`. For remote images the key is the URL
@@ -126,10 +142,10 @@ struct BackgroundView: View {
         .onReceive(tick) { _ in
             refresh(initial: false)
         }
-        .onChange(of: profileStore.current?.backgroundStyle) { _, _ in
+        .onChange(of: currentProfile?.backgroundStyle) { _, _ in
             refresh(initial: false)
         }
-        .onChange(of: profileStore.current?.pinnedBackground) { _, _ in
+        .onChange(of: currentProfile?.pinnedBackground) { _, _ in
             refresh(initial: false)
         }
     }
@@ -187,7 +203,7 @@ struct BackgroundView: View {
             return
         }
 
-        let profile = profileStore.current
+        let profile = currentProfile
         let style = profile?.backgroundStyle ?? BackgroundStyle.photography.rawValue
         let pinned = profile?.pinnedBackground
 

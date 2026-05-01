@@ -102,7 +102,11 @@ enum ConflictResolver {
         // Best-effort save. The sync engines call `context.save()` at the
         // end of each pass anyway; we don't want an intermediate save failure
         // to swallow sync progress.
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            BrettLog.sync.error("ConflictResolver logConflict save failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     // MARK: - Private helpers

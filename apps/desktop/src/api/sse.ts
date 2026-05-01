@@ -51,9 +51,41 @@ export function useEventStream(): void {
     let retryCount = 0;
     let eventSource: EventSource | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let paused = false;
+    // True until the very first successful onopen, so we don't fire the
+    // catch-up invalidation set on initial mount (the React Query consumers
+    // already do their own first fetch).
+    let everConnected = false;
+
+    const closeSocket = () => {
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+    };
+
+    const invalidateCatchUp = () => {
+      // Anything driven by SSE updates: covers events the server might have
+      // emitted while we were hidden. React Query's cache state is stale as
+      // far as we know; force refetch on every SSE-backed list.
+      qc.invalidateQueries({ queryKey: ["calendar-events"] });
+      qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
+      qc.invalidateQueries({ queryKey: ["things"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["lists"] });
+      qc.invalidateQueries({ queryKey: ["scouts"] });
+      qc.invalidateQueries({ queryKey: ["scout-findings"] });
+      qc.invalidateQueries({ queryKey: ["scout-activity"] });
+      qc.invalidateQueries({ queryKey: ["broken-connections"] });
+      qc.invalidateQueries({ queryKey: ["granola"] });
+    };
 
     const scheduleRetry = () => {
-      if (cancelled) return;
+      if (cancelled || paused) return;
       if (retryCount >= MAX_RETRIES) {
         console.warn("[sse] giving up after", retryCount, "retries");
         return;
@@ -65,7 +97,7 @@ export function useEventStream(): void {
     };
 
     const connect = async () => {
-      if (cancelled) return;
+      if (cancelled || paused) return;
 
       const token = await getToken();
       if (!token) return;
@@ -102,8 +134,17 @@ export function useEventStream(): void {
       es.onopen = () => {
         retryDelay = 1000;
         retryCount = 0;
-        qc.invalidateQueries({ queryKey: ["calendar-events"] });
-        qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
+        if (everConnected) {
+          // Reconnect after a drop or visibility-pause: refresh anything
+          // SSE would have updated while we were disconnected.
+          invalidateCatchUp();
+        } else {
+          // First connect — keep the legacy minimal invalidation for the
+          // queries that fetch lazily on auth (calendar-only).
+          qc.invalidateQueries({ queryKey: ["calendar-events"] });
+          qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
+          everConnected = true;
+        }
       };
 
       es.onerror = () => {
@@ -194,15 +235,42 @@ export function useEventStream(): void {
       es.addEventListener("list.created", listHandler);
       es.addEventListener("list.updated", listHandler);
       es.addEventListener("list.deleted", listHandler);
+
+      // Connection-state events. Replaces post-OAuth burst polling on the
+      // client — the server emits this once an OAuth-initiated initial sync
+      // (or any subsequent sync) finishes, so the UI can refetch on a real
+      // signal instead of hammering on a 2–3s timer.
+      es.addEventListener("connection.synced", () => {
+        qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
+        qc.invalidateQueries({ queryKey: ["calendar-events"] });
+        qc.invalidateQueries({ queryKey: ["granola"] });
+        qc.invalidateQueries({ queryKey: ["things"] });
+        qc.invalidateQueries({ queryKey: ["broken-connections"] });
+      });
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        // Tear down the socket while hidden so we stop heartbeats, server
+        // pushes, and reconnect timers from waking the renderer. Catch-up
+        // happens on the onopen after we re-connect.
+        paused = true;
+        closeSocket();
+      } else if (paused) {
+        paused = false;
+        retryCount = 0;
+        retryDelay = 1000;
+        connect();
+      }
     };
 
     connect();
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      eventSource?.close();
-      eventSource = null;
+      document.removeEventListener("visibilitychange", handleVisibility);
+      closeSocket();
     };
   }, [qc]);
 }

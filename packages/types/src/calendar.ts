@@ -135,6 +135,7 @@ export type SSEEventType =
   | "calendar.event.updated"
   | "calendar.event.deleted"
   | "calendar.sync.complete"
+  | "connection.synced"
   | "content.extracted"
   | "granola.meeting.synced"
   | "granola.action_items.created"

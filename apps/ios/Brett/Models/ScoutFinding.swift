@@ -64,3 +64,106 @@ final class ScoutFinding {
         SyncStatus(rawValue: _syncStatus) ?? .synced
     }
 }
+
+// MARK: - Codable (sync wire format)
+//
+// Encoding/decoding is asymmetric on purpose: outbound payloads
+// (`encode(to:)`) intentionally OMIT `deletedAt` to match the legacy
+// `toServerPayload(_ finding:)` shape — the server treats deletes via the
+// global `/sync/push` `deletes[]` envelope, not a per-row tombstone.
+// Inbound (`init(from:)`) DOES read `deletedAt` so hydration from
+// `/sync/pull` survives soft-deleted rows.
+//
+// Reserved-word remap: the model property `findingDescription` maps to the
+// wire key `description`. Swift can't have a stored property literally named
+// `description` (NSObject's `CustomStringConvertible` reserves it as a
+// computed property), so the model column stays `findingDescription` and
+// the `CodingKeys` raw value bridges the two.
+//
+// Nullable fields are encoded as explicit JSON `null` via `encode`
+// (NOT `encodeIfPresent`) so the wire shape stays byte-compatible with
+// the legacy mapper, which emitted `NSNull()` for missing values rather
+// than dropping the key.
+//
+// Sync-metadata fields (`_syncStatus`, `_baseUpdatedAt`, `_lastError`)
+// are deliberately excluded from both directions: they are local-only
+// state and must not be round-tripped through the server.
+extension ScoutFinding: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case scoutId
+        case scoutRunId
+        case type
+        case title
+        case findingDescription = "description"
+        case sourceUrl
+        case sourceName
+        case relevanceScore
+        case reasoning
+        case itemId
+        case feedbackUseful
+        case feedbackAt
+        case createdAt
+        case updatedAt
+        case deletedAt
+    }
+
+    public convenience init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decode(String.self, forKey: .id)
+        let scoutId = try container.decode(String.self, forKey: .scoutId)
+        let scoutRunId = try container.decodeIfPresent(String.self, forKey: .scoutRunId)
+        let typeStr = try container.decodeIfPresent(String.self, forKey: .type) ?? ""
+        let type = FindingType(rawValue: typeStr) ?? .insight
+        let title = try container.decode(String.self, forKey: .title)
+        let findingDescription = try container.decode(String.self, forKey: .findingDescription)
+        let sourceName = try container.decode(String.self, forKey: .sourceName)
+        let sourceUrl = try container.decodeIfPresent(String.self, forKey: .sourceUrl)
+        let relevanceScore = try container.decodeIfPresent(Double.self, forKey: .relevanceScore)
+        let reasoning = try container.decodeIfPresent(String.self, forKey: .reasoning) ?? ""
+        let createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        let updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+
+        self.init(
+            id: id,
+            scoutId: scoutId,
+            scoutRunId: scoutRunId,
+            type: type,
+            title: title,
+            description: findingDescription,
+            sourceName: sourceName,
+            sourceUrl: sourceUrl,
+            relevanceScore: relevanceScore,
+            reasoning: reasoning,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+        self.itemId = try container.decodeIfPresent(String.self, forKey: .itemId)
+        self.feedbackUseful = try container.decodeIfPresent(Bool.self, forKey: .feedbackUseful)
+        self.feedbackAt = try container.decodeIfPresent(Date.self, forKey: .feedbackAt)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(scoutId, forKey: .scoutId)
+        try container.encode(type, forKey: .type)
+        try container.encode(title, forKey: .title)
+        try container.encode(findingDescription, forKey: .findingDescription)
+        try container.encode(sourceName, forKey: .sourceName)
+        try container.encode(reasoning, forKey: .reasoning)
+        // Use `encode` (not `encodeIfPresent`) for nullable fields so nil
+        // becomes JSON `null` on the wire — matches legacy NSNull behavior.
+        try container.encode(scoutRunId, forKey: .scoutRunId)
+        try container.encode(sourceUrl, forKey: .sourceUrl)
+        try container.encode(relevanceScore, forKey: .relevanceScore)
+        try container.encode(itemId, forKey: .itemId)
+        try container.encode(feedbackUseful, forKey: .feedbackUseful)
+        try container.encode(feedbackAt, forKey: .feedbackAt)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        // Note: `deletedAt` is intentionally NOT encoded — the legacy
+        // `toServerPayload(_ finding:)` did not include it on the wire.
+    }
+}

@@ -85,13 +85,23 @@ final class Session {
     /// cancelled) before the underlying rows disappear.
     ///
     /// Order matters:
-    ///   1. Cancel every in-flight chat stream. A stream that's mid-response
-    ///      when the user signs out would otherwise land its final
-    ///      `persistAssistant` against the NEXT user's SwiftData context.
+    ///   1. Clear every `Clearable` store. The fan-out invokes
+    ///      `ChatStore.clearForSignOut()` — which cancels every in-flight
+    ///      chat stream — along with any other store that caches derived
+    ///      state in memory. A stream that's mid-response when the user
+    ///      signs out would otherwise land its final `persistAssistant`
+    ///      against the NEXT user's SwiftData context.
     ///   2. Disconnect SSE so no new events arrive.
     ///   3. Stop the sync manager so its poll loop ends.
     func tearDown() {
-        ChatStoreRegistry.cancelAllActive()
+        // Clear in-memory store caches first. SwiftData rows still exist at
+        // this point — `wipeAllData()` runs in `AuthManager.signOut` *after*
+        // we return — but stores that cache derived state in memory must
+        // drop it now so a stream/network completion arriving in the next
+        // few ms can't repopulate them with the prior user's data.
+        // Notably, ChatStore.clearForSignOut() cancels every in-flight chat
+        // stream as part of the fan-out.
+        ClearableStoreRegistry.clearAll()
         sseClient.disconnect()
         sseHandler?.stop()
         sseHandler = nil
@@ -136,7 +146,30 @@ enum ActiveSession {
     /// correct behaviour (nothing to sync without an account).
     static var syncManager: SyncManager? { current?.syncManager }
 
-    static var userId: String? { current?.userId }
+    static var userId: String? {
+        #if DEBUG
+        if let fake = fakeUserIdForTesting { return fake }
+        #endif
+        return current?.userId
+    }
+
+    #if DEBUG
+    /// Test-only: directly seed `userId` without constructing a real
+    /// `Session`. Store tests that need an authenticated context but
+    /// don't want to start sync engines (which `Session.start()` does)
+    /// call this in setup. Pair with `endTestingSession()` in teardown
+    /// to avoid leaks across test cases.
+    static func installFakeUserIdForTesting(_ userId: String) {
+        fakeUserIdForTesting = userId
+    }
+
+    /// Test-only counterpart to `installFakeUserIdForTesting`.
+    static func endTestingSession() {
+        fakeUserIdForTesting = nil
+    }
+
+    private static var fakeUserIdForTesting: String?
+    #endif
 }
 
 // MARK: - Engine adapters

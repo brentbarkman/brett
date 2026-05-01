@@ -10,7 +10,6 @@ export function useCalendarAccounts() {
 }
 
 export function useConnectCalendar() {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (meetingNotes: boolean) => {
       const qs = meetingNotes ? "" : "?meetingNotes=false";
@@ -22,25 +21,9 @@ export function useConnectCalendar() {
       if (parsed.hostname !== "accounts.google.com") {
         throw new Error("Unexpected OAuth redirect URL");
       }
+      // The completed connection arrives via the `connection.synced` SSE
+      // event after the post-OAuth initial sync — see api/sse.ts.
       window.open(url, "_blank");
-
-      // Poll for the new account — the OAuth callback happens in the browser,
-      // so we don't know exactly when it completes. Refetch accounts when the
-      // window regains focus (user returns from browser) and periodically.
-      const poll = setInterval(() => {
-        qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
-        qc.invalidateQueries({ queryKey: ["calendar-events"] });
-      }, 3000);
-      const onFocus = () => {
-        qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
-        qc.invalidateQueries({ queryKey: ["calendar-events"] });
-      };
-      window.addEventListener("focus", onFocus);
-      // Stop polling after 2 minutes
-      setTimeout(() => {
-        clearInterval(poll);
-        window.removeEventListener("focus", onFocus);
-      }, 120_000);
     },
   });
 }
@@ -58,7 +41,6 @@ export function useDisconnectCalendar() {
 }
 
 export function useReauthCalendar() {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (accountId: string) => {
       const { url } = await apiFetch<{ url: string }>(
@@ -70,12 +52,9 @@ export function useReauthCalendar() {
       if (parsed.hostname !== "accounts.google.com") {
         throw new Error("Unexpected OAuth redirect URL");
       }
+      // Re-auth completion arrives via the `connection.synced` SSE event
+      // after the next sync — see api/sse.ts.
       window.open(url, "_blank");
-
-      const poll = setInterval(() => {
-        qc.invalidateQueries({ queryKey: ["calendar-accounts"] });
-      }, 2000);
-      setTimeout(() => clearInterval(poll), 120_000);
     },
   });
 }

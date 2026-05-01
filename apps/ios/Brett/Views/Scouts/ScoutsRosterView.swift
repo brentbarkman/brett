@@ -1,15 +1,57 @@
 import SwiftUI
+import SwiftData
 
 /// Full-screen roster of the user's scouts. Pushes from the masthead
 /// `antenna.radiowaves.left.and.right` icon in `MainContainer`.
+///
+/// Outer view is a thin auth gate: the body's `@Query` predicate needs a
+/// concrete `userId`, so we resolve it from `AuthManager` and remount the
+/// child via `.id(userId)` whenever the active user changes. This is the
+/// standard Wave-B pattern (see `InboxPage`, `TodayPage`, `ListView`).
 struct ScoutsRosterView: View {
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            ScoutsRosterBody(userId: userId)
+                .id(userId)
+        } else {
+            // Signed-out fallback. Upstream auth gate normally prevents this.
+            EmptyView()
+        }
+    }
+}
+
+/// Roster's data + UI. `userId` is guaranteed non-optional for this view's
+/// lifetime because the parent only renders us inside an auth check and
+/// applies `.id(userId)` so SwiftUI remounts on account switch.
+private struct ScoutsRosterBody: View {
+    let userId: String
+
     @State private var scoutStore = ScoutStore()
     @State private var aiStore = AIProviderStore.shared
     @State private var statusFilter: StatusFilter = .all
-    @State private var isPresentingNewScout = false
     @State private var showNoAIAlert = false
     @State private var pendingAction: PendingAction?
+    @State private var selection = NavStore.shared
     @Environment(\.dismiss) private var dismiss
+
+    /// Live reactive read of the user's non-deleted scouts. The roster used
+    /// to read `scoutStore.scouts` (an in-memory cache of `ScoutDTO`); now
+    /// we read SwiftData rows directly. `ScoutStore.refreshScouts` still
+    /// owns the network fetch and writes via `upsertLocal`, so refresh,
+    /// SSE, and pull-to-refresh all flow through the same path — they
+    /// just write into SwiftData instead of the in-memory array. `@Query`
+    /// reactively re-renders when those writes land.
+    @Query private var scouts: [Scout]
+
+    init(userId: String) {
+        self.userId = userId
+        let predicate = #Predicate<Scout> { scout in
+            scout.deletedAt == nil && scout.userId == userId
+        }
+        _scouts = Query(filter: predicate, sort: \Scout.createdAt, order: .reverse)
+    }
 
     enum StatusFilter: String, CaseIterable, Identifiable {
         case all, active, paused, archived
@@ -38,17 +80,17 @@ struct ScoutsRosterView: View {
     /// Client-side filter. Cheaper than refetching for every segment
     /// tap AND avoids the "empty state flashes in between filter
     /// changes" problem (audit item #18).
-    private var filteredScouts: [APIClient.ScoutDTO] {
+    private var filteredScouts: [Scout] {
         switch statusFilter {
         case .all:
-            return scoutStore.scouts
+            return scouts
         case .active:
-            return scoutStore.scouts.filter { $0.status == "active" }
+            return scouts.filter { $0.status == "active" }
         case .paused:
-            return scoutStore.scouts.filter { $0.status == "paused" }
+            return scouts.filter { $0.status == "paused" }
         case .archived:
             // "archived" UI maps to server-side "completed" status.
-            return scoutStore.scouts.filter { $0.status == "completed" || $0.status == "archived" }
+            return scouts.filter { $0.status == "completed" || $0.status == "archived" }
         }
     }
 
@@ -61,7 +103,7 @@ struct ScoutsRosterView: View {
                     header
                     statusPicker
 
-                    if scoutStore.isLoading && scoutStore.scouts.isEmpty {
+                    if scoutStore.isLoading && scouts.isEmpty {
                         loadingState
                     } else if filteredScouts.isEmpty {
                         // Only show the emptyState when the user genuinely
@@ -124,17 +166,6 @@ struct ScoutsRosterView: View {
         } message: {
             Text("You'll need to add an AI provider key before scouts can run. Open Settings → AI Providers to add one.")
         }
-        .sheet(isPresented: $isPresentingNewScout) {
-            NewScoutSheet { payload in
-                do {
-                    _ = try await scoutStore.create(payload: payload)
-                } catch {
-                    // error already surfaced via store.errorMessage after refresh
-                }
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
         .alert(item: $pendingAction) { action in
             switch action {
             case .delete(let id, let name):
@@ -169,8 +200,8 @@ struct ScoutsRosterView: View {
     }
 
     private var subtitle: String {
-        let active = scoutStore.scouts.filter { $0.status == "active" }.count
-        let findings = scoutStore.scouts.reduce(0) { $0 + ($1.findingsCount ?? 0) }
+        let active = scouts.filter { $0.status == "active" }.count
+        let findings = scouts.reduce(0) { $0 + $1.findingsCount }
         return "\(active) active · \(findings) finding\(findings == 1 ? "" : "s")"
     }
 
@@ -205,7 +236,7 @@ struct ScoutsRosterView: View {
     }
 
     @ViewBuilder
-    private func contextActions(for scout: APIClient.ScoutDTO) -> some View {
+    private func contextActions(for scout: Scout) -> some View {
         if scout.status == "active" {
             Button {
                 Task { _ = try? await scoutStore.pause(id: scout.id) }
@@ -281,7 +312,12 @@ struct ScoutsRosterView: View {
         if aiStore.hasActiveProvider == false {
             showNoAIAlert = true
         } else {
-            isPresentingNewScout = true
+            // Wave D: route the new-scout sheet through the unified
+            // `MainContainer` sheet presenter rather than a local
+            // `@State` boolean. The sheet contents (with their own
+            // `ScoutStore` for the create call) live in
+            // `MainContainer`'s `NewScoutSheetContainer`.
+            selection.currentDestination = .newScout
         }
     }
 

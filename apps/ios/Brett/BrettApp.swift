@@ -37,10 +37,15 @@ struct BrettApp: App {
         self._authManager = State(wrappedValue: manager)
         // Route user-scoped UserDefaults reads through the live AuthManager.
         UserScopedStorage.configure { [weak manager] in manager?.currentUser?.id }
+        // Shake-to-report runs at the UIWindow level so it can present
+        // over any active sheet (TaskDetailView, SearchSheet, etc.). See
+        // FeedbackPresenter for why this isn't a SwiftUI .onShake.
+        FeedbackPresenter.shared.install(authManager: manager)
         #else
         let manager = AuthManager()
         self._authManager = State(wrappedValue: manager)
         UserScopedStorage.configure { [weak manager] in manager?.currentUser?.id }
+        FeedbackPresenter.shared.install(authManager: manager)
         #endif
     }
 
@@ -140,6 +145,26 @@ struct BrettApp: App {
     }
 }
 
+/// Owns one in-flight `Task` at a time. Replaces the fire-and-forget
+/// `Task { ... }` pattern in scenePhase / isAuthenticated handlers. When a
+/// new task is started, the previous one is cancelled — so a rapid
+/// background↔active flap can't leave a stale "clear badge" coexisting
+/// with a "request authorization."
+@MainActor
+final class ScenePhaseTaskTracker {
+    private var current: Task<Void, Never>?
+
+    func start(_ work: @escaping () async -> Void) {
+        current?.cancel()
+        current = Task { await work() }
+    }
+
+    func cancel() {
+        current?.cancel()
+        current = nil
+    }
+}
+
 /// Top-level auth gate. Cross-fades between SignInView and MainContainer
 /// based on `AuthManager.isAuthenticated`.
 ///
@@ -154,6 +179,10 @@ private struct RootView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var lockManager = BiometricLockManager.shared
+
+    @State private var badgeTracker = ScenePhaseTaskTracker()
+    @State private var sessionRefreshTracker = ScenePhaseTaskTracker()
+    @State private var shareDrainTracker = ScenePhaseTaskTracker()
 
     var body: some View {
         ZStack {
@@ -191,14 +220,24 @@ private struct RootView: View {
             // thumbnail. Without this overlay, that snapshot shows whatever
             // the user had open — inbox contents, calendar events, chat
             // threads — to anyone who swipes to the app switcher while the
-            // phone is unlocked. Opaque BackgroundView matches our brand
-            // atmospheric chrome and avoids a flash of black.
+            // phone is unlocked.
+            //
+            // Why a Material instead of a fresh BackgroundView? A second
+            // BackgroundView spins up its own UserProfileStore, service
+            // load, displayedKey, and 60s tick timer, so it can land on a
+            // different image than MainContainer's BackgroundView and
+            // trigger a 1.5s crossfade just as the privacy cover fades in
+            // — the user-reported "background changes back and forth" on
+            // backgrounding. A Material blur sits over whatever's already
+            // mounted (MainContainer's wallpaper, SignInView, lock view)
+            // and obscures content without re-running the image pipeline.
             //
             // Intentionally outside the auth/lock switch so it covers
             // SignInView too (email field) and BiometricLockView (less
             // sensitive, but we may add recent-activity glances later).
             if scenePhase != .active {
-                BackgroundView()
+                Rectangle()
+                    .fill(.ultraThinMaterial)
                     .ignoresSafeArea()
                     .transition(.opacity)
                     .zIndex(1000)
@@ -215,14 +254,14 @@ private struct RootView: View {
                 // prompt the user for Face ID right after they typed
                 // their password.
                 lockManager.handleFreshSignIn()
-                Task { await BadgeManager.shared.requestAuthorization() }
+                badgeTracker.start { await BadgeManager.shared.requestAuthorization() }
             } else {
                 lockManager.handleSignOut()
                 // Fire-and-forget: sign-out is always a foreground action,
                 // so setBadgeCount(0) lands before the process suspends.
                 // Worst case on drop: stale badge until next launch, which
                 // the cold-launch refresh in MainContainer will overwrite.
-                Task { await BadgeManager.shared.clear() }
+                badgeTracker.start { await BadgeManager.shared.clear() }
             }
         }
         // Scene-phase drives the biometric re-lock. Backgrounding the
@@ -248,12 +287,14 @@ private struct RootView: View {
                 // App Group queue. Runs every time the app becomes
                 // active so in-foreground shares reconcile quickly too.
                 ShareIngestor.shared.configure(auth: authManager)
-                Task { await ShareIngestor.shared.drain() }
+                shareDrainTracker.start { await ShareIngestor.shared.drain() }
                 // Foreground keepalive: re-validate the session in case
                 // it was revoked server-side while we were backgrounded.
                 // Throttled to one call per 5 minutes inside AuthManager so
                 // rapid app-switches don't hammer /users/me.
-                Task { await authManager.refreshIfStale() }
+                sessionRefreshTracker.start { [authManager] in
+                    await authManager.refreshIfStale()
+                }
             default:
                 break
             }
@@ -267,7 +308,7 @@ private struct RootView: View {
             // where the user opens the app directly after a share and
             // the hook hasn't wired yet.
             ShareIngestor.shared.configure(auth: authManager)
-            Task { await ShareIngestor.shared.drain() }
+            shareDrainTracker.start { await ShareIngestor.shared.drain() }
         }
     }
 

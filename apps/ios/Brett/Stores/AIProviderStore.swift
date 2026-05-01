@@ -16,7 +16,7 @@ import Observation
 /// `true` or `false` until the next explicit refresh.
 @MainActor
 @Observable
-final class AIProviderStore {
+final class AIProviderStore: Clearable {
     static let shared = AIProviderStore()
 
     private(set) var hasActiveProvider: Bool?
@@ -25,7 +25,21 @@ final class AIProviderStore {
 
     init(client: APIClient = .shared) {
         self.client = client
+        ClearableStoreRegistry.register(self)
     }
+
+    // MARK: - Clearable
+
+    func clearForSignOut() {
+        hasActiveProvider = nil
+    }
+
+    #if DEBUG
+    /// Test-only: populate in-memory state without touching the network.
+    func injectForTesting(hasActiveProvider: Bool?) {
+        self.hasActiveProvider = hasActiveProvider
+    }
+    #endif
 
     /// Fetch `/ai/config` and update `hasActiveProvider`. Swallows errors
     /// and treats them as "no provider" — an auth failure here means the

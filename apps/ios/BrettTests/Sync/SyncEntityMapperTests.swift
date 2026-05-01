@@ -373,6 +373,113 @@ struct SyncEntityMapperTests {
         #expect(fetched.first?._syncStatus == SyncStatus.synced.rawValue)
     }
 
+    // MARK: - JSON-blob content identity (I2)
+
+    /// Compares two arbitrary JSON-shaped values for deep structural
+    /// equality. Walks dicts, arrays, and primitives; tolerates `NSNull`
+    /// as nil. The shape-only assertions elsewhere (`back["organizer"] is
+    /// [String: Any]`) catch a missing key but miss "we silently coerced
+    /// numeric ids to strings" or "we dropped `extendedProperties`."
+    /// These three tests assert content identity end-to-end.
+    private func jsonEqual(_ a: Any?, _ b: Any?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): return true
+        case (is NSNull, nil), (nil, is NSNull), (is NSNull, is NSNull): return true
+        case let (l as [String: Any], r as [String: Any]):
+            guard Set(l.keys) == Set(r.keys) else { return false }
+            for key in l.keys where !jsonEqual(l[key], r[key]) { return false }
+            return true
+        case let (l as [Any], r as [Any]):
+            guard l.count == r.count else { return false }
+            for (li, ri) in zip(l, r) where !jsonEqual(li, ri) { return false }
+            return true
+        case let (l as String, r as String): return l == r
+        case let (l as Int, r as Int): return l == r
+        case let (l as Double, r as Double): return l == r
+        case let (l as Bool, r as Bool): return l == r
+        case let (l as NSNumber, r as NSNumber): return l == r // catch-all for numerics
+        default: return false
+        }
+    }
+
+    @MainActor
+    @Test func itemContentMetadataRoundTripsContentIdentity() throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        let payload: [String: Any] = [
+            "title": "Article title",
+            "url": "https://example.com/post",
+            "publishedAt": "2026-04-01T12:00:00Z",
+            "tags": ["news", "tech"],
+            "wordCount": 1234,
+        ]
+        let item = TestFixtures.makeItem(userId: "alice", title: "Read")
+        item.contentMetadata = String(
+            data: try JSONSerialization.data(withJSONObject: payload),
+            encoding: .utf8
+        )
+        context.insert(item)
+        try context.save()
+
+        let serialized = SyncEntityMapper.toServerPayload(item)
+        guard let outbound = serialized["contentMetadata"] as? [String: Any] else {
+            Issue.record("contentMetadata should be a dict on the wire, not a string")
+            return
+        }
+        #expect(jsonEqual(outbound, payload), "outbound contentMetadata must equal what we put in")
+    }
+
+    @MainActor
+    @Test func calendarEventOrganizerAttendeesRoundTripContentIdentity() throws {
+        let organizer: [String: Any] = ["email": "alice@example.com", "name": "Alice"]
+        let attendees: [Any] = [
+            ["email": "bob@example.com", "responseStatus": "accepted"],
+            ["email": "carol@example.com", "responseStatus": "needsAction"],
+        ]
+
+        let context = try InMemoryPersistenceController.makeContext()
+        let event = TestFixtures.makeEvent(userId: "alice", title: "Meeting")
+        event.organizerJSON = String(
+            data: try JSONSerialization.data(withJSONObject: organizer),
+            encoding: .utf8
+        )
+        event.attendeesJSON = String(
+            data: try JSONSerialization.data(withJSONObject: attendees),
+            encoding: .utf8
+        )
+        context.insert(event)
+        try context.save()
+
+        let serialized = SyncEntityMapper.toServerPayload(event)
+        let outOrganizer = serialized["organizer"] as? [String: Any]
+        let outAttendees = serialized["attendees"] as? [Any]
+        #expect(jsonEqual(outOrganizer, organizer), "organizer dict must round-trip identity")
+        #expect(jsonEqual(outAttendees, attendees), "attendees array must round-trip identity")
+    }
+
+    @MainActor
+    @Test func scoutSourcesRoundTripContentIdentity() throws {
+        let sources: [Any] = [
+            ["url": "https://example.com/feed", "kind": "rss"],
+            ["url": "https://example.com/api", "kind": "json"],
+        ]
+
+        let context = try InMemoryPersistenceController.makeContext()
+        let scout = TestFixtures.makeScout(userId: "alice", name: "Scout")
+        scout.sourcesJSON = String(
+            data: try JSONSerialization.data(withJSONObject: sources),
+            encoding: .utf8
+        )
+        context.insert(scout)
+        try context.save()
+
+        let serialized = SyncEntityMapper.toServerPayload(scout)
+        guard let outSources = serialized["sources"] as? [Any] else {
+            Issue.record("sources should be an array on the wire, not a string")
+            return
+        }
+        #expect(jsonEqual(outSources, sources), "sources array must round-trip identity")
+    }
+
     @MainActor
     @Test func hardDeleteRemovesLocalRecord() throws {
         let context = try InMemoryPersistenceController.makeContext()
@@ -383,6 +490,49 @@ struct SyncEntityMapperTests {
         SyncEntityMapper.hardDelete(tableName: "items", id: "item-1", context: context)
         // Caller owns the save now — `hardDelete` no longer flushes
         // implicitly so the actor batch path can save once per round.
+        try context.save()
+
+        let fetched: [Item] = (try? context.fetch(FetchDescriptor<Item>())) ?? []
+        #expect(fetched.isEmpty)
+    }
+
+    /// Defense-in-depth: when an active user is known via SharedConfig,
+    /// hardDelete refuses to remove rows owned by a different user.
+    @MainActor
+    @Test func hardDeleteRefusesCrossUserRow() throws {
+        // Stamp App Group with a current-user marker so the mapper sees an
+        // active user during this test. Cleared in defer.
+        SharedConfig.writeCurrentUserId("user-current")
+        defer { SharedConfig.writeCurrentUserId(nil) }
+
+        let context = try InMemoryPersistenceController.makeContext()
+        // Row owned by a different user than the current active session.
+        let stale = Item(id: "stale-item", userId: "user-other", title: "Other user's row")
+        context.insert(stale)
+        try context.save()
+
+        // Server sends a delete event for that id. Without scoping, this
+        // would silently delete the foreign-owned row.
+        SyncEntityMapper.hardDelete(tableName: "items", id: "stale-item", context: context)
+        try context.save()
+
+        let fetched: [Item] = (try? context.fetch(FetchDescriptor<Item>())) ?? []
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.userId == "user-other")
+    }
+
+    /// Same active-user, same row: hardDelete proceeds as expected.
+    @MainActor
+    @Test func hardDeleteAllowsMatchingUserRow() throws {
+        SharedConfig.writeCurrentUserId("user-current")
+        defer { SharedConfig.writeCurrentUserId(nil) }
+
+        let context = try InMemoryPersistenceController.makeContext()
+        let owned = Item(id: "owned-item", userId: "user-current", title: "Mine to delete")
+        context.insert(owned)
+        try context.save()
+
+        SyncEntityMapper.hardDelete(tableName: "items", id: "owned-item", context: context)
         try context.save()
 
         let fetched: [Item] = (try? context.fetch(FetchDescriptor<Item>())) ?? []

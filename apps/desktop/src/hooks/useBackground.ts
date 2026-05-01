@@ -12,6 +12,7 @@ import {
 } from "@brett/business";
 import { solidColors } from "../data/solid-colors";
 import { useAppConfig } from "./useAppConfig";
+import { useVisibilityAwareInterval } from "./useNow";
 import { userStorage } from "../lib/userScopedStorage";
 import fallbackBg from "../assets/fallback-bg.webp";
 
@@ -189,13 +190,20 @@ export function useBackground({
     try { userStorage.setItem(lastSegmentKey, segment); } catch { /* noop */ }
   }, [segment]);
 
-  // Rotation timer (10 min)
-  useEffect(() => {
-    const interval = setInterval(() => rotateImageRef.current(), ROTATION_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, []);
+  // Rotation timer (10 min) — paused while hidden; the user can't see the
+  // background anyway and the segment check below catches up on visible.
+  useVisibilityAwareInterval(() => rotateImageRef.current(), ROTATION_INTERVAL_MS);
 
-  // Segment check (60s) + visibility change listener
+  // Segment check (60s) — paused while hidden; on becoming visible we
+  // immediately re-check so a long hidden stretch that crossed a segment
+  // boundary still rotates the moment the user looks at the app.
+  useVisibilityAwareInterval(() => {
+    const newSegment = getTimeSegment(new Date().getHours());
+    if (newSegment !== categoryRef.current.segment) {
+      rotateImageRef.current();
+    }
+  }, SEGMENT_CHECK_MS);
+
   useEffect(() => {
     const checkSegment = () => {
       const newSegment = getTimeSegment(new Date().getHours());
@@ -203,20 +211,11 @@ export function useBackground({
         rotateImageRef.current();
       }
     };
-
-    const interval = setInterval(checkSegment, SEGMENT_CHECK_MS);
-
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        checkSegment();
-      }
+      if (document.visibilityState === "visible") checkSegment();
     };
     document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
   // Recalculate busyness when inputs change
@@ -235,43 +234,37 @@ export function useBackground({
     }
   }, [backgroundStyle]);
 
-  // Preload next segment's image 5 minutes before boundary
-  useEffect(() => {
+  // Preload next segment's image 5 minutes before boundary. Paused while
+  // hidden — preloading offscreen wastes bandwidth and keeps the renderer
+  // awake. The visibility-aware interval re-creates each render so the
+  // callback closes over latest props.
+  useVisibilityAwareInterval(() => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const minutesIntoHour = now.getMinutes();
+    const currentSeg = getTimeSegment(currentHour);
 
-    const preloadCheck = () => {
-      const now = new Date();
-      const currentHour = now.getHours();
-      const minutesIntoHour = now.getMinutes();
-      const currentSeg = getTimeSegment(currentHour);
-
-      const segmentBoundaries: Record<string, number> = {
-        night: 5, dawn: 7, morning: 12, afternoon: 17, goldenHour: 19, evening: 21,
-      };
-      const nextBoundaryHour = segmentBoundaries[currentSeg];
-      if (nextBoundaryHour === undefined) return;
-
-      const hoursUntil = nextBoundaryHour > currentHour
-        ? nextBoundaryHour - currentHour
-        : nextBoundaryHour + 24 - currentHour;
-      const minutesUntilBoundary = (hoursUntil - 1) * 60 + (60 - minutesIntoHour);
-
-      if (minutesUntilBoundary <= 5 && minutesUntilBoundary > 0) {
-        const nextSeg = getTimeSegment(nextBoundaryHour);
-        const tier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
-        const path = selectImage(manifest as BackgroundManifest, backgroundStyle, nextSeg, tier, []);
-        if (path && baseUrl) {
-          const img = new Image();
-          img.src = buildUrl(path);
-        }
-      }
+    const segmentBoundaries: Record<string, number> = {
+      night: 5, dawn: 7, morning: 12, afternoon: 17, goldenHour: 19, evening: 21,
     };
+    const nextBoundaryHour = segmentBoundaries[currentSeg];
+    if (nextBoundaryHour === undefined) return;
 
-    const interval = setInterval(preloadCheck, SEGMENT_CHECK_MS);
-    return () => clearInterval(interval);
-  // buildUrl is a fresh closure each render but only references baseUrl, which is in deps —
-  // safe to omit. Including it would re-run the effect (and reset the interval) on every render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingCount, taskCount, backgroundStyle, baseUrl, avgBusynessScore]);
+    const hoursUntil = nextBoundaryHour > currentHour
+      ? nextBoundaryHour - currentHour
+      : nextBoundaryHour + 24 - currentHour;
+    const minutesUntilBoundary = (hoursUntil - 1) * 60 + (60 - minutesIntoHour);
+
+    if (minutesUntilBoundary <= 5 && minutesUntilBoundary > 0) {
+      const nextSeg = getTimeSegment(nextBoundaryHour);
+      const tier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
+      const path = selectImage(manifest as BackgroundManifest, backgroundStyle, nextSeg, tier, []);
+      if (path && baseUrl) {
+        const img = new Image();
+        img.src = buildUrl(path);
+      }
+    }
+  }, SEGMENT_CHECK_MS);
 
   // Dev: sequential cycling through ALL images, ignoring smart logic
   const devIndexRef = useRef(-1);

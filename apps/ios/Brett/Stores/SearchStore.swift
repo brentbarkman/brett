@@ -147,7 +147,7 @@ struct SearchResult: Identifiable, Hashable, Sendable, Decodable {
 /// query, and the data may be stale by the time the user comes back.
 @MainActor
 @Observable
-final class SearchStore {
+final class SearchStore: Clearable {
     // MARK: - Observable state
 
     var query: String = ""
@@ -170,8 +170,17 @@ final class SearchStore {
 
     // MARK: - Constants
 
-    /// Persisted recent-queries key. Bumping this invalidates the cache.
-    static let recentQueriesDefaultsKey = "brett.search.recentQueries.v1"
+    /// Persisted recent-queries key, scoped per-user via `UserScopedStorage`
+    /// so two accounts that sign in on the same device don't see each other's
+    /// search history. Bumping the base string invalidates the cache.
+    ///
+    /// Computed each call site rather than cached at init: the @MainActor
+    /// `userIdProvider` may not be configured yet when the store is first
+    /// constructed, and per-user identity may change between sign-out and
+    /// the next sign-in within the same process.
+    static func recentQueriesDefaultsKey() -> String {
+        UserScopedStorage.key("brett.search.recentQueries.v1")
+    }
     static let maxRecentQueries = 10
     static let minQueryLength = 2
 
@@ -188,7 +197,41 @@ final class SearchStore {
         self.debounce = debounce
         self.clock = clock
         self.recentQueries = Self.loadRecent(from: userDefaults)
+        ClearableStoreRegistry.register(self)
     }
+
+    // MARK: - Clearable
+
+    /// Clearable conformance — cancel any in-flight search task, drop the
+    /// in-memory result set, and wipe the user-private recent-search list
+    /// (both the in-memory copy and the UserDefaults persistence). Without
+    /// the UserDefaults wipe, a different user signing in on the same
+    /// device would see the previous user's search history.
+    func clearForSignOut() {
+        currentTask?.cancel()
+        currentTask = nil
+        results = []
+        query = ""
+        isSearching = false
+        error = nil
+        recentQueries = []
+        activeTypes = []
+        userDefaults.removeObject(forKey: Self.recentQueriesDefaultsKey())
+    }
+
+    #if DEBUG
+    /// Test-only: populate in-memory state without touching the network.
+    func injectForTesting(
+        results: [SearchResult]? = nil,
+        activeTypes: Set<SearchEntityType>? = nil
+    ) {
+        if let results { self.results = results }
+        if let activeTypes { self.activeTypes = activeTypes }
+    }
+
+    /// Test-only: visibility into whether a debounced search Task is alive.
+    var hasInFlightTask: Bool { currentTask != nil }
+    #endif
 
     // Swift 6 note: deinit on a @MainActor class is nonisolated, so we
     // can't touch `currentTask` there. The view owns the store as @State
@@ -261,12 +304,12 @@ final class SearchStore {
         if recentQueries.count > Self.maxRecentQueries {
             recentQueries = Array(recentQueries.prefix(Self.maxRecentQueries))
         }
-        userDefaults.set(recentQueries, forKey: Self.recentQueriesDefaultsKey)
+        userDefaults.set(recentQueries, forKey: Self.recentQueriesDefaultsKey())
     }
 
     func clearRecent() {
         recentQueries = []
-        userDefaults.removeObject(forKey: Self.recentQueriesDefaultsKey)
+        userDefaults.removeObject(forKey: Self.recentQueriesDefaultsKey())
     }
 
     /// Cancel any pending search. Used when the sheet dismisses.
@@ -315,7 +358,7 @@ final class SearchStore {
     }
 
     private static func loadRecent(from defaults: UserDefaults) -> [String] {
-        (defaults.stringArray(forKey: recentQueriesDefaultsKey) ?? [])
+        (defaults.stringArray(forKey: recentQueriesDefaultsKey()) ?? [])
             .prefix(maxRecentQueries)
             .map { String($0) }
     }

@@ -152,6 +152,90 @@ enum TestFixtures {
         )
     }
 
+    // MARK: - CalendarAccount
+
+    static func makeCalendarAccount(
+        id: String = UUID().uuidString,
+        googleEmail: String = "test@example.com",
+        connectedAt: Date = Date(),
+        hasMeetingNotesScope: Bool = false,
+        meetingNotesEnabled: Bool = false,
+        calendars: [CalendarAccountsStore.CalendarInfo] = []
+    ) -> CalendarAccountsStore.CalendarAccount {
+        CalendarAccountsStore.CalendarAccount(
+            id: id,
+            googleEmail: googleEmail,
+            connectedAt: connectedAt,
+            hasMeetingNotesScope: hasMeetingNotesScope,
+            meetingNotesEnabled: meetingNotesEnabled,
+            calendars: calendars
+        )
+    }
+
+    // MARK: - SearchResult
+
+    static func makeSearchResult(
+        entityType: SearchEntityType = .item,
+        entityId: String = UUID().uuidString,
+        title: String = "Test result",
+        snippet: String? = nil,
+        score: Double = 1.0,
+        matchType: SearchMatchType = .hybrid
+    ) -> SearchResult {
+        SearchResult(
+            entityType: entityType,
+            entityId: entityId,
+            title: title,
+            snippet: snippet,
+            score: score,
+            matchType: matchType,
+            metadata: nil
+        )
+    }
+
+    // MARK: - ScoutDTO
+
+    /// Build a `APIClient.ScoutDTO` for tests. The DTO is `Decodable`-only
+    /// (no memberwise init), so we round-trip through JSON. Sufficient
+    /// fields are populated to make the result indistinguishable from a
+    /// real server response for in-memory store tests.
+    static func makeScoutDTO(
+        id: String = UUID().uuidString,
+        name: String = "Test scout",
+        goal: String = "Monitor industry news",
+        status: String = "active"
+    ) throws -> APIClient.ScoutDTO {
+        let json: [String: Any] = [
+            "id": id,
+            "name": name,
+            "avatarLetter": String(name.prefix(1)),
+            "avatarGradient": ["#000000", "#ffffff"],
+            "goal": goal,
+            "context": NSNull(),
+            "sources": [],
+            "sensitivity": "medium",
+            "analysisTier": "standard",
+            "cadenceIntervalHours": 24,
+            "cadenceMinIntervalHours": 6,
+            "cadenceCurrentIntervalHours": 24,
+            "cadenceReason": NSNull(),
+            "budgetUsed": 0,
+            "budgetTotal": 100,
+            "status": status,
+            "statusLine": NSNull(),
+            "bootstrapped": false,
+            "endDate": NSNull(),
+            "nextRunAt": NSNull(),
+            "lastRun": NSNull(),
+            "findingsCount": 0,
+            "createdAt": ISO8601DateFormatter().string(from: Date()),
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(APIClient.ScoutDTO.self, from: data)
+    }
+
     // MARK: - UserProfile
 
     static func makeUserProfile(

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
 import { apiFetch } from "./client";
+import { useNow } from "../hooks/useNow";
 import type { WeatherData } from "@brett/types";
 
 interface WeatherResponse {
@@ -8,24 +8,8 @@ interface WeatherResponse {
   reason?: string;
 }
 
-/** Ticks every minute, returning a new Date each time. */
-function useCurrentTime() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    // Align to the next minute boundary for clean ticks
-    const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-    const timeout = setTimeout(() => {
-      setNow(new Date());
-      // After the first aligned tick, tick every 60s
-    }, msUntilNextMinute);
-    const interval = setInterval(() => setNow(new Date()), 60_000);
-    return () => { clearTimeout(timeout); clearInterval(interval); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  return now;
-}
-
 export function useWeather(enabled: boolean = true) {
-  const now = useCurrentTime();
+  const now = useNow(60_000, { alignToMinuteBoundary: true });
 
   const query = useQuery({
     queryKey: ["weather"],
@@ -41,6 +25,7 @@ export function useWeather(enabled: boolean = true) {
     enabled,
     staleTime: 5 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
     retry: 2,
     retryDelay: 30_000, // 30s between retries for transient API failures

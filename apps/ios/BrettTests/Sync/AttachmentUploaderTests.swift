@@ -14,7 +14,16 @@ struct AttachmentUploaderTests {
     /// `Self` for each `@Test`, so this runs before every test and
     /// isolates the shared-static request log + stub registry from
     /// whatever the previous suite left behind.
-    init() { MockURLProtocol.reset() }
+    @MainActor
+    init() {
+        MockURLProtocol.reset()
+        // Uploader.userIdForUpload now resolves via ActiveSession.userId
+        // (was an unscoped UserProfile fetch). Install a fake session so
+        // the success-path tests still see a stamped userId on the
+        // resulting Attachment row. Tests that explicitly assert the
+        // "no session" behaviour can call endTestingSession() themselves.
+        ActiveSession.installFakeUserIdForTesting("user-test-001")
+    }
     // MARK: - Harness
 
     final class Harness {
@@ -262,5 +271,63 @@ struct AttachmentUploaderTests {
         } catch let err as AttachmentUploader.EnqueueError {
             #expect(err == .missingMimeType)
         }
+    }
+
+    /// Regression: with no `ActiveSession`, the upload still completes (server
+    /// confirmation is the source of truth) but the local Attachment row is
+    /// stamped with an empty userId rather than picking an arbitrary
+    /// `UserProfile.id` from SwiftData. The next pull backfills the real
+    /// owner from the server.
+    @Test func successfulUploadWithoutActiveSessionUsesEmptyUserId() async throws {
+        // Drop the harness-installed fake session for this case only.
+        ActiveSession.endTestingSession()
+        defer { ActiveSession.installFakeUserIdForTesting("user-test-001") }
+
+        let h = try Harness()
+
+        // Seed a stale UserProfile from a different user — the old code path
+        // would have picked this up and stamped the attachment with it.
+        let stale = UserProfile(id: "stale-other-user", email: "stale@example.com", name: "Stale")
+        h.persistence.mainContext.insert(stale)
+        try h.persistence.mainContext.save()
+
+        stubSuccess(itemId: "item-1", attachmentId: "att-no-session")
+
+        let upload = try await h.uploader.enqueue(
+            itemId: "item-1",
+            fileURL: h.sourceFile,
+            filename: "source.bin",
+            mimeType: "application/octet-stream"
+        )
+
+        let terminal = await h.waitForTerminal(uploadId: upload.id)
+        #expect(terminal?.stageEnum == .done)
+
+        let attachments = h.attachmentStore.fetchForItem("item-1")
+        let row = attachments.first { $0.id == "att-no-session" }
+        #expect(row != nil)
+        // Empty (not stamped with the stale prior user's id) — the next pull
+        // will fill in the real userId from the server.
+        #expect(row?.userId == "")
+    }
+
+    @Test func processQueueDoesNotRetainSelfAcrossDrain() async throws {
+        weak var weakUploader: AttachmentUploader?
+        do {
+            let persistence = PersistenceController.makePreview()
+            let store = AttachmentStore(context: persistence.mainContext)
+            let uploader = AttachmentUploader(
+                apiClient: .shared,
+                attachmentStore: store,
+                persistence: persistence,
+                useBackgroundSession: false
+            )
+            weakUploader = uploader
+            uploader.processQueue()
+            // Let drain complete (queue is empty so it returns immediately).
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(weakUploader == nil, "AttachmentUploader should not be retained after going out of scope")
     }
 }

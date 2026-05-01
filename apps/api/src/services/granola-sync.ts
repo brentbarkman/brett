@@ -117,6 +117,10 @@ export async function initialGranolaSync(userId: string): Promise<void> {
       type: "granola.meeting.synced",
       payload: { count: meetings.length },
     });
+    publishSSE(userId, {
+      type: "connection.synced",
+      payload: { type: "granola" },
+    });
   } catch (err) {
     console.error(`[granola-sync] Initial sync failed for user ${userId}:`, err);
     if (isAuthError(err)) {

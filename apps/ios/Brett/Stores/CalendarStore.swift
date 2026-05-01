@@ -6,16 +6,24 @@ import SwiftData
 /// Writable for `CalendarEventNote` — those are user-owned free-form notes.
 @MainActor
 @Observable
-final class CalendarStore {
+final class CalendarStore: Clearable {
     private let context: ModelContext
 
     init(context: ModelContext) {
         self.context = context
+        ClearableStoreRegistry.register(self)
     }
 
     convenience init() {
         self.init(context: PersistenceController.shared.mainContext)
     }
+
+    // MARK: - Clearable
+
+    /// No in-memory caches today — reads go through SwiftData. Conformance
+    /// exists so the regression-guard test passes; Wave B may fill this
+    /// in if per-instance state appears.
+    func clearForSignOut() {}
 
     // MARK: - Events (read-only)
 

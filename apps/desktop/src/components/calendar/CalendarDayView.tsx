@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { getEventGlassColor, isSafeUrl } from "@brett/utils";
 import { displayTitle, useDemoMode } from "@brett/ui";
+import { useNow } from "../../hooks/useNow";
 
 export interface CalendarDayViewProps {
   date: Date;
@@ -102,18 +103,12 @@ function layoutEvents(events: CalendarEventRecord[]): Map<string, LayoutInfo> {
 export function CalendarDayView({ date, events, onEventClick }: CalendarDayViewProps) {
   useDemoMode();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const currentTime = useNow(60_000);
 
   const allDayEvents = events.filter((e) => e.isAllDay);
   const timedEvents = events.filter((e) => !e.isAllDay);
   const layout = layoutEvents(timedEvents);
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => i);
-
-  // Real-time clock
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Scroll to 8am on mount
   useEffect(() => {

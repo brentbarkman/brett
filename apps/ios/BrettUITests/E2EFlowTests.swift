@@ -94,47 +94,50 @@ final class E2EFlowTests: XCTestCase {
         settingsButton.tap()
 
         // 11) Sign out button + confirmation. Settings is a scrolling list;
-        //     the signout button lives at the bottom. Scroll until it's in
-        //     view + hittable before tapping.
+        //     the signout button lives at the bottom. Scroll until it's
+        //     actually hittable (not just present in the AX tree — the
+        //     identifier appears as soon as the row is in the off-screen
+        //     hierarchy, but tapping then lands on whichever row is at the
+        //     reported coordinates, which is usually a different nav row).
         _ = app.navigationBars["Settings"].waitForExistence(timeout: 5)
         let signOutButton = app.settingsSignOutButton
+        XCTAssertTrue(
+            signOutButton.waitForExistence(timeout: 5),
+            "Sign Out button should appear in the Settings AX tree"
+        )
         var scrolls = 0
-        while !signOutButton.exists && scrolls < 6 {
+        while !signOutButton.isHittable && scrolls < 8 {
             app.swipeUp()
             scrolls += 1
         }
         XCTAssertTrue(
-            signOutButton.waitForExistence(timeout: 5),
-            "Sign Out button should appear in Settings"
+            signOutButton.isHittable,
+            "Sign Out button should be hittable after scrolling (was reachable in AX tree but not visible)"
         )
 
-        // Coordinate-tap unconditionally — on iOS 26 the Sign Out button
-        // element resolves but its computed hit point is occasionally
-        // `{-1, -1}` from the SwiftUI destructive button + glass row stack.
-        // Explicit coordinate taps bypass XCUITest's internal hit test.
-        let f = signOutButton.frame
-        print("[E2E] signout frame=\(f) hittable=\(signOutButton.isHittable)")
-        app.coordinate(withNormalizedOffset: .zero)
-            .withOffset(CGVector(dx: f.midX, dy: f.midY))
-            .tap()
+        // Settle the scroll before tapping — synthetic events delivered
+        // during a scroll-decel animation are occasionally dropped on iOS 26.
+        Thread.sleep(forTimeInterval: 0.5)
 
-        // Confirmation dialog — tap the destructive confirm button. The
-        // destructive button on iOS is the second Sign Out (the first is the
-        // list row itself, still present in the hierarchy).
-        let confirmAlertAction = app.alerts.buttons["Sign Out"].firstMatch
-        let confirmSheetAction = app.sheets.buttons["Sign Out"].firstMatch
-        let confirmButtons = app.buttons.matching(NSPredicate(format: "label == 'Sign Out'"))
+        signOutButton.tap()
 
-        if confirmAlertAction.waitForExistence(timeout: 3) {
-            confirmAlertAction.tap()
-        } else if confirmSheetAction.waitForExistence(timeout: 1) {
-            confirmSheetAction.tap()
-        } else if confirmButtons.count >= 2 {
-            let destructive = confirmButtons.element(boundBy: 1)
-            destructive.tap()
-        } else {
-            app.buttons["Sign Out"].firstMatch.tap()
-        }
+        // Confirmation dialog — wait for the dialog title to appear before
+        // looking up the destructive action. On iOS 26 the dialog isn't
+        // always categorized under `.sheets`/`.alerts` in the accessibility
+        // tree, so we identify the destructive button by the explicit
+        // accessibility identifier set in `SettingsView.signOutCard`.
+        let dialogTitle = app.staticTexts["Sign out of Brett?"]
+        XCTAssertTrue(
+            dialogTitle.waitForExistence(timeout: 5),
+            "Sign out confirmation dialog did not appear after tapping the row"
+        )
+
+        let confirm = app.settingsSignOutConfirmButton
+        XCTAssertTrue(
+            confirm.waitForExistence(timeout: 3),
+            "Destructive Sign Out button (settings.signout.confirm) not found"
+        )
+        confirm.tap()
 
         // 12) We should land back on SignInView.
         XCTAssertTrue(
