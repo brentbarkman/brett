@@ -87,31 +87,83 @@ enum SyncEntityMapper {
     /// and saves once at the end; saving inside this helper would amplify
     /// to one save per row, defeating the batching. Standalone callers
     /// (SSE event handler, ad-hoc cleanups) save their context explicitly.
+    ///
+    /// Defense in depth: when an active user can be resolved via
+    /// `SharedConfig.resolveCurrentUserId()` we refuse to delete a row
+    /// whose `userId` doesn't match — symmetric with the upsert side.
+    /// Without this guard, a stale delete event from a prior account
+    /// (sign-out → sign-in race, mock URL replay, malicious proxy) could
+    /// reach in and remove rows that legitimately belong to the current
+    /// session. `ScoutFinding` has no `userId`; it joins through `Scout`
+    /// which is itself user-scoped, so id-only delete is fine for that
+    /// table.
     static func hardDelete(
         tableName: String,
         id: String,
         context: ModelContext
     ) {
+        let activeUserId = SharedConfig.resolveCurrentUserId()
+
         switch tableName {
         case "lists":
-            if let obj = fetchById(ItemList.self, id: id, in: context) { context.delete(obj) }
+            if let obj = fetchById(ItemList.self, id: id, in: context),
+               passesUserScope(obj.userId, active: activeUserId, table: tableName) {
+                context.delete(obj)
+            }
         case "items":
-            if let obj = fetchById(Item.self, id: id, in: context) { context.delete(obj) }
+            if let obj = fetchById(Item.self, id: id, in: context),
+               passesUserScope(obj.userId, active: activeUserId, table: tableName) {
+                context.delete(obj)
+            }
         case "calendar_events":
-            if let obj = fetchById(CalendarEvent.self, id: id, in: context) { context.delete(obj) }
+            if let obj = fetchById(CalendarEvent.self, id: id, in: context),
+               passesUserScope(obj.userId, active: activeUserId, table: tableName) {
+                context.delete(obj)
+            }
         case "calendar_event_notes":
-            if let obj = fetchById(CalendarEventNote.self, id: id, in: context) { context.delete(obj) }
+            if let obj = fetchById(CalendarEventNote.self, id: id, in: context),
+               passesUserScope(obj.userId, active: activeUserId, table: tableName) {
+                context.delete(obj)
+            }
         case "scouts":
-            if let obj = fetchById(Scout.self, id: id, in: context) { context.delete(obj) }
+            if let obj = fetchById(Scout.self, id: id, in: context),
+               passesUserScope(obj.userId, active: activeUserId, table: tableName) {
+                context.delete(obj)
+            }
         case "scout_findings":
+            // ScoutFinding has no userId column; it joins via scoutId →
+            // Scout (which is user-scoped). Id-only delete is correct.
             if let obj = fetchById(ScoutFinding.self, id: id, in: context) { context.delete(obj) }
         case "brett_messages":
-            if let obj = fetchById(BrettMessage.self, id: id, in: context) { context.delete(obj) }
+            if let obj = fetchById(BrettMessage.self, id: id, in: context),
+               passesUserScope(obj.userId, active: activeUserId, table: tableName) {
+                context.delete(obj)
+            }
         case "attachments":
-            if let obj = fetchById(Attachment.self, id: id, in: context) { context.delete(obj) }
+            if let obj = fetchById(Attachment.self, id: id, in: context),
+               passesUserScope(obj.userId, active: activeUserId, table: tableName) {
+                context.delete(obj)
+            }
         default:
             return
         }
+    }
+
+    /// Cross-user delete guard. Returns true when the row may be deleted:
+    ///   - active session unknown (test contexts, pre-sign-in pulls) →
+    ///     fall back to id-only behaviour (matches upsert's open default).
+    ///   - row userId empty → tolerate (legacy rows pre-userId backfill).
+    ///   - row userId matches active → safe to delete.
+    /// Otherwise we log and refuse — the row belongs to a different user
+    /// and the delete event is suspicious.
+    private static func passesUserScope(_ rowUserId: String, active: String?, table: String) -> Bool {
+        guard let active else { return true }
+        if rowUserId.isEmpty { return true }
+        if rowUserId == active { return true }
+        BrettLog.pull.error(
+            "refusing to hardDelete \(table, privacy: .public) row whose userId does not match active session — possible stale delete event"
+        )
+        return false
     }
 
     // MARK: - Item

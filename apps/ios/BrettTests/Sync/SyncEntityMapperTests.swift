@@ -495,4 +495,47 @@ struct SyncEntityMapperTests {
         let fetched: [Item] = (try? context.fetch(FetchDescriptor<Item>())) ?? []
         #expect(fetched.isEmpty)
     }
+
+    /// Defense-in-depth: when an active user is known via SharedConfig,
+    /// hardDelete refuses to remove rows owned by a different user.
+    @MainActor
+    @Test func hardDeleteRefusesCrossUserRow() throws {
+        // Stamp App Group with a current-user marker so the mapper sees an
+        // active user during this test. Cleared in defer.
+        SharedConfig.writeCurrentUserId("user-current")
+        defer { SharedConfig.writeCurrentUserId(nil) }
+
+        let context = try InMemoryPersistenceController.makeContext()
+        // Row owned by a different user than the current active session.
+        let stale = Item(id: "stale-item", userId: "user-other", title: "Other user's row")
+        context.insert(stale)
+        try context.save()
+
+        // Server sends a delete event for that id. Without scoping, this
+        // would silently delete the foreign-owned row.
+        SyncEntityMapper.hardDelete(tableName: "items", id: "stale-item", context: context)
+        try context.save()
+
+        let fetched: [Item] = (try? context.fetch(FetchDescriptor<Item>())) ?? []
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.userId == "user-other")
+    }
+
+    /// Same active-user, same row: hardDelete proceeds as expected.
+    @MainActor
+    @Test func hardDeleteAllowsMatchingUserRow() throws {
+        SharedConfig.writeCurrentUserId("user-current")
+        defer { SharedConfig.writeCurrentUserId(nil) }
+
+        let context = try InMemoryPersistenceController.makeContext()
+        let owned = Item(id: "owned-item", userId: "user-current", title: "Mine to delete")
+        context.insert(owned)
+        try context.save()
+
+        SyncEntityMapper.hardDelete(tableName: "items", id: "owned-item", context: context)
+        try context.save()
+
+        let fetched: [Item] = (try? context.fetch(FetchDescriptor<Item>())) ?? []
+        #expect(fetched.isEmpty)
+    }
 }
