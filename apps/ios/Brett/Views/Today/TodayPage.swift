@@ -96,8 +96,22 @@ private struct TodayPageBody: View {
         }
         _lists = Query(filter: listPredicate, sort: \ItemList.sortOrder)
 
+        // Bound the working set to a ±30-day window. Heavy users sync years
+        // of events; without this predicate, every body pass walks the
+        // entire history just to compute `nextUpcomingEvent` / `todaysEvents`.
+        // The window covers the "next event" ticker (typically minutes/hours
+        // away) and any reasonable "next 30 days" peek with comfortable
+        // margin. Events whose start is within the window OR whose end is
+        // within the window are both included so a long event in progress
+        // (started yesterday, ends tomorrow) still surfaces today.
+        let calendar = Calendar.current
+        let yesterday = calendar.startOfDay(for: Date().addingTimeInterval(-86_400))
+        let thirtyDaysOut = calendar.startOfDay(for: Date().addingTimeInterval(86_400 * 30))
         let eventPredicate = #Predicate<CalendarEvent> { event in
-            event.deletedAt == nil && event.userId == userId
+            event.deletedAt == nil &&
+            event.userId == userId &&
+            event.endTime >= yesterday &&
+            event.startTime <= thirtyDaysOut
         }
         _events = Query(filter: eventPredicate, sort: \CalendarEvent.startTime)
 
