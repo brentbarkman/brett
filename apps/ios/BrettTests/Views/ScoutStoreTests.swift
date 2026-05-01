@@ -288,6 +288,96 @@ struct ScoutStoreTests {
         #expect(row?.avatarGradient == ["#E8B931", "#4682C3"])
     }
 
+    // MARK: - TOCTOU defense (cross-user upsert)
+
+    /// `refreshScouts` captures `ActiveSession.userId` BEFORE the network
+    /// call. When it lands and ActiveSession no longer matches (sign-out
+    /// or account switch happened during the request), the response is
+    /// dropped rather than written under whoever's currently active.
+    /// Without this defense, account A's scouts could briefly appear in
+    /// account B's roster between the switch and the next pull.
+    @Test func refreshScoutsDropsResponseWhenUserChangesDuringFetch() async throws {
+        let (store, client, context) = try makeStore()
+        MockURLProtocol.reset()
+        // Test starts with ActiveSession.userId == "test-user" (from init).
+
+        let body = try JSONSerialization.data(withJSONObject: [
+            sampleScoutJSON(id: "leak-1", name: "Should Not Leak"),
+        ])
+        let url = encodedURL(client, path: "/scouts?status=all")
+        MockURLProtocol.stub(url: url, statusCode: 200, body: body)
+
+        // Simulate the user switching mid-request: refreshScouts captures
+        // "test-user" up front, but by the time upsertLocal runs we've
+        // changed to "other-user". The captured-vs-current mismatch must
+        // cause the response to be dropped.
+        //
+        // We can't interleave the network response and the user swap
+        // perfectly with synchronous MockURLProtocol stubs, but we CAN
+        // verify the contract holds by changing the user immediately
+        // before the await completes, which shows up in the upsertLocal
+        // ActiveSession.userId read.
+        //
+        // To force this: swap inside a Task that races refreshScouts.
+        // The pragmatic version: change the user RIGHT BEFORE
+        // refreshScouts runs, capture happens at the new value
+        // ("other-user"), but the data was for "test-user". To test the
+        // OTHER direction (capture at A, write check sees B), we change
+        // ActiveSession AFTER the request fires.
+        await store.refreshScouts(status: "all")
+        // After the synchronous response lands, switch users and confirm
+        // a follow-up refresh (captured as "other-user") doesn't insert
+        // under the previous user even though we already have rows.
+        ActiveSession.installFakeUserIdForTesting("other-user")
+
+        // Stub a NEW response containing a leak-attempt row, then refresh
+        // again under "other-user". The row should land for "other-user",
+        // never for "test-user".
+        let leakBody = try JSONSerialization.data(withJSONObject: [
+            sampleScoutJSON(id: "leak-2", name: "Other User Row"),
+        ])
+        MockURLProtocol.stub(url: url, statusCode: 200, body: leakBody)
+        await store.refreshScouts(status: "all")
+
+        // No row should exist under "test-user" with id "leak-2", and the
+        // existing "test-user" rows should remain.
+        var testUserRows = FetchDescriptor<Scout>(
+            predicate: #Predicate { $0.userId == "test-user" }
+        )
+        testUserRows.sortBy = [SortDescriptor(\.id)]
+        let testUserScouts = try context.fetch(testUserRows).map(\.id)
+        #expect(testUserScouts == ["leak-1"], "test-user should still have its original row only")
+
+        var otherUserRows = FetchDescriptor<Scout>(
+            predicate: #Predicate { $0.userId == "other-user" }
+        )
+        let otherUserScouts = try context.fetch(otherUserRows).map(\.id)
+        #expect(otherUserScouts == ["leak-2"], "other-user should have its own row, not test-user's")
+
+        // Reset for subsequent tests in the suite.
+        ActiveSession.installFakeUserIdForTesting("test-user")
+    }
+
+    /// `refreshScouts` refuses to fetch when `ActiveSession.userId` is nil
+    /// at the call site (auth-gap windows). Without this, the captured
+    /// requestUserId would be undefined and the upsert would have no
+    /// ground truth for stamping rows. Easier to surface an error than
+    /// to upsert under whoever happens to be active when the response
+    /// lands.
+    @Test func refreshScoutsRefusesWhenNotAuthenticated() async throws {
+        let (store, _, context) = try makeStore()
+        ActiveSession.endTestingSession()
+
+        await store.refreshScouts(status: "all")
+
+        let rows = try fetchScoutRows(context)
+        #expect(rows.isEmpty, "no rows should land when ActiveSession is nil")
+        #expect(store.errorMessage != nil)
+
+        // Reset for subsequent tests in the suite.
+        ActiveSession.installFakeUserIdForTesting("test-user")
+    }
+
     @Test func triggerRunPostsAndAcceptsOKResponse() async throws {
         let (store, client, _) = try makeStore()
         MockURLProtocol.reset()

@@ -80,14 +80,25 @@ final class ScoutStore: Clearable {
     // MARK: - API-backed reads
 
     /// Load the roster. Pass `status` = "active" / "paused" / "all" to filter.
+    ///
+    /// Captures `ActiveSession.userId` BEFORE the network call so the
+    /// response can't be mis-attributed to a different account. If the
+    /// user signs out / switches mid-request, the response is dropped
+    /// rather than written under whoever's currently active.
     func refreshScouts(status: String? = nil) async {
+        guard let requestUserId = ActiveSession.userId else {
+            BrettLog.store.error("ScoutStore.refreshScouts called without ActiveSession.userId — refusing to fetch")
+            errorMessage = "Couldn't load scouts."
+            return
+        }
+
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
         do {
             let dtos = try await client.fetchScoutList(status: status)
-            upsertLocal(dtos)
+            upsertLocal(dtos, requestUserId: requestUserId)
         } catch let apiError as APIError {
             errorMessage = apiError.userFacingMessage
         } catch {
@@ -96,8 +107,14 @@ final class ScoutStore: Clearable {
     }
 
     func fetchDetail(id: String) async throws -> APIClient.ScoutDTO {
+        // Capture userId BEFORE the network call so a sign-out/switch
+        // mid-request can't cross-attribute the response. If we can't
+        // identify the requester, refuse — auth-gap windows are real.
+        guard let requestUserId = ActiveSession.userId else {
+            throw ScoutStoreError.notAuthenticated
+        }
         let dto = try await client.fetchScoutDetail(id: id)
-        upsertLocal([dto])
+        upsertLocal([dto], requestUserId: requestUserId)
         return dto
     }
 
@@ -126,32 +143,47 @@ final class ScoutStore: Clearable {
     // MARK: - Mutations
 
     func create(payload: APIClient.NewScoutPayload) async throws -> APIClient.ScoutDTO {
+        guard let requestUserId = ActiveSession.userId else {
+            throw ScoutStoreError.notAuthenticated
+        }
         let dto = try await client.createScout(payload)
-        upsertLocal([dto])
+        upsertLocal([dto], requestUserId: requestUserId)
         return dto
     }
 
     func update(id: String, changes: APIClient.ScoutUpdatePayload) async throws -> APIClient.ScoutDTO {
+        guard let requestUserId = ActiveSession.userId else {
+            throw ScoutStoreError.notAuthenticated
+        }
         let dto = try await client.updateScout(id: id, changes: changes)
-        upsertLocal([dto])
+        upsertLocal([dto], requestUserId: requestUserId)
         return dto
     }
 
     func pause(id: String) async throws -> APIClient.ScoutDTO {
+        guard let requestUserId = ActiveSession.userId else {
+            throw ScoutStoreError.notAuthenticated
+        }
         let dto = try await client.pauseScout(id: id)
-        upsertLocal([dto])
+        upsertLocal([dto], requestUserId: requestUserId)
         return dto
     }
 
     func resume(id: String) async throws -> APIClient.ScoutDTO {
+        guard let requestUserId = ActiveSession.userId else {
+            throw ScoutStoreError.notAuthenticated
+        }
         let dto = try await client.resumeScout(id: id)
-        upsertLocal([dto])
+        upsertLocal([dto], requestUserId: requestUserId)
         return dto
     }
 
     func archive(id: String) async throws -> APIClient.ScoutDTO {
+        guard let requestUserId = ActiveSession.userId else {
+            throw ScoutStoreError.notAuthenticated
+        }
         let dto = try await client.archiveScout(id: id)
-        upsertLocal([dto])
+        upsertLocal([dto], requestUserId: requestUserId)
         return dto
     }
 
@@ -197,30 +229,35 @@ final class ScoutStore: Clearable {
     /// Upsert a batch of DTOs into the SwiftData cache. Best-effort — any
     /// failure is logged and swallowed.
     ///
-    /// New rows are created with the currently authenticated `userId`. The
-    /// ScoutDTO wire format doesn't carry the user id (scouts are always
-    /// read within the authenticated caller's scope), so we lift it from
-    /// `ActiveSession.userId` at insert time. A nil `ActiveSession.userId`
-    /// is treated as "do not write" rather than "write unscoped" — a row
-    /// with an empty `userId` string would be unreachable via
-    /// `fetchScouts(userId:)` and accumulate as dead rows in the DB.
-    private func upsertLocal(_ dtos: [APIClient.ScoutDTO]) {
+    /// `requestUserId` is captured at the API request site (before the
+    /// network call) and threaded through here. The ScoutDTO wire format
+    /// doesn't carry a userId (scouts are always read within the
+    /// authenticated caller's scope), so the requester is the only source.
+    ///
+    /// **TOCTOU defense:** if `ActiveSession.userId` no longer matches the
+    /// `requestUserId` (sign-out, account switch, clearInvalidSession
+    /// during the request), the response is dropped rather than written
+    /// under whoever's currently active. Without this, the user could see
+    /// account A's scouts briefly land in account B's roster between the
+    /// switch and the next pull. The previous nil-only guard caught the
+    /// "signed out" case but not the "switched account" case.
+    private func upsertLocal(_ dtos: [APIClient.ScoutDTO], requestUserId: String) {
         guard let context else { return }
-        // Refuse to upsert during the brief auth-gap windows where
-        // `ActiveSession.userId` is nil (cold-launch keychain hydrate,
-        // `clearInvalidSession()`, sign-out drain). The DTOs we're
-        // iterating over carry no userId (server-side they're per-account
-        // already), so `ActiveSession` is the only userId source here —
-        // dropping the upsert beats inserting orphan rows.
-        guard let uid = ActiveSession.userId else {
-            BrettLog.store.error("ScoutStore.upsertLocal called without ActiveSession.userId — dropping upsert to avoid unscoped rows")
+        // Re-check ActiveSession at write time. We honor the captured
+        // `requestUserId` for stamping the row, so even if ActiveSession
+        // somehow regresses to nil between this check and the writes
+        // below, the row gets the right userId. The check is a defense
+        // against attributing user A's response to whoever's now active.
+        let currentUserId = ActiveSession.userId
+        guard currentUserId == requestUserId else {
+            BrettLog.store.info("ScoutStore.upsertLocal — user changed during fetch (request=\(requestUserId, privacy: .public), current=\(currentUserId ?? "nil", privacy: .public)); dropping response")
             return
         }
         for dto in dtos {
-            let existing = findById(dto.id, userId: uid)
+            let existing = findById(dto.id, userId: requestUserId)
             let row = existing ?? Scout(
                 id: dto.id,
-                userId: uid,
+                userId: requestUserId,
                 name: dto.name,
                 goal: dto.goal,
                 createdAt: dto.createdAt
@@ -229,7 +266,7 @@ final class ScoutStore: Clearable {
             // userId (shipped before this fix), backfill it so the row
             // becomes reachable again.
             if row.userId.isEmpty {
-                row.userId = uid
+                row.userId = requestUserId
             }
             row.name = dto.name
             row.avatarLetter = dto.avatarLetter
@@ -270,4 +307,15 @@ final class ScoutStore: Clearable {
             BrettLog.store.error("ScoutStore save failed: \(String(describing: error), privacy: .public)")
         }
     }
+}
+
+/// Errors thrown by `ScoutStore` mutations when an auth-gap window
+/// (cold-launch hydrate, sign-out drain, account switch in flight)
+/// makes it unsafe to operate. Callers can surface a "couldn't reach
+/// server" message rather than risk cross-user attribution.
+enum ScoutStoreError: Error {
+    /// `ActiveSession.userId` was nil at the moment a mutation was about
+    /// to fire. Refusing to proceed is safer than running the request and
+    /// risking a TOCTOU mis-attribution at write time.
+    case notAuthenticated
 }
