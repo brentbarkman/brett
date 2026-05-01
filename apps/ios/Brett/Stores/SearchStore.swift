@@ -170,8 +170,17 @@ final class SearchStore: Clearable {
 
     // MARK: - Constants
 
-    /// Persisted recent-queries key. Bumping this invalidates the cache.
-    static let recentQueriesDefaultsKey = "brett.search.recentQueries.v1"
+    /// Persisted recent-queries key, scoped per-user via `UserScopedStorage`
+    /// so two accounts that sign in on the same device don't see each other's
+    /// search history. Bumping the base string invalidates the cache.
+    ///
+    /// Computed each call site rather than cached at init: the @MainActor
+    /// `userIdProvider` may not be configured yet when the store is first
+    /// constructed, and per-user identity may change between sign-out and
+    /// the next sign-in within the same process.
+    static func recentQueriesDefaultsKey() -> String {
+        UserScopedStorage.key("brett.search.recentQueries.v1")
+    }
     static let maxRecentQueries = 10
     static let minQueryLength = 2
 
@@ -207,7 +216,7 @@ final class SearchStore: Clearable {
         error = nil
         recentQueries = []
         activeTypes = []
-        userDefaults.removeObject(forKey: Self.recentQueriesDefaultsKey)
+        userDefaults.removeObject(forKey: Self.recentQueriesDefaultsKey())
     }
 
     #if DEBUG
@@ -295,12 +304,12 @@ final class SearchStore: Clearable {
         if recentQueries.count > Self.maxRecentQueries {
             recentQueries = Array(recentQueries.prefix(Self.maxRecentQueries))
         }
-        userDefaults.set(recentQueries, forKey: Self.recentQueriesDefaultsKey)
+        userDefaults.set(recentQueries, forKey: Self.recentQueriesDefaultsKey())
     }
 
     func clearRecent() {
         recentQueries = []
-        userDefaults.removeObject(forKey: Self.recentQueriesDefaultsKey)
+        userDefaults.removeObject(forKey: Self.recentQueriesDefaultsKey())
     }
 
     /// Cancel any pending search. Used when the sheet dismisses.
@@ -349,7 +358,7 @@ final class SearchStore: Clearable {
     }
 
     private static func loadRecent(from defaults: UserDefaults) -> [String] {
-        (defaults.stringArray(forKey: recentQueriesDefaultsKey) ?? [])
+        (defaults.stringArray(forKey: recentQueriesDefaultsKey()) ?? [])
             .prefix(maxRecentQueries)
             .map { String($0) }
     }

@@ -19,12 +19,12 @@ struct SearchStoreClearTests {
     }
 
     /// Regression: `recentQueries` is persisted to `UserDefaults.standard`
-    /// under a non-user-scoped key. Without an explicit wipe, user B would
+    /// under a user-scoped key. Without an explicit wipe, user B would
     /// inherit user A's search history after sign-in on a shared device.
     @Test func clearForSignOutWipesRecentQueriesInMemoryAndOnDisk() {
         ClearableStoreRegistry.resetForTesting()
 
-        let key = SearchStore.recentQueriesDefaultsKey
+        let key = SearchStore.recentQueriesDefaultsKey()
         let defaults = UserDefaults.standard
         defaults.set(["alice's secret search", "another"], forKey: key)
 
