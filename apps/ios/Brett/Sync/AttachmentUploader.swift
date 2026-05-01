@@ -513,16 +513,23 @@ final class AttachmentUploader {
         return (try? persistence.mainContext.fetch(descriptor))?.first
     }
 
-    /// Best-effort userId resolution. If we have the current signed-in user
-    /// stashed elsewhere we could wire it through init; for now we read the
-    /// UserProfile table which is populated on sign-in.
+    /// Stamp the upload with the currently-signed-in user's id, sourced from
+    /// `ActiveSession.userId`. The previous implementation read the first
+    /// `UserProfile` row in SwiftData with no predicate — after Wave B,
+    /// multiple `UserProfile` rows can transiently coexist during an
+    /// account switch, so an unscoped fetch could pick up a prior user's
+    /// id and stamp the upload (and the Attachment row created via
+    /// `markComplete`) with the wrong owner.
+    ///
+    /// Returns nil when no session is active. Callers fall back to an empty
+    /// string today (the next sync pull backfills the real userId from the
+    /// server response), but logging here lets us spot the gap in telemetry.
     private func userIdForUpload(id: String) -> String? {
-        var descriptor = FetchDescriptor<UserProfile>()
-        descriptor.fetchLimit = 1
-        if let profile = (try? persistence.mainContext.fetch(descriptor))?.first {
-            return profile.id
+        guard let userId = ActiveSession.userId else {
+            BrettLog.attachments.error("AttachmentUploader.userIdForUpload — no ActiveSession.userId; skipping userId stamp on upload \(id, privacy: .public)")
+            return nil
         }
-        return nil
+        return userId
     }
 
     // MARK: - Progress emit
