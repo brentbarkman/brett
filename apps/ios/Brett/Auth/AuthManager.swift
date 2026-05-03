@@ -198,7 +198,7 @@ final class AuthManager {
     ///  3. Wipe SwiftData. Safe now that no sync task is still running.
     ///  4. Best-effort server sign-out.
     func signOut() async {
-        ActiveSession.end()
+        await ActiveSession.end()
 
         token = nil
         currentUser = nil
@@ -236,7 +236,7 @@ final class AuthManager {
     /// instead: it compares the incoming user-id against
     /// `SharedConfig.lastSignedInUserId` and wipes if they differ.
     private func clearInvalidSession() async {
-        ActiveSession.end()
+        await ActiveSession.end()
 
         token = nil
         currentUser = nil
@@ -342,7 +342,7 @@ final class AuthManager {
         // so the next persist() can compare against it.
         SharedConfig.writeLastSignedInUserId(session.user.id)
 
-        installSession(for: session.user.id)
+        await installSession(for: session.user.id)
 
         // Hydrate full user profile. Non-fatal if it fails — we already have
         // a minimal user from the sign-in response.
@@ -352,12 +352,12 @@ final class AuthManager {
     /// Build and install a fresh `Session`. Called from `persist(session:)`
     /// and from the keychain-hydrate path in `refreshCurrentUser()` once
     /// we've confirmed the stored token is valid.
-    private func installSession(for userId: String) {
+    private func installSession(for userId: String) async {
         let session = Session(
             userId: userId,
             persistence: PersistenceController.shared
         )
-        ActiveSession.begin(session)
+        await ActiveSession.begin(session)
     }
 
     /// Best-effort refresh of `currentUser` via `/users/me`.
@@ -395,7 +395,7 @@ final class AuthManager {
             // (persist() already installed one on fresh sign-in; the call
             // is idempotent because ActiveSession.begin replaces any prior).
             if ActiveSession.userId != me.id {
-                installSession(for: me.id)
+                await installSession(for: me.id)
             }
         } catch APIError.unauthorized {
             guard hasSuccessfullyRefreshed else {

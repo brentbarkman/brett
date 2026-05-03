@@ -149,12 +149,27 @@ final class SSEClient {
 
     // MARK: - Public control
 
+    /// Generation counter — bumped every time `connect()` starts a new
+    /// loop. `runConnectLoop` captures the generation at start and
+    /// compares before clearing `loopTask` on exit, so a stale loop
+    /// finishing its CancellationError unwind can't nil out the
+    /// `loopTask` of a freshly-started successor. Without this, a rapid
+    /// `.background → .active` scene-phase flap could leave SSE permanently
+    /// disconnected: `disconnect()` cancels loop A and nils `loopTask`,
+    /// `connect()` starts loop B and assigns `loopTask`, then loop A
+    /// finishes its cleanup and writes `loopTask = nil` — wiping loop B's
+    /// reference. Loop B keeps running (Task is still alive), but the
+    /// next `connect()` thinks no loop exists and starts a third.
+    private var loopGeneration: Int = 0
+
     /// Start the connect/reconnect loop. Safe to call more than once — a
     /// second call while already running is a no-op.
     func connect() {
         guard loopTask == nil else { return }
+        loopGeneration &+= 1
+        let myGeneration = loopGeneration
         loopTask = Task { [weak self] in
-            await self?.runConnectLoop()
+            await self?.runConnectLoop(generation: myGeneration)
         }
     }
 
@@ -181,14 +196,17 @@ final class SSEClient {
     /// immediately attempt a fast reconnect, good — but a flaky server
     /// that kept opening+closing within seconds would also reset, so the
     /// client hammered it with 1s-intervals forever.
-    private func runConnectLoop() async {
+    private func runConnectLoop(generation: Int) async {
         while !Task.isCancelled {
             do {
                 try await openAndStream()
                 // `openAndStream` returns when the stream closes cleanly.
                 // If the stream was up long enough to be considered
-                // "healthy," treat this as a fresh server-initiated
-                // drop — zero the backoff so the next open starts at 1s.
+                // "healthy," treat this as a fresh server-initiated drop
+                // — `bumpOrReset` rewinds the counter to 1, so the next
+                // reconnect waits one second instead of compounding the
+                // prior backoff. Not zero: a one-second pause prevents
+                // hammering a server that's restarting under load.
                 // Otherwise preserve the counter: whatever made the last
                 // connection unhealthy is probably still happening.
                 if !Task.isCancelled {
@@ -219,11 +237,15 @@ final class SSEClient {
             }
         }
         // Loop ended — either cancelled explicitly, or the task itself was
-        // told to finish. Reset state so a future `connect()` starts fresh.
-        loopTask = nil
-        isConnected = false
-        lastHealthyConnectAt = nil
-        reconnectAttempt = 0
+        // told to finish. Only clear `loopTask` if it still points at OUR
+        // generation; a successor `connect()` may have already replaced it
+        // and we mustn't wipe its reference. (See `loopGeneration` doc.)
+        if generation == loopGeneration {
+            loopTask = nil
+            isConnected = false
+            lastHealthyConnectAt = nil
+            reconnectAttempt = 0
+        }
     }
 
     /// Hard cap on `reconnectAttempt`. Keeps the counter observable in
@@ -414,4 +436,15 @@ final class SSEClient {
             throw APIError.serverError(http.statusCode)
         }
     }
+}
+
+// MARK: - SSEHealthSignal
+
+/// `SyncManager` reads this every poll cycle to decide whether to relax
+/// its baseline cadence (SSE delivering → poll less often) or stay on the
+/// fast 30s schedule. Same value as `isConnected`, exposed via the
+/// protocol so SyncManager doesn't need to know about SSEClient's full
+/// surface in tests.
+extension SSEClient: SSEHealthSignal {
+    var isSSEHealthy: Bool { isConnected }
 }

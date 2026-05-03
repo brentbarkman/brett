@@ -47,7 +47,7 @@ struct AuthManagerTests {
     /// must be torn down before swapping the persistence container so any
     /// in-flight SyncManager Task can't write into the new container.
     private func resetState() {
-        ActiveSession.end()
+        ActiveSession.endForTesting()
         try? KeychainStore.deleteToken()
         SharedConfig.clearLastSignedInUserId()
         SharedConfig.writeCurrentUserId(nil)

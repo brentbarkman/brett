@@ -20,6 +20,18 @@ protocol PullEngineProtocol: AnyObject {
     func pull() async throws -> PullEngine.PullOutcome
 }
 
+/// Signals whether the realtime SSE channel is currently delivering events.
+/// `SyncManager` uses this to relax the foreground poll cadence — when SSE
+/// is doing its job the poll is a safety net, not the realtime path, and
+/// can fire less often. When SSE is down, the poll falls back to the fast
+/// baseline so data lag stays bounded.
+@MainActor
+protocol SSEHealthSignal: AnyObject {
+    /// True when the SSE stream is currently connected. SyncManager reads
+    /// this on every poll cycle, so the implementation must be cheap.
+    var isSSEHealthy: Bool { get }
+}
+
 // MARK: - Sync state
 
 /// UI-facing state of the sync engine. Used by `SyncStatusIndicator`.
@@ -65,9 +77,25 @@ final class SyncManager {
     private let networkMonitor: NetworkMonitor
     private let modelContext: ModelContext?
 
+    /// Optional SSE-health probe. When supplied AND signaling healthy AND
+    /// no consecutive failures, the poll relaxes from `pollInterval` to
+    /// `relaxedPollInterval` — SSE is already delivering invalidations so
+    /// the poll is a safety net, not the realtime path. `nil` (or unhealthy)
+    /// means we run the original fast poll cadence. Bound late so SSEClient
+    /// → SyncManager doesn't become a hard dependency for tests.
+    private weak var sseHealthSignal: SSEHealthSignal?
+
     /// Interval for the periodic foreground poll. Exposed so tests can use a
     /// much shorter value. Defaults to 30 seconds per the spec.
     private let pollInterval: TimeInterval
+
+    /// Relaxed interval used when SSE is healthy and we've had no recent
+    /// sync failures. Caps the worst-case data-lag at this duration if
+    /// SSE silently drops between polls — `silentStreamWatchdog` (75s) +
+    /// reconnect backoff means most drops self-detect well within the
+    /// 2-minute window, so picking 120s here gives us a large radio-cost
+    /// reduction (4×) without sacrificing freshness on a dead connection.
+    private let relaxedPollInterval: TimeInterval
 
     /// Debounce window applied to `schedulePushDebounced`. Defaults to 1s.
     private let debounceInterval: TimeInterval
@@ -111,14 +139,18 @@ final class SyncManager {
         pullEngine: PullEngineProtocol,
         networkMonitor: NetworkMonitor,
         modelContext: ModelContext?,
+        sseHealthSignal: SSEHealthSignal? = nil,
         pollInterval: TimeInterval = 30,
+        relaxedPollInterval: TimeInterval = 120,
         debounceInterval: TimeInterval = 1.0
     ) {
         self.pushEngine = pushEngine
         self.pullEngine = pullEngine
         self.networkMonitor = networkMonitor
         self.modelContext = modelContext
+        self.sseHealthSignal = sseHealthSignal
         self.pollInterval = pollInterval
+        self.relaxedPollInterval = relaxedPollInterval
         self.debounceInterval = debounceInterval
     }
 
@@ -323,21 +355,56 @@ final class SyncManager {
         }
     }
 
-    /// Compute the wait before the next poll. 0 failures → `pollInterval`
-    /// (the user-facing freshness guarantee). Each consecutive failure
-    /// at least doubles the wait — failure #1 waits `pollInterval * 2`,
-    /// not `pollInterval * 1` — so even a single blip yields a visible
-    /// backoff. Capped at five minutes with ±20% jitter to prevent a
-    /// thundering herd when many clients see the network flap together.
+    /// Compute the wait before the next poll.
     ///
-    /// Growth: 30s → 60s → 120s → 240s → 300s (cap) …
+    /// Two regimes:
+    ///  - **Failure recovery** (`consecutiveFailures > 0`): always uses
+    ///    the fast `pollInterval` baseline with exponential backoff.
+    ///    A sync failure means our cursor management is out of step
+    ///    with the server in a way SSE can't fix, so we want to retry
+    ///    quickly regardless of SSE health.
+    ///  - **Steady state** (`consecutiveFailures == 0`): uses
+    ///    `relaxedPollInterval` when SSE is signaling healthy (the
+    ///    realtime path is doing its job, poll is a safety net), or
+    ///    `pollInterval` otherwise (poll IS the realtime path).
+    ///    Both flavors get ±20% jitter to break thundering-herd patterns
+    ///    when many clients return to foreground together.
+    ///
+    /// Failure-mode growth (unchanged): 30s → 60s → 120s → 240s → 300s (cap).
+    /// Steady-state when SSE healthy: ~120s ± 20%.
     private func nextPollDelay() -> TimeInterval {
-        Self.backoffDelay(
+        Self.pollDelay(
             forFailures: consecutiveFailures,
+            sseHealthy: sseHealthSignal?.isSSEHealthy == true,
             pollInterval: pollInterval,
+            relaxedPollInterval: relaxedPollInterval,
             maxBackoff: Self.maxBackoffSeconds,
             jitter: Double.random(in: 0.8...1.2)
         )
+    }
+
+    /// Pure helper. Same shape as `backoffDelay(forFailures:...)` but
+    /// folds in the SSE-aware steady-state branch so tests can pin the
+    /// full decision matrix without standing up a SyncManager.
+    /// `nonisolated` so tests can call off the main actor.
+    nonisolated static func pollDelay(
+        forFailures consecutiveFailures: Int,
+        sseHealthy: Bool,
+        pollInterval: TimeInterval,
+        relaxedPollInterval: TimeInterval,
+        maxBackoff: TimeInterval,
+        jitter: Double
+    ) -> TimeInterval {
+        if consecutiveFailures > 0 {
+            return backoffDelay(
+                forFailures: consecutiveFailures,
+                pollInterval: pollInterval,
+                maxBackoff: maxBackoff,
+                jitter: jitter
+            )
+        }
+        let baseline = sseHealthy ? relaxedPollInterval : pollInterval
+        return baseline * jitter
     }
 
     /// Pure, testable backoff math. `jitter` is injected so unit tests can

@@ -14,9 +14,18 @@ import SwiftData
 ///      render the bundled asset-catalog image keyed on hour-of-day so
 ///      the app never boots to a blank screen.
 ///
-/// The 1.5s crossfade + vignettes + 15% dark overlay from the earlier
-/// prototype are preserved — those are the visual primitives every
-/// screen in the app layers glass cards on top of.
+/// View architecture: BackgroundView is a *pure observer* of
+/// `BackgroundService.shared`. The 60s segment ticker, the resolution
+/// pipeline, and the cached `displayedKey` all live in the service. Any
+/// number of mounted BackgroundView instances share that single state —
+/// before the hoist each instance ran its own ticker, image-decision
+/// pipeline, and `@State` slots, which compounded with every pushed nav
+/// destination on top of MainContainer.
+///
+/// Each instance still owns one tiny `@Query<UserProfile>` so it can
+/// push profile changes into the service on `.onChange`. SwiftData
+/// notifications are cheap to subscribe multiple times against the same
+/// container, so the multi-mount cost is negligible.
 struct BackgroundView: View {
     /// Optional override — callers (e.g. previews, auth screens) can
     /// pin a specific asset-catalog image and skip the service entirely.
@@ -40,45 +49,27 @@ struct BackgroundView: View {
         profiles.count == 1 ? profiles.first : nil
     }
 
-    /// Image key currently being rendered. Drives the crossfade via
-    /// `.animation(_, value:)`. For remote images the key is the URL
-    /// string; for assets it's the image name; for solids it's the hex.
-    /// Seeded from the last-wallpaper cache so cold-launch paints the
-    /// previous image immediately from URLCache — no asset→remote swap.
-    @State private var displayedKey: String = BackgroundService.cachedRemoteURL?.absoluteString ?? ""
-
-    /// URL of the current remote image, if any. Held alongside the key
-    /// so we don't rebuild the URL on every render. Seeded from the
-    /// last-URL cache — see `displayedKey`.
-    @State private var remoteURL: URL? = BackgroundService.cachedRemoteURL
-
-    /// Parsed color for the solid-style path. `nil` unless the user
-    /// picked a solid.
-    @State private var solidColor: Color?
-
-    /// Fallback asset name used when neither remote image nor solid
-    /// applies. Keyed on hour-of-day.
-    @State private var fallbackAsset: String = ""
-
-    /// Poll every 60s so the background swaps as segments tick over
-    /// (dawn -> morning, etc.). Cheap — the remote image is cached by
-    /// URLSession and SwiftUI skips renders when `displayedKey` is
-    /// unchanged.
-    private let tick = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
-
     var body: some View {
         ZStack {
-            // Photo / asset / solid layer. `displayedKey` drives the
-            // crossfade — switching it triggers the 1.5s opacity
-            // transition regardless of which rendering path is active.
+            // Photo / asset / solid layer. Service-owned `displayedKey`
+            // drives the crossfade — switching it triggers the 1.5s
+            // opacity transition regardless of which rendering path is
+            // active.
             GeometryReader { geo in
                 ZStack {
-                    if let solidColor {
+                    if let imageName {
+                        // Caller pinned an asset — bypass the service
+                        // entirely so previews / lock screens look the
+                        // way they expect regardless of profile state.
+                        assetImage(name: imageName, size: geo.size)
+                            .id("asset:\(imageName)")
+                            .transition(.opacity)
+                    } else if let solidColor = service.currentSolidColor {
                         solidColor
                             .frame(width: geo.size.width, height: geo.size.height)
-                            .id("solid:\(displayedKey)")
+                            .id("solid:\(service.displayedKey)")
                             .transition(.opacity)
-                    } else if let remoteURL {
+                    } else if let remoteURL = service.currentRemoteURL {
                         AsyncImage(url: remoteURL) { phase in
                             switch phase {
                             case .success(let image):
@@ -88,26 +79,20 @@ struct BackgroundView: View {
                                     .frame(width: geo.size.width, height: geo.size.height)
                                     .clipped()
                             default:
-                                // While loading, hold the previous
-                                // crossfade target so we don't flash
-                                // black between manifest ticks. The
-                                // fallback asset renders underneath
-                                // this branch anyway — see the else
-                                // clause below for details.
                                 fallbackImage(size: geo.size)
                             }
                         }
-                        .id("remote:\(displayedKey)")
+                        .id("remote:\(service.displayedKey)")
                         .transition(.opacity)
                     } else {
                         fallbackImage(size: geo.size)
-                            .id("asset:\(displayedKey)")
+                            .id("asset:\(service.displayedKey)")
                             .transition(.opacity)
                     }
                 }
             }
             .ignoresSafeArea()
-            .animation(crossfadeAnimation, value: displayedKey)
+            .animation(crossfadeAnimation, value: service.displayedKey)
 
             // Top vignette for status bar readability
             VStack {
@@ -135,18 +120,56 @@ struct BackgroundView: View {
             Color.black.opacity(0.15)
         }
         .ignoresSafeArea()
-        .task {
-            await service.load()
-            refresh(initial: true)
+        // `onAppear` / `onDisappear` are paired synchronous lifecycle
+        // hooks — register/unregister the renderer here so the
+        // ref-count can't drift if the view is dismissed during the
+        // async `.task` below. (Earlier draft put `registerRenderer()`
+        // inside the .task after `await service.load()`; if the user
+        // dismissed a sheet-mounted BackgroundView during the network
+        // round-trip, `onDisappear` would unregister with count == 0
+        // — clamped to 0 — and then the resumed task would register
+        // anyway, leaking a permanent +1 each cycle.)
+        .onAppear {
+            guard imageName == nil else { return }
+            service.registerRenderer()
+            // Push initial profile so the service can render whatever's
+            // available right now (cached fallback or the previous
+            // session's resolved key) without waiting on `.task`.
+            service.updateProfile(
+                style: currentProfile?.backgroundStyle,
+                pinned: currentProfile?.pinnedBackground,
+                initial: true
+            )
         }
-        .onReceive(tick) { _ in
-            refresh(initial: false)
+        .task {
+            // Manifest + storageBaseUrl come from a network call, so the
+            // load lives in `.task` (cancelled with view lifecycle).
+            // After load completes, push the profile again so the
+            // service recomputes against the now-resolved manifest.
+            guard imageName == nil else { return }
+            await service.load()
+            service.updateProfile(
+                style: currentProfile?.backgroundStyle,
+                pinned: currentProfile?.pinnedBackground
+            )
+        }
+        .onDisappear {
+            guard imageName == nil else { return }
+            service.unregisterRenderer()
         }
         .onChange(of: currentProfile?.backgroundStyle) { _, _ in
-            refresh(initial: false)
+            guard imageName == nil else { return }
+            service.updateProfile(
+                style: currentProfile?.backgroundStyle,
+                pinned: currentProfile?.pinnedBackground
+            )
         }
         .onChange(of: currentProfile?.pinnedBackground) { _, _ in
-            refresh(initial: false)
+            guard imageName == nil else { return }
+            service.updateProfile(
+                style: currentProfile?.backgroundStyle,
+                pinned: currentProfile?.pinnedBackground
+            )
         }
     }
 
@@ -159,108 +182,24 @@ struct BackgroundView: View {
             .clipped()
     }
 
-    /// Name of the asset-catalog fallback image for the current hour.
-    /// Kept in sync with the pre-service behavior so the app never
-    /// boots to a blank screen.
+    @ViewBuilder
+    private func assetImage(name: String, size: CGSize) -> some View {
+        Image(name)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: size.width, height: size.height)
+            .clipped()
+    }
+
+    /// Asset name for the fallback path. Prefers the service's
+    /// `currentFallbackAsset` (set during a successful recompute), falls
+    /// back to the hour-keyed default for the cold-launch window where
+    /// the service hasn't run yet.
     private var assetName: String {
         if let imageName { return imageName }
-        if !fallbackAsset.isEmpty { return fallbackAsset }
-        return Self.assetNameForHour(Calendar.current.component(.hour, from: Date()))
-    }
-
-    private static func assetNameForHour(_ hour: Int) -> String {
-        switch hour {
-        case 5..<8: return "bg-morning"
-        case 8..<12: return "bg-morning"
-        case 12..<17: return "bg-golden"
-        case 17..<20: return "bg-evening"
-        default: return "bg-night"
-        }
-    }
-
-    /// Set `displayedKey` without the view-level crossfade animation.
-    /// Used on the first resolution after launch so cold-launch never
-    /// fades from one image to another — the user sees one image settle
-    /// in under the awakening cover.
-    private func setDisplayedKeyWithoutAnimation(_ newKey: String) {
-        var tx = Transaction(animation: nil)
-        withTransaction(tx) { displayedKey = newKey }
-    }
-
-    /// Recompute `solidColor`, `remoteURL`, and `displayedKey` from
-    /// whatever the profile currently says. `initial` suppresses the
-    /// crossfade on the first call so the app doesn't fade in from
-    /// nothing at launch.
-    private func refresh(initial: Bool) {
-        // If the caller pinned a specific asset, honor that and stop.
-        if let imageName {
-            if initial {
-                fallbackAsset = imageName
-                setDisplayedKeyWithoutAnimation(imageName)
-            } else if displayedKey != imageName {
-                displayedKey = imageName
-            }
-            return
-        }
-
-        let profile = currentProfile
-        let style = profile?.backgroundStyle ?? BackgroundStyle.photography.rawValue
-        let pinned = profile?.pinnedBackground
-
-        // Solid path — parse the hex from the pinned sentinel. If the
-        // profile says "solid" but pinned is nil / malformed, fall
-        // through to the photography path so the user still sees
-        // something.
-        if style == BackgroundStyle.solid.rawValue,
-           let pinned,
-           pinned.hasPrefix("solid:") {
-            let hex = String(pinned.dropFirst("solid:".count))
-            if let color = BackgroundService.color(forHex: hex) {
-                remoteURL = nil
-                solidColor = color
-                let key = "solid:\(hex)"
-                if initial {
-                    setDisplayedKeyWithoutAnimation(key)
-                } else if displayedKey != key {
-                    displayedKey = key
-                }
-                return
-            }
-        }
-
-        // Remote / auto path. Delegate to the service which picks a
-        // manifest image based on hour-of-day (auto) or the pinned
-        // path.
-        let effectiveStyle: String = {
-            if style == BackgroundStyle.solid.rawValue { return BackgroundStyle.photography.rawValue }
-            if style == BackgroundStyle.gradient.rawValue { return BackgroundStyle.photography.rawValue }
-            return style
-        }()
-
-        if let url = service.currentImageURL(style: effectiveStyle, pinned: pinned) {
-            solidColor = nil
-            remoteURL = url
-            BackgroundService.cachedRemoteURL = url
-            let key = url.absoluteString
-            if initial {
-                setDisplayedKeyWithoutAnimation(key)
-            } else if displayedKey != key {
-                displayedKey = key
-            }
-            return
-        }
-
-        // Fallback — service not ready or manifest empty. Asset
-        // catalog image keyed on hour-of-day.
-        let asset = Self.assetNameForHour(Calendar.current.component(.hour, from: Date()))
-        fallbackAsset = asset
-        solidColor = nil
-        remoteURL = nil
-        if initial {
-            setDisplayedKeyWithoutAnimation(asset)
-        } else if displayedKey != asset {
-            displayedKey = asset
-        }
+        let serviceFallback = service.currentFallbackAsset
+        if !serviceFallback.isEmpty { return serviceFallback }
+        return BackgroundService.assetNameForHour(Calendar.current.component(.hour, from: Date()))
     }
 
     /// 1.5s ease-in-out crossfade, or `nil` when Reduce Motion is on so

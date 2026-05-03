@@ -60,7 +60,7 @@ struct ClearableStoreRegistrySessionIntegrationTests {
         func clearForSignOut() { clears += 1 }
     }
 
-    @Test func sessionTearDownClearsRegisteredStores() {
+    @Test func sessionTearDownClearsRegisteredStores() async {
         ClearableStoreRegistry.resetForTesting()
         let store = CountingStore()
         ClearableStoreRegistry.register(store)
@@ -71,7 +71,9 @@ struct ClearableStoreRegistrySessionIntegrationTests {
         // `SSEClient.shared` singleton and triggers a real push/pull cycle
         // against the API, neither of which is needed to verify the
         // invariant under test (`tearDown` calls `ClearableStoreRegistry.clearAll`).
-        session.tearDown()
+        // tearDown is async because it awaits `RemoteCache.shared.clear()`;
+        // see ActiveSession.swift for the rationale.
+        await session.tearDown()
 
         #expect(store.clears == 1)
     }

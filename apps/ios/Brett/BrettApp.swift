@@ -183,6 +183,13 @@ private struct RootView: View {
     @State private var badgeTracker = ScenePhaseTaskTracker()
     @State private var sessionRefreshTracker = ScenePhaseTaskTracker()
     @State private var shareDrainTracker = ScenePhaseTaskTracker()
+    /// Owns the foreground sync kick. Wrapped in a tracker so a rapid
+    /// background↔active flap can't pile up two `sync()` calls — the
+    /// previous one is cancelled before a new one starts. SyncManager's
+    /// own re-entry guard would protect us against parallel runs anyway,
+    /// but cancelling is cheaper than letting both Tasks live to discover
+    /// the mutex.
+    @State private var foregroundSyncTracker = ScenePhaseTaskTracker()
 
     var body: some View {
         ZStack {
@@ -277,6 +284,22 @@ private struct RootView: View {
                 // shake gestures matter when we're not visible, and
                 // stopping saves a small but real amount of battery.
                 ShakeMonitor.shared.stop()
+                // Disconnect SSE so we're not holding a TLS connection
+                // (or sitting in a backoff sleep against a connection
+                // iOS NAT-killed) while suspended. `Task.sleep` would
+                // pause naturally at process suspend, but proactively
+                // disconnecting also stops any in-flight heartbeat I/O
+                // during the brief window before iOS suspends, and
+                // guarantees a clean reconnect attempt on foreground
+                // instead of waiting for the watchdog timeout to fire.
+                // Idempotent + cheap when already disconnected.
+                if authManager.isAuthenticated {
+                    SSEClient.shared.disconnect()
+                }
+                // Cancel any in-flight foreground sync task so its
+                // continuation doesn't fire mid-suspend; SyncManager's
+                // poll loop suspends naturally with the process.
+                foregroundSyncTracker.cancel()
             case .active:
                 lockManager.handleWillEnterForeground()
                 // Resume shake-to-report. Idempotent — no-op if already
@@ -294,6 +317,20 @@ private struct RootView: View {
                 // rapid app-switches don't hammer /users/me.
                 sessionRefreshTracker.start { [authManager] in
                     await authManager.refreshIfStale()
+                }
+                // Re-establish realtime + force a fresh sync. The SSE
+                // connection from the previous foreground was either
+                // suspended-and-likely-NAT-killed or explicitly
+                // disconnected by the .background branch above; either
+                // way the user expects live state the moment the app
+                // foregrounds, not after the next 30s poll cycle. Both
+                // calls are gated on auth so we don't spin a doomed
+                // ticket-fetch loop on the sign-in screen.
+                if authManager.isAuthenticated {
+                    SSEClient.shared.connect()
+                    foregroundSyncTracker.start {
+                        await ActiveSession.syncManager?.sync()
+                    }
                 }
             default:
                 break

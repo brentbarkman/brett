@@ -1,25 +1,111 @@
+import SwiftData
 import SwiftUI
 
-/// Calendar page — wired to the live `CalendarStore` (SwiftData backed by
-/// the sync pull).
+/// Calendar page — wired to live SwiftData via `@Query`. Auth gate around
+/// `CalendarPageBody` mirrors the pattern used by `TodayPage` /
+/// `InboxPage` / `ListView`: SwiftData's `#Predicate` macro can't read
+/// `@Environment` values, so the body subview captures `userId` in `init`
+/// and `.id(userId)` remounts on account switch.
+///
+/// Pre-refactor this page used a `@State [CalendarEvent]` array hydrated
+/// imperatively from `CalendarStore.fetchEvents(...)`. New events arriving
+/// via SSE updated SwiftData but didn't refresh the array until the user
+/// changed day or pulled to refresh — a freshness gap that diverged from
+/// every other list surface in the app. The `@Query` here closes that gap
+/// AND aligns the file with the established Wave-B pattern.
 struct CalendarPage: View {
     @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        if let userId = authManager.currentUser?.id {
+            CalendarPageBody(userId: userId)
+                .id(userId)
+        } else {
+            EmptyView()
+        }
+    }
+
+    // MARK: - Pure helpers (test surface)
+    //
+    // Re-exposed here on the public type because the tests in
+    // `CalendarOfflineFallbackTests` and `CalendarDatePinningTests` call
+    // them as `CalendarPage.shouldShowTimeline(...)` /
+    // `CalendarPage.snapForwardIfStale(...)`. The implementations live on
+    // `CalendarPageBody` so the body subview can use them directly; these
+    // shims forward without duplicating the logic.
+
+    /// Test-facing wrapper. See `CalendarPageBody.snapForwardIfStale`.
+    static func snapForwardIfStale(
+        selected: Date,
+        pinned: Bool,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+    ) -> Date {
+        CalendarPageBody.snapForwardIfStale(
+            selected: selected,
+            pinned: pinned,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    /// Test-facing wrapper. See `CalendarPageBody.shouldShowTimeline`.
+    static func shouldShowTimeline(hasAccount: Bool, hasCachedEvents: Bool) -> Bool {
+        CalendarPageBody.shouldShowTimeline(hasAccount: hasAccount, hasCachedEvents: hasCachedEvents)
+    }
+}
+
+private struct CalendarPageBody: View {
+    let userId: String
+
     @State private var selectedDate = Date()
     /// Tracks whether the user is still viewing "today" (vs. having
     /// navigated to a specific day via the week strip). When true, the
     /// anchor snaps forward on foreground if the day rolled over while
     /// the app was backgrounded or the device was asleep.
     @State private var pinnedToToday: Bool = true
-    @State private var calendarStore = CalendarStore()
     @State private var accountsStore = CalendarAccountsStore()
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var events: [CalendarEvent] = []
     @State private var isShowingConnectSheet = false
 
-    /// Keep ±60 days of events in memory. The sync-pull populates SwiftData;
-    /// this is just a bounded read window.
-    private let windowDays = 60
+    /// User-scoped, non-deleted events overlapping a wide window around
+    /// today (±90 days). The window is fixed at view-init time — the
+    /// `Calendar` page lets users scroll the week strip but in practice
+    /// they don't navigate months out, so the bounded predicate keeps
+    /// the working set small (vs. fetching every event the user has
+    /// ever synced) without forcing a re-init every day. If a user
+    /// navigates beyond the window, the WeekStrip + DayTimeline render
+    /// empty for those days; the next account refresh / pull restores
+    /// the data when it lands inside the window again.
+    @Query private var events: [CalendarEvent]
+
+    init(userId: String) {
+        self.userId = userId
+        let calendar = Calendar.current
+        let now = Date()
+        // Generous symmetric window — calendars are read-mostly so
+        // ±90 days easily covers reasonable navigation without
+        // forcing a re-init on day rollover. The week strip caps
+        // visible navigation at a few weeks in either direction.
+        let windowStart = calendar.date(byAdding: .day, value: -90, to: now) ?? now
+        let windowEnd = calendar.date(byAdding: .day, value: 90, to: now) ?? now
+        let predicate = #Predicate<CalendarEvent> { event in
+            event.deletedAt == nil
+                && event.userId == userId
+                && event.startTime < windowEnd
+                && event.endTime > windowStart
+        }
+        _events = Query(filter: predicate, sort: \CalendarEvent.startTime)
+    }
+
+    /// View-facing event list — the @Query result with declined events
+    /// filtered out (matches Google Calendar's default). Done in Swift
+    /// rather than the predicate so a future "show declined" toggle can
+    /// flip without re-initing the @Query.
+    private var visibleEvents: [CalendarEvent] {
+        events.filter { $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue }
+    }
 
     /// Pure helper — public for test access. Given the currently-selected
     /// date, whether the user is pinned to today, and the current wall
@@ -59,13 +145,13 @@ struct CalendarPage: View {
         VStack(spacing: 16) {
             monthHeader
 
-            WeekStrip(selectedDate: $selectedDate, events: events)
+            WeekStrip(selectedDate: $selectedDate, events: visibleEvents)
 
             if Self.shouldShowTimeline(
                 hasAccount: accountsStore.hasAnyAccount,
-                hasCachedEvents: !events.isEmpty
+                hasCachedEvents: !visibleEvents.isEmpty
             ) {
-                DayTimeline(events: events, selectedDate: selectedDate)
+                DayTimeline(events: visibleEvents, selectedDate: selectedDate)
                     .background {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .fill(.thinMaterial)
@@ -80,11 +166,10 @@ struct CalendarPage: View {
                 connectCTA
             }
         }
-        .refreshable { await refresh() }
-        .task { await refresh() }
+        .refreshable { await accountsStore.fetchAccounts() }
+        .task { await accountsStore.fetchAccounts() }
         .onChange(of: selectedDate) { _, new in
             pinnedToToday = Calendar.current.isDate(new, inSameDayAs: Date())
-            loadEventsFromCache()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -128,7 +213,7 @@ struct CalendarPage: View {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: selectedDate)
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
-        let count = events.filter { $0.startTime >= dayStart && $0.startTime < dayEnd }.count
+        let count = visibleEvents.filter { $0.startTime >= dayStart && $0.startTime < dayEnd }.count
         if count == 0 {
             return "Nothing scheduled"
         }
@@ -168,29 +253,10 @@ struct CalendarPage: View {
         }
     }
 
-    private func refresh() async {
-        // Hydrate from local cache first, BEFORE any network call.
-        // `accountsStore.fetchAccounts()` hits `/calendar/accounts`, which can
-        // hang or fail when offline — if we awaited it before reading the
-        // cache, the timeline would render empty until the network call
-        // resolved (or timed out). Reading SwiftData first means cached
-        // events show immediately on cold launch, even with no connectivity.
-        loadEventsFromCache()
-        await accountsStore.fetchAccounts()
-        // Re-read after the fetch so any newly-pulled events are picked up.
-        loadEventsFromCache()
-    }
-
-    private func loadEventsFromCache() {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: selectedDate)
-        let windowStart = calendar.date(byAdding: .day, value: -windowDays, to: dayStart) ?? dayStart
-        let windowEnd = calendar.date(byAdding: .day, value: windowDays, to: dayStart) ?? dayStart
-        // Hide events the user declined — matches Google Calendar's default.
-        events = calendarStore.fetchEvents(
-            userId: authManager.currentUser?.id,
-            startDate: windowStart,
-            endDate: windowEnd
-        ).filter { $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue }
-    }
+    // Pre-refactor `refresh()` + `loadEventsFromCache()` lived here; both
+    // are subsumed by the @Query reactive read. The `accountsStore.fetchAccounts()`
+    // call moved inline into `.task` and `.refreshable` because that
+    // remains the only network-dependent piece — events themselves come
+    // through the sync pull and SSE invalidations into SwiftData, where
+    // the @Query observes them automatically.
 }
