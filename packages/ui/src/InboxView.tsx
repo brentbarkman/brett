@@ -6,6 +6,7 @@ import { InboxItemRow } from "./InboxItemRow";
 import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
 import { ItemListShell } from "./ItemListShell";
 import { TypeFilter } from "./TypeFilter";
+import { useVisibilityAwareInterval } from "./useNow";
 
 interface InboxViewProps {
   things: Thing[];
@@ -77,13 +78,11 @@ export function InboxView({
     return () => { if (toggleTimer.current) clearTimeout(toggleTimer.current); };
   }, []);
 
-  // Update "now" every minute for relative age
-  useEffect(() => {
-    const interval = setInterval(() => {
-      now.current = new Date();
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
+  // Update "now" every minute for relative age. Visibility-gated so we
+  // don't wake the renderer when the user can't see the inbox.
+  useVisibilityAwareInterval(() => {
+    now.current = new Date();
+  }, 60_000);
 
   // Apply type filter
   const filteredThings = (() => {

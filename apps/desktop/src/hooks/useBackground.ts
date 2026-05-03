@@ -12,7 +12,7 @@ import {
 } from "@brett/business";
 import { solidColors } from "../data/solid-colors";
 import { useAppConfig } from "./useAppConfig";
-import { useVisibilityAwareInterval } from "./useNow";
+import { useVisibilityAwareInterval } from "@brett/ui";
 import { userStorage } from "../lib/userScopedStorage";
 import fallbackBg from "../assets/fallback-bg.webp";
 

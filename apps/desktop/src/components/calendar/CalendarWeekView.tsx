@@ -2,8 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { Video } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
 import { getEventGlassColor } from "@brett/utils";
-import { displayTitle, useDemoMode } from "@brett/ui";
-import { useNow } from "../../hooks/useNow";
+import { displayTitle, useDemoMode, useNow } from "@brett/ui";
 
 export interface CalendarWeekViewProps {
   startDate: Date;
