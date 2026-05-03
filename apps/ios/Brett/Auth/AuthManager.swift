@@ -250,8 +250,11 @@ final class AuthManager {
     /// instead: it compares the incoming user-id against
     /// `SharedConfig.lastSignedInUserId` and wipes if they differ.
     private func clearInvalidSession() async {
-        // Soft sign-out UX: capture the email and flag the next sign-in
-        // screen to show a "please sign in again" banner with prefill.
+        // Soft sign-out UX: capture the email so SignInView can prefill it,
+        // and flag the next sign-in screen to show a "please sign in again"
+        // banner. If currentUser is nil here (theoretically possible if the
+        // 401 races a pre-refresh cold launch), the banner still fires but
+        // the email field won't prefill — acceptable degradation.
         if let email = currentUser?.email {
             SessionExpiryHint.lastEmail = email
         }
@@ -391,6 +394,8 @@ final class AuthManager {
 
         // Soft sign-out UX: stash the email for the next sign-in's prefill,
         // and clear any stale "expired" flag from a prior clearInvalidSession.
+        // We re-write lastEmail every persist (not just first sign-in) so the
+        // hint stays current if the user's account email changes.
         SessionExpiryHint.lastEmail = session.user.email
         SessionExpiryHint.didExpire = false
 

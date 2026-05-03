@@ -66,6 +66,7 @@ struct AuthManagerTests {
         try? KeychainStore.deleteToken()
         SharedConfig.clearLastSignedInUserId()
         SharedConfig.writeCurrentUserId(nil)
+        SessionExpiryHint.clear()
         MockURLProtocol.reset()
         PersistenceController.configureForTesting(inMemory: true)
     }
@@ -703,8 +704,7 @@ struct AuthManagerTests {
     @MainActor
     func sessionExpiryHintLifecycle() async throws {
         resetState()
-        SessionExpiryHint.clear()
-        defer { resetState(); SessionExpiryHint.clear() }
+        defer { resetState() }
 
         let (mgr, client) = makeTestManager()
 
