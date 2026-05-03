@@ -740,6 +740,63 @@ struct AuthManagerTests {
         #expect(SessionExpiryHint.didExpire == false)
     }
 
+    // MARK: - hydrateFromKeychain
+
+    /// Calling `hydrateFromKeychain` a second time must be a no-op when the
+    /// token is already set. The Face-ID-ON post-unlock path may fire the
+    /// `.onChange(of: authenticatedContext)` more than once (e.g. after a
+    /// background→foreground→background→foreground cycle), and we must not
+    /// overwrite the in-memory token with whatever is currently in the keychain.
+    @Test("hydrateFromKeychain is idempotent — second call returns early when token is already set")
+    @MainActor
+    func hydrateFromKeychainIdempotent() async throws {
+        resetState()
+        defer { resetState() }
+        try KeychainStore.writeToken("hydrate-test-tok")
+
+        let (mgr, client) = makeTestManager()
+        MockURLProtocol.stub(url: usersMeURL(for: client), statusCode: 200,
+                             body: validUserMeBody(id: "u1", email: "a@b.com"))
+
+        // First call hydrates.
+        await mgr.hydrateFromKeychain(authContext: nil)
+        #expect(mgr.token == "hydrate-test-tok")
+
+        // Second call should no-op even if keychain contains a different token.
+        try KeychainStore.writeToken("different-token")
+        await mgr.hydrateFromKeychain(authContext: nil)
+        #expect(mgr.token == "hydrate-test-tok", "second call must be a no-op — token is unchanged")
+    }
+
+    /// `hydrateFromKeychain` sets `isHydratingFromKeychain = false` via its
+    /// `defer` block regardless of the outcome (token found, not found, or
+    /// error). This ensures RootView never gets stuck showing BiometricLockView
+    /// after the keychain read completes.
+    @Test("hydrateFromKeychain clears isHydratingFromKeychain on completion")
+    @MainActor
+    func hydrateFromKeychainClearsHydrationFlag() async throws {
+        resetState()
+        defer { resetState() }
+
+        let (mgr, client) = makeTestManager()
+        // No stub needed for /users/me — no token in keychain so the guard
+        // returns early before calling refreshCurrentUser. Just register the
+        // URL so MockURLProtocol doesn't blow up if it is somehow hit.
+        MockURLProtocol.stub(url: usersMeURL(for: client), statusCode: 200,
+                             body: validUserMeBody(id: "u1", email: "a@b.com"))
+
+        // Manually set the flag to simulate Face-ID-ON init path.
+        // (In production this is done inside init(); we set it directly here
+        // to avoid relying on UserDefaults state in tests.)
+        mgr.testSetHydratingFromKeychain(true)
+        #expect(mgr.isHydratingFromKeychain)
+
+        // No token in keychain — hydrateFromKeychain should return early
+        // but still clear the flag via defer.
+        await mgr.hydrateFromKeychain(authContext: nil)
+        #expect(!mgr.isHydratingFromKeychain, "flag must be cleared even when no token is found")
+    }
+
     @Test func hydrateTaskDoesNotRetainSelfAfterRelease() async throws {
         resetState()
         defer { resetState() }

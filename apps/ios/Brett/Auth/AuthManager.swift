@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Observation
 import SwiftData
 
@@ -20,6 +21,11 @@ final class AuthManager {
     private(set) var token: String?
     private(set) var isLoading: Bool = false
     private(set) var errorMessage: String?
+    /// True between init (when Face ID is enabled) and the first successful
+    /// `hydrateFromKeychain(authContext:)` call. `RootView` reads this to
+    /// show `BiometricLockView` during the window before the token has been
+    /// read from the keychain — preventing a brief flash of `SignInView`.
+    private(set) var isHydratingFromKeychain: Bool = false
     /// True when the last sign-in attempt failed because the email/password
     /// combo didn't match an existing account. `SignInView` reads this to
     /// offer a "create account" CTA instead of a plain error banner.
@@ -83,15 +89,49 @@ final class AuthManager {
         // launch of this install.
         Self.purgeKeychainIfFreshInstall()
 
-        // Hydrate from Keychain synchronously, then kick off a background
-        // /users/me to refresh the user record. If Keychain read fails we
-        // treat it as "not signed in" (no need to surface the error).
-        if let stored = try? KeychainStore.readToken() {
+        // Hydration timing depends on Face ID setting:
+        //
+        // - Face ID OFF: hydrate now. Existing pre-Phase-5 behavior. The
+        //   keychain entry is non-gated, no LAContext needed.
+        //
+        // - Face ID ON: defer until BiometricLockManager publishes an
+        //   authenticated LAContext via `authenticatedContext`. RootView in
+        //   BrettApp.swift watches that property and calls
+        //   `hydrateFromKeychain(authContext:)` when the user passes Face ID.
+        //
+        // Without this conditional, reading a biometric-gated keychain entry
+        // without a context would prompt the OS for Face ID immediately at
+        // app launch, bypassing the lock screen we already use for the same
+        // purpose.
+        if UserDefaults.standard.bool(forKey: BiometricLockManager.faceIDEnabledKey) {
+            // Mark hydration as pending so RootView shows BiometricLockView
+            // instead of SignInView while we're waiting for biometric unlock.
+            isHydratingFromKeychain = true
+        } else {
+            Task { [weak self] in await self?.hydrateFromKeychain(authContext: nil) }
+        }
+    }
+
+    /// Public entry point for keychain hydration. Used by both:
+    ///  - The Face-ID-OFF cold-launch path (init schedules this with
+    ///    `authContext: nil`).
+    ///  - The Face-ID-ON post-unlock path (RootView calls this with
+    ///    `authContext: BiometricLockManager.shared.authenticatedContext`
+    ///    after a successful biometric unlock).
+    ///
+    /// Idempotent: calling twice is harmless — the second call returns
+    /// early because `token` is already set.
+    func hydrateFromKeychain(authContext: LAContext?) async {
+        defer { isHydratingFromKeychain = false }
+        guard token == nil else { return } // already hydrated
+        do {
+            guard let stored = try KeychainStore.readToken(authContext: authContext) else {
+                return
+            }
             self.token = stored
-            // We don't have a user record yet (`/users/me` hasn't returned),
-            // but we know there's a valid token. `refreshCurrentUser` hydrates
-            // the user and, on success, installs the session.
-            Task { [weak self] in await self?.refreshCurrentUser() }
+            await refreshCurrentUser()
+        } catch {
+            BrettLog.auth.error("Keychain hydrate failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -569,6 +609,15 @@ final class AuthManager {
     @MainActor
     func persistForTesting(session: AuthSession) async throws {
         try await persist(session: session)
+    }
+
+    /// Test-only setter for `isHydratingFromKeychain`. Lets unit tests
+    /// simulate the Face-ID-ON init path (where `isHydratingFromKeychain`
+    /// is set to `true` in `init()`) without relying on UserDefaults state
+    /// that varies between test environments.
+    @MainActor
+    func testSetHydratingFromKeychain(_ value: Bool) {
+        isHydratingFromKeychain = value
     }
     #endif
 }

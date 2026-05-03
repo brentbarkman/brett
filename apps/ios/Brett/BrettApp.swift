@@ -210,6 +210,15 @@ private struct RootView: View {
                             await BadgeManager.shared.requestAuthorization()
                         }
                 }
+            } else if authManager.isHydratingFromKeychain {
+                // Face ID is enabled and the token hasn't been read from the
+                // keychain yet — we're waiting for BiometricLockManager to
+                // unlock so `hydrateFromKeychain` can run with a valid
+                // LAContext. Show the lock view here so the user sees the
+                // same Face ID prompt they'd see post-hydrate, rather than a
+                // brief flash of SignInView.
+                BiometricLockView()
+                    .transition(.opacity)
             } else {
                 SignInView()
                     .transition(.opacity)
@@ -245,6 +254,7 @@ private struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: authManager.isAuthenticated)
+        .animation(.easeInOut(duration: 0.35), value: authManager.isHydratingFromKeychain)
         .animation(.easeInOut(duration: 0.25), value: lockManager.isLocked)
         .animation(.easeInOut(duration: 0.15), value: scenePhase)
         // Biometric lock lifecycle only — sync/SSE are handled by AuthManager.
@@ -297,6 +307,16 @@ private struct RootView: View {
                 }
             default:
                 break
+            }
+        }
+        .onChange(of: lockManager.authenticatedContext) { _, newContext in
+            // Biometric unlock succeeded → hydrate keychain with the
+            // authenticated LAContext so the gated read doesn't trigger
+            // a second Face ID prompt. Idempotent: hydrateFromKeychain
+            // returns early if the token is already set (e.g. Face ID OFF
+            // path), so repeat calls are safe.
+            if let ctx = newContext {
+                Task { [authManager] in await authManager.hydrateFromKeychain(authContext: ctx) }
             }
         }
         .task {
