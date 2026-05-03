@@ -766,6 +766,7 @@ struct AuthManagerTests {
         try KeychainStore.writeToken("different-token")
         await mgr.hydrateFromKeychain(authContext: nil)
         #expect(mgr.token == "hydrate-test-tok", "second call must be a no-op — token is unchanged")
+        #expect(!mgr.isHydratingFromKeychain, "flag should be false after both calls")
     }
 
     /// `hydrateFromKeychain` sets `isHydratingFromKeychain = false` via its

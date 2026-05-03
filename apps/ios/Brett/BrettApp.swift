@@ -211,12 +211,15 @@ private struct RootView: View {
                         }
                 }
             } else if authManager.isHydratingFromKeychain {
-                // Face ID is enabled and the token hasn't been read from the
-                // keychain yet — we're waiting for BiometricLockManager to
-                // unlock so `hydrateFromKeychain` can run with a valid
-                // LAContext. Show the lock view here so the user sees the
-                // same Face ID prompt they'd see post-hydrate, rather than a
-                // brief flash of SignInView.
+                // Face-ID-ON cold launch: keychain hasn't been read yet (token gated
+                // behind biometric). BiometricLockView prompts for unlock; once
+                // authenticated, AuthManager.hydrateFromKeychain runs and isAuthenticated
+                // flips, this branch yields to MainContainer.
+                //
+                // Edge case: if the user removed their device passcode (canEvaluatePolicy
+                // fails), authenticatedContext never becomes non-nil, isHydratingFromKeychain
+                // stays true, and this branch keeps showing BiometricLockView with the
+                // "Set a device passcode" error. Intentional fail-closed behavior.
                 BiometricLockView()
                     .transition(.opacity)
             } else {
