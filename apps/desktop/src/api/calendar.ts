@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type {
   CalendarEventsResponse,
@@ -52,23 +52,61 @@ export function useUpdateRsvp() {
       }),
     onMutate: async ({ eventId, status, comment }) => {
       await qc.cancelQueries({ queryKey: ["calendar-event-detail", eventId] });
-      const prev = qc.getQueryData<CalendarEventDetailResponse>(["calendar-event-detail", eventId]);
-      if (prev) {
-        // Update both myResponseStatus and the self-attendee in the attendees array
-        const updatedAttendees = prev.attendees?.map((a: any) =>
+      await qc.cancelQueries({ queryKey: ["calendar-events"] });
+
+      // Detail cache: patch myResponseStatus + the self-attendee row.
+      const prevDetail = qc.getQueryData<CalendarEventDetailResponse>([
+        "calendar-event-detail",
+        eventId,
+      ]);
+      if (prevDetail) {
+        const updatedAttendees = prevDetail.attendees?.map((a: any) =>
           a.self ? { ...a, responseStatus: status, comment: comment ?? a.comment } : a,
         );
         qc.setQueryData(["calendar-event-detail", eventId], {
-          ...prev,
+          ...prevDetail,
           myResponseStatus: status,
           attendees: updatedAttendees,
         });
       }
-      return { prev };
+
+      // List caches: patch the same fields in every ["calendar-events", *]
+      // entry that contains this event. Without this, declining an event
+      // leaves it visible in the timeline until the post-success refetch
+      // lands — and the user's own attendee row stays at the old status
+      // in any list-derived rendering. Snapshot first so onError can roll
+      // back atomically.
+      const prevLists: Array<[QueryKey, CalendarEventsResponse | undefined]> = [];
+      const matches = qc.getQueriesData<CalendarEventsResponse>({
+        queryKey: ["calendar-events"],
+      });
+      for (const [key, data] of matches) {
+        prevLists.push([key, data]);
+        if (!data) continue;
+        const updatedEvents = data.events.map((e) =>
+          e.id === eventId
+            ? {
+                ...e,
+                myResponseStatus: status,
+                attendees: e.attendees?.map((a: any) =>
+                  a.self ? { ...a, responseStatus: status, comment: comment ?? a.comment } : a,
+                ),
+              }
+            : e,
+        );
+        qc.setQueryData(key, { ...data, events: updatedEvents });
+      }
+
+      return { prevDetail, prevLists };
     },
     onError: (_err, { eventId }, context) => {
-      if (context?.prev) {
-        qc.setQueryData(["calendar-event-detail", eventId], context.prev);
+      if (context?.prevDetail) {
+        qc.setQueryData(["calendar-event-detail", eventId], context.prevDetail);
+      }
+      if (context?.prevLists) {
+        for (const [key, data] of context.prevLists) {
+          qc.setQueryData(key, data);
+        }
       }
     },
     onSuccess: (_, { eventId }) => {
