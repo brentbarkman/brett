@@ -4,10 +4,11 @@ import SwiftUI
 struct SignInView: View {
     @Environment(AuthManager.self) private var authManager
 
-    @State private var email = ""
+    @State private var email = SessionExpiryHint.lastEmail ?? ""
     @State private var password = ""
     @State private var name = ""
     @State private var isSignUp = false
+    @State private var showExpiredBanner: Bool = SessionExpiryHint.didExpire
 
     var body: some View {
         ZStack {
@@ -57,6 +58,17 @@ struct SignInView: View {
                     }
                 }
 
+                if showExpiredBanner {
+                    errorBanner("Please sign in again to continue.")
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showExpiredBanner = false
+                                SessionExpiryHint.didExpire = false
+                            }
+                        }
+                }
+
                 if authManager.errorIsNoAccount {
                     noAccountBanner
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -92,6 +104,7 @@ struct SignInView: View {
             .padding(.horizontal, 24)
             .animation(.easeInOut(duration: 0.2), value: authManager.errorMessage)
             .animation(.easeInOut(duration: 0.2), value: isSignUp)
+            .animation(.easeInOut(duration: 0.2), value: showExpiredBanner)
         }
     }
 

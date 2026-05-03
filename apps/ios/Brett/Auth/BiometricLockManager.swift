@@ -27,6 +27,18 @@ final class BiometricLockManager {
     private(set) var isEvaluating: Bool = false
     private(set) var lastError: String?
 
+    /// The LAContext that successfully passed `evaluatePolicy`. Stays valid
+    /// for the lifetime of the unlocked session — code that needs to read
+    /// the biometric-gated keychain entry passes this via
+    /// `kSecUseAuthenticationContext` so a single Face ID prompt covers
+    /// both app unlock AND keychain decrypt. Nil while locked or before
+    /// the first successful evaluation.
+    ///
+    /// Cleared on background (the next foreground requires a fresh prompt
+    /// and a fresh context — Apple invalidates re-used contexts after a
+    /// timeout anyway).
+    private(set) var authenticatedContext: LAContext?
+
     /// Device-scoped Face ID toggle. Read via UserDefaults because the
     /// manager isn't a View. When the toggle flips off in Settings we
     /// eagerly unlock — no point holding the user behind a prompt they
@@ -104,6 +116,7 @@ final class BiometricLockManager {
     func handleDidEnterBackground() {
         context?.invalidate()
         context = nil
+        authenticatedContext = nil
         if isEnabledInSettings {
             isLocked = true
         }
@@ -121,11 +134,33 @@ final class BiometricLockManager {
 
     /// Called from the settings toggle when the user enables/disables the
     /// feature. Disabling immediately unlocks so the user can use the app
-    /// without a gate.
+    /// without a gate. In both directions, re-writes the keychain entry
+    /// so the next cold launch reads a token with the correct gating state.
     func settingsDidChange() {
         if !isEnabledInSettings {
+            // User just disabled Face ID. Re-write the keychain token without the
+            // biometric gate so the next cold launch can read it without a Face ID
+            // prompt the user has explicitly opted out of.
+            //
+            // Edge case: if `authenticatedContext` is nil here (e.g., app was
+            // backgrounded between the last unlock and this toggle), the keychain
+            // read against the gated entry will trigger an OS Face ID prompt. This
+            // is acceptable UX — the user is in Settings actively changing a security
+            // preference, and verifying they're the device owner before removing the
+            // gate is expected.
+            if let token = try? KeychainStore.readToken(authContext: authenticatedContext) {
+                try? KeychainStore.writeToken(token, biometricGated: false)
+            }
             isLocked = false
             lastError = nil
+        } else {
+            // User just enabled Face ID. Re-write the keychain token WITH the
+            // biometric gate so the next cold launch requires Face ID before
+            // the token is readable. The current token is non-gated so we can
+            // read it without a context.
+            if let token = try? KeychainStore.readToken(authContext: nil) {
+                try? KeychainStore.writeToken(token, biometricGated: true)
+            }
         }
     }
 
@@ -143,6 +178,7 @@ final class BiometricLockManager {
     func handleSignOut() {
         context?.invalidate()
         context = nil
+        authenticatedContext = nil
         isLocked = false
         lastError = nil
     }
@@ -193,6 +229,7 @@ final class BiometricLockManager {
             )
             if success {
                 isLocked = false
+                authenticatedContext = ctx
             }
         } catch {
             let laError = error as? LAError

@@ -17,6 +17,16 @@ export interface AuthOptions {
 export function createAuth(options: AuthOptions) {
   return betterAuth({
     database: prismaAdapter(prisma, { provider: "postgresql" }),
+    session: {
+      // 400 days — the maximum allowed by the browser cookie spec (RFC 6265bis)
+      // and enforced by better-auth's underlying better-call cookie serializer.
+      // This is 57× the default 7-day lifetime — effectively non-expiring in
+      // practice. Same rationale as SESSION_LIFETIME_SECONDS in
+      // apps/api/src/lib/ios-google-signin.ts. Browser sessions are bounded by
+      // cookie lifecycle + `__Secure-` prefix + CSRF, not by `expiresIn` alone.
+      expiresIn: 60 * 60 * 24 * 400, // 400 days in seconds (= 34,560,000)
+      updateAge: 60 * 60 * 24, // refresh `expiresAt` on activity once per 24h
+    },
     emailAndPassword: {
       enabled: options.enableEmailPassword ?? true,
       minPasswordLength: PASSWORD_MIN_LENGTH,

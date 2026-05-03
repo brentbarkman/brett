@@ -183,6 +183,10 @@ final class BriefingStore: Clearable {
             case .serverError(let status): return "Server error (\(status))."
             case .decodingFailed: return "Couldn't read the briefing response."
             case .unknown: return "Something went wrong."
+            case .keychainWriteFailed:
+                // Unreachable — briefing paths don't write to keychain. Kept
+                // for exhaustive switch.
+                return "Something went wrong."
             }
         }
         return error.localizedDescription

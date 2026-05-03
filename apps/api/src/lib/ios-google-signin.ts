@@ -27,9 +27,9 @@ import type { IOSGoogleClaims, IOSGoogleVerifier } from "./ios-google-verifier.j
  * 3. **No match either way** — create a new User + Account + Session.
  *
  * Returns the bearer token the iOS client should store, plus the user row
- * (stripped of sensitive fields). Session expiry mirrors better-auth's
- * default of 7 days — long enough for typical mobile use, short enough that
- * a compromised device eventually loses access.
+ * (stripped of sensitive fields). Sessions are effectively non-expiring
+ * (100-year lifetime); revocation (sign-out, "sign out all devices") is the
+ * security boundary, not expiry.
  *
  * ### What this function does NOT do
  *
@@ -52,7 +52,12 @@ export interface IOSGoogleSignInResult {
   outcome: "existing" | "linked" | "created";
 }
 
-const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7; // 7 days
+// 100 years — effectively non-expiring. Active users never see a sign-in
+// screen on a trusted device; revocation is the security boundary, not
+// expiry. The biometric keychain gate (when Face ID is enabled in
+// Settings → Security) protects the bearer at rest. Future "sign out all
+// devices" feature is the user-visible recovery path.
+const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 365 * 100;
 
 export async function signInWithIOSGoogleIdToken(opts: {
   idToken: string;

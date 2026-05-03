@@ -217,6 +217,18 @@ private struct RootView: View {
                             await BadgeManager.shared.requestAuthorization()
                         }
                 }
+            } else if authManager.isHydratingFromKeychain {
+                // Face-ID-ON cold launch: keychain hasn't been read yet (token gated
+                // behind biometric). BiometricLockView prompts for unlock; once
+                // authenticated, AuthManager.hydrateFromKeychain runs and isAuthenticated
+                // flips, this branch yields to MainContainer.
+                //
+                // Edge case: if the user removed their device passcode (canEvaluatePolicy
+                // fails), authenticatedContext never becomes non-nil, isHydratingFromKeychain
+                // stays true, and this branch keeps showing BiometricLockView with the
+                // "Set a device passcode" error. Intentional fail-closed behavior.
+                BiometricLockView()
+                    .transition(.opacity)
             } else {
                 SignInView()
                     .transition(.opacity)
@@ -252,6 +264,7 @@ private struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: authManager.isAuthenticated)
+        .animation(.easeInOut(duration: 0.35), value: authManager.isHydratingFromKeychain)
         .animation(.easeInOut(duration: 0.25), value: lockManager.isLocked)
         .animation(.easeInOut(duration: 0.15), value: scenePhase)
         // Biometric lock lifecycle only — sync/SSE are handled by AuthManager.
@@ -334,6 +347,16 @@ private struct RootView: View {
                 }
             default:
                 break
+            }
+        }
+        .onChange(of: lockManager.authenticatedContext) { _, newContext in
+            // Biometric unlock succeeded → hydrate keychain with the
+            // authenticated LAContext so the gated read doesn't trigger
+            // a second Face ID prompt. Idempotent: hydrateFromKeychain
+            // returns early if the token is already set (e.g. Face ID OFF
+            // path), so repeat calls are safe.
+            if let ctx = newContext {
+                Task { [authManager] in await authManager.hydrateFromKeychain(authContext: ctx) }
             }
         }
         .task {

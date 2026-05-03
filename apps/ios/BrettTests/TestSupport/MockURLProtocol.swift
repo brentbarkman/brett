@@ -45,6 +45,11 @@ final class MockURLProtocol: URLProtocol {
     nonisolated(unsafe) private static var stubs: [URL: Stub] = [:]
     nonisolated(unsafe) private static var requestLog: [URLRequest] = []
 
+    /// Sequenced stub queues per URL. Each call to the URL dequeues the next
+    /// response. After the queue is exhausted, subsequent calls return the
+    /// last response (sticky). Takes priority over `stubs` when registered.
+    nonisolated(unsafe) private static var sequencedStubs: [URL: [Stub]] = [:]
+
     /// Register a stub response for a specific URL.
     static func stub(url: URL, statusCode: Int, body: Data, headers: [String: String] = [:]) {
         queue.sync { stubs[url] = .response(statusCode: statusCode, body: body, headers: headers) }
@@ -55,11 +60,22 @@ final class MockURLProtocol: URLProtocol {
         queue.sync { stubs[url] = .failure(error) }
     }
 
-    /// Clear all registered stubs and the request log. Call this in `tearDown`
-    /// or at the start of each test to avoid cross-test pollution.
+    /// Register a sequence of stub responses for a URL. Each call to the URL
+    /// dequeues the next response. After the queue is exhausted, subsequent
+    /// calls return the last response (sticky). Takes priority over a
+    /// single-stub registration for the same URL.
+    static func stubSequence(url: URL, responses: [Stub]) {
+        precondition(!responses.isEmpty, "stubSequence requires at least one response")
+        queue.sync { sequencedStubs[url] = responses }
+    }
+
+    /// Clear all registered stubs (single and sequenced) and the request log.
+    /// Call this in `tearDown` or at the start of each test to avoid
+    /// cross-test pollution.
     static func reset() {
         queue.sync {
             stubs.removeAll()
+            sequencedStubs.removeAll()
             requestLog.removeAll()
         }
     }
@@ -88,10 +104,40 @@ final class MockURLProtocol: URLProtocol {
 
         MockURLProtocol.queue.sync { MockURLProtocol.requestLog.append(request) }
 
-        // Look up with full URL first, then fall back to path-only matching —
-        // lets tests stub `/api/search` and have it match requests with
-        // `?q=...&limit=...` query strings without re-registering per query.
+        // Sequenced stubs take priority: dequeue the next response for this
+        // URL (or return the last one if the queue is exhausted). Fall back
+        // to the single-stub registry, then to path-only matching for URLs
+        // with query strings (lets tests stub `/api/search` and have it
+        // match requests with `?q=...&limit=...` without re-registering).
         let stub = MockURLProtocol.queue.sync { () -> Stub? in
+            // --- Sequenced stubs ---
+            // Try exact URL first, then path-only for query-parameterized URLs.
+            let sequenceKey: URL? = {
+                if MockURLProtocol.sequencedStubs[url] != nil { return url }
+                if var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                    comps.query = nil; comps.fragment = nil
+                    if let pathOnly = comps.url,
+                       MockURLProtocol.sequencedStubs[pathOnly] != nil { return pathOnly }
+                }
+                return nil
+            }()
+            if let key = sequenceKey {
+                var queue = MockURLProtocol.sequencedStubs[key]!
+                let next = queue.removeFirst()
+                // Sticky: if more remain keep trimmed queue; otherwise leave
+                // single-element queue so the last stub is returned forever.
+                if !queue.isEmpty {
+                    MockURLProtocol.sequencedStubs[key] = queue
+                }
+                // After removing the last element via removeFirst, restore it as the
+                // sticky stub so subsequent requests continue to receive it.
+                else {
+                    MockURLProtocol.sequencedStubs[key] = [next]
+                }
+                return next
+            }
+
+            // --- Single stubs ---
             if let exact = MockURLProtocol.stubs[url] { return exact }
             if var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
                 comps.query = nil

@@ -299,6 +299,46 @@ describe("signInWithIOSGoogleIdToken", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Session lifetime
+// ---------------------------------------------------------------------------
+
+describe("session lifetime", () => {
+  it("issues effectively-non-expiring sessions for iOS Google sign-in", async () => {
+    const fixedNow = new Date("2026-05-03T00:00:00Z");
+    const suffix = uniq();
+    const email = `lifetime-${suffix}@example.com`;
+    await cleanupUserByEmail(email);
+
+    const verifier = new FakeVerifier({
+      sub: `sub-lifetime-${suffix}`,
+      email,
+      emailVerified: true,
+      name: "Lifetime Test",
+    });
+
+    const result = await signInWithIOSGoogleIdToken({
+      idToken: "fake-token",
+      verifier,
+      prisma,
+      now: () => fixedNow,
+    });
+
+    const session = await prisma.session.findUnique({
+      where: { token: result.token },
+      select: { expiresAt: true },
+    });
+
+    // Assert "more than 50 years" rather than an exact number — keeps the
+    // test stable if we ever bump the constant up further.
+    const fiftyYearsMs = 50 * 365 * 24 * 60 * 60 * 1000;
+    const diff = session!.expiresAt.getTime() - fixedNow.getTime();
+    expect(diff).toBeGreaterThan(fiftyYearsMs);
+
+    await cleanupUserByEmail(email);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Route handler — exercises input validation + error mapping
 // ---------------------------------------------------------------------------
 
