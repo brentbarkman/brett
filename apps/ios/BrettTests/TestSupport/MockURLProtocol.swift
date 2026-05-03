@@ -65,6 +65,7 @@ final class MockURLProtocol: URLProtocol {
     /// calls return the last response (sticky). Takes priority over a
     /// single-stub registration for the same URL.
     static func stubSequence(url: URL, responses: [Stub]) {
+        precondition(!responses.isEmpty, "stubSequence requires at least one response")
         queue.sync { sequencedStubs[url] = responses }
     }
 
@@ -128,8 +129,8 @@ final class MockURLProtocol: URLProtocol {
                 if !queue.isEmpty {
                     MockURLProtocol.sequencedStubs[key] = queue
                 }
-                // (If queue is now empty we removed the last element above
-                // so we restore it as a sticky one-element queue.)
+                // After removing the last element via removeFirst, restore it as the
+                // sticky stub so subsequent requests continue to receive it.
                 else {
                     MockURLProtocol.sequencedStubs[key] = [next]
                 }

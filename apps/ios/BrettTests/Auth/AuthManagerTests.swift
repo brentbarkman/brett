@@ -30,6 +30,13 @@ struct AuthManagerTests {
 
     // MARK: - Setup helpers
 
+    /// Zero-delay retry array for tests. Three zeros = 3 retries with no
+    /// sleep between attempts, so retry-path tests run in milliseconds
+    /// rather than the production 7-second worst case (1s + 2s + 4s).
+    /// The element COUNT must match the production retry count (currently 3
+    /// — see `AuthManager.retryDelays` default).
+    private static let testRetryDelays: [UInt64] = [0, 0, 0]
+
     /// Build an APIClient routed through `MockURLProtocol`. Because
     /// `APIClient.baseURL` is read from Info.plist on init, the tests use
     /// it directly when constructing stub URLs — keeps the assertion
@@ -44,7 +51,7 @@ struct AuthManagerTests {
 
     /// Build a test `AuthManager` wired to `MockURLProtocol` with instant
     /// retry delays (0 ns) so retry tests run in milliseconds rather than ~7 s.
-    private func makeTestManager(retryDelays: [UInt64] = [0, 0, 0]) -> (AuthManager, APIClient) {
+    private func makeTestManager(retryDelays: [UInt64] = Self.testRetryDelays) -> (AuthManager, APIClient) {
         let client = makeTestClient()
         let manager = AuthManager(client: client, retryDelays: retryDelays)
         return (manager, client)
@@ -105,7 +112,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         // Cold-launch state: token in keychain, /users/me hasn't returned
         // yet, no successful refresh established this process.
         manager.injectFakeSession(
@@ -116,6 +123,11 @@ struct AuthManagerTests {
         seedItem(userId: "u1", title: "task A")
         seedItem(userId: "u1", title: "task B")
 
+        // Note: with the retry helper added in this PR, a single sticky 401 stub
+        // is hit 4 times (1 initial + 3 retries) before refreshCurrentUser
+        // applies the cold-launch lenience. This test asserts on the lenience
+        // outcome (cached state preserved), not on the request count — both are
+        // valid behaviors for the cold-launch path.
         MockURLProtocol.stub(url: usersMeURL(for: client), statusCode: 401, body: Data())
 
         await manager.refreshCurrentUser()
@@ -134,7 +146,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-cold",
@@ -161,7 +173,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -278,7 +290,7 @@ struct AuthManagerTests {
         SharedConfig.writeLastSignedInUserId("u1")
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -301,7 +313,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -328,7 +340,7 @@ struct AuthManagerTests {
         SharedConfig.writeLastSignedInUserId("u1")
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -348,7 +360,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -385,7 +397,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -416,7 +428,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
 
         // Pre-condition: tokenProvider was wired in init.
         #expect(client.tokenProvider != nil, "AuthManager.init must install a tokenProvider")
@@ -466,7 +478,7 @@ struct AuthManagerTests {
         #expect(itemCount() == 2)
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         // Stub /users/me so the post-persist hydrate doesn't blow up.
         MockURLProtocol.stub(
             url: usersMeURL(for: client),
@@ -496,7 +508,7 @@ struct AuthManagerTests {
         #expect(itemCount() == 0)
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         MockURLProtocol.stub(
             url: usersMeURL(for: client),
             statusCode: 200,
@@ -524,7 +536,7 @@ struct AuthManagerTests {
         #expect(itemCount() == 1)
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+        let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
         MockURLProtocol.stub(
             url: usersMeURL(for: client),
             statusCode: 200,
@@ -563,7 +575,7 @@ struct AuthManagerTests {
 
         weak var weakManager: AuthManager?
         do {
-            let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
+            let manager = AuthManager(client: client, retryDelays: Self.testRetryDelays)
             weakManager = manager
             // Manager goes out of scope at end of `do` block.
         }
