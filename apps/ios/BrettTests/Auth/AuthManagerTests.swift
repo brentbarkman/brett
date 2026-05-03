@@ -163,6 +163,94 @@ struct AuthManagerTests {
         #expect(itemCount() == 1)
     }
 
+    // MARK: - Retry on unauthorized (refreshIfStale)
+
+    /// After exhausting all retries, `refreshIfStale` escalates to
+    /// `clearInvalidSession` the same way a bare 401 did before retry was
+    /// added — we just try harder first.
+    @Test("refreshIfStale retries 3 times on /api/auth/ios/session 401 before signing out")
+    func refreshIfStaleRetriesThenSignsOut() async {
+        resetState()
+        defer { resetState() }
+
+        let (mgr, client) = makeTestManager()
+        mgr.injectFakeSession(
+            user: AuthUser(id: "u1", email: "a@b.com", name: nil,
+                           avatarUrl: nil, timezone: "UTC", assistantName: "Brett"),
+            token: "tok",
+            hasRefreshed: true
+        )
+
+        MockURLProtocol.stub(url: iosSessionURL(for: client), statusCode: 401, body: Data())
+        MockURLProtocol.stub(url: signOutURL(for: client), statusCode: 200, body: Data())
+
+        await mgr.refreshIfStale(threshold: 0)
+
+        #expect(mgr.token == nil, "exhausted retries must escalate to clearInvalidSession")
+        let sessionRequests = MockURLProtocol.recordedRequests()
+            .filter { $0.url?.path.hasSuffix("/api/auth/ios/session") == true }
+        #expect(sessionRequests.count == 4, "1 initial attempt + 3 retries = 4 total requests")
+    }
+
+    /// If any retry succeeds, the session is preserved — the user stays
+    /// signed in without any visible disruption.
+    @Test("refreshIfStale recovers when one retry succeeds after 401s")
+    func refreshIfStaleRecoversAfterRetry() async {
+        resetState()
+        defer { resetState() }
+
+        let (mgr, client) = makeTestManager()
+        mgr.injectFakeSession(
+            user: AuthUser(id: "u1", email: "a@b.com", name: nil,
+                           avatarUrl: nil, timezone: "UTC", assistantName: "Brett"),
+            token: "tok",
+            hasRefreshed: true
+        )
+
+        let unauth = MockURLProtocol.Stub.response(statusCode: 401, body: Data())
+        // ISO 8601 without fractional seconds — matches the decoder's .iso8601 strategy.
+        let okBody = Data(#"{"token":"tok","expiresAt":"2099-01-01T00:00:00Z","user":{"id":"u1","email":"a@b.com"}}"#.utf8)
+        let ok = MockURLProtocol.Stub.response(statusCode: 200, body: okBody)
+        MockURLProtocol.stubSequence(
+            url: iosSessionURL(for: client),
+            responses: [unauth, unauth, unauth, ok]
+        )
+
+        await mgr.refreshIfStale(threshold: 0)
+
+        #expect(mgr.token == "tok", "session preserved — retry succeeded before exhaustion")
+    }
+
+    /// Non-401 errors (transport failures, timeouts) must NOT be retried —
+    /// only `APIError.unauthorized` triggers the backoff loop.
+    @Test("refreshIfStale does not retry on non-401 errors")
+    func refreshIfStaleDoesNotRetryOnNetworkError() async {
+        resetState()
+        defer { resetState() }
+
+        let (mgr, client) = makeTestManager()
+        mgr.injectFakeSession(
+            user: AuthUser(id: "u1", email: "a@b.com", name: nil,
+                           avatarUrl: nil, timezone: "UTC", assistantName: "Brett"),
+            token: "tok",
+            hasRefreshed: true
+        )
+
+        MockURLProtocol.stub(
+            url: iosSessionURL(for: client),
+            error: URLError(.notConnectedToInternet)
+        )
+
+        await mgr.refreshIfStale(threshold: 0)
+
+        // Network errors leave state intact (the outer catch-all in
+        // refreshIfStale keeps cached state on transient failures).
+        #expect(mgr.token == "tok", "transport error must NOT clear the session")
+        let requests = MockURLProtocol.recordedRequests()
+            .filter { $0.url?.path.hasSuffix("/api/auth/ios/session") == true }
+        #expect(requests.count == 1, "transport errors are not retried — exactly 1 request")
+    }
+
     // MARK: - Post-success escalation
 
     /// Once the process HAS successfully validated a session, a subsequent

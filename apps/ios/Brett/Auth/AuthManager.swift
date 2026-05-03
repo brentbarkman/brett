@@ -478,7 +478,9 @@ final class AuthManager {
         }
 
         do {
-            let session = try await endpoints.getSession()
+            let session = try await retryingOnUnauthorized {
+                try await self.endpoints.getSession()
+            }
             self.lastRefreshedAt = Date()
             self.hasSuccessfullyRefreshed = true
             // Session token rotation isn't exposed by better-auth's bearer
