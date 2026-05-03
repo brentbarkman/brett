@@ -4,7 +4,7 @@ import { slugify, getEventGlassColor, getTaskDestinationLabel } from "@brett/uti
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
 import { useTodayKey } from "./hooks/useTodayKey";
 import { usePinnedDate } from "./hooks/usePinnedDate";
-import { getEndOfWeekUTC } from "@brett/business";
+import { getEndOfWeekUTC, isHiddenDeclined } from "@brett/business";
 import type { BackgroundStyle } from "@brett/business";
 import {
   DndContext,
@@ -394,16 +394,18 @@ export function App() {
   const { data: sidebarCalendarData, isLoading: isLoadingSidebarCalendar } = useCalendarEvents(sidebarBounds);
   // Hide events the user declined — matches Google Calendar's default. The
   // event still exists server-side; we just don't surface it in any timeline.
+  // Events the user organized stay visible even when declined; Google
+  // Calendar never hides organizer-owned events from "Hide declined".
   const sidebarCalendarEvents: CalendarEventDisplay[] =
     (sidebarCalendarData?.events ?? [])
-      .filter((e: CalendarEventRecord) => !e.isAllDay && e.myResponseStatus !== "declined")
+      .filter((e: CalendarEventRecord) => !e.isAllDay && !isHiddenDeclined(e))
       .map(recordToDisplay);
 
   // Today's events for Next Up — always pinned to today, independent of sidebar navigation
   const { data: todayCalendarData } = useCalendarEvents(todayBounds);
   const todayCalendarEvents: CalendarEventDisplay[] =
     (todayCalendarData?.events ?? [])
-      .filter((e: CalendarEventRecord) => !e.isAllDay && e.myResponseStatus !== "declined")
+      .filter((e: CalendarEventRecord) => !e.isAllDay && !isHiddenDeclined(e))
       .map(recordToDisplay);
 
   // Next Up: find the next upcoming event from TODAY (not the sidebar date)

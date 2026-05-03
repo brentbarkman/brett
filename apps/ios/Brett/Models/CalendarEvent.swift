@@ -136,6 +136,18 @@ final class CalendarEvent {
         guard let data = organizerJSON?.data(using: .utf8) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
+
+    /// Whether the signed-in Google account organized this event.
+    ///
+    /// Reads `organizer.self` from the JSON the server hydrates from
+    /// Google's API. `selfAttendee?.responseStatus` already drives the
+    /// per-attendee RSVP UI; this flag is for filters that need to keep
+    /// organizer-owned events visible regardless of declined status —
+    /// matches Google Calendar's behaviour of never hiding events you
+    /// organized, even when "Hide declined events" is on.
+    var isOrganizer: Bool {
+        (organizer?["self"] as? Bool) == true
+    }
 }
 
 // MARK: - Codable (sync wire format)

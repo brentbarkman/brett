@@ -103,8 +103,15 @@ private struct CalendarPageBody: View {
     /// filtered out (matches Google Calendar's default). Done in Swift
     /// rather than the predicate so a future "show declined" toggle can
     /// flip without re-initing the @Query.
+    ///
+    /// Events the user organized stay visible even when declined. Google
+    /// Calendar behaves the same way — "Hide declined events" never hides
+    /// events you organized, because declining your own event is unusual
+    /// and the user almost always still wants to see it on their calendar.
     private var visibleEvents: [CalendarEvent] {
-        events.filter { $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue }
+        events.filter {
+            $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue || $0.isOrganizer
+        }
     }
 
     /// Pure helper — public for test access. Given the currently-selected

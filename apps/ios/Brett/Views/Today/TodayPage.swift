@@ -423,10 +423,12 @@ private struct TodayPageBody: View {
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
         // Hide events the user declined — matches Google Calendar's default.
+        // Events the user organized stay visible even when declined; Google
+        // Calendar never hides organizer-owned events from "Hide declined".
         return events.filter {
             $0.startTime >= start
                 && $0.startTime < end
-                && $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue
+                && ($0.myResponseStatus != CalendarRsvpStatus.declined.rawValue || $0.isOrganizer)
         }
     }
 
@@ -440,7 +442,7 @@ private struct TodayPageBody: View {
         let now = Date()
         return events.first {
             $0.startTime > now.addingTimeInterval(-60)
-                && $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue
+                && ($0.myResponseStatus != CalendarRsvpStatus.declined.rawValue || $0.isOrganizer)
         }
     }
 
