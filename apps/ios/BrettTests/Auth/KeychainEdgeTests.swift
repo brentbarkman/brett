@@ -188,4 +188,49 @@ struct KeychainEdgeTests {
         }
         Issue.record("expected read-back to return nil (mismatch), but got \(String(describing: readBack))")
     }
+
+    // MARK: - Biometric-gated keychain paths (Phase 5.1)
+
+    @Test("writeToken with biometricGated=true succeeds and skips read-back verification")
+    func writeTokenBiometricGated() throws {
+        defer { try? cleanKeychain() }
+        let token = "biometric-token-\(UUID().uuidString)"
+
+        // Should not throw — biometric writes skip the read-back step that
+        // would otherwise prompt the OS for Face ID during this test.
+        try KeychainStore.writeToken(token, biometricGated: true)
+
+        // Verify the entry exists by querying via SecItem directly.
+        // We use kSecReturnAttributes rather than kSecReturnData so we don't
+        // trigger an interactive biometric prompt.
+        // `KeychainStore.testTokenAccount` exposes the private "sessionToken"
+        // literal via a #if DEBUG extension.
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: KeychainStore.service,
+            kSecAttrAccount as String: KeychainStore.testTokenAccount,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        // errSecSuccess → item found and attributes returned.
+        // errSecInteractionNotAllowed → item exists but reading it requires
+        //   biometric/passcode (proves the gate is on); expected on a locked
+        //   simulator or when the access-control policy is enforced.
+        #expect(status == errSecSuccess || status == errSecInteractionNotAllowed)
+    }
+
+    @Test("readToken with nil authContext falls back to non-gated read for legacy entries")
+    func readTokenWithNilContext() throws {
+        defer { try? cleanKeychain() }
+        let token = "legacy-token-\(UUID().uuidString)"
+
+        // Write WITHOUT biometric gating (simulating an existing user's pre-
+        // Phase-5 keychain entry). Read with nil authContext should succeed
+        // without any interactive prompts.
+        try KeychainStore.writeToken(token, biometricGated: false)
+        let readBack = try KeychainStore.readToken(authContext: nil)
+        #expect(readBack == token)
+    }
 }
