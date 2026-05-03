@@ -16,6 +16,7 @@ export { UpNextCard } from "./UpNextCard";
 export { NextUpCard } from "./NextUpCard";
 export { useNextUpTimer, parseTimeToMinutes } from "./useNextUpTimer";
 export type { NextUpTimerState } from "./useNextUpTimer";
+export { useNow, useVisibilityAwareInterval } from "./useNow";
 export { FilterPills } from "./FilterPills";
 export { ThingCard } from "./ThingCard";
 export { ThingsList } from "./ThingsList";

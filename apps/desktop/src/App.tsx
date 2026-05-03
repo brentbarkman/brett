@@ -392,22 +392,25 @@ export function App() {
   };
 
   const { data: sidebarCalendarData, isLoading: isLoadingSidebarCalendar } = useCalendarEvents(sidebarBounds);
+  // Hide events the user declined — matches Google Calendar's default. The
+  // event still exists server-side; we just don't surface it in any timeline.
   const sidebarCalendarEvents: CalendarEventDisplay[] =
-    (sidebarCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay);
+    (sidebarCalendarData?.events ?? [])
+      .filter((e: CalendarEventRecord) => !e.isAllDay && e.myResponseStatus !== "declined")
+      .map(recordToDisplay);
 
   // Today's events for Next Up — always pinned to today, independent of sidebar navigation
   const { data: todayCalendarData } = useCalendarEvents(todayBounds);
   const todayCalendarEvents: CalendarEventDisplay[] =
-    (todayCalendarData?.events ?? []).filter((e: CalendarEventRecord) => !e.isAllDay).map(recordToDisplay);
+    (todayCalendarData?.events ?? [])
+      .filter((e: CalendarEventRecord) => !e.isAllDay && e.myResponseStatus !== "declined")
+      .map(recordToDisplay);
 
   // Next Up: find the next upcoming event from TODAY (not the sidebar date)
   const nextUpEvent = (() => {
     if (!todayCalendarEvents.length) return null;
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-    return todayCalendarEvents.find((e) => {
-      if (e.myResponseStatus === "declined" || e.isAllDay) return false;
-      return parseTimeToMinutes(e.endTime) > nowMin;
-    }) ?? null;
+    return todayCalendarEvents.find((e) => parseTimeToMinutes(e.endTime) > nowMin) ?? null;
   })();
   const nextUpTimer = useNextUpTimer(nextUpEvent);
 

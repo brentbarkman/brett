@@ -157,10 +157,11 @@ struct CalendarPage: View {
         let dayStart = calendar.startOfDay(for: selectedDate)
         let windowStart = calendar.date(byAdding: .day, value: -windowDays, to: dayStart) ?? dayStart
         let windowEnd = calendar.date(byAdding: .day, value: windowDays, to: dayStart) ?? dayStart
+        // Hide events the user declined — matches Google Calendar's default.
         events = calendarStore.fetchEvents(
             userId: authManager.currentUser?.id,
             startDate: windowStart,
             endDate: windowEnd
-        )
+        ).filter { $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue }
     }
 }

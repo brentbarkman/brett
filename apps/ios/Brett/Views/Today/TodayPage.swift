@@ -416,11 +416,19 @@ private struct TodayPageBody: View {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        return events.filter { $0.startTime >= start && $0.startTime < end }
+        // Hide events the user declined — matches Google Calendar's default.
+        return events.filter {
+            $0.startTime >= start
+                && $0.startTime < end
+                && $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue
+        }
     }
 
     private var nextUpcomingEvent: CalendarEvent? {
-        events.first { $0.startTime > tickerNow.addingTimeInterval(-60) }
+        events.first {
+            $0.startTime > tickerNow.addingTimeInterval(-60)
+                && $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue
+        }
     }
 
     /// Only surface the card when the next event is genuinely soon. We use a

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "./client";
-import { useNow } from "../hooks/useNow";
+import { useNow } from "@brett/ui";
 import type { WeatherData } from "@brett/types";
 
 interface WeatherResponse {

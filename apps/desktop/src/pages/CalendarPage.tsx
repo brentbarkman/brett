@@ -88,7 +88,10 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
   })();
 
   const { data } = useCalendarEvents({ startDate, endDate });
-  const events: CalendarEventRecord[] = data?.events ?? [];
+  // Hide events the user declined — matches Google Calendar's default.
+  const events: CalendarEventRecord[] = (data?.events ?? []).filter(
+    (e) => e.myResponseStatus !== "declined",
+  );
 
   const handleToday = () => setCurrentDate(new Date());
 

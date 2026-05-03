@@ -5,6 +5,7 @@ import type {
   CalendarRsvpStatus,
 } from "@brett/types";
 import { displayTitle, useDemoMode } from "./lib/demoMode";
+import { useNow } from "./useNow";
 
 // TODO: Import EventHoverTooltip once available
 // import { EventHoverTooltip } from "./EventHoverTooltip";
@@ -166,11 +167,7 @@ export function CalendarTimeline({
   // events empty on first load → non-empty after fetch) and silently
   // corrupts the fiber tree in prod, breaking unrelated subscriptions
   // like the Router's useSyncExternalStore.
-  const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(interval);
-  }, []);
+  const currentTime = useNow(60_000);
 
   const currentTimeRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);

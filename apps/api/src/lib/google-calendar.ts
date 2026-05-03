@@ -73,6 +73,46 @@ export async function exchangeCalendarCode(code: string) {
   return tokens;
 }
 
+/**
+ * Detects Google API errors that mean the user must re-authorize. Caller should
+ * stop syncing this account and surface a re-link task.
+ *
+ * Covers: HTTP 401/403, plus HTTP 400 with OAuth `invalid_grant` /
+ * `unauthorized_client`. The `invalid_grant` path matters because Google issues
+ * 7-day refresh tokens to OAuth apps in "Testing" status — once the refresh
+ * token expires, every API call dies with a 400 (not 401), and the user gets
+ * no signal unless we classify it correctly.
+ *
+ * `googleapis` returns `GaxiosError` whose shape varies by version (numeric vs
+ * string `code`, presence of `response`, OAuth error sometimes on `error`,
+ * sometimes on `response.data.error`, sometimes only in `message`). We
+ * defensively check all of them.
+ */
+export function isGoogleAuthFailure(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as {
+    code?: number | string;
+    error?: string;
+    message?: string;
+    response?: { status?: number; data?: { error?: string } };
+  };
+
+  const numericCode =
+    typeof e.code === "number" ? e.code : Number(e.code);
+  if (numericCode === 401 || numericCode === 403) return true;
+  if (e.response?.status === 401 || e.response?.status === 403) return true;
+
+  const oauthError = e.error ?? e.response?.data?.error;
+  if (oauthError === "invalid_grant" || oauthError === "unauthorized_client") {
+    return true;
+  }
+
+  const msg = typeof e.message === "string" ? e.message : "";
+  if (msg === "invalid_grant" || msg === "unauthorized_client") return true;
+
+  return false;
+}
+
 /** Get authenticated Calendar API client for a GoogleAccount. Auto-refreshes tokens. */
 export async function getCalendarClient(
   googleAccountId: string,

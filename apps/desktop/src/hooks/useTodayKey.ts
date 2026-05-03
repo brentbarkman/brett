@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getTodayUTC } from "@brett/business";
-import { useNow } from "./useNow";
+import { useNow } from "@brett/ui";
 
 /**
  * Returns the current UTC day-start ISO string. Stable across re-renders

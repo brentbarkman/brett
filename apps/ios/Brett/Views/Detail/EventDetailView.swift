@@ -325,6 +325,14 @@ private struct EventDetailBody: View {
             )
             if let event {
                 event.myResponseStatus = status.rawValue
+                // Patch the self-attendee row in the local attendees JSON.
+                // Without this, AttendeesSection keeps rendering our own
+                // entry with the pre-RSVP status until the next /sync/pull
+                // catches up — server-side already updated both fields.
+                event.attendeesJSON = Self.patchSelfAttendeeStatus(
+                    in: event.attendeesJSON,
+                    status: status.rawValue
+                )
                 do {
                     try event.modelContext?.save()
                 } catch {
@@ -344,6 +352,30 @@ private struct EventDetailBody: View {
         } catch {
             rsvpError = "Couldn't update RSVP. Try again."
         }
+    }
+
+    /// Update the `responseStatus` of any attendee marked `self` inside the
+    /// stored attendees JSON blob. Returns the original blob unchanged if
+    /// it can't be parsed or there's no self-attendee — never throws away
+    /// other data. Pure function so it's trivially testable.
+    static func patchSelfAttendeeStatus(in attendeesJSON: String?, status: String) -> String? {
+        guard let json = attendeesJSON,
+              let data = json.data(using: .utf8),
+              var attendees = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return attendeesJSON
+        }
+        var changed = false
+        for i in 0..<attendees.count {
+            if (attendees[i]["self"] as? Bool) == true {
+                attendees[i]["responseStatus"] = status
+                changed = true
+            }
+        }
+        guard changed,
+              let newData = try? JSONSerialization.data(withJSONObject: attendees) else {
+            return attendeesJSON
+        }
+        return String(data: newData, encoding: .utf8) ?? attendeesJSON
     }
 
     @ViewBuilder
