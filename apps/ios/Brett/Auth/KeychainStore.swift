@@ -144,8 +144,33 @@ enum KeychainStore {
     /// group when that group is entitled, otherwise writes to the default
     /// group. Callers don't need to care about the access group — everything
     /// in the app funnels through this single write path.
+    ///
+    /// Rejects empty strings (a blank token is never valid and storing one
+    /// produces a "signed in but every request 401s" zombie state).
+    ///
+    /// After writing, reads back the stored value and compares it against
+    /// the input. `SecItemAdd` returning `errSecSuccess` without actually
+    /// persisting the item is a known iOS edge case on locked devices or
+    /// when keychain accessibility settings mismatch. Without this check,
+    /// a silent write failure produces a "I just signed in but I'm signed
+    /// out on relaunch" bug.
     static func writeToken(_ token: String) throws {
+        guard !token.isEmpty else {
+            BrettLog.auth.error("Refused to write empty token to Keychain")
+            throw KeychainError.unexpectedData
+        }
         try writeInternal(token, accessGroup: sharedAccessGroup)
+
+        // Verify the write landed by reading back. A SecItemAdd that returns
+        // errSecSuccess but stores nothing is a known iOS edge case
+        // (corrupted keychain, locked device with non-AfterFirstUnlock
+        // accessibility, etc.). Without this check, a silent write failure
+        // produces a "I just signed in but I'm signed out on relaunch" bug.
+        let readBack = try readToken()
+        guard readBack == token else {
+            BrettLog.auth.error("Keychain write verification failed: read-back mismatch")
+            throw KeychainError.unexpectedData
+        }
     }
 
     /// Deletes the stored token from every location we might have written

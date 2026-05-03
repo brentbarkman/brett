@@ -280,6 +280,9 @@ final class AuthManager {
         do {
             let session = try await action()
             try await persist(session: session)
+        } catch let kc as KeychainStore.KeychainError {
+            BrettLog.auth.error("Keychain write failure during sign-in: \(String(describing: kc), privacy: .public)")
+            errorMessage = APIError.keychainWriteFailed.userFacingMessage
         } catch let apiError as APIError {
             errorMessage = apiError.userFacingMessage
             if case .invalidCredentials = apiError {

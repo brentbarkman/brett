@@ -183,6 +183,7 @@ final class BriefingStore: Clearable {
             case .serverError(let status): return "Server error (\(status))."
             case .decodingFailed: return "Couldn't read the briefing response."
             case .unknown: return "Something went wrong."
+            case .keychainWriteFailed: return "Couldn't save your session."
             }
         }
         return error.localizedDescription

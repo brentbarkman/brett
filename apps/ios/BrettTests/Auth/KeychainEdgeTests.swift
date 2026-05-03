@@ -71,15 +71,20 @@ struct KeychainEdgeTests {
         try KeychainStore.deleteToken()
     }
 
-    @Test func writeHandlesEmptyString() throws {
-        try cleanKeychain()
-        defer { try? cleanKeychain() }
+    @Test("writeToken rejects empty strings")
+    func writeTokenRejectsEmptyTokens() {
+        #expect(throws: KeychainStore.KeychainError.self) {
+            try KeychainStore.writeToken("")
+        }
+    }
 
-        // An empty string is still a valid token value from Keychain's
-        // perspective. We shouldn't crash or throw on it.
-        try KeychainStore.writeToken("")
-        let read = try KeychainStore.readToken()
-        #expect(read == "")
+    @Test("writeToken+readToken round-trip succeeds for a non-empty token")
+    func writeTokenRoundTrip() throws {
+        let token = "round-trip-\(UUID().uuidString)"
+        try KeychainStore.writeToken(token)
+        let readBack = try KeychainStore.readToken()
+        #expect(readBack == token)
+        try KeychainStore.deleteToken()
     }
 
     @Test func writeHandlesUnicodeToken() throws {

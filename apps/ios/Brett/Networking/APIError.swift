@@ -17,6 +17,7 @@ enum APIError: Error, CustomStringConvertible {
     case validation(String)
     case decodingFailed(Error)
     case unknown(Error)
+    case keychainWriteFailed
 
     var userFacingMessage: String {
         switch self {
@@ -39,6 +40,8 @@ enum APIError: Error, CustomStringConvertible {
             return "We couldn't read the server's response."
         case .unknown:
             return "Something went wrong. Please try again."
+        case .keychainWriteFailed:
+            return "Couldn't save your session. Try again, and if the problem persists, restart your device."
         }
     }
 
@@ -96,6 +99,8 @@ enum APIError: Error, CustomStringConvertible {
             return "APIError.decodingFailed"
         case .unknown:
             return "APIError.unknown"
+        case .keychainWriteFailed:
+            return "APIError.keychainWriteFailed"
         }
     }
 
@@ -131,6 +136,8 @@ enum APIError: Error, CustomStringConvertible {
             // Type name only — never the message string, since unknown
             // wraps arbitrary Errors which may stringify to PII.
             return "Network error (\(type(of: underlying)))."
+        case .keychainWriteFailed:
+            return "Couldn't save session to Keychain."
         }
     }
 
