@@ -100,11 +100,21 @@ suggestions.get("/events/:id/related-items", async (c) => {
 
     const filtered = matches.filter((m) => m.similarity >= AI_CONFIG.embedding.crossTypeThreshold);
 
-    // Enrich with item details
+    // Drop items whose due date (or, if none, creation) is older than 90 days
+    // — embedding-similar but stale tasks aren't actually relevant to today.
+    const recencyCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
     const entityIds = filtered.map((m) => m.entityId);
     const items = entityIds.length > 0
       ? await prisma.item.findMany({
-          where: { id: { in: entityIds }, userId: user.id },
+          where: {
+            id: { in: entityIds },
+            userId: user.id,
+            OR: [
+              { dueDate: { gte: recencyCutoff } },
+              { dueDate: null, createdAt: { gte: recencyCutoff } },
+            ],
+          },
           select: { id: true, title: true, type: true, completedAt: true },
         })
       : [];
@@ -222,10 +232,18 @@ suggestions.get("/events/:id/meeting-history", async (c) => {
       });
 
       const filtered = matches.filter((m) => m.similarity >= AI_CONFIG.embedding.crossTypeThreshold);
+      const recencyCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
       const entityIds = filtered.map((m) => m.entityId);
       const items = entityIds.length > 0
         ? await prisma.item.findMany({
-            where: { id: { in: entityIds }, userId: user.id },
+            where: {
+              id: { in: entityIds },
+              userId: user.id,
+              OR: [
+                { dueDate: { gte: recencyCutoff } },
+                { dueDate: null, createdAt: { gte: recencyCutoff } },
+              ],
+            },
             select: { id: true, title: true, type: true, completedAt: true },
           })
         : [];
