@@ -6,6 +6,7 @@ import {
   fetchEvents,
   watchCalendar,
   fetchAttendeePhotos,
+  isGoogleAuthFailure,
 } from "../lib/google-calendar.js";
 import { extractMeetingLink } from "./meeting-link.js";
 import { publishSSE } from "../lib/sse.js";
@@ -88,10 +89,10 @@ export async function initialSync(googleAccountId: string): Promise<void> {
   try {
     client = await getCalendarClient(googleAccountId);
   } catch (err) {
-    if (isGoogleApiError(err) && (err.code === 401 || err.code === 403)) {
+    if (isGoogleAuthFailure(err)) {
       await createRelinkTask(
         account.userId, "google-calendar", googleAccountId,
-        `Google Calendar sync failed — your access was revoked or expired (error ${err.code}). Go to Settings → Calendar to reconnect.`,
+        `Google Calendar sync failed — your access was revoked or expired. Go to Settings → Calendar to reconnect.`,
       ).catch((e) => console.error("[calendar-sync] Failed to create re-link task:", e));
     }
     throw err;
@@ -274,16 +275,18 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
             `[calendar-sync] syncToken expired for calendar ${cal.googleCalendarId}, ` +
             `cleared — backoff attempt #${entry?.attempts}, next retry in ${Math.round((entry?.nextAllowedAt ?? 0 - Date.now()) / 1000)}s`,
           );
-        } else if (isGoogleApiError(err) && (err.code === 401 || err.code === 403)) {
-          // Token revoked or permission denied — stop syncing this account
+        } else if (isGoogleAuthFailure(err)) {
+          // Token revoked, refresh token expired (e.g. 7-day testing-mode expiry),
+          // or scope insufficient — stop syncing this account and prompt re-auth
+          const errMsg = err instanceof Error ? err.message : String(err);
           console.error(
-            `[calendar-sync] Auth failed for account ${googleAccountId} (${err.code}): ${err.message}. Account needs re-authorization.`,
+            `[calendar-sync] Auth failed for account ${googleAccountId}: ${errMsg}. Account needs re-authorization.`,
           );
           await createRelinkTask(
             account.userId,
             "google-calendar",
             googleAccountId,
-            `Google Calendar sync failed — your access was revoked or expired (error ${err.code}). Go to Settings → Calendar to reconnect.`,
+            `Google Calendar sync failed — your access was revoked or expired. Go to Settings → Calendar to reconnect.`,
           ).catch((e) => console.error("[calendar-sync] Failed to create re-link task:", e));
           return;
         } else {
