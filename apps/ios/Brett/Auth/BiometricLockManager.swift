@@ -27,6 +27,18 @@ final class BiometricLockManager {
     private(set) var isEvaluating: Bool = false
     private(set) var lastError: String?
 
+    /// The LAContext that successfully passed `evaluatePolicy`. Stays valid
+    /// for the lifetime of the unlocked session — code that needs to read
+    /// the biometric-gated keychain entry passes this via
+    /// `kSecUseAuthenticationContext` so a single Face ID prompt covers
+    /// both app unlock AND keychain decrypt. Nil while locked or before
+    /// the first successful evaluation.
+    ///
+    /// Cleared on background (the next foreground requires a fresh prompt
+    /// and a fresh context — Apple invalidates re-used contexts after a
+    /// timeout anyway).
+    private(set) var authenticatedContext: LAContext?
+
     /// Device-scoped Face ID toggle. Read via UserDefaults because the
     /// manager isn't a View. When the toggle flips off in Settings we
     /// eagerly unlock — no point holding the user behind a prompt they
@@ -104,6 +116,7 @@ final class BiometricLockManager {
     func handleDidEnterBackground() {
         context?.invalidate()
         context = nil
+        authenticatedContext = nil
         if isEnabledInSettings {
             isLocked = true
         }
@@ -143,6 +156,7 @@ final class BiometricLockManager {
     func handleSignOut() {
         context?.invalidate()
         context = nil
+        authenticatedContext = nil
         isLocked = false
         lastError = nil
     }
@@ -193,6 +207,7 @@ final class BiometricLockManager {
             )
             if success {
                 isLocked = false
+                authenticatedContext = ctx
             }
         } catch {
             let laError = error as? LAError
