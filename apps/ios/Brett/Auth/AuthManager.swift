@@ -52,11 +52,20 @@ final class AuthManager {
     private let endpoints: AuthEndpoints
     private let client: APIClient
 
+    /// Delays between retries when `retryingOnUnauthorized` encounters an
+    /// `APIError.unauthorized` response, expressed in nanoseconds.
+    ///
+    /// Production default: 1 s → 2 s → 4 s (exponential backoff, 3 retries).
+    /// Tests override this with `[0, 0, 0]` to keep the suite fast.
+    private let retryDelays: [UInt64]
+
     // MARK: - Init
 
-    init(client: APIClient = .shared) {
+    init(client: APIClient = .shared,
+         retryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000]) {
         self.client = client
         self.endpoints = AuthEndpoints(client: client)
+        self.retryDelays = retryDelays
 
         // Wire the APIClient token provider *before* loading the stored token
         // so the first /users/me call uses it.
@@ -281,6 +290,37 @@ final class AuthManager {
         }
     }
 
+    /// Calls `attempt()` and returns its result.
+    ///
+    /// If `attempt()` throws `APIError.unauthorized`, sleeps for the
+    /// next delay in `retryDelays` then retries. Any other error bubbles
+    /// up immediately without retrying. After exhausting all configured
+    /// delays (i.e., `retryDelays.count` retries), the final unauthorized
+    /// error is rethrown so the caller can decide what to do.
+    ///
+    /// Production delays: 1 s → 2 s → 4 s (configurable via the init
+    /// parameter for test speed).
+    private func retryingOnUnauthorized<T>(_ attempt: () async throws -> T) async throws -> T {
+        var lastError: Error = APIError.unauthorized
+        for (index, delay) in ([UInt64(0)] + retryDelays).enumerated() {
+            if index > 0 {
+                // Sleep before each retry (index 0 is the initial attempt —
+                // its "delay" of 0 is just a sentinel to unify the loop).
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            do {
+                return try await attempt()
+            } catch APIError.unauthorized {
+                lastError = APIError.unauthorized
+                // Continue to next iteration (retry).
+            } catch {
+                // Non-401 errors are not retried.
+                throw error
+            }
+        }
+        throw lastError
+    }
+
     /// Saves the token to Keychain, updates in-memory state, hydrates the
     /// user record from /users/me, and installs a fresh `Session` so the
     /// mutation queue + sync engine + SSE come alive for this account only.
@@ -380,7 +420,7 @@ final class AuthManager {
     func refreshCurrentUser() async {
         guard token != nil else { return }
         do {
-            let me = try await endpoints.getMe()
+            let me = try await retryingOnUnauthorized { try await self.endpoints.getMe() }
             self.currentUser = me
             self.lastRefreshedAt = Date()
             self.hasSuccessfullyRefreshed = true

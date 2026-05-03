@@ -547,78 +547,92 @@ private struct TodayPageBody: View {
 // `AuthUser.testUser` are themselves DEBUG-only — without the gate the
 // Release build (TestFlight, App Store) fails to compile the preview.
 
+// Preview wrappers live in a private struct so the #Preview closures stay
+// declarative (no imperative `for` loops or Void calls that confuse
+// PreviewMacroBodyBuilder in Xcode 26 / Swift 6.3).
 #if DEBUG
-#Preview("Today — with fixture items") {
-    let preview = PersistenceController.makePreview()
-    let context = preview.mainContext
-    let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
+@MainActor
+private struct TodayPageWithFixturesPreview: View {
+    private let authManager: AuthManager
+    private let persistence: PersistenceController
 
-    // `TodayPage` is an auth gate that reads `userId` from `AuthManager`
-    // and pushes it into `TodayPageBody`'s `@Query` predicates. Previews
-    // need an injected `AuthManager` whose `currentUser.id` matches the
-    // userId used to seed the fixtures below — otherwise the page falls
-    // through to its signed-out `EmptyView()` branch and the preview
-    // renders blank. `injectFakeSession` is DEBUG-only.
-    let authManager = AuthManager()
-    authManager.injectFakeSession(user: .testUser, token: "preview")
-    let previewUserId = AuthUser.testUser.id
+    init() {
+        let preview = PersistenceController.makePreview()
+        let context = preview.mainContext
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
 
-    let workList = ItemList(userId: previewUserId, name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
-    let healthList = ItemList(userId: previewUserId, name: "Health", colorClass: "bg-green-500", sortOrder: 1)
-    context.insert(workList)
-    context.insert(healthList)
+        let mgr = AuthManager()
+        mgr.injectFakeSession(user: .testUser, token: "preview")
+        let uid = AuthUser.testUser.id
 
-    let fixtures: [Item] = [
-        // Overdue
-        .init(userId: previewUserId, title: "Submit Q1 expense report", dueDate: calendar.date(byAdding: .day, value: -2, to: today), listId: workList.id),
-        .init(userId: previewUserId, title: "Renew gym membership", dueDate: calendar.date(byAdding: .day, value: -1, to: today), listId: healthList.id),
-        // Today
-        .init(userId: previewUserId, title: "Prep slides for Q2 review", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today), listId: workList.id),
-        .init(userId: previewUserId, title: "Push mobile auth fix to staging", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today), listId: workList.id),
-        .init(userId: previewUserId, title: "Book physio appointment", dueDate: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today), listId: healthList.id),
-        // This week
-        .init(userId: previewUserId, title: "Draft technical spec for sync v2", dueDate: calendar.date(byAdding: .day, value: 2, to: today), listId: workList.id),
-        // Next week
-        .init(userId: previewUserId, title: "Annual performance self-review", dueDate: calendar.date(byAdding: .day, value: 7, to: today), listId: workList.id),
-    ]
-    for item in fixtures {
-        context.insert(item)
+        let workList = ItemList(userId: uid, name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
+        let healthList = ItemList(userId: uid, name: "Health", colorClass: "bg-green-500", sortOrder: 1)
+        context.insert(workList)
+        context.insert(healthList)
+
+        let fixtures: [Item] = [
+            // Overdue
+            .init(userId: uid, title: "Submit Q1 expense report", dueDate: calendar.date(byAdding: .day, value: -2, to: today), listId: workList.id),
+            .init(userId: uid, title: "Renew gym membership", dueDate: calendar.date(byAdding: .day, value: -1, to: today), listId: healthList.id),
+            // Today
+            .init(userId: uid, title: "Prep slides for Q2 review", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today), listId: workList.id),
+            .init(userId: uid, title: "Push mobile auth fix to staging", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today), listId: workList.id),
+            .init(userId: uid, title: "Book physio appointment", dueDate: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today), listId: healthList.id),
+            // This week
+            .init(userId: uid, title: "Draft technical spec for sync v2", dueDate: calendar.date(byAdding: .day, value: 2, to: today), listId: workList.id),
+            // Next week
+            .init(userId: uid, title: "Annual performance self-review", dueDate: calendar.date(byAdding: .day, value: 7, to: today), listId: workList.id),
+        ]
+        for item in fixtures { context.insert(item) }
+
+        // One done-today item so the Done section lights up.
+        let done = Item(userId: uid, title: "Morning standup", dueDate: today, listId: workList.id)
+        done.status = ItemStatus.done.rawValue
+        done.completedAt = Date()
+        context.insert(done)
+
+        try? context.save()
+
+        self.authManager = mgr
+        self.persistence = preview
     }
 
-    // One done-today item so the Done section lights up.
-    let done = Item(userId: previewUserId, title: "Morning standup", dueDate: today, listId: workList.id)
-    done.status = ItemStatus.done.rawValue
-    done.completedAt = Date()
-    context.insert(done)
-
-    try? context.save()
-
-    ZStack {
-        BackgroundView()
-        TodayPage()
+    var body: some View {
+        ZStack {
+            BackgroundView()
+            TodayPage()
+        }
+        .environment(authManager)
+        .modelContainer(persistence.container)
+        .preferredColorScheme(.dark)
     }
-    .environment(authManager)
-    .modelContainer(preview.container)
-    .preferredColorScheme(.dark)
 }
-#endif
 
-#if DEBUG
-#Preview("Today — empty state") {
-    let preview = PersistenceController.makePreview()
-    // Auth gate needs a user even in the empty-state preview — without
-    // one, `TodayPage` renders its signed-out `EmptyView()` branch
-    // instead of `TodayPageBody`'s empty state (the actual thing this
-    // preview exists to demonstrate).
-    let authManager = AuthManager()
-    authManager.injectFakeSession(user: .testUser, token: "preview")
-    ZStack {
-        BackgroundView()
-        TodayPage()
+@MainActor
+private struct TodayPageEmptyPreview: View {
+    private let authManager: AuthManager
+    private let persistence: PersistenceController
+
+    init() {
+        let preview = PersistenceController.makePreview()
+        let mgr = AuthManager()
+        mgr.injectFakeSession(user: .testUser, token: "preview")
+        self.authManager = mgr
+        self.persistence = preview
     }
-    .environment(authManager)
-    .modelContainer(preview.container)
-    .preferredColorScheme(.dark)
+
+    var body: some View {
+        ZStack {
+            BackgroundView()
+            TodayPage()
+        }
+        .environment(authManager)
+        .modelContainer(persistence.container)
+        .preferredColorScheme(.dark)
+    }
 }
+
+#Preview("Today — with fixture items") { TodayPageWithFixturesPreview() }
+#Preview("Today — empty state") { TodayPageEmptyPreview() }
 #endif

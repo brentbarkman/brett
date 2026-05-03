@@ -42,6 +42,14 @@ struct AuthManagerTests {
         return APIClient(session: session)
     }
 
+    /// Build a test `AuthManager` wired to `MockURLProtocol` with instant
+    /// retry delays (0 ns) so retry tests run in milliseconds rather than ~7 s.
+    private func makeTestManager(retryDelays: [UInt64] = [0, 0, 0]) -> (AuthManager, APIClient) {
+        let client = makeTestClient()
+        let manager = AuthManager(client: client, retryDelays: retryDelays)
+        return (manager, client)
+    }
+
     /// Reset every shared bit of state these tests touch. Idempotent and
     /// safe to call from `defer` blocks. Order matters — `ActiveSession`
     /// must be torn down before swapping the persistence container so any
@@ -97,7 +105,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         // Cold-launch state: token in keychain, /users/me hasn't returned
         // yet, no successful refresh established this process.
         manager.injectFakeSession(
@@ -126,7 +134,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-cold",
@@ -153,7 +161,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -172,6 +180,93 @@ struct AuthManagerTests {
         #expect(itemCount() == 1, "clearInvalidSession must NOT wipe local data — that's signOut's job")
     }
 
+    // MARK: - Retry on unauthorized
+
+    /// After exhausting all retries, `refreshCurrentUser` escalates to
+    /// `clearInvalidSession` the same way a bare 401 did before retry was
+    /// added — we just try harder first.
+    @Test("refreshCurrentUser retries 3 times on /users/me 401 before signing out")
+    func refreshCurrentUserRetriesThenSignsOut() async {
+        resetState()
+        defer { resetState() }
+
+        let (mgr, client) = makeTestManager()
+        mgr.injectFakeSession(
+            user: AuthUser(id: "u1", email: "a@b.com", name: nil,
+                           avatarUrl: nil, timezone: "UTC", assistantName: "Brett"),
+            token: "tok",
+            hasRefreshed: true
+        )
+
+        MockURLProtocol.stub(url: usersMeURL(for: client), statusCode: 401, body: Data())
+        MockURLProtocol.stub(url: signOutURL(for: client), statusCode: 200, body: Data())
+
+        await mgr.refreshCurrentUser()
+
+        #expect(mgr.token == nil, "exhausted retries must escalate to clearInvalidSession")
+        let usersMeRequests = MockURLProtocol.recordedRequests()
+            .filter { $0.url?.path.hasSuffix("/users/me") == true }
+        #expect(usersMeRequests.count == 4, "1 initial attempt + 3 retries = 4 total requests")
+    }
+
+    /// If any retry succeeds, the session is preserved — the user stays
+    /// signed in without any visible disruption.
+    @Test("refreshCurrentUser recovers when one retry succeeds after 401s")
+    func refreshCurrentUserRecoversAfterRetry() async {
+        resetState()
+        defer { resetState() }
+
+        let (mgr, client) = makeTestManager()
+        mgr.injectFakeSession(
+            user: AuthUser(id: "u1", email: "a@b.com", name: nil,
+                           avatarUrl: nil, timezone: "UTC", assistantName: "Brett"),
+            token: "tok",
+            hasRefreshed: true
+        )
+
+        let unauth = MockURLProtocol.Stub.response(statusCode: 401, body: Data())
+        let ok = MockURLProtocol.Stub.response(
+            statusCode: 200,
+            body: validUserMeBody(id: "u1", email: "a@b.com")
+        )
+        MockURLProtocol.stubSequence(
+            url: usersMeURL(for: client),
+            responses: [unauth, unauth, unauth, ok]
+        )
+
+        await mgr.refreshCurrentUser()
+
+        #expect(mgr.token == "tok", "session preserved — retry succeeded before exhaustion")
+        #expect(mgr.currentUser?.id == "u1", "user record updated from the successful retry response")
+    }
+
+    /// Non-401 errors (transport failures, timeouts) must NOT be retried —
+    /// only `APIError.unauthorized` triggers the backoff loop.
+    @Test("refreshCurrentUser does not retry on non-401 errors")
+    func refreshCurrentUserDoesNotRetryOnNetworkError() async {
+        resetState()
+        defer { resetState() }
+
+        let (mgr, client) = makeTestManager()
+        mgr.injectFakeSession(
+            user: AuthUser(id: "u1", email: "a@b.com", name: nil,
+                           avatarUrl: nil, timezone: "UTC", assistantName: "Brett"),
+            token: "tok",
+            hasRefreshed: true
+        )
+
+        MockURLProtocol.stub(url: usersMeURL(for: client), error: URLError(.notConnectedToInternet))
+
+        await mgr.refreshCurrentUser()
+
+        // Network errors leave state intact (the outer catch-all in
+        // refreshCurrentUser keeps cached state on transient failures).
+        #expect(mgr.token == "tok", "transport error must NOT clear the session")
+        let requests = MockURLProtocol.recordedRequests()
+            .filter { $0.url?.path.hasSuffix("/users/me") == true }
+        #expect(requests.count == 1, "transport errors are not retried — exactly 1 request")
+    }
+
     /// `clearInvalidSession` deliberately leaves `lastSignedInUserId` in
     /// place so the next `persist(session:)` can detect a user-switch and
     /// wipe defensively. Without that, signing in as a different user
@@ -183,7 +278,7 @@ struct AuthManagerTests {
         SharedConfig.writeLastSignedInUserId("u1")
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -206,7 +301,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -233,7 +328,7 @@ struct AuthManagerTests {
         SharedConfig.writeLastSignedInUserId("u1")
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -253,7 +348,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -290,7 +385,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         manager.injectFakeSession(
             user: AuthUser(id: "u1", email: "u1@x.com"),
             token: "tok-1",
@@ -321,7 +416,7 @@ struct AuthManagerTests {
         defer { resetState() }
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
 
         // Pre-condition: tokenProvider was wired in init.
         #expect(client.tokenProvider != nil, "AuthManager.init must install a tokenProvider")
@@ -371,7 +466,7 @@ struct AuthManagerTests {
         #expect(itemCount() == 2)
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         // Stub /users/me so the post-persist hydrate doesn't blow up.
         MockURLProtocol.stub(
             url: usersMeURL(for: client),
@@ -401,7 +496,7 @@ struct AuthManagerTests {
         #expect(itemCount() == 0)
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         MockURLProtocol.stub(
             url: usersMeURL(for: client),
             statusCode: 200,
@@ -429,7 +524,7 @@ struct AuthManagerTests {
         #expect(itemCount() == 1)
 
         let client = makeTestClient()
-        let manager = AuthManager(client: client)
+        let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
         MockURLProtocol.stub(
             url: usersMeURL(for: client),
             statusCode: 200,
@@ -468,7 +563,7 @@ struct AuthManagerTests {
 
         weak var weakManager: AuthManager?
         do {
-            let manager = AuthManager(client: client)
+            let manager = AuthManager(client: client, retryDelays: [0, 0, 0])
             weakManager = manager
             // Manager goes out of scope at end of `do` block.
         }
