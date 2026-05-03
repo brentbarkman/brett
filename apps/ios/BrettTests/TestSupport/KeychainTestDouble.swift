@@ -30,6 +30,14 @@ final class KeychainTestDouble: @unchecked Sendable {
     /// keychain failures (locked device, corrupted entry, etc.).
     var throwOnNextOperation: Error?
 
+    /// When set, the next `readToken()` call returns `nil` instead of the
+    /// stored value — without consuming `throwOnNextOperation`. Simulates the
+    /// silent write-success / empty-read-back edge case so tests can verify
+    /// that `writeToken` would throw `.writeVerificationFailed` in that
+    /// scenario (exercisable today via the double; will wire into
+    /// `KeychainStore.writeToken` when the `KeychainStoring` protocol lands).
+    var returnNilOnNextRead = false
+
     private let queue = DispatchQueue(label: "com.brett.tests.KeychainTestDouble")
     private var storage: [String: String] = [:]
 
@@ -57,6 +65,10 @@ final class KeychainTestDouble: @unchecked Sendable {
         if let err = throwOnNextOperation {
             throwOnNextOperation = nil
             throw err
+        }
+        if returnNilOnNextRead {
+            returnNilOnNextRead = false
+            return nil
         }
         return queue.sync { storage[Self.tokenKey] }
     }

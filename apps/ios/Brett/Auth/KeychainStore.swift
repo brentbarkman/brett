@@ -95,13 +95,26 @@ enum KeychainStore {
     // MARK: - Errors
 
     enum KeychainError: Error, CustomStringConvertible {
+        /// Keychain returned bytes that weren't valid UTF-8.
         case unexpectedData
+        /// Caller passed an empty string. An empty bearer is never a valid
+        /// session — refused at the application layer even though SecItem
+        /// itself would happily store it.
+        case emptyInput
+        /// `SecItemAdd` returned `errSecSuccess` but a subsequent read-back
+        /// did not return the value we just wrote. Documented iOS edge case
+        /// (corrupted keychain, locked device with wrong accessibility).
+        case writeVerificationFailed
         case status(OSStatus)
 
         var description: String {
             switch self {
             case .unexpectedData:
                 return "Keychain returned unexpected data"
+            case .emptyInput:
+                return "Refused to write empty token to Keychain"
+            case .writeVerificationFailed:
+                return "Keychain write verification failed: read-back mismatch"
             case .status(let code):
                 return "Keychain operation failed with status \(code)"
             }
@@ -157,7 +170,7 @@ enum KeychainStore {
     static func writeToken(_ token: String) throws {
         guard !token.isEmpty else {
             BrettLog.auth.error("Refused to write empty token to Keychain")
-            throw KeychainError.unexpectedData
+            throw KeychainError.emptyInput
         }
         try writeInternal(token, accessGroup: sharedAccessGroup)
 
@@ -169,7 +182,7 @@ enum KeychainStore {
         let readBack = try readToken()
         guard readBack == token else {
             BrettLog.auth.error("Keychain write verification failed: read-back mismatch")
-            throw KeychainError.unexpectedData
+            throw KeychainError.writeVerificationFailed
         }
     }
 

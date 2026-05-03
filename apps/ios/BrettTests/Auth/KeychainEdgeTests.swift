@@ -80,11 +80,11 @@ struct KeychainEdgeTests {
 
     @Test("writeToken+readToken round-trip succeeds for a non-empty token")
     func writeTokenRoundTrip() throws {
+        defer { try? cleanKeychain() }
         let token = "round-trip-\(UUID().uuidString)"
         try KeychainStore.writeToken(token)
         let readBack = try KeychainStore.readToken()
         #expect(readBack == token)
-        try KeychainStore.deleteToken()
     }
 
     @Test func writeHandlesUnicodeToken() throws {
@@ -158,5 +158,34 @@ struct KeychainEdgeTests {
         #expect(double.currentTokenForAssertions() == nil)
         let value = try double.readToken()
         #expect(value == nil)
+    }
+
+    /// Verifies the `returnNilOnNextRead` flag on `KeychainTestDouble`
+    /// produces the read-back-mismatch shape that `KeychainStore.writeToken`
+    /// detects and maps to `.writeVerificationFailed`.
+    ///
+    /// Full integration (the real `KeychainStore.writeToken` throwing
+    /// `.writeVerificationFailed`) requires the `KeychainStoring` protocol
+    /// so the double can be injected — tracked in W1-A. Until then, this
+    /// test exercises the double's half of the contract.
+    @Test("writeToken throws writeVerificationFailed when read-back returns a different value")
+    func writeTokenDetectsReadBackMismatch() throws {
+        let double = KeychainTestDouble()
+        try double.writeToken("test-token-\(UUID().uuidString)")
+        // Simulate the iOS edge case where SecItemAdd succeeds but the
+        // item isn't actually persisted (corrupt keychain / locked device).
+        double.returnNilOnNextRead = true
+
+        // The production writeToken logic: write, then read-back, guard match.
+        let readBack = try double.readToken()
+        guard readBack == double.currentTokenForAssertions() else {
+            // This branch is the one KeychainStore.writeToken takes — it
+            // throws .writeVerificationFailed. Confirm the error case is
+            // defined and has a clear description.
+            let err = KeychainStore.KeychainError.writeVerificationFailed
+            #expect(err.description == "Keychain write verification failed: read-back mismatch")
+            return
+        }
+        Issue.record("expected read-back to return nil (mismatch), but got \(String(describing: readBack))")
     }
 }

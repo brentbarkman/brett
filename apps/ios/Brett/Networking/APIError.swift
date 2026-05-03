@@ -41,7 +41,7 @@ enum APIError: Error, CustomStringConvertible {
         case .unknown:
             return "Something went wrong. Please try again."
         case .keychainWriteFailed:
-            return "Couldn't save your session. Try again, and if the problem persists, restart your device."
+            return "Couldn't save your session. Try again, and if the problem persists, sign out and back in, or reinstall the app."
         }
     }
 

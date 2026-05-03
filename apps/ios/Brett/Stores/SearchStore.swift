@@ -354,7 +354,10 @@ final class SearchStore: Clearable {
         case .serverError: return "Server error. Try again shortly."
         case .decodingFailed: return "Couldn't read the response."
         case .unknown: return "Search failed. Try again."
-        case .keychainWriteFailed: return "Couldn't save your session."
+        case .keychainWriteFailed:
+            // Unreachable — search paths don't write to keychain. Kept
+            // for exhaustive switch.
+            return "Something went wrong. Try again."
         }
     }
 
