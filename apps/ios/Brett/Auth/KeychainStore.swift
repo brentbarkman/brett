@@ -5,9 +5,14 @@ import Security
 /// Thin wrapper over Keychain Services for storing the session bearer token.
 ///
 /// Design notes:
-/// - Accessibility is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`:
-///   the token is readable after the first unlock following a reboot, but
-///   never leaves this device (no iCloud keychain sync).
+/// - Accessibility:
+///   - Non-gated path (default): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`
+///     — readable after the first unlock following a reboot.
+///   - Biometric-gated path (`writeToken(_:biometricGated: true)`):
+///     `kSecAttrAccessControl` with `.userPresence` over base
+///     `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` — Face ID OR
+///     passcode required to read; device must be unlocked.
+///   In both cases, items never leave this device (no iCloud keychain sync).
 /// - We only store the token string here. User profile data lives in
 ///   SwiftData (`UserProfile`) — the token is the sensitive bit.
 ///
@@ -381,14 +386,24 @@ enum KeychainStore {
         case errSecSuccess:
             return
         case errSecItemNotFound:
-            break // Fall through to insert
+            break // fall through to insert
+        case errSecParam:
+            // SecItemUpdate cannot change kSecAttrAccessControl on an existing
+            // item. Delete and re-insert to apply the new gate. Hit when toggling
+            // Face ID on/off via Settings → Security (Task 5.4).
+            BrettLog.auth.info("Keychain update returned errSecParam — deleting existing item to change access control")
+            let deleteQuery = baseQuery(accessGroup: accessGroup)
+            let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
+            if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
+                throw KeychainError.status(deleteStatus)
+            }
+            // fall through to insert
         default:
             throw KeychainError.status(updateStatus)
         }
 
         var addQuery = query
         for (k, v) in attrs { addQuery[k] = v }
-
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw KeychainError.status(addStatus)
@@ -415,9 +430,10 @@ enum KeychainStore {
 
 #if DEBUG
 extension KeychainStore {
-    /// Exposes the private `tokenAccount` literal for use in unit tests that
-    /// need to query the keychain directly (e.g. verifying a biometric-gated
-    /// entry exists without triggering an interactive prompt).
-    static var testTokenAccount: String { "sessionToken" }
+    /// Test-only accessor for the private `tokenAccount` constant.
+    /// Lets unit tests query the keychain via `SecItemCopyMatching` with
+    /// the same account key the production code uses, without duplicating
+    /// the literal "sessionToken" in a separate file.
+    static var testTokenAccount: String { tokenAccount }
 }
 #endif
