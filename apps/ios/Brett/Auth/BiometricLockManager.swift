@@ -138,9 +138,16 @@ final class BiometricLockManager {
     /// so the next cold launch reads a token with the correct gating state.
     func settingsDidChange() {
         if !isEnabledInSettings {
-            // User just disabled Face ID. Re-write the keychain token without
-            // the biometric gate so the next cold launch can read it without
-            // a Face ID prompt the user has explicitly opted out of.
+            // User just disabled Face ID. Re-write the keychain token without the
+            // biometric gate so the next cold launch can read it without a Face ID
+            // prompt the user has explicitly opted out of.
+            //
+            // Edge case: if `authenticatedContext` is nil here (e.g., app was
+            // backgrounded between the last unlock and this toggle), the keychain
+            // read against the gated entry will trigger an OS Face ID prompt. This
+            // is acceptable UX — the user is in Settings actively changing a security
+            // preference, and verifying they're the device owner before removing the
+            // gate is expected.
             if let token = try? KeychainStore.readToken(authContext: authenticatedContext) {
                 try? KeychainStore.writeToken(token, biometricGated: false)
             }

@@ -822,6 +822,13 @@ struct AuthManagerTests {
                             avatarUrl: nil, timezone: "UTC", assistantName: "Brett")
         try await mgr.persistForTesting(session: AuthSession(token: "persist-token", user: user))
 
+        // We don't directly assert kSecAttrAccessControl is in the result dict —
+        // simulator behavior varies on attribute round-trip. The contract this
+        // test pins is that persist() with Face ID enabled does not throw and
+        // the resulting entry is queryable. The actual gating behavior (delete+add
+        // when access control changes) is proven in
+        // KeychainEdgeTests.writeTokenChangesAccessControlOnExistingItem.
+
         // Verify the entry was written with kSecAttrAccessControl. Use
         // kSecReturnAttributes to query without triggering biometric.
         let query: [String: Any] = [
