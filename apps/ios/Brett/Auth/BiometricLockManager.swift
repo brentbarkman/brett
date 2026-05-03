@@ -134,11 +134,26 @@ final class BiometricLockManager {
 
     /// Called from the settings toggle when the user enables/disables the
     /// feature. Disabling immediately unlocks so the user can use the app
-    /// without a gate.
+    /// without a gate. In both directions, re-writes the keychain entry
+    /// so the next cold launch reads a token with the correct gating state.
     func settingsDidChange() {
         if !isEnabledInSettings {
+            // User just disabled Face ID. Re-write the keychain token without
+            // the biometric gate so the next cold launch can read it without
+            // a Face ID prompt the user has explicitly opted out of.
+            if let token = try? KeychainStore.readToken(authContext: authenticatedContext) {
+                try? KeychainStore.writeToken(token, biometricGated: false)
+            }
             isLocked = false
             lastError = nil
+        } else {
+            // User just enabled Face ID. Re-write the keychain token WITH the
+            // biometric gate so the next cold launch requires Face ID before
+            // the token is readable. The current token is non-gated so we can
+            // read it without a context.
+            if let token = try? KeychainStore.readToken(authContext: nil) {
+                try? KeychainStore.writeToken(token, biometricGated: true)
+            }
         }
     }
 

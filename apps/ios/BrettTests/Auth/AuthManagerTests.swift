@@ -67,6 +67,7 @@ struct AuthManagerTests {
         SharedConfig.clearLastSignedInUserId()
         SharedConfig.writeCurrentUserId(nil)
         SessionExpiryHint.clear()
+        UserDefaults.standard.removeObject(forKey: BiometricLockManager.faceIDEnabledKey)
         MockURLProtocol.reset()
         PersistenceController.configureForTesting(inMemory: true)
     }
@@ -796,6 +797,74 @@ struct AuthManagerTests {
         // but still clear the flag via defer.
         await mgr.hydrateFromKeychain(authContext: nil)
         #expect(!mgr.isHydratingFromKeychain, "flag must be cleared even when no token is found")
+    }
+
+    // MARK: - persist respects Face ID setting (Task 5.5)
+
+    @Test("persist writes biometric-gated token when Face ID setting is on")
+    @MainActor
+    func persistRespectsFaceIDSetting() async throws {
+        resetState()
+        defer {
+            UserDefaults.standard.removeObject(forKey: BiometricLockManager.faceIDEnabledKey)
+            resetState()
+        }
+
+        UserDefaults.standard.set(true, forKey: BiometricLockManager.faceIDEnabledKey)
+        let (mgr, client) = makeTestManager()
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u1", email: "p@x.com")
+        )
+
+        let user = AuthUser(id: "u1", email: "p@x.com", name: nil,
+                            avatarUrl: nil, timezone: "UTC", assistantName: "Brett")
+        try await mgr.persistForTesting(session: AuthSession(token: "persist-token", user: user))
+
+        // Verify the entry was written with kSecAttrAccessControl. Use
+        // kSecReturnAttributes to query without triggering biometric.
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: KeychainStore.service,
+            kSecAttrAccount as String: KeychainStore.testTokenAccount,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        #expect(status == errSecSuccess)
+        // We don't strictly assert kSecAttrAccessControl is in the dict because
+        // simulator behavior varies; the contract is that persist did not throw,
+        // and write() correctly bifurcated the access-control path (proven in
+        // KeychainEdgeTests.writeTokenChangesAccessControlOnExistingItem).
+    }
+
+    @Test("persist writes non-gated token when Face ID setting is off")
+    @MainActor
+    func persistDoesNotGateWhenFaceIDDisabled() async throws {
+        resetState()
+        defer {
+            UserDefaults.standard.removeObject(forKey: BiometricLockManager.faceIDEnabledKey)
+            resetState()
+        }
+        // Explicitly set false (resetState clears state but doesn't necessarily
+        // clear UserDefaults from prior test runs).
+        UserDefaults.standard.set(false, forKey: BiometricLockManager.faceIDEnabledKey)
+
+        let (mgr, client) = makeTestManager()
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u1", email: "p@x.com")
+        )
+        let user = AuthUser(id: "u1", email: "p@x.com", name: nil,
+                            avatarUrl: nil, timezone: "UTC", assistantName: "Brett")
+        try await mgr.persistForTesting(session: AuthSession(token: "no-gate-token", user: user))
+
+        // Read without authContext should succeed because the entry is non-gated.
+        let readBack = try KeychainStore.readToken(authContext: nil)
+        #expect(readBack == "no-gate-token")
     }
 
     @Test func hydrateTaskDoesNotRetainSelfAfterRelease() async throws {

@@ -425,7 +425,8 @@ final class AuthManager {
             }
         }
 
-        try KeychainStore.writeToken(session.token)
+        let useGate = UserDefaults.standard.bool(forKey: BiometricLockManager.faceIDEnabledKey)
+        try KeychainStore.writeToken(session.token, biometricGated: useGate)
         self.token = session.token
         self.currentUser = session.user
         // Sign-in counts as an established session — subsequent 401s in
