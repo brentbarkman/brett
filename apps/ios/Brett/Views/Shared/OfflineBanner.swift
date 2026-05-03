@@ -5,8 +5,13 @@ import SwiftData
 ///
 /// The banner is a glass card with a red tint, a "wifi.slash" icon, and a
 /// message. If there are pending mutations, the count is surfaced inline:
-/// "Offline — 3 changes waiting to sync". Tap to toggle a detailed view with
-/// the last-sync timestamp.
+/// "You're offline — 3 changes saved". Tap to toggle a detailed view with
+/// the last-update timestamp.
+///
+/// Copy is intentionally human, not technical — users shouldn't see words
+/// like "mutations", "queue", "pending" in the headline. The expanded
+/// detail uses "sync" only because it's the standard consumer-app term
+/// ("we'll sync when you're back online") and still reads as plain English.
 ///
 /// The banner uses `safeAreaInset(edge: .top)` so content is pushed down —
 /// it never overlaps list content.
@@ -83,35 +88,57 @@ struct OfflineBanner: View {
     // MARK: - Copy
 
     private var headlineText: String {
-        if pendingCount > 0 {
-            let unit = pendingCount == 1 ? "change" : "changes"
-            return "Offline — \(pendingCount) \(unit) waiting to sync"
-        }
-        return "Offline — changes will sync when you're back"
+        Self.headline(pendingCount: pendingCount)
     }
 
     private var detailText: String {
-        let mutationsLine: String = {
-            if pendingCount == 0 {
-                return "No mutations pending."
-            }
-            let unit = pendingCount == 1 ? "mutation" : "mutations"
-            return "\(pendingCount) \(unit) pending."
-        }()
-
-        let lastSyncLine: String = {
-            guard let lastSyncedAt else { return "No sync recorded yet." }
-            let minutes = max(0, Int(Date().timeIntervalSince(lastSyncedAt) / 60))
-            if minutes < 1 { return "Last sync: moments ago." }
-            if minutes == 1 { return "Last sync: 1 minute ago." }
-            return "Last sync: \(minutes) minutes ago."
-        }()
-
-        return "\(mutationsLine) \(lastSyncLine)"
+        Self.detail(pendingCount: pendingCount, lastSyncedAt: lastSyncedAt)
     }
 
     private var accessibilityLabel: String {
-        "Offline. \(pendingCount) changes waiting to sync."
+        Self.accessibility(pendingCount: pendingCount)
+    }
+
+    // MARK: - Pure copy helpers (testable)
+
+    /// Headline shown next to the wifi-slash icon. Avoids the words
+    /// "sync", "queue", "mutation" — consumer-friendly only.
+    static func headline(pendingCount: Int) -> String {
+        if pendingCount <= 0 {
+            return "You're offline"
+        }
+        let unit = pendingCount == 1 ? "change" : "changes"
+        return "You're offline — \(pendingCount) \(unit) saved"
+    }
+
+    /// Detail line shown when the banner is expanded. Combines the saved-
+    /// changes status with the last-update relative time.
+    static func detail(pendingCount: Int, lastSyncedAt: Date?, now: Date = Date()) -> String {
+        let savedLine: String = {
+            if pendingCount <= 0 {
+                return "We'll sync when you're back online."
+            }
+            let unit = pendingCount == 1 ? "change" : "changes"
+            return "\(pendingCount) \(unit) saved on this device. We'll sync when you're back online."
+        }()
+
+        let lastUpdateLine: String = {
+            guard let lastSyncedAt else { return "No previous update yet." }
+            let minutes = max(0, Int(now.timeIntervalSince(lastSyncedAt) / 60))
+            if minutes < 1 { return "Last update: moments ago." }
+            if minutes == 1 { return "Last update: 1 minute ago." }
+            return "Last update: \(minutes) minutes ago."
+        }()
+
+        return "\(savedLine) \(lastUpdateLine)"
+    }
+
+    static func accessibility(pendingCount: Int) -> String {
+        if pendingCount <= 0 {
+            return "You're offline."
+        }
+        let unit = pendingCount == 1 ? "change" : "changes"
+        return "You're offline. \(pendingCount) \(unit) saved on this device."
     }
 }
 

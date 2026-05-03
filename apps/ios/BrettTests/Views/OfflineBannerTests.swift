@@ -122,32 +122,93 @@ struct OfflineBannerTests {
 
     // MARK: - Headline copy
 
-    @MainActor
-    @Test func bannerHeadlineWithNoPendingUsesBaseCopy() {
-        // Construct a view with the public init; read the internal property
-        // via the same mechanism the view body uses so copy regressions are
-        // caught without rendering.
-        let stub = StubPathMonitor()
-        let monitor = NetworkMonitor(pathMonitor: stub)
-        let banner = OfflineBanner(
-            networkMonitor: monitor,
-            pendingCount: 0,
-            lastSyncedAt: nil
-        )
-        // View bodies can't be inspected directly, but we can sanity-check
-        // the input state the headline helper pulls from.
-        #expect(banner.pendingCount == 0)
+    @Test func headlineWithNoPendingIsHumanFriendly() {
+        // Issue #119: regression guard for "Offline — N changes waiting to
+        // sync" wording. The new copy avoids the technical "sync" /
+        // "waiting" framing in the headline.
+        #expect(OfflineBanner.headline(pendingCount: 0) == "You're offline")
+        #expect(OfflineBanner.headline(pendingCount: -1) == "You're offline")
     }
 
-    @MainActor
-    @Test func bannerHeadlineWithPendingShowsCount() {
-        let stub = StubPathMonitor()
-        let monitor = NetworkMonitor(pathMonitor: stub)
-        let banner = OfflineBanner(
-            networkMonitor: monitor,
-            pendingCount: 5,
-            lastSyncedAt: Date()
-        )
-        #expect(banner.pendingCount == 5)
+    @Test func headlineWithSinglePendingUsesSingularUnit() {
+        #expect(OfflineBanner.headline(pendingCount: 1) == "You're offline — 1 change saved")
+    }
+
+    @Test func headlineWithMultiplePendingPluralizes() {
+        #expect(OfflineBanner.headline(pendingCount: 3) == "You're offline — 3 changes saved")
+        #expect(OfflineBanner.headline(pendingCount: 12) == "You're offline — 12 changes saved")
+    }
+
+    @Test func headlineHasNoTechnicalJargon() {
+        // Regression for #119: no leakage of "mutation", "queue", or
+        // "pending" into user-visible headline copy.
+        let samples = [0, 1, 2, 7, 100].map { OfflineBanner.headline(pendingCount: $0) }
+        for s in samples {
+            #expect(!s.lowercased().contains("mutation"))
+            #expect(!s.lowercased().contains("queue"))
+            #expect(!s.lowercased().contains("pending"))
+            #expect(!s.lowercased().contains("waiting to sync"))
+        }
+    }
+
+    // MARK: - Detail copy
+
+    @Test func detailWithNoPendingShowsReassurance() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let result = OfflineBanner.detail(pendingCount: 0, lastSyncedAt: nil, now: now)
+        #expect(result.contains("We'll sync when you're back online."))
+        #expect(result.contains("No previous update yet."))
+    }
+
+    @Test func detailWithSinglePendingPluralizesCorrectly() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let result = OfflineBanner.detail(pendingCount: 1, lastSyncedAt: nil, now: now)
+        #expect(result.contains("1 change saved on this device."))
+    }
+
+    @Test func detailWithMultiplePendingPluralizesCorrectly() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let result = OfflineBanner.detail(pendingCount: 4, lastSyncedAt: nil, now: now)
+        #expect(result.contains("4 changes saved on this device."))
+    }
+
+    @Test func detailLastUpdateUsesMomentsAgoForRecent() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let recent = now.addingTimeInterval(-30) // 30s ago → < 1 min
+        let result = OfflineBanner.detail(pendingCount: 0, lastSyncedAt: recent, now: now)
+        #expect(result.contains("Last update: moments ago."))
+    }
+
+    @Test func detailLastUpdateUsesSingularMinute() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let oneMin = now.addingTimeInterval(-60)
+        let result = OfflineBanner.detail(pendingCount: 0, lastSyncedAt: oneMin, now: now)
+        #expect(result.contains("Last update: 1 minute ago."))
+    }
+
+    @Test func detailLastUpdatePluralizesMinutes() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let fiveMin = now.addingTimeInterval(-5 * 60)
+        let result = OfflineBanner.detail(pendingCount: 0, lastSyncedAt: fiveMin, now: now)
+        #expect(result.contains("Last update: 5 minutes ago."))
+    }
+
+    @Test func detailHandlesClockSkew() {
+        // Defensive: if the device clock jumps backward (NTP correction,
+        // user editing the system clock), `lastSyncedAt > now`. Should not
+        // crash or render a negative-minutes string.
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let future = now.addingTimeInterval(300)
+        let result = OfflineBanner.detail(pendingCount: 0, lastSyncedAt: future, now: now)
+        #expect(result.contains("Last update: moments ago."))
+        #expect(!result.contains("-"))
+    }
+
+    // MARK: - Accessibility copy
+
+    @Test func accessibilityLabelMatchesHeadline() {
+        #expect(OfflineBanner.accessibility(pendingCount: 0) == "You're offline.")
+        #expect(OfflineBanner.accessibility(pendingCount: 1) == "You're offline. 1 change saved on this device.")
+        #expect(OfflineBanner.accessibility(pendingCount: 7) == "You're offline. 7 changes saved on this device.")
     }
 }
