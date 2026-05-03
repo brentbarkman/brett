@@ -34,11 +34,13 @@ function callbackHtml(c: Context, { title, message, isError }: { title: string; 
 
 const calendarAccounts = new Hono<AuthEnv>();
 
-// All routes require auth
-calendarAccounts.use("*", authMiddleware);
+// Auth is applied per-route. The /callback route is reached via Google's
+// browser redirect with no session present (the system browser may not have
+// our session cookie at all), so userId is verified via the HMAC-signed
+// state parameter instead — same pattern as granola-auth.ts.
 
 // GET / — List connected accounts with their calendars
-calendarAccounts.get("/", async (c) => {
+calendarAccounts.get("/", authMiddleware, async (c) => {
   const user = c.get("user");
 
   const accounts = await prisma.googleAccount.findMany({
@@ -72,7 +74,7 @@ calendarAccounts.get("/", async (c) => {
 
 // POST /connect — Initiate OAuth (returns URL, state = base64url(userId).nonce.hmac)
 // ?meetingNotes=false to omit Drive/Docs scopes
-calendarAccounts.post("/connect", async (c) => {
+calendarAccounts.post("/connect", authMiddleware, async (c) => {
   const user = c.get("user");
   const meetingNotes = c.req.query("meetingNotes") !== "false";
   const { state } = signOAuthState("calendar", user.id);
@@ -107,11 +109,11 @@ calendarAccounts.get("/callback", async (c) => {
   }
 
   const { userId } = verified;
-
-  // Verify the state matches the authenticated user
-  const user = c.get("user");
-  if (userId !== user.id) {
-    return callbackHtml(c, { title: "Session mismatch", message: "The authorization was started by a different session. Please try again.", isError: true });
+  // userId is verified via HMAC — no session needed on callback. Load the
+  // user to confirm they still exist (FK target for the upsert below).
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    return callbackHtml(c, { title: "User not found", message: "The user account no longer exists. Please try again.", isError: true });
   }
 
   // Exchange the auth code for tokens
@@ -216,7 +218,7 @@ calendarAccounts.get("/callback", async (c) => {
 });
 
 // POST /:accountId/reauth — Re-authenticate to upgrade scopes (e.g., Drive/Docs)
-calendarAccounts.post("/:accountId/reauth", async (c) => {
+calendarAccounts.post("/:accountId/reauth", authMiddleware, async (c) => {
   const user = c.get("user");
   const accountId = c.req.param("accountId");
 
@@ -235,7 +237,7 @@ calendarAccounts.post("/:accountId/reauth", async (c) => {
 });
 
 // PATCH /:accountId/meeting-notes — Toggle meetingNotesEnabled
-calendarAccounts.patch("/:accountId/meeting-notes", async (c) => {
+calendarAccounts.patch("/:accountId/meeting-notes", authMiddleware, async (c) => {
   const user = c.get("user");
   const accountId = c.req.param("accountId");
 
@@ -263,7 +265,7 @@ calendarAccounts.patch("/:accountId/meeting-notes", async (c) => {
 });
 
 // DELETE /:id — Disconnect: stop watches, cascade delete
-calendarAccounts.delete("/:id", async (c) => {
+calendarAccounts.delete("/:id", authMiddleware, async (c) => {
   const user = c.get("user");
   const accountId = c.req.param("id");
 
@@ -304,7 +306,7 @@ calendarAccounts.delete("/:id", async (c) => {
 });
 
 // PATCH /:accountId/calendars/:calId — Toggle calendar visibility
-calendarAccounts.patch("/:accountId/calendars/:calId", async (c) => {
+calendarAccounts.patch("/:accountId/calendars/:calId", authMiddleware, async (c) => {
   const user = c.get("user");
   const accountId = c.req.param("accountId");
   const calId = c.req.param("calId");
