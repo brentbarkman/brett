@@ -275,7 +275,7 @@ private struct InboxPageBody: View {
         } content: {
             VStack(spacing: 0) {
                 ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                    rowWithAccent(item: item, isLast: index == filteredItems.count - 1)
+                    inboxRow(item: item, isLast: index == filteredItems.count - 1)
                 }
             }
             .padding(.bottom, 8)
@@ -283,48 +283,35 @@ private struct InboxPageBody: View {
     }
 
     @ViewBuilder
-    private func rowWithAccent(item: Item, isLast: Bool) -> some View {
-        let isNewsletter = (item.contentType == "newsletter") ||
-            (item.itemType == .content && item.source.lowercased().contains("newsletter"))
-
+    private func inboxRow(item: Item, isLast: Bool) -> some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                if isNewsletter {
-                    Rectangle()
-                        .fill(BrettColors.cerulean)
-                        .frame(width: 2)
-                        .padding(.vertical, 4)
-                }
-
-                TaskRow(
-                    item: item,
-                    listName: nil,
-                    allowSwipeRight: false,
-                    allowSwipeLeft: false,
-                    allowDrag: false,
-                    isSelectMode: isSelectMode,
-                    isSelected: selectedIDs.contains(item.id),
-                    onToggle: {
-                        if isSelectMode {
-                            toggleSelection(item.id)
-                        } else {
-                            HapticManager.light()
-                            itemStore.toggleStatus(id: item.id, userId: userId)
-                        }
-                    },
-                    onSelect: {
-                        if isSelectMode {
-                            toggleSelection(item.id)
-                        } else {
-                            // Wave D Phase 3: single source of truth —
-                            // `go(to:)` dispatches to `currentDestination`
-                            // because `.taskDetail` is a sheet case.
-                            NavStore.shared.go(to: .taskDetail(id: item.id))
-                        }
+            TaskRow(
+                item: item,
+                listName: nil,
+                allowSwipeRight: false,
+                allowSwipeLeft: false,
+                allowDrag: false,
+                isSelectMode: isSelectMode,
+                isSelected: selectedIDs.contains(item.id),
+                onToggle: {
+                    if isSelectMode {
+                        toggleSelection(item.id)
+                    } else {
+                        HapticManager.light()
+                        itemStore.toggleStatus(id: item.id, userId: userId)
                     }
-                )
-                .padding(.leading, isNewsletter ? 6 : 0)
-            }
+                },
+                onSelect: {
+                    if isSelectMode {
+                        toggleSelection(item.id)
+                    } else {
+                        // Wave D Phase 3: single source of truth —
+                        // `go(to:)` dispatches to `currentDestination`
+                        // because `.taskDetail` is a sheet case.
+                        NavStore.shared.go(to: .taskDetail(id: item.id))
+                    }
+                }
+            )
             // Inbox owns the row-level swipe actions — TaskRow's default
             // Today/Lists swipe set (schedule leading, delete/archive
             // trailing) is turned off above via the allowSwipe* = false

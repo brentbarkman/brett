@@ -14,13 +14,15 @@ const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
 const calendar = new Hono<AuthEnv>();
 
-// All routes require auth
-calendar.use("*", authMiddleware);
+// Auth is applied per-route. A wildcard `use("*", authMiddleware)` here
+// would also fire for `/calendar/accounts/*` because Hono mounts sub-app
+// middleware as `/calendar/*` on the parent app — and that prefix matches
+// the calendar-accounts router too, blocking its public /callback route.
 
 // GET /events — List events for date range
 // Accepts `date` (single day) OR `startDate` + `endDate` (range)
 // Filters by visible calendars only
-calendar.get("/events", async (c) => {
+calendar.get("/events", authMiddleware, async (c) => {
   const user = c.get("user");
   const { date, startDate, endDate } = c.req.query();
 
@@ -111,7 +113,7 @@ calendar.get("/events", async (c) => {
 });
 
 // GET /events/:id — Single event with detail
-calendar.get("/events/:id", async (c) => {
+calendar.get("/events/:id", authMiddleware, async (c) => {
   const user = c.get("user");
   const eventId = c.req.param("id");
 
@@ -161,7 +163,7 @@ calendar.get("/events/:id", async (c) => {
 });
 
 // PATCH /events/:id/rsvp — Update RSVP status
-calendar.patch("/events/:id/rsvp", async (c) => {
+calendar.patch("/events/:id/rsvp", authMiddleware, async (c) => {
   const user = c.get("user");
   const eventId = c.req.param("id");
 
@@ -228,7 +230,7 @@ calendar.patch("/events/:id/rsvp", async (c) => {
 });
 
 // GET /events/:id/notes — Get private notes
-calendar.get("/events/:id/notes", async (c) => {
+calendar.get("/events/:id/notes", authMiddleware, async (c) => {
   const user = c.get("user");
   const eventId = c.req.param("id");
 
@@ -260,7 +262,7 @@ calendar.get("/events/:id/notes", async (c) => {
 });
 
 // PUT /events/:id/notes — Upsert private notes
-calendar.put("/events/:id/notes", async (c) => {
+calendar.put("/events/:id/notes", authMiddleware, async (c) => {
   const user = c.get("user");
   const eventId = c.req.param("id");
 
@@ -299,7 +301,7 @@ calendar.put("/events/:id/notes", async (c) => {
 // POST /events/fetch-range — On-demand fetch for date ranges outside sync window.
 // Rate-limited because each call fans out to every connected Google account and
 // can burn Google Calendar quota fast if looped.
-calendar.post("/events/fetch-range", rateLimiter(10, 60_000), async (c) => {
+calendar.post("/events/fetch-range", authMiddleware, rateLimiter(10, 60_000), async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
   const { startDate, endDate } = body;
