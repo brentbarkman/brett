@@ -37,13 +37,34 @@ struct CalendarPage: View {
         return now
     }
 
+    /// Pure helper — public for test access. Decides whether the calendar
+    /// should render the timeline (with whatever events are in the local
+    /// cache) versus the "Connect Google Calendar" CTA.
+    ///
+    /// Account metadata isn't part of the sync-pull (`/calendar/accounts`
+    /// is fetched on demand), so when offline `hasAnyAccount` is false even
+    /// if the user actually has accounts and cached events. Falling back
+    /// on cached-events presence handles that case: if there's any event
+    /// in the local SwiftData store, the user must have a connected
+    /// account, so show the timeline.
+    ///
+    /// Edge case: a connected account with zero events in the visible
+    /// window (rare) still shows the CTA when offline. Not a regression
+    /// vs. the old behaviour — both old and new code hit the CTA there.
+    static func shouldShowTimeline(hasAccount: Bool, hasCachedEvents: Bool) -> Bool {
+        hasAccount || hasCachedEvents
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             monthHeader
 
             WeekStrip(selectedDate: $selectedDate, events: events)
 
-            if accountsStore.hasAnyAccount {
+            if Self.shouldShowTimeline(
+                hasAccount: accountsStore.hasAnyAccount,
+                hasCachedEvents: !events.isEmpty
+            ) {
                 DayTimeline(events: events, selectedDate: selectedDate)
                     .background {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -148,7 +169,15 @@ struct CalendarPage: View {
     }
 
     private func refresh() async {
+        // Hydrate from local cache first, BEFORE any network call.
+        // `accountsStore.fetchAccounts()` hits `/calendar/accounts`, which can
+        // hang or fail when offline — if we awaited it before reading the
+        // cache, the timeline would render empty until the network call
+        // resolved (or timed out). Reading SwiftData first means cached
+        // events show immediately on cold launch, even with no connectivity.
+        loadEventsFromCache()
         await accountsStore.fetchAccounts()
+        // Re-read after the fetch so any newly-pulled events are picked up.
         loadEventsFromCache()
     }
 
