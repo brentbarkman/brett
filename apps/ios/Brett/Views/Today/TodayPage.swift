@@ -150,7 +150,13 @@ private struct TodayPageBody: View {
     /// unchanged, which is the common case for state-only re-renders.
     @State private var sectionsCache = TodaySectionsCache()
 
-    /// Ticker driving NextUpCard's relative-time copy.
+    /// Ticker driving NextUpCard's relative-time copy. Only updated when
+    /// an event is within the 60-minute card-visibility window — outside
+    /// that, the loop in `runTicker()` sleeps adaptively (60s–5 min) and
+    /// doesn't write `tickerNow`, so TodayPage's body doesn't re-evaluate.
+    /// Without this gating, TabView keeping TodayPage mounted would mean
+    /// ~120 wasted body re-evals per hour for any user without an
+    /// upcoming meeting.
     @State private var tickerNow: Date = Date()
 
     var body: some View {
@@ -212,8 +218,8 @@ private struct TodayPageBody: View {
             if !briefingStore.isDismissedToday && briefingStore.briefing == nil {
                 await briefingStore.fetch()
             }
-            // Kick off a ticker to keep NextUpCard's relative time fresh.
-            await startTicker()
+            // Kick off the adaptive ticker for NextUpCard's relative time.
+            await runTicker()
         }
     }
 
@@ -424,19 +430,27 @@ private struct TodayPageBody: View {
         }
     }
 
+    /// Selection uses live `Date()` (not the @State `tickerNow`) so the
+    /// ticker can stay idle without producing stale candidates. The card's
+    /// "in N min" copy still reads `tickerNow` for its display string —
+    /// the ticker writes a fresh `tickerNow` the moment a candidate enters
+    /// range, so the first render after the active/idle transition is
+    /// correct.
     private var nextUpcomingEvent: CalendarEvent? {
-        events.first {
-            $0.startTime > tickerNow.addingTimeInterval(-60)
+        let now = Date()
+        return events.first {
+            $0.startTime > now.addingTimeInterval(-60)
                 && $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue
         }
     }
 
     /// Only surface the card when the next event is genuinely soon. We use a
     /// wide 60-minute window so the "compact" form is visible well before the
-    /// "imminent" 10-minute form kicks in.
+    /// "imminent" 10-minute form kicks in. Uses live time for the same
+    /// reason `nextUpcomingEvent` does.
     private var hasNextUpEvent: Bool {
         guard let next = nextUpcomingEvent else { return false }
-        let minutesUntil = next.startTime.timeIntervalSince(tickerNow) / 60
+        let minutesUntil = next.startTime.timeIntervalSinceNow / 60
         return minutesUntil <= 60
     }
 
@@ -527,14 +541,61 @@ private struct TodayPageBody: View {
 
     // MARK: - Ticker
 
-    /// 30-second ticker to keep NextUpCard's relative time display fresh.
-    /// Cancels automatically when the view leaves the screen because `.task`
-    /// is tied to view lifetime.
-    private func startTicker() async {
+    /// Adaptive ticker for `NextUpCard`'s relative-time copy.
+    ///
+    /// Two modes:
+    ///  - **Active** — when the next non-declined event is within the
+    ///    card-visibility window (60 min). Updates `tickerNow` every 30s
+    ///    so the "in N min" copy refreshes.
+    ///  - **Idle** — when no event is within the window. Sleeps without
+    ///    writing state (no body re-eval), waking up at most every 5 min
+    ///    to re-check whether an event has crept into range. The wake
+    ///    interval scales toward "1 minute before the next event would
+    ///    enter the window" so the ticker arms itself just in time.
+    ///
+    /// The `.task` modifier ties this to view lifetime, so when TodayPage
+    /// is unmounted (sign-out, account switch via `.id(userId)`) the loop
+    /// cancels cleanly. TabView keeps TodayPage mounted across page
+    /// swipes, which is why the idle-mode gate matters: without it the
+    /// ticker fires 120×/hour even for users with no upcoming meetings.
+    private func runTicker() async {
         while !Task.isCancelled {
-            tickerNow = Date()
-            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            let sleepSeconds = Self.nextTickerSleep(secondsUntilNext: nextUpcomingEvent?.startTime.timeIntervalSinceNow)
+            try? await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
+            if Task.isCancelled { return }
+            // Refresh AFTER the sleep so the displayed `tickerNow` is
+            // always the moment-of-render time, not the moment we
+            // started waiting. Only fire the @State write in the
+            // active window — idle-mode wakes silently re-poll the
+            // gate without triggering a body re-eval.
+            //
+            // Re-check `nextUpcomingEvent` here (not just rely on the
+            // pre-sleep value) because an event could have crossed
+            // the boundary while we slept.
+            let postSleep = Self.nextTickerSleep(secondsUntilNext: nextUpcomingEvent?.startTime.timeIntervalSinceNow)
+            if postSleep == Self.activeTickerInterval {
+                tickerNow = Date()
+            }
         }
+    }
+
+    /// Active-mode tick interval. Card is visible — we want fresh
+    /// "in N min" copy on a 30s cadence.
+    static let activeTickerInterval: TimeInterval = 30
+
+    /// Pure helper. Given seconds until the next event (or `nil`), returns
+    /// the next sleep window:
+    ///   - In the visibility window (≤60 min out): 30s active tick
+    ///   - Outside the window: sleep until the event would enter range,
+    ///     floored at 60s and capped at 5 min so we re-poll periodically
+    ///     even when no event is in sight (covers cases where SSE pushes
+    ///     a brand-new event into the window between checks).
+    /// Exposed so unit tests can verify the cadence math without
+    /// constructing a SwiftUI view.
+    static func nextTickerSleep(secondsUntilNext: TimeInterval?) -> TimeInterval {
+        guard let seconds = secondsUntilNext else { return 300 }
+        if seconds <= 3600 { return activeTickerInterval }
+        return min(max(seconds - 3600, 60), 300)
     }
 }
 
@@ -546,79 +607,119 @@ private struct TodayPageBody: View {
 // Wrapped in `#if DEBUG` because `AuthManager.injectFakeSession` and
 // `AuthUser.testUser` are themselves DEBUG-only — without the gate the
 // Release build (TestFlight, App Store) fails to compile the preview.
+//
+// Setup runs in each wrapper's `init()`, NOT inside the `#Preview` macro
+// body. Xcode 16's `PreviewMacroBodyBuilder` is a SwiftUI result builder
+// that rejects `for` loops and bare-expression statements (e.g.
+// `context.insert(...)`, `try? context.save()`). Putting the imperative
+// fixture seeding inside a regular `init()` sidesteps the macro entirely
+// and gives the preview a clean view tree to render.
 
 #if DEBUG
 #Preview("Today — with fixture items") {
-    let preview = PersistenceController.makePreview()
-    let context = preview.mainContext
-    let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
-
-    // `TodayPage` is an auth gate that reads `userId` from `AuthManager`
-    // and pushes it into `TodayPageBody`'s `@Query` predicates. Previews
-    // need an injected `AuthManager` whose `currentUser.id` matches the
-    // userId used to seed the fixtures below — otherwise the page falls
-    // through to its signed-out `EmptyView()` branch and the preview
-    // renders blank. `injectFakeSession` is DEBUG-only.
-    let authManager = AuthManager()
-    authManager.injectFakeSession(user: .testUser, token: "preview")
-    let previewUserId = AuthUser.testUser.id
-
-    let workList = ItemList(userId: previewUserId, name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
-    let healthList = ItemList(userId: previewUserId, name: "Health", colorClass: "bg-green-500", sortOrder: 1)
-    context.insert(workList)
-    context.insert(healthList)
-
-    let fixtures: [Item] = [
-        // Overdue
-        .init(userId: previewUserId, title: "Submit Q1 expense report", dueDate: calendar.date(byAdding: .day, value: -2, to: today), listId: workList.id),
-        .init(userId: previewUserId, title: "Renew gym membership", dueDate: calendar.date(byAdding: .day, value: -1, to: today), listId: healthList.id),
-        // Today
-        .init(userId: previewUserId, title: "Prep slides for Q2 review", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today), listId: workList.id),
-        .init(userId: previewUserId, title: "Push mobile auth fix to staging", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today), listId: workList.id),
-        .init(userId: previewUserId, title: "Book physio appointment", dueDate: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today), listId: healthList.id),
-        // This week
-        .init(userId: previewUserId, title: "Draft technical spec for sync v2", dueDate: calendar.date(byAdding: .day, value: 2, to: today), listId: workList.id),
-        // Next week
-        .init(userId: previewUserId, title: "Annual performance self-review", dueDate: calendar.date(byAdding: .day, value: 7, to: today), listId: workList.id),
-    ]
-    for item in fixtures {
-        context.insert(item)
-    }
-
-    // One done-today item so the Done section lights up.
-    let done = Item(userId: previewUserId, title: "Morning standup", dueDate: today, listId: workList.id)
-    done.status = ItemStatus.done.rawValue
-    done.completedAt = Date()
-    context.insert(done)
-
-    try? context.save()
-
-    ZStack {
-        BackgroundView()
-        TodayPage()
-    }
-    .environment(authManager)
-    .modelContainer(preview.container)
-    .preferredColorScheme(.dark)
+    TodayPageFixturePreview()
 }
-#endif
 
-#if DEBUG
 #Preview("Today — empty state") {
-    let preview = PersistenceController.makePreview()
-    // Auth gate needs a user even in the empty-state preview — without
-    // one, `TodayPage` renders its signed-out `EmptyView()` branch
-    // instead of `TodayPageBody`'s empty state (the actual thing this
-    // preview exists to demonstrate).
-    let authManager = AuthManager()
-    authManager.injectFakeSession(user: .testUser, token: "preview")
-    ZStack {
-        BackgroundView()
-        TodayPage()
+    TodayPageEmptyPreview()
+}
+
+/// Wrapper view whose `init()` seeds a fixture-rich SwiftData preview
+/// container, then renders `TodayPage` against it. The setup is in
+/// `init` (a normal function, not a result builder) because the
+/// `#Preview` macro body builder rejects the imperative statements
+/// the seeding requires — see file-level note above.
+@MainActor
+private struct TodayPageFixturePreview: View {
+    let preview: PersistenceController
+    let authManager: AuthManager
+
+    init() {
+        let preview = PersistenceController.makePreview()
+        let context = preview.mainContext
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        // `TodayPage` is an auth gate that reads `userId` from `AuthManager`
+        // and pushes it into `TodayPageBody`'s `@Query` predicates. The
+        // injected fake session must match the userId on the seeded
+        // fixtures or the page falls through to its signed-out
+        // `EmptyView()` branch and the preview renders blank.
+        let authManager = AuthManager()
+        authManager.injectFakeSession(user: .testUser, token: "preview")
+        let previewUserId = AuthUser.testUser.id
+
+        let workList = ItemList(userId: previewUserId, name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
+        let healthList = ItemList(userId: previewUserId, name: "Health", colorClass: "bg-green-500", sortOrder: 1)
+        context.insert(workList)
+        context.insert(healthList)
+
+        let fixtures: [Item] = [
+            // Overdue
+            .init(userId: previewUserId, title: "Submit Q1 expense report", dueDate: calendar.date(byAdding: .day, value: -2, to: today), listId: workList.id),
+            .init(userId: previewUserId, title: "Renew gym membership", dueDate: calendar.date(byAdding: .day, value: -1, to: today), listId: healthList.id),
+            // Today
+            .init(userId: previewUserId, title: "Prep slides for Q2 review", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today), listId: workList.id),
+            .init(userId: previewUserId, title: "Push mobile auth fix to staging", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today), listId: workList.id),
+            .init(userId: previewUserId, title: "Book physio appointment", dueDate: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today), listId: healthList.id),
+            // This week
+            .init(userId: previewUserId, title: "Draft technical spec for sync v2", dueDate: calendar.date(byAdding: .day, value: 2, to: today), listId: workList.id),
+            // Next week
+            .init(userId: previewUserId, title: "Annual performance self-review", dueDate: calendar.date(byAdding: .day, value: 7, to: today), listId: workList.id),
+        ]
+        for item in fixtures {
+            context.insert(item)
+        }
+
+        // One done-today item so the Done section lights up.
+        let done = Item(userId: previewUserId, title: "Morning standup", dueDate: today, listId: workList.id)
+        done.status = ItemStatus.done.rawValue
+        done.completedAt = Date()
+        context.insert(done)
+
+        try? context.save()
+
+        self.preview = preview
+        self.authManager = authManager
     }
-    .environment(authManager)
-    .modelContainer(preview.container)
-    .preferredColorScheme(.dark)
+
+    var body: some View {
+        ZStack {
+            BackgroundView()
+            TodayPage()
+        }
+        .environment(authManager)
+        .modelContainer(preview.container)
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// Sibling of `TodayPageFixturePreview` for the "no items" state. Same
+/// init-based pattern so the preview macro body stays clean.
+@MainActor
+private struct TodayPageEmptyPreview: View {
+    let preview: PersistenceController
+    let authManager: AuthManager
+
+    init() {
+        let preview = PersistenceController.makePreview()
+        // Auth gate needs a user even in the empty-state preview;
+        // without one TodayPage hits its signed-out EmptyView branch
+        // instead of the empty-state copy this preview exists to show.
+        let authManager = AuthManager()
+        authManager.injectFakeSession(user: .testUser, token: "preview")
+        self.preview = preview
+        self.authManager = authManager
+    }
+
+    var body: some View {
+        ZStack {
+            BackgroundView()
+            TodayPage()
+        }
+        .environment(authManager)
+        .modelContainer(preview.container)
+        .preferredColorScheme(.dark)
+    }
 }
 #endif

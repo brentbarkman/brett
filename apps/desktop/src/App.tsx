@@ -1479,7 +1479,11 @@ export function App() {
           isBlockingNewsletter={blockNewsletter.isPending}
           onItemClick={(id) => {
             const thing = allActiveThings.find((t) => t.id === id);
-            if (thing) handleDetailDrillDown(thing);
+            if (thing) {
+              handleDetailDrillDown(thing);
+            } else {
+              handleDetailDrillDown({ id, title: "", type: "task", list: "", listId: null, status: "active", source: "", urgency: "later", isCompleted: false } as any);
+            }
           }}
           onEventClick={(eventId) => {
             const event = sidebarCalendarEvents.find((e) => e.id === eventId);

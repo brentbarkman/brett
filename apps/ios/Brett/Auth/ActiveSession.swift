@@ -64,7 +64,14 @@ final class Session {
             pushEngine: SessionPushEngineAdapter(pushEngine),
             pullEngine: SessionPullEngineAdapter(pullEngine),
             networkMonitor: NetworkMonitor.shared,
-            modelContext: context
+            modelContext: context,
+            // Wire SSE health into the poll loop so when the realtime
+            // stream is delivering events the poll relaxes from 30s to
+            // 120s — SSE is the realtime path; the poll is just a
+            // safety net against silent SSE drops + missed-event gaps.
+            // Falls back to fast 30s polls automatically when SSE drops
+            // or after sync failures.
+            sseHealthSignal: sseClient
         )
     }
 
@@ -80,9 +87,10 @@ final class Session {
         sseClient.connect()
     }
 
-    /// Deterministic teardown. Called synchronously from `AuthManager.signOut`
-    /// before it wipes SwiftData, so any in-flight push/pull completes (or is
-    /// cancelled) before the underlying rows disappear.
+    /// Deterministic teardown. Called from `AuthManager.signOut` /
+    /// `clearInvalidSession()` before SwiftData is wiped, so any in-flight
+    /// push/pull completes (or is cancelled) before the underlying rows
+    /// disappear.
     ///
     /// Order matters:
     ///   1. Clear every `Clearable` store. The fan-out invokes
@@ -93,7 +101,12 @@ final class Session {
     ///      against the NEXT user's SwiftData context.
     ///   2. Disconnect SSE so no new events arrive.
     ///   3. Stop the sync manager so its poll loop ends.
-    func tearDown() {
+    ///   4. Clear the process-wide `RemoteCache` synchronously. Previously
+    ///      a `Task.detached` here could land after the next session began
+    ///      writing — a fast sign-out → sign-in (token rotation, account
+    ///      switch on a shared device) would lose the new session's first
+    ///      cache entries to the prior session's clear.
+    func tearDown() async {
         // Clear in-memory store caches first. SwiftData rows still exist at
         // this point — `wipeAllData()` runs in `AuthManager.signOut` *after*
         // we return — but stores that cache derived state in memory must
@@ -106,12 +119,25 @@ final class Session {
         sseHandler?.stop()
         sseHandler = nil
         syncManager.stop()
-        // Drop any on-demand cache entries from this session — chat
-        // history, event notes, etc. — so the next user can never
-        // observe the previous user's cached server data. Detached
-        // because `RemoteCache` is an actor; tearDown is synchronous.
-        Task.detached { await RemoteCache.shared.clear() }
+        // Drop on-demand cache entries (chat history, event notes, etc.)
+        // before returning so the next session install can't observe
+        // previous-session entries. `await` is critical — see doc above.
+        await RemoteCache.shared.clear()
     }
+
+    #if DEBUG
+    /// Sync subset of `tearDown` for `ActiveSession.endForTesting`. Skips
+    /// the async `RemoteCache.clear` because tests don't observe the
+    /// cross-session cache race. `ClearableStoreRegistry.clearAll()` runs
+    /// in the caller (`endForTesting`) so this method only handles the
+    /// per-session cleanup.
+    func disconnectForTesting() {
+        sseClient.disconnect()
+        sseHandler?.stop()
+        sseHandler = nil
+        syncManager.stop()
+    }
+    #endif
 }
 
 /// Static registry of the currently-authenticated session. Updated by
@@ -122,21 +148,38 @@ enum ActiveSession {
 
     /// Install a new session, tearing down any previous one. Called by
     /// `AuthManager` on sign-in (including the "already signed in at
-    /// launch" path that hydrates from Keychain).
-    static func begin(_ session: Session) {
+    /// launch" path that hydrates from Keychain). `async` so `tearDown`'s
+    /// `RemoteCache.clear()` completes before the new session can write.
+    static func begin(_ session: Session) async {
         if let existing = current {
-            existing.tearDown()
+            await existing.tearDown()
         }
         current = session
         session.start()
     }
 
-    /// Release the current session. Called by `AuthManager.signOut` before
-    /// it clears the token and wipes SwiftData.
-    static func end() {
-        current?.tearDown()
+    /// Release the current session. Called by `AuthManager.signOut` /
+    /// `clearInvalidSession` before they clear the token and wipe SwiftData.
+    static func end() async {
+        await current?.tearDown()
         current = nil
     }
+
+    #if DEBUG
+    /// Test-only synchronous cleanup. Fires the same teardown work, but
+    /// drops the `RemoteCache.clear()` await — tests don't observe the
+    /// cross-session cache race that the production await guards against,
+    /// and keeping the call sync lets test suites continue to use the
+    /// `defer { resetState() }` pattern (defer can't `await`).
+    @MainActor
+    static func endForTesting() {
+        if let session = current {
+            ClearableStoreRegistry.clearAll()
+            session.disconnectForTesting()
+        }
+        current = nil
+    }
+    #endif
 
     // MARK: - Convenience accessors
 

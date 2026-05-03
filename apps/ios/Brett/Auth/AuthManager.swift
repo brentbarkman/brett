@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Observation
 import SwiftData
 
@@ -20,6 +21,11 @@ final class AuthManager {
     private(set) var token: String?
     private(set) var isLoading: Bool = false
     private(set) var errorMessage: String?
+    /// True between init (when Face ID is enabled) and the first successful
+    /// `hydrateFromKeychain(authContext:)` call. `RootView` reads this to
+    /// show `BiometricLockView` during the window before the token has been
+    /// read from the keychain — preventing a brief flash of `SignInView`.
+    private(set) var isHydratingFromKeychain: Bool = false
     /// True when the last sign-in attempt failed because the email/password
     /// combo didn't match an existing account. `SignInView` reads this to
     /// offer a "create account" CTA instead of a plain error banner.
@@ -52,11 +58,20 @@ final class AuthManager {
     private let endpoints: AuthEndpoints
     private let client: APIClient
 
+    /// Delays between retries when `retryingOnUnauthorized` encounters an
+    /// `APIError.unauthorized` response, expressed in nanoseconds.
+    ///
+    /// Production default: 1 s → 2 s → 4 s (exponential backoff, 3 retries).
+    /// Tests override this with `[0, 0, 0]` to keep the suite fast.
+    private let retryDelays: [UInt64]
+
     // MARK: - Init
 
-    init(client: APIClient = .shared) {
+    init(client: APIClient = .shared,
+         retryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000]) {
         self.client = client
         self.endpoints = AuthEndpoints(client: client)
+        self.retryDelays = retryDelays
 
         // Wire the APIClient token provider *before* loading the stored token
         // so the first /users/me call uses it.
@@ -74,15 +89,49 @@ final class AuthManager {
         // launch of this install.
         Self.purgeKeychainIfFreshInstall()
 
-        // Hydrate from Keychain synchronously, then kick off a background
-        // /users/me to refresh the user record. If Keychain read fails we
-        // treat it as "not signed in" (no need to surface the error).
-        if let stored = try? KeychainStore.readToken() {
+        // Hydration timing depends on Face ID setting:
+        //
+        // - Face ID OFF: hydrate now. Existing pre-Phase-5 behavior. The
+        //   keychain entry is non-gated, no LAContext needed.
+        //
+        // - Face ID ON: defer until BiometricLockManager publishes an
+        //   authenticated LAContext via `authenticatedContext`. RootView in
+        //   BrettApp.swift watches that property and calls
+        //   `hydrateFromKeychain(authContext:)` when the user passes Face ID.
+        //
+        // Without this conditional, reading a biometric-gated keychain entry
+        // without a context would prompt the OS for Face ID immediately at
+        // app launch, bypassing the lock screen we already use for the same
+        // purpose.
+        if UserDefaults.standard.bool(forKey: BiometricLockManager.faceIDEnabledKey) {
+            // Mark hydration as pending so RootView shows BiometricLockView
+            // instead of SignInView while we're waiting for biometric unlock.
+            isHydratingFromKeychain = true
+        } else {
+            Task { [weak self] in await self?.hydrateFromKeychain(authContext: nil) }
+        }
+    }
+
+    /// Public entry point for keychain hydration. Used by both:
+    ///  - The Face-ID-OFF cold-launch path (init schedules this with
+    ///    `authContext: nil`).
+    ///  - The Face-ID-ON post-unlock path (RootView calls this with
+    ///    `authContext: BiometricLockManager.shared.authenticatedContext`
+    ///    after a successful biometric unlock).
+    ///
+    /// Idempotent: calling twice is harmless — the second call returns
+    /// early because `token` is already set.
+    func hydrateFromKeychain(authContext: LAContext?) async {
+        defer { isHydratingFromKeychain = false }
+        guard token == nil else { return } // already hydrated
+        do {
+            guard let stored = try KeychainStore.readToken(authContext: authContext) else {
+                return
+            }
             self.token = stored
-            // We don't have a user record yet (`/users/me` hasn't returned),
-            // but we know there's a valid token. `refreshCurrentUser` hydrates
-            // the user and, on success, installs the session.
-            Task { [weak self] in await self?.refreshCurrentUser() }
+            await refreshCurrentUser()
+        } catch {
+            BrettLog.auth.error("Keychain hydrate failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -198,7 +247,12 @@ final class AuthManager {
     ///  3. Wipe SwiftData. Safe now that no sync task is still running.
     ///  4. Best-effort server sign-out.
     func signOut() async {
-        ActiveSession.end()
+        // Deliberate sign-out: clear the soft sign-out hint so the device
+        // doesn't show the prior user's "please sign in again" banner if
+        // handed to a different person.
+        SessionExpiryHint.clear()
+
+        await ActiveSession.end()
 
         token = nil
         currentUser = nil
@@ -236,7 +290,17 @@ final class AuthManager {
     /// instead: it compares the incoming user-id against
     /// `SharedConfig.lastSignedInUserId` and wipes if they differ.
     private func clearInvalidSession() async {
-        ActiveSession.end()
+        // Soft sign-out UX: capture the email so SignInView can prefill it,
+        // and flag the next sign-in screen to show a "please sign in again"
+        // banner. If currentUser is nil here (theoretically possible if the
+        // 401 races a pre-refresh cold launch), the banner still fires but
+        // the email field won't prefill — acceptable degradation.
+        if let email = currentUser?.email {
+            SessionExpiryHint.lastEmail = email
+        }
+        SessionExpiryHint.didExpire = true
+
+        await ActiveSession.end()
 
         token = nil
         currentUser = nil
@@ -271,6 +335,9 @@ final class AuthManager {
         do {
             let session = try await action()
             try await persist(session: session)
+        } catch let kc as KeychainStore.KeychainError {
+            BrettLog.auth.error("Keychain write failure during sign-in: \(String(describing: kc), privacy: .public)")
+            errorMessage = APIError.keychainWriteFailed.userFacingMessage
         } catch let apiError as APIError {
             errorMessage = apiError.userFacingMessage
             if case .invalidCredentials = apiError {
@@ -279,6 +346,37 @@ final class AuthManager {
         } catch {
             errorMessage = APIError.unknown(error).userFacingMessage
         }
+    }
+
+    /// Calls `attempt()` and returns its result.
+    ///
+    /// If `attempt()` throws `APIError.unauthorized`, sleeps for the
+    /// next delay in `retryDelays` then retries. Any other error bubbles
+    /// up immediately without retrying. After exhausting all configured
+    /// delays (i.e., `retryDelays.count` retries), the final unauthorized
+    /// error is rethrown so the caller can decide what to do.
+    ///
+    /// Production delays: 1 s → 2 s → 4 s (configurable via the init
+    /// parameter for test speed).
+    private func retryingOnUnauthorized<T>(_ attempt: () async throws -> T) async throws -> T {
+        var lastError: Error = APIError.unauthorized
+        for (index, delay) in ([UInt64(0)] + retryDelays).enumerated() {
+            if index > 0 {
+                // Sleep before each retry (index 0 is the initial attempt —
+                // its "delay" of 0 is just a sentinel to unify the loop).
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            do {
+                return try await attempt()
+            } catch APIError.unauthorized {
+                lastError = APIError.unauthorized
+                // Continue to next iteration (retry).
+            } catch {
+                // Non-401 errors are not retried.
+                throw error
+            }
+        }
+        throw lastError
     }
 
     /// Saves the token to Keychain, updates in-memory state, hydrates the
@@ -327,12 +425,20 @@ final class AuthManager {
             }
         }
 
-        try KeychainStore.writeToken(session.token)
+        let useGate = UserDefaults.standard.bool(forKey: BiometricLockManager.faceIDEnabledKey)
+        try KeychainStore.writeToken(session.token, biometricGated: useGate)
         self.token = session.token
         self.currentUser = session.user
         // Sign-in counts as an established session — subsequent 401s in
         // this process should escalate, not be deferred.
         self.hasSuccessfullyRefreshed = true
+
+        // Soft sign-out UX: stash the email for the next sign-in's prefill,
+        // and clear any stale "expired" flag from a prior clearInvalidSession.
+        // We re-write lastEmail every persist (not just first sign-in) so the
+        // hint stays current if the user's account email changes.
+        SessionExpiryHint.lastEmail = session.user.email
+        SessionExpiryHint.didExpire = false
 
         // Mirror the current user-id into the App Group so the share
         // extension can stamp captured payloads with the right account —
@@ -342,7 +448,7 @@ final class AuthManager {
         // so the next persist() can compare against it.
         SharedConfig.writeLastSignedInUserId(session.user.id)
 
-        installSession(for: session.user.id)
+        await installSession(for: session.user.id)
 
         // Hydrate full user profile. Non-fatal if it fails — we already have
         // a minimal user from the sign-in response.
@@ -352,12 +458,12 @@ final class AuthManager {
     /// Build and install a fresh `Session`. Called from `persist(session:)`
     /// and from the keychain-hydrate path in `refreshCurrentUser()` once
     /// we've confirmed the stored token is valid.
-    private func installSession(for userId: String) {
+    private func installSession(for userId: String) async {
         let session = Session(
             userId: userId,
             persistence: PersistenceController.shared
         )
-        ActiveSession.begin(session)
+        await ActiveSession.begin(session)
     }
 
     /// Best-effort refresh of `currentUser` via `/users/me`.
@@ -380,7 +486,7 @@ final class AuthManager {
     func refreshCurrentUser() async {
         guard token != nil else { return }
         do {
-            let me = try await endpoints.getMe()
+            let me = try await retryingOnUnauthorized { try await self.endpoints.getMe() }
             self.currentUser = me
             self.lastRefreshedAt = Date()
             self.hasSuccessfullyRefreshed = true
@@ -395,7 +501,7 @@ final class AuthManager {
             // (persist() already installed one on fresh sign-in; the call
             // is idempotent because ActiveSession.begin replaces any prior).
             if ActiveSession.userId != me.id {
-                installSession(for: me.id)
+                await installSession(for: me.id)
             }
         } catch APIError.unauthorized {
             guard hasSuccessfullyRefreshed else {
@@ -438,7 +544,9 @@ final class AuthManager {
         }
 
         do {
-            let session = try await endpoints.getSession()
+            let session = try await retryingOnUnauthorized {
+                try await self.endpoints.getSession()
+            }
             self.lastRefreshedAt = Date()
             self.hasSuccessfullyRefreshed = true
             // Session token rotation isn't exposed by better-auth's bearer
@@ -502,6 +610,15 @@ final class AuthManager {
     @MainActor
     func persistForTesting(session: AuthSession) async throws {
         try await persist(session: session)
+    }
+
+    /// Test-only setter for `isHydratingFromKeychain`. Lets unit tests
+    /// simulate the Face-ID-ON init path (where `isHydratingFromKeychain`
+    /// is set to `true` in `init()`) without relying on UserDefaults state
+    /// that varies between test environments.
+    @MainActor
+    func testSetHydratingFromKeychain(_ value: Bool) {
+        isHydratingFromKeychain = value
     }
     #endif
 }

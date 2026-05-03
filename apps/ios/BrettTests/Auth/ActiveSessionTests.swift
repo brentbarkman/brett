@@ -17,7 +17,7 @@ struct ActiveSessionTests {
     /// Cleanup between tests — the registry is process-wide by design,
     /// so a leftover session from a previous test would cross-contaminate.
     private func resetRegistry() {
-        ActiveSession.end()
+        ActiveSession.endForTesting()
     }
 
     @Test func registryStartsEmpty() {
@@ -29,8 +29,8 @@ struct ActiveSessionTests {
 
     @Test func endIsIdempotent() {
         resetRegistry()
-        ActiveSession.end()
-        ActiveSession.end()
+        ActiveSession.endForTesting()
+        ActiveSession.endForTesting()
         #expect(ActiveSession.current == nil)
     }
 

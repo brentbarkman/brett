@@ -1,6 +1,56 @@
 import SwiftUI
 import AVFoundation
+import Foundation
 import Speech
+
+// MARK: - Amplitude throttle
+
+/// Peak-hold + interval-throttle helper for the audio-tap callback.
+///
+/// The audio thread feeds per-buffer RMS samples into `observe(_:)`; the
+/// helper keeps the loudest reading since the last successful push and
+/// returns it (and only it) once `pushInterval` seconds have elapsed.
+/// Returning `nil` means "still inside the window — don't dispatch."
+///
+/// Lock-protected so the audio queue can call it without the @MainActor
+/// hopping that the pre-throttle implementation needed per buffer.
+/// `@unchecked Sendable` because the only mutable state is guarded by
+/// the lock.
+final class AmplitudeThrottle: @unchecked Sendable {
+    private let pushInterval: TimeInterval
+    private let lock = NSLock()
+    private var peak: Double = 0
+    private var lastPushAt: Date = .distantPast
+
+    init(pushInterval: TimeInterval) {
+        self.pushInterval = pushInterval
+    }
+
+    /// Observe a fresh RMS sample. Returns the peak-since-last-push when
+    /// the throttle window has elapsed; otherwise `nil` (caller drops).
+    /// `now` is injectable for tests.
+    func observe(_ rms: Double, now: Date = Date()) -> Double? {
+        lock.lock()
+        defer { lock.unlock() }
+        peak = max(peak, rms)
+        guard now.timeIntervalSince(lastPushAt) >= pushInterval else {
+            return nil
+        }
+        let value = peak
+        peak = 0
+        lastPushAt = now
+        return value
+    }
+
+    /// Drop accumulated state. Called when a recording session
+    /// (re)starts so a stale peak from a prior session doesn't leak in.
+    func reset() {
+        lock.lock()
+        peak = 0
+        lastPushAt = .distantPast
+        lock.unlock()
+    }
+}
 
 // MARK: - Voice recognition model
 
@@ -46,6 +96,15 @@ final class VoiceRecognizer {
     /// Amplitude considered "speech" — anything above this resets the
     /// silence timer.
     private let speechThreshold: Double = 0.06
+
+    /// Coalesces per-buffer amplitude samples on the audio thread and
+    /// reports a peak-hold value at most every 50ms. The audio tap fires
+    /// at ~43Hz; pushing every buffer onto the main actor would spawn
+    /// ~43 Tasks/sec just to nudge a Double. The waveform UI only
+    /// animates at ~50ms granularity anyway, so this throttling is
+    /// invisible to the user but eliminates the per-buffer Task
+    /// allocation churn during voice mode.
+    private let amplitudeThrottle = AmplitudeThrottle(pushInterval: 0.05)
 
     init() {
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -110,15 +169,28 @@ final class VoiceRecognizer {
             }
         }
 
-        // Tap the input node — each buffer goes to the recognizer + amplitude sampler.
+        // Reset the throttle accumulator — a previous start() may have left
+        // peak/timestamp values from a prior session.
+        amplitudeThrottle.reset()
+
+        // Tap the input node — each buffer goes to the recognizer + amplitude
+        // sampler. Recognition append happens per-buffer because Speech
+        // expects continuous audio; amplitude is throttled via the
+        // peak-hold accumulator so we only hop to the main actor at ~20Hz
+        // instead of ~43Hz, eliminating the Task-per-buffer churn that the
+        // pre-throttle implementation incurred.
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
         input.removeTap(onBus: 0)
+        let throttle = amplitudeThrottle
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
+
             let rms = VoiceRecognizer.rmsAmplitude(from: buffer)
-            Task { @MainActor in
-                self?.updateAmplitude(rms)
+            guard let peak = throttle.observe(rms) else { return }
+
+            Task { @MainActor [weak self] in
+                self?.updateAmplitude(peak)
             }
         }
 

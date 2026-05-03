@@ -39,6 +39,57 @@ final class BackgroundService {
     /// True once both the manifest and base URL have resolved.
     var isReady: Bool { manifest != nil && storageBaseUrl != nil }
 
+    // MARK: - Renderer state
+    //
+    // Hoisted from `BackgroundView` so multiple mounted instances share one
+    // ticker, one resolution pass, and one set of `@State` slots. Before the
+    // hoist, every BackgroundView in the hierarchy (MainContainer + pushed
+    // ListView + pushed ScoutsRosterView, etc.) ran its own 60s timer and
+    // its own image-decision pipeline — most of the work redundant because
+    // they all converge on the same image. Now BackgroundView is a thin
+    // observer of these properties.
+
+    /// Current remote image URL (nil for solid backgrounds or before
+    /// `/config` resolves).
+    private(set) var currentRemoteURL: URL? = BackgroundService.cachedRemoteURL
+
+    /// Current solid color when style is "solid".
+    private(set) var currentSolidColor: Color?
+
+    /// Fallback asset-catalog name when neither remote nor solid applies.
+    /// Empty string means "not yet resolved" — callers fall back to
+    /// `assetNameForHour(...)` directly.
+    private(set) var currentFallbackAsset: String = ""
+
+    /// Stable identity that drives the crossfade animation. Changes
+    /// whenever the rendered image changes.
+    private(set) var displayedKey: String = BackgroundService.cachedRemoteURL?.absoluteString ?? ""
+
+    /// Reference count of mounted `BackgroundView` instances. When it
+    /// transitions 0 → 1 we start the 60s segment ticker; 1 → 0 stops it.
+    /// Multiple mounts (e.g. while a pushed view sits on top of the
+    /// MainContainer wallpaper) share the single tick.
+    private var rendererCount: Int = 0
+
+    /// The 60s segment ticker. Owned by the service rather than each
+    /// BackgroundView so we run exactly one timer regardless of how many
+    /// renderers are alive.
+    private var tickTask: Task<Void, Never>?
+
+    #if DEBUG
+    /// Test inspectors. Exposed only in DEBUG so tests can verify the
+    /// ref-count + tick-task invariants without forcing the production
+    /// type to leak internals.
+    var debug_rendererCount: Int { rendererCount }
+    var debug_hasTickTask: Bool { tickTask != nil }
+    #endif
+
+    /// Profile values last pushed by a renderer. All renderers see the
+    /// same SwiftData row, so last-writer-wins is safe — any `nil` here
+    /// means we either have no profile yet or the user is signed out.
+    private var lastProfileStyle: String?
+    private var lastProfilePinned: String?
+
     // MARK: - Init
 
     private let client: APIClient
@@ -193,6 +244,122 @@ final class BackgroundService {
             }
         } catch {
             BrettLog.app.error("BackgroundService: failed to load /config: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    // MARK: - Renderer lifecycle
+
+    /// Called by `BackgroundView` on mount. The first registration also
+    /// kicks off the 60s tick task so the wallpaper swaps as time-of-day
+    /// segments cross. Idempotent in the "already running" sense — a
+    /// second registration just bumps the ref count.
+    func registerRenderer() {
+        rendererCount += 1
+        if tickTask == nil {
+            startTick()
+        }
+    }
+
+    /// Called by `BackgroundView` on disappear. The last unregister
+    /// stops the ticker so a backgrounded process isn't holding a Task
+    /// that will never fire usefully.
+    func unregisterRenderer() {
+        rendererCount = max(0, rendererCount - 1)
+        if rendererCount == 0 {
+            tickTask?.cancel()
+            tickTask = nil
+        }
+    }
+
+    /// Push the latest user profile values from a renderer. Recomputes
+    /// the rendered state immediately so user-driven changes (picking a
+    /// new wallpaper in Settings) reflect without waiting for the next
+    /// 60s tick. Multiple renderers all push the same profile (they all
+    /// observe the same SwiftData row), so last-writer-wins is correct.
+    func updateProfile(style: String?, pinned: String?, initial: Bool = false) {
+        lastProfileStyle = style
+        lastProfilePinned = pinned
+        recompute(initial: initial)
+    }
+
+    /// One tick of the 60s loop. Crosses time-of-day segments, picks a
+    /// new manifest image when appropriate, and bumps `displayedKey` so
+    /// the renderer's crossfade transition fires.
+    private func startTick() {
+        tickTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                if Task.isCancelled { return }
+                self?.recompute(initial: false)
+            }
+        }
+    }
+
+    /// Resolve `currentSolidColor` / `currentRemoteURL` / `currentFallbackAsset`
+    /// from the last-known profile values. `initial: true` skips the
+    /// `displayedKey` change when the new key is the same — protects
+    /// the cold-launch path from triggering an unnecessary crossfade
+    /// from the cached remote URL to itself.
+    private func recompute(initial: Bool) {
+        let style = lastProfileStyle ?? Style.photography.rawValue
+        let pinned = lastProfilePinned
+
+        // Solid path — parse the hex from the pinned sentinel.
+        if style == Style.solid.rawValue,
+           let pinned,
+           pinned.hasPrefix("solid:") {
+            let hex = String(pinned.dropFirst("solid:".count))
+            if let color = Self.color(forHex: hex) {
+                currentRemoteURL = nil
+                currentSolidColor = color
+                currentFallbackAsset = ""
+                let key = "solid:\(hex)"
+                if displayedKey != key { displayedKey = key }
+                return
+            }
+        }
+
+        // Remote / auto path. Map any non-photography style that isn't
+        // solid back onto the photography manifest — abstract + gradient
+        // currently render as photography on iOS until the manifest grows
+        // distinct sets.
+        let effectiveStyle: String = {
+            if style == Style.solid.rawValue { return Style.photography.rawValue }
+            return style
+        }()
+
+        if let url = currentImageURL(style: effectiveStyle, pinned: pinned) {
+            currentSolidColor = nil
+            currentRemoteURL = url
+            currentFallbackAsset = ""
+            Self.cachedRemoteURL = url
+            let key = url.absoluteString
+            if displayedKey != key { displayedKey = key }
+            return
+        }
+
+        // Service hasn't loaded yet (cold launch, offline) — fall back
+        // to the bundled asset for the current hour. Renderer paints
+        // this without a crossfade so the user never sees a blank screen.
+        let asset = Self.assetNameForHour(Calendar.current.component(.hour, from: Date()))
+        currentSolidColor = nil
+        currentRemoteURL = nil
+        currentFallbackAsset = asset
+        if displayedKey != asset { displayedKey = asset }
+    }
+
+    /// Bundled asset for the current hour. Mirrors the prior
+    /// `BackgroundView.assetNameForHour` so the fallback path picks
+    /// the same image the view used to compute itself. Public for
+    /// `BackgroundView` to use when the caller pinned an `imageName`
+    /// override (previews, auth screens with a specific look).
+    static func assetNameForHour(_ hour: Int) -> String {
+        switch hour {
+        case 5..<8: return "bg-morning"
+        case 8..<12: return "bg-morning"
+        case 12..<17: return "bg-golden"
+        case 17..<20: return "bg-evening"
+        default: return "bg-night"
         }
     }
 

@@ -257,7 +257,15 @@ struct MainContainer: View {
                         // Drawer is gone (Lists has its own tab now), but
                         // the callback is still wired so any future entry
                         // point that re-introduces a list picker works.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        // Defer the push by ~350ms so the sheet dismissal
+                        // animation completes before the navigation
+                        // transition starts. Structured-Task form (vs.
+                        // DispatchQueue.main.asyncAfter) suspends with the
+                        // process and uses idiomatic concurrency; SwiftUI
+                        // doesn't auto-cancel inline Tasks on unmount but
+                        // mutating a detached @State is a no-op.
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 350_000_000)
                             path.append(NavDestination.listView(id: id))
                         }
                     }
@@ -465,10 +473,13 @@ struct MainContainer: View {
     }
 
     /// Navigate to the correct detail surface for a selected search hit.
-    /// Sheet dismissal is async, so we defer the push one runloop tick to
-    /// avoid racing the sheet's exit animation.
+    /// Sheet dismissal is async, so we defer the push by ~350ms to avoid
+    /// racing the sheet's exit animation. Structured-Task form (vs.
+    /// DispatchQueue.main.asyncAfter) for the same reason as `onSelectList`
+    /// above — idiomatic concurrency, plays nicely with process suspend.
     private func handleSearchSelection(_ result: SearchResult) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
             switch result.entityType {
             case .item:
                 // Wave D Phase 3: single source of truth — the
