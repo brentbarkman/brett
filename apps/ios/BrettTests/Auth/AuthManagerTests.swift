@@ -697,6 +697,49 @@ struct AuthManagerTests {
         }
     }
 
+    // MARK: - SessionExpiryHint lifecycle
+
+    @Test("SessionExpiryHint is set on persist, set on clearInvalidSession, cleared on signOut")
+    @MainActor
+    func sessionExpiryHintLifecycle() async throws {
+        resetState()
+        SessionExpiryHint.clear()
+        defer { resetState(); SessionExpiryHint.clear() }
+
+        let (mgr, client) = makeTestManager()
+
+        // Simulate a successful sign-in via persist:
+        let user = AuthUser(id: "u1", email: "soft@example.com", name: nil,
+                            avatarUrl: nil, timezone: "UTC", assistantName: "Brett")
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u1", email: "soft@example.com")
+        )
+        try await mgr.persistForTesting(session: AuthSession(token: "tok", user: user))
+        #expect(SessionExpiryHint.lastEmail == "soft@example.com")
+        #expect(SessionExpiryHint.didExpire == false)
+
+        // Trigger clearInvalidSession via a post-refresh 401:
+        MockURLProtocol.stub(url: usersMeURL(for: client), statusCode: 401, body: Data())
+        MockURLProtocol.stub(url: signOutURL(for: client), statusCode: 200, body: Data())
+        mgr.injectFakeSession(user: user, token: "tok", hasRefreshed: true)
+        await mgr.refreshCurrentUser()
+
+        #expect(mgr.token == nil)
+        #expect(SessionExpiryHint.lastEmail == "soft@example.com") // preserved
+        #expect(SessionExpiryHint.didExpire == true)               // flag set
+
+        // User-initiated signOut should clear both:
+        // (signOut needs a token + currentUser to do the full path; re-inject)
+        mgr.injectFakeSession(user: user, token: "tok2", hasRefreshed: true)
+        MockURLProtocol.stub(url: signOutURL(for: client), statusCode: 200, body: Data())
+        await mgr.signOut()
+
+        #expect(SessionExpiryHint.lastEmail == nil)
+        #expect(SessionExpiryHint.didExpire == false)
+    }
+
     @Test func hydrateTaskDoesNotRetainSelfAfterRelease() async throws {
         resetState()
         defer { resetState() }

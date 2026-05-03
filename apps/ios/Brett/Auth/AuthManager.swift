@@ -207,6 +207,11 @@ final class AuthManager {
     ///  3. Wipe SwiftData. Safe now that no sync task is still running.
     ///  4. Best-effort server sign-out.
     func signOut() async {
+        // Deliberate sign-out: clear the soft sign-out hint so the device
+        // doesn't show the prior user's "please sign in again" banner if
+        // handed to a different person.
+        SessionExpiryHint.clear()
+
         ActiveSession.end()
 
         token = nil
@@ -245,6 +250,13 @@ final class AuthManager {
     /// instead: it compares the incoming user-id against
     /// `SharedConfig.lastSignedInUserId` and wipes if they differ.
     private func clearInvalidSession() async {
+        // Soft sign-out UX: capture the email and flag the next sign-in
+        // screen to show a "please sign in again" banner with prefill.
+        if let email = currentUser?.email {
+            SessionExpiryHint.lastEmail = email
+        }
+        SessionExpiryHint.didExpire = true
+
         ActiveSession.end()
 
         token = nil
@@ -376,6 +388,11 @@ final class AuthManager {
         // Sign-in counts as an established session — subsequent 401s in
         // this process should escalate, not be deferred.
         self.hasSuccessfullyRefreshed = true
+
+        // Soft sign-out UX: stash the email for the next sign-in's prefill,
+        // and clear any stale "expired" flag from a prior clearInvalidSession.
+        SessionExpiryHint.lastEmail = session.user.email
+        SessionExpiryHint.didExpire = false
 
         // Mirror the current user-id into the App Group so the share
         // extension can stamp captured payloads with the right account —
