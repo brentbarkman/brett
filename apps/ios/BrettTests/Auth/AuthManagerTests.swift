@@ -101,6 +101,16 @@ struct AuthManagerTests {
         Data(#"{"id":"\#(id)","email":"\#(email)","name":null,"avatarUrl":null,"timezone":"America/Los_Angeles","assistantName":"Brett"}"#.utf8)
     }
 
+    /// Minimal valid response body for `/api/auth/ios/session`. Matches the
+    /// shape of `SessionStatus` (token, expiresAt, user.id, user.email).
+    ///
+    /// Note: `expiresAt` deliberately uses `2099-01-01T00:00:00Z` with NO
+    /// fractional seconds — `APIClient`'s decoder uses `.iso8601`, which
+    /// rejects `.000Z`. Don't add milliseconds.
+    private func validIOSSessionBody(token: String = "tok", userId: String, email: String) -> Data {
+        Data(#"{"token":"\#(token)","expiresAt":"2099-01-01T00:00:00Z","user":{"id":"\#(userId)","email":"\#(email)"}}"#.utf8)
+    }
+
     // MARK: - Cold-launch lenience
 
     /// **Regression guard.** The original symptom: hard-kill on TestFlight,
@@ -154,6 +164,11 @@ struct AuthManagerTests {
         )
         seedItem(userId: "u1", title: "task A")
 
+        // Note: with the retry helper added in this PR, a single sticky 401 stub
+        // is hit 4 times (1 initial + 3 retries) before refreshIfStale applies
+        // the cold-launch lenience. This test asserts on the lenience outcome
+        // (cached state preserved), not on the request count — both are valid
+        // behaviors for the cold-launch path.
         MockURLProtocol.stub(url: iosSessionURL(for: client), statusCode: 401, body: Data())
 
         await manager.refreshIfStale()
