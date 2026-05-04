@@ -233,7 +233,15 @@ struct FeedbackSheet: View {
         }
     }
 
+    /// Marketing version + Fastlane-bumped build number.
+    /// `MARKETING_VERSION` is hardcoded at "1.0.0" today, so the build
+    /// number is the part that actually identifies which TestFlight upload
+    /// a reporter is on (`fastlane/Fastfile` sets it to one above the
+    /// highest TestFlight build for this marketing version).
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let info = Bundle.main.infoDictionary
+        let marketing = info?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(marketing) (\(build))"
     }
 }
