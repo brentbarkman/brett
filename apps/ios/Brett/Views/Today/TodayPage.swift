@@ -98,7 +98,7 @@ private struct TodayPageBody: View {
 
         // Bound the working set to a ±30-day window. Heavy users sync years
         // of events; without this predicate, every body pass walks the
-        // entire history just to compute `nextUpcomingEvent` / `todaysEvents`.
+        // entire history just to compute `nextUpcomingEvent`.
         // The window covers the "next event" ticker (typically minutes/hours
         // away) and any reasonable "next 30 days" peek with comfortable
         // margin. Events whose start is within the window OR whose end is
@@ -129,7 +129,6 @@ private struct TodayPageBody: View {
 
     // MARK: - UI state
 
-    @State private var completionPulse: Bool = false
     @State private var pendingReflowTask: Task<Void, Never>? = nil
     /// Snapshot of the active item set at the moment of last completion. When
     /// the debounce window expires we bring the view's "working set" in line
@@ -164,22 +163,74 @@ private struct TodayPageBody: View {
         // when a new task lands there. Without this, adding a task to a
         // long Today list looks like nothing happened — the row is below
         // the fold.
+        //
+        // Calm-hero layout (2026-05-04 spec):
+        //   1. TodayHero — greeting + brief over the photo, no chrome.
+        //   2. Photo→wash gradient — 140pt smooth transition into the
+        //      solid wash bed that hosts every section below.
+        //   3. Wash bed — NextUp + 5 task sections + empty state, all
+        //      sitting on `BackgroundService.currentWashColor` so the
+        //      photo only lives in the hero zone.
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    collapsingHeader
-                        .padding(.top, 8)
-                        .padding(.bottom, 8)
-
-                    if hasNextUpEvent {
-                        NextUpCard(event: nextUpcomingEvent, now: tickerNow)
+                    // Scroll-offset publisher. A 0pt-tall, transparent
+                    // probe sits at the top of the scroll content; its
+                    // y-position in the `scroll` coordinate space is
+                    // negative when the user has scrolled down, so we
+                    // negate it before publishing. `MainContainer` reads
+                    // this value to drive the calm-hero adaptive chrome
+                    // — the bottom view-pills row stays invisible at
+                    // the top of Today and fades in as the hero
+                    // scrolls away.
+                    GeometryReader { geo in
+                        let y = geo.frame(in: .named("scroll")).minY
+                        Color.clear
+                            .publishHeroScrollOffset(max(0, -y))
                     }
+                    .frame(height: 0)
 
-                    DailyBriefing(store: briefingStore)
+                    // Pass `tickerNow` (the @State managed by `runTicker()`)
+                    // rather than a fresh `Date()` per body call so the
+                    // hero's date sub-line and `partOfDay` greeting stay
+                    // stable across re-renders. The ticker only writes
+                    // `tickerNow` when an event is in the visibility
+                    // window, so on idle days the value is the page's
+                    // mount-time date — fine for a greeting that only
+                    // needs to roll over at part-of-day boundaries.
+                    TodayHero(briefingStore: briefingStore, date: tickerNow)
+                        // The hero owns its own top padding via
+                        // `.safeAreaInset` upstream — at this point in
+                        // the layout we just want it to claim the top
+                        // of the scroll content with a comfortable
+                        // editorial bottom margin.
 
-                    taskSections
+                    // Photo→wash transition. Starts clear at the bottom
+                    // of the hero so the photo bleeds into the wash
+                    // without a hard line, then arrives at fully opaque
+                    // wash 140pt later. Below this gradient the rest of
+                    // the page sits on the solid wash.
+                    LinearGradient(
+                        colors: [Color.clear, BackgroundService.shared.currentWashColor],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 140)
 
-                    emptyState
+                    // Wash bed. Carries NextUp, the 5 task sections, and
+                    // the empty state. Single `.background(washColor)`
+                    // here means SwiftUI doesn't restart material chains
+                    // per child.
+                    VStack(spacing: 0) {
+                        if hasNextUpEvent {
+                            NextUpCard(event: nextUpcomingEvent, now: tickerNow)
+                        }
+
+                        taskSections
+
+                        emptyState
+                    }
+                    .background(BackgroundService.shared.currentWashColor)
                 }
                 .padding(.bottom, 70)
                 // Inner VStack surfaces more reliably as an accessibility
@@ -221,29 +272,6 @@ private struct TodayPageBody: View {
             // Kick off the adaptive ticker for NextUpCard's relative time.
             await runTicker()
         }
-    }
-
-    // MARK: - Header
-
-    /// Static page header — was previously a collapsing GeometryReader
-    /// that scaled the date from 18pt to 28pt as the user scrolled. The
-    /// resize made Today's header look smaller than Inbox's fixed 28pt
-    /// header during side-swipes between pages, which the user flagged as
-    /// jarring. Now matches the Inbox/Calendar treatment: 28pt date +
-    /// muted subtitle, no scroll-driven resize.
-    private var collapsingHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(DateHelpers.formatDayHeader(Date()))
-                .font(BrettTypography.dateHeader)
-                .foregroundStyle(.white)
-
-            Text(statsLine)
-                .font(BrettTypography.stats)
-                .foregroundStyle(completionPulse ? BrettColors.gold : Color.white.opacity(0.55))
-                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: completionPulse)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
     }
 
     // MARK: - Section computation
@@ -385,50 +413,7 @@ private struct TodayPageBody: View {
         }
     }
 
-    // MARK: - Stats
-
-    private var statsLine: String {
-        // Hoist the bucket and the day-filtered event list so the three
-        // `sections.*` reads share one bucket and the two event accesses
-        // (count + duration sum) share one filter pass.
-        //
-        // Only include events that block time on the calendar. Google
-        // auto-creates `transparent` events for flights / hotels / working
-        // location from Gmail; counting those as meetings (and summing
-        // their hours) confuses the day's commitment summary.
-        let s = sections
-        let dayEvents = todaysEvents.filter { $0.isBusy }
-        let total = s.activeCount + s.doneToday.count
-        let done = s.doneToday.count
-        let base = "\(done) of \(total) done"
-        guard !dayEvents.isEmpty else { return base }
-        let meetingCount = dayEvents.count
-        let suffix = meetingCount == 1 ? "meeting" : "meetings"
-        return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: dayEvents)))"
-    }
-
-    private static func formatMeetingDuration(events: [CalendarEvent]) -> String {
-        let total = events.reduce(0) { $0 + $1.durationMinutes }
-        let hours = total / 60
-        let mins = total % 60
-        if hours > 0 && mins > 0 { return "\(hours)h \(mins)m" }
-        if hours > 0 { return "\(hours)h" }
-        return "\(mins)m"
-    }
-
     // MARK: - Calendar helpers
-
-    private var todaysEvents: [CalendarEvent] {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: Date())
-        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        // Hide events the user declined — matches Google Calendar's default.
-        return events.filter {
-            $0.startTime >= start
-                && $0.startTime < end
-                && $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue
-        }
-    }
 
     /// Selection uses live `Date()` (not the @State `tickerNow`) so the
     /// ticker can stay idle without producing stale candidates. The card's
@@ -458,22 +443,18 @@ private struct TodayPageBody: View {
 
     /// Toggle a task's status. Fires the completion cascade:
     /// 1. Haptic success
-    /// 2. Header stats pulse gold (spring animation on `completionPulse`)
-    /// 3. After 2s idle, the item moves into Done Today — implemented by
+    /// 2. After 2s idle, the item moves into Done Today — implemented by
     ///    bumping `reflowSnapshotKey` which invalidates the cached sections.
     ///    Each fresh toggle cancels the previous reflow so a burst of quick
     ///    completions all settle together.
+    ///
+    /// Calm-hero refactor (2026-05-04) removed the header stats-pulse: the
+    /// stats line itself moved out of the page (the editorial hero
+    /// doesn't carry a stats counter), so the pulse no longer has a
+    /// surface to land on.
     private func toggle(_ id: String) {
         HapticManager.success()
         itemStore.toggleStatus(id: id, userId: userId)
-
-        // Trigger the stats pulse. Flip true for a beat, then back false so
-        // the spring animation actually runs.
-        completionPulse = true
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            completionPulse = false
-        }
 
         // Hold the row in its current section until the debounce window
         // expires. The user's `isCompleted` toggle is reflected in the

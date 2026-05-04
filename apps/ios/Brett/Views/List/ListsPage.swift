@@ -116,11 +116,13 @@ private struct ListsPageBody: View {
 
     var body: some View {
         ZStack {
+            // Wash backdrop — Lists wears the same solid wash as every
+            // non-Today page per the calm-hero design.
+            WashBackground()
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     header
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
                         .padding(.bottom, 12)
 
                     if lists.isEmpty {
@@ -147,19 +149,17 @@ private struct ListsPageBody: View {
         }
     }
 
-    // MARK: - Header (matches Today / Inbox / Calendar treatment)
+    // MARK: - Header
 
+    /// Editorial 38pt serif header per the calm-hero design — parity
+    /// with every other top-level page so swipes don't shift the
+    /// header silhouette.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Lists")
-                .font(BrettTypography.dateHeader)
-                .foregroundStyle(.white)
-
-            Text(subtitle)
-                .font(BrettTypography.stats)
-                .foregroundStyle(Color.white.opacity(0.55))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        EditorialPageHeader(
+            title: "Lists",
+            subtitle: subtitle
+        )
+        .padding(.top, 12)
     }
 
     private var subtitle: String {

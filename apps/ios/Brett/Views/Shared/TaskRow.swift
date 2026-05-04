@@ -259,13 +259,17 @@ struct TaskRow: View {
     private var leadingGlyph: some View {
         if isSelectMode {
             selectionCircleGlyph
-        } else if viewModel.isCompleted {
-            completionGlyph
         } else if viewModel.itemType == .content {
             contentGlyph
         } else {
             taskGlyph
         }
+        // No completion-state branch: the existing title fade +
+        // strikethrough (in `rowButton`) is what signals "done." The
+        // earlier swap to a green checkmark added visual chatter and
+        // diverged from the calmer editorial direction — now the
+        // type icon stays put on completion, just dimmer alongside
+        // the faded title.
     }
 
     private var selectionCircleGlyph: some View {
@@ -291,21 +295,6 @@ struct TaskRow: View {
         .transition(.scale.combined(with: .opacity))
     }
 
-    private var completionGlyph: some View {
-        ZStack {
-            Circle()
-                .fill(BrettColors.success.opacity(0.15))
-                .overlay {
-                    Circle().strokeBorder(BrettColors.success.opacity(0.4), lineWidth: 1)
-                }
-                .frame(width: 30, height: 30)
-
-            Image(systemName: "checkmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(BrettColors.success)
-        }
-    }
-
     private var contentGlyph: some View {
         ZStack {
             Circle()
@@ -315,9 +304,13 @@ struct TaskRow: View {
                 }
                 .frame(width: 30, height: 30)
 
+            // Gold tint, matching `taskGlyph`. Cerulean is reserved for
+            // Brett-generated surfaces (briefing, take, AI cards) —
+            // captured user content uses the same gold accent regardless
+            // of whether it's a task or a content item.
             Image(systemName: "doc.text")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(BrettColors.cerulean.opacity(0.7))
+                .foregroundStyle(BrettColors.gold.opacity(0.7))
         }
     }
 

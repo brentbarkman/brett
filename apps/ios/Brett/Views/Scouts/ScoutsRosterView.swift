@@ -96,7 +96,11 @@ private struct ScoutsRosterBody: View {
 
     var body: some View {
         ZStack {
-            BackgroundView()
+            // Wash backdrop — Scouts is a drill-in destination but
+            // wears the same solid wash as every non-Today surface so
+            // the visual family stays consistent across the app per
+            // the calm-hero design.
+            WashBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -185,18 +189,15 @@ private struct ScoutsRosterBody: View {
 
     // MARK: - Sections
 
+    /// Editorial 38pt serif header per the calm-hero design — parity
+    /// with every other top-level page so swipes and pushes don't
+    /// shift the header silhouette.
     @ViewBuilder
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Scouts")
-                .font(BrettTypography.dateHeader)
-                .foregroundStyle(.white)
-
-            Text(subtitle)
-                .font(BrettTypography.stats)
-                .foregroundStyle(BrettColors.textInactive)
-        }
-        .padding(.horizontal, 20)
+        EditorialPageHeader(
+            title: "Scouts",
+            subtitle: subtitle
+        )
     }
 
     private var subtitle: String {

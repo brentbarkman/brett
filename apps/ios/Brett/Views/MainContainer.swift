@@ -29,6 +29,10 @@ enum NavDestination: Hashable {
     case search
     case newScout
     case editScout(id: String)
+    /// Calm-hero "B" menu (2026-05-04 spec) — bottom sheet behind the
+    /// gold chip in `ViewPillsBar`. Routed through the unified sheet
+    /// presenter so it composes with the other modal destinations.
+    case menu
 
     /// True for cases that should present as a sheet rather than a push.
     /// `MainContainer` reads this to decide which presenter wraps the
@@ -37,7 +41,7 @@ enum NavDestination: Hashable {
     /// avoids scattering routing logic across views.
     var isSheet: Bool {
         switch self {
-        case .taskDetail, .search, .newScout, .editScout:
+        case .taskDetail, .search, .newScout, .editScout, .menu:
             return true
         case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
             return false
@@ -122,7 +126,28 @@ struct MainContainer: View {
     @State private var coverOpacity: Double = Awakening.sessionPlayed ? 0.0 : 1.0
     @State private var awakeningTriggered: Bool = Awakening.sessionPlayed
 
-    private let pages = ["Lists", "Inbox", "Today", "Calendar"]
+    /// Last hero scroll offset published by `TodayPage`. Drives the
+    /// adaptive chrome — `ViewPillsBar` fades in as the hero scrolls
+    /// away, stays at full opacity on every other page.
+    @State private var heroScrollOffset: CGFloat = 0
+
+    /// Distance over which the pills + omnibar transition between hero
+    /// (calm) and work (substantive) modes. Matches the photo→wash
+    /// gradient height in `TodayPage` so all the calm-hero affordances
+    /// transition together.
+    private static let heroFadeDistance: CGFloat = 140
+
+    /// Visibility (0–1) for the bottom view-pills row.
+    /// - On Today, ramps from 0 at the top of the hero to 1 at
+    ///   `heroFadeDistance` of scroll.
+    /// - On every other page, always 1 (the hero treatment is
+    ///   Today-only, so other pages don't earn the editorial empty
+    ///   top).
+    private var pillsVisibility: Double {
+        guard currentPage == 2 else { return 1 }
+        let progress = Double(heroScrollOffset / Self.heroFadeDistance)
+        return min(max(progress, 0), 1)
+    }
 
     var body: some View {
         // `@Bindable` projection so we can pass `$selection.currentDestination`
@@ -196,80 +221,64 @@ struct MainContainer: View {
             .offlineBanner()
             .errorToastHost()
             .safeAreaInset(edge: .top) {
-                // Top controls — safeAreaInset handles dynamic island clearance
-                HStack {
+                // Top chrome reduced to sync indicators only per the
+                // calm-hero design (2026-05-04 spec). PageIndicator,
+                // search, scouts, and settings buttons all moved out:
+                //   - Page indication → `ViewPillsBar` above the omnibar.
+                //   - Search → no top button (search lives inside the
+                //     omnibar's eventual AI routing; for now the search
+                //     destination is reachable via deep-link only).
+                //   - Scouts + Settings → `BMenuSheet` behind the gold
+                //     "B" chip in `ViewPillsBar`.
+                // SyncPendingIndicator + SyncStatusIndicator stay because
+                // they communicate critical sync state the user needs at
+                // a glance, regardless of the editorial direction.
+                HStack(spacing: 6) {
                     Spacer()
-                    PageIndicator(pages: pages, currentIndex: currentPage)
-                    Spacer()
+                    SyncPendingIndicator()
+                    SyncStatusIndicator()
                 }
-                .overlay(alignment: .trailing) {
-                    HStack(spacing: 6) {
-                        // Pending-sync pill — hidden when the queue is empty.
-                        SyncPendingIndicator()
-
-                        // Animated dot that reflects SyncManager.state (idle /
-                        // pushing / pulling / error).
-                        SyncStatusIndicator()
-
-                        Button {
-                            selection.currentDestination = .search
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.55))
-                                .frame(width: 40, height: 40)
-                                .contentShape(Rectangle())
-                        }
-
-                        NavigationLink(value: NavDestination.scoutsRoster) {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.55))
-                                .frame(width: 40, height: 40)
-                                .contentShape(Rectangle())
-                        }
-
-                        // Settings gear: using an explicit Button + programmatic
-                        // path.append so XCUITest can reliably tap this via
-                        // its accessibility identifier. `NavigationLink` inside
-                        // a `safeAreaInset` overlay has a known issue where
-                        // its tap handler doesn't register from synthesized
-                        // coordinate taps on iOS 26+.
-                        Button {
-                            path.append(NavDestination.settings)
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.55))
-                                .frame(width: 40, height: 40)
-                                .contentShape(Rectangle())
-                        }
-                        .accessibilityIdentifier("nav.settings")
-                    }
-                    .padding(.trailing, 8)
-                }
+                .padding(.trailing, 12)
+                .padding(.top, 4)
+            }
+            .onPreferenceChange(HeroScrollOffsetKey.self) { offset in
+                // Keep the @State write off the hot path: only when the
+                // value actually changes do we re-render the bar. The
+                // pure-comparison guard isn't strictly needed (SwiftUI
+                // diffs `@State` writes), but keeping the assignment
+                // explicit documents that this is the single integration
+                // point for the adaptive chrome.
+                heroScrollOffset = offset
             }
             .overlay(alignment: .bottom) {
-                OmnibarView(
-                    placeholder: omnibarPlaceholder,
-                    currentPage: currentPage,
-                    onSelectList: { id in
-                        // Drawer is gone (Lists has its own tab now), but
-                        // the callback is still wired so any future entry
-                        // point that re-introduces a list picker works.
-                        // Defer the push by ~350ms so the sheet dismissal
-                        // animation completes before the navigation
-                        // transition starts. Structured-Task form (vs.
-                        // DispatchQueue.main.asyncAfter) suspends with the
-                        // process and uses idiomatic concurrency; SwiftUI
-                        // doesn't auto-cancel inline Tasks on unmount but
-                        // mutating a detached @State is a no-op.
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            path.append(NavDestination.listView(id: id))
+                VStack(spacing: 0) {
+                    ViewPillsBar(
+                        currentPage: $currentPage,
+                        onMenuTap: { selection.currentDestination = .menu },
+                        visibility: pillsVisibility
+                    )
+
+                    OmnibarView(
+                        placeholder: omnibarPlaceholder,
+                        currentPage: currentPage,
+                        onSelectList: { id in
+                            // Drawer is gone (Lists has its own tab now), but
+                            // the callback is still wired so any future entry
+                            // point that re-introduces a list picker works.
+                            // Defer the push by ~350ms so the sheet dismissal
+                            // animation completes before the navigation
+                            // transition starts. Structured-Task form (vs.
+                            // DispatchQueue.main.asyncAfter) suspends with the
+                            // process and uses idiomatic concurrency; SwiftUI
+                            // doesn't auto-cancel inline Tasks on unmount but
+                            // mutating a detached @State is a no-op.
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 350_000_000)
+                                path.append(NavDestination.listView(id: id))
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
             .navigationDestination(for: NavDestination.self) { destination in
                 switch destination {
@@ -290,7 +299,7 @@ struct MainContainer: View {
                     EventDetailView(eventId: id)
                 case .listView(let id):
                     ListView(listId: id)
-                case .taskDetail, .search, .newScout, .editScout:
+                case .taskDetail, .search, .newScout, .editScout, .menu:
                     // Sheet-style destinations are presented via
                     // `.sheet(item:)` elsewhere on this view; reaching
                     // them through the push stack is a programming error.
@@ -342,6 +351,16 @@ struct MainContainer: View {
                     EditScoutSheetContainer(scoutId: id)
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
+                case .menu:
+                    // Calm-hero "B" menu — small detent because four
+                    // short rows don't earn a half-screen sheet. Black
+                    // glass background matches the other sheet
+                    // presentations in this presenter.
+                    BMenuSheet()
+                        .presentationDetents([.fraction(0.40)])
+                        .presentationDragIndicator(.visible)
+                        .presentationBackground(Color.black.opacity(0.85))
+                        .presentationCornerRadius(20)
                 case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
                     // Push-style destinations are not sheet-presentable.
                     // Render `EmptyView` so a misrouted sheet drive

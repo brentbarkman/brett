@@ -65,6 +65,31 @@ final class BackgroundService {
     /// whenever the rendered image changes.
     private(set) var displayedKey: String = BackgroundService.cachedRemoteURL?.absoluteString ?? ""
 
+    /// Solid "wash" color used as the bed for non-Today pages and below
+    /// the hero on Today. Calm-hero design (2026-05-04) uses the same
+    /// wash everywhere except the Today hero so the photo lives only at
+    /// the home screen.
+    ///
+    /// **Stored** (not computed) so the `@Observable` machinery emits a
+    /// change notification when the v2 photo-sampling work writes a new
+    /// value here. A computed property would render the v2 hand-off
+    /// silent — SwiftUI only tracks reads of stored `@Observable`
+    /// properties — and `WashBackground` consumers wouldn't re-paint
+    /// when the sampled wash arrives.
+    ///
+    /// v1: defaults to a fixed warm-dark neutral that complements every
+    /// photo in the manifest. v2: sample average color of the 50–65%
+    /// vertical band of the current photo (UIImage average) and write
+    /// the sampled color here, cached by `displayedKey`, falling back
+    /// to the v1 default until the sample lands.
+    private(set) var currentWashColor: Color = BackgroundService.defaultWashColor
+
+    /// The v1 fixed wash. Burnt-umber neutral — looks like the deep warm
+    /// color found in the bottom band of the most common photography
+    /// assets without shouting any one of them. Tuned dark enough for
+    /// cards + text to sit on without a vignette.
+    static let defaultWashColor = Color(red: 26/255, green: 22/255, blue: 18/255)
+
     /// Reference count of mounted `BackgroundView` instances. When it
     /// transitions 0 → 1 we start the 60s segment ticker; 1 → 0 stops it.
     /// Multiple mounts (e.g. while a pushed view sits on top of the
@@ -313,6 +338,11 @@ final class BackgroundService {
                 currentRemoteURL = nil
                 currentSolidColor = color
                 currentFallbackAsset = ""
+                // Wash matches the user's solid pick. Without this,
+                // non-Today pages would render in the default warm-dark
+                // while Today shows the user's solid — the two surfaces
+                // would visibly disagree on what color the app is.
+                currentWashColor = color
                 let key = "solid:\(hex)"
                 if displayedKey != key { displayedKey = key }
                 return
@@ -332,6 +362,10 @@ final class BackgroundService {
             currentSolidColor = nil
             currentRemoteURL = url
             currentFallbackAsset = ""
+            // Photo path. v1: reset wash to the default warm-dark
+            // neutral. v2 will sample the photo's middle band and
+            // overwrite this value once the UIImage decode lands.
+            currentWashColor = Self.defaultWashColor
             Self.cachedRemoteURL = url
             let key = url.absoluteString
             if displayedKey != key { displayedKey = key }
@@ -345,6 +379,10 @@ final class BackgroundService {
         currentSolidColor = nil
         currentRemoteURL = nil
         currentFallbackAsset = asset
+        // Same v1 default as the remote-photo path. v2 could ship
+        // pre-sampled wash colors per bundled asset (small lookup
+        // table, ~5 entries) since these are known at build time.
+        currentWashColor = Self.defaultWashColor
         if displayedKey != asset { displayedKey = asset }
     }
 

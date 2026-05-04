@@ -148,40 +148,48 @@ private struct InboxPageBody: View {
         // be scrolled into view. Without this, the new row appears at
         // the top of the inbox card but the user might be scrolled
         // halfway down a long inbox and miss it entirely.
+        //
+        // ZStack layers the wash backdrop under the scroll content so
+        // the photo (rendered by the global BackgroundView at
+        // MainContainer's z-stack root) is masked on this page —
+        // photo lives only on Today per the calm-hero design.
         ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    header
+            ZStack {
+                WashBackground()
 
-                    TypeFilterPills(selected: $selectedFilter)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        header
 
-                    if filteredItems.isEmpty {
-                        if hasCompletedInitialSync {
-                            EmptyState(heading: "Your inbox", copy: "Everything worth doing starts here.")
-                                .padding(.top, 48)
+                        TypeFilterPills(selected: $selectedFilter)
+
+                        if filteredItems.isEmpty {
+                            if hasCompletedInitialSync {
+                                inboxEmptyState
+                            } else {
+                                TaskListPlaceholder()
+                                    .padding(.top, 24)
+                            }
                         } else {
-                            TaskListPlaceholder()
-                                .padding(.top, 24)
+                            inboxCard
+                                .id("inbox_top")
                         }
-                    } else {
-                        inboxCard
-                            .id("inbox_top")
                     }
+                    .padding(.bottom, isSelectMode ? 140 : 70)
                 }
-                .padding(.bottom, isSelectMode ? 140 : 70)
-            }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-            .coordinateSpace(name: "scroll")
-            .onChange(of: NavStore.shared.lastCreatedItemId) { _, newId in
-                guard newId != nil else { return }
-                // Inbox is sorted newest-first, so the new row lives at
-                // the top of the card. Scroll there with a soft spring.
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                    proxy.scrollTo("inbox_top", anchor: .top)
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    NavStore.shared.lastCreatedItemId = nil
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .coordinateSpace(name: "scroll")
+                .onChange(of: NavStore.shared.lastCreatedItemId) { _, newId in
+                    guard newId != nil else { return }
+                    // Inbox is sorted newest-first, so the new row lives at
+                    // the top of the card. Scroll there with a soft spring.
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        proxy.scrollTo("inbox_top", anchor: .top)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        NavStore.shared.lastCreatedItemId = nil
+                    }
                 }
             }
         }
@@ -226,23 +234,49 @@ private struct InboxPageBody: View {
 
     // MARK: - Header
 
+    /// Editorial 38pt serif header per the calm-hero design — parity with
+    /// Today's hero greeting size so the page-to-page swipe carries a
+    /// consistent silhouette.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Inbox")
-                .font(BrettTypography.dateHeader)
-                .foregroundStyle(.white)
-
-            Text("\(visibleInboxItems.count) to triage")
-                .font(BrettTypography.stats)
-                // Bumped from /0.35 (per user "hard to see"). Aligns
-                // with Today's stats line which renders at the same
-                // brightness for the same role.
-                .foregroundStyle(Color.white.opacity(0.55))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
+        EditorialPageHeader(
+            title: "Inbox",
+            subtitle: subtitleCopy
+        )
+        .padding(.top, 12)
         .padding(.bottom, 8)
+    }
+
+    private var subtitleCopy: String {
+        let count = visibleInboxItems.count
+        switch count {
+        case 0: return "All clear"
+        case 1: return "1 to triage"
+        default: return "\(count) to triage"
+        }
+    }
+
+    // MARK: - Empty state
+
+    /// Page-level editorial empty state — used when the inbox has zero
+    /// items after the initial sync has landed. The existing
+    /// `EmptyState` glass card was retired here in favor of pure
+    /// typography on the wash backdrop, matching Today's empty state
+    /// voice.
+    private var inboxEmptyState: some View {
+        VStack(spacing: 8) {
+            Text("Inbox is clear.")
+                .font(BrettTypography.emptyHeading)
+                .foregroundStyle(Color.white.opacity(0.90))
+                .multilineTextAlignment(.center)
+
+            Text("Forward something to your ingest address or use the omnibar.")
+                .font(BrettTypography.emptyCopy)
+                .foregroundStyle(Color.white.opacity(0.40))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+        .padding(.top, 80)
     }
 
     // MARK: - Inbox card

@@ -52,16 +52,18 @@ Empty save the iOS status bar. No top nav, no profile chip, no scouts chip, no s
 - **Photo:** today's atmospheric photo from the existing background manifest, anchored to the top, scaled to fit the hero zone. No glass, no scrim above the brief.
 - **Greeting:** 38pt serif (New York), e.g. "Tuesday morning". Date sub-line below in 13pt sans, white at 0.7.
 - **Brief:** 17pt sans, full white, layered text-shadow (tight 1px outline + soft 8px halo) for legibility on any photo. 2–3 sentences, Calm voice — observation + recommendation, not a status report.
-- **Padding:** 60pt top (clears status bar), 24pt sides, 24pt bottom. No fixed gap to the next section — the hero ends and the work begins.
+- **Padding:** top respects the safe-area inset (Dynamic Island, notch, no-notch all handled by `.safeAreaInset`/safe-area APIs — never hardcode 60pt), 24pt sides, 24pt bottom. No fixed gap to the next section — the hero ends and the work begins.
 
 ### Photo → solid wash transition
 
 As the user scrolls past the hero:
 - The photo crops/fades over ~140pt of scroll.
-- Below the fade, the page background is a solid color **sampled from a 50–65% vertical band of the photo** (averaged at app launch / photo rotation). This solid wash is the bed for all sections below.
+- Below the fade, the page background is a solid color (the "wash") that's intended to be sampled from a 50–65% vertical band of the photo. This solid wash is the bed for all sections below.
 - The transition is one continuous gradient mask, not a hard line.
 
-The same sampled solid is used as the **full-page background on Inbox, Calendar, Lists, and Scouts** — those pages never show the photo. This unifies the palette across the app while keeping Today distinct.
+The same wash color is used as the **full-page background on Inbox, Calendar, Lists, and Scouts** — those pages never show the photo. This unifies the palette across the app while keeping Today distinct.
+
+**Implementation honesty (v1):** real per-photo color sampling on iOS requires async UIImage download → CGImage average-color → published value, plus caching keyed by the BackgroundService's `displayedKey`. For v1 we ship with a **fixed neutral warm-dark wash** (~`#1A1612` / a "burnt umber" tone) that complements every photo in the manifest. Per-photo sampling is a follow-up — flagged below. The architecture (single source on `BackgroundService`, single `WashBackground` consumer view) is designed so swapping the constant for a sampled value is a one-line change.
 
 ### Sections (preserve sticky/collapse)
 
@@ -71,11 +73,16 @@ The existing `StickyCardSection` ([apps/ios/Brett/Views/Shared/StickyCardSection
 
 This is non-negotiable — it's the load-bearing scroll mechanic of Today and we spent significant time getting it right. The hero scroll behavior layers on top of this; it does not replace it.
 
-Section order on Today:
-1. **Overdue** — header in red. Items show their original day in red ("Friday", "Wednesday"). No "X days overdue" subtext (the section title is enough).
+Section order on Today (matches existing `taskSections` in [TodayPage.swift:273](apps/ios/Brett/Views/Today/TodayPage.swift:273)):
+1. **Overdue** — header in white at 0.55. Items show their original day in red ("Friday", "Wednesday"). No "X days overdue" subtext (the section title is enough).
 2. **Today** — header in white at 0.55.
-3. **This week** — header in white at 0.55. Content items (newsletters, articles, podcasts) cluster here by default.
-4. **Done today** — header de-emphasized (smaller, white at 0.30). Completed items move into this section. Empty if nothing done today.
+3. **This Week** — header in white at 0.55. Content items (newsletters, articles, podcasts) cluster here by default.
+4. **Next Week** — header in white at 0.55. Already exists in code; keeping for parity with the bucketing logic in `TodaySections`.
+5. **Done Today** — header de-emphasized (smaller, white at 0.30). Completed items move into this section. Empty if nothing done today.
+
+**Hero ↔ sticky interaction:** the hero is part of the same ScrollView as the sections, so the hero scrolls UP and OFF as the user scrolls. It is NOT pinned. Section headers continue to pin at the top of the viewport per the existing StickyCardSection mechanics — the hero just scrolls past them. The first section header pins under the status-bar safe area inset, not under the (already-scrolled-away) hero.
+
+**NextUpCard placement:** the existing `NextUpCard` (the "in 12 min: Standup" event ticker) renders just below the hero, above the Overdue section. It's a thin glass pill that earns its place when there's an imminent meeting; out of view otherwise.
 
 ### Empty state (Today)
 
@@ -136,8 +143,8 @@ The omnibar AI parses intent (task vs question vs command). **In the current iOS
 
 Just above the omnibar, a row of four small pills (Today / Inbox / Calendar / Lists) with the gold "B" menu chip at the right end.
 
-- **Adaptive opacity:** at the very top of Today the row is invisible (opacity 0). It fades in as the user scrolls past the hero (0 → 1 over the same ~140pt as the photo→solid transition). On other pages it's always at full opacity.
-- **B chip:** gold disc with a stylized "B". Tap opens a bottom sheet (medium detent) with:
+- **Adaptive opacity:** at the very top of Today the row is invisible (opacity 0). It fades in as the user scrolls past the hero (0 → 1 over the same ~140pt as the photo→solid transition). On other pages it's always at full opacity. **Implementation:** TodayPage publishes its scroll offset via a preference key; `MainContainer` reads it and drives the pills/omnibar opacity. On non-Today pages the published offset is treated as "past hero" (opacity = 1).
+- **B chip:** gold disc with a stylized "B". Persistent across page swipes (lives in `MainContainer`'s bottom overlay alongside the omnibar, not per-page). Tap opens a bottom sheet sized to its content (custom small detent ~`.fraction(0.30)` — 4 short rows don't need a half-screen sheet) with:
   - **Profile** — `brent@brett.app`, push to existing profile screen.
   - **Scouts** — sub "N active", push to the redesigned Scouts roster.
   - **Notifications** — sub "Coming soon", disabled state for now.
@@ -151,7 +158,7 @@ Just above the omnibar, a row of four small pills (Today / Inbox / Calendar / Li
 **Use the existing icons in the app.** The mockup's icons were placeholder-quality. The real implementation pulls from [TaskRow.swift:258-337](apps/ios/Brett/Views/Shared/TaskRow.swift:258) with two adjustments:
 
 1. **All icons gold.** Currently content items use cerulean. Change content to use the same gold tint as tasks. Cerulean stays reserved for Brett-generated surfaces (briefing, take, AI cards) per the design guide.
-2. **Done state stays as the existing green checkmark treatment** ([TaskRow.swift:303](apps/ios/Brett/Views/Shared/TaskRow.swift:303)). The mockup's gold-disc-with-checkmark was a stylization; the app's existing green is correct and ships everywhere — keep it for parity with desktop.
+2. **Done state: NO icon swap.** The current `completionGlyph` branch in [TaskRow.swift:294](apps/ios/Brett/Views/Shared/TaskRow.swift:294) replaces the type icon with a green checkmark on completion — remove this. The done state should be communicated by the existing title fade + strikethrough only ([TaskRow.swift:198-199](apps/ios/Brett/Views/Shared/TaskRow.swift:198)). The original task/content icon stays put when an item is checked off, just dimmed via the title's lower opacity. Less visual chatter, calmer aesthetic. (Update `leadingGlyph` to drop the `viewModel.isCompleted` branch entirely; selectMode + content + task branches remain.)
 
 Otherwise the SF Symbol mapping is unchanged:
 - Task: `bolt.fill`
@@ -226,9 +233,11 @@ The Scouts roster ([ScoutsRosterView.swift](apps/ios/Brett/Views/Scouts/ScoutsRo
 
 ## Background system (existing — clarification)
 
-The existing background manifest (6 time segments × 3 busyness tiers, ~36 photography images on iOS) feeds the photo. Today's photo is selected at app launch / on the existing rotation cadence. **The sampled solid wash is computed once per photo** and cached on the photo metadata so every page using the wash looks identical until the photo rotates.
+The existing background manifest (6 time segments × 3 busyness tiers, ~36 photography images on iOS) feeds the photo. Today's photo is selected at app launch / on the existing rotation cadence.
 
-If sampling is non-trivial to do in Swift at runtime, an acceptable shortcut is **pre-sampling the wash colors at manifest build time** and shipping them in the manifest JSON.
+**v1 ships with a fixed wash color** — a warm-dark neutral that complements every photo in the manifest. This avoids per-photo sampling in the first PR. The cold-launch reveal (Ken Burns scale + cover fade in [MainContainer.swift:121-122](apps/ios/Brett/Views/MainContainer.swift:121)) continues to work — the hero photo is just another renderer of `BackgroundService` and inherits the awakening behavior.
+
+**v2: per-photo wash sampling.** Sample the average color of the 50–65% vertical band of each loaded photo (UIImage → CGContext draw → average → published `currentWashColor: Color?`), cached by `displayedKey`. Until the sample lands, the v1 fixed wash is the fallback. Alternative: pre-sample at manifest build time and ship colors in the manifest JSON — slightly simpler runtime, requires manifest tooling.
 
 ---
 
