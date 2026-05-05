@@ -71,30 +71,43 @@ struct OmnibarView: View {
     // MARK: - Pill
 
     private var pill: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             // Text field.
             TextField("", text: $inputText, prompt:
-                Text(placeholder).foregroundStyle(BrettColors.textPlaceholder)
+                Text(placeholder).foregroundStyle(Color.white.opacity(0.55))
             )
-            .font(.system(size: 15))
-            .foregroundStyle(Color.white.opacity(0.90))
+            .font(.system(size: 13))
+            .foregroundStyle(Color.white.opacity(0.85))
             .tint(BrettColors.gold)
             .focused($isFocused)
             .submitLabel(.send)
             .onSubmit { submit() }
             .accessibilityIdentifier("omnibar.input")
 
-            // Right: send when text present, mic when empty. Both at
-            // the gold accent color per the calm-hero spec — the mic
-            // was previously white/35 which read as disabled chrome
-            // rather than the brand's voice affordance.
+            // Right: send when text present, mic when empty. Both
+            // render as a 38pt gold-filled circle per the v18
+            // mockup — `omni-mic { width:38; background: rgba(199,154,77,0.85);
+            // border: 1px rgba(255,220,180,0.30); box-shadow: 0 4px 10px ...; }`.
+            // The previous treatment used a tiny 30pt foreground-only
+            // gold glyph which read as disabled, not as the voice
+            // affordance.
             if hasText {
                 Button { submit() } label: {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
-                        .frame(width: 30, height: 30)
-                        .background(BrettColors.gold, in: Circle())
+                        .frame(width: 38, height: 38)
+                        .background {
+                            Circle()
+                                .fill(BrettColors.gold.opacity(0.85))
+                                .overlay {
+                                    Circle().strokeBorder(
+                                        Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.30),
+                                        lineWidth: 1
+                                    )
+                                }
+                                .shadow(color: BrettColors.gold.opacity(0.30), radius: 5, x: 0, y: 4)
+                        }
                 }
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
                 .accessibilityIdentifier("omnibar.send")
@@ -102,31 +115,58 @@ struct OmnibarView: View {
                 Button { enterVoiceMode() } label: {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(BrettColors.gold.opacity(0.85))
-                        .frame(width: 30, height: 30)
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background {
+                            Circle()
+                                .fill(BrettColors.gold.opacity(0.85))
+                                .overlay {
+                                    Circle().strokeBorder(
+                                        Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.30),
+                                        lineWidth: 1
+                                    )
+                                }
+                                .shadow(color: BrettColors.gold.opacity(0.30), radius: 5, x: 0, y: 4)
+                        }
                 }
+                .accessibilityLabel("Voice input")
             }
         }
         .padding(.leading, 18)
         .padding(.trailing, 6)
-        .padding(.vertical, 7)
+        .frame(height: 50)
         .background {
-            // Floating capsule with .thinMaterial — feels like a
-            // discrete object resting above the page, not chrome welded
-            // to the bottom edge. Adaptive opacity drives the calm-hero
-            // chrome rule (thinner glass at the top of the hero,
-            // substantive glass at the work zone). A faint gold rim
-            // appears on submit (existing pulse) and red on parse
-            // failure — both ride the capsule shape so the stroke
-            // tracks the curved corners.
+            // Tinted dark-warm capsule with a real drop shadow per the
+            // v18 mockup spec — `background: rgba(20,14,18, 0.55);
+            // backdrop-filter: blur(36px) saturate(180%); border: 1px
+            // rgba(255,255,255,0.14); box-shadow: 0 16px 36px
+            // rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.10);`.
+            //
+            // Was using `.thinMaterial` previously which gave us the
+            // standard iOS-translucent-white glass look — wrong family
+            // for a calm-hero pill that should read as a dark warm
+            // object floating over the wash, not as iOS chrome.
             ZStack {
                 Capsule()
-                    .fill(.thinMaterial)
-                    .overlay {
+                    .fill(Color(red: 20/255, green: 14/255, blue: 18/255).opacity(backgroundOpacity * 0.85 + 0.10))
+                    .background(
                         Capsule()
-                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                            .fill(.ultraThinMaterial)
+                            .opacity(backgroundOpacity)
+                    )
+                    .overlay {
+                        // Outer hairline border + a subtle top inner
+                        // highlight (mockup's `inset 0 1px 0 ...`).
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
                     }
-                    .opacity(backgroundOpacity)
+                    .overlay(alignment: .top) {
+                        Capsule()
+                            .frame(height: 1)
+                            .foregroundStyle(Color.white.opacity(0.10))
+                            .padding(.horizontal, 10)
+                    }
+                    .shadow(color: Color.black.opacity(0.50), radius: 18, x: 0, y: 16)
 
                 Capsule()
                     .stroke(
@@ -142,10 +182,6 @@ struct OmnibarView: View {
                     )
                     .animation(.easeOut(duration: 0.2), value: parseFailure)
             }
-            // Reduce Motion: snap the bg opacity to its target rather
-            // than crossfading. The crossfade is tied to scroll
-            // position so it reads as ambient motion that a
-            // Reduce-Motion user has opted out of.
             .animation(
                 BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)),
                 value: backgroundOpacity

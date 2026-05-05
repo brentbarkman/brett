@@ -130,6 +130,22 @@ private struct TodayPageBody: View {
     // MARK: - UI state
 
     @State private var pendingReflowTask: Task<Void, Never>? = nil
+
+    /// Reactive read of the shared hero-scroll state — drives the
+    /// editorial parallax/opacity/scale on `TodayHero` per the v18
+    /// mockup's `applyTodayVerticalScroll`. Same source the
+    /// MainContainer reads from for adaptive chrome, so the hero,
+    /// pills, and omnibar bg all transition in lockstep.
+    @State private var heroScroll = HeroScrollState.shared
+
+    /// Smoothstep-eased 0–1 progress over a given scroll distance —
+    /// matches the mockup's `t * t * (3 - 2 * t)` curve. Linear
+    /// progress reads as mechanical at the endpoints; smoothstep
+    /// snaps softly to 0/1 and feels the way the mockup does.
+    private func heroProgress(over distance: CGFloat) -> Double {
+        let raw = Double(min(max(heroScroll.offset / distance, 0), 1))
+        return raw * raw * (3 - 2 * raw)
+    }
     /// Snapshot of the active item set at the moment of last completion. When
     /// the debounce window expires we bring the view's "working set" in line
     /// with the live data and the completed items slide into Done.
@@ -183,11 +199,23 @@ private struct TodayPageBody: View {
                     // mount-time date — fine for a greeting that only
                     // needs to roll over at part-of-day boundaries.
                     TodayHero(briefingStore: briefingStore, date: tickerNow)
-                        // Scroll-offset publisher → adaptive chrome
-                        // (pills + omnibar bg fade in as the hero
-                        // scrolls away). Writes through to the shared
-                        // `HeroScrollState` so MainContainer's reads
-                        // are reactive without depending on
+                        // Editorial parallax — hero text fades + lifts
+                        // + tightens as the user scrolls (matches the
+                        // v18 mockup's `applyTodayVerticalScroll`).
+                        // Translates 30% faster than scroll so the
+                        // hero "leaves quickly" and surfaces the wash
+                        // bed underneath. Opacity 1→0 over 200pt of
+                        // scroll, scale 1→0.96. Reads from the same
+                        // shared HeroScrollState the chrome reads
+                        // from — one source of truth for the whole
+                        // hero-scroll story.
+                        .opacity(1 - heroProgress(over: 200))
+                        .scaleEffect(1 - heroProgress(over: 200) * 0.04)
+                        .offset(y: -heroScroll.offset * 0.3)
+                        // Scroll-offset publisher → HeroScrollState.
+                        // Writes through to the shared @Observable
+                        // so MainContainer's adaptive chrome reads
+                        // reactively without depending on
                         // PreferenceKey propagation through TabView
                         // (which is unreliable when SwiftUI keeps
                         // background pages mounted but layout-skipped).
@@ -214,9 +242,14 @@ private struct TodayPageBody: View {
                     .frame(height: 140)
 
                     // Wash bed. Carries NextUp, the 5 task sections, and
-                    // the empty state. Single `.background(washColor)`
-                    // here means SwiftUI doesn't restart material chains
-                    // per child.
+                    // the empty state. `minHeight: 1.5×screen` so the
+                    // wash always extends past the visible viewport
+                    // even when the content is short — without it,
+                    // the global photo (rendered behind the
+                    // ScrollView) bled through the empty area at the
+                    // bottom of a short list and read as a "solid
+                    // border / scrim" stripe between the wash and the
+                    // omnibar.
                     VStack(spacing: 0) {
                         if hasNextUpEvent {
                             NextUpCard(event: nextUpcomingEvent, now: tickerNow)
@@ -225,10 +258,18 @@ private struct TodayPageBody: View {
                         taskSections
 
                         emptyState
+
+                        // Tail spacer so the wash extends below the
+                        // last item without depending on container
+                        // height tricks. Cheap (no draw cost on
+                        // empty Color), and keeps the wash painting
+                        // behind the omnibar on overscroll.
+                        Color.clear.frame(height: 400)
                     }
+                    .frame(maxWidth: .infinity)
                     .background(BackgroundService.shared.currentWashColor)
                 }
-                .padding(.bottom, 110)
+                .padding(.bottom, 0)
                 // Inner VStack surfaces more reliably as an accessibility
                 // element than the outer ScrollView — XCUITest identifier
                 // lookups on ScrollView inconsistently resolve.
@@ -238,22 +279,6 @@ private struct TodayPageBody: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "scroll")
-            // Soft fade at the bottom 80pt so list content disappears
-            // gracefully into the omnibar zone instead of crashing
-            // into it. Keeps the editorial calm even when the page
-            // is scrolled to where a task row would otherwise sit
-            // directly behind the floating pill.
-            .mask {
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.85),
-                        .init(color: .clear, location: 1.0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
             .refreshable {
                 try? await ActiveSession.syncManager?.pullToRefresh()
                 await briefingStore.fetch()
