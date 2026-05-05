@@ -35,22 +35,33 @@ struct TaskSection: View {
                 // and the user wants iOS to match. The label text +
                 // (optional) accentColor stripe on the rows already
                 // signal what kind of section this is.
+                // Header treatment per v18 mockup `.section-head`:
+                //   color: rgba(255,255,255,0.55)
+                //   font: 11px, weight 600, uppercase, ls 0.06em
+                // Overdue and Done sections take their own tints
+                // (`.overdue` muted-red family, `.done-head` muted
+                // white + gold count). `Section.kind(label:)` reads
+                // the label string and returns the right palette.
+                let kind = SectionKind.kind(for: label)
                 HStack(spacing: 6) {
                     Text(label.uppercased())
-                        .font(BrettTypography.sectionLabel)
-                        .tracking(2.4)
-                        // Bumped from /0.40 → /0.65: against the
-                        // burnt-umber wash backdrop the prior
-                        // contrast was barely legible. Still subdued
-                        // enough to read as a section label, not a
-                        // primary header.
-                        .foregroundStyle(Color.white.opacity(0.65))
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.66) // 0.06em at 11pt ≈ 0.66pt
+                        .foregroundStyle(kind.labelColor)
 
                     Spacer()
 
+                    // Count pill — `rgba(255,255,255,0.10)` bg + count
+                    // text white/0.65. Overdue + Done sections swap
+                    // the palette for their own tints.
                     Text("\(items.count)")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.50))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(kind.countTextColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background {
+                            Capsule().fill(kind.countBgColor)
+                        }
                 }
             } content: {
                 VStack(spacing: 0) {
@@ -98,6 +109,46 @@ struct TaskSection: View {
                 )
             }
             .id("section_\(label.lowercased().replacingOccurrences(of: " ", with: "_"))")
+        }
+    }
+
+    /// Palette mapping for section header chrome. Each kind drives
+    /// label color + count pill bg + count text color, matching the
+    /// v18 mockup's `.section-head`, `.section-head.overdue`, and
+    /// `.section-head.done-head` rules verbatim.
+    private enum SectionKind {
+        case standard
+        case overdue
+        case done
+
+        static func kind(for label: String) -> SectionKind {
+            switch label.lowercased() {
+            case "overdue": return .overdue
+            case "done today": return .done
+            default: return .standard
+            }
+        }
+
+        var labelColor: Color {
+            switch self {
+            case .standard: return Color.white.opacity(0.55)
+            case .overdue: return Color(red: 232/255, green: 138/255, blue: 138/255).opacity(0.95)
+            case .done: return Color.white.opacity(0.40)
+            }
+        }
+        var countBgColor: Color {
+            switch self {
+            case .standard: return Color.white.opacity(0.10)
+            case .overdue: return Color(red: 232/255, green: 138/255, blue: 138/255).opacity(0.18)
+            case .done: return BrettColors.gold.opacity(0.20)
+            }
+        }
+        var countTextColor: Color {
+            switch self {
+            case .standard: return Color.white.opacity(0.65)
+            case .overdue: return Color(red: 1.0, green: 0.78, blue: 0.78).opacity(0.95)
+            case .done: return Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.85)
+            }
         }
     }
 

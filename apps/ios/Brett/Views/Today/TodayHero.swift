@@ -26,18 +26,25 @@ struct TodayHero: View {
     let date: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Greeting + date sub-line. Both carry the photo-shadow so
-            // they're legible against any wallpaper in the manifest.
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 18) {
+            // Greeting + date sub-line. Per v18 mockup:
+            //   .greeting { 38px serif, weight 500, letter-spacing -0.02em }
+            //   .meta     { 11px UPPERCASE, white/0.75, letter-spacing 0.04em }
+            // Was rendering the date as plain mixed-case 13pt — too
+            // chatty next to the editorial greeting; the uppercase
+            // tracked treatment reads as an editorial dateline.
+            VStack(alignment: .leading, spacing: 8) {
                 Text(greeting)
-                    .font(.system(size: 38, weight: .regular, design: .serif))
+                    .font(.system(size: 38, weight: .medium, design: .serif))
+                    .tracking(-0.76) // -0.02em at 38pt
                     .foregroundStyle(.white)
+                    .lineLimit(1)
                     .modifier(HeroLegibilityShadow())
 
-                Text(dateSubtitle)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.70))
+                Text(dateSubtitle.uppercased())
+                    .font(.system(size: 11, weight: .regular))
+                    .tracking(0.44) // 0.04em at 11pt
+                    .foregroundStyle(Color.white.opacity(0.75))
                     .modifier(HeroLegibilityShadow())
             }
 

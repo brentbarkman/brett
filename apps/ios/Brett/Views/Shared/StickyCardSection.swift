@@ -95,7 +95,7 @@ struct StickyCardSection<Header: View, Content: View>: View {
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
 
-    private let cornerRadius: CGFloat = 14
+    private let cornerRadius: CGFloat = 16  // v18 mockup `.card { border-radius: 16px }`
     private let headerHeight: CGFloat = 38
     private let fadeDistance: CGFloat = 24
 
@@ -183,11 +183,13 @@ struct StickyCardSection<Header: View, Content: View>: View {
         // Border picks up the tint when one is provided so AI-surface
         // cards (Brett's Take, Daily Briefing, Brett Chat) carry the
         // signature cerulean rim — matches Electron's
-        // `border border-brett-cerulean/30` treatment.
+        // `border border-brett-cerulean/30` treatment. Default border
+        // is `rgba(255,255,255,0.12)` per v18 mockup `.card { border:
+        // 1px solid rgba(255,255,255,0.12) }`.
         .overlay {
             cardShape.strokeBorder(
-                tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.10),
-                lineWidth: tint == nil ? 0.5 : 1
+                tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.12),
+                lineWidth: 1
             )
         }
         .padding(.horizontal, 16)

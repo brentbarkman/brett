@@ -75,7 +75,8 @@ struct TaskRow: View {
             capturedLabel: Self.capturedLabel(for: item),
             listName: listName,
             contentDomain: item.contentDomain,
-            relinkTask: RelinkTask.parse(source: item.source, sourceId: item.sourceId)
+            relinkTask: RelinkTask.parse(source: item.source, sourceId: item.sourceId),
+            isOverdue: Self.isOverdue(item)
         )
         self.onToggle = onToggle
         self.onSelect = onSelect
@@ -192,40 +193,52 @@ struct TaskRow: View {
                         }
                     )
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    // Title — 13pt weight 500 white per the v18 mockup
+                    // (`.task-title { font-size: 13px; font-weight: 500;
+                    // color: #fff; line-height: 1.35 }`). The legacy
+                    // `BrettTypography.taskTitle` is 15pt, sized for
+                    // Settings rows; calm-hero task rows want tighter,
+                    // editorial-print proportions.
                     Text(viewModel.title)
-                        .font(BrettTypography.taskTitle)
-                        .foregroundStyle(viewModel.isCompleted ? BrettColors.textMeta : BrettColors.textCardTitle)
-                        .strikethrough(viewModel.isCompleted, color: BrettColors.textGhost)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(viewModel.isCompleted ? Color.white.opacity(0.45) : Color.white)
+                        .strikethrough(viewModel.isCompleted, color: Color.white.opacity(0.30))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
                     HStack(spacing: 6) {
+                        // Meta — 11pt white/0.55 per the mockup
+                        // (`.task-meta`). Overdue items render the
+                        // day-of-week ("Friday", "Wednesday") in a
+                        // muted warm red (`.task-meta.overdue-meta`)
+                        // — `viewModel.isOverdue` carries the bucket
+                        // membership upstream.
                         if let time = viewModel.timeLabel {
                             Text(time)
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta)
+                                .font(.system(size: 11))
+                                .foregroundStyle(metaColor)
                         } else if let captured = viewModel.capturedLabel {
                             Text("Captured \(captured)")
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta)
+                                .font(.system(size: 11))
+                                .foregroundStyle(metaColor)
                         }
 
                         if let listName = viewModel.listName {
                             if viewModel.timeLabel != nil || viewModel.capturedLabel != nil {
                                 Text("·")
-                                    .font(BrettTypography.taskMeta)
-                                    .foregroundStyle(BrettColors.textGhost)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color.white.opacity(0.30))
                             }
                             Text(listName)
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.white.opacity(0.55))
                         }
 
                         if let domain = viewModel.contentDomain {
                             Text(domain)
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.cerulean.opacity(0.6))
+                                .font(.system(size: 11))
+                                .foregroundStyle(BrettColors.gold.opacity(0.65))
                         }
                     }
                 }
@@ -295,37 +308,54 @@ struct TaskRow: View {
         .transition(.scale.combined(with: .opacity))
     }
 
+    /// 28pt gold-tinted glass circle per the v18 calm-hero mockup
+    /// (`.type-icon`). All user-content rows (task + content) wear
+    /// the same chrome — type is signalled by the glyph shape, not
+    /// the tile color. Cerulean is reserved for Brett-generated
+    /// surfaces and never appears on row icons.
+    ///
+    /// Mockup CSS:
+    ///   width: 28; background: rgba(199,154,77,0.18);
+    ///   border: 1px solid rgba(199,154,77,0.40);
+    ///   color: rgba(255,230,200,0.95); inset highlight at top.
     private var contentGlyph: some View {
-        ZStack {
-            Circle()
-                .fill(Color.black.opacity(0.20))
-                .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                }
-                .frame(width: 30, height: 30)
-
-            // Gold tint, matching `taskGlyph`. Cerulean is reserved for
-            // Brett-generated surfaces (briefing, take, AI cards) —
-            // captured user content uses the same gold accent regardless
-            // of whether it's a task or a content item.
+        typeIconCircle {
             Image(systemName: "doc.text")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(BrettColors.gold.opacity(0.7))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color(red: 1.0, green: 0.90, blue: 0.78).opacity(0.95))
         }
     }
 
     private var taskGlyph: some View {
+        typeIconCircle {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color(red: 1.0, green: 0.90, blue: 0.78).opacity(0.95))
+        }
+    }
+
+    /// Shared circle chrome for task + content type icons. Matches
+    /// the v18 mockup's `.type-icon` exactly so a row in the iOS
+    /// app reads the same as the mockup at-a-glance.
+    @ViewBuilder
+    private func typeIconCircle<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         ZStack {
             Circle()
-                .fill(Color.black.opacity(0.20))
+                .fill(BrettColors.gold.opacity(0.18))
                 .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                    Circle().strokeBorder(BrettColors.gold.opacity(0.40), lineWidth: 1)
                 }
-                .frame(width: 30, height: 30)
-
-            Image(systemName: "bolt.fill")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(BrettColors.gold.opacity(0.7))
+                .overlay(alignment: .top) {
+                    // Inset top highlight (mockup `box-shadow:
+                    // inset 0 1px 0 rgba(255,255,255,0.06)`).
+                    Circle()
+                        .trim(from: 0, to: 0.5)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .frame(width: 26, height: 26)
+                        .rotationEffect(.degrees(180))
+                }
+                .frame(width: 28, height: 28)
+            content()
         }
     }
 
@@ -402,6 +432,31 @@ struct TaskRow: View {
         let listName: String?
         let contentDomain: String?
         let relinkTask: RelinkTask?
+        /// True when the item's due date is before the start of today.
+        /// Drives the v18 mockup's `.task-meta.overdue-meta` red tint
+        /// — the meta whisper renders in muted warm red so the row
+        /// reads as "you're late" without needing a separate "X days
+        /// overdue" suffix (the section header already says OVERDUE).
+        let isOverdue: Bool
+    }
+
+    /// True when the item is active and due before today started.
+    /// Mirrors `TodaySections.bucket`'s overdue test so the row's
+    /// visual matches what the section bucketing decided.
+    private static func isOverdue(_ item: Item) -> Bool {
+        guard item.itemStatus == .active, let due = item.dueDate else { return false }
+        return due < Calendar.current.startOfDay(for: Date())
+    }
+
+    /// Meta whisper color — muted warm red for overdue rows
+    /// (`rgba(232, 138, 138, 0.85)` from the v18 mockup), white/0.55
+    /// otherwise. Done items keep the normal meta color; the title
+    /// strikethrough already carries the done signal.
+    private var metaColor: Color {
+        guard !viewModel.isCompleted, viewModel.isOverdue else {
+            return Color.white.opacity(0.55)
+        }
+        return Color(red: 232/255, green: 138/255, blue: 138/255).opacity(0.85)
     }
 
     /// Convert a task title into a stable, predictable accessibility-id token.
@@ -423,15 +478,32 @@ struct TaskRow: View {
         return formatter
     }()
 
-    /// Time whisper — only render when the due date carries a time-of-day
-    /// (we skip midnight-only dates so the row doesn't read "12:00 AM" for
-    /// every item without a precise time).
+    /// Time whisper — render the time-of-day when the due date
+    /// carries one ("9:00 am"); for overdue items without a time-of-
+    /// day fall back to the weekday name ("Friday", "Wednesday") so
+    /// the row tells the user *when* it slipped without resorting to
+    /// "X days overdue" math (the section header already says
+    /// OVERDUE). Items in any non-overdue bucket without a time
+    /// stay quiet — `nil` means "no time whisper, skip the segment."
     private static func timeLabel(for item: Item) -> String? {
         guard let due = item.dueDate else { return nil }
         let comps = Calendar.current.dateComponents([.hour, .minute], from: due)
-        if (comps.hour ?? 0) == 0 && (comps.minute ?? 0) == 0 { return nil }
-        return timeFormatter.string(from: due).lowercased() // "9:00 am" style
+        let hasTimeOfDay = (comps.hour ?? 0) != 0 || (comps.minute ?? 0) != 0
+        if hasTimeOfDay {
+            return timeFormatter.string(from: due).lowercased()
+        }
+        // Overdue + midnight-only date → weekday whisper.
+        if due < Calendar.current.startOfDay(for: Date()) {
+            return weekdayFormatter.string(from: due)
+        }
+        return nil
     }
+
+    private static let weekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        return formatter
+    }()
 
     private static func capturedLabel(for item: Item) -> String? {
         // "Captured {relative}" for undated content/inbox items
