@@ -181,6 +181,29 @@ struct MainContainer: View {
         return 0.55 + (1.0 - 0.55) * clamped
     }
 
+    /// Full-screen wash overlay opacity. Fades in over the same
+    /// distance as the pills so the sampled wash visually replaces
+    /// the photo under the status bar (which the in-scroll wash bed
+    /// can't reach because the ScrollView respects the top safe
+    /// area). Mirrors the v18 mockup's two-layer architecture:
+    /// `solidBg` at z=2 fades from 0 → ~1 as scroll progresses;
+    /// `blurBg` (the photo) effectively goes away because the
+    /// wash now covers it edge-to-edge. Always 0 on non-Today pages
+    /// (those pages render their own opaque WashBackground inside
+    /// the page so the global photo is already covered).
+    private var fullScreenWashOpacity: Double {
+        guard currentPage == 2 else { return 0 }
+        let progress = Double(heroScroll.offset / Self.heroFadeDistance)
+        let clamped = min(max(progress, 0), 1)
+        // Smoothstep eased — matches the hero parallax curve so all
+        // calm-hero motion shares one easing language.
+        let eased = clamped * clamped * (3 - 2 * clamped)
+        // Cap just under 1 so the photo isn't TECHNICALLY gone — at
+        // 0.96 the photo is invisible but the renderer still keeps
+        // it warm in case the user scrolls back up.
+        return eased * 0.96
+    }
+
     var body: some View {
         // `@Bindable` projection so we can pass `$selection.currentDestination`
         // to `.sheet(item:)`. The `@State` wrapper alone gives us a
@@ -194,6 +217,22 @@ struct MainContainer: View {
             ZStack {
                 BackgroundView()
                     .scaleEffect(kenBurnsScale, anchor: .center)
+
+                // Full-screen wash overlay — fades in over the photo
+                // (including the status-bar safe area) as the user
+                // scrolls past the Today hero. Mirrors the v18
+                // mockup's `solidBg` layer; the in-scroll wash bed
+                // alone can't reach the safe-area zone, which left a
+                // photo strip visible under the status bar even at
+                // full work-mode scroll.
+                BackgroundService.shared.currentWashColor
+                    .opacity(fullScreenWashOpacity)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .animation(
+                        BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)),
+                        value: fullScreenWashOpacity
+                    )
 
                 // Shake detection is handled by `ShakeMonitor.shared` (polls
                 // CoreMotion at the app level) and presented by
