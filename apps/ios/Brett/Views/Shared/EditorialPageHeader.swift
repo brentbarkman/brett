@@ -17,6 +17,12 @@ struct EditorialPageHeader: View {
     let title: String
     let subtitle: String?
     var variant: Variant = .onWash
+    /// Inset from the leading edge. Default 24pt to match the
+    /// canonical calm-hero pages (Today / Inbox / Lists / Calendar /
+    /// Scouts). Settings nests the header inside `BrettSettingsScroll`
+    /// (which already pads 16pt for cards), so it passes 0 here to
+    /// avoid compounding to a 40pt offset.
+    var horizontalPadding: CGFloat = 24
 
     enum Variant {
         case onWash
@@ -38,7 +44,7 @@ struct EditorialPageHeader: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, horizontalPadding)
     }
 }
 

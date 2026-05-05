@@ -166,6 +166,12 @@ struct BrettSettingsScroll<Content: View>: View {
         // as every non-Today surface. The photo is a privilege of the
         // home screen; Settings is a dense form context where the
         // photo would compete with the typed-data inputs anyway.
+        //
+        // Section cards keep the prior 16pt gutter; the editorial
+        // 38pt header is nested with `horizontalPadding: 0` (its own
+        // 24pt inset is suppressed) so the title's leading edge ends
+        // up at the same 16pt as the cards rather than compounding
+        // to 40pt.
         ZStack {
             WashBackground()
 

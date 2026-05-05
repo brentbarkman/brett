@@ -58,19 +58,37 @@ struct DayTimeline: View {
         let visibleStart = resolveStartHour(timed: timed)
         let visibleEnd = resolveEndHour(timed: timed)
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if !allDay.isEmpty {
-                    allDayBand(events: allDay)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        .padding(.bottom, 4)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !allDay.isEmpty {
+                        allDayBand(events: allDay)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                            .padding(.bottom, 4)
+                    }
+                    timelineGrid(timed: timed, startHour: visibleStart, endHour: visibleEnd)
                 }
-                timelineGrid(timed: timed, startHour: visibleStart, endHour: visibleEnd)
+                .padding(.bottom, 120)
             }
-            .padding(.bottom, 120)
+            .scrollIndicators(.hidden)
+            .onAppear {
+                // Auto-scroll to ~1 hour before "now" on the current
+                // day so the user lands somewhere useful instead of
+                // 6 AM. Other days don't auto-scroll — there's no
+                // canonical "interesting" hour for a future date.
+                guard calendar.isDateInToday(selectedDate) else { return }
+                let nowHour = calendar.component(.hour, from: Date())
+                let target = max(visibleStart, nowHour - 1)
+                // Defer to the next runloop so the layout has rendered
+                // the hour rows before we ask the proxy to find one.
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo("hour-\(target)", anchor: .top)
+                    }
+                }
+            }
         }
-        .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
@@ -127,6 +145,10 @@ struct DayTimeline: View {
                             .frame(maxWidth: .infinity)
                     }
                     .frame(height: hourHeight)
+                    // ScrollViewReader anchor used by the body's
+                    // `onAppear` to land the user near "now" on the
+                    // current day instead of 6 AM.
+                    .id("hour-\(hour)")
                 }
             }
 

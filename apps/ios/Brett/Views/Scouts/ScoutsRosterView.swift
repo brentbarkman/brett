@@ -153,13 +153,17 @@ private struct ScoutsRosterBody: View {
         // the rest of the app. Previously had a custom gold "Back" button
         // which diverged from ScoutDetailView's "Scouts" label and from
         // every other pushed screen's default chrome.
-        // `.navigationTitle("Scouts")` is required: without it (or some
-        // other navbar registrant like a `.principal` toolbar item),
-        // SwiftUI doesn't wire the interactive pop gesture, so the user
-        // can't swipe-from-the-edge to go back. Slight visual
-        // redundancy with the big in-page "Scouts" header is the price.
-        .navigationTitle("Scouts")
+        //
+        // No `.navigationTitle("Scouts")` — the editorial 38pt header
+        // in the page body is the only "Scouts" label the user sees.
+        // A `.principal` toolbar item set to `EmptyView()` registers a
+        // navbar customisation (which SwiftUI requires to wire the
+        // interactive pop gesture) without showing duplicate text.
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) { EmptyView() }
+        }
         .task {
             // One fetch of all scouts; the segmented picker filters them
             // client-side so switching filters is instant and never shows

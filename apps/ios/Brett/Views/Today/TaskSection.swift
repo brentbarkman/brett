@@ -39,17 +39,18 @@ struct TaskSection: View {
                     Text(label.uppercased())
                         .font(BrettTypography.sectionLabel)
                         .tracking(2.4)
-                        // Always neutral white — matches Electron's
-                        // `text-white/40` for ALL sections (Overdue
-                        // included). Per-section accent now lives only
-                        // on the row stripe.
-                        .foregroundStyle(Color.white.opacity(0.60))
+                        // Bumped from /0.40 → /0.65: against the
+                        // burnt-umber wash backdrop the prior
+                        // contrast was barely legible. Still subdued
+                        // enough to read as a section label, not a
+                        // primary header.
+                        .foregroundStyle(Color.white.opacity(0.65))
 
                     Spacer()
 
                     Text("\(items.count)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.40))
+                        .foregroundStyle(Color.white.opacity(0.50))
                 }
             } content: {
                 VStack(spacing: 0) {

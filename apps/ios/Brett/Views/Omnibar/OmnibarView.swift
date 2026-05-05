@@ -71,36 +71,29 @@ struct OmnibarView: View {
     // MARK: - Pill
 
     private var pill: some View {
-        HStack(spacing: 8) {
-            // List-drawer button removed — Lists has its own tab at the
-            // leftmost position, so the omnibar doesn't need a list
-            // picker anymore. The `#listname` shortcut still works for
-            // power users who want to assign a list inline.
-
+        HStack(spacing: 10) {
             // Text field.
             TextField("", text: $inputText, prompt:
                 Text(placeholder).foregroundStyle(BrettColors.textPlaceholder)
             )
             .font(.system(size: 15))
-            .foregroundStyle(Color.white.opacity(0.85))
+            .foregroundStyle(Color.white.opacity(0.90))
             .tint(BrettColors.gold)
             .focused($isFocused)
             .submitLabel(.send)
             .onSubmit { submit() }
             .accessibilityIdentifier("omnibar.input")
-            // `.keyboard` Done button was here — removed because it
-            // visually overlapped the gold send button and created a
-            // dual-submit UX. Return key + send button are enough;
-            // tap-outside-to-dismiss (wired in MainContainer) handles
-            // the "get rid of the keyboard without submitting" case.
 
-            // Right: send when text present, mic when empty.
+            // Right: send when text present, mic when empty. Both at
+            // the gold accent color per the calm-hero spec — the mic
+            // was previously white/35 which read as disabled chrome
+            // rather than the brand's voice affordance.
             if hasText {
                 Button { submit() } label: {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
+                        .frame(width: 30, height: 30)
                         .background(BrettColors.gold, in: Circle())
                 }
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
@@ -108,57 +101,61 @@ struct OmnibarView: View {
             } else {
                 Button { enterVoiceMode() } label: {
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.35))
-                        .frame(width: 26, height: 26)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(BrettColors.gold.opacity(0.85))
+                        .frame(width: 30, height: 30)
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.leading, 18)
+        .padding(.trailing, 6)
+        .padding(.vertical, 7)
         .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                // Adaptive opacity for the calm-hero chrome. The
-                // material itself stays — opacity acts on the whole
-                // glass plate so the visual reads as "thinner glass"
-                // rather than "different glass." Stroke overlays
-                // (submit pulse, parse-failure ring) ride the same
-                // opacity so they never visually orphan from the
-                // bg they're supposed to belong to.
-                .opacity(backgroundOpacity)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.04))
-                        .frame(height: 0.5)
-                        .opacity(backgroundOpacity)
-                }
-                .overlay {
-                    Rectangle()
-                        .stroke(
-                            BrettColors.gold.opacity(submitPulse ? 0.8 : 0.0),
-                            lineWidth: 1
-                        )
-                        .animation(.easeOut(duration: 0.15), value: submitPulse)
-                }
-                .overlay {
-                    Rectangle()
-                        .stroke(
-                            BrettColors.error.opacity(parseFailure ? 0.65 : 0.0),
-                            lineWidth: 1
-                        )
-                        .animation(.easeOut(duration: 0.2), value: parseFailure)
-                }
-                .ignoresSafeArea(edges: .bottom)
-                // Reduce Motion: snap the bg opacity to its target
-                // rather than crossfading. The crossfade is tied to
-                // scroll position so it reads as ambient motion that
-                // a Reduce-Motion user has opted out of.
-                .animation(
-                    BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)),
-                    value: backgroundOpacity
-                )
+            // Floating capsule with .thinMaterial — feels like a
+            // discrete object resting above the page, not chrome welded
+            // to the bottom edge. Adaptive opacity drives the calm-hero
+            // chrome rule (thinner glass at the top of the hero,
+            // substantive glass at the work zone). A faint gold rim
+            // appears on submit (existing pulse) and red on parse
+            // failure — both ride the capsule shape so the stroke
+            // tracks the curved corners.
+            ZStack {
+                Capsule()
+                    .fill(.thinMaterial)
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                    }
+                    .opacity(backgroundOpacity)
+
+                Capsule()
+                    .stroke(
+                        BrettColors.gold.opacity(submitPulse ? 0.8 : 0.0),
+                        lineWidth: 1
+                    )
+                    .animation(.easeOut(duration: 0.15), value: submitPulse)
+
+                Capsule()
+                    .stroke(
+                        BrettColors.error.opacity(parseFailure ? 0.65 : 0.0),
+                        lineWidth: 1
+                    )
+                    .animation(.easeOut(duration: 0.2), value: parseFailure)
+            }
+            // Reduce Motion: snap the bg opacity to its target rather
+            // than crossfading. The crossfade is tied to scroll
+            // position so it reads as ambient motion that a
+            // Reduce-Motion user has opted out of.
+            .animation(
+                BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)),
+                value: backgroundOpacity
+            )
         }
+        // Floating margin from the screen edges (calm-hero spec — the
+        // pill is a discrete object, not edge-welded chrome). Bottom
+        // padding keeps it clear of the home indicator.
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
         .animation(.easeOut(duration: 0.15), value: hasText)
     }
 

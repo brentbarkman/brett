@@ -174,22 +174,6 @@ private struct TodayPageBody: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    // Scroll-offset publisher. A 0pt-tall, transparent
-                    // probe sits at the top of the scroll content; its
-                    // y-position in the `scroll` coordinate space is
-                    // negative when the user has scrolled down, so we
-                    // negate it before publishing. `MainContainer` reads
-                    // this value to drive the calm-hero adaptive chrome
-                    // — the bottom view-pills row stays invisible at
-                    // the top of Today and fades in as the hero
-                    // scrolls away.
-                    GeometryReader { geo in
-                        let y = geo.frame(in: .named("scroll")).minY
-                        Color.clear
-                            .publishHeroScrollOffset(max(0, -y))
-                    }
-                    .frame(height: 0)
-
                     // Pass `tickerNow` (the @State managed by `runTicker()`)
                     // rather than a fresh `Date()` per body call so the
                     // hero's date sub-line and `partOfDay` greeting stay
@@ -199,11 +183,23 @@ private struct TodayPageBody: View {
                     // mount-time date — fine for a greeting that only
                     // needs to roll over at part-of-day boundaries.
                     TodayHero(briefingStore: briefingStore, date: tickerNow)
-                        // The hero owns its own top padding via
-                        // `.safeAreaInset` upstream — at this point in
-                        // the layout we just want it to claim the top
-                        // of the scroll content with a comfortable
-                        // editorial bottom margin.
+                        // Scroll-offset publisher → adaptive chrome
+                        // (pills + omnibar bg fade in as the hero
+                        // scrolls away). Writes through to the shared
+                        // `HeroScrollState` so MainContainer's reads
+                        // are reactive without depending on
+                        // PreferenceKey propagation through TabView
+                        // (which is unreliable when SwiftUI keeps
+                        // background pages mounted but layout-skipped).
+                        .background(
+                            GeometryReader { geo in
+                                let y = geo.frame(in: .named("scroll")).minY
+                                Color.clear
+                                    .onChange(of: y, initial: true) { _, newY in
+                                        HeroScrollState.shared.publish(-newY)
+                                    }
+                            }
+                        )
 
                     // Photo→wash transition. Starts clear at the bottom
                     // of the hero so the photo bleeds into the wash
@@ -232,7 +228,7 @@ private struct TodayPageBody: View {
                     }
                     .background(BackgroundService.shared.currentWashColor)
                 }
-                .padding(.bottom, 70)
+                .padding(.bottom, 110)
                 // Inner VStack surfaces more reliably as an accessibility
                 // element than the outer ScrollView — XCUITest identifier
                 // lookups on ScrollView inconsistently resolve.
@@ -242,6 +238,22 @@ private struct TodayPageBody: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "scroll")
+            // Soft fade at the bottom 80pt so list content disappears
+            // gracefully into the omnibar zone instead of crashing
+            // into it. Keeps the editorial calm even when the page
+            // is scrolled to where a task row would otherwise sit
+            // directly behind the floating pill.
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.85),
+                        .init(color: .clear, location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
             .refreshable {
                 try? await ActiveSession.syncManager?.pullToRefresh()
                 await briefingStore.fetch()

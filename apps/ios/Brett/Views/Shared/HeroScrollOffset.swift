@@ -1,35 +1,35 @@
+import Observation
 import SwiftUI
 
-/// Scroll offset published by `TodayPage` so the calm-hero adaptive
-/// chrome can fade in the bottom view-pills row as the user scrolls
-/// past the hero zone.
+/// Shared scroll offset published by `TodayPage` so the calm-hero
+/// adaptive chrome can fade in the bottom view-pills row + omnibar
+/// background as the user scrolls past the hero zone.
 ///
-/// Why a `PreferenceKey` rather than a shared store: the offset is a
-/// pure layout value. SwiftUI's preference system is the canonical
-/// channel for child-to-parent layout reads — no `@Observable` lifetime
-/// dance, no MainActor reentrancy concerns, and the value naturally
-/// flows up the view tree to whichever ancestor reads it.
-///
-/// Reduce strategy: last-writer-wins. There is exactly one writer
-/// (the probe at the top of `TodayPage`'s scroll content) by design;
-/// if a future refactor produces multiple writers (e.g. a nested
-/// ScrollView), each layout pass should publish the *current* offset,
-/// not a stale maximum. A `max` reduce would latch the bar at the
-/// deepest scroll ever observed, which is wrong for a hero that can
-/// scroll back up.
-struct HeroScrollOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
+/// Why a shared `@Observable` instead of a `PreferenceKey`: preference
+/// keys flow up through the view tree, but TabView keeps every page
+/// mounted simultaneously and SwiftUI doesn't reliably propagate
+/// preferences from non-foreground TabView pages to a `.onPreferenceChange`
+/// on the TabView's parent. Direct mutation through a shared
+/// `@Observable` sidesteps that — TodayPage writes the offset, any
+/// view that reads `HeroScrollState.shared.offset` re-renders, and
+/// other TabView pages don't need to participate.
+@MainActor
+@Observable
+final class HeroScrollState {
+    static let shared = HeroScrollState()
 
-extension View {
-    /// Publish a scroll offset (in points) for `MainContainer` to read.
-    /// Use at the top of the scroll content; values are layout-pass
-    /// granular so SwiftUI batches updates with the rest of the
-    /// transaction.
-    func publishHeroScrollOffset(_ offset: CGFloat) -> some View {
-        preference(key: HeroScrollOffsetKey.self, value: offset)
+    /// Latest scroll offset of the Today hero in points. 0 when at
+    /// the top of the hero, grows as the user scrolls down. Bounded
+    /// at 0 from below — negative scrolls (rubber-band overscroll
+    /// past the top) don't drive the chrome past invisible.
+    private(set) var offset: CGFloat = 0
+
+    private init() {}
+
+    func publish(_ value: CGFloat) {
+        let clamped = max(0, value)
+        if abs(clamped - offset) > 0.5 {
+            offset = clamped
+        }
     }
 }

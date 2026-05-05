@@ -198,12 +198,14 @@ private struct CalendarPageBody: View {
 
     /// Editorial 38pt serif header per the calm-hero design — parity
     /// with Inbox/Today/Lists/Scouts so swipe transitions don't shift
-    /// the header silhouette. Title is the selected date's month + year
-    /// (the WeekStrip below acts as the day-precision selector); the
-    /// subtitle counts events on the selected day.
+    /// the header silhouette. Title is the selected day-and-month
+    /// ("Monday, May 4") and the subtitle counts events on that day.
+    /// Was previously "May 2026" — too coarse, the WeekStrip below
+    /// already conveys the month/year, and the user-selected day
+    /// deserves the prime real estate.
     private var monthHeader: some View {
         EditorialPageHeader(
-            title: selectedDate.formatted(.dateTime.month(.wide).year()),
+            title: selectedDate.formatted(.dateTime.weekday(.wide).month(.wide).day()),
             subtitle: eventsSubtitle
         )
         .padding(.top, 12)

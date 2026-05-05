@@ -161,7 +161,16 @@ private struct InboxPageBody: View {
                     VStack(spacing: 0) {
                         header
 
-                        TypeFilterPills(selected: $selectedFilter)
+                        // Lead-align with the editorial header (which
+                        // sits at 24pt horizontal padding) instead of
+                        // letting the pills center themselves and
+                        // visually float away from the page title.
+                        HStack {
+                            TypeFilterPills(selected: $selectedFilter)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 8)
 
                         if filteredItems.isEmpty {
                             if hasCompletedInitialSync {

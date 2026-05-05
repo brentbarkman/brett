@@ -96,7 +96,22 @@ struct MainContainer: View {
     /// app opens to the same primary surface as the desktop. Watch out:
     /// the omnibar's date-injection logic depends on these indices —
     /// search for `currentPage` consumers if you re-order.
-    @State private var currentPage = 2
+    /// In DEBUG, `-UITEST_START_PAGE=N` overrides the launch page so
+    /// the audit harness (and similar one-shot screenshot scripts) can
+    /// land on a specific surface without driving navigation gestures.
+    @State private var currentPage = MainContainer.initialPage()
+
+    private static func initialPage() -> Int {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let raw = args.first(where: { $0.hasPrefix("-UITEST_START_PAGE=") }),
+           let value = Int(raw.dropFirst("-UITEST_START_PAGE=".count)),
+           (0...3).contains(value) {
+            return value
+        }
+        #endif
+        return 2
+    }
     @State private var path = NavigationPath()
 
     @Environment(AuthManager.self) private var authManager
@@ -126,10 +141,11 @@ struct MainContainer: View {
     @State private var coverOpacity: Double = Awakening.sessionPlayed ? 0.0 : 1.0
     @State private var awakeningTriggered: Bool = Awakening.sessionPlayed
 
-    /// Last hero scroll offset published by `TodayPage`. Drives the
-    /// adaptive chrome — `ViewPillsBar` fades in as the hero scrolls
-    /// away, stays at full opacity on every other page.
-    @State private var heroScrollOffset: CGFloat = 0
+    /// Reactive read of the shared hero-scroll state. Writes happen
+    /// inside TodayPage via `HeroScrollState.shared.publish(...)` —
+    /// reading the offset here causes MainContainer to re-render the
+    /// adaptive chrome (pills opacity + omnibar bg opacity).
+    @State private var heroScroll = HeroScrollState.shared
 
     /// Distance over which the pills + omnibar transition between hero
     /// (calm) and work (substantive) modes. Matches the photo→wash
@@ -145,7 +161,7 @@ struct MainContainer: View {
     ///   top).
     private var pillsVisibility: Double {
         guard currentPage == 2 else { return 1 }
-        let progress = Double(heroScrollOffset / Self.heroFadeDistance)
+        let progress = Double(heroScroll.offset / Self.heroFadeDistance)
         return min(max(progress, 0), 1)
     }
 
@@ -157,7 +173,7 @@ struct MainContainer: View {
     /// transition together. Always 1.0 on non-Today pages.
     private var omnibarBackgroundOpacity: Double {
         guard currentPage == 2 else { return 1 }
-        let progress = Double(heroScrollOffset / Self.heroFadeDistance)
+        let progress = Double(heroScroll.offset / Self.heroFadeDistance)
         let clamped = min(max(progress, 0), 1)
         // Lerp from 0.55 (hero) to 1.0 (work). Never goes below 0.55
         // even at scroll=0 because the omnibar input is interactive
@@ -256,15 +272,6 @@ struct MainContainer: View {
                 }
                 .padding(.trailing, 12)
                 .padding(.top, 4)
-            }
-            .onPreferenceChange(HeroScrollOffsetKey.self) { offset in
-                // Keep the @State write off the hot path: only when the
-                // value actually changes do we re-render the bar. The
-                // pure-comparison guard isn't strictly needed (SwiftUI
-                // diffs `@State` writes), but keeping the assignment
-                // explicit documents that this is the single integration
-                // point for the adaptive chrome.
-                heroScrollOffset = offset
             }
             .overlay(alignment: .bottom) {
                 VStack(spacing: 0) {
@@ -369,15 +376,17 @@ struct MainContainer: View {
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
                 case .menu:
-                    // Calm-hero "B" menu — small detent because four
-                    // short rows don't earn a half-screen sheet. Black
-                    // glass background matches the other sheet
-                    // presentations in this presenter.
+                    // Calm-hero "B" menu — sized to its content (4
+                    // short rows + drag indicator). Background is
+                    // `.thinMaterial` so the underlying page bleeds
+                    // through softly, matching the calm-hero glass
+                    // language. Was 0.40 fraction with a fully-opaque
+                    // black sheet — too tall and too solid.
                     BMenuSheet()
-                        .presentationDetents([.fraction(0.40)])
+                        .presentationDetents([.fraction(0.32)])
                         .presentationDragIndicator(.visible)
-                        .presentationBackground(Color.black.opacity(0.85))
-                        .presentationCornerRadius(20)
+                        .presentationBackground(.thinMaterial)
+                        .presentationCornerRadius(24)
                 case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
                     // Push-style destinations are not sheet-presentable.
                     // Render `EmptyView` so a misrouted sheet drive

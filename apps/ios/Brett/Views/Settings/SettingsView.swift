@@ -111,6 +111,15 @@ private struct SettingsBody: View {
     @ViewBuilder
     private var settingsList: some View {
         BrettSettingsScroll {
+            // Editorial 38pt serif header — matches Inbox / Lists /
+            // Calendar / Scouts. Replaces the prior iOS large title
+            // (`.navigationTitle("Settings").navigationBarTitleDisplayMode(.large)`)
+            // which rendered in the system bold sans and visually
+            // diverged from the rest of the calm-hero pages.
+            // `horizontalPadding: 0` so the title aligns with the
+            // 16pt-inset cards below instead of compounding to 40pt.
+            EditorialPageHeader(title: "Settings", subtitle: nil, horizontalPadding: 0)
+
             profileHeaderCard
 
             accountCard
@@ -120,10 +129,19 @@ private struct SettingsBody: View {
 
             signOutCard
         }
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.large)
-        .navigationBarBackButtonHidden(false)
+        // Hidden empty title keeps the swipe-from-edge interactive
+        // pop gesture wired up (SwiftUI requires *some* nav-bar
+        // registrant) without rendering the iOS large title that
+        // would visually duplicate the editorial header above. A
+        // `.principal` toolbar item set to EmptyView() does the
+        // same thing as `.navigationTitle("")` — without SwiftUI's
+        // tendency to render literal whitespace strings as visible
+        // placeholder glyphs in the bar.
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) { EmptyView() }
+        }
     }
 
     /// View for a single settings tab. Same content the outer stack

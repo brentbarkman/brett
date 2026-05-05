@@ -54,6 +54,18 @@ final class BriefingStore: Clearable {
     init(api: APIClient = APIClient.shared) {
         self.api = api
         ClearableStoreRegistry.register(self)
+        #if DEBUG
+        // UI-test launches and design-review sessions skip the
+        // network fetch; pre-populate the store with a representative
+        // brief so the editorial hero on Today shows real copy
+        // instead of just the greeting + date.
+        if ProcessInfo.processInfo.arguments.contains("-UITEST_FAKE_AUTH") {
+            self.briefing = """
+            Two things slipped past Friday — clear those first. Q2 board prep is your highest-leverage piece today, and the afternoon is heavy with back-to-backs. Block 30 minutes around lunch to breathe.
+            """
+            self.generatedAt = Date()
+        }
+        #endif
     }
 
     // MARK: - Clearable
