@@ -10,6 +10,7 @@ Consult the relevant doc(s) for your task — no need to read all of them every 
 - [`architecture.md`](architecture.md) — technical structure: monorepo layout, API routes + data model, desktop / iOS clients, sync engine, operating constraints, tech debt. Skim the ToC; deep-read the section for your task.
 - [`ai-deep-dive.md`](ai-deep-dive.md) — the AI layer specifically. Orchestrator, skills, memory/facts, embeddings, prompt caching. Consult before changing anything under `packages/ai/`.
 - [`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md) — consult before any UI work. Glass-over-chrome system, typography, color, spacing, animations, anti-patterns. iOS and desktop must look like the same product — see the parity rules in the Rules section below.
+- [`apps/ios/DESIGN.md`](apps/ios/DESIGN.md) — iOS-specific design guide. Reads on top of `docs/DESIGN_GUIDE.md`. Captures the calm-hero patterns: Today hero + wash backdrops, editorial 38pt serif headers, sticky/collapse sections, adaptive bottom chrome, B menu chip. Read before any change under `apps/ios/`.
 - [`docs/llm-call-audit.md`](docs/llm-call-audit.md) — every LLM invocation in the codebase with model tier, streaming flag, frequency. Consult when adding a new LLM call site; the shared Security block at the top gets appended to every user-facing prompt.
 - [`docs/memory-system.md`](docs/memory-system.md) — how facts, embeddings, and the knowledge graph fit together. Consult when working on memory/retrieval.
 

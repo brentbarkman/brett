@@ -362,10 +362,16 @@ final class BackgroundService {
             currentSolidColor = nil
             currentRemoteURL = url
             currentFallbackAsset = ""
-            // Photo path. v1: reset wash to the default warm-dark
-            // neutral. v2 will sample the photo's middle band and
-            // overwrite this value once the UIImage decode lands.
-            currentWashColor = Self.defaultWashColor
+            // Set wash from the disk cache synchronously when we have
+            // it (avoids a default-color flash on cold launch). When
+            // we don't, ride the default until `kickWashSample(...)`
+            // resolves the download + sample on a background task and
+            // writes the real value back. SwiftUI re-paints any
+            // subscribed view automatically because `currentWashColor`
+            // is a stored `@Observable` property.
+            currentWashColor = WashColorSampler.cachedWash(forURL: url)
+                ?? Self.defaultWashColor
+            kickWashSample(url: url)
             Self.cachedRemoteURL = url
             let key = url.absoluteString
             if displayedKey != key { displayedKey = key }
@@ -379,11 +385,36 @@ final class BackgroundService {
         currentSolidColor = nil
         currentRemoteURL = nil
         currentFallbackAsset = asset
-        // Same v1 default as the remote-photo path. v2 could ship
-        // pre-sampled wash colors per bundled asset (small lookup
-        // table, ~5 entries) since these are known at build time.
-        currentWashColor = Self.defaultWashColor
+        // Bundled assets sample synchronously — UIImage(named:) hits
+        // the asset catalog with no I/O wait, and the average is
+        // CoreGraphics-fast. Cache result on first sight.
+        currentWashColor = WashColorSampler.sampledWash(forAssetNamed: asset)
+            ?? Self.defaultWashColor
         if displayedKey != asset { displayedKey = asset }
+    }
+
+    /// Async sample for a remote photo — kicks off only when the cache
+    /// doesn't already have a value. The sampler writes through to the
+    /// disk cache on success and we publish the result to
+    /// `currentWashColor` on the main actor. Fire-and-forget; failure
+    /// (network, decode) leaves the default wash in place.
+    private func kickWashSample(url: URL) {
+        // Skip if we already have a cached entry — `recompute` has
+        // already published it synchronously above.
+        if WashColorSampler.cachedWash(forURL: url) != nil { return }
+        Task.detached(priority: .utility) { [weak self] in
+            guard let sampled = try? await WashColorSampler.sampledWash(for: url) else { return }
+            await MainActor.run {
+                guard let self else { return }
+                // Only adopt the sampled color if the user is still on
+                // this same photo by the time the sample lands —
+                // otherwise the sample belongs to a stale photo and
+                // would briefly mismatch the current wallpaper.
+                if self.currentRemoteURL == url {
+                    self.currentWashColor = sampled
+                }
+            }
+        }
     }
 
     /// Bundled asset for the current hour. Mirrors the prior

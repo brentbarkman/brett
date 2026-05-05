@@ -162,8 +162,12 @@ struct BrettSettingsScroll<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
+        // Calm-hero (2026-05-04): Settings wears the same solid wash
+        // as every non-Today surface. The photo is a privilege of the
+        // home screen; Settings is a dense form context where the
+        // photo would compete with the typed-data inputs anyway.
         ZStack {
-            BackgroundView()
+            WashBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {

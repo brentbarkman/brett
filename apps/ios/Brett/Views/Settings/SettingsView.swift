@@ -76,11 +76,23 @@ private struct SettingsBody: View {
         // - `initialTab != nil` (deep-link, e.g. Today's Reconnect pill):
         //   render that single tab directly so the outer stack's back
         //   chevron returns to the calling screen in one tap.
-        Group {
-            if let initialTab {
-                tabContent(for: initialTab)
-            } else {
-                settingsList
+        //
+        // Calm-hero wash backdrop (2026-05-04) wraps both paths so
+        // every Settings surface — landing list and individual tabs —
+        // sits on the same solid wash as the rest of the non-Today
+        // app. Form-based subviews use `.scrollContentBackground(.hidden)`
+        // so this wash shows through them; `BrettSettingsScroll`
+        // (custom-card subviews) renders its own wash layer (no
+        // double-render — they composite to the same color).
+        ZStack {
+            WashBackground()
+
+            Group {
+                if let initialTab {
+                    tabContent(for: initialTab)
+                } else {
+                    settingsList
+                }
             }
         }
         // Hydrate profile on open. Without this the header card falls back

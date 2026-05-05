@@ -118,13 +118,19 @@ final class E2EFlowTests: XCTestCase {
         let leadingEdge = row.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5))
         leadingEdge.tap()
 
-        // Wait past the 1.5s Today reflow debounce.
-        Thread.sleep(forTimeInterval: 2.0)
-
-        // Row should still be present (now under Done Today).
+        // The Today reflow debounce fires at 2.0s (`pendingReflowTask`
+        // in TodayPage), then a spring animation moves the row into
+        // Done Today over another ~0.5s. A bare `Thread.sleep(2.0)` +
+        // `.exists` snap-check lands on the boundary — half the time
+        // the row is mid-animation and the AX query returns false even
+        // though the row will resolve a moment later. Using
+        // `waitForExistence` with a 6s budget gives the debounce, the
+        // animation tail, and a safety margin to settle without
+        // padding the happy-path runtime — the predicate returns the
+        // moment the row resolves.
         XCTAssertTrue(
-            row.exists,
-            "Completed row should remain visible on TodayPage (Done Today section) after debounce"
+            row.waitForExistence(timeout: 6),
+            "Completed row should remain visible on TodayPage (Done Today section) after the 2s reflow debounce + animation"
         )
     }
 

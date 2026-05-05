@@ -149,6 +149,22 @@ struct MainContainer: View {
         return min(max(progress, 0), 1)
     }
 
+    /// Background opacity for the omnibar. Calm-hero spec: 0.55 at
+    /// the top of Today (thinner glass so the photo breathes), 1.0
+    /// past the hero (substantive glass against busy lists). Same
+    /// adaptive curve as `pillsVisibility` — both anchor on the
+    /// 140pt hero fade distance so all calm-hero affordances
+    /// transition together. Always 1.0 on non-Today pages.
+    private var omnibarBackgroundOpacity: Double {
+        guard currentPage == 2 else { return 1 }
+        let progress = Double(heroScrollOffset / Self.heroFadeDistance)
+        let clamped = min(max(progress, 0), 1)
+        // Lerp from 0.55 (hero) to 1.0 (work). Never goes below 0.55
+        // even at scroll=0 because the omnibar input is interactive
+        // and needs *some* glass plate for the field to read against.
+        return 0.55 + (1.0 - 0.55) * clamped
+    }
+
     var body: some View {
         // `@Bindable` projection so we can pass `$selection.currentDestination`
         // to `.sheet(item:)`. The `@State` wrapper alone gives us a
@@ -261,6 +277,7 @@ struct MainContainer: View {
                     OmnibarView(
                         placeholder: omnibarPlaceholder,
                         currentPage: currentPage,
+                        backgroundOpacity: omnibarBackgroundOpacity,
                         onSelectList: { id in
                             // Drawer is gone (Lists has its own tab now), but
                             // the callback is still wired so any future entry
@@ -480,14 +497,19 @@ struct MainContainer: View {
         }
     }
 
-    /// Per-page omnibar placeholder copy. Lists/Inbox use generic capture,
-    /// Today gets a task-shaped prompt, Calendar gets an event prompt.
+    /// Per-page omnibar placeholder copy — calm-hero design (2026-05-04
+    /// spec, Phase 4). Conversational, contextual, signals to the user
+    /// that the omnibar is the input for whatever page they're on.
+    /// Routing is still task-only (the existing `SmartParser` path);
+    /// full AI intent parsing — actually doing the contextual thing —
+    /// lands in a separate dedicated PR. The copy is design-only here
+    /// so the surface looks finished while the engine catches up.
     private var omnibarPlaceholder: String {
         switch currentPage {
-        case 0: return "Capture to inbox..."   // Lists tab — same as inbox capture
-        case 1: return "Capture something..."  // Inbox
-        case 3: return "Add an event..."       // Calendar
-        default: return "Add a task..."        // Today
+        case 0: return "Add to a list or ask…"  // Lists
+        case 1: return "Triage or ask…"         // Inbox
+        case 3: return "Schedule or ask…"       // Calendar
+        default: return "What's on your mind?"  // Today
         }
     }
 

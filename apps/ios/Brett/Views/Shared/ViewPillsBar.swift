@@ -47,7 +47,13 @@ struct ViewPillsBar: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
         .opacity(visibility)
-        .animation(.easeOut(duration: 0.20), value: visibility)
+        // Reduce Motion: drop the cross-fade and let the bar snap to
+        // its target opacity. Fades are usually acceptable under
+        // Reduce Motion, but the calm-hero fade is tied to scroll
+        // position and reads as ambient motion to a user who's opted
+        // out of it — `respectingReduceMotion` returns nil and the
+        // assignment is instant.
+        .animation(BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)), value: visibility)
     }
 
     private func pill(title: String, index: Int) -> some View {

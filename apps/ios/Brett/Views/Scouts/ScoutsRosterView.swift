@@ -103,23 +103,45 @@ private struct ScoutsRosterBody: View {
             WashBackground()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                // Pinned-section layout (calm-hero spec): the page
+                // title scrolls away normally, the status filter
+                // pins to the top of the viewport, and scout cards
+                // scroll under it. Same Apple Weather-style sticky
+                // pattern that Today's task sections use, just
+                // expressed via SwiftUI's native LazyVStack pinning
+                // rather than the custom `StickyCardSection` (which
+                // is tuned for cards with their own glass plate;
+                // here the picker has its own segmented chrome).
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                     header
-                    statusPicker
+                        .padding(.bottom, 16)
 
-                    if scoutStore.isLoading && scouts.isEmpty {
-                        loadingState
-                    } else if filteredScouts.isEmpty {
-                        // Only show the emptyState when the user genuinely
-                        // has nothing for this filter — not while we're
-                        // mid-fetch. The isLoading guard above handles
-                        // the initial cold-start case.
-                        emptyState
-                    } else {
-                        grid
+                    Section {
+                        if scoutStore.isLoading && scouts.isEmpty {
+                            loadingState
+                        } else if filteredScouts.isEmpty {
+                            // Only show the emptyState when the user genuinely
+                            // has nothing for this filter — not while we're
+                            // mid-fetch. The isLoading guard above handles
+                            // the initial cold-start case.
+                            emptyState
+                        } else {
+                            grid
+                        }
+
+                        Spacer(minLength: 80)
+                    } header: {
+                        statusPicker
+                            // Opaque wash backdrop on the pinned
+                            // header so scout cards scrolling
+                            // underneath don't show through the
+                            // segmented control.
+                            .padding(.vertical, 8)
+                            .background {
+                                BackgroundService.shared.currentWashColor
+                                    .ignoresSafeArea(edges: .horizontal)
+                            }
                     }
-
-                    Spacer(minLength: 80)
                 }
                 .padding(.top, 12)
             }
@@ -274,36 +296,27 @@ private struct ScoutsRosterBody: View {
         .padding(.vertical, 40)
     }
 
+    /// Editorial empty state per the calm-hero design — no glass card,
+    /// no icon, just typography on the wash. Mirrors the Today / Inbox
+    /// / Lists empty-state voice. The "create" affordance is the FAB
+    /// (kept for v1; once omnibar AI routing ships in a follow-up we
+    /// can move the entry point into the omnibar's contextual prompt).
     @ViewBuilder
     private var emptyState: some View {
-        GlassCard {
-            VStack(spacing: 12) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 36, weight: .thin))
-                    .foregroundStyle(BrettColors.textGhost)
-                Text("No scouts yet")
-                    .font(BrettTypography.emptyHeading)
-                    .foregroundStyle(.white)
-                Text("Scouts monitor the internet for things you care about.")
-                    .font(BrettTypography.emptyCopy)
-                    .foregroundStyle(BrettColors.textInactive)
-                    .multilineTextAlignment(.center)
-                Button {
-                    presentNewScout()
-                } label: {
-                    Text("Create your first scout")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(BrettColors.gold, in: Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+        VStack(spacing: 8) {
+            Text("No scouts yet.")
+                .font(BrettTypography.emptyHeading)
+                .foregroundStyle(Color.white.opacity(0.90))
+                .multilineTextAlignment(.center)
+
+            Text("Scouts monitor the internet for things you care about. Use the + below to brief one.")
+                .font(BrettTypography.emptyCopy)
+                .foregroundStyle(Color.white.opacity(0.40))
+                .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+        .padding(.top, 60)
     }
 
     /// Gate for every "create scout" entry point. A scout without an AI

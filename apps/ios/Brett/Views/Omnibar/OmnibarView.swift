@@ -16,6 +16,18 @@ struct OmnibarView: View {
     /// items default to this list unless the user explicitly tags a
     /// different list via `#name`.
     var listId: String? = nil
+
+    /// Background opacity for the calm-hero adaptive chrome. At the
+    /// top of Today this drops toward 0.55 so the photo breathes;
+    /// past the hero (and on every other page) it's 1.0 so the glass
+    /// reads substantively against busy lists. `MainContainer` drives
+    /// this from the same scroll-offset preference key as the
+    /// view-pills row, so all calm-hero affordances transition
+    /// together. Declared before `onSelectList` so call-sites that
+    /// supply both can match the synthesised member-wise init's
+    /// expected argument order.
+    var backgroundOpacity: Double = 1.0
+
     var onSelectList: ((String) -> Void)? = nil
 
     @Environment(AuthManager.self) private var authManager
@@ -107,10 +119,19 @@ struct OmnibarView: View {
         .background {
             Rectangle()
                 .fill(.ultraThinMaterial)
+                // Adaptive opacity for the calm-hero chrome. The
+                // material itself stays — opacity acts on the whole
+                // glass plate so the visual reads as "thinner glass"
+                // rather than "different glass." Stroke overlays
+                // (submit pulse, parse-failure ring) ride the same
+                // opacity so they never visually orphan from the
+                // bg they're supposed to belong to.
+                .opacity(backgroundOpacity)
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color.white.opacity(0.04))
                         .frame(height: 0.5)
+                        .opacity(backgroundOpacity)
                 }
                 .overlay {
                     Rectangle()
@@ -129,6 +150,14 @@ struct OmnibarView: View {
                         .animation(.easeOut(duration: 0.2), value: parseFailure)
                 }
                 .ignoresSafeArea(edges: .bottom)
+                // Reduce Motion: snap the bg opacity to its target
+                // rather than crossfading. The crossfade is tied to
+                // scroll position so it reads as ambient motion that
+                // a Reduce-Motion user has opted out of.
+                .animation(
+                    BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)),
+                    value: backgroundOpacity
+                )
         }
         .animation(.easeOut(duration: 0.15), value: hasText)
     }
