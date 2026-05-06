@@ -64,13 +64,17 @@ struct TodayHero: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
-        .padding(.bottom, 24)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // A minimum height so the hero claims editorial real estate even
-        // on slow networks where the brief hasn't landed yet (otherwise
-        // a fresh-launch Today would briefly show a stubby hero with
-        // just the greeting before the brief arrives).
-        .frame(minHeight: 220, alignment: .topLeading)
+        // No minHeight — let the hero size itself to its content. The
+        // earlier 220pt floor was creating dead space below the brief
+        // when the briefing was short, pushing the first card too far
+        // down. The greeting + sub-line + brief naturally claim
+        // editorial real estate on their own (~150pt for a 3-sentence
+        // brief, ~50pt for greeting+sub when there's no brief). A
+        // skeleton placeholder for the brief would be the right
+        // long-term fix for the "fresh launch with no brief yet"
+        // case rather than reserving fixed empty space.
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("today.hero")
     }

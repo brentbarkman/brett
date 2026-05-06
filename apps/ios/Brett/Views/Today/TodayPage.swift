@@ -229,17 +229,19 @@ private struct TodayPageBody: View {
                             }
                         )
 
-                    // Photo→wash transition. Starts clear at the bottom
-                    // of the hero so the photo bleeds into the wash
-                    // without a hard line, then arrives at fully opaque
-                    // wash 140pt later. Below this gradient the rest of
-                    // the page sits on the solid wash.
+                    // Photo→wash transition. Tightened from 140pt to
+                    // 56pt — the longer band was visually empty space
+                    // between the brief and the first card, pushing
+                    // the work zone too far down. 56pt is enough to
+                    // soften the hard line between the photo and the
+                    // solid wash without creating a no-content
+                    // breathing gap.
                     LinearGradient(
                         colors: [Color.clear, BackgroundService.shared.currentWashColor],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 140)
+                    .frame(height: 56)
 
                     // Wash bed. Carries NextUp, the 5 task sections, and
                     // the empty state. `minHeight: 1.5×screen` so the
