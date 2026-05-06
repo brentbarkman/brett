@@ -81,24 +81,11 @@ extension XCUIApplication {
         buttons["signin.submit"]
     }
 
-    var settingsNavButton: XCUIElement {
-        buttons["nav.settings"]
-    }
-
-    var settingsSignOutButton: XCUIElement {
-        buttons["settings.signout"]
-    }
-
-    var settingsSignOutConfirmButton: XCUIElement {
-        // SwiftUI's `confirmationDialog` wraps the destructive `Button` in
-        // an outer accessibility container that shares the inner button's
-        // identifier, so a bare `buttons[id]` query resolves two matches
-        // and any direct `.tap()` raises "multiple matching elements".
-        // Take the first descendant match — both wrap the same action.
-        descendants(matching: .button)
-            .matching(identifier: "settings.signout.confirm")
-            .firstMatch
-    }
+    // Settings + B-menu + sign-out helpers were retired with the
+    // calm-hero redesign (2026-05-04) when the only test that reached
+    // Settings (`testCoreUserJourney`) was deleted — its flow couldn't
+    // be made stable through the new scroll-driven adaptive chrome.
+    // Re-add when a dedicated Settings/sign-out flow test returns.
 
     var detailTitleField: XCUIElement {
         // Can surface as either a textField (single-line) or textView

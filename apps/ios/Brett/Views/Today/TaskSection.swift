@@ -35,21 +35,44 @@ struct TaskSection: View {
                 // and the user wants iOS to match. The label text +
                 // (optional) accentColor stripe on the rows already
                 // signal what kind of section this is.
+                // Header treatment per v18 mockup `.section-head`:
+                //   color: rgba(255,255,255,0.55)
+                //   font: 11px, weight 600, uppercase, ls 0.06em
+                // Overdue and Done sections take their own tints
+                // (`.overdue` muted-red family, `.done-head` muted
+                // white + gold count). `Section.kind(label:)` reads
+                // the label string and returns the right palette.
+                let kind = SectionKind.kind(for: label)
                 HStack(spacing: 6) {
+                    // Label gets a layered legibility shadow because Today
+                    // now floats its task sections directly over the
+                    // photo at rest — without this, OVERDUE / TODAY etc
+                    // wash out against bright sky/horizon regions of the
+                    // wallpaper. Same recipe as `HeroLegibilityShadow`
+                    // in `TodayHero`. Once the user scrolls past the
+                    // hero, `MainContainer.fullScreenWashOpacity` fades
+                    // the wash in over the photo and the shadow becomes
+                    // a no-op visually.
                     Text(label.uppercased())
-                        .font(BrettTypography.sectionLabel)
-                        .tracking(2.4)
-                        // Always neutral white — matches Electron's
-                        // `text-white/40` for ALL sections (Overdue
-                        // included). Per-section accent now lives only
-                        // on the row stripe.
-                        .foregroundStyle(Color.white.opacity(0.60))
+                        .font(.system(size: 13, weight: .semibold))
+                        .tracking(0.78) // 0.06em at 13pt
+                        .foregroundStyle(kind.labelColor)
+                        .shadow(color: Color.black.opacity(0.40), radius: 1, x: 0, y: 0)
+                        .shadow(color: Color.black.opacity(0.30), radius: 8, x: 0, y: 2)
 
                     Spacer()
 
+                    // Count pill carries its own bg fill so the text
+                    // inside has contrast regardless of what's behind
+                    // the row — no extra shadow needed there.
                     Text("\(items.count)")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.40))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(kind.countTextColor)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background {
+                            Capsule().fill(kind.countBgColor)
+                        }
                 }
             } content: {
                 VStack(spacing: 0) {
@@ -71,8 +94,17 @@ struct TaskSection: View {
                             }
 
                             if index < items.count - 1 {
-                                Divider().background(BrettColors.hairline)
-                                    .padding(.horizontal, 16)
+                                // Hairline between rows. Mockup
+                                // `.task { border-bottom: 1px solid
+                                // rgba(255,255,255,0.06) }`. Indented
+                                // 14pt to match the row's leading
+                                // padding so the line starts under
+                                // the icon's left edge, not under
+                                // the card border.
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.06))
+                                    .frame(height: 0.5)
+                                    .padding(.horizontal, 14)
                             }
                         }
                         // Per-row transition: rows fade + slide in from
@@ -97,6 +129,46 @@ struct TaskSection: View {
                 )
             }
             .id("section_\(label.lowercased().replacingOccurrences(of: " ", with: "_"))")
+        }
+    }
+
+    /// Palette mapping for section header chrome. Each kind drives
+    /// label color + count pill bg + count text color, matching the
+    /// v18 mockup's `.section-head`, `.section-head.overdue`, and
+    /// `.section-head.done-head` rules verbatim.
+    private enum SectionKind {
+        case standard
+        case overdue
+        case done
+
+        static func kind(for label: String) -> SectionKind {
+            switch label.lowercased() {
+            case "overdue": return .overdue
+            case "done today": return .done
+            default: return .standard
+            }
+        }
+
+        var labelColor: Color {
+            switch self {
+            case .standard: return Color.white.opacity(0.55)
+            case .overdue: return BrettColors.overdueRed
+            case .done: return Color.white.opacity(0.40)
+            }
+        }
+        var countBgColor: Color {
+            switch self {
+            case .standard: return Color.white.opacity(0.10)
+            case .overdue: return BrettColors.overdueRed.opacity(0.20)
+            case .done: return BrettColors.gold.opacity(0.20)
+            }
+        }
+        var countTextColor: Color {
+            switch self {
+            case .standard: return Color.white.opacity(0.65)
+            case .overdue: return BrettColors.overdueRed
+            case .done: return Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.85)
+            }
         }
     }
 

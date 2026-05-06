@@ -29,6 +29,10 @@ enum NavDestination: Hashable {
     case search
     case newScout
     case editScout(id: String)
+    /// Calm-hero "B" menu (2026-05-04 spec) — bottom sheet behind the
+    /// gold chip in `ViewPillsBar`. Routed through the unified sheet
+    /// presenter so it composes with the other modal destinations.
+    case menu
 
     /// True for cases that should present as a sheet rather than a push.
     /// `MainContainer` reads this to decide which presenter wraps the
@@ -37,7 +41,7 @@ enum NavDestination: Hashable {
     /// avoids scattering routing logic across views.
     var isSheet: Bool {
         switch self {
-        case .taskDetail, .search, .newScout, .editScout:
+        case .taskDetail, .search, .newScout, .editScout, .menu:
             return true
         case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
             return false
@@ -56,14 +60,17 @@ extension NavDestination: Identifiable {
 
 // MARK: - Awakening tokens
 //
-// Cold-launch reveal: on first launch of each app process the wallpaper zooms
-// from `startScale` → 1.0 (Ken Burns) while a black cover above the UI fades
-// out. Gated on the caller's readiness signal (sync hydrated) with a hard cap
-// so a slow or offline launch never strands the user on black. Plays exactly
-// once per process; subsequent MainContainer re-renders skip.
+// Cold-launch reveal: on first launch of each app process the wallpaper is
+// painted at full scale immediately; the UI (pages + top/bottom chrome)
+// fades in over it from opacity 0 → 1. Gated on the caller's readiness
+// signal (sync hydrated) with a hard cap so a slow or offline launch
+// never strands the user on a chrome-less photo. Plays exactly once per
+// process; subsequent MainContainer re-renders skip.
 //
-// Mirrors `apps/desktop/src/hooks/useAwakening.ts` — keep durations in sync
-// across platforms so the two clients feel like the same product.
+// Earlier iterations had the photo do a Ken-Burns zoom-in behind a
+// fading black cover. The user's call: the photo is the wallpaper, it
+// shouldn't make a grand entrance — it should just BE there. Only the
+// UI earns an entrance.
 
 enum Awakening {
     /// Flipped once the reveal has started for this process. Not reset —
@@ -71,18 +78,54 @@ enum Awakening {
     /// isolated because every reader is a SwiftUI View.
     @MainActor static var sessionPlayed = false
 
-    /// Image scale at mount. Eases to 1.0 over `kenBurnsDuration`.
-    static let startScale: CGFloat = 1.15
+    /// Content fade-in duration — pages, task sections, list rows,
+    /// chrome. Fast so the workspace feels available immediately.
+    static let contentFadeDuration: Double = 1.0
 
-    /// Ken-Burns zoom-out duration.
-    static let kenBurnsDuration: Double = 2.5
+    /// Hero fade-in duration — the editorial 38pt headers (Today's
+    /// greeting + brief, every page-header). Slower than content so
+    /// the hero blooms after the workspace lands, drawing the eye to
+    /// the editorial layer.
+    static let heroFadeDuration: Double = 2.0
 
-    /// Black-cover fade-out duration.
-    static let coverFadeDuration: Double = 1.8
-
-    /// Hard cap from mount on how long we hold the cover opaque while
+    /// Hard cap from mount on how long we hold the UI hidden while
     /// waiting on the readiness signal.
     static let maxWaitSeconds: Double = 2.2
+}
+
+/// Shared awakening opacity state. Two values so the workspace can
+/// arrive on a fast fade while the hero (editorial header band) arrives
+/// on a slower one — the workspace feels usable quickly, then the
+/// editorial layer settles in for the calm-hero entrance. Read from
+/// `MainContainer` (chrome) and from `TodayHero` /
+/// `EditorialPageHeader` (the hero band).
+@MainActor
+@Observable
+final class AwakeningState {
+    static let shared = AwakeningState()
+
+    var contentOpacity: Double = Awakening.sessionPlayed ? 1.0 : 0.0
+    var heroOpacity: Double = Awakening.sessionPlayed ? 1.0 : 0.0
+
+    private init() {}
+
+    /// Animate both opacities to 1. Idempotent.
+    func playReveal() {
+        withAnimation(.easeOut(duration: Awakening.contentFadeDuration)) {
+            contentOpacity = 1.0
+        }
+        withAnimation(.easeOut(duration: Awakening.heroFadeDuration)) {
+            heroOpacity = 1.0
+        }
+    }
+
+    /// Snap back to 0 (no animation) so the next `playReveal()` has a
+    /// visible delta to animate. Used by the warm-reentry path before
+    /// a `playReveal()` on the next runloop tick.
+    func resetForReplay() {
+        contentOpacity = 0
+        heroOpacity = 0
+    }
 }
 
 struct MainContainer: View {
@@ -92,18 +135,40 @@ struct MainContainer: View {
     /// app opens to the same primary surface as the desktop. Watch out:
     /// the omnibar's date-injection logic depends on these indices —
     /// search for `currentPage` consumers if you re-order.
-    @State private var currentPage = 2
+    /// In DEBUG, `-UITEST_START_PAGE=N` overrides the launch page so
+    /// the audit harness (and similar one-shot screenshot scripts) can
+    /// land on a specific surface without driving navigation gestures.
+    @State private var currentPage = MainContainer.initialPage()
+
+    private static func initialPage() -> Int {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let raw = args.first(where: { $0.hasPrefix("-UITEST_START_PAGE=") }),
+           let value = Int(raw.dropFirst("-UITEST_START_PAGE=".count)),
+           (0...3).contains(value) {
+            return value
+        }
+        #endif
+        return 2
+    }
     @State private var path = NavigationPath()
 
     @Environment(AuthManager.self) private var authManager
+    /// Drives the warm-open fade-in. We re-run the UI reveal whenever
+    /// the app returns from `.background` to `.active`, so coming back
+    /// to Brett feels like the same calm-hero entrance every time —
+    /// not just on cold launch. `.inactive` (control-center pull,
+    /// notification banner) is NOT counted; that would fire the
+    /// animation every time a swipe-down happens, which is too noisy.
+    @Environment(\.scenePhase) private var scenePhase
 
     // MARK: - Awakening (cold-launch reveal)
     //
-    // On first launch of each app process, the wallpaper zooms from 1.15 → 1.0
-    // (Ken Burns) while a black cover above the UI fades out — so the content
-    // hydrates under the cover and the user sees a single, settled image.
-    // Gated on `hasCompletedInitialSync` with a hard cap at `maxWaitSeconds`.
-    // See `Views/Shared/AwakeningModifier.swift` for the tokens and rationale.
+    // On first launch of each app process, the wallpaper paints immediately
+    // at full scale; the UI (pages + top/bottom chrome) fades in over it from
+    // 0 → 1. Gated on `hasCompletedInitialSync` with a hard cap at
+    // `maxWaitSeconds` so a slow / offline launch never leaves the user
+    // staring at a chrome-less photo.
 
     @Query private var syncHealthRows: [SyncHealth]
     private var hasCompletedInitialSync: Bool {
@@ -118,11 +183,83 @@ struct MainContainer: View {
     // unscoped @Query here was a cross-user defense gap — see
     // `BadgeRefreshController.swift` for the rationale and pattern.
 
-    @State private var kenBurnsScale: CGFloat = Awakening.sessionPlayed ? 1.0 : Awakening.startScale
-    @State private var coverOpacity: Double = Awakening.sessionPlayed ? 0.0 : 1.0
+    /// Reactive read of the shared awakening opacities. The chrome
+    /// uses `contentOpacity` (fast fade); `TodayHero` /
+    /// `EditorialPageHeader` use `heroOpacity` (slower fade).
+    @State private var awakening = AwakeningState.shared
     @State private var awakeningTriggered: Bool = Awakening.sessionPlayed
+    /// Tracks whether the app has been backgrounded since the last
+    /// `.active` so the warm-reentry replay can fire reliably. iOS
+    /// transitions through `.inactive` on the way to/from
+    /// `.background`, so a `previous == .background, current ==
+    /// .active` check never matches — this flag captures the prior
+    /// background state explicitly.
+    @State private var wasBackgrounded: Bool = false
 
-    private let pages = ["Lists", "Inbox", "Today", "Calendar"]
+    /// Reactive read of the shared hero-scroll state. Writes happen
+    /// inside TodayPage via `HeroScrollState.shared.publish(...)` —
+    /// reading the offset here causes MainContainer to re-render the
+    /// adaptive chrome (pills opacity + omnibar bg opacity).
+    @State private var heroScroll = HeroScrollState.shared
+
+    /// Distance over which the pills + omnibar transition between hero
+    /// (calm) and work (substantive) modes. Matches the photo→wash
+    /// gradient height in `TodayPage` so all the calm-hero affordances
+    /// transition together.
+    private static let heroFadeDistance: CGFloat = 140
+
+    /// Visibility (0–1) for the bottom view-pills row.
+    /// - On Today, ramps from 0 at the top of the hero to 1 at
+    ///   `heroFadeDistance` of scroll.
+    /// - On every other page, always 1 (the hero treatment is
+    ///   Today-only, so other pages don't earn the editorial empty
+    ///   top).
+    private var pillsVisibility: Double {
+        guard currentPage == 2 else { return 1 }
+        let progress = Double(heroScroll.offset / Self.heroFadeDistance)
+        return min(max(progress, 0), 1)
+    }
+
+    /// Background opacity for the omnibar. Calm-hero spec: 0.55 at
+    /// the top of Today (thinner glass so the photo breathes), 1.0
+    /// past the hero (substantive glass against busy lists). Same
+    /// adaptive curve as `pillsVisibility` — both anchor on the
+    /// 140pt hero fade distance so all calm-hero affordances
+    /// transition together. Always 1.0 on non-Today pages.
+    private var omnibarBackgroundOpacity: Double {
+        guard currentPage == 2 else { return 1 }
+        let progress = Double(heroScroll.offset / Self.heroFadeDistance)
+        let clamped = min(max(progress, 0), 1)
+        // Lerp from 0.55 (hero) to 1.0 (work). Never goes below 0.55
+        // even at scroll=0 because the omnibar input is interactive
+        // and needs *some* glass plate for the field to read against.
+        return 0.55 + (1.0 - 0.55) * clamped
+    }
+
+    /// Magnitude of the current pager swipe (0 settled, 1 fully
+    /// dragged to an adjacent page).
+    @State private var pagerDragProgress: CGFloat = 0
+    /// Signed pager swipe progress. Positive = dragging toward a
+    /// HIGHER page index, negative toward a LOWER index. Combined
+    /// with `currentPage` we can compute "effective page position"
+    /// during the swipe and drive a smooth photo↔wash crossfade.
+    @State private var pagerSignedDragProgress: CGFloat = 0
+
+    /// Opacity for the global background photo. Crossfades smoothly
+    /// to the wash as the user swipes away from Today (and back as
+    /// they swipe toward Today). The "effective page" is `currentPage
+    /// + signedDragProgress`; how close that is to Today's index (2)
+    /// is the photo's visibility. Multiplied by the Today scroll
+    /// factor so scrolling past the hero also fades the photo out.
+    private var photoOpacity: Double {
+        let effectivePage = Double(currentPage) + Double(pagerSignedDragProgress)
+        let distanceFromToday = abs(effectivePage - 2)
+        let proximityToToday = max(0, 1 - distanceFromToday)
+        let scrollFactor = currentPage == 2
+            ? 1 - min(max(Double(heroScroll.offset / Self.heroFadeDistance), 0), 1)
+            : 1.0
+        return proximityToToday * scrollFactor
+    }
 
     var body: some View {
         // `@Bindable` projection so we can pass `$selection.currentDestination`
@@ -135,33 +272,85 @@ struct MainContainer: View {
         // screen having to override per-item tints.
         return NavigationStack(path: $path) {
             ZStack {
+                // Always-on wash backdrop, edge-to-edge. Sits at the
+                // very back so the safe-area zones are always covered
+                // even during the brief moment a page boots its own
+                // content.
+                WashBackground()
+
+                // Photo on top of the wash, opacity tied to current
+                // page + scroll position + live swipe progress. Lives
+                // here (not inside Today) so it can reach the safe-
+                // area zones — `PagedSwipeView` gives us live swipe
+                // progress so the photo crossfades smoothly during a
+                // side-swipe instead of snapping at midpoint.
                 BackgroundView()
-                    .scaleEffect(kenBurnsScale, anchor: .center)
+                    .opacity(photoOpacity)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
                 // Shake detection is handled by `ShakeMonitor.shared` (polls
                 // CoreMotion at the app level) and presented by
                 // `FeedbackPresenter.shared` (UIWindow-level present so
                 // it works over any active sheet). Nothing in-tree.
 
-                TabView(selection: $currentPage) {
-                    ListsPage()
-                        .tag(0)
-
-                    InboxPage()
-                        .tag(1)
-
-                    TodayPage()
-                        .tag(2)
-
-                    CalendarPage()
-                        .tag(3)
+                // PagedSwipeView replaces TabView(.page) so we get
+                // real-time swipe progress — TabView only flips its
+                // currentPage at midpoint, which made the photo
+                // snap-fade at the swipe midpoint instead of
+                // crossfading with the drag. Pages still respect the
+                // safe area for their own content layout.
+                PagedSwipeView(
+                    pageCount: 4,
+                    selection: $currentPage,
+                    dragProgress: $pagerDragProgress,
+                    signedDragProgress: $pagerSignedDragProgress
+                ) { idx in
+                    switch idx {
+                    case 0: AnyView(ListsPage())
+                    case 1: AnyView(InboxPage())
+                    case 2: AnyView(TodayPage())
+                    case 3: AnyView(CalendarPage())
+                    default: AnyView(EmptyView())
+                    }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                // Pages don't carry their own backgrounds anymore.
+                // Their content slides over the GLOBAL wash + photo
+                // backdrop above (which crossfades based on signed
+                // swipe progress), so what the user sees during a
+                // swipe is: UI sliding horizontally on top, photo
+                // dissolving to wash underneath. No `.ignoresSafeArea()`
+                // here — the pager sits inside safe area, page
+                // content respects safe area normally for layout.
+                .opacity(awakening.contentOpacity)
             }
             .task { await runAwakeningIfNeeded() }
             .onChange(of: hasCompletedInitialSync) { _, ready in
                 if ready && !awakeningTriggered {
                     fireAwakening()
+                }
+            }
+            // Warm re-entry. iOS goes
+            //   active → inactive → background    (going to homescreen)
+            //   background → inactive → active    (returning)
+            // so a literal `previous == .background` check on the
+            // immediate transition never matches. Track the prior
+            // background state explicitly via `wasBackgrounded`: set it
+            // on entering `.background`, fire the replay on the next
+            // `.active` we see and clear the flag. Skipped under Reduce
+            // Motion and before the first cold-launch reveal (the cold
+            // path's own `.task` / `hasCompletedInitialSync` observer
+            // handles that case).
+            .onChange(of: scenePhase) { _, current in
+                if current == .background {
+                    wasBackgrounded = true
+                    return
+                }
+                if current == .active && wasBackgrounded {
+                    wasBackgrounded = false
+                    if awakeningTriggered && !BrettAnimation.isReduceMotionEnabled {
+                        replayAwakening()
+                    }
                 }
             }
             // Badge refresh runs in `BadgeRefreshController` mounted below
@@ -195,81 +384,54 @@ struct MainContainer: View {
             // page inside the NavigationStack inherits them.
             .offlineBanner()
             .errorToastHost()
-            .safeAreaInset(edge: .top) {
-                // Top controls — safeAreaInset handles dynamic island clearance
-                HStack {
-                    Spacer()
-                    PageIndicator(pages: pages, currentIndex: currentPage)
-                    Spacer()
+            .overlay(alignment: .topTrailing) {
+                // Sync indicators float over the top-right corner instead
+                // of being hosted in a `safeAreaInset`. The earlier inset
+                // pushed every page's content down by ~30pt — which made
+                // the editorial 38pt headers (Today's greeting, Inbox /
+                // Lists / Calendar page titles) sit much further from
+                // the dynamic island than the calm-hero direction wants.
+                // Indicators are tiny and infrequently updating, so an
+                // overlay over the corner is fine.
+                HStack(spacing: 6) {
+                    SyncPendingIndicator()
+                    SyncStatusIndicator()
                 }
-                .overlay(alignment: .trailing) {
-                    HStack(spacing: 6) {
-                        // Pending-sync pill — hidden when the queue is empty.
-                        SyncPendingIndicator()
-
-                        // Animated dot that reflects SyncManager.state (idle /
-                        // pushing / pulling / error).
-                        SyncStatusIndicator()
-
-                        Button {
-                            selection.currentDestination = .search
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.55))
-                                .frame(width: 40, height: 40)
-                                .contentShape(Rectangle())
-                        }
-
-                        NavigationLink(value: NavDestination.scoutsRoster) {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.55))
-                                .frame(width: 40, height: 40)
-                                .contentShape(Rectangle())
-                        }
-
-                        // Settings gear: using an explicit Button + programmatic
-                        // path.append so XCUITest can reliably tap this via
-                        // its accessibility identifier. `NavigationLink` inside
-                        // a `safeAreaInset` overlay has a known issue where
-                        // its tap handler doesn't register from synthesized
-                        // coordinate taps on iOS 26+.
-                        Button {
-                            path.append(NavDestination.settings)
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.55))
-                                .frame(width: 40, height: 40)
-                                .contentShape(Rectangle())
-                        }
-                        .accessibilityIdentifier("nav.settings")
-                    }
-                    .padding(.trailing, 8)
-                }
+                .padding(.trailing, 12)
+                .padding(.top, 4)
+                .opacity(awakening.contentOpacity)
             }
             .overlay(alignment: .bottom) {
-                OmnibarView(
-                    placeholder: omnibarPlaceholder,
-                    currentPage: currentPage,
-                    onSelectList: { id in
-                        // Drawer is gone (Lists has its own tab now), but
-                        // the callback is still wired so any future entry
-                        // point that re-introduces a list picker works.
-                        // Defer the push by ~350ms so the sheet dismissal
-                        // animation completes before the navigation
-                        // transition starts. Structured-Task form (vs.
-                        // DispatchQueue.main.asyncAfter) suspends with the
-                        // process and uses idiomatic concurrency; SwiftUI
-                        // doesn't auto-cancel inline Tasks on unmount but
-                        // mutating a detached @State is a no-op.
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            path.append(NavDestination.listView(id: id))
+                VStack(spacing: 0) {
+                    ViewPillsBar(
+                        currentPage: $currentPage,
+                        onMenuTap: { selection.currentDestination = .menu },
+                        visibility: pillsVisibility
+                    )
+
+                    OmnibarView(
+                        placeholder: omnibarPlaceholder,
+                        currentPage: currentPage,
+                        backgroundOpacity: omnibarBackgroundOpacity,
+                        onSelectList: { id in
+                            // Drawer is gone (Lists has its own tab now), but
+                            // the callback is still wired so any future entry
+                            // point that re-introduces a list picker works.
+                            // Defer the push by ~350ms so the sheet dismissal
+                            // animation completes before the navigation
+                            // transition starts. Structured-Task form (vs.
+                            // DispatchQueue.main.asyncAfter) suspends with the
+                            // process and uses idiomatic concurrency; SwiftUI
+                            // doesn't auto-cancel inline Tasks on unmount but
+                            // mutating a detached @State is a no-op.
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 350_000_000)
+                                path.append(NavDestination.listView(id: id))
+                            }
                         }
-                    }
-                )
+                    )
+                }
+                .opacity(awakening.contentOpacity)
             }
             .navigationDestination(for: NavDestination.self) { destination in
                 switch destination {
@@ -290,7 +452,7 @@ struct MainContainer: View {
                     EventDetailView(eventId: id)
                 case .listView(let id):
                     ListView(listId: id)
-                case .taskDetail, .search, .newScout, .editScout:
+                case .taskDetail, .search, .newScout, .editScout, .menu:
                     // Sheet-style destinations are presented via
                     // `.sheet(item:)` elsewhere on this view; reaching
                     // them through the push stack is a programming error.
@@ -342,6 +504,18 @@ struct MainContainer: View {
                     EditScoutSheetContainer(scoutId: id)
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
+                case .menu:
+                    // Calm-hero "B" menu — sized to its content (4
+                    // short rows + drag indicator). Background is
+                    // `.thinMaterial` so the underlying page bleeds
+                    // through softly, matching the calm-hero glass
+                    // language. Was 0.40 fraction with a fully-opaque
+                    // black sheet — too tall and too solid.
+                    BMenuSheet()
+                        .presentationDetents([.fraction(0.32)])
+                        .presentationDragIndicator(.visible)
+                        .presentationBackground(.thinMaterial)
+                        .presentationCornerRadius(24)
                 case .settings, .settingsTab, .scoutsRoster, .scoutDetail, .eventDetail, .listView:
                     // Push-style destinations are not sheet-presentable.
                     // Render `EmptyView` so a misrouted sheet drive
@@ -394,19 +568,9 @@ struct MainContainer: View {
         // (the iOS back chevron on ListView / ScoutsRosterView /
         // ScoutDetailView) render in gold instead of system blue.
         .tint(BrettColors.gold)
-        // Cold-launch cover. Sits above the whole NavigationStack — including
-        // safeAreaInset chrome (page indicator, settings gear) — so the
-        // UI reveals as one piece rather than top-toolbar-first.
-        // `allowsHitTesting(false)` lets stray taps pass through even if
-        // opacity rounding leaves a pixel of alpha.
-        .overlay {
-            if coverOpacity > 0 {
-                Color.black
-                    .ignoresSafeArea()
-                    .opacity(coverOpacity)
-                    .allowsHitTesting(false)
-            }
-        }
+        // No cold-launch cover anymore — the photo paints at full alpha
+        // immediately and the UI fades in over it via `uiOpacity`
+        // attached to the TabView and the top/bottom chrome insets.
     }
 
     // MARK: - Awakening
@@ -415,60 +579,71 @@ struct MainContainer: View {
     /// cap timer. The reveal itself fires from `fireAwakening()` — either
     /// from the `.onChange(hasCompletedInitialSync)` observer or from
     /// this timer when the sync is slow / offline. Reduce Motion and a
-    /// prior session in this process both short-circuit to the skipped
-    /// state (scale 1, cover opacity 0).
+    /// prior session in this process both short-circuit to the settled
+    /// state (uiOpacity = 1).
     private func runAwakeningIfNeeded() async {
         guard !awakeningTriggered else { return }
 
         if BrettAnimation.isReduceMotionEnabled {
             Awakening.sessionPlayed = true
             awakeningTriggered = true
-            kenBurnsScale = 1.0
-            coverOpacity = 0.0
+            awakening.contentOpacity = 1.0
+            awakening.heroOpacity = 1.0
             return
         }
 
         // If sync already landed (cache hit from a prior session), fire
-        // almost immediately — one tick so the initial frame paints at
-        // the start scale first, so the Ken Burns motion is visible.
+        // almost immediately — one tick so the initial frame paints with
+        // the UI at 0 alpha first, so the fade-in is actually visible.
         if hasCompletedInitialSync {
             try? await Task.sleep(for: .milliseconds(50))
             fireAwakening()
             return
         }
 
-        // Cap: don't hold the cover longer than `maxWaitSeconds` from
-        // mount. If the `.onChange` observer beats us, `fireAwakening`
-        // is a no-op on the second call.
+        // Cap: don't hold the UI hidden longer than `maxWaitSeconds`
+        // from mount. If the `.onChange` observer beats us,
+        // `fireAwakening` is a no-op on the second call.
         try? await Task.sleep(for: .seconds(Awakening.maxWaitSeconds))
         if !awakeningTriggered {
             fireAwakening()
         }
     }
 
-    /// Kick off the zoom-out and cover fade. Idempotent — safe to call
-    /// from both the readiness observer and the cap timer.
+    /// Kick off the UI fade-in. Idempotent — safe to call from both the
+    /// readiness observer and the cap timer.
     private func fireAwakening() {
         guard !awakeningTriggered else { return }
         Awakening.sessionPlayed = true
         awakeningTriggered = true
+        awakening.playReveal()
+    }
 
-        withAnimation(.easeOut(duration: Awakening.kenBurnsDuration)) {
-            kenBurnsScale = 1.0
-        }
-        withAnimation(.easeOut(duration: Awakening.coverFadeDuration)) {
-            coverOpacity = 0.0
+    /// Re-run the fade-in for warm re-entries (background → active). The
+    /// reset must happen OUTSIDE `withAnimation` and the rebuild must
+    /// happen ON the next runloop tick — otherwise SwiftUI coalesces
+    /// "0 then back to 1" into a no-op transaction and skips the
+    /// animation entirely.
+    private func replayAwakening() {
+        awakening.resetForReplay()
+        DispatchQueue.main.async {
+            awakening.playReveal()
         }
     }
 
-    /// Per-page omnibar placeholder copy. Lists/Inbox use generic capture,
-    /// Today gets a task-shaped prompt, Calendar gets an event prompt.
+    /// Per-page omnibar placeholder copy verbatim from the v18 mockup
+    /// `placeholders` map — short verb + bolded action object
+    /// ("Add or **ask Brett…**" on Today). Rendering of the bold
+    /// segment lives inside `OmnibarView`, which splits on the
+    /// `**…**` markers. Routing is still task-only (existing
+    /// `SmartParser` path); full AI intent parsing lands in a
+    /// separate PR.
     private var omnibarPlaceholder: String {
         switch currentPage {
-        case 0: return "Capture to inbox..."   // Lists tab — same as inbox capture
-        case 1: return "Capture something..."  // Inbox
-        case 3: return "Add an event..."       // Calendar
-        default: return "Add a task..."        // Today
+        case 0: return "Add to a **list…**"             // Lists
+        case 1: return "Capture or **search inbox…**"   // Inbox
+        case 3: return "Add an **event…**"              // Calendar
+        default: return "Add or **ask Brett…**"         // Today
         }
     }
 

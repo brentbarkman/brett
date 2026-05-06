@@ -50,31 +50,131 @@ struct BrettApp: App {
     }
 
     #if DEBUG
-    /// Inserts a known-good active task + a default list into the shared
-    /// (in-memory) SwiftData container. Called once at UI-test launch.
+    /// Seed a realistic working set into the shared (in-memory) SwiftData
+    /// container so UI-test launches and design-review sessions land on
+    /// a Today screen that looks like a real workday — every section
+    /// populated, multiple lists, content items, a sample briefing.
+    /// Anchored on `"Review design spec"` because that's the title the
+    /// existing UI tests assert against; surrounding fixtures fill out
+    /// the rest of the page.
     private static func seedUITestFixtures(userId: String) {
         let context = PersistenceController.shared.mainContext
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let now = Date()
 
-        let list = ItemList(
-            userId: userId,
-            name: "Work",
-            colorClass: "bg-blue-500",
-            sortOrder: 0
-        )
-        context.insert(list)
+        // Lists
+        let workList = ItemList(userId: userId, name: "Work", colorClass: "bg-blue-500", sortOrder: 0)
+        let personalList = ItemList(userId: userId, name: "Personal", colorClass: "bg-emerald-500", sortOrder: 1)
+        let healthList = ItemList(userId: userId, name: "Health", colorClass: "bg-rose-500", sortOrder: 2)
+        let readingList = ItemList(userId: userId, name: "Reading", colorClass: "bg-amber-500", sortOrder: 3)
+        for list in [workList, personalList, healthList, readingList] { context.insert(list) }
 
-        let seededItem = Item(
+        // Helper builders so the array below stays scannable.
+        @discardableResult
+        func task(
+            _ title: String,
+            list: ItemList? = nil,
+            dueDate: Date? = nil,
+            status: ItemStatus = .active,
+            type: ItemType = .task,
+            source: String = "uitest"
+        ) -> Item {
+            let item = Item(
+                userId: userId,
+                type: type,
+                status: status,
+                title: title,
+                source: source,
+                dueDate: dueDate,
+                listId: list?.id,
+                createdAt: now,
+                updatedAt: now
+            )
+            if status == .done {
+                item.completedAt = now
+            }
+            context.insert(item)
+            return item
+        }
+
+        // Overdue (red headers in Today)
+        task("Submit Q1 expense report", list: workList, dueDate: calendar.date(byAdding: .day, value: -2, to: today))
+        task("Renew gym membership", list: healthList, dueDate: calendar.date(byAdding: .day, value: -1, to: today))
+
+        // Today — relative-to-now times so the items always land in
+        // the TODAY bucket regardless of when the design-review
+        // session runs (a hardcoded "9 am" lands in OVERDUE if the
+        // session happens after 9 am). Picks 4 future moments
+        // spread across the rest of the day. Anchor item ("Review
+        // design spec") MUST keep this exact title — UI-test
+        // selectors key on the slug `task.row.review_design_spec`.
+        // Spread today items across the remaining hours of the day,
+        // ending no later than 23:30 so they never look identical
+        // (the prior `min(candidate, endOfDay-60)` collapsed every
+        // post-evening item to 11:59 pm).
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86_400)
+        let cutoff = calendar.date(bySettingHour: 23, minute: 30, second: 0, of: today) ?? endOfDay
+        let secondsUntilCutoff = max(60, cutoff.timeIntervalSince(now))
+        func slot(_ index: Int, of total: Int) -> Date {
+            // Evenly divide the remaining time into `total` slots and
+            // pick the `index`th. Never goes past the cutoff.
+            let fraction = Double(index + 1) / Double(total + 1)
+            return now.addingTimeInterval(secondsUntilCutoff * fraction)
+        }
+        let todayItems: [(String, ItemList?)] = [
+            ("Review design spec", workList),
+            ("Prep slides for Q2 board review", workList),
+            ("Push mobile auth fix to staging", workList),
+            ("Book physio appointment", healthList),
+            ("Pick up dry cleaning", personalList),
+        ]
+        for (i, (title, list)) in todayItems.enumerated() {
+            task(title, list: list, dueDate: slot(i, of: todayItems.count))
+        }
+
+        // This Week — mix of tasks + content items
+        task("Draft technical spec for sync v2", list: workList, dueDate: calendar.date(byAdding: .day, value: 2, to: today))
+        task("Quarterly 1:1s with team", list: workList, dueDate: calendar.date(byAdding: .day, value: 3, to: today))
+        task("The pragmatic technologist's guide to LLMs", list: readingList, dueDate: calendar.date(byAdding: .day, value: 4, to: today), type: .content, source: "newsletter")
+        task("Why Apple's design language still wins in 2026", list: readingList, dueDate: calendar.date(byAdding: .day, value: 5, to: today), type: .content, source: "article")
+
+        // Next Week
+        task("Annual performance self-review", list: workList, dueDate: calendar.date(byAdding: .day, value: 8, to: today))
+        task("Renew passport", list: personalList, dueDate: calendar.date(byAdding: .day, value: 10, to: today))
+
+        // Done Today (so the de-emphasized Done section has content)
+        task("Morning standup", list: workList, dueDate: today, status: .done)
+        task("Reply to investor update thread", list: workList, dueDate: today, status: .done)
+        task("Walk the dog", list: personalList, dueDate: today, status: .done)
+
+        // SyncHealth row so the empty-state gate flips from
+        // "still syncing → show skeleton" to "real empty state →
+        // show editorial copy". Without this every page boots
+        // showing the loading skeleton because -UITEST_MOCK_API
+        // never completes a real sync pull.
+        let syncHealth = SyncHealth()
+        syncHealth.lastSuccessfulPullAt = now
+        context.insert(syncHealth)
+
+        // Calendar event in the next 25 min so NextUp fires — gives
+        // the design-review session something to look at in the
+        // editorial NextUp surface.
+        let nextUp = CalendarEvent(
             userId: userId,
-            type: .task,
-            status: .active,
-            title: "Review design spec",
-            source: "uitest",
-            dueDate: Calendar.current.startOfDay(for: Date()),
-            listId: list.id,
-            createdAt: Date(),
-            updatedAt: Date()
+            googleAccountId: "uitest-acct",
+            calendarListId: "uitest-cal",
+            googleEventId: "uitest-nextup-\(UUID().uuidString)",
+            title: "Q2 board prep sync",
+            startTime: now.addingTimeInterval(25 * 60),
+            endTime: now.addingTimeInterval(55 * 60),
+            myResponseStatus: .accepted
         )
-        context.insert(seededItem)
+        context.insert(nextUp)
+
+        // Briefing — pre-populated inside `BriefingStore.init` when
+        // -UITEST_FAKE_AUTH is set, so the editorial hero on Today
+        // shows real copy instead of just the greeting + date.
 
         try? context.save()
     }
@@ -214,6 +314,17 @@ private struct RootView: View {
                             // here — `AuthManager.persist(session:)` already
                             // installs an `ActiveSession` which owns both.
                             // Only the badge-permission prompt is view-level.
+                            //
+                            // Skip the prompt under `-UITEST_FAKE_AUTH` so
+                            // automated runs (and live design-review
+                            // sessions) don't get blocked by the system
+                            // notifications dialog before they can see
+                            // the screen they're trying to inspect.
+                            #if DEBUG
+                            if ProcessInfo.processInfo.arguments.contains("-UITEST_FAKE_AUTH") {
+                                return
+                            }
+                            #endif
                             await BadgeManager.shared.requestAuthorization()
                         }
                 }
@@ -274,7 +385,13 @@ private struct RootView: View {
                 // prompt the user for Face ID right after they typed
                 // their password.
                 lockManager.handleFreshSignIn()
+                #if DEBUG
+                if !ProcessInfo.processInfo.arguments.contains("-UITEST_FAKE_AUTH") {
+                    badgeTracker.start { await BadgeManager.shared.requestAuthorization() }
+                }
+                #else
                 badgeTracker.start { await BadgeManager.shared.requestAuthorization() }
+                #endif
             } else {
                 lockManager.handleSignOut()
                 // Fire-and-forget: sign-out is always a foreground action,

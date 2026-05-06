@@ -98,7 +98,7 @@ private struct TodayPageBody: View {
 
         // Bound the working set to a ±30-day window. Heavy users sync years
         // of events; without this predicate, every body pass walks the
-        // entire history just to compute `nextUpcomingEvent` / `todaysEvents`.
+        // entire history just to compute `nextUpcomingEvent`.
         // The window covers the "next event" ticker (typically minutes/hours
         // away) and any reasonable "next 30 days" peek with comfortable
         // margin. Events whose start is within the window OR whose end is
@@ -129,8 +129,23 @@ private struct TodayPageBody: View {
 
     // MARK: - UI state
 
-    @State private var completionPulse: Bool = false
     @State private var pendingReflowTask: Task<Void, Never>? = nil
+
+    /// Reactive read of the shared hero-scroll state — drives the
+    /// editorial parallax/opacity/scale on `TodayHero` per the v18
+    /// mockup's `applyTodayVerticalScroll`. Same source the
+    /// MainContainer reads from for adaptive chrome, so the hero,
+    /// pills, and omnibar bg all transition in lockstep.
+    @State private var heroScroll = HeroScrollState.shared
+
+    /// Smoothstep-eased 0–1 progress over a given scroll distance —
+    /// matches the mockup's `t * t * (3 - 2 * t)` curve. Linear
+    /// progress reads as mechanical at the endpoints; smoothstep
+    /// snaps softly to 0/1 and feels the way the mockup does.
+    private func heroProgress(over distance: CGFloat) -> Double {
+        let raw = Double(min(max(heroScroll.offset / distance, 0), 1))
+        return raw * raw * (3 - 2 * raw)
+    }
     /// Snapshot of the active item set at the moment of last completion. When
     /// the debounce window expires we bring the view's "working set" in line
     /// with the live data and the completed items slide into Done.
@@ -150,38 +165,101 @@ private struct TodayPageBody: View {
     /// unchanged, which is the common case for state-only re-renders.
     @State private var sectionsCache = TodaySectionsCache()
 
-    /// Ticker driving NextUpCard's relative-time copy. Only updated when
-    /// an event is within the 60-minute card-visibility window — outside
-    /// that, the loop in `runTicker()` sleeps adaptively (60s–5 min) and
-    /// doesn't write `tickerNow`, so TodayPage's body doesn't re-evaluate.
-    /// Without this gating, TabView keeping TodayPage mounted would mean
-    /// ~120 wasted body re-evals per hour for any user without an
-    /// upcoming meeting.
-    @State private var tickerNow: Date = Date()
-
     var body: some View {
         // ScrollViewReader so we can scroll the user to the Today section
         // when a new task lands there. Without this, adding a task to a
         // long Today list looks like nothing happened — the row is below
         // the fold.
+        //
+        // Calm-hero layout (2026-05-04 spec):
+        //   1. TodayHero — greeting + brief over the photo, no chrome.
+        //   2. Photo→wash gradient — 140pt smooth transition into the
+        //      solid wash bed that hosts every section below.
+        //   3. Wash bed — NextUp + 5 task sections + empty state, all
+        //      sitting on `BackgroundService.currentWashColor` so the
+        //      photo only lives in the hero zone.
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    collapsingHeader
-                        .padding(.top, 8)
-                        .padding(.bottom, 8)
+                    // Hero takes a fresh `Date()` per body re-eval. We
+                    // used to pin this to a `tickerNow` @State driven
+                    // by an adaptive ticker loop so the dateline could
+                    // show a live clock; the clock was dropped (the
+                    // iOS status bar already carries it) and the
+                    // ticker came out with it for battery — see the
+                    // history of this file. The greeting only depends
+                    // on the weekday and the dateline only on the
+                    // month/day, so per-render `Date()` is stable for
+                    // the whole life of a SwiftUI body pass.
+                    TodayHero(briefingStore: briefingStore, date: Date())
+                        // Editorial parallax — hero text fades + lifts
+                        // + tightens as the user scrolls (matches the
+                        // v18 mockup's `applyTodayVerticalScroll`).
+                        // Translates 30% faster than scroll so the
+                        // hero "leaves quickly" and surfaces the wash
+                        // bed underneath. Opacity 1→0 over 200pt of
+                        // scroll, scale 1→0.96. Reads from the same
+                        // shared HeroScrollState the chrome reads
+                        // from — one source of truth for the whole
+                        // hero-scroll story.
+                        .opacity(1 - heroProgress(over: 200))
+                        .scaleEffect(1 - heroProgress(over: 200) * 0.04)
+                        .offset(y: -heroScroll.offset * 0.3)
+                        // Scroll-offset publisher → HeroScrollState.
+                        // Writes through to the shared @Observable
+                        // so MainContainer's adaptive chrome reads
+                        // reactively without depending on
+                        // PreferenceKey propagation through TabView
+                        // (which is unreliable when SwiftUI keeps
+                        // background pages mounted but layout-skipped).
+                        .background(
+                            GeometryReader { geo in
+                                let y = geo.frame(in: .named("scroll")).minY
+                                Color.clear
+                                    .onChange(of: y, initial: true) { _, newY in
+                                        HeroScrollState.shared.publish(-newY)
+                                    }
+                            }
+                        )
 
+                    // NextUp sits directly under the brief and over
+                    // the photo. No wash plate behind it — and no
+                    // wash plate behind the work zone below either,
+                    // per the v18 mockup which has cards floating
+                    // over the photo at rest. The wash is brought in
+                    // by `MainContainer`'s `fullScreenWashOpacity`
+                    // overlay as the user scrolls past the hero, so
+                    // an in-scroll static wash bed would just block
+                    // the photo prematurely.
                     if hasNextUpEvent {
-                        NextUpCard(event: nextUpcomingEvent, now: tickerNow)
+                        // `now` is captured at body-eval time. Used
+                        // to be a `tickerNow` @State that updated
+                        // every 30s when an event was in range; we
+                        // removed the ticker for battery and the
+                        // card still re-renders frequently enough
+                        // (scroll, foreground, item changes) for the
+                        // relative-time copy.
+                        NextUpCard(event: nextUpcomingEvent, now: Date())
                     }
 
-                    DailyBriefing(store: briefingStore)
+                    // Work zone. Cards float over the photo at rest;
+                    // the global `fullScreenWashOpacity` overlay
+                    // (in `MainContainer`) fades the wash in over
+                    // the photo as the user scrolls past the hero.
+                    // The 400pt tail spacer guarantees the bottom
+                    // mask has content to fade against on a short
+                    // list so the omnibar zone doesn't paint a hard
+                    // line into raw photo.
+                    VStack(spacing: 0) {
+                        taskSections
 
-                    taskSections
+                        emptyState
 
-                    emptyState
+                        Color.clear.frame(height: 400)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.bottom, 70)
+                .padding(.bottom, 0)
                 // Inner VStack surfaces more reliably as an accessibility
                 // element than the outer ScrollView — XCUITest identifier
                 // lookups on ScrollView inconsistently resolve.
@@ -191,6 +269,26 @@ private struct TodayPageBody: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "scroll")
+            // Bottom fade per v18 mockup `.page { mask-image:
+            // linear-gradient(to bottom, black 0, black calc(100% -
+            // 110px), transparent calc(100% - 30px)) }`. Page
+            // content fades to clear over the bottom 80pt so it
+            // disappears gracefully into the omnibar zone instead
+            // of crashing into it as a hard line. Safe to use now —
+            // the full-screen wash overlay (in MainContainer) covers
+            // the underlying photo, so the mask reveals wash, not
+            // photo.
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.86),
+                        .init(color: .clear, location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
             .refreshable {
                 try? await ActiveSession.syncManager?.pullToRefresh()
                 await briefingStore.fetch()
@@ -218,32 +316,7 @@ private struct TodayPageBody: View {
             if !briefingStore.isDismissedToday && briefingStore.briefing == nil {
                 await briefingStore.fetch()
             }
-            // Kick off the adaptive ticker for NextUpCard's relative time.
-            await runTicker()
         }
-    }
-
-    // MARK: - Header
-
-    /// Static page header — was previously a collapsing GeometryReader
-    /// that scaled the date from 18pt to 28pt as the user scrolled. The
-    /// resize made Today's header look smaller than Inbox's fixed 28pt
-    /// header during side-swipes between pages, which the user flagged as
-    /// jarring. Now matches the Inbox/Calendar treatment: 28pt date +
-    /// muted subtitle, no scroll-driven resize.
-    private var collapsingHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(DateHelpers.formatDayHeader(Date()))
-                .font(BrettTypography.dateHeader)
-                .foregroundStyle(.white)
-
-            Text(statsLine)
-                .font(BrettTypography.stats)
-                .foregroundStyle(completionPulse ? BrettColors.gold : Color.white.opacity(0.55))
-                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: completionPulse)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
     }
 
     // MARK: - Section computation
@@ -385,50 +458,7 @@ private struct TodayPageBody: View {
         }
     }
 
-    // MARK: - Stats
-
-    private var statsLine: String {
-        // Hoist the bucket and the day-filtered event list so the three
-        // `sections.*` reads share one bucket and the two event accesses
-        // (count + duration sum) share one filter pass.
-        //
-        // Only include events that block time on the calendar. Google
-        // auto-creates `transparent` events for flights / hotels / working
-        // location from Gmail; counting those as meetings (and summing
-        // their hours) confuses the day's commitment summary.
-        let s = sections
-        let dayEvents = todaysEvents.filter { $0.isBusy }
-        let total = s.activeCount + s.doneToday.count
-        let done = s.doneToday.count
-        let base = "\(done) of \(total) done"
-        guard !dayEvents.isEmpty else { return base }
-        let meetingCount = dayEvents.count
-        let suffix = meetingCount == 1 ? "meeting" : "meetings"
-        return "\(base) · \(meetingCount) \(suffix) (\(Self.formatMeetingDuration(events: dayEvents)))"
-    }
-
-    private static func formatMeetingDuration(events: [CalendarEvent]) -> String {
-        let total = events.reduce(0) { $0 + $1.durationMinutes }
-        let hours = total / 60
-        let mins = total % 60
-        if hours > 0 && mins > 0 { return "\(hours)h \(mins)m" }
-        if hours > 0 { return "\(hours)h" }
-        return "\(mins)m"
-    }
-
     // MARK: - Calendar helpers
-
-    private var todaysEvents: [CalendarEvent] {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: Date())
-        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        // Hide events the user declined — matches Google Calendar's default.
-        return events.filter {
-            $0.startTime >= start
-                && $0.startTime < end
-                && $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue
-        }
-    }
 
     /// Selection uses live `Date()` (not the @State `tickerNow`) so the
     /// ticker can stay idle without producing stale candidates. The card's
@@ -458,22 +488,18 @@ private struct TodayPageBody: View {
 
     /// Toggle a task's status. Fires the completion cascade:
     /// 1. Haptic success
-    /// 2. Header stats pulse gold (spring animation on `completionPulse`)
-    /// 3. After 2s idle, the item moves into Done Today — implemented by
+    /// 2. After 2s idle, the item moves into Done Today — implemented by
     ///    bumping `reflowSnapshotKey` which invalidates the cached sections.
     ///    Each fresh toggle cancels the previous reflow so a burst of quick
     ///    completions all settle together.
+    ///
+    /// Calm-hero refactor (2026-05-04) removed the header stats-pulse: the
+    /// stats line itself moved out of the page (the editorial hero
+    /// doesn't carry a stats counter), so the pulse no longer has a
+    /// surface to land on.
     private func toggle(_ id: String) {
         HapticManager.success()
         itemStore.toggleStatus(id: id, userId: userId)
-
-        // Trigger the stats pulse. Flip true for a beat, then back false so
-        // the spring animation actually runs.
-        completionPulse = true
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            completionPulse = false
-        }
 
         // Hold the row in its current section until the debounce window
         // expires. The user's `isCompleted` toggle is reflected in the
@@ -539,64 +565,6 @@ private struct TodayPageBody: View {
         itemStore.delete(id: id, userId: userId)
     }
 
-    // MARK: - Ticker
-
-    /// Adaptive ticker for `NextUpCard`'s relative-time copy.
-    ///
-    /// Two modes:
-    ///  - **Active** — when the next non-declined event is within the
-    ///    card-visibility window (60 min). Updates `tickerNow` every 30s
-    ///    so the "in N min" copy refreshes.
-    ///  - **Idle** — when no event is within the window. Sleeps without
-    ///    writing state (no body re-eval), waking up at most every 5 min
-    ///    to re-check whether an event has crept into range. The wake
-    ///    interval scales toward "1 minute before the next event would
-    ///    enter the window" so the ticker arms itself just in time.
-    ///
-    /// The `.task` modifier ties this to view lifetime, so when TodayPage
-    /// is unmounted (sign-out, account switch via `.id(userId)`) the loop
-    /// cancels cleanly. TabView keeps TodayPage mounted across page
-    /// swipes, which is why the idle-mode gate matters: without it the
-    /// ticker fires 120×/hour even for users with no upcoming meetings.
-    private func runTicker() async {
-        while !Task.isCancelled {
-            let sleepSeconds = Self.nextTickerSleep(secondsUntilNext: nextUpcomingEvent?.startTime.timeIntervalSinceNow)
-            try? await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
-            if Task.isCancelled { return }
-            // Refresh AFTER the sleep so the displayed `tickerNow` is
-            // always the moment-of-render time, not the moment we
-            // started waiting. Only fire the @State write in the
-            // active window — idle-mode wakes silently re-poll the
-            // gate without triggering a body re-eval.
-            //
-            // Re-check `nextUpcomingEvent` here (not just rely on the
-            // pre-sleep value) because an event could have crossed
-            // the boundary while we slept.
-            let postSleep = Self.nextTickerSleep(secondsUntilNext: nextUpcomingEvent?.startTime.timeIntervalSinceNow)
-            if postSleep == Self.activeTickerInterval {
-                tickerNow = Date()
-            }
-        }
-    }
-
-    /// Active-mode tick interval. Card is visible — we want fresh
-    /// "in N min" copy on a 30s cadence.
-    static let activeTickerInterval: TimeInterval = 30
-
-    /// Pure helper. Given seconds until the next event (or `nil`), returns
-    /// the next sleep window:
-    ///   - In the visibility window (≤60 min out): 30s active tick
-    ///   - Outside the window: sleep until the event would enter range,
-    ///     floored at 60s and capped at 5 min so we re-poll periodically
-    ///     even when no event is in sight (covers cases where SSE pushes
-    ///     a brand-new event into the window between checks).
-    /// Exposed so unit tests can verify the cadence math without
-    /// constructing a SwiftUI view.
-    static func nextTickerSleep(secondsUntilNext: TimeInterval?) -> TimeInterval {
-        guard let seconds = secondsUntilNext else { return 300 }
-        if seconds <= 3600 { return activeTickerInterval }
-        return min(max(seconds - 3600, 60), 300)
-    }
 }
 
 // MARK: - Preview

@@ -95,59 +95,93 @@ struct StickyCardSection<Header: View, Content: View>: View {
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
 
-    private let cornerRadius: CGFloat = 14
-    private let headerHeight: CGFloat = 38
+    private let cornerRadius: CGFloat = 16  // v18 mockup `.card { border-radius: 16px }`
+    /// Header band height. Bumped from 26 → 32 to fit the larger
+    /// 13pt-semibold label (was 11pt) and a bigger count pill —
+    /// the mockup-spec sizes were too small to read comfortably on
+    /// a real iPhone, so we pulled both up a step. Still sits as a
+    /// quiet label floating above the card rather than a heavy
+    /// headerbar.
+    private let headerHeight: CGFloat = 32
     private let fadeDistance: CGFloat = 24
 
     var body: some View {
         let cardShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let headerShape = UnevenRoundedRectangle(
-            topLeadingRadius: cornerRadius,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: cornerRadius,
-            style: .continuous
-        )
 
+        // Layout per v18 mockup: section-head sits as a SIBLING
+        // above the card (cards-area > section-head + card). To get
+        // that visual while keeping the iOS app's sticky-pin
+        // behavior, we stack header + card vertically (so the card
+        // is plainly below the header at rest) and overlay the
+        // header on its own reserved area at the top. As the user
+        // scrolls, the header pins to the viewport top and the
+        // card scrolls under it; the body mask clips items at the
+        // header's bottom edge so the rows look like they
+        // "disappear into the page" as they pass.
         ZStack(alignment: .top) {
-            // Body zone. Material + content are masked together at the
-            // header's current bottom edge so they never render
-            // underneath the header band (no double-material seam).
-            // Clipped to the full card shape so the bottom corners
-            // round; the top corners are inside the masked region and
-            // never visible.
-            VStack(spacing: 0) {
-                // Reserve the header footprint at rest so the first
-                // row sits below the header band instead of underneath
-                // it.
-                Color.clear.frame(height: headerHeight + StickyHeaderLayout.separatorHeight)
+            VStack(spacing: 6) {
+                // Reserved header zone (transparent — the floating
+                // header sits in this space at rest). 6pt gap to
+                // the card matches the mockup's `cards-area gap:
+                // 10px` minus the section-head's bottom padding 6
+                // ≈ 4–6pt space between header text and card top.
+                Color.clear.frame(height: headerHeight)
+
+                // The actual card — glass body with rows. Card
+                // chrome (glass + border) is bounded to this area
+                // only, NOT extending up behind the header text.
                 content()
-            }
-            .background(.thinMaterial)
-            .background(tint.map { $0.opacity(0.10) } ?? Color.clear)
-            .mask {
-                GeometryReader { bodyGeo in
-                    let bodyMinY = bodyGeo.frame(in: .named("scroll")).minY
-                    let scrolledPast = max(0, -bodyMinY)
-                    let masked = StickyHeaderLayout.bodyMaskedHeight(
-                        scrolledPast: scrolledPast,
-                        cardHeight: bodyGeo.size.height,
-                        headerHeight: headerHeight
-                    )
-
-                    VStack(spacing: 0) {
-                        Color.clear.frame(height: masked)
-                        Color.black
+                    .background {
+                        cardShape.fill(Color.white.opacity(0.07))
                     }
-                }
-            }
-            .clipShape(cardShape)
+                    .background(tint.map { $0.opacity(0.10) } ?? Color.clear)
+                    // Border composed BEFORE the mask. Earlier order
+                    // (mask → overlay) left the side borders showing
+                    // through above the pinned header, because the
+                    // mask had already clipped the body but the
+                    // overlay-stroke ran on the unmasked card shape
+                    // afterward. Putting `.overlay` first means the
+                    // border is part of the same group the mask
+                    // clips — so when the body's top is masked, the
+                    // border at that y-range is masked along with it.
+                    .overlay {
+                        cardShape.strokeBorder(
+                            tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.12),
+                            lineWidth: 1
+                        )
+                    }
+                    .mask {
+                        GeometryReader { bodyGeo in
+                            let bodyMinY = bodyGeo.frame(in: .named("scroll")).minY
+                            // Mask covers the area where the pinned
+                            // header sits above the body. With the
+                            // new outer-VStack layout, the body's
+                            // top in scroll coords is positive at
+                            // rest (sits below the header reservation),
+                            // so no clipping is needed until the body
+                            // scrolls up far enough that its first
+                            // rows pass under the header's pinned
+                            // bottom edge. Formula:
+                            //   masked = max(0, headerHeight - bodyMinY)
+                            // — at rest bodyMinY > headerHeight so
+                            // masked == 0; at full pin masked grows
+                            // to hide everything above the header
+                            // edge.
+                            let masked = max(0, headerHeight - bodyMinY)
 
-            // Sticky header zone. Owns its own material clipped to a
-            // top-rounded shape so the viewport-top boundary stays
-            // rounded regardless of scroll position. The body mask
-            // above ensures there's no body material underneath this
-            // band, so the two zones meet cleanly without stacking.
+                            VStack(spacing: 0) {
+                                Color.clear.frame(height: masked)
+                                Color.black
+                            }
+                        }
+                    }
+                    .clipShape(cardShape)
+            }
+
+            // Sticky header zone. NO card chrome — just the header
+            // text + count pill floating above the card. Pinned to
+            // the viewport top once the section enters scroll
+            // range; fades out as the next section approaches.
             GeometryReader { geo in
                 let frame = geo.frame(in: .named("scroll"))
                 let scrolledPast = max(0, -frame.minY)
@@ -163,32 +197,13 @@ struct StickyCardSection<Header: View, Content: View>: View {
                     fadeDistance: fadeDistance
                 )
 
-                VStack(spacing: 0) {
-                    header()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: headerHeight)
-                        .padding(.horizontal, 16)
-
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(height: StickyHeaderLayout.separatorHeight)
-                }
-                .background(.thinMaterial)
-                .background(tint.map { $0.opacity(0.10) } ?? Color.clear)
-                .clipShape(headerShape)
-                .offset(y: offset)
-                .opacity(opacity)
+                header()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: headerHeight)
+                    .padding(.horizontal, 4)
+                    .offset(y: offset)
+                    .opacity(opacity)
             }
-        }
-        // Border picks up the tint when one is provided so AI-surface
-        // cards (Brett's Take, Daily Briefing, Brett Chat) carry the
-        // signature cerulean rim — matches Electron's
-        // `border border-brett-cerulean/30` treatment.
-        .overlay {
-            cardShape.strokeBorder(
-                tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.10),
-                lineWidth: tint == nil ? 0.5 : 1
-            )
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 12)

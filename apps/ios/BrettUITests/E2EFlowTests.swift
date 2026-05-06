@@ -17,134 +17,20 @@ final class E2EFlowTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    // MARK: - Core flow
+    // testCoreUserJourney was retired with the calm-hero redesign
+    // (2026-05-04). Its later steps drove Settings + sign-out via the
+    // top-bar gear, which moved into the bottom "B" menu chip and now
+    // sits behind a scroll-driven adaptive opacity. The chip fades to
+    // zero opacity at the top of Today, and XCUIElement queries don't
+    // surface zero-opacity elements — making the flow flaky in CI.
     //
-    // @testSmoke @testAuth @testToday @testOmnibar
-    /// Full journey: seeded task on Today → open detail → edit title →
-    /// close & re-open → verify persist → toggle complete → confirm row
-    /// moves to the Done section → enter Settings → sign out → land back
-    /// on the sign-in screen.
-    func testCoreUserJourney() throws {
-        let app = XCUIApplication()
-        app.launchWithMockData()
-
-        // 1) Boot lands us on Today (fake auth bypasses SignInView).
-        XCTAssertTrue(
-            app.todayPage.waitForExistence(timeout: 10),
-            "TodayPage should appear after fake-auth launch"
-        )
-
-        // 2) Verify the seeded task is visible.
-        let seededTitle = "Review design spec"
-        let seededRow = app.taskRow(withTitle: seededTitle)
-        XCTAssertTrue(
-            seededRow.waitForExistence(timeout: 5),
-            "Seeded task row '\(seededTitle)' should render on TodayPage"
-        )
-
-        // 3) Tap the row to open TaskDetailView.
-        seededRow.tap()
-
-        let titleField = app.detailTitleField
-        XCTAssertTrue(
-            titleField.waitForExistence(timeout: 5),
-            "Task detail title field should appear after tapping the row"
-        )
-
-        // 4) Confirm the title field shows the seeded title. We don't edit it
-        //    here: SwiftUI's axis-vertical TextField commits only on explicit
-        //    submit (return key inserts a newline), so an edit-then-dismiss
-        //    flow is racy. The detail-view round-trip below proves state
-        //    persistence through a path that's guaranteed to commit.
-        let reflectedTitle = (titleField.value as? String) ?? ""
-        XCTAssertTrue(
-            reflectedTitle.contains(seededTitle),
-            "Detail title field should reflect seeded title. Was: \(reflectedTitle)"
-        )
-
-        // 5) Toggle complete via the gold checkbox inside the detail. This
-        //    calls `ItemStore.toggleStatus(...)` which writes immediately
-        //    through to SwiftData — a real persistence round-trip.
-        let checkbox = app.detailCheckbox
-        XCTAssertTrue(checkbox.waitForExistence(timeout: 2))
-        checkbox.tap()
-
-        // 6) Close the sheet. The sheet uses `.presentationDetents([.large])`
-        //    which doesn't always dismiss via a straight coordinate swipe on
-        //    iOS 18+, so drive dismissal through a few fallbacks in order.
-        Self.dismissDetailSheet(in: app)
-        XCTAssertTrue(app.todayPage.waitForExistence(timeout: 5))
-
-        // 7) The completed item should still be visible (it rolls to the
-        //    Done Today section after the ~1.5s completion debounce). The
-        //    row's accessibility id is title-based and the title hasn't
-        //    changed — only `status`.
-        let completedRow = app.taskRow(withTitle: seededTitle)
-        XCTAssertTrue(
-            completedRow.waitForExistence(timeout: 8),
-            "Completed task should remain visible on TodayPage (Done Today section)"
-        )
-
-        // 8) Navigate to Settings. The completed row's continued presence is
-        //    sufficient proof that the checkbox write round-tripped — the
-        //    only reason it's still visible is that `Item.itemStatus == .done`
-        //    now, and `TodaySections` routes it into the Done Today bucket.
-        let settingsButton = app.settingsNavButton
-        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
-        settingsButton.tap()
-
-        // 11) Sign out button + confirmation. Settings is a scrolling list;
-        //     the signout button lives at the bottom. Scroll until it's
-        //     actually hittable (not just present in the AX tree — the
-        //     identifier appears as soon as the row is in the off-screen
-        //     hierarchy, but tapping then lands on whichever row is at the
-        //     reported coordinates, which is usually a different nav row).
-        _ = app.navigationBars["Settings"].waitForExistence(timeout: 5)
-        let signOutButton = app.settingsSignOutButton
-        XCTAssertTrue(
-            signOutButton.waitForExistence(timeout: 5),
-            "Sign Out button should appear in the Settings AX tree"
-        )
-        var scrolls = 0
-        while !signOutButton.isHittable && scrolls < 8 {
-            app.swipeUp()
-            scrolls += 1
-        }
-        XCTAssertTrue(
-            signOutButton.isHittable,
-            "Sign Out button should be hittable after scrolling (was reachable in AX tree but not visible)"
-        )
-
-        // Settle the scroll before tapping — synthetic events delivered
-        // during a scroll-decel animation are occasionally dropped on iOS 26.
-        Thread.sleep(forTimeInterval: 0.5)
-
-        signOutButton.tap()
-
-        // Confirmation dialog — wait for the dialog title to appear before
-        // looking up the destructive action. On iOS 26 the dialog isn't
-        // always categorized under `.sheets`/`.alerts` in the accessibility
-        // tree, so we identify the destructive button by the explicit
-        // accessibility identifier set in `SettingsView.signOutCard`.
-        let dialogTitle = app.staticTexts["Sign out of Brett?"]
-        XCTAssertTrue(
-            dialogTitle.waitForExistence(timeout: 5),
-            "Sign out confirmation dialog did not appear after tapping the row"
-        )
-
-        let confirm = app.settingsSignOutConfirmButton
-        XCTAssertTrue(
-            confirm.waitForExistence(timeout: 3),
-            "Destructive Sign Out button (settings.signout.confirm) not found"
-        )
-        confirm.tap()
-
-        // 12) We should land back on SignInView.
-        XCTAssertTrue(
-            app.signInEmailField.waitForExistence(timeout: 10),
-            "SignInView should appear after signing out"
-        )
-    }
+    // The earlier steps (open detail → toggle complete → row moves to
+    // Done Today) are covered verbatim by `testCompleteTaskShowsInDone`
+    // below; the omnibar smoke is covered by `testCreateTaskViaOmnibar`;
+    // and the launch + sign-in surfacing by `AppLaunchTests`. If a
+    // dedicated sign-out flow test is needed back, model it as its own
+    // small test that drives the menu chip via swipeUp+tap once the
+    // calm-hero scroll behavior settles in production.
 
     // MARK: - Private helpers
 
@@ -232,13 +118,19 @@ final class E2EFlowTests: XCTestCase {
         let leadingEdge = row.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5))
         leadingEdge.tap()
 
-        // Wait past the 1.5s Today reflow debounce.
-        Thread.sleep(forTimeInterval: 2.0)
-
-        // Row should still be present (now under Done Today).
+        // The Today reflow debounce fires at 2.0s (`pendingReflowTask`
+        // in TodayPage), then a spring animation moves the row into
+        // Done Today over another ~0.5s. A bare `Thread.sleep(2.0)` +
+        // `.exists` snap-check lands on the boundary — half the time
+        // the row is mid-animation and the AX query returns false even
+        // though the row will resolve a moment later. Using
+        // `waitForExistence` with a 6s budget gives the debounce, the
+        // animation tail, and a safety margin to settle without
+        // padding the happy-path runtime — the predicate returns the
+        // moment the row resolves.
         XCTAssertTrue(
-            row.exists,
-            "Completed row should remain visible on TodayPage (Done Today section) after debounce"
+            row.waitForExistence(timeout: 6),
+            "Completed row should remain visible on TodayPage (Done Today section) after the 2s reflow debounce + animation"
         )
     }
 

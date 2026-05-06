@@ -16,6 +16,18 @@ struct OmnibarView: View {
     /// items default to this list unless the user explicitly tags a
     /// different list via `#name`.
     var listId: String? = nil
+
+    /// Background opacity for the calm-hero adaptive chrome. At the
+    /// top of Today this drops toward 0.55 so the photo breathes;
+    /// past the hero (and on every other page) it's 1.0 so the glass
+    /// reads substantively against busy lists. `MainContainer` drives
+    /// this from the same scroll-offset preference key as the
+    /// view-pills row, so all calm-hero affordances transition
+    /// together. Declared before `onSelectList` so call-sites that
+    /// supply both can match the synthesised member-wise init's
+    /// expected argument order.
+    var backgroundOpacity: Double = 1.0
+
     var onSelectList: ((String) -> Void)? = nil
 
     @Environment(AuthManager.self) private var authManager
@@ -60,77 +72,152 @@ struct OmnibarView: View {
 
     private var pill: some View {
         HStack(spacing: 8) {
-            // List-drawer button removed — Lists has its own tab at the
-            // leftmost position, so the omnibar doesn't need a list
-            // picker anymore. The `#listname` shortcut still works for
-            // power users who want to assign a list inline.
+            // Text field with overlaid mixed-styled placeholder. The
+            // placeholder string carries `**…**` markers around the
+            // segment that should bold (per the v18 mockup `<strong>`
+            // styling — e.g. "Add or **ask Brett…**" emphasises the
+            // verb-object). SwiftUI's `prompt:` only takes a flat
+            // `Text`, which can't mix weights, so we render the
+            // placeholder as our own overlay and hide the TextField's
+            // own prompt.
+            ZStack(alignment: .leading) {
+                if !hasText {
+                    placeholderView
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: $inputText)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    .tint(BrettColors.gold)
+                    .focused($isFocused)
+                    .submitLabel(.send)
+                    .onSubmit { submit() }
+                    .accessibilityIdentifier("omnibar.input")
+            }
 
-            // Text field.
-            TextField("", text: $inputText, prompt:
-                Text(placeholder).foregroundStyle(BrettColors.textPlaceholder)
-            )
-            .font(.system(size: 15))
-            .foregroundStyle(Color.white.opacity(0.85))
-            .tint(BrettColors.gold)
-            .focused($isFocused)
-            .submitLabel(.send)
-            .onSubmit { submit() }
-            .accessibilityIdentifier("omnibar.input")
-            // `.keyboard` Done button was here — removed because it
-            // visually overlapped the gold send button and created a
-            // dual-submit UX. Return key + send button are enough;
-            // tap-outside-to-dismiss (wired in MainContainer) handles
-            // the "get rid of the keyboard without submitting" case.
-
-            // Right: send when text present, mic when empty.
+            // Right: send when text present, mic when empty. Both
+            // render as a 38pt antique-gold-filled circle per the
+            // v18 mockup `.omni-mic` — bg `rgba(199,154,77,0.85)`,
+            // border `rgba(255,220,180,0.30)`, drop shadow
+            // `0 4px 10px rgba(199,154,77,0.30)`. Glyph is a
+            // STROKED outline (`fill: none; stroke-width: 1.8`) —
+            // the previous `mic.fill` was a solid white silhouette,
+            // wrong family. SF Symbols' `mic` is the outline variant.
             if hasText {
                 Button { submit() } label: {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
-                        .background(BrettColors.gold, in: Circle())
+                        .frame(width: 44, height: 44)
+                        .background { goldButtonCircle }
                 }
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
                 .accessibilityIdentifier("omnibar.send")
             } else {
                 Button { enterVoiceMode() } label: {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.35))
-                        .frame(width: 26, height: 26)
+                    Image(systemName: "mic")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background { goldButtonCircle }
                 }
+                .accessibilityLabel("Voice input")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.leading, 20)
+        .padding(.trailing, 6)
+        .frame(height: 56)
         .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.04))
-                        .frame(height: 0.5)
-                }
-                .overlay {
-                    Rectangle()
-                        .stroke(
-                            BrettColors.gold.opacity(submitPulse ? 0.8 : 0.0),
-                            lineWidth: 1
-                        )
-                        .animation(.easeOut(duration: 0.15), value: submitPulse)
-                }
-                .overlay {
-                    Rectangle()
-                        .stroke(
-                            BrettColors.error.opacity(parseFailure ? 0.65 : 0.0),
-                            lineWidth: 1
-                        )
-                        .animation(.easeOut(duration: 0.2), value: parseFailure)
-                }
-                .ignoresSafeArea(edges: .bottom)
+            // Tinted dark-warm capsule with a real drop shadow per the
+            // v18 mockup spec — `background: rgba(20,14,18, 0.55);
+            // backdrop-filter: blur(36px) saturate(180%); border: 1px
+            // rgba(255,255,255,0.14); box-shadow: 0 16px 36px
+            // rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.10);`.
+            //
+            // Was using `.thinMaterial` previously which gave us the
+            // standard iOS-translucent-white glass look — wrong family
+            // for a calm-hero pill that should read as a dark warm
+            // object floating over the wash, not as iOS chrome.
+            ZStack {
+                Capsule()
+                    .fill(Color(red: 20/255, green: 14/255, blue: 18/255).opacity(backgroundOpacity * 0.85 + 0.10))
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .opacity(backgroundOpacity)
+                    )
+                    .overlay {
+                        // Outer hairline border + a subtle top inner
+                        // highlight (mockup's `inset 0 1px 0 ...`).
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                    }
+                    .overlay(alignment: .top) {
+                        Capsule()
+                            .frame(height: 1)
+                            .foregroundStyle(Color.white.opacity(0.10))
+                            .padding(.horizontal, 10)
+                    }
+                    .shadow(color: Color.black.opacity(0.50), radius: 18, x: 0, y: 16)
+
+                Capsule()
+                    .stroke(
+                        BrettColors.gold.opacity(submitPulse ? 0.8 : 0.0),
+                        lineWidth: 1
+                    )
+                    .animation(.easeOut(duration: 0.15), value: submitPulse)
+
+                Capsule()
+                    .stroke(
+                        BrettColors.error.opacity(parseFailure ? 0.65 : 0.0),
+                        lineWidth: 1
+                    )
+                    .animation(.easeOut(duration: 0.2), value: parseFailure)
+            }
+            .animation(
+                BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)),
+                value: backgroundOpacity
+            )
         }
+        // Floating margin from the screen edges (calm-hero spec — the
+        // pill is a discrete object, not edge-welded chrome). Bottom
+        // padding keeps it clear of the home indicator.
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
         .animation(.easeOut(duration: 0.15), value: hasText)
+    }
+
+    /// Mixed-styled placeholder per v18 mockup — `<strong>` segments
+    /// (delimited by `**…**` in the placeholder string) render
+    /// at white/0.85 weight medium; the surrounding base segments
+    /// stay at white/0.55 regular. Built as a SwiftUI Text by
+    /// concatenating styled spans so the whole placeholder reads
+    /// as one line with mixed weights, no manual string splicing.
+    private var placeholderView: some View {
+        let segments = OmnibarPlaceholder.parse(placeholder)
+        return segments.reduce(Text("")) { acc, seg in
+            let span = Text(seg.text)
+                .foregroundStyle(seg.bold ? Color.white.opacity(0.85) : Color.white.opacity(0.55))
+                .fontWeight(seg.bold ? .medium : .regular)
+            return acc + span
+        }
+        .font(.system(size: 15))
+    }
+
+    /// Shared antique-gold-filled circle for both send + mic buttons.
+    /// Mockup `.omni-mic`: width 38, bg `rgba(199,154,77,0.85)`,
+    /// border 1px `rgba(255,220,180,0.30)`, drop shadow
+    /// `0 4px 10px rgba(199,154,77,0.30)`.
+    private var goldButtonCircle: some View {
+        Circle()
+            .fill(BrettColors.mockupGold.opacity(0.85))
+            .overlay {
+                Circle().strokeBorder(
+                    Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.30),
+                    lineWidth: 1
+                )
+            }
+            .shadow(color: BrettColors.mockupGold.opacity(0.30), radius: 5, x: 0, y: 4)
     }
 
     // MARK: - Derived
@@ -315,5 +402,36 @@ struct OmnibarView: View {
             isVoiceMode = false
         }
         voiceRecognizer.stop(fireSilence: false)
+    }
+}
+
+/// Tiny parser for the omnibar's mixed-styled placeholder strings.
+/// Splits on `**…**` markers so callers can write the placeholder
+/// like Markdown — `"Add or **ask Brett…**"` becomes two segments,
+/// the second flagged `bold`. Matches the v18 mockup `<strong>`
+/// styling (`.omni-input strong { font-weight: 500 }`).
+enum OmnibarPlaceholder {
+    struct Segment {
+        let text: String
+        let bold: Bool
+    }
+
+    /// Parse a placeholder string into bold/non-bold segments. Pure,
+    /// allocation-light, no regex — splits on `**` and toggles a
+    /// flag. Unbalanced markers are passed through as literal text
+    /// so a typo never crashes the omnibar.
+    static func parse(_ raw: String) -> [Segment] {
+        let parts = raw.components(separatedBy: "**")
+        // Even number of `**` markers ⇒ even count of parts ⇒
+        // bold/non-bold alternation works out. Odd ⇒ orphan
+        // marker; treat all as plain text to avoid silently
+        // hiding a chunk of the placeholder.
+        let isBalanced = parts.count.isMultiple(of: 2) == false
+        guard isBalanced else {
+            return [Segment(text: raw.replacingOccurrences(of: "**", with: ""), bold: false)]
+        }
+        return parts.enumerated().map { index, text in
+            Segment(text: text, bold: index.isMultiple(of: 2) == false)
+        }
     }
 }
