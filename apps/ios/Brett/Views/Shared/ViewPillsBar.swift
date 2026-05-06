@@ -12,11 +12,11 @@ import SwiftUI
 /// gets the prime real estate, the workhorse navigation gets a quieter
 /// home near the user's thumb.
 ///
-/// Pill order mirrors the underlying `TabView` index order in
-/// `MainContainer` (0=Lists, 1=Inbox, 2=Today, 3=Calendar). Tapping a
-/// pill drives `currentPage`; the gold-tinted active state tracks
-/// whichever page the user is currently on (whether they got there by
-/// pill tap or horizontal swipe).
+/// Visual spec mirrors v18 mockup `.view-pills` + `.view-pill` +
+/// `.menu-chip` exactly: pills + chip are CENTERED as a single group
+/// (justify-content: center), each pill is its own dark-glass capsule,
+/// the active pill is gold-tinted glass, and the menu chip is a 26pt
+/// gold-gradient circle separated by a 6pt margin from the pills.
 struct ViewPillsBar: View {
     @Binding var currentPage: Int
     let onMenuTap: () -> Void
@@ -35,27 +35,30 @@ struct ViewPillsBar: View {
     ]
 
     var body: some View {
-        HStack(spacing: 6) {
+        // Centered HStack (mockup `justify-content: center`) — pills
+        // and menu chip travel as one group. Pills get 4pt gap; menu
+        // chip gets a 6pt margin separating it from the pills row.
+        HStack(spacing: 4) {
             ForEach(Self.pages, id: \.index) { page in
                 pill(title: page.title, index: page.index)
             }
-
-            Spacer(minLength: 4)
-
             menuChip
+                .padding(.leading, 6)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
         .opacity(visibility)
-        // Reduce Motion: drop the cross-fade and let the bar snap to
-        // its target opacity. Fades are usually acceptable under
-        // Reduce Motion, but the calm-hero fade is tied to scroll
-        // position and reads as ambient motion to a user who's opted
-        // out of it — `respectingReduceMotion` returns nil and the
-        // assignment is instant.
         .animation(BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)), value: visibility)
     }
 
+    /// A single page pill. Mockup `.view-pill`:
+    ///   padding 6px 12px; border-radius 100px;
+    ///   background rgba(0,0,0,0.40); blur(16px) saturate(140%);
+    ///   border 1px solid rgba(255,255,255,0.12);
+    ///   color rgba(255,255,255,0.72); font 11px weight 500.
+    /// Active variant swaps to `rgba(199,154,77,0.40)` bg + matching
+    /// border + white text.
     private func pill(title: String, index: Int) -> some View {
         let isActive = currentPage == index
         return Button {
@@ -65,17 +68,20 @@ struct ViewPillsBar: View {
             }
         } label: {
             Text(title)
-                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.45))
-                .padding(.horizontal, 10)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.72))
+                .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background {
                     Capsule()
-                        .fill(isActive ? BrettColors.gold.opacity(0.20) : Color.clear)
+                        .fill(isActive ? BrettColors.mockupGold.opacity(0.40) : Color.black.opacity(0.40))
+                        .background(Capsule().fill(.ultraThinMaterial))
                         .overlay {
                             Capsule().strokeBorder(
-                                isActive ? BrettColors.gold.opacity(0.40) : Color.clear,
-                                lineWidth: 0.5
+                                isActive
+                                    ? BrettColors.mockupGold.opacity(0.65)
+                                    : Color.white.opacity(0.12),
+                                lineWidth: 1
                             )
                         }
                 }
@@ -85,23 +91,38 @@ struct ViewPillsBar: View {
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
-    /// Gold disc with a serif "B" — the calm-hero spec's compressed
-    /// home for Profile / Scouts / Notifications / Settings.
+    /// Gold gradient disc with a serif "B". Mockup `.menu-chip`:
+    ///   width 26; border-radius 50%;
+    ///   background linear-gradient(135deg, #c79a4d 0%, #8a5e2c 100%);
+    ///   border 1px solid rgba(255,220,180,0.30);
+    ///   color #fff; font 10px weight 600;
+    ///   box-shadow 0 3px 10px rgba(0,0,0,0.20).
     private var menuChip: some View {
         Button {
             HapticManager.light()
             onMenuTap()
         } label: {
             Text("B")
-                .font(.system(size: 14, weight: .semibold, design: .serif))
+                .font(.system(size: 10, weight: .semibold, design: .serif))
+                .tracking(0.2)
                 .foregroundStyle(.white)
-                .frame(width: 28, height: 28)
+                .frame(width: 26, height: 26)
                 .background {
                     Circle()
-                        .fill(BrettColors.gold)
+                        .fill(
+                            LinearGradient(
+                                colors: [BrettColors.mockupGold, BrettColors.mockupGoldDark],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .overlay {
-                            Circle().strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
+                            Circle().strokeBorder(
+                                Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.30),
+                                lineWidth: 1
+                            )
                         }
+                        .shadow(color: Color.black.opacity(0.20), radius: 5, x: 0, y: 3)
                 }
         }
         .buttonStyle(.plain)

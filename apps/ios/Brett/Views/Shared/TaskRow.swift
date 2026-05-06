@@ -173,13 +173,19 @@ struct TaskRow: View {
         Button {
             onSelect()
         } label: {
-            HStack(spacing: 12) {
+            // Mockup `.task { padding: 12px 14px; gap: 10px }` —
+            // icon flush with the card's left padding (no 44pt
+            // tap-target frame around it). Was previously a 44pt
+            // tap-target frame around a 28pt icon, which pushed the
+            // title another 8pt right and made the icon look
+            // floating-in-padding. The icon glyph itself is 28pt
+            // which is just under HIG's recommended 44pt minimum;
+            // expanded `.contentShape` brings the tap area to the
+            // full 28×40 (icon + extra vertical padding from the
+            // row's vertical padding above + below).
+            HStack(spacing: 10) {
                 leadingGlyph
-                    // Both icon glyphs render at 13pt bold so completed and
-                    // incomplete rows have visually identical leading
-                    // anchors. Earlier 12pt vs 13pt + medium vs semibold
-                    // made the checkmark look smaller and pull left.
-                    .frame(width: 44, height: 44)
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                     .highPriorityGesture(
                         TapGesture().onEnded {
@@ -253,7 +259,10 @@ struct TaskRow: View {
                     reconnectPill(for: relink.type)
                 }
             }
-            .padding(.vertical, 4)
+            // Mockup `.task { padding: 12px 14px }` — icon flush
+            // with the 14pt inset from the card's leading edge.
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
         .buttonStyle(.plain)
     }

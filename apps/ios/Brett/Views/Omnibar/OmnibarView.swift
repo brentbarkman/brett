@@ -85,49 +85,30 @@ struct OmnibarView: View {
             .accessibilityIdentifier("omnibar.input")
 
             // Right: send when text present, mic when empty. Both
-            // render as a 38pt gold-filled circle per the v18
-            // mockup — `omni-mic { width:38; background: rgba(199,154,77,0.85);
-            // border: 1px rgba(255,220,180,0.30); box-shadow: 0 4px 10px ...; }`.
-            // The previous treatment used a tiny 30pt foreground-only
-            // gold glyph which read as disabled, not as the voice
-            // affordance.
+            // render as a 38pt antique-gold-filled circle per the
+            // v18 mockup `.omni-mic` — bg `rgba(199,154,77,0.85)`,
+            // border `rgba(255,220,180,0.30)`, drop shadow
+            // `0 4px 10px rgba(199,154,77,0.30)`. Glyph is a
+            // STROKED outline (`fill: none; stroke-width: 1.8`) —
+            // the previous `mic.fill` was a solid white silhouette,
+            // wrong family. SF Symbols' `mic` is the outline variant.
             if hasText {
                 Button { submit() } label: {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 38, height: 38)
-                        .background {
-                            Circle()
-                                .fill(BrettColors.gold.opacity(0.85))
-                                .overlay {
-                                    Circle().strokeBorder(
-                                        Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.30),
-                                        lineWidth: 1
-                                    )
-                                }
-                                .shadow(color: BrettColors.gold.opacity(0.30), radius: 5, x: 0, y: 4)
-                        }
+                        .background { goldButtonCircle }
                 }
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
                 .accessibilityIdentifier("omnibar.send")
             } else {
                 Button { enterVoiceMode() } label: {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                    Image(systemName: "mic")
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(.white)
                         .frame(width: 38, height: 38)
-                        .background {
-                            Circle()
-                                .fill(BrettColors.gold.opacity(0.85))
-                                .overlay {
-                                    Circle().strokeBorder(
-                                        Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.30),
-                                        lineWidth: 1
-                                    )
-                                }
-                                .shadow(color: BrettColors.gold.opacity(0.30), radius: 5, x: 0, y: 4)
-                        }
+                        .background { goldButtonCircle }
                 }
                 .accessibilityLabel("Voice input")
             }
@@ -193,6 +174,22 @@ struct OmnibarView: View {
         .padding(.horizontal, 14)
         .padding(.bottom, 8)
         .animation(.easeOut(duration: 0.15), value: hasText)
+    }
+
+    /// Shared antique-gold-filled circle for both send + mic buttons.
+    /// Mockup `.omni-mic`: width 38, bg `rgba(199,154,77,0.85)`,
+    /// border 1px `rgba(255,220,180,0.30)`, drop shadow
+    /// `0 4px 10px rgba(199,154,77,0.30)`.
+    private var goldButtonCircle: some View {
+        Circle()
+            .fill(BrettColors.mockupGold.opacity(0.85))
+            .overlay {
+                Circle().strokeBorder(
+                    Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.30),
+                    lineWidth: 1
+                )
+            }
+            .shadow(color: BrettColors.mockupGold.opacity(0.30), radius: 5, x: 0, y: 4)
     }
 
     // MARK: - Derived

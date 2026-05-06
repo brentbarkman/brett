@@ -83,8 +83,17 @@ struct TaskSection: View {
                             }
 
                             if index < items.count - 1 {
-                                Divider().background(BrettColors.hairline)
-                                    .padding(.horizontal, 16)
+                                // Hairline between rows. Mockup
+                                // `.task { border-bottom: 1px solid
+                                // rgba(255,255,255,0.06) }`. Indented
+                                // 14pt to match the row's leading
+                                // padding so the line starts under
+                                // the icon's left edge, not under
+                                // the card border.
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.06))
+                                    .frame(height: 0.5)
+                                    .padding(.horizontal, 14)
                             }
                         }
                         // Per-row transition: rows fade + slide in from

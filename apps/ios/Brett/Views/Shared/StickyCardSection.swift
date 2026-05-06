@@ -101,29 +101,31 @@ struct StickyCardSection<Header: View, Content: View>: View {
 
     var body: some View {
         let cardShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let headerShape = UnevenRoundedRectangle(
-            topLeadingRadius: cornerRadius,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: cornerRadius,
-            style: .continuous
-        )
 
         ZStack(alignment: .top) {
-            // Body zone. Material + content are masked together at the
-            // header's current bottom edge so they never render
-            // underneath the header band (no double-material seam).
-            // Clipped to the full card shape so the bottom corners
-            // round; the top corners are inside the masked region and
-            // never visible.
+            // Body card — the only glass plate per the v18 mockup
+            // (`.card { background: rgba(255,255,255,0.07); blur(20px)
+            // saturate(140%); border: 1px rgba(255,255,255,0.12) }`).
+            // Header is rendered separately above (no card chrome on
+            // the header) so the visual matches the mockup's
+            // "section-head as plain text floating above the card."
             VStack(spacing: 0) {
                 // Reserve the header footprint at rest so the first
-                // row sits below the header band instead of underneath
-                // it.
+                // row sits below the header band instead of
+                // underneath it.
                 Color.clear.frame(height: headerHeight + StickyHeaderLayout.separatorHeight)
                 content()
             }
-            .background(.thinMaterial)
+            .background {
+                // Mockup `.card` glass: white-tint base + ultraThin
+                // material blur underneath. SwiftUI's .ultraThinMaterial
+                // is the closest stock equivalent of `blur(20px)
+                // saturate(140%)`; the white tint on top brings it
+                // to the white/0.07 base.
+                cardShape
+                    .fill(Color.white.opacity(0.07))
+                    .background(cardShape.fill(.ultraThinMaterial))
+            }
             .background(tint.map { $0.opacity(0.10) } ?? Color.clear)
             .mask {
                 GeometryReader { bodyGeo in
@@ -141,13 +143,30 @@ struct StickyCardSection<Header: View, Content: View>: View {
                     }
                 }
             }
+            .overlay {
+                // Border on the body card only — the header sits on
+                // the wash (no card chrome) so it doesn't carry the
+                // border. AI-surface cards (Brett's Take, Daily
+                // Briefing) get a cerulean rim via `tint`.
+                cardShape.strokeBorder(
+                    tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.12),
+                    lineWidth: 1
+                )
+            }
             .clipShape(cardShape)
 
-            // Sticky header zone. Owns its own material clipped to a
-            // top-rounded shape so the viewport-top boundary stays
-            // rounded regardless of scroll position. The body mask
-            // above ensures there's no body material underneath this
-            // band, so the two zones meet cleanly without stacking.
+            // Sticky header zone. NO card chrome here — just the
+            // header content (label + count pill) on a wash-colored
+            // band. When the header pins to the viewport top and
+            // items scroll under it, the wash bg occludes them
+            // (looks like items "disappear into the wash"). When
+            // the section is exhausted, the band fades out and the
+            // next section's header takes its place.
+            //
+            // The wash band reads as a continuation of the page
+            // background rather than a card-chrome strip, which is
+            // what the mockup shows (`.section-head` as a sibling
+            // of `.card`, not nested inside it).
             GeometryReader { geo in
                 let frame = geo.frame(in: .named("scroll"))
                 let scrolledPast = max(0, -frame.minY)
@@ -163,34 +182,14 @@ struct StickyCardSection<Header: View, Content: View>: View {
                     fadeDistance: fadeDistance
                 )
 
-                VStack(spacing: 0) {
-                    header()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: headerHeight)
-                        .padding(.horizontal, 16)
-
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(height: StickyHeaderLayout.separatorHeight)
-                }
-                .background(.thinMaterial)
-                .background(tint.map { $0.opacity(0.10) } ?? Color.clear)
-                .clipShape(headerShape)
-                .offset(y: offset)
-                .opacity(opacity)
+                header()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: headerHeight)
+                    .padding(.horizontal, 4)
+                    .background(BackgroundService.shared.currentWashColor)
+                    .offset(y: offset)
+                    .opacity(opacity)
             }
-        }
-        // Border picks up the tint when one is provided so AI-surface
-        // cards (Brett's Take, Daily Briefing, Brett Chat) carry the
-        // signature cerulean rim — matches Electron's
-        // `border border-brett-cerulean/30` treatment. Default border
-        // is `rgba(255,255,255,0.12)` per v18 mockup `.card { border:
-        // 1px solid rgba(255,255,255,0.12) }`.
-        .overlay {
-            cardShape.strokeBorder(
-                tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.12),
-                lineWidth: 1
-            )
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 12)

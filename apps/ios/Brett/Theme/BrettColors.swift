@@ -5,6 +5,17 @@ enum BrettColors {
     static let gold = Color(red: 232/255, green: 185/255, blue: 49/255)       // #E8B931
     static let cerulean = Color(red: 70/255, green: 130/255, blue: 195/255)   // #4682C3
 
+    /// Calm-hero "antique gold" used in v18 mockup tints (`rec-gold:
+    /// #c79a4d`). Slightly darker + more amber than the brand gold —
+    /// reads as champagne/aged metal where the brand gold reads as
+    /// modern/zesty. Used on type-icon glass tiles, the omnibar mic,
+    /// active view pills, and section count pills so those calm-hero
+    /// treatments match the mockup exactly. The brand gold stays
+    /// canonical for everything else (active nav state, checkboxes,
+    /// completion pulse, etc.).
+    static let mockupGold = Color(red: 199/255, green: 154/255, blue: 77/255) // #C79A4D
+    static let mockupGoldDark = Color(red: 138/255, green: 94/255, blue: 44/255) // #8A5E2C
+
     // Regular blue — for user-pickable "blue" list-color tokens, NOT a Brett
     // AI signal. Distinct from cerulean so lists don't accidentally carry the
     // Brett brand. Matches ListColor.blue (Tailwind blue-400, #60A5FA).
