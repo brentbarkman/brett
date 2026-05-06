@@ -72,12 +72,17 @@ export function InboxItemRow({
     : undefined;
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (isFocused) rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [isFocused]);
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -91,7 +96,10 @@ export function InboxItemRow({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        rowRef.current = node;
+      }}
       onClick={onClick}
       onFocus={onFocus}
       {...listeners}
