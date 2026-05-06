@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@brett/api-core";
 
 /**
  * Where-clause fragment selecting only events on user-visible calendars.
