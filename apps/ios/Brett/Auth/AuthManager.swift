@@ -553,7 +553,19 @@ final class AuthManager {
             // plugin today (the token string stays the same across
             // extensions). If that changes in a future endpoint contract,
             // persist the new token here.
-            if session.user.id != currentUser?.id {
+            //
+            // currentUser is in-memory only and starts nil on every cold
+            // launch. If an earlier refreshCurrentUser hit a non-401
+            // transient error its silent catch leaves currentUser nil; the
+            // user-switch comparison below would then read `validId != nil`
+            // as TRUE and run signOut() with a full data wipe — the exact
+            // bug from issue #134. Treat nil as "haven't hydrated yet" and
+            // recover by fetching the full profile.
+            guard let existingId = currentUser?.id else {
+                await refreshCurrentUser()
+                return
+            }
+            if existingId != session.user.id {
                 // User id changed under us — full sign-out (including data
                 // wipe). This shouldn't happen but covers the case where
                 // the server reassigned the token to a different account,

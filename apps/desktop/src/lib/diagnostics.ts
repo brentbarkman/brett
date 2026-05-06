@@ -210,7 +210,7 @@ export function collectDiagnostics(electronVersion?: string): DiagnosticSnapshot
     consoleLogs: consoleLogs.snapshot(),
     failedApiCalls: failedApiCalls.snapshot(),
     breadcrumbs: breadcrumbs.snapshot(),
-    appVersion: import.meta.env.VITE_APP_VERSION || "unknown",
+    appVersion: __APP_VERSION__,
     electronVersion: electronVersion || "unknown",
     os: navigator.userAgent,
     currentRoute: window.location.pathname + window.location.hash,

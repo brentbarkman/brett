@@ -150,6 +150,74 @@ struct AuthManagerTests {
         #expect(itemCount() == 2, "cold-launch 401 must NOT wipe local data — that was the regression")
     }
 
+    /// **Regression guard for the silent cold-launch user-switch race.**
+    ///
+    /// The setup that bites:
+    ///   1. Cold launch — fresh `AuthManager`, token in keychain,
+    ///      `currentUser == nil` (in-memory only, never persisted).
+    ///   2. `hydrateFromKeychain` reads the token and calls
+    ///      `refreshCurrentUser`.
+    ///   3. `/users/me` hits a transient *non-401* error (timeout, weak
+    ///      signal, DNS hiccup). `refreshCurrentUser` falls into the silent
+    ///      catch-all — `currentUser` stays nil, `hasSuccessfullyRefreshed`
+    ///      stays false.
+    ///   4. Network recovers. The scene-active hook fires `refreshIfStale`.
+    ///   5. `/api/auth/ios/session` returns 200 with the user's real id.
+    ///   6. The bug: `if session.user.id != currentUser?.id` evaluates as
+    ///      `"u1" != nil` → TRUE → `signOut()` runs → keychain wiped,
+    ///      SwiftData wiped, user dumped to SignInView with no data.
+    ///
+    /// The intent of that comparison is "detect a token reassigned to a
+    /// different account." A nil `currentUser` is "we never managed to
+    /// hydrate this process," not "user switched." Recovery path: fetch
+    /// the full profile via `refreshCurrentUser`, leave data alone.
+    @Test func refreshIfStaleWithNilCurrentUserDoesNotSignOut() async throws {
+        resetState()
+        defer { resetState() }
+
+        let (mgr, client) = makeTestManager()
+
+        // Reproduce step (1)–(3): keychain token + transient /users/me failure.
+        try KeychainStore.writeToken("tok-cold")
+        MockURLProtocol.stub(url: usersMeURL(for: client), error: URLError(.notConnectedToInternet))
+        await mgr.hydrateFromKeychain(authContext: nil)
+
+        #expect(mgr.token == "tok-cold", "hydrate must load the keychain token")
+        #expect(mgr.currentUser == nil, "transient network error must leave currentUser nil")
+
+        seedItem(userId: "u1", title: "task A")
+        seedItem(userId: "u1", title: "task B")
+        #expect(itemCount() == 2)
+
+        // Step (4)–(5): network recovers, refreshIfStale gets a clean
+        // session response. Re-stubbing /users/me replaces the prior
+        // network-error stub so the recovery refreshCurrentUser call (added
+        // by the fix) succeeds. /api/auth/sign-out is stubbed so a
+        // regression that takes the buggy signOut path doesn't fail with a
+        // stub-not-found error and obscure the real assertion.
+        MockURLProtocol.stub(
+            url: iosSessionURL(for: client),
+            statusCode: 200,
+            body: validIOSSessionBody(token: "tok-cold", userId: "u1", email: "a@b.com")
+        )
+        MockURLProtocol.stub(
+            url: usersMeURL(for: client),
+            statusCode: 200,
+            body: validUserMeBody(id: "u1", email: "a@b.com")
+        )
+        MockURLProtocol.stub(url: signOutURL(for: client), statusCode: 200, body: Data())
+
+        await mgr.refreshIfStale(threshold: 0)
+
+        #expect(mgr.token == "tok-cold",
+                "session-success on a nil-currentUser must NOT trigger signOut")
+        #expect(mgr.currentUser?.id == "u1",
+                "fix should hydrate currentUser from the recovery refresh")
+        #expect(mgr.isAuthenticated)
+        #expect(itemCount() == 2,
+                "data must NOT be wiped — that was the original bug")
+    }
+
     /// Mirror of the above for the foreground-keepalive path
     /// (`refreshIfStale` → `/api/auth/ios/session`). Both refresh paths
     /// fire on cold launch so both need the lenience gate.
