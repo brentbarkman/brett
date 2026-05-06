@@ -210,12 +210,14 @@ struct MainContainer: View {
 
     /// Visibility (0–1) for the bottom view-pills row.
     /// - On Today, ramps from 0 at the top of the hero to 1 at
-    ///   `heroFadeDistance` of scroll.
-    /// - On every other page, always 1 (the hero treatment is
-    ///   Today-only, so other pages don't earn the editorial empty
-    ///   top).
+    ///   `heroFadeDistance` of scroll — pills only earn their place
+    ///   once the user is in the working zone.
+    /// - On every other page, hidden (0). Calm-hero direction is
+    ///   swipe-only navigation between pages; the pills aren't a
+    ///   primary affordance, just a "here's where you are when you
+    ///   land back on Today" signal.
     private var pillsVisibility: Double {
-        guard currentPage == 2 else { return 1 }
+        guard currentPage == 2 else { return 0 }
         let progress = Double(heroScroll.offset / Self.heroFadeDistance)
         return min(max(progress, 0), 1)
     }
