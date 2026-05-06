@@ -25,6 +25,17 @@ enum ContentMetadata: Decodable, Equatable {
         let author: String?
         let tweetText: String?
         let embedHtml: String?
+        let quotedTweet: QuotedTweet?
+
+        /// One level of quote-tweet, matching Twitter's own UI. Optional on
+        /// every field — older API responses won't include this at all, and
+        /// individual sub-fields can be missing if the server can't extract
+        /// them (e.g. the quoted tweet was deleted).
+        struct QuotedTweet: Decodable, Equatable {
+            let author: String?
+            let text: String?
+            let sourceUrl: String?
+        }
     }
 
     struct VideoMeta: Decodable, Equatable {

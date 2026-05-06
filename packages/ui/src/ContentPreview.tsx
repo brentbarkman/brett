@@ -121,6 +121,38 @@ function ErrorState({ sourceUrl, onRetry, isRetrying, assistantName = "Brett" }:
   );
 }
 
+function QuotedTweetCard({
+  author,
+  text,
+  sourceUrl,
+}: {
+  author?: string;
+  text?: string;
+  sourceUrl?: string;
+}) {
+  if (!author && !text && !sourceUrl) return null;
+  return (
+    <div className="mt-2 rounded-md border border-white/10 bg-white/[0.03] p-3 space-y-1.5">
+      <div className="flex items-center gap-2">
+        {author && <span className="text-xs text-white/50 font-medium">@{author}</span>}
+        {sourceUrl && isSafeHref(sourceUrl) && (
+          <a
+            href={sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto inline-flex items-center gap-1 text-[11px] text-white/30 hover:text-white/50 transition-colors"
+          >
+            View on X <ExternalLink size={9} />
+          </a>
+        )}
+      </div>
+      {text && (
+        <p className="text-[13px] text-white/70 leading-relaxed whitespace-pre-wrap">{text}</p>
+      )}
+    </div>
+  );
+}
+
 function TweetPreview({
   metadata,
   sourceUrl,
@@ -137,6 +169,7 @@ function TweetPreview({
   const author = metadata?.type === "tweet" ? metadata.author : undefined;
   const tweetText = metadata?.type === "tweet" ? metadata.tweetText : undefined;
   const embedHtml = metadata?.type === "tweet" ? metadata.embedHtml : undefined;
+  const quotedTweet = metadata?.type === "tweet" ? metadata.quotedTweet : undefined;
 
   // The oEmbed HTML is a <blockquote> with the tweet text + a <script> tag.
   // Sanitize to keep just the blockquote content (strips the script tag).
@@ -157,6 +190,8 @@ function TweetPreview({
     : undefined;
 
   // Nothing to render — preserve the existing "content unavailable" affordance.
+  // A quoted tweet alone isn't enough to consider the parent "available" since
+  // the user shared the parent, not the quote.
   if (!sanitizedEmbed && !bodyText && !contentImageUrl && !headingTitle) {
     return (
       <div className="bg-white/5 rounded-lg border border-white/10 p-4 space-y-2">
@@ -205,6 +240,13 @@ function TweetPreview({
           ) : bodyText ? (
             <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
           ) : null}
+          {quotedTweet && (
+            <QuotedTweetCard
+              author={quotedTweet.author}
+              text={quotedTweet.text}
+              sourceUrl={quotedTweet.sourceUrl}
+            />
+          )}
         </div>
       </div>
     </div>

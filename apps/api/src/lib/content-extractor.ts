@@ -111,17 +111,121 @@ export function computeSyndicationToken(id: string): string {
   return ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, "");
 }
 
-interface TweetSyndicationResult {
-  handle: string;               // screen_name, e.g. "aiedge_"
-  displayName: string | null;   // user.name, e.g. "AI Edge"
-  text: string;                 // raw tweet text
+export interface TweetUrlEntity {
+  url: string;          // t.co shortlink as it appears in the tweet text
+  expandedUrl: string;  // canonical destination
+  displayUrl: string;   // human-readable form (no protocol)
+}
+
+export interface TweetSyndicationResult {
+  handle: string;                         // screen_name, e.g. "aiedge_"
+  displayName: string | null;             // user.name, e.g. "AI Edge"
+  idStr: string | null;                   // numeric tweet id as string — used to build permalinks
+  text: string;                           // raw data.text (may be 280-char truncated for long tweets)
+  noteText: string | null;                // raw data.note_tweet.text (full body of long tweets), null otherwise
+  urls: TweetUrlEntity[];                 // entity URLs from data.entities.urls or note_tweet.entity_set.urls
   createdAt: string | null;
   article: {
     title: string;
     previewText: string | null;
     coverImageUrl: string | null;
   } | null;
-  mediaImageUrl: string | null; // first media photo if any
+  mediaImageUrl: string | null;           // first media photo if any
+  quotedTweet: TweetSyndicationResult | null;  // one level only — never recurse further
+}
+
+function parseUrlEntities(raw: unknown): TweetUrlEntity[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TweetUrlEntity[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const url = (entry as any).url;
+    const expanded = (entry as any).expanded_url;
+    const display = (entry as any).display_url;
+    if (typeof url !== "string" || typeof expanded !== "string" || typeof display !== "string") continue;
+    out.push({ url, expandedUrl: expanded, displayUrl: display });
+  }
+  return out;
+}
+
+/**
+ * Parse a Twitter syndication CDN response into our normalized shape.
+ * Pure function — separated from the network call so it can be unit-tested
+ * with fixture JSON without hitting the live endpoint.
+ *
+ * `allowRecurse` caps quoted-tweet nesting at one level: Twitter's own UI
+ * doesn't render quote-of-a-quote, and recursing further would let a
+ * pathological response blow up the stored JSON.
+ */
+export function parseSyndicationData(
+  data: unknown,
+  allowRecurse = true,
+): TweetSyndicationResult | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, any>;
+  const handle = d.user?.screen_name;
+  if (typeof handle !== "string" || !handle) return null;
+
+  const article = (() => {
+    const a = d.article;
+    if (!a || typeof a !== "object") return null;
+    const title = a.title;
+    if (typeof title !== "string") return null;
+    return {
+      title,
+      previewText: typeof a.preview_text === "string" ? a.preview_text : null,
+      coverImageUrl:
+        typeof a?.cover_media?.media_info?.original_img_url === "string"
+          ? a.cover_media.media_info.original_img_url
+          : null,
+    };
+  })();
+
+  const mediaDetails = Array.isArray(d.mediaDetails) ? d.mediaDetails : [];
+  const photo = mediaDetails.find((m: any) => m?.type === "photo");
+  const mediaImageUrl = typeof photo?.media_url_https === "string" ? photo.media_url_https : null;
+
+  // Long tweets store their entity URLs under note_tweet.entity_set; short
+  // tweets put them at the top level. Prefer the long-form set when present
+  // since that's the entity set that matches note_tweet.text.
+  const noteText = typeof d.note_tweet?.text === "string" ? d.note_tweet.text : null;
+  const urls = noteText
+    ? parseUrlEntities(d.note_tweet?.entity_set?.urls)
+    : parseUrlEntities(d.entities?.urls);
+
+  const quotedTweet = allowRecurse ? parseSyndicationData(d.quoted_tweet, false) : null;
+
+  return {
+    handle,
+    displayName: typeof d.user?.name === "string" ? d.user.name : null,
+    idStr: typeof d.id_str === "string" ? d.id_str : null,
+    text: typeof d.text === "string" ? d.text : "",
+    noteText,
+    urls,
+    createdAt: typeof d.created_at === "string" ? d.created_at : null,
+    article,
+    mediaImageUrl,
+    quotedTweet,
+  };
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Replace each `t.co` shortlink in `text` with its expanded URL. Twitter
+ * stores tweet body text with t.co shortlinks; we want the human-readable
+ * destination so the preview isn't a wall of opaque links.
+ */
+export function expandTwitterUrls(text: string, urls: TweetUrlEntity[]): string {
+  if (!text || urls.length === 0) return text;
+  let out = text;
+  for (const entry of urls) {
+    if (!entry.url) continue;
+    out = out.replace(new RegExp(escapeRegExp(entry.url), "g"), entry.expandedUrl);
+  }
+  return out;
 }
 
 async function fetchTweetSyndication(url: string): Promise<TweetSyndicationResult | null> {
@@ -135,37 +239,13 @@ async function fetchTweetSyndication(url: string): Promise<TweetSyndicationResul
       console.warn(`[content-extractor] tweet syndication non-ok ${res.status} for ${url}`);
       return null;
     }
-    const data = (await res.json()) as Record<string, any>;
-    const handle = data?.user?.screen_name as string | undefined;
-    if (!handle) {
+    const data = await res.json();
+    const parsed = parseSyndicationData(data);
+    if (!parsed) {
       console.warn(`[content-extractor] tweet syndication missing user.screen_name for ${url}`);
       return null;
     }
-
-    const article = (() => {
-      const a = data?.article;
-      if (!a || typeof a !== "object") return null;
-      const title = a.title as string | undefined;
-      if (!title) return null;
-      return {
-        title,
-        previewText: (a.preview_text as string | undefined) ?? null,
-        coverImageUrl: (a?.cover_media?.media_info?.original_img_url as string | undefined) ?? null,
-      };
-    })();
-
-    const mediaDetails = Array.isArray(data?.mediaDetails) ? data.mediaDetails : [];
-    const photo = mediaDetails.find((m: any) => m?.type === "photo");
-    const mediaImageUrl = (photo?.media_url_https as string | undefined) ?? null;
-
-    return {
-      handle,
-      displayName: (data?.user?.name as string | undefined) ?? null,
-      text: (data?.text as string | undefined) ?? "",
-      createdAt: (data?.created_at as string | undefined) ?? null,
-      article,
-      mediaImageUrl,
-    };
+    return parsed;
   } catch (err) {
     const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     const cause = (err as { cause?: { code?: string; message?: string } })?.cause;
@@ -219,18 +299,37 @@ async function extractTweet(url: string): Promise<ExtractionResult> {
   if (syndication) {
     // For "X Article" tweets, the article card is the meaningful content;
     // data.text is just a t.co shortlink, so prefer the article fields.
+    // Otherwise prefer note_tweet (full body of long tweets) over data.text
+    // (which is 280-char truncated for long tweets).
     const isArticle = syndication.article !== null;
-    const effectiveText = isArticle
+    const rawText = isArticle
       ? syndication.article?.previewText ?? syndication.text
-      : syndication.text;
+      : syndication.noteText ?? syndication.text;
+    const effectiveText = expandTwitterUrls(rawText ?? "", syndication.urls);
     const title = syndication.article?.title ?? `Tweet by @${syndication.handle}`;
     const imageUrl = syndication.article?.coverImageUrl ?? syndication.mediaImageUrl ?? null;
+
+    const quotedTweet = (() => {
+      const q = syndication.quotedTweet;
+      if (!q) return undefined;
+      const qRaw = q.noteText ?? q.text;
+      const qText = expandTwitterUrls(qRaw ?? "", q.urls).trim();
+      const qSourceUrl = q.idStr ? `https://x.com/${q.handle}/status/${q.idStr}` : undefined;
+      // Drop entirely if there's no meaningful content — otherwise renderers
+      // would have to handle yet another empty-card edge case.
+      if (!qText && !qSourceUrl) return undefined;
+      return {
+        author: q.handle,
+        text: qText || undefined,
+        sourceUrl: qSourceUrl,
+      };
+    })();
 
     return {
       contentType: "tweet",
       contentStatus: "extracted",
       contentTitle: title,
-      contentDescription: effectiveText?.trim() || null,
+      contentDescription: effectiveText.trim() || null,
       contentImageUrl: imageUrl,
       contentBody: null,
       contentFavicon: favicon,
@@ -238,7 +337,8 @@ async function extractTweet(url: string): Promise<ExtractionResult> {
       contentMetadata: {
         type: "tweet",
         author: syndication.handle,
-        tweetText: effectiveText?.trim() || undefined,
+        tweetText: effectiveText.trim() || undefined,
+        quotedTweet,
       },
       title,
     };

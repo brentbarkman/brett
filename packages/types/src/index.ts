@@ -40,7 +40,15 @@ export type ContentType = "tweet" | "article" | "video" | "pdf" | "podcast" | "w
 export type ContentStatus = "pending" | "extracted" | "failed";
 
 export type ContentMetadata =
-  | { type: "tweet"; embedHtml?: string; author?: string; tweetText?: string }
+  | {
+      type: "tweet";
+      embedHtml?: string;
+      author?: string;
+      tweetText?: string;
+      // One level of quote-tweet only (matches Twitter's own UI). Older clients
+      // ignore this field; newer clients render it as a nested sub-card.
+      quotedTweet?: { author?: string; text?: string; sourceUrl?: string };
+    }
   | { type: "video"; embedUrl: string; duration?: number; channel?: string }
   | { type: "podcast"; embedUrl: string; provider: "spotify" | "apple"; episodeName?: string; showName?: string }
   | { type: "article"; author?: string; publishDate?: string; wordCount?: number }

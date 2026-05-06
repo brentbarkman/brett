@@ -8,6 +8,8 @@ import {
   extractTweetId,
   extractTweetAuthor,
   computeSyndicationToken,
+  parseSyndicationData,
+  expandTwitterUrls,
 } from "../lib/content-extractor.js";
 // cleanFilename is from @brett/ui — import directly since API doesn't depend on ui package
 function cleanFilename(filename: string): string {
@@ -266,6 +268,157 @@ describe("extractArticle", () => {
     `;
     const result = extractArticle(html, "https://example.com/spa");
     expect(result).toBeNull();
+  });
+});
+
+describe("parseSyndicationData", () => {
+  // Minimal valid response shape — every test layers on top of this.
+  const baseResponse = {
+    user: { screen_name: "vercel", name: "Vercel" },
+    text: "hello world",
+    created_at: "2026-04-01T12:00:00Z",
+  };
+
+  it("returns null when user.screen_name is missing (deleted/protected tweet)", () => {
+    expect(parseSyndicationData({ text: "orphan" })).toBeNull();
+    expect(parseSyndicationData({ user: {}, text: "orphan" })).toBeNull();
+  });
+
+  it("returns handle, displayName, text, and createdAt for a basic tweet", () => {
+    const result = parseSyndicationData(baseResponse);
+    expect(result).not.toBeNull();
+    expect(result!.handle).toBe("vercel");
+    expect(result!.displayName).toBe("Vercel");
+    expect(result!.text).toBe("hello world");
+    expect(result!.noteText).toBeNull();
+    expect(result!.createdAt).toBe("2026-04-01T12:00:00Z");
+    expect(result!.urls).toEqual([]);
+    expect(result!.quotedTweet).toBeNull();
+  });
+
+  it("reads note_tweet.text for long-form tweets", () => {
+    const longText = "L".repeat(800);
+    const result = parseSyndicationData({
+      ...baseResponse,
+      text: "L".repeat(280) + "…", // legacy truncated text
+      note_tweet: { text: longText },
+    });
+    expect(result!.noteText).toBe(longText);
+    // text field is preserved as-is; callers decide which to use
+    expect(result!.text.endsWith("…")).toBe(true);
+  });
+
+  it("parses entities.urls into {url, expandedUrl, displayUrl}", () => {
+    const result = parseSyndicationData({
+      ...baseResponse,
+      text: "check this out https://t.co/abc123",
+      entities: {
+        urls: [
+          { url: "https://t.co/abc123", expanded_url: "https://example.com/article", display_url: "example.com/article" },
+        ],
+      },
+    });
+    expect(result!.urls).toEqual([
+      { url: "https://t.co/abc123", expandedUrl: "https://example.com/article", displayUrl: "example.com/article" },
+    ]);
+  });
+
+  it("parses urls inside note_tweet.entity_set when present", () => {
+    // Long tweets put entity URLs under note_tweet.entity_set, not the top-level entities.
+    const result = parseSyndicationData({
+      ...baseResponse,
+      note_tweet: {
+        text: "long body with https://t.co/long",
+        entity_set: {
+          urls: [
+            { url: "https://t.co/long", expanded_url: "https://example.com/long", display_url: "example.com/long" },
+          ],
+        },
+      },
+    });
+    expect(result!.urls).toEqual([
+      { url: "https://t.co/long", expandedUrl: "https://example.com/long", displayUrl: "example.com/long" },
+    ]);
+  });
+
+  it("recurses into quoted_tweet one level and captures id_str", () => {
+    const result = parseSyndicationData({
+      ...baseResponse,
+      text: "quoting this",
+      quoted_tweet: {
+        user: { screen_name: "dril", name: "wint" },
+        text: "the wallet inspector",
+        id_str: "200",
+      },
+    });
+    expect(result!.quotedTweet).not.toBeNull();
+    expect(result!.quotedTweet!.handle).toBe("dril");
+    expect(result!.quotedTweet!.text).toBe("the wallet inspector");
+    // idStr lets the renderer build a permalink (https://x.com/{handle}/status/{idStr})
+    expect(result!.quotedTweet!.idStr).toBe("200");
+  });
+
+  it("does not recurse past one level (quoted_tweet.quoted_tweet is dropped)", () => {
+    const result = parseSyndicationData({
+      ...baseResponse,
+      quoted_tweet: {
+        user: { screen_name: "dril" },
+        text: "outer quote",
+        quoted_tweet: {
+          user: { screen_name: "horse_ebooks" },
+          text: "deeply nested — should not appear",
+        },
+      },
+    });
+    expect(result!.quotedTweet!.handle).toBe("dril");
+    expect(result!.quotedTweet!.quotedTweet).toBeNull();
+  });
+
+  it("ignores malformed entities.urls without crashing", () => {
+    const result = parseSyndicationData({
+      ...baseResponse,
+      entities: { urls: [{ url: "https://t.co/x" }, null, "junk", { expanded_url: "https://example.com" }] },
+    });
+    // Only entries with all three string fields survive.
+    expect(result!.urls).toEqual([]);
+  });
+});
+
+describe("expandTwitterUrls", () => {
+  it("replaces every t.co shortlink with its expanded_url", () => {
+    const text = "morning read https://t.co/abc and https://t.co/xyz nice";
+    const urls = [
+      { url: "https://t.co/abc", expandedUrl: "https://example.com/a", displayUrl: "example.com/a" },
+      { url: "https://t.co/xyz", expandedUrl: "https://example.com/x", displayUrl: "example.com/x" },
+    ];
+    expect(expandTwitterUrls(text, urls)).toBe("morning read https://example.com/a and https://example.com/x nice");
+  });
+
+  it("is a no-op when no urls match the text", () => {
+    expect(expandTwitterUrls("plain text", [])).toBe("plain text");
+    expect(expandTwitterUrls("plain text", [
+      { url: "https://t.co/missing", expandedUrl: "https://example.com", displayUrl: "example.com" },
+    ])).toBe("plain text");
+  });
+
+  it("returns the input unchanged when text is empty", () => {
+    expect(expandTwitterUrls("", [
+      { url: "https://t.co/abc", expandedUrl: "https://example.com", displayUrl: "example.com" },
+    ])).toBe("");
+  });
+
+  it("handles a t.co url that appears multiple times", () => {
+    const text = "a https://t.co/abc b https://t.co/abc c";
+    const urls = [{ url: "https://t.co/abc", expandedUrl: "https://example.com", displayUrl: "example.com" }];
+    expect(expandTwitterUrls(text, urls)).toBe("a https://example.com b https://example.com c");
+  });
+
+  it("does not interpret expandedUrl as a regex (escapes special chars in url)", () => {
+    // If the implementation naively builds a regex from `url`, "?" or "." would behave
+    // as regex metacharacters and match unexpected substrings. Verify literal replace.
+    const text = "see https://t.co/a.b?c";
+    const urls = [{ url: "https://t.co/a.b?c", expandedUrl: "https://example.com/safe", displayUrl: "example.com" }];
+    expect(expandTwitterUrls(text, urls)).toBe("see https://example.com/safe");
   });
 });
 
