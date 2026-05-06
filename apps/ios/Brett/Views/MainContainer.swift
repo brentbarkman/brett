@@ -409,33 +409,36 @@ struct MainContainer: View {
                         visibility: pillsVisibility
                     )
 
-                    // Omnibar is hidden on the Calendar page —
-                    // capture-style input doesn't fit a calendar
-                    // surface (creating events lives behind the
-                    // event-detail / + flows). Other pages keep it.
-                    if currentPage != 3 {
-                        OmnibarView(
-                            placeholder: omnibarPlaceholder,
-                            currentPage: currentPage,
-                            backgroundOpacity: omnibarBackgroundOpacity,
-                            onSelectList: { id in
-                                // Drawer is gone (Lists has its own tab now), but
-                                // the callback is still wired so any future entry
-                                // point that re-introduces a list picker works.
-                                // Defer the push by ~350ms so the sheet dismissal
-                                // animation completes before the navigation
-                                // transition starts. Structured-Task form (vs.
-                                // DispatchQueue.main.asyncAfter) suspends with the
-                                // process and uses idiomatic concurrency; SwiftUI
-                                // doesn't auto-cancel inline Tasks on unmount but
-                                // mutating a detached @State is a no-op.
-                                Task { @MainActor in
-                                    try? await Task.sleep(nanoseconds: 350_000_000)
-                                    path.append(NavDestination.listView(id: id))
-                                }
+                    // Omnibar fades out on Calendar but its layout
+                    // slot stays reserved — otherwise removing it
+                    // would shrink the bottom VStack and snap the
+                    // view-pills row down to fill the space, which
+                    // reads as a jarring pop. Opacity + hit-testing
+                    // gating gives a calm fade in/out instead.
+                    OmnibarView(
+                        placeholder: omnibarPlaceholder,
+                        currentPage: currentPage,
+                        backgroundOpacity: omnibarBackgroundOpacity,
+                        onSelectList: { id in
+                            // Drawer is gone (Lists has its own tab now), but
+                            // the callback is still wired so any future entry
+                            // point that re-introduces a list picker works.
+                            // Defer the push by ~350ms so the sheet dismissal
+                            // animation completes before the navigation
+                            // transition starts. Structured-Task form (vs.
+                            // DispatchQueue.main.asyncAfter) suspends with the
+                            // process and uses idiomatic concurrency; SwiftUI
+                            // doesn't auto-cancel inline Tasks on unmount but
+                            // mutating a detached @State is a no-op.
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 350_000_000)
+                                path.append(NavDestination.listView(id: id))
                             }
-                        )
-                    }
+                        }
+                    )
+                    .opacity(currentPage == 3 ? 0 : 1)
+                    .allowsHitTesting(currentPage != 3)
+                    .animation(.easeOut(duration: 0.20), value: currentPage)
                 }
                 .opacity(awakening.contentOpacity)
             }
