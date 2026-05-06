@@ -8,6 +8,7 @@ import { publishSSE } from "../lib/sse.js";
 import { detectContentType } from "@brett/utils";
 import { runExtraction } from "../lib/content-extractor.js";
 import { paginatedPull, parseCursor } from "../lib/sync/paginated-pull.js";
+import { eventsOnVisibleCalendars } from "../lib/calendar-visibility.js";
 import type {
   SyncPullRequest, SyncPullResponse, SyncTableChanges,
   SyncPushRequest, SyncPushResponse, SyncMutation, SyncMutationResult,
@@ -266,6 +267,11 @@ export const sync = new Hono<AuthEnv>()
       const extraWhere: Record<string, unknown> = {};
       if (table === "calendar_events") {
         extraWhere.startTime = { gte: fourteenDaysAgo, lte: fourteenDaysAhead };
+        // Match the /calendar/events REST filter so iOS and desktop agree
+        // on which events the user can see. Without this, sync-pull returns
+        // every event the user owns — including events on shared calendars
+        // the user has hidden via the calendar list visibility toggle.
+        Object.assign(extraWhere, eventsOnVisibleCalendars);
       } else if (table === "items") {
         // Active work + just-completed. Excludes archived entirely;
         // older done items are fetched on-demand via /things and via
