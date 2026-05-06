@@ -470,7 +470,7 @@ private struct TodayPageBody: View {
         let now = Date()
         return events.first {
             $0.startTime > now.addingTimeInterval(-60)
-                && $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue
+                && ($0.myResponseStatus != CalendarRsvpStatus.declined.rawValue || $0.isOrganizer)
         }
     }
 

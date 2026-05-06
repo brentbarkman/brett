@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { CalendarDays } from "lucide-react";
 import type { CalendarEventRecord } from "@brett/types";
+import { isHiddenDeclined } from "@brett/business";
 import { useCalendarEvents } from "../api/calendar";
 import { useCalendarAccounts, useConnectCalendar, useToggleCalendarVisibility } from "../api/calendar-accounts";
 import { CalendarConnectModal } from "../components/CalendarConnectModal";
@@ -89,8 +90,10 @@ export default function CalendarPage({ onEventClick }: CalendarPageProps) {
 
   const { data } = useCalendarEvents({ startDate, endDate });
   // Hide events the user declined — matches Google Calendar's default.
+  // Events the user organized stay visible even when declined; Google
+  // Calendar never hides organizer-owned events from "Hide declined".
   const events: CalendarEventRecord[] = (data?.events ?? []).filter(
-    (e) => e.myResponseStatus !== "declined",
+    (e) => !isHiddenDeclined(e),
   );
 
   const handleToday = () => setCurrentDate(new Date());
