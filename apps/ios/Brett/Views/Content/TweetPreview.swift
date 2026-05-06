@@ -47,6 +47,17 @@ struct TweetPreview: View {
         return nil
     }
 
+    /// Returns the quoted-tweet sub-card payload only when there's something
+    /// meaningful to render — drops payloads where the server failed to
+    /// extract the quoted tweet's contents.
+    private var quotedTweet: ContentMetadata.TweetMeta.QuotedTweet? {
+        guard let q = meta?.quotedTweet else { return nil }
+        let hasAuthor = q.author?.isEmpty == false
+        let hasText = q.text?.isEmpty == false
+        let hasUrl = q.sourceUrl?.isEmpty == false
+        return (hasAuthor || hasText || hasUrl) ? q : nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             profileRow
@@ -65,6 +76,10 @@ struct TweetPreview: View {
                     .foregroundStyle(Color.white.opacity(0.92))
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let quotedTweet {
+                quotedTweetCard(quotedTweet)
             }
 
             if let imageString = item.contentImageUrl,
@@ -172,6 +187,58 @@ struct TweetPreview: View {
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        }
+    }
+
+    // MARK: - Quoted tweet sub-card
+
+    /// Indented, visually-subordinate card matching the desktop's
+    /// `QuotedTweetCard`. Tapping the sub-card opens the quoted tweet
+    /// directly in X — same universal-link handoff as the parent card.
+    @ViewBuilder
+    private func quotedTweetCard(_ quoted: ContentMetadata.TweetMeta.QuotedTweet) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                if let handle = quoted.author, !handle.isEmpty {
+                    Text("@\(handle)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                }
+                Spacer(minLength: 4)
+                if quoted.sourceUrl != nil {
+                    HStack(spacing: 3) {
+                        Text("View on X")
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.40))
+                }
+            }
+            if let text = quoted.text, !text.isEmpty {
+                Text(text)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.white.opacity(0.78))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let raw = quoted.sourceUrl, let url = URL(string: raw) {
+                HapticManager.light()
+                systemOpenURL(url)
+            }
         }
     }
 
