@@ -77,23 +77,24 @@ struct TodayHero: View {
 
     // MARK: - Derived
 
+    /// Greeting per v18 mockup — just the weekday name with a period
+    /// ("Wednesday."). The previous "Tuesday morning"/"night" form
+    /// was an early calm-hero exploration; the mockup landed on the
+    /// quieter weekday-only treatment that reads as a dateline rather
+    /// than a salutation.
     private var greeting: String {
         let weekday = date.formatted(.dateTime.weekday(.wide))
-        return "\(weekday) \(partOfDay)"
+        return "\(weekday)."
     }
 
-    private var partOfDay: String {
-        let hour = Calendar.current.component(.hour, from: date)
-        switch hour {
-        case 5..<12: return "morning"
-        case 12..<17: return "afternoon"
-        case 17..<21: return "evening"
-        default: return "night"
-        }
-    }
-
+    /// Sub-line per v18 mockup `MAY 4 · 9:41 AM` — month + day +
+    /// dot separator + time. Was "MAY 5" only; adding the time
+    /// makes the dateline carry the moment-of-the-glance signal
+    /// the mockup shows.
     private var dateSubtitle: String {
-        date.formatted(.dateTime.month(.wide).day())
+        let monthDay = date.formatted(.dateTime.month(.abbreviated).day())
+        let time = date.formatted(.dateTime.hour().minute())
+        return "\(monthDay) · \(time)"
     }
 
     private var briefSummary: String? {

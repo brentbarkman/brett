@@ -279,6 +279,26 @@ private struct TodayPageBody: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "scroll")
+            // Bottom fade per v18 mockup `.page { mask-image:
+            // linear-gradient(to bottom, black 0, black calc(100% -
+            // 110px), transparent calc(100% - 30px)) }`. Page
+            // content fades to clear over the bottom 80pt so it
+            // disappears gracefully into the omnibar zone instead
+            // of crashing into it as a hard line. Safe to use now —
+            // the full-screen wash overlay (in MainContainer) covers
+            // the underlying photo, so the mask reveals wash, not
+            // photo.
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.86),
+                        .init(color: .clear, location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
             .refreshable {
                 try? await ActiveSession.syncManager?.pullToRefresh()
                 await briefingStore.fetch()

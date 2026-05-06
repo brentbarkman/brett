@@ -96,77 +96,81 @@ struct StickyCardSection<Header: View, Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     private let cornerRadius: CGFloat = 16  // v18 mockup `.card { border-radius: 16px }`
-    private let headerHeight: CGFloat = 38
+    /// Tight band per v18 mockup `.section-head { padding: 8px 4px
+    /// 6px }` — ~14pt of vertical padding around 11pt label text =
+    /// ~25pt total. Was previously 38pt (felt like a headerbar
+    /// rather than a quiet label floating above the card).
+    private let headerHeight: CGFloat = 26
     private let fadeDistance: CGFloat = 24
 
     var body: some View {
         let cardShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
+        // Layout per v18 mockup: section-head sits as a SIBLING
+        // above the card (cards-area > section-head + card). To get
+        // that visual while keeping the iOS app's sticky-pin
+        // behavior, we stack header + card vertically (so the card
+        // is plainly below the header at rest) and overlay the
+        // header on its own reserved area at the top. As the user
+        // scrolls, the header pins to the viewport top and the
+        // card scrolls under it; the body mask clips items at the
+        // header's bottom edge so the rows look like they
+        // "disappear into the page" as they pass.
         ZStack(alignment: .top) {
-            // Body card — the only glass plate per the v18 mockup
-            // (`.card { background: rgba(255,255,255,0.07); blur(20px)
-            // saturate(140%); border: 1px rgba(255,255,255,0.12) }`).
-            // Header is rendered separately above (no card chrome on
-            // the header) so the visual matches the mockup's
-            // "section-head as plain text floating above the card."
-            VStack(spacing: 0) {
-                // Reserve the header footprint at rest so the first
-                // row sits below the header band instead of
-                // underneath it.
-                Color.clear.frame(height: headerHeight + StickyHeaderLayout.separatorHeight)
+            VStack(spacing: 6) {
+                // Reserved header zone (transparent — the floating
+                // header sits in this space at rest). 6pt gap to
+                // the card matches the mockup's `cards-area gap:
+                // 10px` minus the section-head's bottom padding 6
+                // ≈ 4–6pt space between header text and card top.
+                Color.clear.frame(height: headerHeight)
+
+                // The actual card — glass body with rows. Card
+                // chrome (glass + border) is bounded to this area
+                // only, NOT extending up behind the header text.
                 content()
-            }
-            .background {
-                // Mockup `.card` glass: white-tint base + ultraThin
-                // material blur underneath. SwiftUI's .ultraThinMaterial
-                // is the closest stock equivalent of `blur(20px)
-                // saturate(140%)`; the white tint on top brings it
-                // to the white/0.07 base.
-                cardShape
-                    .fill(Color.white.opacity(0.07))
-                    .background(cardShape.fill(.ultraThinMaterial))
-            }
-            .background(tint.map { $0.opacity(0.10) } ?? Color.clear)
-            .mask {
-                GeometryReader { bodyGeo in
-                    let bodyMinY = bodyGeo.frame(in: .named("scroll")).minY
-                    let scrolledPast = max(0, -bodyMinY)
-                    let masked = StickyHeaderLayout.bodyMaskedHeight(
-                        scrolledPast: scrolledPast,
-                        cardHeight: bodyGeo.size.height,
-                        headerHeight: headerHeight
-                    )
-
-                    VStack(spacing: 0) {
-                        Color.clear.frame(height: masked)
-                        Color.black
+                    .background {
+                        cardShape.fill(Color.white.opacity(0.07))
                     }
-                }
-            }
-            .overlay {
-                // Border on the body card only — the header sits on
-                // the wash (no card chrome) so it doesn't carry the
-                // border. AI-surface cards (Brett's Take, Daily
-                // Briefing) get a cerulean rim via `tint`.
-                cardShape.strokeBorder(
-                    tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.12),
-                    lineWidth: 1
-                )
-            }
-            .clipShape(cardShape)
+                    .background(tint.map { $0.opacity(0.10) } ?? Color.clear)
+                    .mask {
+                        GeometryReader { bodyGeo in
+                            let bodyMinY = bodyGeo.frame(in: .named("scroll")).minY
+                            // Mask covers the area where the pinned
+                            // header sits above the body. With the
+                            // new outer-VStack layout, the body's
+                            // top in scroll coords is positive at
+                            // rest (sits below the header reservation),
+                            // so no clipping is needed until the body
+                            // scrolls up far enough that its first
+                            // rows pass under the header's pinned
+                            // bottom edge. Formula:
+                            //   masked = max(0, headerHeight - bodyMinY)
+                            // — at rest bodyMinY > headerHeight so
+                            // masked == 0; at full pin masked grows
+                            // to hide everything above the header
+                            // edge.
+                            let masked = max(0, headerHeight - bodyMinY)
 
-            // Sticky header zone. NO card chrome here — just the
-            // header content (label + count pill) on a wash-colored
-            // band. When the header pins to the viewport top and
-            // items scroll under it, the wash bg occludes them
-            // (looks like items "disappear into the wash"). When
-            // the section is exhausted, the band fades out and the
-            // next section's header takes its place.
-            //
-            // The wash band reads as a continuation of the page
-            // background rather than a card-chrome strip, which is
-            // what the mockup shows (`.section-head` as a sibling
-            // of `.card`, not nested inside it).
+                            VStack(spacing: 0) {
+                                Color.clear.frame(height: masked)
+                                Color.black
+                            }
+                        }
+                    }
+                    .overlay {
+                        cardShape.strokeBorder(
+                            tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.12),
+                            lineWidth: 1
+                        )
+                    }
+                    .clipShape(cardShape)
+            }
+
+            // Sticky header zone. NO card chrome — just the header
+            // text + count pill floating above the card. Pinned to
+            // the viewport top once the section enters scroll
+            // range; fades out as the next section approaches.
             GeometryReader { geo in
                 let frame = geo.frame(in: .named("scroll"))
                 let scrolledPast = max(0, -frame.minY)
@@ -186,7 +190,6 @@ struct StickyCardSection<Header: View, Content: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: headerHeight)
                     .padding(.horizontal, 4)
-                    .background(BackgroundService.shared.currentWashColor)
                     .offset(y: offset)
                     .opacity(opacity)
             }

@@ -60,9 +60,12 @@ final class BriefingStore: Clearable {
         // brief so the editorial hero on Today shows real copy
         // instead of just the greeting + date.
         if ProcessInfo.processInfo.arguments.contains("-UITEST_FAKE_AUTH") {
-            self.briefing = """
-            Two things slipped past Friday — clear those first. Q2 board prep is your highest-leverage piece today, and the afternoon is heavy with back-to-backs. Block 30 minutes around lunch to breathe.
-            """
+            // Verbatim from the v18 mockup hero — three sentences,
+            // ~140 chars. The earlier copy added "with back-to-backs"
+            // and a "Block 30 minutes around lunch to breathe" tail
+            // that pushed the brief to 4 lines, eating into the
+            // visible card area below the hero.
+            self.briefing = "Two things slipped past Friday — clear those first. Q2 board prep is your highest-leverage piece today. The afternoon is heavy."
             self.generatedAt = Date()
         }
         #endif

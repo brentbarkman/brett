@@ -335,6 +335,12 @@ struct TaskRow: View {
         }
     }
 
+    /// Tasks: bolt glyph in the gold-tinted circle. The v18 mockup
+    /// happened to render task circles empty (the SVG paths in the
+    /// HTML were broken), but the calm-hero spec — and the user's
+    /// preference — is to keep our `bolt.fill` glyph so the icon
+    /// communicates "task" at-a-glance even in a list with no
+    /// content items for contrast.
     private var taskGlyph: some View {
         typeIconCircle {
             Image(systemName: "bolt.fill")

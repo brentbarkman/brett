@@ -545,19 +545,19 @@ struct MainContainer: View {
         }
     }
 
-    /// Per-page omnibar placeholder copy — calm-hero design (2026-05-04
-    /// spec, Phase 4). Conversational, contextual, signals to the user
-    /// that the omnibar is the input for whatever page they're on.
-    /// Routing is still task-only (the existing `SmartParser` path);
-    /// full AI intent parsing — actually doing the contextual thing —
-    /// lands in a separate dedicated PR. The copy is design-only here
-    /// so the surface looks finished while the engine catches up.
+    /// Per-page omnibar placeholder copy verbatim from the v18 mockup
+    /// `placeholders` map — short verb + bolded action object
+    /// ("Add or **ask Brett…**" on Today). Rendering of the bold
+    /// segment lives inside `OmnibarView`, which splits on the
+    /// `**…**` markers. Routing is still task-only (existing
+    /// `SmartParser` path); full AI intent parsing lands in a
+    /// separate PR.
     private var omnibarPlaceholder: String {
         switch currentPage {
-        case 0: return "Add to a list or ask…"  // Lists
-        case 1: return "Triage or ask…"         // Inbox
-        case 3: return "Schedule or ask…"       // Calendar
-        default: return "What's on your mind?"  // Today
+        case 0: return "Add to a **list…**"             // Lists
+        case 1: return "Capture or **search inbox…**"   // Inbox
+        case 3: return "Add an **event…**"              // Calendar
+        default: return "Add or **ask Brett…**"         // Today
         }
     }
 
