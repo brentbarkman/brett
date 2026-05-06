@@ -21,7 +21,6 @@ import {
   CalendarTimeline,
   NextUpCard,
   useNextUpTimer,
-  parseTimeToMinutes,
   DetailPanel,
   InboxView,
   TriagePopup,
@@ -406,13 +405,11 @@ export function App() {
       .filter((e: CalendarEventRecord) => !e.isAllDay && e.myResponseStatus !== "declined")
       .map(recordToDisplay);
 
-  // Next Up: find the next upcoming event from TODAY (not the sidebar date)
-  const nextUpEvent = (() => {
-    if (!todayCalendarEvents.length) return null;
-    const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-    return todayCalendarEvents.find((e) => parseTimeToMinutes(e.endTime) > nowMin) ?? null;
-  })();
-  const nextUpTimer = useNextUpTimer(nextUpEvent);
+  // Next Up: the hook owns "which event is current" + the countdown so
+  // both update on the same visibility-aware tick. Selection happening
+  // here (in App's render) used to freeze until an unrelated re-render,
+  // so the card stayed on a past meeting after its end time passed.
+  const { event: nextUpEvent, timer: nextUpTimer } = useNextUpTimer(todayCalendarEvents);
 
   // Fetch detail when panel is open and item is a task (not a CalendarEvent)
   const selectedId = selectedItem?.id ?? null;

@@ -6,7 +6,7 @@ import { InboxItemRow } from "./InboxItemRow";
 import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
 import { ItemListShell } from "./ItemListShell";
 import { TypeFilter } from "./TypeFilter";
-import { useVisibilityAwareInterval } from "./useNow";
+import { useNow } from "./useNow";
 
 interface InboxViewProps {
   things: Thing[];
@@ -56,7 +56,12 @@ export function InboxView({
   const [addInputFocused, setAddInputFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<QuickAddInputHandle>(null);
-  const now = useRef(new Date());
+  // useNow returns a state value (not a ref), so each tick triggers a
+  // re-render and the temporal buckets recompute against the current
+  // clock — including across local-midnight rollover when the app stays
+  // open overnight. The hook is visibility-aware, so we don't wake the
+  // renderer while the inbox is hidden.
+  const now = useNow(60_000);
 
   // Snapshots of items being animated out (persist through refetches)
   const animatingOutItemsRef = useRef<Map<string, Thing>>(new Map());
@@ -77,12 +82,6 @@ export function InboxView({
   useEffect(() => {
     return () => { if (toggleTimer.current) clearTimeout(toggleTimer.current); };
   }, []);
-
-  // Update "now" every minute for relative age. Visibility-gated so we
-  // don't wake the renderer when the user can't see the inbox.
-  useVisibilityAwareInterval(() => {
-    now.current = new Date();
-  }, 60_000);
 
   // Apply type filter
   const filteredThings = (() => {
@@ -111,9 +110,9 @@ export function InboxView({
   const getTimeBucket = (thing: Thing): TimeBucket => {
     if (!thing.createdAt) return "OLDER";
     const created = new Date(thing.createdAt);
-    const diffMs = now.current.getTime() - created.getTime();
+    const diffMs = now.getTime() - created.getTime();
     const diffHours = diffMs / (1000 * 60 * 60);
-    const today = new Date(now.current);
+    const today = new Date(now);
     today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -491,7 +490,7 @@ export function InboxView({
                           hideSource={allSameSource}
                           relativeAge={
                             thing.createdAt
-                              ? formatRelativeTime(new Date(thing.createdAt), now.current)
+                              ? formatRelativeTime(new Date(thing.createdAt), now)
                               : ""
                           }
                           onClick={() => onItemClick(thing)}

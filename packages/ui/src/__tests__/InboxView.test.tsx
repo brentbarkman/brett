@@ -1,11 +1,19 @@
 import React from "react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { Thing, NavList } from "@brett/types";
 import { InboxView } from "../InboxView";
 
-function makeThing(id: string, title: string): Thing {
+function setVisibility(state: "visible" | "hidden"): void {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => state,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
+function makeThing(id: string, title: string, createdAt?: string): Thing {
   return {
     id,
     type: "task",
@@ -16,7 +24,7 @@ function makeThing(id: string, title: string): Thing {
     source: "manual",
     urgency: "later",
     isCompleted: false,
-    createdAt: new Date().toISOString(),
+    createdAt: createdAt ?? new Date().toISOString(),
   };
 }
 
@@ -110,5 +118,71 @@ describe("InboxView keyboard shortcuts", () => {
     });
 
     expect(document.activeElement).not.toBe(quickAdd);
+  });
+});
+
+/**
+ * Regression test for the overnight bucket-staleness bug.
+ *
+ * History: InboxView captured `now` in a `useRef(new Date())` and updated
+ * it inside a `useVisibilityAwareInterval` callback. Updating a ref
+ * doesn't trigger a re-render, so the temporal-grouping logic
+ * (`getTimeBucket`, `groupedDisplay`) only re-ran when something else
+ * caused InboxView to render. If the desktop app stayed open past local
+ * midnight, items created "earlier today" were still labeled "EARLIER
+ * TODAY" instead of moving to "YESTERDAY" — the bucket headers and
+ * grouped order didn't reflect the new day.
+ *
+ * Fix: drive `now` via the `useNow` state hook so each tick triggers a
+ * re-render and the buckets recompute against the current clock.
+ */
+describe("InboxView temporal bucket rollover", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    setVisibility("visible");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    setVisibility("visible");
+  });
+
+  it("re-buckets an 'earlier today' item to 'yesterday' after local midnight passes", () => {
+    // Pre-midnight: 2026-05-06 23:30 local. Item created at 2026-05-06 09:00.
+    vi.setSystemTime(new Date("2026-05-06T23:30:00"));
+
+    const earlierItem = makeThing(
+      "morning-item",
+      "morning thing",
+      new Date("2026-05-06T09:00:00").toISOString(),
+    );
+
+    render(
+      <InboxView
+        things={[earlierItem]}
+        lists={[]}
+        onItemClick={vi.fn()}
+        onToggle={vi.fn()}
+        onArchive={vi.fn()}
+        onAdd={vi.fn()}
+        onTriage={vi.fn()}
+      />,
+    );
+
+    // Sanity: pre-midnight, the item is in the "EARLIER TODAY" bucket.
+    expect(screen.getByText("EARLIER TODAY")).toBeInTheDocument();
+    expect(screen.queryByText("YESTERDAY")).not.toBeInTheDocument();
+
+    // Cross local midnight. Advance the clock and fire one interval tick
+    // — no parent rerender, no other state change. The hook must drive
+    // the re-bucket on its own.
+    act(() => {
+      vi.setSystemTime(new Date("2026-05-07T00:01:00"));
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(screen.getByText("YESTERDAY")).toBeInTheDocument();
+    // The "EARLIER TODAY" header must vanish — there are no items in it now.
+    expect(screen.queryByText("EARLIER TODAY")).not.toBeInTheDocument();
   });
 });
