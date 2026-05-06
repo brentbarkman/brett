@@ -86,7 +86,7 @@ struct OmnibarView: View {
                         .allowsHitTesting(false)
                 }
                 TextField("", text: $inputText)
-                    .font(.system(size: 13))
+                    .font(.system(size: 15))
                     .foregroundStyle(Color.white.opacity(0.85))
                     .tint(BrettColors.gold)
                     .focused($isFocused)
@@ -106,9 +106,9 @@ struct OmnibarView: View {
             if hasText {
                 Button { submit() } label: {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
+                        .frame(width: 44, height: 44)
                         .background { goldButtonCircle }
                 }
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
@@ -116,17 +116,17 @@ struct OmnibarView: View {
             } else {
                 Button { enterVoiceMode() } label: {
                     Image(systemName: "mic")
-                        .font(.system(size: 14, weight: .regular))
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
+                        .frame(width: 44, height: 44)
                         .background { goldButtonCircle }
                 }
                 .accessibilityLabel("Voice input")
             }
         }
-        .padding(.leading, 18)
+        .padding(.leading, 20)
         .padding(.trailing, 6)
-        .frame(height: 50)
+        .frame(height: 56)
         .background {
             // Tinted dark-warm capsule with a real drop shadow per the
             // v18 mockup spec — `background: rgba(20,14,18, 0.55);
@@ -201,7 +201,7 @@ struct OmnibarView: View {
                 .fontWeight(seg.bold ? .medium : .regular)
             return acc + span
         }
-        .font(.system(size: 13))
+        .font(.system(size: 15))
     }
 
     /// Shared antique-gold-filled circle for both send + mic buttons.

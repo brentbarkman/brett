@@ -165,15 +165,6 @@ private struct TodayPageBody: View {
     /// unchanged, which is the common case for state-only re-renders.
     @State private var sectionsCache = TodaySectionsCache()
 
-    /// Ticker driving NextUpCard's relative-time copy. Only updated when
-    /// an event is within the 60-minute card-visibility window — outside
-    /// that, the loop in `runTicker()` sleeps adaptively (60s–5 min) and
-    /// doesn't write `tickerNow`, so TodayPage's body doesn't re-evaluate.
-    /// Without this gating, TabView keeping TodayPage mounted would mean
-    /// ~120 wasted body re-evals per hour for any user without an
-    /// upcoming meeting.
-    @State private var tickerNow: Date = Date()
-
     var body: some View {
         // ScrollViewReader so we can scroll the user to the Today section
         // when a new task lands there. Without this, adding a task to a
@@ -190,15 +181,17 @@ private struct TodayPageBody: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    // Pass `tickerNow` (the @State managed by `runTicker()`)
-                    // rather than a fresh `Date()` per body call so the
-                    // hero's date sub-line and `partOfDay` greeting stay
-                    // stable across re-renders. The ticker only writes
-                    // `tickerNow` when an event is in the visibility
-                    // window, so on idle days the value is the page's
-                    // mount-time date — fine for a greeting that only
-                    // needs to roll over at part-of-day boundaries.
-                    TodayHero(briefingStore: briefingStore, date: tickerNow)
+                    // Hero takes a fresh `Date()` per body re-eval. We
+                    // used to pin this to a `tickerNow` @State driven
+                    // by an adaptive ticker loop so the dateline could
+                    // show a live clock; the clock was dropped (the
+                    // iOS status bar already carries it) and the
+                    // ticker came out with it for battery — see the
+                    // history of this file. The greeting only depends
+                    // on the weekday and the dateline only on the
+                    // month/day, so per-render `Date()` is stable for
+                    // the whole life of a SwiftUI body pass.
+                    TodayHero(briefingStore: briefingStore, date: Date())
                         // Editorial parallax — hero text fades + lifts
                         // + tightens as the user scrolls (matches the
                         // v18 mockup's `applyTodayVerticalScroll`).
@@ -229,47 +222,42 @@ private struct TodayPageBody: View {
                             }
                         )
 
-                    // Photo→wash transition. Tightened from 140pt to
-                    // 56pt — the longer band was visually empty space
-                    // between the brief and the first card, pushing
-                    // the work zone too far down. 56pt is enough to
-                    // soften the hard line between the photo and the
-                    // solid wash without creating a no-content
-                    // breathing gap.
-                    LinearGradient(
-                        colors: [Color.clear, BackgroundService.shared.currentWashColor],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 56)
+                    // NextUp sits directly under the brief and over
+                    // the photo. No wash plate behind it — and no
+                    // wash plate behind the work zone below either,
+                    // per the v18 mockup which has cards floating
+                    // over the photo at rest. The wash is brought in
+                    // by `MainContainer`'s `fullScreenWashOpacity`
+                    // overlay as the user scrolls past the hero, so
+                    // an in-scroll static wash bed would just block
+                    // the photo prematurely.
+                    if hasNextUpEvent {
+                        // `now` is captured at body-eval time. Used
+                        // to be a `tickerNow` @State that updated
+                        // every 30s when an event was in range; we
+                        // removed the ticker for battery and the
+                        // card still re-renders frequently enough
+                        // (scroll, foreground, item changes) for the
+                        // relative-time copy.
+                        NextUpCard(event: nextUpcomingEvent, now: Date())
+                    }
 
-                    // Wash bed. Carries NextUp, the 5 task sections, and
-                    // the empty state. `minHeight: 1.5×screen` so the
-                    // wash always extends past the visible viewport
-                    // even when the content is short — without it,
-                    // the global photo (rendered behind the
-                    // ScrollView) bled through the empty area at the
-                    // bottom of a short list and read as a "solid
-                    // border / scrim" stripe between the wash and the
-                    // omnibar.
+                    // Work zone. Cards float over the photo at rest;
+                    // the global `fullScreenWashOpacity` overlay
+                    // (in `MainContainer`) fades the wash in over
+                    // the photo as the user scrolls past the hero.
+                    // The 400pt tail spacer guarantees the bottom
+                    // mask has content to fade against on a short
+                    // list so the omnibar zone doesn't paint a hard
+                    // line into raw photo.
                     VStack(spacing: 0) {
-                        if hasNextUpEvent {
-                            NextUpCard(event: nextUpcomingEvent, now: tickerNow)
-                        }
-
                         taskSections
 
                         emptyState
 
-                        // Tail spacer so the wash extends below the
-                        // last item without depending on container
-                        // height tricks. Cheap (no draw cost on
-                        // empty Color), and keeps the wash painting
-                        // behind the omnibar on overscroll.
                         Color.clear.frame(height: 400)
                     }
                     .frame(maxWidth: .infinity)
-                    .background(BackgroundService.shared.currentWashColor)
                 }
                 .padding(.bottom, 0)
                 // Inner VStack surfaces more reliably as an accessibility
@@ -328,8 +316,6 @@ private struct TodayPageBody: View {
             if !briefingStore.isDismissedToday && briefingStore.briefing == nil {
                 await briefingStore.fetch()
             }
-            // Kick off the adaptive ticker for NextUpCard's relative time.
-            await runTicker()
         }
     }
 
@@ -579,64 +565,6 @@ private struct TodayPageBody: View {
         itemStore.delete(id: id, userId: userId)
     }
 
-    // MARK: - Ticker
-
-    /// Adaptive ticker for `NextUpCard`'s relative-time copy.
-    ///
-    /// Two modes:
-    ///  - **Active** — when the next non-declined event is within the
-    ///    card-visibility window (60 min). Updates `tickerNow` every 30s
-    ///    so the "in N min" copy refreshes.
-    ///  - **Idle** — when no event is within the window. Sleeps without
-    ///    writing state (no body re-eval), waking up at most every 5 min
-    ///    to re-check whether an event has crept into range. The wake
-    ///    interval scales toward "1 minute before the next event would
-    ///    enter the window" so the ticker arms itself just in time.
-    ///
-    /// The `.task` modifier ties this to view lifetime, so when TodayPage
-    /// is unmounted (sign-out, account switch via `.id(userId)`) the loop
-    /// cancels cleanly. TabView keeps TodayPage mounted across page
-    /// swipes, which is why the idle-mode gate matters: without it the
-    /// ticker fires 120×/hour even for users with no upcoming meetings.
-    private func runTicker() async {
-        while !Task.isCancelled {
-            let sleepSeconds = Self.nextTickerSleep(secondsUntilNext: nextUpcomingEvent?.startTime.timeIntervalSinceNow)
-            try? await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
-            if Task.isCancelled { return }
-            // Refresh AFTER the sleep so the displayed `tickerNow` is
-            // always the moment-of-render time, not the moment we
-            // started waiting. Only fire the @State write in the
-            // active window — idle-mode wakes silently re-poll the
-            // gate without triggering a body re-eval.
-            //
-            // Re-check `nextUpcomingEvent` here (not just rely on the
-            // pre-sleep value) because an event could have crossed
-            // the boundary while we slept.
-            let postSleep = Self.nextTickerSleep(secondsUntilNext: nextUpcomingEvent?.startTime.timeIntervalSinceNow)
-            if postSleep == Self.activeTickerInterval {
-                tickerNow = Date()
-            }
-        }
-    }
-
-    /// Active-mode tick interval. Card is visible — we want fresh
-    /// "in N min" copy on a 30s cadence.
-    static let activeTickerInterval: TimeInterval = 30
-
-    /// Pure helper. Given seconds until the next event (or `nil`), returns
-    /// the next sleep window:
-    ///   - In the visibility window (≤60 min out): 30s active tick
-    ///   - Outside the window: sleep until the event would enter range,
-    ///     floored at 60s and capped at 5 min so we re-poll periodically
-    ///     even when no event is in sight (covers cases where SSE pushes
-    ///     a brand-new event into the window between checks).
-    /// Exposed so unit tests can verify the cadence math without
-    /// constructing a SwiftUI view.
-    static func nextTickerSleep(secondsUntilNext: TimeInterval?) -> TimeInterval {
-        guard let seconds = secondsUntilNext else { return 300 }
-        if seconds <= 3600 { return activeTickerInterval }
-        return min(max(seconds - 3600, 60), 300)
-    }
 }
 
 // MARK: - Preview

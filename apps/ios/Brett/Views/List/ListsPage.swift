@@ -116,9 +116,9 @@ private struct ListsPageBody: View {
 
     var body: some View {
         ZStack {
-            // Wash backdrop — Lists wears the same solid wash as every
-            // non-Today page per the calm-hero design.
-            WashBackground()
+            // No per-page wash — the global wash in `MainContainer`
+            // is the backdrop, and page content slides over it during
+            // pager transitions. See `photoOpacity` in MainContainer.
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -228,31 +228,36 @@ private struct ListsPageBody: View {
                 totalCount: counts.total
             )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(list.name)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(BrettColors.textCardTitle)
+                    .foregroundStyle(.white)
                     .lineLimit(1)
 
                 Text(counts.active == 1 ? "1 item" : "\(counts.active) items")
-                    .font(BrettTypography.taskMeta)
-                    .foregroundStyle(BrettColors.textMeta)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.white.opacity(0.55))
             }
 
             Spacer()
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(BrettColors.textGhost)
+                .foregroundStyle(Color.white.opacity(0.30))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
+        // Canonical card glass — `Color.white.opacity(0.07)` fill +
+        // `Color.white.opacity(0.12)` 1pt border + 14pt corner. See
+        // apps/ios/DESIGN.md "Canonical card glass". Was `.thinMaterial`
+        // which doubled the white tint of the wash and made list cards
+        // read brighter than every other card surface in the app.
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.thinMaterial)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.07))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
                 }
         }
         .contentShape(Rectangle())

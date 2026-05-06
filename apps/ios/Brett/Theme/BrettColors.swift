@@ -25,6 +25,15 @@ enum BrettColors {
     static let success = Color(red: 72/255, green: 187/255, blue: 160/255)    // #48BBA0 (teal)
     static let error = Color(red: 230/255, green: 85/255, blue: 75/255)       // #E6554B
 
+    /// Calm-hero overdue red. Earlier this was `rgb(232,138,138)` (the
+    /// v18 mockup spec) which read as washed-out pink against the wash
+    /// — the user flagged it as not legible enough. Bumped to a more
+    /// saturated, slightly deeper red (#F56565 ≈ Tailwind red-400) that
+    /// still reads as "warmly urgent" rather than the harder
+    /// stop-sign `error` red. Used by overdue section header + count
+    /// pill + per-row meta.
+    static let overdueRed = Color(red: 245/255, green: 101/255, blue: 101/255) // #F56565
+
     // Text opacity scale — matches design guide exactly
     // Only use standard stops: /20, /30, /40, /50, /60, /80, /90, white
     static let textHeading = Color.white                    // Primary headings, active nav

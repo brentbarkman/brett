@@ -143,9 +143,9 @@ private struct CalendarPageBody: View {
 
     var body: some View {
         ZStack {
-            // Wash backdrop — Calendar lives on the same solid wash as
-            // every non-Today page per the calm-hero design.
-            WashBackground()
+            // No per-page wash — the global wash in `MainContainer`
+            // is the backdrop, and page content slides over it
+            // during pager transitions.
 
             VStack(spacing: 16) {
                 monthHeader
@@ -156,13 +156,18 @@ private struct CalendarPageBody: View {
                     hasAccount: accountsStore.hasAnyAccount,
                     hasCachedEvents: !visibleEvents.isEmpty
                 ) {
+                    // Canonical card glass — see apps/ios/DESIGN.md
+                    // "Canonical card glass". Single material fill at
+                    // white/0.07 with a white/0.12 border so the
+                    // timeline reads identical to Today's task
+                    // sections, the Inbox card, and Lists rows.
                     DayTimeline(events: visibleEvents, selectedDate: selectedDate)
                         .background {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(.thinMaterial)
+                                .fill(Color.white.opacity(0.07))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
                                 }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))

@@ -96,11 +96,13 @@ struct StickyCardSection<Header: View, Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     private let cornerRadius: CGFloat = 16  // v18 mockup `.card { border-radius: 16px }`
-    /// Tight band per v18 mockup `.section-head { padding: 8px 4px
-    /// 6px }` — ~14pt of vertical padding around 11pt label text =
-    /// ~25pt total. Was previously 38pt (felt like a headerbar
-    /// rather than a quiet label floating above the card).
-    private let headerHeight: CGFloat = 26
+    /// Header band height. Bumped from 26 → 32 to fit the larger
+    /// 13pt-semibold label (was 11pt) and a bigger count pill —
+    /// the mockup-spec sizes were too small to read comfortably on
+    /// a real iPhone, so we pulled both up a step. Still sits as a
+    /// quiet label floating above the card rather than a heavy
+    /// headerbar.
+    private let headerHeight: CGFloat = 32
     private let fadeDistance: CGFloat = 24
 
     var body: some View {
@@ -133,6 +135,21 @@ struct StickyCardSection<Header: View, Content: View>: View {
                         cardShape.fill(Color.white.opacity(0.07))
                     }
                     .background(tint.map { $0.opacity(0.10) } ?? Color.clear)
+                    // Border composed BEFORE the mask. Earlier order
+                    // (mask → overlay) left the side borders showing
+                    // through above the pinned header, because the
+                    // mask had already clipped the body but the
+                    // overlay-stroke ran on the unmasked card shape
+                    // afterward. Putting `.overlay` first means the
+                    // border is part of the same group the mask
+                    // clips — so when the body's top is masked, the
+                    // border at that y-range is masked along with it.
+                    .overlay {
+                        cardShape.strokeBorder(
+                            tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.12),
+                            lineWidth: 1
+                        )
+                    }
                     .mask {
                         GeometryReader { bodyGeo in
                             let bodyMinY = bodyGeo.frame(in: .named("scroll")).minY
@@ -157,12 +174,6 @@ struct StickyCardSection<Header: View, Content: View>: View {
                                 Color.black
                             }
                         }
-                    }
-                    .overlay {
-                        cardShape.strokeBorder(
-                            tint.map { $0.opacity(0.30) } ?? Color.white.opacity(0.12),
-                            lineWidth: 1
-                        )
                     }
                     .clipShape(cardShape)
             }

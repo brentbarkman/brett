@@ -157,9 +157,9 @@ struct BrettApp: App {
         syncHealth.lastSuccessfulPullAt = now
         context.insert(syncHealth)
 
-        // Calendar event in the next 25 min so NextUpCard fires —
-        // gives the design-review session something to look at in
-        // the "imminent meeting" surface.
+        // Calendar event in the next 25 min so NextUp fires — gives
+        // the design-review session something to look at in the
+        // editorial NextUp surface.
         let nextUp = CalendarEvent(
             userId: userId,
             googleAccountId: "uitest-acct",

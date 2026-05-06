@@ -35,30 +35,37 @@ struct ViewPillsBar: View {
     ]
 
     var body: some View {
-        // Centered HStack (mockup `justify-content: center`) — pills
-        // and menu chip travel as one group. Pills get 4pt gap; menu
-        // chip gets a 6pt margin separating it from the pills row.
-        HStack(spacing: 4) {
+        // Each pill takes an equal share of the screen so the row
+        // spans edge-to-edge with the menu chip riding on the right.
+        // Mockup spec was `justify-content: center` (pills hugging
+        // their content), but on a real iPhone that left a lot of
+        // empty space at either end of the row and the small pill
+        // text felt under-claimed. Stretching them across keeps the
+        // chrome legible at thumb distance and reads as a proper
+        // navigation surface rather than a polite group of capsules.
+        HStack(spacing: 6) {
             ForEach(Self.pages, id: \.index) { page in
                 pill(title: page.title, index: page.index)
+                    .frame(maxWidth: .infinity)
             }
             menuChip
                 .padding(.leading, 6)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
         .opacity(visibility)
         .animation(BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)), value: visibility)
     }
 
-    /// A single page pill. Mockup `.view-pill`:
-    ///   padding 6px 12px; border-radius 100px;
-    ///   background rgba(0,0,0,0.40); blur(16px) saturate(140%);
-    ///   border 1px solid rgba(255,255,255,0.12);
-    ///   color rgba(255,255,255,0.72); font 11px weight 500.
-    /// Active variant swaps to `rgba(199,154,77,0.40)` bg + matching
-    /// border + white text.
+    /// A single page pill. Mockup `.view-pill` was 11pt weight 500
+    /// with 6/12 padding; bumped here to 13pt semibold with 10/16
+    /// padding because the device-rendered version of the mockup
+    /// felt under-claimed at its native size. The hits stay inside
+    /// the pill capsule (we use a Button label so the whole capsule
+    /// is the tap target) and the row stretches the pill across an
+    /// equal share of the screen via the parent's
+    /// `.frame(maxWidth: .infinity)`.
     private func pill(title: String, index: Int) -> some View {
         let isActive = currentPage == index
         return Button {
@@ -68,10 +75,18 @@ struct ViewPillsBar: View {
             }
         } label: {
             Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.72))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.78))
+                .lineLimit(1)
+                // Lets the longest label ("Calendar") squeeze to ~12pt
+                // when the four-pill row + B chip share an iPhone-narrow
+                // viewport. Without this the pill wraps to two lines and
+                // breaks the chrome silhouette. The shrink is barely
+                // perceptible because only Calendar uses it.
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.vertical, 10)
                 .background {
                     Capsule()
                         .fill(isActive ? BrettColors.mockupGold.opacity(0.40) : Color.black.opacity(0.40))
@@ -103,10 +118,10 @@ struct ViewPillsBar: View {
             onMenuTap()
         } label: {
             Text("B")
-                .font(.system(size: 10, weight: .semibold, design: .serif))
+                .font(.system(size: 13, weight: .semibold, design: .serif))
                 .tracking(0.2)
                 .foregroundStyle(.white)
-                .frame(width: 26, height: 26)
+                .frame(width: 36, height: 36)
                 .background {
                     Circle()
                         .fill(
@@ -122,7 +137,7 @@ struct ViewPillsBar: View {
                                 lineWidth: 1
                             )
                         }
-                        .shadow(color: Color.black.opacity(0.20), radius: 5, x: 0, y: 3)
+                        .shadow(color: Color.black.opacity(0.20), radius: 6, x: 0, y: 3)
                 }
         }
         .buttonStyle(.plain)

@@ -36,8 +36,35 @@ The home screen (Today) wears today's photo. Every other surface wears a wash sa
 
 **Rules:**
 - Cerulean (`BrettColors.cerulean`) is reserved for Brett-generated AI surfaces (briefing, take, AI cards). User content uses gold (`BrettColors.gold`). No exceptions — the cerulean signal is what tells the user "Brett did this."
-- Glass cards in iOS use `.thinMaterial` or the custom two-zone material from `StickyCardSection`. Never stack two materials at the same opacity in a single card — the backdrop sample doubles up and reads brighter than intended.
+- Glass cards use the **canonical card glass** below — never `.thinMaterial` / `.ultraThinMaterial` as the primary fill. Materials carry their own white tint that double-stacks on top of the wash, so a card built from a material always reads brighter than spec.
 - The wash is always opaque: it's the bed. Never put a glass card over a photo when on a non-Today page; stack it on the wash.
+
+---
+
+## Canonical Card Glass
+
+Every card surface in the iOS app — Today's task sections, Inbox card, Lists rows, Calendar timeline, Settings cards, Scouts cards, NextUpCard — uses the same chrome:
+
+| Property | Value |
+|----------|-------|
+| Background | `Color.white.opacity(0.07)` (NOT a SwiftUI material) |
+| Border | `Color.white.opacity(0.12)` 1pt `strokeBorder` |
+| Corner radius | 16pt for sticky/large cards (Today task sections); 14pt for everything else |
+| Tinted variant | When `tint:` is provided (e.g. cerulean for AI surfaces): same background, then a `tint.opacity(0.10)` fill on top, then a `tint.opacity(0.30)` border replaces the white border |
+
+This mirrors the v18 mockup `.card { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); }` exactly. The implementation lives in:
+
+- `Theme/GlassCard.swift` — `GlassCard` view + `.glassCard(tint:)` modifier (used by Scouts, Calendar CTA, NextUpCard, etc.)
+- `Views/Shared/StickyCardSection.swift` — Today task sections + Inbox card (16pt corner with sticky headers)
+- `Views/List/ListsPage.swift` — Lists rows (inline; matches via the same fill/border pair)
+- `Views/Settings/SettingsStyle.swift` — `BrettSettingsCard` + `BrettSettingsRowBackground`
+
+**Anti-patterns:**
+- Don't add `.thinMaterial` / `.ultraThinMaterial` "for the glass feel." The material doubles the wash's white tint and the card stops reading consistent across pages.
+- Don't pick a different corner radius. 14pt or 16pt — that's the menu.
+- Don't lower the border opacity to make it "subtle." 0.12 reads at 0.5pt of perceptual edge weight — anything thinner disappears against bright wash colors.
+
+Two material exceptions: the omnibar pill (`OmnibarView`) layers an `.ultraThinMaterial` under the dark warm tint to keep the input pill blurring the wash behind it, and the view-pill capsules (`ViewPillsBar`) use the same trick at smaller scale. Both are bottom-chrome surfaces that need to hover over the wash, not blend with it.
 
 ---
 

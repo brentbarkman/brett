@@ -60,14 +60,17 @@ extension NavDestination: Identifiable {
 
 // MARK: - Awakening tokens
 //
-// Cold-launch reveal: on first launch of each app process the wallpaper zooms
-// from `startScale` → 1.0 (Ken Burns) while a black cover above the UI fades
-// out. Gated on the caller's readiness signal (sync hydrated) with a hard cap
-// so a slow or offline launch never strands the user on black. Plays exactly
-// once per process; subsequent MainContainer re-renders skip.
+// Cold-launch reveal: on first launch of each app process the wallpaper is
+// painted at full scale immediately; the UI (pages + top/bottom chrome)
+// fades in over it from opacity 0 → 1. Gated on the caller's readiness
+// signal (sync hydrated) with a hard cap so a slow or offline launch
+// never strands the user on a chrome-less photo. Plays exactly once per
+// process; subsequent MainContainer re-renders skip.
 //
-// Mirrors `apps/desktop/src/hooks/useAwakening.ts` — keep durations in sync
-// across platforms so the two clients feel like the same product.
+// Earlier iterations had the photo do a Ken-Burns zoom-in behind a
+// fading black cover. The user's call: the photo is the wallpaper, it
+// shouldn't make a grand entrance — it should just BE there. Only the
+// UI earns an entrance.
 
 enum Awakening {
     /// Flipped once the reveal has started for this process. Not reset —
@@ -75,18 +78,54 @@ enum Awakening {
     /// isolated because every reader is a SwiftUI View.
     @MainActor static var sessionPlayed = false
 
-    /// Image scale at mount. Eases to 1.0 over `kenBurnsDuration`.
-    static let startScale: CGFloat = 1.15
+    /// Content fade-in duration — pages, task sections, list rows,
+    /// chrome. Fast so the workspace feels available immediately.
+    static let contentFadeDuration: Double = 1.0
 
-    /// Ken-Burns zoom-out duration.
-    static let kenBurnsDuration: Double = 2.5
+    /// Hero fade-in duration — the editorial 38pt headers (Today's
+    /// greeting + brief, every page-header). Slower than content so
+    /// the hero blooms after the workspace lands, drawing the eye to
+    /// the editorial layer.
+    static let heroFadeDuration: Double = 2.0
 
-    /// Black-cover fade-out duration.
-    static let coverFadeDuration: Double = 1.8
-
-    /// Hard cap from mount on how long we hold the cover opaque while
+    /// Hard cap from mount on how long we hold the UI hidden while
     /// waiting on the readiness signal.
     static let maxWaitSeconds: Double = 2.2
+}
+
+/// Shared awakening opacity state. Two values so the workspace can
+/// arrive on a fast fade while the hero (editorial header band) arrives
+/// on a slower one — the workspace feels usable quickly, then the
+/// editorial layer settles in for the calm-hero entrance. Read from
+/// `MainContainer` (chrome) and from `TodayHero` /
+/// `EditorialPageHeader` (the hero band).
+@MainActor
+@Observable
+final class AwakeningState {
+    static let shared = AwakeningState()
+
+    var contentOpacity: Double = Awakening.sessionPlayed ? 1.0 : 0.0
+    var heroOpacity: Double = Awakening.sessionPlayed ? 1.0 : 0.0
+
+    private init() {}
+
+    /// Animate both opacities to 1. Idempotent.
+    func playReveal() {
+        withAnimation(.easeOut(duration: Awakening.contentFadeDuration)) {
+            contentOpacity = 1.0
+        }
+        withAnimation(.easeOut(duration: Awakening.heroFadeDuration)) {
+            heroOpacity = 1.0
+        }
+    }
+
+    /// Snap back to 0 (no animation) so the next `playReveal()` has a
+    /// visible delta to animate. Used by the warm-reentry path before
+    /// a `playReveal()` on the next runloop tick.
+    func resetForReplay() {
+        contentOpacity = 0
+        heroOpacity = 0
+    }
 }
 
 struct MainContainer: View {
@@ -115,14 +154,21 @@ struct MainContainer: View {
     @State private var path = NavigationPath()
 
     @Environment(AuthManager.self) private var authManager
+    /// Drives the warm-open fade-in. We re-run the UI reveal whenever
+    /// the app returns from `.background` to `.active`, so coming back
+    /// to Brett feels like the same calm-hero entrance every time —
+    /// not just on cold launch. `.inactive` (control-center pull,
+    /// notification banner) is NOT counted; that would fire the
+    /// animation every time a swipe-down happens, which is too noisy.
+    @Environment(\.scenePhase) private var scenePhase
 
     // MARK: - Awakening (cold-launch reveal)
     //
-    // On first launch of each app process, the wallpaper zooms from 1.15 → 1.0
-    // (Ken Burns) while a black cover above the UI fades out — so the content
-    // hydrates under the cover and the user sees a single, settled image.
-    // Gated on `hasCompletedInitialSync` with a hard cap at `maxWaitSeconds`.
-    // See `Views/Shared/AwakeningModifier.swift` for the tokens and rationale.
+    // On first launch of each app process, the wallpaper paints immediately
+    // at full scale; the UI (pages + top/bottom chrome) fades in over it from
+    // 0 → 1. Gated on `hasCompletedInitialSync` with a hard cap at
+    // `maxWaitSeconds` so a slow / offline launch never leaves the user
+    // staring at a chrome-less photo.
 
     @Query private var syncHealthRows: [SyncHealth]
     private var hasCompletedInitialSync: Bool {
@@ -137,9 +183,18 @@ struct MainContainer: View {
     // unscoped @Query here was a cross-user defense gap — see
     // `BadgeRefreshController.swift` for the rationale and pattern.
 
-    @State private var kenBurnsScale: CGFloat = Awakening.sessionPlayed ? 1.0 : Awakening.startScale
-    @State private var coverOpacity: Double = Awakening.sessionPlayed ? 0.0 : 1.0
+    /// Reactive read of the shared awakening opacities. The chrome
+    /// uses `contentOpacity` (fast fade); `TodayHero` /
+    /// `EditorialPageHeader` use `heroOpacity` (slower fade).
+    @State private var awakening = AwakeningState.shared
     @State private var awakeningTriggered: Bool = Awakening.sessionPlayed
+    /// Tracks whether the app has been backgrounded since the last
+    /// `.active` so the warm-reentry replay can fire reliably. iOS
+    /// transitions through `.inactive` on the way to/from
+    /// `.background`, so a `previous == .background, current ==
+    /// .active` check never matches — this flag captures the prior
+    /// background state explicitly.
+    @State private var wasBackgrounded: Bool = false
 
     /// Reactive read of the shared hero-scroll state. Writes happen
     /// inside TodayPage via `HeroScrollState.shared.publish(...)` —
@@ -181,27 +236,29 @@ struct MainContainer: View {
         return 0.55 + (1.0 - 0.55) * clamped
     }
 
-    /// Full-screen wash overlay opacity. Fades in over the same
-    /// distance as the pills so the sampled wash visually replaces
-    /// the photo under the status bar (which the in-scroll wash bed
-    /// can't reach because the ScrollView respects the top safe
-    /// area). Mirrors the v18 mockup's two-layer architecture:
-    /// `solidBg` at z=2 fades from 0 → ~1 as scroll progresses;
-    /// `blurBg` (the photo) effectively goes away because the
-    /// wash now covers it edge-to-edge. Always 0 on non-Today pages
-    /// (those pages render their own opaque WashBackground inside
-    /// the page so the global photo is already covered).
-    private var fullScreenWashOpacity: Double {
-        guard currentPage == 2 else { return 0 }
-        let progress = Double(heroScroll.offset / Self.heroFadeDistance)
-        let clamped = min(max(progress, 0), 1)
-        // Smoothstep eased — matches the hero parallax curve so all
-        // calm-hero motion shares one easing language.
-        let eased = clamped * clamped * (3 - 2 * clamped)
-        // Cap just under 1 so the photo isn't TECHNICALLY gone — at
-        // 0.96 the photo is invisible but the renderer still keeps
-        // it warm in case the user scrolls back up.
-        return eased * 0.96
+    /// Magnitude of the current pager swipe (0 settled, 1 fully
+    /// dragged to an adjacent page).
+    @State private var pagerDragProgress: CGFloat = 0
+    /// Signed pager swipe progress. Positive = dragging toward a
+    /// HIGHER page index, negative toward a LOWER index. Combined
+    /// with `currentPage` we can compute "effective page position"
+    /// during the swipe and drive a smooth photo↔wash crossfade.
+    @State private var pagerSignedDragProgress: CGFloat = 0
+
+    /// Opacity for the global background photo. Crossfades smoothly
+    /// to the wash as the user swipes away from Today (and back as
+    /// they swipe toward Today). The "effective page" is `currentPage
+    /// + signedDragProgress`; how close that is to Today's index (2)
+    /// is the photo's visibility. Multiplied by the Today scroll
+    /// factor so scrolling past the hero also fades the photo out.
+    private var photoOpacity: Double {
+        let effectivePage = Double(currentPage) + Double(pagerSignedDragProgress)
+        let distanceFromToday = abs(effectivePage - 2)
+        let proximityToToday = max(0, 1 - distanceFromToday)
+        let scrollFactor = currentPage == 2
+            ? 1 - min(max(Double(heroScroll.offset / Self.heroFadeDistance), 0), 1)
+            : 1.0
+        return proximityToToday * scrollFactor
     }
 
     var body: some View {
@@ -215,49 +272,85 @@ struct MainContainer: View {
         // screen having to override per-item tints.
         return NavigationStack(path: $path) {
             ZStack {
-                BackgroundView()
-                    .scaleEffect(kenBurnsScale, anchor: .center)
+                // Always-on wash backdrop, edge-to-edge. Sits at the
+                // very back so the safe-area zones are always covered
+                // even during the brief moment a page boots its own
+                // content.
+                WashBackground()
 
-                // Full-screen wash overlay — fades in over the photo
-                // (including the status-bar safe area) as the user
-                // scrolls past the Today hero. Mirrors the v18
-                // mockup's `solidBg` layer; the in-scroll wash bed
-                // alone can't reach the safe-area zone, which left a
-                // photo strip visible under the status bar even at
-                // full work-mode scroll.
-                BackgroundService.shared.currentWashColor
-                    .opacity(fullScreenWashOpacity)
+                // Photo on top of the wash, opacity tied to current
+                // page + scroll position + live swipe progress. Lives
+                // here (not inside Today) so it can reach the safe-
+                // area zones — `PagedSwipeView` gives us live swipe
+                // progress so the photo crossfades smoothly during a
+                // side-swipe instead of snapping at midpoint.
+                BackgroundView()
+                    .opacity(photoOpacity)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
-                    .animation(
-                        BrettAnimation.respectingReduceMotion(.easeOut(duration: 0.20)),
-                        value: fullScreenWashOpacity
-                    )
 
                 // Shake detection is handled by `ShakeMonitor.shared` (polls
                 // CoreMotion at the app level) and presented by
                 // `FeedbackPresenter.shared` (UIWindow-level present so
                 // it works over any active sheet). Nothing in-tree.
 
-                TabView(selection: $currentPage) {
-                    ListsPage()
-                        .tag(0)
-
-                    InboxPage()
-                        .tag(1)
-
-                    TodayPage()
-                        .tag(2)
-
-                    CalendarPage()
-                        .tag(3)
+                // PagedSwipeView replaces TabView(.page) so we get
+                // real-time swipe progress — TabView only flips its
+                // currentPage at midpoint, which made the photo
+                // snap-fade at the swipe midpoint instead of
+                // crossfading with the drag. Pages still respect the
+                // safe area for their own content layout.
+                PagedSwipeView(
+                    pageCount: 4,
+                    selection: $currentPage,
+                    dragProgress: $pagerDragProgress,
+                    signedDragProgress: $pagerSignedDragProgress
+                ) { idx in
+                    switch idx {
+                    case 0: AnyView(ListsPage())
+                    case 1: AnyView(InboxPage())
+                    case 2: AnyView(TodayPage())
+                    case 3: AnyView(CalendarPage())
+                    default: AnyView(EmptyView())
+                    }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                // Pages don't carry their own backgrounds anymore.
+                // Their content slides over the GLOBAL wash + photo
+                // backdrop above (which crossfades based on signed
+                // swipe progress), so what the user sees during a
+                // swipe is: UI sliding horizontally on top, photo
+                // dissolving to wash underneath. No `.ignoresSafeArea()`
+                // here — the pager sits inside safe area, page
+                // content respects safe area normally for layout.
+                .opacity(awakening.contentOpacity)
             }
             .task { await runAwakeningIfNeeded() }
             .onChange(of: hasCompletedInitialSync) { _, ready in
                 if ready && !awakeningTriggered {
                     fireAwakening()
+                }
+            }
+            // Warm re-entry. iOS goes
+            //   active → inactive → background    (going to homescreen)
+            //   background → inactive → active    (returning)
+            // so a literal `previous == .background` check on the
+            // immediate transition never matches. Track the prior
+            // background state explicitly via `wasBackgrounded`: set it
+            // on entering `.background`, fire the replay on the next
+            // `.active` we see and clear the flag. Skipped under Reduce
+            // Motion and before the first cold-launch reveal (the cold
+            // path's own `.task` / `hasCompletedInitialSync` observer
+            // handles that case).
+            .onChange(of: scenePhase) { _, current in
+                if current == .background {
+                    wasBackgrounded = true
+                    return
+                }
+                if current == .active && wasBackgrounded {
+                    wasBackgrounded = false
+                    if awakeningTriggered && !BrettAnimation.isReduceMotionEnabled {
+                        replayAwakening()
+                    }
                 }
             }
             // Badge refresh runs in `BadgeRefreshController` mounted below
@@ -291,26 +384,22 @@ struct MainContainer: View {
             // page inside the NavigationStack inherits them.
             .offlineBanner()
             .errorToastHost()
-            .safeAreaInset(edge: .top) {
-                // Top chrome reduced to sync indicators only per the
-                // calm-hero design (2026-05-04 spec). PageIndicator,
-                // search, scouts, and settings buttons all moved out:
-                //   - Page indication → `ViewPillsBar` above the omnibar.
-                //   - Search → no top button (search lives inside the
-                //     omnibar's eventual AI routing; for now the search
-                //     destination is reachable via deep-link only).
-                //   - Scouts + Settings → `BMenuSheet` behind the gold
-                //     "B" chip in `ViewPillsBar`.
-                // SyncPendingIndicator + SyncStatusIndicator stay because
-                // they communicate critical sync state the user needs at
-                // a glance, regardless of the editorial direction.
+            .overlay(alignment: .topTrailing) {
+                // Sync indicators float over the top-right corner instead
+                // of being hosted in a `safeAreaInset`. The earlier inset
+                // pushed every page's content down by ~30pt — which made
+                // the editorial 38pt headers (Today's greeting, Inbox /
+                // Lists / Calendar page titles) sit much further from
+                // the dynamic island than the calm-hero direction wants.
+                // Indicators are tiny and infrequently updating, so an
+                // overlay over the corner is fine.
                 HStack(spacing: 6) {
-                    Spacer()
                     SyncPendingIndicator()
                     SyncStatusIndicator()
                 }
                 .padding(.trailing, 12)
                 .padding(.top, 4)
+                .opacity(awakening.contentOpacity)
             }
             .overlay(alignment: .bottom) {
                 VStack(spacing: 0) {
@@ -342,6 +431,7 @@ struct MainContainer: View {
                         }
                     )
                 }
+                .opacity(awakening.contentOpacity)
             }
             .navigationDestination(for: NavDestination.self) { destination in
                 switch destination {
@@ -478,19 +568,9 @@ struct MainContainer: View {
         // (the iOS back chevron on ListView / ScoutsRosterView /
         // ScoutDetailView) render in gold instead of system blue.
         .tint(BrettColors.gold)
-        // Cold-launch cover. Sits above the whole NavigationStack — including
-        // safeAreaInset chrome (page indicator, settings gear) — so the
-        // UI reveals as one piece rather than top-toolbar-first.
-        // `allowsHitTesting(false)` lets stray taps pass through even if
-        // opacity rounding leaves a pixel of alpha.
-        .overlay {
-            if coverOpacity > 0 {
-                Color.black
-                    .ignoresSafeArea()
-                    .opacity(coverOpacity)
-                    .allowsHitTesting(false)
-            }
-        }
+        // No cold-launch cover anymore — the photo paints at full alpha
+        // immediately and the UI fades in over it via `uiOpacity`
+        // attached to the TabView and the top/bottom chrome insets.
     }
 
     // MARK: - Awakening
@@ -499,49 +579,55 @@ struct MainContainer: View {
     /// cap timer. The reveal itself fires from `fireAwakening()` — either
     /// from the `.onChange(hasCompletedInitialSync)` observer or from
     /// this timer when the sync is slow / offline. Reduce Motion and a
-    /// prior session in this process both short-circuit to the skipped
-    /// state (scale 1, cover opacity 0).
+    /// prior session in this process both short-circuit to the settled
+    /// state (uiOpacity = 1).
     private func runAwakeningIfNeeded() async {
         guard !awakeningTriggered else { return }
 
         if BrettAnimation.isReduceMotionEnabled {
             Awakening.sessionPlayed = true
             awakeningTriggered = true
-            kenBurnsScale = 1.0
-            coverOpacity = 0.0
+            awakening.contentOpacity = 1.0
+            awakening.heroOpacity = 1.0
             return
         }
 
         // If sync already landed (cache hit from a prior session), fire
-        // almost immediately — one tick so the initial frame paints at
-        // the start scale first, so the Ken Burns motion is visible.
+        // almost immediately — one tick so the initial frame paints with
+        // the UI at 0 alpha first, so the fade-in is actually visible.
         if hasCompletedInitialSync {
             try? await Task.sleep(for: .milliseconds(50))
             fireAwakening()
             return
         }
 
-        // Cap: don't hold the cover longer than `maxWaitSeconds` from
-        // mount. If the `.onChange` observer beats us, `fireAwakening`
-        // is a no-op on the second call.
+        // Cap: don't hold the UI hidden longer than `maxWaitSeconds`
+        // from mount. If the `.onChange` observer beats us,
+        // `fireAwakening` is a no-op on the second call.
         try? await Task.sleep(for: .seconds(Awakening.maxWaitSeconds))
         if !awakeningTriggered {
             fireAwakening()
         }
     }
 
-    /// Kick off the zoom-out and cover fade. Idempotent — safe to call
-    /// from both the readiness observer and the cap timer.
+    /// Kick off the UI fade-in. Idempotent — safe to call from both the
+    /// readiness observer and the cap timer.
     private func fireAwakening() {
         guard !awakeningTriggered else { return }
         Awakening.sessionPlayed = true
         awakeningTriggered = true
+        awakening.playReveal()
+    }
 
-        withAnimation(.easeOut(duration: Awakening.kenBurnsDuration)) {
-            kenBurnsScale = 1.0
-        }
-        withAnimation(.easeOut(duration: Awakening.coverFadeDuration)) {
-            coverOpacity = 0.0
+    /// Re-run the fade-in for warm re-entries (background → active). The
+    /// reset must happen OUTSIDE `withAnimation` and the rebuild must
+    /// happen ON the next runloop tick — otherwise SwiftUI coalesces
+    /// "0 then back to 1" into a no-op transaction and skips the
+    /// animation entirely.
+    private func replayAwakening() {
+        awakening.resetForReplay()
+        DispatchQueue.main.async {
+            awakening.playReveal()
         }
     }
 

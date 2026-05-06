@@ -25,6 +25,12 @@ struct TodayHero: View {
     @Bindable var briefingStore: BriefingStore
     let date: Date
 
+    /// Reactive read of the shared awakening opacity. The hero gets
+    /// the slower of the two awakening fades (vs. content) so it
+    /// blooms in after the workspace has landed — see `Awakening`
+    /// in `MainContainer.swift`.
+    @State private var awakening = AwakeningState.shared
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             // Greeting + date sub-line. Per v18 mockup:
@@ -42,19 +48,22 @@ struct TodayHero: View {
                     .modifier(HeroLegibilityShadow())
 
                 Text(dateSubtitle.uppercased())
-                    .font(.system(size: 11, weight: .regular))
-                    .tracking(0.44) // 0.04em at 11pt
+                    .font(.system(size: 13, weight: .regular))
+                    .tracking(0.52) // 0.04em at 13pt
                     .foregroundStyle(Color.white.opacity(0.75))
                     .modifier(HeroLegibilityShadow())
             }
 
             // Brief — only when present and not dismissed-for-today.
-            // 17pt full-white with the same legibility shadow as the
-            // greeting. Kept to a single paragraph; longer briefings get
-            // sentence-truncated so the hero stays scannable.
+            // 18pt full-white with the same legibility shadow as the
+            // greeting. Mockup spec was 17pt; bumped one notch for
+            // device readability so the editorial prose carries the
+            // same comfort as the section rows below it (15pt task
+            // title). Kept to a single paragraph; longer briefings
+            // get sentence-truncated so the hero stays scannable.
             if let brief = briefSummary {
                 Text(brief)
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.system(size: 18, weight: .regular))
                     .foregroundStyle(.white)
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
@@ -77,6 +86,14 @@ struct TodayHero: View {
         // case rather than reserving fixed empty space.
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("today.hero")
+        // Hero rides the slower awakening fade. With the parent
+        // TabView already at `awakening.contentOpacity`, the visible
+        // alpha here is the product of the two: at t≈1.0s the
+        // workspace is fully present and the hero is still ~70%
+        // through its own fade — the staged effect the user asked
+        // for ("things list quickly, hero slightly slower to draw
+        // attention to it").
+        .opacity(awakening.heroOpacity)
     }
 
     // MARK: - Derived
@@ -91,14 +108,15 @@ struct TodayHero: View {
         return "\(weekday)."
     }
 
-    /// Sub-line per v18 mockup `MAY 4 · 9:41 AM` — month + day +
-    /// dot separator + time. Was "MAY 5" only; adding the time
-    /// makes the dateline carry the moment-of-the-glance signal
-    /// the mockup shows.
+    /// Sub-line — month + day only ("MAY 6"). The mockup shows
+    /// "MAY 4 · 9:41 AM" but we drop the time deliberately: the
+    /// iOS status bar already carries the wall-clock at the top
+    /// of every screen, so a second time display in the hero is
+    /// redundant — and keeping a live clock here would force a
+    /// minute-by-minute view re-render (battery cost) for no new
+    /// information.
     private var dateSubtitle: String {
-        let monthDay = date.formatted(.dateTime.month(.abbreviated).day())
-        let time = date.formatted(.dateTime.hour().minute())
-        return "\(monthDay) · \(time)"
+        date.formatted(.dateTime.month(.abbreviated).day())
     }
 
     private var briefSummary: String? {

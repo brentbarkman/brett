@@ -29,6 +29,12 @@ struct EditorialPageHeader: View {
         case onPhoto
     }
 
+    /// Reactive read of the shared awakening opacity. Editorial
+    /// headers ride the slower awakening fade so the hero band
+    /// blooms in after the workspace lands — see `Awakening` in
+    /// `MainContainer.swift`.
+    @State private var awakening = AwakeningState.shared
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -45,6 +51,7 @@ struct EditorialPageHeader: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, horizontalPadding)
+        .opacity(awakening.heroOpacity)
     }
 }
 

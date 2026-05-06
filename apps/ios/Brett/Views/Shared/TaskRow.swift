@@ -183,9 +183,9 @@ struct TaskRow: View {
             // expanded `.contentShape` brings the tap area to the
             // full 28×40 (icon + extra vertical padding from the
             // row's vertical padding above + below).
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 leadingGlyph
-                    .frame(width: 28, height: 28)
+                    .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
                     .highPriorityGesture(
                         TapGesture().onEnded {
@@ -199,51 +199,52 @@ struct TaskRow: View {
                         }
                     )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    // Title — 13pt weight 500 white per the v18 mockup
-                    // (`.task-title { font-size: 13px; font-weight: 500;
-                    // color: #fff; line-height: 1.35 }`). The legacy
-                    // `BrettTypography.taskTitle` is 15pt, sized for
-                    // Settings rows; calm-hero task rows want tighter,
-                    // editorial-print proportions.
+                VStack(alignment: .leading, spacing: 3) {
+                    // Title — bumped from the mockup's 13pt to 15pt
+                    // weight medium so the row reads at a comfortable
+                    // distance on a real iPhone. The mockup is rendered
+                    // inside a 320px desktop preview frame where 13px
+                    // is fine; on the device, that translated to text
+                    // that felt small next to the editorial 38pt
+                    // serif header. Weight stays medium so the row
+                    // doesn't shout.
                     Text(viewModel.title)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(viewModel.isCompleted ? Color.white.opacity(0.45) : Color.white)
                         .strikethrough(viewModel.isCompleted, color: Color.white.opacity(0.30))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
                     HStack(spacing: 6) {
-                        // Meta — 11pt white/0.55 per the mockup
-                        // (`.task-meta`). Overdue items render the
-                        // day-of-week ("Friday", "Wednesday") in a
-                        // muted warm red (`.task-meta.overdue-meta`)
-                        // — `viewModel.isOverdue` carries the bucket
-                        // membership upstream.
+                        // Meta — bumped to 12.5pt for the same
+                        // device-readability reason as the title.
+                        // Overdue items render the day-of-week
+                        // ("Friday", "Wednesday") in a muted warm
+                        // red (`.task-meta.overdue-meta`).
                         if let time = viewModel.timeLabel {
                             Text(time)
-                                .font(.system(size: 11))
+                                .font(.system(size: 12.5))
                                 .foregroundStyle(metaColor)
                         } else if let captured = viewModel.capturedLabel {
                             Text("Captured \(captured)")
-                                .font(.system(size: 11))
+                                .font(.system(size: 12.5))
                                 .foregroundStyle(metaColor)
                         }
 
                         if let listName = viewModel.listName {
                             if viewModel.timeLabel != nil || viewModel.capturedLabel != nil {
                                 Text("·")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 12.5))
                                     .foregroundStyle(Color.white.opacity(0.30))
                             }
                             Text(listName)
-                                .font(.system(size: 11))
+                                .font(.system(size: 12.5))
                                 .foregroundStyle(Color.white.opacity(0.55))
                         }
 
                         if let domain = viewModel.contentDomain {
                             Text(domain)
-                                .font(.system(size: 11))
+                                .font(.system(size: 12.5))
                                 .foregroundStyle(BrettColors.gold.opacity(0.65))
                         }
                     }
@@ -330,7 +331,7 @@ struct TaskRow: View {
     private var contentGlyph: some View {
         typeIconCircle {
             Image(systemName: "doc.text")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color(red: 1.0, green: 0.90, blue: 0.78).opacity(0.95))
         }
     }
@@ -344,7 +345,7 @@ struct TaskRow: View {
     private var taskGlyph: some View {
         typeIconCircle {
             Image(systemName: "bolt.fill")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color(red: 1.0, green: 0.90, blue: 0.78).opacity(0.95))
         }
     }
@@ -366,10 +367,10 @@ struct TaskRow: View {
                     Circle()
                         .trim(from: 0, to: 0.5)
                         .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                        .frame(width: 26, height: 26)
+                        .frame(width: 28, height: 28)
                         .rotationEffect(.degrees(180))
                 }
-                .frame(width: 28, height: 28)
+                .frame(width: 30, height: 30)
             content()
         }
     }
@@ -463,15 +464,15 @@ struct TaskRow: View {
         return due < Calendar.current.startOfDay(for: Date())
     }
 
-    /// Meta whisper color — muted warm red for overdue rows
-    /// (`rgba(232, 138, 138, 0.85)` from the v18 mockup), white/0.55
-    /// otherwise. Done items keep the normal meta color; the title
-    /// strikethrough already carries the done signal.
+    /// Meta whisper color — `BrettColors.overdueRed` for overdue rows
+    /// (calm-hero red, see `BrettColors.swift`), white/0.55 otherwise.
+    /// Done items keep the normal meta color; the title strikethrough
+    /// already carries the done signal.
     private var metaColor: Color {
         guard !viewModel.isCompleted, viewModel.isOverdue else {
             return Color.white.opacity(0.55)
         }
-        return Color(red: 232/255, green: 138/255, blue: 138/255).opacity(0.85)
+        return BrettColors.overdueRed.opacity(0.90)
     }
 
     /// Convert a task title into a stable, predictable accessibility-id token.

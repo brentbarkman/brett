@@ -56,29 +56,18 @@ struct BrettSectionHeader: View {
 
 /// The shared backing for every settings row.
 ///
-/// Earlier `.thinMaterial` made each row pick up the photo background
-/// behind it — Security/Account looked orange against a sunset, while
-/// Calendar/AI/Newsletter looked neutral. Each row tinted differently
-/// based on what was vertically behind it. The fix is a near-opaque
-/// solid black so the rows always render the same colour regardless of
-/// what photo is loaded behind the page. We keep a thin material on top
-/// for the brand "glass" feel — it tints the dark fill subtly without
-/// letting full photo colour through.
+/// Settings now sits on the solid wash (not the photo) per the calm-hero
+/// design, so the photo-tint problem the earlier black/material stack was
+/// solving doesn't apply anymore. Switched to the canonical card glass
+/// (white/0.07 + white/0.12 border, see apps/ios/DESIGN.md) so Settings
+/// rows read identical to every other card surface in the app.
 private struct BrettSettingsRowBackground: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(Color.black.opacity(0.45))
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Color.white.opacity(0.07))
             .overlay {
-                // Subtle material tint on top of the dark fill so the
-                // rows still have the brand glass character — the
-                // material's transparency is mostly absorbed by the
-                // black underneath, so colour bleed is minimal.
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(0.40))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
             }
     }
 }
@@ -126,18 +115,14 @@ struct BrettSettingsCard<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) { content() }
             .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.black.opacity(0.45))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.07))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(.ultraThinMaterial.opacity(0.40))
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
                     }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

@@ -155,7 +155,11 @@ private struct InboxPageBody: View {
         // photo lives only on Today per the calm-hero design.
         ScrollViewReader { proxy in
             ZStack {
-                WashBackground()
+                // No per-page wash. The global `WashBackground` in
+                // `MainContainer` is the sole backdrop; page content
+                // slides over it during swipes while the global photo
+                // crossfades to wash on top. See `photoOpacity`
+                // computation in `MainContainer.swift`.
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -295,11 +299,15 @@ private struct InboxPageBody: View {
             // Match TaskSection: neutral white label, count on the right
             // (after the Spacer). The gold "INBOX" + count-next-to-title
             // diverged from every other section in the app.
+            // Match TaskSection header treatment exactly so swiping
+            // between Today and Inbox doesn't shift the header
+            // silhouette: 13pt semibold uppercase + count pill on
+            // the right with the same neutral palette.
             HStack(spacing: 6) {
                 Text("INBOX")
-                    .font(BrettTypography.sectionLabel)
-                    .tracking(2.4)
-                    .foregroundStyle(Color.white.opacity(0.60))
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(0.78) // 0.06em at 13pt — matches TaskSection
+                    .foregroundStyle(Color.white.opacity(0.55))
 
                 Spacer()
 
@@ -307,13 +315,18 @@ private struct InboxPageBody: View {
                     Button("Done") {
                         exitSelectMode()
                     }
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(BrettColors.gold)
                 }
 
                 Text("\(filteredItems.count)")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.40))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.65))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .background {
+                        Capsule().fill(Color.white.opacity(0.10))
+                    }
             }
         } content: {
             VStack(spacing: 0) {

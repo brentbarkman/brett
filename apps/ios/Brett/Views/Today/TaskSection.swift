@@ -44,21 +44,32 @@ struct TaskSection: View {
                 // the label string and returns the right palette.
                 let kind = SectionKind.kind(for: label)
                 HStack(spacing: 6) {
+                    // Label gets a layered legibility shadow because Today
+                    // now floats its task sections directly over the
+                    // photo at rest — without this, OVERDUE / TODAY etc
+                    // wash out against bright sky/horizon regions of the
+                    // wallpaper. Same recipe as `HeroLegibilityShadow`
+                    // in `TodayHero`. Once the user scrolls past the
+                    // hero, `MainContainer.fullScreenWashOpacity` fades
+                    // the wash in over the photo and the shadow becomes
+                    // a no-op visually.
                     Text(label.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .tracking(0.66) // 0.06em at 11pt ≈ 0.66pt
+                        .font(.system(size: 13, weight: .semibold))
+                        .tracking(0.78) // 0.06em at 13pt
                         .foregroundStyle(kind.labelColor)
+                        .shadow(color: Color.black.opacity(0.40), radius: 1, x: 0, y: 0)
+                        .shadow(color: Color.black.opacity(0.30), radius: 8, x: 0, y: 2)
 
                     Spacer()
 
-                    // Count pill — `rgba(255,255,255,0.10)` bg + count
-                    // text white/0.65. Overdue + Done sections swap
-                    // the palette for their own tints.
+                    // Count pill carries its own bg fill so the text
+                    // inside has contrast regardless of what's behind
+                    // the row — no extra shadow needed there.
                     Text("\(items.count)")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(kind.countTextColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
                         .background {
                             Capsule().fill(kind.countBgColor)
                         }
@@ -141,21 +152,21 @@ struct TaskSection: View {
         var labelColor: Color {
             switch self {
             case .standard: return Color.white.opacity(0.55)
-            case .overdue: return Color(red: 232/255, green: 138/255, blue: 138/255).opacity(0.95)
+            case .overdue: return BrettColors.overdueRed
             case .done: return Color.white.opacity(0.40)
             }
         }
         var countBgColor: Color {
             switch self {
             case .standard: return Color.white.opacity(0.10)
-            case .overdue: return Color(red: 232/255, green: 138/255, blue: 138/255).opacity(0.18)
+            case .overdue: return BrettColors.overdueRed.opacity(0.20)
             case .done: return BrettColors.gold.opacity(0.20)
             }
         }
         var countTextColor: Color {
             switch self {
             case .standard: return Color.white.opacity(0.65)
-            case .overdue: return Color(red: 1.0, green: 0.78, blue: 0.78).opacity(0.95)
+            case .overdue: return BrettColors.overdueRed
             case .done: return Color(red: 1.0, green: 0.86, blue: 0.71).opacity(0.85)
             }
         }
