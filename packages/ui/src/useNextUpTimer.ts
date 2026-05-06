@@ -11,6 +11,11 @@ export interface NextUpTimerState {
   minutesRemaining: number;
 }
 
+export interface NextUpResult {
+  event: CalendarEventDisplay | null;
+  timer: NextUpTimerState | null;
+}
+
 /** Parse time string to minutes-since-midnight. Handles both "HH:MM" and ISO date strings. */
 export function parseTimeToMinutes(timeStr: string): number {
   if (timeStr.includes("T") || timeStr.includes("-")) {
@@ -38,13 +43,20 @@ function formatCountdown(minutesAway: number): string {
   return `in ${hours}h ${roundedMins}m`;
 }
 
+function selectNextUpEvent(
+  events: CalendarEventDisplay[],
+  now: number,
+): CalendarEventDisplay | null {
+  if (!events.length) return null;
+  return events.find((e) => parseTimeToMinutes(e.endTime) > now) ?? null;
+}
+
 function computeNextUpState(
   event: CalendarEventDisplay | null,
-  nowOverride?: string,
+  now: number,
 ): NextUpTimerState | null {
   if (!event) return null;
 
-  const now = nowOverride ? parseTimeToMinutes(nowOverride) : getNowMinutes();
   const startMin = parseTimeToMinutes(event.startTime);
   const endMin = parseTimeToMinutes(event.endTime);
   const minutesAway = startMin - now;
@@ -87,28 +99,54 @@ function statesEqual(
   );
 }
 
-export function useNextUpTimer(
-  event: CalendarEventDisplay | null,
+function resultsEqual(a: NextUpResult, b: NextUpResult): boolean {
+  return a.event === b.event && statesEqual(a.timer, b.timer);
+}
+
+function compute(
+  events: CalendarEventDisplay[],
   nowOverride?: string,
-): NextUpTimerState | null {
-  const [state, setState] = useState<NextUpTimerState | null>(() =>
-    computeNextUpState(event, nowOverride),
+): NextUpResult {
+  const now = nowOverride ? parseTimeToMinutes(nowOverride) : getNowMinutes();
+  const event = selectNextUpEvent(events, now);
+  return { event, timer: computeNextUpState(event, now) };
+}
+
+/**
+ * Returns the current "Up Next" event from the supplied list AND its
+ * timer state. The hook owns selection so that when the active event's
+ * end time passes, the next visibility-aware tick advances to the next
+ * event without needing a parent re-render.
+ *
+ * History: previously the caller did the selection in render and passed
+ * a single event in. The timer hook then re-rendered every 10s but only
+ * the card subtree saw it — the parent's selection stayed frozen until
+ * something else re-rendered, so the card showed "Ended" forever after
+ * the meeting passed.
+ */
+export function useNextUpTimer(
+  events: CalendarEventDisplay[],
+  nowOverride?: string,
+): NextUpResult {
+  const [result, setResult] = useState<NextUpResult>(() =>
+    compute(events, nowOverride),
   );
 
-  // Recompute on event/nowOverride change. statesEqual prevents a render
-  // when the new value matches what we already have (e.g. event identity
-  // changed but its fields didn't).
+  // Recompute when the input list changes (e.g. calendar sync brings new
+  // data) or when nowOverride flips.
   useEffect(() => {
-    const next = computeNextUpState(event, nowOverride);
-    setState((prev) => (statesEqual(prev, next) ? prev : next));
-  }, [event?.id, event?.startTime, event?.endTime, nowOverride]);
+    const next = compute(events, nowOverride);
+    setResult((prev) => (resultsEqual(prev, next) ? prev : next));
+  }, [events, nowOverride]);
 
-  // Visibility-gated periodic tick — pauses while the window is hidden so
-  // we don't wake the renderer every 10s for a card the user can't see.
+  // Visibility-gated periodic tick — pauses while the window is hidden
+  // so we don't wake the renderer every 10s for a card the user can't
+  // see. Each tick re-runs selection AND state computation against the
+  // current clock.
   useVisibilityAwareInterval(() => {
-    const next = computeNextUpState(event, nowOverride);
-    setState((prev) => (statesEqual(prev, next) ? prev : next));
+    const next = compute(events, nowOverride);
+    setResult((prev) => (resultsEqual(prev, next) ? prev : next));
   }, 10_000);
 
-  return state;
+  return result;
 }

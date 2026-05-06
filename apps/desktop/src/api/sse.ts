@@ -93,7 +93,14 @@ export function useEventStream(): void {
       retryCount += 1;
       const delay = retryDelay;
       retryDelay = Math.min(delay * 2, 30000);
-      retryTimer = setTimeout(connect, delay);
+      // Null retryTimer when the callback fires so anything else that
+      // checks "is a retry pending?" sees the truth (not a stale handle
+      // for an already-fired timer). The focus-heal handler depends on
+      // this to know the retry budget is spent.
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        connect();
+      }, delay);
     };
 
     const connect = async () => {
@@ -264,12 +271,31 @@ export function useEventStream(): void {
       }
     };
 
+    // Heal a silently-dead connection when the user comes back to the
+    // window. After 20 retries scheduleRetry stops trying — fine when
+    // the server is gone, fatal when a transient network outage drained
+    // the budget while the user was away. macOS Electron windows can
+    // regain focus without ever flipping document.visibilityState
+    // (cmd-tab back to a never-hidden window), so visibilitychange
+    // alone doesn't catch this case. If we land here with no socket,
+    // no scheduled retry, and we're not paused, the budget is spent —
+    // reset and try once.
+    const handleFocus = () => {
+      if (cancelled || paused) return;
+      if (eventSource || retryTimer) return;
+      retryCount = 0;
+      retryDelay = 1000;
+      connect();
+    };
+
     connect();
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleFocus);
       closeSocket();
     };
   }, [qc]);

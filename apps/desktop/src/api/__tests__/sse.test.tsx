@@ -253,6 +253,124 @@ describe("useEventStream", () => {
     ]));
   });
 
+  /**
+   * Regression test for the silent-death-after-MAX_RETRIES bug.
+   *
+   * History: useEventStream gives up after 20 retries to avoid burning
+   * battery on a permanently-gone server. But if a transient network
+   * outage exhausted the retry budget while the user was away (laptop
+   * sleep, network blip, anything), the SSE never came back until the
+   * window's visibility flipped — and on macOS Electron, a window can
+   * regain focus without ever going hidden, so visibilitychange never
+   * fired. The connection stayed dead, calendar deletions and other
+   * server-pushed updates never reached the client, and the user saw
+   * stale data until they reloaded the app.
+   *
+   * Fix: also listen for `window.focus`. When the connection is in the
+   * given-up state (no socket, no pending retry, not paused), focus
+   * resets the retry budget and reconnects.
+   */
+  it("reconnects on window focus when retries have been exhausted", async () => {
+    vi.useFakeTimers();
+    try {
+      // Initial fetch succeeds, then the network goes dark.
+      let callIndex = 0;
+      fetchSpy.mockReset();
+      fetchSpy.mockImplementation(() => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ ticket: "first" }),
+          });
+        }
+        return Promise.reject(new Error("network down"));
+      });
+
+      const bumpRef = { current: null as (() => void) | null };
+      const Wrapper = createWrapper();
+      render(
+        <Wrapper>
+          <Harness bumpRef={bumpRef} />
+        </Wrapper>,
+      );
+
+      // Initial connect.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      expect(MockEventSource.instances).toHaveLength(1);
+
+      // Force the live connection into an error → retry chain begins.
+      await act(async () => {
+        MockEventSource.instances[0]!.onerror?.();
+      });
+
+      // Drain every retry timer. With 20 retries and exponential
+      // backoff capped at 30s, this exhausts the budget.
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      const fetchCallsAfterRetries = fetchSpy.mock.calls.length;
+
+      // Network comes back. Only after this point should new fetches
+      // succeed.
+      fetchSpy.mockReset();
+      fetchSpy.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ ticket: "healed" }),
+      });
+
+      // The user comes back to the window. focus alone (no
+      // visibilitychange) must heal the connection.
+      await act(async () => {
+        window.dispatchEvent(new Event("focus"));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      // A second EventSource was opened.
+      expect(MockEventSource.instances.length).toBeGreaterThan(1);
+      // And a new ticket POST happened after focus.
+      expect(fetchSpy.mock.calls.length).toBeGreaterThan(0);
+      expect(fetchCallsAfterRetries).toBeGreaterThan(1); // sanity: retries did run
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does NOT churn the connection when window focus fires on a healthy connection", async () => {
+    const bumpRef = { current: null as (() => void) | null };
+    const Wrapper = createWrapper();
+    render(
+      <Wrapper>
+        <Harness bumpRef={bumpRef} />
+      </Wrapper>,
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(MockEventSource.instances).toHaveLength(1);
+    const fetchCallsBefore = fetchSpy.mock.calls.length;
+
+    // Multiple focus events on a healthy connection — common when the
+    // user cmd-tabs around. Must not open new sockets or POST tickets.
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        window.dispatchEvent(new Event("focus"));
+      });
+    }
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    expect(MockEventSource.instances).toHaveLength(1);
+    expect(fetchSpy.mock.calls.length).toBe(fetchCallsBefore);
+  });
+
   it("does NOT reconnect when many SSE events fire in quick succession", async () => {
     const bumpRef = { current: null as (() => void) | null };
     const Wrapper = createWrapper();

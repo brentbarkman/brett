@@ -75,7 +75,8 @@ struct TaskRow: View {
             capturedLabel: Self.capturedLabel(for: item),
             listName: listName,
             contentDomain: item.contentDomain,
-            relinkTask: RelinkTask.parse(source: item.source, sourceId: item.sourceId)
+            relinkTask: RelinkTask.parse(source: item.source, sourceId: item.sourceId),
+            isOverdue: Self.isOverdue(item)
         )
         self.onToggle = onToggle
         self.onSelect = onSelect
@@ -172,13 +173,19 @@ struct TaskRow: View {
         Button {
             onSelect()
         } label: {
+            // Mockup `.task { padding: 12px 14px; gap: 10px }` —
+            // icon flush with the card's left padding (no 44pt
+            // tap-target frame around it). Was previously a 44pt
+            // tap-target frame around a 28pt icon, which pushed the
+            // title another 8pt right and made the icon look
+            // floating-in-padding. The icon glyph itself is 28pt
+            // which is just under HIG's recommended 44pt minimum;
+            // expanded `.contentShape` brings the tap area to the
+            // full 28×40 (icon + extra vertical padding from the
+            // row's vertical padding above + below).
             HStack(spacing: 12) {
                 leadingGlyph
-                    // Both icon glyphs render at 13pt bold so completed and
-                    // incomplete rows have visually identical leading
-                    // anchors. Earlier 12pt vs 13pt + medium vs semibold
-                    // made the checkmark look smaller and pull left.
-                    .frame(width: 44, height: 44)
+                    .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
                     .highPriorityGesture(
                         TapGesture().onEnded {
@@ -193,39 +200,52 @@ struct TaskRow: View {
                     )
 
                 VStack(alignment: .leading, spacing: 3) {
+                    // Title — bumped from the mockup's 13pt to 15pt
+                    // weight medium so the row reads at a comfortable
+                    // distance on a real iPhone. The mockup is rendered
+                    // inside a 320px desktop preview frame where 13px
+                    // is fine; on the device, that translated to text
+                    // that felt small next to the editorial 38pt
+                    // serif header. Weight stays medium so the row
+                    // doesn't shout.
                     Text(viewModel.title)
-                        .font(BrettTypography.taskTitle)
-                        .foregroundStyle(viewModel.isCompleted ? BrettColors.textMeta : BrettColors.textCardTitle)
-                        .strikethrough(viewModel.isCompleted, color: BrettColors.textGhost)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(viewModel.isCompleted ? Color.white.opacity(0.45) : Color.white)
+                        .strikethrough(viewModel.isCompleted, color: Color.white.opacity(0.30))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
                     HStack(spacing: 6) {
+                        // Meta — bumped to 12.5pt for the same
+                        // device-readability reason as the title.
+                        // Overdue items render the day-of-week
+                        // ("Friday", "Wednesday") in a muted warm
+                        // red (`.task-meta.overdue-meta`).
                         if let time = viewModel.timeLabel {
                             Text(time)
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(metaColor)
                         } else if let captured = viewModel.capturedLabel {
                             Text("Captured \(captured)")
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(metaColor)
                         }
 
                         if let listName = viewModel.listName {
                             if viewModel.timeLabel != nil || viewModel.capturedLabel != nil {
                                 Text("·")
-                                    .font(BrettTypography.taskMeta)
-                                    .foregroundStyle(BrettColors.textGhost)
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(Color.white.opacity(0.30))
                             }
                             Text(listName)
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.textMeta)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(Color.white.opacity(0.55))
                         }
 
                         if let domain = viewModel.contentDomain {
                             Text(domain)
-                                .font(BrettTypography.taskMeta)
-                                .foregroundStyle(BrettColors.cerulean.opacity(0.6))
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(BrettColors.gold.opacity(0.65))
                         }
                     }
                 }
@@ -240,7 +260,10 @@ struct TaskRow: View {
                     reconnectPill(for: relink.type)
                 }
             }
-            .padding(.vertical, 4)
+            // Mockup `.task { padding: 12px 14px }` — icon flush
+            // with the 14pt inset from the card's leading edge.
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
         .buttonStyle(.plain)
     }
@@ -259,13 +282,17 @@ struct TaskRow: View {
     private var leadingGlyph: some View {
         if isSelectMode {
             selectionCircleGlyph
-        } else if viewModel.isCompleted {
-            completionGlyph
         } else if viewModel.itemType == .content {
             contentGlyph
         } else {
             taskGlyph
         }
+        // No completion-state branch: the existing title fade +
+        // strikethrough (in `rowButton`) is what signals "done." The
+        // earlier swap to a green checkmark added visual chatter and
+        // diverged from the calmer editorial direction — now the
+        // type icon stays put on completion, just dimmer alongside
+        // the faded title.
     }
 
     private var selectionCircleGlyph: some View {
@@ -291,48 +318,60 @@ struct TaskRow: View {
         .transition(.scale.combined(with: .opacity))
     }
 
-    private var completionGlyph: some View {
-        ZStack {
-            Circle()
-                .fill(BrettColors.success.opacity(0.15))
-                .overlay {
-                    Circle().strokeBorder(BrettColors.success.opacity(0.4), lineWidth: 1)
-                }
-                .frame(width: 30, height: 30)
-
-            Image(systemName: "checkmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(BrettColors.success)
-        }
-    }
-
+    /// 28pt gold-tinted glass circle per the v18 calm-hero mockup
+    /// (`.type-icon`). All user-content rows (task + content) wear
+    /// the same chrome — type is signalled by the glyph shape, not
+    /// the tile color. Cerulean is reserved for Brett-generated
+    /// surfaces and never appears on row icons.
+    ///
+    /// Mockup CSS:
+    ///   width: 28; background: rgba(199,154,77,0.18);
+    ///   border: 1px solid rgba(199,154,77,0.40);
+    ///   color: rgba(255,230,200,0.95); inset highlight at top.
     private var contentGlyph: some View {
-        ZStack {
-            Circle()
-                .fill(Color.black.opacity(0.20))
-                .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                }
-                .frame(width: 30, height: 30)
-
+        typeIconCircle {
             Image(systemName: "doc.text")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(BrettColors.cerulean.opacity(0.7))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 1.0, green: 0.90, blue: 0.78).opacity(0.95))
         }
     }
 
+    /// Tasks: bolt glyph in the gold-tinted circle. The v18 mockup
+    /// happened to render task circles empty (the SVG paths in the
+    /// HTML were broken), but the calm-hero spec — and the user's
+    /// preference — is to keep our `bolt.fill` glyph so the icon
+    /// communicates "task" at-a-glance even in a list with no
+    /// content items for contrast.
     private var taskGlyph: some View {
+        typeIconCircle {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 1.0, green: 0.90, blue: 0.78).opacity(0.95))
+        }
+    }
+
+    /// Shared circle chrome for task + content type icons. Matches
+    /// the v18 mockup's `.type-icon` exactly so a row in the iOS
+    /// app reads the same as the mockup at-a-glance.
+    @ViewBuilder
+    private func typeIconCircle<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         ZStack {
             Circle()
-                .fill(Color.black.opacity(0.20))
+                .fill(BrettColors.gold.opacity(0.18))
                 .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                    Circle().strokeBorder(BrettColors.gold.opacity(0.40), lineWidth: 1)
+                }
+                .overlay(alignment: .top) {
+                    // Inset top highlight (mockup `box-shadow:
+                    // inset 0 1px 0 rgba(255,255,255,0.06)`).
+                    Circle()
+                        .trim(from: 0, to: 0.5)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .frame(width: 28, height: 28)
+                        .rotationEffect(.degrees(180))
                 }
                 .frame(width: 30, height: 30)
-
-            Image(systemName: "bolt.fill")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(BrettColors.gold.opacity(0.7))
+            content()
         }
     }
 
@@ -409,6 +448,31 @@ struct TaskRow: View {
         let listName: String?
         let contentDomain: String?
         let relinkTask: RelinkTask?
+        /// True when the item's due date is before the start of today.
+        /// Drives the v18 mockup's `.task-meta.overdue-meta` red tint
+        /// — the meta whisper renders in muted warm red so the row
+        /// reads as "you're late" without needing a separate "X days
+        /// overdue" suffix (the section header already says OVERDUE).
+        let isOverdue: Bool
+    }
+
+    /// True when the item is active and due before today started.
+    /// Mirrors `TodaySections.bucket`'s overdue test so the row's
+    /// visual matches what the section bucketing decided.
+    private static func isOverdue(_ item: Item) -> Bool {
+        guard item.itemStatus == .active, let due = item.dueDate else { return false }
+        return due < Calendar.current.startOfDay(for: Date())
+    }
+
+    /// Meta whisper color — `BrettColors.overdueRed` for overdue rows
+    /// (calm-hero red, see `BrettColors.swift`), white/0.55 otherwise.
+    /// Done items keep the normal meta color; the title strikethrough
+    /// already carries the done signal.
+    private var metaColor: Color {
+        guard !viewModel.isCompleted, viewModel.isOverdue else {
+            return Color.white.opacity(0.55)
+        }
+        return BrettColors.overdueRed.opacity(0.90)
     }
 
     /// Convert a task title into a stable, predictable accessibility-id token.
@@ -430,15 +494,32 @@ struct TaskRow: View {
         return formatter
     }()
 
-    /// Time whisper — only render when the due date carries a time-of-day
-    /// (we skip midnight-only dates so the row doesn't read "12:00 AM" for
-    /// every item without a precise time).
+    /// Time whisper — render the time-of-day when the due date
+    /// carries one ("9:00 am"); for overdue items without a time-of-
+    /// day fall back to the weekday name ("Friday", "Wednesday") so
+    /// the row tells the user *when* it slipped without resorting to
+    /// "X days overdue" math (the section header already says
+    /// OVERDUE). Items in any non-overdue bucket without a time
+    /// stay quiet — `nil` means "no time whisper, skip the segment."
     private static func timeLabel(for item: Item) -> String? {
         guard let due = item.dueDate else { return nil }
         let comps = Calendar.current.dateComponents([.hour, .minute], from: due)
-        if (comps.hour ?? 0) == 0 && (comps.minute ?? 0) == 0 { return nil }
-        return timeFormatter.string(from: due).lowercased() // "9:00 am" style
+        let hasTimeOfDay = (comps.hour ?? 0) != 0 || (comps.minute ?? 0) != 0
+        if hasTimeOfDay {
+            return timeFormatter.string(from: due).lowercased()
+        }
+        // Overdue + midnight-only date → weekday whisper.
+        if due < Calendar.current.startOfDay(for: Date()) {
+            return weekdayFormatter.string(from: due)
+        }
+        return nil
     }
+
+    private static let weekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        return formatter
+    }()
 
     private static func capturedLabel(for item: Item) -> String? {
         // "Captured {relative}" for undated content/inbox items

@@ -121,6 +121,12 @@ export function Omnibar({
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
   const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
+  // Tracks whether forcedAction is in *preview* state — i.e. set by typing
+  // "t" or "s" from empty, awaiting space-to-commit. Kept in sync with
+  // SpotlightModal so the two surfaces share a single mental model. The
+  // Omnibar itself doesn't take an external initial-action prop today, but
+  // the explicit flag prevents future drift if it ever does.
+  const [isPreview, setIsPreview] = useState(false);
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -138,6 +144,7 @@ export function Omnibar({
       closeTimerRef.current = null;
       setIsClosing(false);
       setForcedAction(null);
+      setIsPreview(false);
       setConfirmedTask(null);
       onClose();
     }, 150);
@@ -182,16 +189,16 @@ export function Omnibar({
       return;
     }
 
-    // Preview state: single "t" or "s" with forcedAction set.
-    const inPreview = forcedAction !== null && (input === "t" || input === "s");
-    if (inPreview) {
+    if (isPreview) {
       // Space appended → commit mode, clear input.
       if (value === input + " ") {
+        setIsPreview(false);
         onInputChange("");
         return;
       }
       // Any other change (new char, backspace, paste, …) → flip to Brett.
       setForcedAction(null);
+      setIsPreview(false);
       onInputChange(value);
       return;
     }
@@ -199,6 +206,7 @@ export function Omnibar({
     // Enter preview mode from empty input.
     if (!forcedAction && input === "" && (value === "t" || value === "s")) {
       setForcedAction(value === "t" ? "create" : "search");
+      setIsPreview(true);
       onInputChange(value);
       return;
     }
@@ -350,9 +358,10 @@ export function Omnibar({
     setConfirmedTask(title);
   };
 
-  const handleSuggestionSelect = 
+  const handleSuggestionSelect =
     (suggestion: Suggestion) => {
       setForcedAction(null);
+      setIsPreview(false);
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "scout") {
@@ -379,6 +388,7 @@ export function Omnibar({
         }
         if (forcedAction) {
           setForcedAction(null);
+          setIsPreview(false);
           onInputChange("");
           return;
         }
@@ -448,6 +458,7 @@ export function Omnibar({
         e.preventDefault();
         if (input.trim()) {
           setForcedAction(null);
+          setIsPreview(false);
           if (forcedAction === "search") {
             onSearch(input);
           } else if (forcedAction === "create") {

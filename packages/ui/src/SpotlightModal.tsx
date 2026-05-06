@@ -85,6 +85,13 @@ export function SpotlightModal({
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedSearchIdx, setSelectedSearchIdx] = useState(-1);
   const [forcedAction, setForcedAction] = useState<"search" | "create" | null>(null);
+  // Tracks whether forcedAction is in *preview* state — i.e. set by typing
+  // "t" or "s" from an empty input, awaiting space-to-commit. Distinct from
+  // forcedAction set externally via initialForcedAction (Cmd+N / Cmd+F),
+  // which is committed mode from the start. Without this flag, the cancel
+  // branch fires whenever input transiently equals "t" or "s" — e.g. typing
+  // "seque" right after Cmd+N would clear the create-task action.
+  const [isPreview, setIsPreview] = useState(false);
   const [confirmedTask, setConfirmedTask] = useState<string | null>(null);
 
   const handleScroll = () => {
@@ -104,19 +111,23 @@ export function SpotlightModal({
       return;
     }
 
-    const inPreview = forcedAction !== null && (input === "t" || input === "s");
-    if (inPreview) {
+    if (isPreview) {
       if (value === input + " ") {
+        // Space committed the preview — clear input, exit preview, keep forcedAction.
+        setIsPreview(false);
         onInputChange("");
         return;
       }
+      // Any other change cancels back to default.
       setForcedAction(null);
+      setIsPreview(false);
       onInputChange(value);
       return;
     }
 
     if (!forcedAction && input === "" && (value === "t" || value === "s")) {
       setForcedAction(value === "t" ? "create" : "search");
+      setIsPreview(true);
       onInputChange(value);
       return;
     }
@@ -131,9 +142,11 @@ export function SpotlightModal({
   useEffect(() => {
     if (isOpen && initialForcedAction) {
       setForcedAction(initialForcedAction);
+      setIsPreview(false);
     }
     if (!isOpen) {
       setForcedAction(null);
+      setIsPreview(false);
     }
   }, [isOpen, initialForcedAction]);
 
@@ -265,9 +278,10 @@ export function SpotlightModal({
     setConfirmedTask(title);
   };
 
-  const handleSuggestionSelect = 
+  const handleSuggestionSelect =
     (suggestion: Suggestion) => {
       setForcedAction(null);
+      setIsPreview(false);
       if (suggestion.action === "ask") {
         onSend(input);
       } else if (suggestion.action === "scout") {
@@ -284,6 +298,7 @@ export function SpotlightModal({
       if (e.key === "Escape") {
         e.preventDefault();
         setForcedAction(null);
+        setIsPreview(false);
         onClose();
         return;
       }
@@ -340,6 +355,7 @@ export function SpotlightModal({
         e.preventDefault();
         if (input.trim()) {
           setForcedAction(null);
+          setIsPreview(false);
           if (forcedAction === "search") {
             onSearch(input);
           } else if (forcedAction === "create") {

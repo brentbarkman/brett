@@ -76,11 +76,23 @@ private struct SettingsBody: View {
         // - `initialTab != nil` (deep-link, e.g. Today's Reconnect pill):
         //   render that single tab directly so the outer stack's back
         //   chevron returns to the calling screen in one tap.
-        Group {
-            if let initialTab {
-                tabContent(for: initialTab)
-            } else {
-                settingsList
+        //
+        // Calm-hero wash backdrop (2026-05-04) wraps both paths so
+        // every Settings surface — landing list and individual tabs —
+        // sits on the same solid wash as the rest of the non-Today
+        // app. Form-based subviews use `.scrollContentBackground(.hidden)`
+        // so this wash shows through them; `BrettSettingsScroll`
+        // (custom-card subviews) renders its own wash layer (no
+        // double-render — they composite to the same color).
+        ZStack {
+            WashBackground()
+
+            Group {
+                if let initialTab {
+                    tabContent(for: initialTab)
+                } else {
+                    settingsList
+                }
             }
         }
         // Hydrate profile on open. Without this the header card falls back
@@ -99,6 +111,15 @@ private struct SettingsBody: View {
     @ViewBuilder
     private var settingsList: some View {
         BrettSettingsScroll {
+            // Editorial 38pt serif header — matches Inbox / Lists /
+            // Calendar / Scouts. Replaces the prior iOS large title
+            // (`.navigationTitle("Settings").navigationBarTitleDisplayMode(.large)`)
+            // which rendered in the system bold sans and visually
+            // diverged from the rest of the calm-hero pages.
+            // `horizontalPadding: 0` so the title aligns with the
+            // 16pt-inset cards below instead of compounding to 40pt.
+            EditorialPageHeader(title: "Settings", subtitle: nil, horizontalPadding: 0)
+
             profileHeaderCard
 
             accountCard
@@ -108,10 +129,19 @@ private struct SettingsBody: View {
 
             signOutCard
         }
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.large)
-        .navigationBarBackButtonHidden(false)
+        // Hidden empty title keeps the swipe-from-edge interactive
+        // pop gesture wired up (SwiftUI requires *some* nav-bar
+        // registrant) without rendering the iOS large title that
+        // would visually duplicate the editorial header above. A
+        // `.principal` toolbar item set to EmptyView() does the
+        // same thing as `.navigationTitle("")` — without SwiftUI's
+        // tendency to render literal whitespace strings as visible
+        // placeholder glyphs in the bar.
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) { EmptyView() }
+        }
     }
 
     /// View for a single settings tab. Same content the outer stack

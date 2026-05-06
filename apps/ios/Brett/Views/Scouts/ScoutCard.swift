@@ -137,7 +137,10 @@ struct ScoutAvatar: View {
         let parsed = gradient.compactMap { BrettColors.fromHex($0) }
         if parsed.count >= 2 { return parsed }
         if parsed.count == 1 { return [parsed[0], parsed[0].opacity(0.6)] }
-        return [BrettColors.gold.opacity(0.6), BrettColors.cerulean.opacity(0.4)]
+        // Calm-hero (2026-05-04): cerulean is reserved for Brett-
+        // generated AI surfaces. Scouts are user content, so the
+        // fallback gradient stays in the warm-gold family.
+        return [BrettColors.gold.opacity(0.6), BrettColors.amber400.opacity(0.4)]
     }
 }
 

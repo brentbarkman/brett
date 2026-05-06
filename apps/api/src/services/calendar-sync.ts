@@ -468,7 +468,7 @@ async function resolveAttendeePhotos(
   }
 }
 
-async function upsertEvents(
+export async function upsertEvents(
   events: calendar_v3.Schema$Event[],
   userId: string,
   googleAccountId: string,
@@ -580,10 +580,13 @@ async function upsertEvents(
       syncedAt,
     };
 
-    // On update, don't overwrite myResponseStatus or attendees — the local
-    // RSVP handler may have set them more recently than Google's data.
-    // These fields will converge on the next full sync when Google has propagated.
-    const { myResponseStatus: _mrs, attendees: _att, ...updateData } = eventData;
+    // On update, don't overwrite attendees — the local RSVP handler enriches
+    // attendees with photoUrl from the People API, which Google's event
+    // payload doesn't include. Letting sync overwrite would wipe photos
+    // until resolveAttendeePhotos re-resolves them. myResponseStatus IS
+    // updated from Google so RSVPs made outside Brett (Gmail, Calendar app,
+    // phone) propagate.
+    const { attendees: _att, ...updateData } = eventData;
 
     const result = await prisma.calendarEvent.upsert({
       where: {

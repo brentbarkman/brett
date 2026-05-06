@@ -895,7 +895,7 @@ export function detectUrl(input: string): { isUrl: true; url: string } | { isUrl
 
 // ── Calendar validation ──
 
-export { validateRsvpInput, validateCalendarNoteInput } from "./calendar-validation";
+export { validateRsvpInput, validateCalendarNoteInput, isHiddenDeclined } from "./calendar-validation";
 
 // ── Things 3 Import validation ──
 

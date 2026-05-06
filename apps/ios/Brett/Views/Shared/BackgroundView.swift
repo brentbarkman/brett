@@ -33,6 +33,16 @@ struct BackgroundView: View {
 
     @State private var service = BackgroundService.shared
 
+    /// Tracks whether the first non-empty image key has landed. The
+    /// crossfade animation is suppressed until then so cold launch shows
+    /// the wallpaper as "just there" — without this, the empty initial
+    /// `displayedKey` swapping to its first resolved value triggers the
+    /// 1.5s opacity transition, which reads as the photo animating in
+    /// even though there's no Ken Burns scale anymore. Initialised from
+    /// the service's current key so a warm process (cached URL already
+    /// pinned) skips the gate entirely.
+    @State private var hasInitialPaint: Bool = !BackgroundService.shared.displayedKey.isEmpty
+
     /// Live read of the user's profile. SwiftData is canonical;
     /// `UserProfileStore` is mutation-only after Wave-B Phase 5. The
     /// background view may render on the auth screen with no profile
@@ -92,7 +102,16 @@ struct BackgroundView: View {
                 }
             }
             .ignoresSafeArea()
-            .animation(crossfadeAnimation, value: service.displayedKey)
+            // Crossfade ONLY after the initial key has landed. Cold
+            // launch's first key swap (empty → resolved) would
+            // otherwise look like the photo "animating in" — calm-hero
+            // wants the wallpaper to just BE there.
+            .animation(hasInitialPaint ? crossfadeAnimation : nil, value: service.displayedKey)
+            .onChange(of: service.displayedKey, initial: false) { _, newKey in
+                if !hasInitialPaint && !newKey.isEmpty {
+                    hasInitialPaint = true
+                }
+            }
 
             // Top vignette for status bar readability
             VStack {

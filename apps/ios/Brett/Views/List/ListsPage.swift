@@ -116,11 +116,13 @@ private struct ListsPageBody: View {
 
     var body: some View {
         ZStack {
+            // No per-page wash — the global wash in `MainContainer`
+            // is the backdrop, and page content slides over it during
+            // pager transitions. See `photoOpacity` in MainContainer.
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     header
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
                         .padding(.bottom, 12)
 
                     if lists.isEmpty {
@@ -134,32 +136,59 @@ private struct ListsPageBody: View {
                         listCards
                     }
                 }
-                // Reserve room above the omnibar AND the FAB so the
-                // last card isn't covered by the floating + button.
-                .padding(.bottom, 140)
+                // Reserve only enough room for the omnibar — the FAB
+                // was retired with the calm-hero design (the gold "+"
+                // bottom-right competed visually with the gold "B"
+                // chip in `ViewPillsBar`, and the omnibar is the
+                // canonical capture surface). New lists land via the
+                // header `+` (added below) or via the omnibar's
+                // intent-routing (Phase 4 follow-up).
+                .padding(.bottom, 90)
             }
             .scrollIndicators(.hidden)
             .refreshable {
                 try? await ActiveSession.syncManager?.pullToRefresh()
             }
-
-            fab
         }
     }
 
-    // MARK: - Header (matches Today / Inbox / Calendar treatment)
+    // MARK: - Header
 
+    /// Editorial 38pt serif header per the calm-hero design — parity
+    /// with every other top-level page so swipes don't shift the
+    /// header silhouette. A discrete trailing "+" button replaces the
+    /// gold FAB the page used to have at the bottom-right; the FAB
+    /// was visually competing with the B menu chip in `ViewPillsBar`
+    /// (two gold circles stacked at the bottom), so the create
+    /// affordance moved up here where it doesn't crowd the chrome.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Lists")
-                .font(BrettTypography.dateHeader)
-                .foregroundStyle(.white)
+        ZStack(alignment: .trailing) {
+            EditorialPageHeader(
+                title: "Lists",
+                subtitle: subtitle
+            )
 
-            Text(subtitle)
-                .font(BrettTypography.stats)
-                .foregroundStyle(Color.white.opacity(0.55))
+            Button {
+                createList()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background {
+                        Circle()
+                            .fill(BrettColors.gold)
+                            .overlay {
+                                Circle().strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
+                            }
+                    }
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 24)
+            .accessibilityLabel("New list")
+            .accessibilityIdentifier("lists.create")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 12)
     }
 
     private var subtitle: String {
@@ -199,31 +228,36 @@ private struct ListsPageBody: View {
                 totalCount: counts.total
             )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(list.name)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(BrettColors.textCardTitle)
+                    .foregroundStyle(.white)
                     .lineLimit(1)
 
                 Text(counts.active == 1 ? "1 item" : "\(counts.active) items")
-                    .font(BrettTypography.taskMeta)
-                    .foregroundStyle(BrettColors.textMeta)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.white.opacity(0.55))
             }
 
             Spacer()
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(BrettColors.textGhost)
+                .foregroundStyle(Color.white.opacity(0.30))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
+        // Canonical card glass — `Color.white.opacity(0.07)` fill +
+        // `Color.white.opacity(0.12)` 1pt border + 14pt corner. See
+        // apps/ios/DESIGN.md "Canonical card glass". Was `.thinMaterial`
+        // which doubled the white tint of the wash and made list cards
+        // read brighter than every other card surface in the app.
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.thinMaterial)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.07))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
                 }
         }
         .contentShape(Rectangle())
@@ -243,38 +277,6 @@ private struct ListsPageBody: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 32)
         .padding(.top, 48)
-    }
-
-    /// Floating "+" button — same chrome as ScoutsRosterView's FAB.
-    /// Bottom padding clears the global omnibar (which sits ~70pt up
-    /// from the screen bottom). Per CLAUDE.md's iOS↔desktop parity
-    /// rule, primary-screen "create" affordances now use the same
-    /// gold circular FAB across the app instead of inline buttons.
-    private var fab: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                Button {
-                    createList()
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(
-                            Circle()
-                                .fill(BrettColors.gold)
-                                .shadow(color: BrettColors.gold.opacity(0.6), radius: 12)
-                        )
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, 20)
-                // Float above the omnibar (≈70pt + safe area).
-                .padding(.bottom, 90)
-                .accessibilityLabel("New list")
-            }
-        }
     }
 
     // MARK: - Actions

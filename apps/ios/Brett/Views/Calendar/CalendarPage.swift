@@ -103,8 +103,15 @@ private struct CalendarPageBody: View {
     /// filtered out (matches Google Calendar's default). Done in Swift
     /// rather than the predicate so a future "show declined" toggle can
     /// flip without re-initing the @Query.
+    ///
+    /// Events the user organized stay visible even when declined. Google
+    /// Calendar behaves the same way — "Hide declined events" never hides
+    /// events you organized, because declining your own event is unusual
+    /// and the user almost always still wants to see it on their calendar.
     private var visibleEvents: [CalendarEvent] {
-        events.filter { $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue }
+        events.filter {
+            $0.myResponseStatus != CalendarRsvpStatus.declined.rawValue || $0.isOrganizer
+        }
     }
 
     /// Pure helper — public for test access. Given the currently-selected
@@ -142,28 +149,39 @@ private struct CalendarPageBody: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            monthHeader
+        ZStack {
+            // No per-page wash — the global wash in `MainContainer`
+            // is the backdrop, and page content slides over it
+            // during pager transitions.
 
-            WeekStrip(selectedDate: $selectedDate, events: visibleEvents)
+            VStack(spacing: 16) {
+                monthHeader
 
-            if Self.shouldShowTimeline(
-                hasAccount: accountsStore.hasAnyAccount,
-                hasCachedEvents: !visibleEvents.isEmpty
-            ) {
-                DayTimeline(events: visibleEvents, selectedDate: selectedDate)
-                    .background {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(.thinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-                            }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .padding(.horizontal, 16)
-            } else {
-                connectCTA
+                WeekStrip(selectedDate: $selectedDate, events: visibleEvents)
+
+                if Self.shouldShowTimeline(
+                    hasAccount: accountsStore.hasAnyAccount,
+                    hasCachedEvents: !visibleEvents.isEmpty
+                ) {
+                    // Canonical card glass — see apps/ios/DESIGN.md
+                    // "Canonical card glass". Single material fill at
+                    // white/0.07 with a white/0.12 border so the
+                    // timeline reads identical to Today's task
+                    // sections, the Inbox card, and Lists rows.
+                    DayTimeline(events: visibleEvents, selectedDate: selectedDate)
+                        .background {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white.opacity(0.07))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                                }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(.horizontal, 16)
+                } else {
+                    connectCTA
+                }
             }
         }
         .refreshable { await accountsStore.fetchAccounts() }
@@ -190,23 +208,19 @@ private struct CalendarPageBody: View {
         }
     }
 
+    /// Editorial 38pt serif header per the calm-hero design — parity
+    /// with Inbox/Today/Lists/Scouts so swipe transitions don't shift
+    /// the header silhouette. Title is the selected day-and-month
+    /// ("Monday, May 4") and the subtitle counts events on that day.
+    /// Was previously "May 2026" — too coarse, the WeekStrip below
+    /// already conveys the month/year, and the user-selected day
+    /// deserves the prime real estate.
     private var monthHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(selectedDate.formatted(.dateTime.month(.wide).year()))
-                .font(BrettTypography.dateHeader)
-                .foregroundStyle(.white)
-
-            // Subtitle matches Inbox + Today — gives the page a consistent
-            // header silhouette during side-swipes. Counts events in the
-            // currently-selected day so the user knows what they're
-            // looking at.
-            Text(eventsSubtitle)
-                .font(BrettTypography.stats)
-                .foregroundStyle(Color.white.opacity(0.55))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
+        EditorialPageHeader(
+            title: selectedDate.formatted(.dateTime.weekday(.wide).month(.wide).day()),
+            subtitle: eventsSubtitle
+        )
+        .padding(.top, 12)
     }
 
     private var eventsSubtitle: String {

@@ -27,12 +27,17 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
   });
   const [completing, setCompleting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (isFocused) cardRef.current?.scrollIntoView({ block: "nearest" });
+  }, [isFocused]);
 
   const handleToggleClick = 
     (e: React.MouseEvent) => {
@@ -85,7 +90,10 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        cardRef.current = node;
+      }}
       {...attributes}
       {...listeners}
       onClick={() => { onFocus?.(); onClick(); }}
