@@ -253,7 +253,14 @@ export function App() {
   const [selectedScoutId, setSelectedScoutId] = useState<string | null>(null);
   const [scoutRunning, setScoutRunning] = useState(false);
 
-  // Triage popup state
+  // Triage popup state.
+  // For Inbox triage (mode = list-first / date-first), pendingDate /
+  // pendingListId hold the user's first commit until the picker closes,
+  // so we only fire one mutation per triage flow. This keeps the row
+  // visible in the inbox during the morph between pickers; otherwise the
+  // first commit refetches the inbox and the row disappears underneath.
+  // `undefined` means "user did not commit this field"; an explicit value
+  // (including `null`) means they did and it gets flushed on close.
   const [triageState, setTriageState] = useState<{
     mode: "list-first" | "date-first" | "list-only" | "date-only";
     ids: string[];
@@ -261,6 +268,8 @@ export function App() {
     currentDueDate?: string | null;
     currentDueDatePrecision?: "day" | "week" | null;
     anchorEl?: HTMLElement | null;
+    pendingDate?: Date | null;
+    pendingListId?: string | null;
   } | null>(null);
 
   // Semantic list suggestions for the active triage item
@@ -850,7 +859,7 @@ export function App() {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (triageState) {
-          setTriageState(null);
+          closeTriageWithFlush();
           return;
         }
         if (isDetailOpen) {
@@ -877,7 +886,7 @@ export function App() {
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest?.("[data-quickpicker='root']")) return;
-      setTriageState(null);
+      closeTriageWithFlush();
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -1066,6 +1075,28 @@ export function App() {
 
   const handleTriageCancel = () => {
     setTriageState(null);
+  };
+
+  // Close the triage popup, flushing any pending Inbox commits. Called by
+  // TriageQuickPicker.onClose, the Escape effect, and click-outside.
+  // Today/list flows (date-only, list-only) commit immediately and never
+  // populate pendingDate/pendingListId, so the flush is a no-op for them.
+  const closeTriageWithFlush = () => {
+    setTriageState((s) => {
+      if (!s) return null;
+      const updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null } = {};
+      if (s.pendingDate !== undefined) {
+        updates.dueDate = s.pendingDate ? s.pendingDate.toISOString() : null;
+        updates.dueDatePrecision = s.pendingDate ? "day" : null;
+      }
+      if (s.pendingListId !== undefined) {
+        updates.listId = s.pendingListId;
+      }
+      if (Object.keys(updates).length > 0) {
+        handleInboxTriage(s.ids, updates);
+      }
+      return null;
+    });
   };
 
   const handleArchiveList = (id: string, knownIncompleteCount?: number) => {
@@ -1576,15 +1607,12 @@ export function App() {
                 suggestionMode={suggestionMode}
                 startWith={triageState.mode === "list-first" ? "list" : "date"}
                 onCommitDate={(date) =>
-                  handleInboxTriage(triageState.ids, {
-                    dueDate: date ? date.toISOString() : null,
-                    dueDatePrecision: date ? "day" : null,
-                  })
+                  setTriageState((s) => (s ? { ...s, pendingDate: date } : s))
                 }
                 onCommitList={(listId) =>
-                  handleInboxTriage(triageState.ids, { listId })
+                  setTriageState((s) => (s ? { ...s, pendingListId: listId } : s))
                 }
-                onClose={handleTriageCancel}
+                onClose={closeTriageWithFlush}
               />
             );
           }
