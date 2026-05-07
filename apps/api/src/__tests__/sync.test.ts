@@ -404,6 +404,75 @@ describe("POST /sync/pull", () => {
     expect(eventIds).not.toContain(hiddenEventId);
   });
 
+  it("emits tombstones for events on hidden calendars so iOS can purge them", async () => {
+    // Regression for the second iteration: the visibility filter was
+    // applied to BOTH the live AND the tombstone query, so iOS clients
+    // that already had a hidden-calendar event in local SwiftData never
+    // received the delete signal — the row would linger indefinitely
+    // even after the cascade soft-deleted it server-side. The fix moved
+    // the filter to `extraWhereLive` so tombstones bypass it.
+    clearAllRateLimits();
+
+    const tombUser = await createTestUser("Tombstone Visibility User");
+
+    const googleAccountId = generateId();
+    await prisma.googleAccount.create({
+      data: {
+        id: googleAccountId,
+        userId: tombUser.userId,
+        googleEmail: "tomb-test@gmail.com",
+        googleUserId: `google-tomb-${googleAccountId}`,
+        accessToken: encryptToken("fake-access-token"),
+        refreshToken: encryptToken("fake-refresh-token"),
+        tokenExpiresAt: new Date(Date.now() + 3600 * 1000),
+      },
+    });
+
+    // Hidden calendar with a soft-deleted event — mirrors the state the
+    // backfill migration produces for already-hidden calendars at deploy
+    // time, and the state the PATCH cascade produces on visibility toggle.
+    const hiddenCalId = generateId();
+    await prisma.calendarList.create({
+      data: {
+        id: hiddenCalId,
+        googleAccountId,
+        googleCalendarId: "tomb-shared",
+        name: "Hidden shared",
+        color: "#a142f4",
+        isVisible: false,
+        isPrimary: false,
+      },
+    });
+
+    const tombstonedEventId = generateId();
+    const now = new Date();
+    await prisma.calendarEvent.create({
+      data: {
+        id: tombstonedEventId,
+        userId: tombUser.userId,
+        googleAccountId,
+        calendarListId: hiddenCalId,
+        googleEventId: `tomb-evt-${tombstonedEventId}`,
+        title: "Tombstoned hidden-calendar event",
+        startTime: now,
+        endTime: new Date(now.getTime() + 3600 * 1000),
+        deletedAt: now,
+      },
+    });
+
+    const res = await authRequest("/sync/pull", tombUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+
+    const upsertedIds = body.changes.calendar_events.upserted.map((e: any) => e.id);
+    const deletedIds: string[] = body.changes.calendar_events.deleted;
+    expect(upsertedIds).not.toContain(tombstonedEventId);
+    expect(deletedIds).toContain(tombstonedEventId);
+  });
+
   // ── On-demand sync filters (perf-driven hot/cold split) ──
 
   it("items filter: archived items are excluded from sync", async () => {

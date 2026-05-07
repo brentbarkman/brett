@@ -265,13 +265,19 @@ export const sync = new Hono<AuthEnv>()
       const tableLimit = overrideLimit ?? DEFAULT_LIMIT_BY_TABLE[table] ?? FALLBACK_DEFAULT_LIMIT;
 
       const extraWhere: Record<string, unknown> = {};
+      const extraWhereLive: Record<string, unknown> = {};
       if (table === "calendar_events") {
         extraWhere.startTime = { gte: fourteenDaysAgo, lte: fourteenDaysAhead };
-        // Match the /calendar/events REST filter so iOS and desktop agree
-        // on which events the user can see. Without this, sync-pull returns
-        // every event the user owns — including events on shared calendars
-        // the user has hidden via the calendar list visibility toggle.
-        Object.assign(extraWhere, eventsOnVisibleCalendars);
+        // Visibility filter applies to LIVE rows only. The corresponding
+        // tombstones MUST escape this filter — when the user toggles a
+        // calendar to hidden, the cascade soft-deletes its events; iOS
+        // can only purge them locally if the tombstone reaches /sync/pull's
+        // `deleted[]` array. Constraining the tombstone query by the
+        // (now-false) calendarList.isVisible flag would block exactly the
+        // delete signal we need to send. Keep the filter on the live
+        // path so a race between the cascade and a concurrent insert
+        // never surfaces a hidden-calendar event to the client.
+        Object.assign(extraWhereLive, eventsOnVisibleCalendars);
       } else if (table === "items") {
         // Active work + just-completed. Excludes archived entirely;
         // older done items are fetched on-demand via /things and via
@@ -300,6 +306,7 @@ export const sync = new Hono<AuthEnv>()
       // for that page.
       const result = await paginatedPull({
         prismaModel: model,
+        extraWhereLive,
         prismaClient: prisma,
         userId: user.id,
         cursor,
