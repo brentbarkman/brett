@@ -28,7 +28,6 @@ export { ThingsEmptyState } from "./ThingsEmptyState";
 export { CrossFade } from "./CrossFade";
 export { InboxView } from "./InboxView";
 export { InboxItemRow } from "./InboxItemRow";
-export { TriagePopup } from "./TriagePopup";
 export {
   QuickDatePicker,
   QuickListPicker,

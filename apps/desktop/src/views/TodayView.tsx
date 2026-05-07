@@ -8,7 +8,6 @@ import {
   ThingsList,
   ThingsEmptyState,
   CrossFade,
-  TriagePopup,
   SkeletonListView,
 } from "@brett/ui";
 import type { OmnibarProps, NextUpTimerState } from "@brett/ui";
