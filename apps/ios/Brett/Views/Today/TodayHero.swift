@@ -130,38 +130,59 @@ struct TodayHero: View {
     // MARK: - Markdown → plain summary
 
     /// Collapse a markdown briefing into a single-paragraph plain
-    /// summary suitable for the hero. Strips headings, list bullets
-    /// (unordered + ordered), blockquote markers, code fences, inline
-    /// emphasis, and link syntax; truncates at ~280 chars on the
+    /// summary suitable for the hero. Headings, blockquotes, code
+    /// fences, and horizontal rules are dropped (they don't read as
+    /// prose). List bullet markers (`-`, `*`, `+`, `N.`) are stripped
+    /// and the bullet TEXT is folded into the paragraph — the API's
+    /// briefing prompt produces a bullet list, so without this step
+    /// the hero renders nothing. Inline emphasis and link syntax are
+    /// stripped, then the result is truncated at ~280 chars on the
     /// nearest sentence boundary.
     ///
     /// Public for testability — `TodayHeroTests` exercises the
     /// markdown-stripping cases directly without rendering SwiftUI.
-    /// Lines we don't want concatenated into the hero prose: list
-    /// bullets, ordered list items, blockquotes, code fences, headings,
-    /// and horizontal rules. Anything else is treated as prose.
+    /// Lines we drop entirely (no readable prose equivalent): headings,
+    /// blockquotes, code fences, horizontal rules.
     private static func isStructuralLine(_ trimmed: String) -> Bool {
         if trimmed.hasPrefix("#") { return true }                    // heading
-        if trimmed.hasPrefix("-") { return true }                    // unordered list
-        if trimmed.hasPrefix("*") { return true }                    // unordered list / emphasis-only
-        if trimmed.hasPrefix("+") { return true }                    // unordered list (alt)
         if trimmed.hasPrefix(">") { return true }                    // blockquote
         if trimmed.hasPrefix("```") { return true }                  // code fence
         if trimmed == "---" || trimmed == "***" { return true }      // horizontal rule
-        // Ordered list — `1. text`, `12. text`. Match a leading run of
-        // digits followed by `. ` (the markdown ordered-list marker).
-        if let firstSpace = trimmed.firstIndex(of: " "),
-           let dot = trimmed.firstIndex(of: "."),
-           dot < firstSpace,
-           trimmed[..<dot].allSatisfy({ $0.isNumber }) {
-            return true
-        }
         return false
     }
 
+    /// If `trimmed` starts with a list bullet marker (`- `, `* `, `+ `,
+    /// or `N. `), return the text after the marker. Otherwise return
+    /// `trimmed` unchanged. The trailing-space requirement is what
+    /// keeps `*italic*` and `--hyphen` from being misread as bullets.
+    static func stripBulletMarker(_ trimmed: String) -> String {
+        // Unordered: `- text`, `* text`, `+ text`. Need at least
+        // marker + space + one content character.
+        if trimmed.count >= 3,
+           let first = trimmed.first,
+           first == "-" || first == "*" || first == "+" {
+            let afterMarker = trimmed.index(after: trimmed.startIndex)
+            if trimmed[afterMarker] == " " {
+                return String(trimmed[trimmed.index(after: afterMarker)...])
+            }
+        }
+        // Ordered: `1. text`, `12. text`. Leading digits, then `. `.
+        if let dot = trimmed.firstIndex(of: "."),
+           dot > trimmed.startIndex,
+           trimmed[..<dot].allSatisfy({ $0.isNumber }) {
+            let afterDot = trimmed.index(after: dot)
+            if afterDot < trimmed.endIndex, trimmed[afterDot] == " " {
+                return String(trimmed[trimmed.index(after: afterDot)...])
+            }
+        }
+        return trimmed
+    }
+
     static func stripMarkdownToPlain(_ md: String) -> String {
-        // Walk the lines and pick the first prose paragraph (skip
-        // headings + list bullets — we want the conversational opener).
+        // Walk the lines and pick the first content paragraph. Bullet
+        // lines have their marker stripped so the text joins the
+        // surrounding prose; consecutive non-empty lines fold together
+        // with a single space (matches markdown soft-break semantics).
         let lines = md.components(separatedBy: .newlines)
         var paragraphs: [String] = []
         var current = ""
@@ -177,8 +198,10 @@ struct TodayHero: View {
             if Self.isStructuralLine(trimmed) {
                 continue
             }
+            let content = Self.stripBulletMarker(trimmed)
+            if content.isEmpty { continue }
             if !current.isEmpty { current += " " }
-            current += trimmed
+            current += content
         }
         if !current.isEmpty { paragraphs.append(current) }
         guard let first = paragraphs.first(where: { !$0.isEmpty }) else { return "" }
