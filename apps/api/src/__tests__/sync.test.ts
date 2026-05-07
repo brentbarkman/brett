@@ -473,6 +473,87 @@ describe("POST /sync/pull", () => {
     expect(deletedIds).toContain(tombstonedEventId);
   });
 
+  it("excludes cancelled calendar events from upserts and emits tombstones", async () => {
+    // The Google cancellation handler in calendar-sync.ts now both
+    // sets status="cancelled" AND soft-deletes the row, so /sync/pull
+    // emits a tombstone to iOS instead of leaking the cancelled event
+    // as a live row (which is what /calendar/events on desktop has
+    // always excluded). This test pins both behaviours: a cancelled-
+    // and-tombstoned row shows up only in `deleted[]`, never `upserted[]`.
+    clearAllRateLimits();
+
+    const cxlUser = await createTestUser("Cancelled Sync User");
+
+    const googleAccountId = generateId();
+    await prisma.googleAccount.create({
+      data: {
+        id: googleAccountId,
+        userId: cxlUser.userId,
+        googleEmail: "cxl-test@gmail.com",
+        googleUserId: `google-cxl-${googleAccountId}`,
+        accessToken: encryptToken("fake-access-token"),
+        refreshToken: encryptToken("fake-refresh-token"),
+        tokenExpiresAt: new Date(Date.now() + 3600 * 1000),
+      },
+    });
+
+    const calendarListId = generateId();
+    await prisma.calendarList.create({
+      data: {
+        id: calendarListId,
+        googleAccountId,
+        googleCalendarId: "cxl-cal",
+        name: "Mine",
+        color: "#4285f4",
+        isVisible: true,
+        isPrimary: true,
+      },
+    });
+
+    const liveEventId = generateId();
+    const cancelledEventId = generateId();
+    const now = new Date();
+    await prisma.calendarEvent.createMany({
+      data: [
+        {
+          id: liveEventId,
+          userId: cxlUser.userId,
+          googleAccountId,
+          calendarListId,
+          googleEventId: `live-evt-${liveEventId}`,
+          title: "Live event",
+          startTime: now,
+          endTime: new Date(now.getTime() + 3600 * 1000),
+        },
+        {
+          id: cancelledEventId,
+          userId: cxlUser.userId,
+          googleAccountId,
+          calendarListId,
+          googleEventId: `cxl-evt-${cancelledEventId}`,
+          title: "Cancelled event",
+          status: "cancelled",
+          startTime: now,
+          endTime: new Date(now.getTime() + 3600 * 1000),
+          deletedAt: now,
+        },
+      ],
+    });
+
+    const res = await authRequest("/sync/pull", cxlUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+
+    const upsertedIds = body.changes.calendar_events.upserted.map((e: any) => e.id);
+    const deletedIds: string[] = body.changes.calendar_events.deleted;
+    expect(upsertedIds).toContain(liveEventId);
+    expect(upsertedIds).not.toContain(cancelledEventId);
+    expect(deletedIds).toContain(cancelledEventId);
+  });
+
   // ── On-demand sync filters (perf-driven hot/cold split) ──
 
   it("items filter: archived items are excluded from sync", async () => {
