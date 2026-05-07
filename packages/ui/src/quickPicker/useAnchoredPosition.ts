@@ -27,7 +27,12 @@ export function useAnchoredPosition(
   useLayoutEffect(() => {
     if (!anchorEl || !popoverRef.current) return;
 
-    function compute(): AnchoredPosition {
+    function compute(): AnchoredPosition | null {
+      // If the anchor was removed from the DOM (e.g. the row that triggered
+      // the popover was filtered out by a refetch), freeze position at the
+      // last known good value rather than collapsing to (0,0).
+      if (!document.contains(anchorEl)) return null;
+
       const anchor = anchorEl!.getBoundingClientRect();
       const popover = popoverRef.current!.getBoundingClientRect();
       const vw = window.innerWidth;
@@ -62,7 +67,8 @@ export function useAnchoredPosition(
     }
 
     function update() {
-      setPos(compute());
+      const next = compute();
+      if (next !== null) setPos(next);
     }
     update();
 

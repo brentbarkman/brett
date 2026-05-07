@@ -172,7 +172,7 @@ function MonthGrid({
               className={[
                 "text-[10px] rounded-[3px] py-0.5 text-center cursor-pointer outline-none",
                 isSelected
-                  ? "bg-brett-gold/30 text-brett-gold font-semibold"
+                  ? "bg-brett-gold text-black font-bold"
                   : isHighlighted
                     ? "bg-white/10 text-white"
                     : "text-white/85 hover:bg-white/5",

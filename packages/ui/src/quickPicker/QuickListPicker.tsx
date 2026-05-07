@@ -111,9 +111,9 @@ export function QuickListPicker({
     <div
       ref={popoverRef}
       role="dialog"
+      data-quickpicker="root"
       style={{ position: "fixed", top: pos.top, left: pos.left, width: 330 }}
       className="z-50 flex gap-2 rounded-xl border border-white/8 bg-[rgba(20,20,22,0.96)] p-2 shadow-2xl backdrop-blur-2xl"
-      onMouseDown={(e) => e.stopPropagation()}
     >
       {/* Chip column */}
       <div className="flex w-[128px] flex-col gap-1">
@@ -132,11 +132,12 @@ export function QuickListPicker({
               key={list.id}
               type="button"
               data-testid={`chip-list-${list.id}`}
+              data-current={isCurrent ? "true" : "false"}
               onClick={() => onCommit(list.id)}
               className={[
-                "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left",
+                "relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left",
                 isCurrent
-                  ? "bg-brett-gold/20 border border-brett-gold/35"
+                  ? "bg-brett-gold/25 ring-1 ring-brett-gold/60 ring-inset"
                   : "border border-transparent bg-white/[0.025] hover:bg-white/5",
               ].join(" ")}
             >
@@ -144,16 +145,25 @@ export function QuickListPicker({
                 className={[
                   "flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-semibold",
                   isCurrent
-                    ? "bg-brett-gold/30 text-brett-gold"
+                    ? "bg-brett-gold text-black/80"
                     : "bg-white/10 text-white/70",
                 ].join(" ")}
               >
                 {i + 1}
               </span>
               <span className={`h-1.5 w-1.5 rounded-full ${list.colorClass}`} />
-              <span className="flex-1 truncate text-[10px] text-white/85">
+              <span className={[
+                "flex-1 truncate text-[10px]",
+                isCurrent ? "text-white font-medium" : "text-white/85",
+              ].join(" ")}>
                 {list.name}
               </span>
+              {isCurrent && (
+                <span
+                  aria-label="currently set"
+                  className="ml-1 h-1.5 w-1.5 rounded-full bg-brett-gold"
+                />
+              )}
             </button>
           );
         })}

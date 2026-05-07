@@ -868,11 +868,17 @@ export function App() {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [triageState, isDetailOpen, location.pathname, selectedScoutId]);
 
-  // Click-outside dismissal for the quick pickers. The picker root stops
-  // mousedown propagation, so any mousedown that reaches document is "outside."
+  // Click-outside dismissal for the quick pickers. We can't rely on synthetic
+  // stopPropagation here — React 17+ synthetic events don't stop native
+  // bubbling to document listeners — so we filter by a data attribute on the
+  // picker root instead. The picker also handles Esc / commit-close itself.
   useEffect(() => {
     if (!triageState) return;
-    const handler = () => setTriageState(null);
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.("[data-quickpicker='root']")) return;
+      setTriageState(null);
+    };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [triageState]);

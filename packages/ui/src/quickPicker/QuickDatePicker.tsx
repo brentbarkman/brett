@@ -149,9 +149,9 @@ export function QuickDatePicker({
     <div
       ref={popoverRef}
       role="dialog"
+      data-quickpicker="root"
       style={{ position: "fixed", top: pos.top, left: pos.left, width: 330 }}
       className="z-50 flex gap-2 rounded-xl border border-white/8 bg-[rgba(20,20,22,0.96)] p-2 shadow-2xl backdrop-blur-2xl"
-      onMouseDown={(e) => e.stopPropagation()}
     >
       <ChipColumn
         initialDate={initialDate}
@@ -197,11 +197,12 @@ function ChipColumn({
             key={preset}
             type="button"
             data-testid={`chip-${preset}`}
+            data-current={isCurrent ? "true" : "false"}
             onClick={() => onCommitPreset(preset)}
             className={[
-              "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left",
+              "relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left",
               isCurrent
-                ? "bg-brett-gold/20 border border-brett-gold/35"
+                ? "bg-brett-gold/25 ring-1 ring-brett-gold/60 ring-inset"
                 : "border border-transparent bg-white/[0.025] hover:bg-white/5",
             ].join(" ")}
           >
@@ -209,16 +210,16 @@ function ChipColumn({
               className={[
                 "flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-semibold",
                 isCurrent
-                  ? "bg-brett-gold/30 text-brett-gold"
+                  ? "bg-brett-gold text-black/80"
                   : "bg-white/10 text-white/70",
               ].join(" ")}
             >
               {DATE_PRESET_TO_LETTER[preset].toUpperCase()}
             </span>
-            <span className="flex-1">
+            <span className="flex-1 min-w-0">
               <span
                 className={[
-                  "block text-[10px] font-medium",
+                  "block text-[10px] font-medium truncate",
                   isCurrent ? "text-white" : "text-white/85",
                 ].join(" ")}
               >
@@ -226,13 +227,19 @@ function ChipColumn({
               </span>
               <span
                 className={[
-                  "block text-[8px]",
-                  isCurrent ? "text-brett-gold/70" : "text-white/40",
+                  "block text-[8px] truncate",
+                  isCurrent ? "text-brett-gold" : "text-white/40",
                 ].join(" ")}
               >
                 {presetSublabel(preset, now)}
               </span>
             </span>
+            {isCurrent && (
+              <span
+                aria-label="currently set"
+                className="ml-1 h-1.5 w-1.5 rounded-full bg-brett-gold"
+              />
+            )}
           </button>
         );
       })}

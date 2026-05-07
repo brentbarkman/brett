@@ -77,6 +77,25 @@ describe("useAnchoredPosition", () => {
     expect(popover.style.top).toBe("296px"); // anchor.top (600) − 300 − 4
   });
 
+  it("freezes position when the anchor is removed from the DOM", () => {
+    const anchor = makeAnchor({ top: 100, left: 400, right: 600, bottom: 140 });
+    const { getByTestId, rerender } = render(
+      <Probe anchor={anchor} popoverWidth={330} popoverHeight={300} />,
+    );
+    const popover = getByTestId("popover");
+    const initialTop = popover.style.top;
+    const initialLeft = popover.style.left;
+
+    // Detach the anchor, then trigger a resize to force recomputation.
+    anchor.remove();
+    window.dispatchEvent(new Event("resize"));
+    rerender(<Probe anchor={anchor} popoverWidth={330} popoverHeight={300} />);
+
+    // Position must NOT collapse to (0,0); it stays at the last known good value.
+    expect(popover.style.top).toBe(initialTop);
+    expect(popover.style.left).toBe(initialLeft);
+  });
+
   it("clamps left coordinate so popover stays inside the viewport", () => {
     // Anchor at left edge: bottom-end would put left at 100-330 = -230. Should clamp to gutter (8).
     const anchor = makeAnchor({ top: 100, left: 0, right: 100, bottom: 140 });
