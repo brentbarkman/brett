@@ -21,7 +21,9 @@ struct BackgroundServiceRendererTests {
 
     /// `BackgroundService.shared` is process-wide. Reset its renderer
     /// count to 0 between tests so accumulated state from one test
-    /// doesn't bleed into another.
+    /// doesn't bleed into another. Also clears the cached remote URL
+    /// so fallback-path tests start from a deterministic "no cache"
+    /// baseline regardless of UserDefaults state on the simulator.
     private func reset() {
         let svc = BackgroundService.shared
         // Drain the count without underflowing — call unregister until
@@ -29,6 +31,7 @@ struct BackgroundServiceRendererTests {
         while svc.debug_rendererCount > 0 {
             svc.unregisterRenderer()
         }
+        svc.debug_resetRemoteCache()
     }
 
     @Test func firstRegisterStartsTickTask() {

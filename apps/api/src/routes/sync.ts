@@ -8,7 +8,7 @@ import { publishSSE } from "../lib/sse.js";
 import { detectContentType } from "@brett/utils";
 import { runExtraction } from "../lib/content-extractor.js";
 import { paginatedPull, parseCursor } from "../lib/sync/paginated-pull.js";
-import { eventsOnVisibleCalendars } from "../lib/calendar-visibility.js";
+import { liveCalendarEventFilter } from "../lib/calendar-visibility.js";
 import type {
   SyncPullRequest, SyncPullResponse, SyncTableChanges,
   SyncPushRequest, SyncPushResponse, SyncMutation, SyncMutationResult,
@@ -268,16 +268,13 @@ export const sync = new Hono<AuthEnv>()
       const extraWhereLive: Record<string, unknown> = {};
       if (table === "calendar_events") {
         extraWhere.startTime = { gte: fourteenDaysAgo, lte: fourteenDaysAhead };
-        // Visibility filter applies to LIVE rows only. The corresponding
-        // tombstones MUST escape this filter — when the user toggles a
-        // calendar to hidden, the cascade soft-deletes its events; iOS
-        // can only purge them locally if the tombstone reaches /sync/pull's
-        // `deleted[]` array. Constraining the tombstone query by the
-        // (now-false) calendarList.isVisible flag would block exactly the
-        // delete signal we need to send. Keep the filter on the live
-        // path so a race between the cascade and a concurrent insert
-        // never surfaces a hidden-calendar event to the client.
-        Object.assign(extraWhereLive, eventsOnVisibleCalendars);
+        // Live-only filter (visibility + non-cancelled). The matching
+        // tombstones MUST escape this filter — both rules cascade soft-
+        // delete (visibility toggle and Google cancellation), and iOS
+        // can only purge the row locally if the tombstone reaches
+        // /sync/pull's `deleted[]` array. Constraining the tombstone
+        // query would block exactly the delete signal we need to send.
+        Object.assign(extraWhereLive, liveCalendarEventFilter);
       } else if (table === "items") {
         // Active work + just-completed. Excludes archived entirely;
         // older done items are fetched on-demand via /things and via

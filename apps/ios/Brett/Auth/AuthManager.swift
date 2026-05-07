@@ -108,7 +108,24 @@ final class AuthManager {
             // instead of SignInView while we're waiting for biometric unlock.
             isHydratingFromKeychain = true
         } else {
-            Task { [weak self] in await self?.hydrateFromKeychain(authContext: nil) }
+            // Synchronous keychain read so `isAuthenticated` reflects the
+            // stored token from the very first SwiftUI compose. Without
+            // this, RootView spends a few frames rendering SignInView for
+            // already-signed-in users before the async hydrate Task can
+            // flip `token` — visible as a one-frame flash of the login UI
+            // on every cold launch. Keychain reads with no LAContext are
+            // microsecond-fast, so the init-time blocking cost is
+            // negligible. The /users/me network refresh stays async.
+            do {
+                if let stored = try KeychainStore.readToken(authContext: nil) {
+                    self.token = stored
+                }
+            } catch {
+                BrettLog.auth.error("Sync keychain hydrate failed: \(String(describing: error), privacy: .public)")
+            }
+            if self.token != nil {
+                Task { [weak self] in await self?.refreshCurrentUser() }
+            }
         }
     }
 

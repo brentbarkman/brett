@@ -344,40 +344,10 @@ private struct RootView: View {
                 SignInView()
                     .transition(.opacity)
             }
-
-            // App-switcher privacy cover. When iOS transitions the scene
-            // to `.inactive` it snapshots the window for the task-switcher
-            // thumbnail. Without this overlay, that snapshot shows whatever
-            // the user had open — inbox contents, calendar events, chat
-            // threads — to anyone who swipes to the app switcher while the
-            // phone is unlocked.
-            //
-            // Why a Material instead of a fresh BackgroundView? A second
-            // BackgroundView spins up its own UserProfileStore, service
-            // load, displayedKey, and 60s tick timer, so it can land on a
-            // different image than MainContainer's BackgroundView and
-            // trigger a 1.5s crossfade just as the privacy cover fades in
-            // — the user-reported "background changes back and forth" on
-            // backgrounding. A Material blur sits over whatever's already
-            // mounted (MainContainer's wallpaper, SignInView, lock view)
-            // and obscures content without re-running the image pipeline.
-            //
-            // Intentionally outside the auth/lock switch so it covers
-            // SignInView too (email field) and BiometricLockView (less
-            // sensitive, but we may add recent-activity glances later).
-            if scenePhase != .active {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .zIndex(1000)
-                    .accessibilityHidden(true)
-            }
         }
         .animation(.easeInOut(duration: 0.35), value: authManager.isAuthenticated)
         .animation(.easeInOut(duration: 0.35), value: authManager.isHydratingFromKeychain)
         .animation(.easeInOut(duration: 0.25), value: lockManager.isLocked)
-        .animation(.easeInOut(duration: 0.15), value: scenePhase)
         // Biometric lock lifecycle only — sync/SSE are handled by AuthManager.
         .onChange(of: authManager.isAuthenticated) { _, isAuth in
             if isAuth {
