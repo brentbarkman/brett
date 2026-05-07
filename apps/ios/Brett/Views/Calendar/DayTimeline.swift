@@ -238,7 +238,19 @@ struct DayTimeline: View {
                 .padding(.vertical, 6)
                 Spacer()
             }
-            .frame(minHeight: max(height - 4, minHeight), alignment: .top)
+            // Use a fixed `height` (not `minHeight`) so the chip can't grow
+            // past its computed duration. The chip's HStack contains a
+            // vertical-fill `Rectangle` accent bar with no intrinsic height;
+            // when this frame had only a `minHeight`, the parent ZStack
+            // (sized to the full hour grid) proposed the grid's full height
+            // to the HStack, the Rectangle obligingly filled it, and every
+            // chip rendered from its `offset` down to the bottom of the
+            // visible window — regardless of the event's actual duration.
+            // PR #38 introduced the regression to fit a meta line; the fix
+            // is to keep PR #38's `minHeight` value as the floor (so short
+            // events with a meta line still fit their text inside the
+            // glass background) while pinning the upper bound to `height`.
+            .frame(height: max(height - 4, minHeight), alignment: .top)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.ultraThinMaterial)
