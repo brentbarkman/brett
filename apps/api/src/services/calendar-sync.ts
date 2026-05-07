@@ -586,7 +586,13 @@ export async function upsertEvents(
     // until resolveAttendeePhotos re-resolves them. myResponseStatus IS
     // updated from Google so RSVPs made outside Brett (Gmail, Calendar app,
     // phone) propagate.
-    const { attendees: _att, ...updateData } = eventData;
+    //
+    // Also clear `deletedAt`: events soft-deleted by the calendar
+    // visibility cascade (see PATCH /calendar/accounts/:id/calendars/:calId)
+    // get restored when the user re-shows the calendar and the next
+    // sync re-fetches them. Events Google has hard-deleted aren't in
+    // the fetch result, so they stay tombstoned naturally.
+    const { attendees: _att, ...updateData } = { ...eventData, deletedAt: null };
 
     const result = await prisma.calendarEvent.upsert({
       where: {

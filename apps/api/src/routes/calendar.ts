@@ -4,6 +4,7 @@ import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
 import { getCalendarClient, updateRsvp } from "../lib/google-calendar.js";
 import { onDemandFetch } from "../services/calendar-sync.js";
+import { eventsOnVisibleCalendars } from "../lib/calendar-visibility.js";
 import {
   validateRsvpInput,
   validateCalendarNoteInput,
@@ -59,24 +60,14 @@ calendar.get("/events", authMiddleware, async (c) => {
     return c.json({ error: "Invalid date format" }, 400);
   }
 
-  // Get visible calendar IDs for this user
-  const visibleCalendars = await prisma.calendarList.findMany({
-    where: {
-      googleAccount: { userId: user.id },
-      isVisible: true,
-    },
-    select: { id: true },
-  });
-
-  const calendarListIds = visibleCalendars.map((cal) => cal.id);
-  if (calendarListIds.length === 0) {
-    return c.json({ events: [] });
-  }
-
+  // Visibility filter is shared with /sync/pull via `eventsOnVisibleCalendars`
+  // so iOS and desktop see the same set of events. The relation filter
+  // replaces the previous two-step (fetch IDs → IN clause) with a single
+  // query — Prisma compiles it to a JOIN on `CalendarList.isVisible`.
   const events = await prisma.calendarEvent.findMany({
     where: {
       userId: user.id,
-      calendarListId: { in: calendarListIds },
+      ...eventsOnVisibleCalendars,
       startTime: { lte: end },
       endTime: { gte: start },
       status: { not: "cancelled" },
