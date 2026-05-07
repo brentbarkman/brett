@@ -62,7 +62,15 @@ export function QuickDatePicker({
 }: QuickDatePickerProps) {
   const today = useMemo(() => startOfDayUTC(now ?? new Date()), [now]);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const pos = useAnchoredPosition(anchorEl, popoverRef, { preferred: placement });
+  // Bumping `version` when `visible` flips forces useAnchoredPosition to
+  // re-measure once popoverRef.current has actually been attached to the DOM
+  // (otherwise the morph from QuickDatePicker → QuickListPicker would leave
+  // the newly-visible picker positioned at -9999, -9999 from its initial
+  // null-ref measurement).
+  const pos = useAnchoredPosition(anchorEl, popoverRef, {
+    preferred: placement,
+    version: visible ? 1 : 0,
+  });
 
   const [highlighted, setHighlighted] = useState<Date>(initialDate ?? today);
 

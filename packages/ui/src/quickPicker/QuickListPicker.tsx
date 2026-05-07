@@ -28,7 +28,13 @@ export function QuickListPicker({
   visible = true,
 }: QuickListPickerProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
-  const pos = useAnchoredPosition(anchorEl, popoverRef, { preferred: placement });
+  // See QuickDatePicker for the rationale: `version` flips when the picker
+  // becomes visible so useAnchoredPosition re-measures against the now-mounted
+  // popover element (the morph in TriageQuickPicker depends on this).
+  const pos = useAnchoredPosition(anchorEl, popoverRef, {
+    preferred: placement,
+    version: visible ? 1 : 0,
+  });
 
   const chips = useMemo(() => {
     const byId = new Map(lists.map((l) => [l.id, l]));
