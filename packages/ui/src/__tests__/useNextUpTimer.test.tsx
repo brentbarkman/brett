@@ -117,4 +117,24 @@ describe("useNextUpTimer event selection", () => {
     expect(result.current.event).toBeNull();
     expect(result.current.timer).toBeNull();
   });
+
+  it("does not select an event from a previous day even if its HH:MM is later than now", () => {
+    // Regression for "Up Next showing a thing from yesterday" after the
+    // desktop app stayed open across midnight. If the events list ever
+    // contains a previous-day event (e.g. because the calendar query
+    // bounds went stale on local-day rollover), the selection logic must
+    // not pick it just because its end-of-day HH:MM is greater than the
+    // current HH:MM.
+    vi.setSystemTime(new Date("2026-05-07T09:00:00"));
+    const events = [
+      makeEvent(
+        "yesterdays-3pm",
+        "2026-05-06T15:00:00",
+        "2026-05-06T16:00:00",
+      ),
+    ];
+    const { result } = renderHook(() => useNextUpTimer(events));
+    expect(result.current.event).toBeNull();
+    expect(result.current.timer).toBeNull();
+  });
 });

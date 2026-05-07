@@ -71,12 +71,16 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   const briefing = useBriefing();
   const summary = useBriefingSummary();
 
-  // Date boundaries — recomputed when the UTC day rolls over so tasks coming
-  // due today become visible without requiring an app reload.
+  // Date boundaries — recomputed when the user's LOCAL day rolls over so
+  // tasks coming due today become visible without requiring an app reload.
+  // todayKey is just the rollover trigger; the actual UTC ISO bounds come
+  // straight from `getTodayUTC()` / `getEndOfWeekUTC()` so they stay correct
+  // independent of the key's string format.
   const todayKey = useTodayKey();
-  const dueBefore = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
-  // todayKey is already `getTodayUTC().toISOString()`, so use it directly.
-  const completedAfter = todayKey;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dueBefore = useMemo(() => getEndOfWeekUTC(new Date()).toISOString(), [todayKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const completedAfter = useMemo(() => getTodayUTC().toISOString(), [todayKey]);
 
   // Two explicit queries: active items due this week or earlier, done items from today
   const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);

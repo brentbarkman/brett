@@ -26,6 +26,23 @@ export function parseTimeToMinutes(timeStr: string): number {
   return h * 60 + m;
 }
 
+/**
+ * Resolve a time string to an absolute epoch ms relative to a reference Date.
+ * ISO strings keep their own date; bare HH:MM is interpreted as that time on
+ * the reference date's local day. Used by selection so a stale events list
+ * (e.g. yesterday's calendar slipped through) cannot pick a previous-day
+ * event whose end-of-day HH:MM happens to be later than the current HH:MM.
+ */
+function parseTimeToMs(timeStr: string, ref: Date): number {
+  if (timeStr.includes("T") || timeStr.includes("-")) {
+    return new Date(timeStr).getTime();
+  }
+  const [h, m] = timeStr.split(":").map(Number);
+  const d = new Date(ref);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+
 function getNowMinutes(): number {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
@@ -45,10 +62,11 @@ function formatCountdown(minutesAway: number): string {
 
 function selectNextUpEvent(
   events: CalendarEventDisplay[],
-  now: number,
+  ref: Date,
 ): CalendarEventDisplay | null {
   if (!events.length) return null;
-  return events.find((e) => parseTimeToMinutes(e.endTime) > now) ?? null;
+  const nowMs = ref.getTime();
+  return events.find((e) => parseTimeToMs(e.endTime, ref) > nowMs) ?? null;
 }
 
 function computeNextUpState(
@@ -107,9 +125,21 @@ function compute(
   events: CalendarEventDisplay[],
   nowOverride?: string,
 ): NextUpResult {
-  const now = nowOverride ? parseTimeToMinutes(nowOverride) : getNowMinutes();
-  const event = selectNextUpEvent(events, now);
-  return { event, timer: computeNextUpState(event, now) };
+  // ref is a real Date so selection can compare full timestamps. nowOverride
+  // (HH:MM or ISO) is interpreted as that moment on today's local day, which
+  // matches the previous semantics for callers that supply a HH:MM string.
+  const ref = nowOverride ? buildRefFromOverride(nowOverride) : new Date();
+  const nowMin = nowOverride ? parseTimeToMinutes(nowOverride) : getNowMinutes();
+  const event = selectNextUpEvent(events, ref);
+  return { event, timer: computeNextUpState(event, nowMin) };
+}
+
+function buildRefFromOverride(s: string): Date {
+  if (s.includes("T") || s.includes("-")) return new Date(s);
+  const [h, m] = s.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
 }
 
 /**

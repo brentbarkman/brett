@@ -365,11 +365,11 @@ export function App() {
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   }
 
-  // Today's bounds — recomputed when the UTC day rolls over so queries that
-  // depend on "today" stay fresh without requiring an app reload.
+  // Today's bounds — recomputed when the user's local day rolls over so
+  // queries that depend on "today" stay fresh without requiring an app
+  // reload. todayKey is just the rollover trigger; the actual bounds come
+  // from `new Date()` so we don't need to encode them in the key.
   const todayKey = useTodayKey();
-  // todayKey triggers recompute on UTC day rollover; localDayBounds uses local
-  // day, so we can't derive it from todayKey directly.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const todayBounds = useMemo(() => localDayBounds(new Date()), [todayKey]);
 
