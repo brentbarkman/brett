@@ -1,8 +1,8 @@
 import React, { useState, useRef } from "react";
 import { Calendar, Bell, RotateCw } from "lucide-react";
 import type { DueDatePrecision, ReminderType, RecurrenceType } from "@brett/types";
-import { computeTriageResult, type TriageDatePreset } from "@brett/business";
 import { useClickOutside } from "./useClickOutside";
+import { QuickDatePicker } from "./quickPicker";
 
 interface ScheduleRowProps {
   dueDate?: string;
@@ -19,19 +19,26 @@ interface ScheduleCardProps {
   icon: React.ReactNode;
   label: string;
   value?: string;
-  children: (close: () => void) => React.ReactNode;
+  /** Legacy: renders content inside the card's own dropdown div (Reminder, Recurrence). */
+  children?: (close: () => void) => React.ReactNode;
+  /** New: renders a portal-anchored picker keyed off the card button. */
+  renderPicker?: (anchorEl: HTMLButtonElement | null, close: () => void) => React.ReactNode;
 }
 
-function ScheduleCard({ icon, label, value, children }: ScheduleCardProps) {
+function ScheduleCard({ icon, label, value, children, renderPicker }: ScheduleCardProps) {
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const close = () => setOpen(false);
-  useClickOutside(ref, close, open);
+  // Only attach click-outside for legacy children dropdown — the portal picker
+  // owns its own dismissal via App-level click-outside.
+  useClickOutside(ref, close, open && !!children);
 
   return (
     <div ref={ref} className="relative flex-1">
       <button
+        ref={buttonRef}
         onClick={() => setOpen((prev) => !prev)}
         className="w-full flex flex-col items-center gap-1.5 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer min-h-[76px] justify-center"
       >
@@ -47,11 +54,12 @@ function ScheduleCard({ icon, label, value, children }: ScheduleCardProps) {
           )}
         </span>
       </button>
-      {open && (
+      {open && children && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-black/80 backdrop-blur-xl rounded-lg border border-white/10 overflow-hidden z-10">
           {children(close)}
         </div>
       )}
+      {open && renderPicker && renderPicker(buttonRef.current, close)}
     </div>
   );
 }
@@ -79,31 +87,6 @@ function DropdownOption({
   );
 }
 
-function getUTCDatePrefix(iso: string): string {
-  return iso.slice(0, 10);
-}
-
-/** Preset options — must stay in sync with TriagePopup so the `d` shortcut
- *  and the thing panel dropdown produce identical dates. */
-const DATE_PRESETS: { preset: TriageDatePreset; label: string }[] = [
-  { preset: "today", label: "Today" },
-  { preset: "tomorrow", label: "Tomorrow" },
-  { preset: "this_week", label: "This Week" },
-  { preset: "next_week", label: "Next Week" },
-  { preset: "next_month", label: "Next Month" },
-];
-
-function isPresetActive(
-  preset: TriageDatePreset,
-  dueDate: string | undefined,
-  precision: DueDatePrecision | undefined
-): boolean {
-  if (!dueDate) return false;
-  const result = computeTriageResult(preset);
-  if (result.dueDatePrecision !== precision) return false;
-  return getUTCDatePrefix(result.dueDate) === getUTCDatePrefix(dueDate);
-}
-
 const reminderLabels: Record<ReminderType, string> = {
   morning_of: "Morning of",
   "1_hour_before": "1 hour before",
@@ -121,7 +104,7 @@ const recurrenceLabels: Record<RecurrenceType, string> = {
 export function ScheduleRow({
   dueDate,
   dueDateLabel,
-  dueDatePrecision,
+  dueDatePrecision: _dueDatePrecision,
   reminder,
   recurrence,
   onUpdateDueDate,
@@ -138,29 +121,19 @@ export function ScheduleRow({
           icon={<Calendar size={16} />}
           label="Due Date"
           value={dueDateLabel ?? (dueDate ? "Set" : undefined)}
-        >
-          {(close) => (
-            <>
-              {DATE_PRESETS.map(({ preset, label }) => (
-                <DropdownOption
-                  key={preset}
-                  label={label}
-                  isActive={isPresetActive(preset, dueDate, dueDatePrecision)}
-                  onClick={() => {
-                    const result = computeTriageResult(preset);
-                    onUpdateDueDate(result.dueDate, result.dueDatePrecision);
-                    close();
-                  }}
-                />
-              ))}
-              <DropdownOption
-                label="No date"
-                isActive={!dueDate}
-                onClick={() => { onUpdateDueDate(null, "day"); close(); }}
-              />
-            </>
+          renderPicker={(anchorEl, close) => (
+            <QuickDatePicker
+              anchorEl={anchorEl}
+              initialDate={dueDate ? new Date(dueDate) : null}
+              onCommit={(date) => {
+                onUpdateDueDate(date ? date.toISOString() : null, "day");
+                close();
+              }}
+              onCancel={close}
+              placement="bottom-start"
+            />
           )}
-        </ScheduleCard>
+        />
 
         <ScheduleCard
           icon={<Bell size={16} />}
