@@ -29,6 +29,17 @@ export { CrossFade } from "./CrossFade";
 export { InboxView } from "./InboxView";
 export { InboxItemRow } from "./InboxItemRow";
 export { TriagePopup } from "./TriagePopup";
+export {
+  QuickDatePicker,
+  QuickListPicker,
+  TriageQuickPicker,
+  useSuggestedLists,
+} from "./quickPicker";
+export type {
+  QuickDatePickerProps,
+  QuickListPickerProps,
+  TriageQuickPickerProps,
+} from "./quickPicker";
 export { InboxDragOverlay } from "./InboxDragOverlay";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { QuickAddInput } from "./QuickAddInput";
