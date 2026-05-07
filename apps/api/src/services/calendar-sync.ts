@@ -204,8 +204,19 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
       console.warn("[calendar-sync] Failed to refresh calendar list metadata:", err);
     }
 
+    // Filter to user-visible calendars. Without this, the reconciliation
+    // cron (every 4h) would refetch events on calendars the user has
+    // hidden via `isVisible: false`, and `upsertEvents`'s update-branch
+    // (which clears `deletedAt: null` to support the visibility-on
+    // cascade) would un-tombstone them — silently re-leaking events to
+    // iOS via /sync/pull every 4 hours. The visibility-off cascade in
+    // PATCH /calendar/accounts/.../calendars/... already removes the
+    // syncToken when toggled back on, so a calendar re-becoming visible
+    // does NOT need to roll forward through this filter to catch up:
+    // the next periodic incrementalSync after toggle picks the cleared
+    // syncToken up and full-fetches.
     const calendarLists = await prisma.calendarList.findMany({
-      where: { googleAccountId },
+      where: { googleAccountId, isVisible: true },
     });
 
     const changeset: SyncChangeset = { created: [], updated: [], deleted: [] };
