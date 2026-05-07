@@ -21,6 +21,8 @@ interface InboxItemRowProps {
   onReconnect?: () => void;
   reconnectPending?: boolean;
   onInstallUpdate?: () => void;
+  /** Forwards the row's DOM element so the parent can anchor a popover to it. */
+  onElementRef?: (el: HTMLDivElement | null) => void;
 }
 
 export function InboxItemRow({
@@ -39,6 +41,7 @@ export function InboxItemRow({
   onReconnect,
   reconnectPending,
   onInstallUpdate,
+  onElementRef,
 }: InboxItemRowProps) {
   const [completing, setCompleting] = useState(false);
   const shownTitle = useDisplayTitle(thing.id, thing.title, "thing");
@@ -99,6 +102,7 @@ export function InboxItemRow({
       ref={(node) => {
         setNodeRef(node);
         rowRef.current = node;
+        onElementRef?.(node);
       }}
       onClick={onClick}
       onFocus={onFocus}
