@@ -93,10 +93,29 @@ export type PaginatedPullArgs = {
 
   /**
    * Additional Prisma `where` clauses, AND-layered onto `userId` and the
-   * cursor filter. Use to narrow by status, listId, etc. Do NOT include
-   * `deletedAt` here — internal logic owns that key.
+   * cursor filter for BOTH the live query AND the tombstone query.
+   * Use to narrow by criteria that apply to both states (e.g. time
+   * range — we don't want tombstones outside the visible window). Do
+   * NOT include `deletedAt` here — internal logic owns that key.
+   *
+   * For filters that should ONLY constrain live rows (e.g. relation
+   * filters where the relation may be invalid for soft-deleted rows,
+   * or visibility flags whose toggle-off cascades a soft-delete and so
+   * the tombstone needs to escape the filter), pass `extraWhereLive`.
    */
   extraWhere?: Record<string, unknown>;
+
+  /**
+   * Additional Prisma `where` clauses applied ONLY to the live query
+   * — never to the tombstone query. Use for filters where the
+   * tombstone needs to escape the constraint so the client can still
+   * receive the delete signal. Example: calendar event visibility —
+   * an event on a calendar the user has hidden is soft-deleted by the
+   * cascade, but if the visibility filter were applied to the
+   * tombstone query, iOS would never see the deletion and the event
+   * would linger in local storage forever.
+   */
+  extraWhereLive?: Record<string, unknown>;
 
   /**
    * If true (default), tombstones are merged into the keyset stream and
@@ -187,7 +206,16 @@ function compareKeyset(a: { updatedAt: Date; id: string }, b: { updatedAt: Date;
 export async function paginatedPull<
   T extends { id: string; updatedAt: Date; deletedAt: Date | null },
 >(args: PaginatedPullArgs): Promise<PaginatedPullResult<T>> {
-  const { prismaModel, prismaClient, userId, cursor, limit, extraWhere = {}, includeTombstones = true } = args;
+  const {
+    prismaModel,
+    prismaClient,
+    userId,
+    cursor,
+    limit,
+    extraWhere = {},
+    extraWhereLive = {},
+    includeTombstones = true,
+  } = args;
 
   if (!Number.isInteger(limit) || limit < 1) {
     throw new Error(`paginatedPull: limit must be a positive integer (got ${limit})`);
@@ -195,18 +223,18 @@ export async function paginatedPull<
   if (!userId) {
     throw new Error("paginatedPull: userId is required");
   }
-  if ("deletedAt" in extraWhere) {
+  if ("deletedAt" in extraWhere || "deletedAt" in extraWhereLive) {
     // Reserve `deletedAt` ownership — it's how we bypass the soft-delete
     // extension for the tombstone query. A caller passing it would
     // either be clobbered (silent) or break the bypass (insidious).
-    throw new Error("paginatedPull: extraWhere must not include `deletedAt`");
+    throw new Error("paginatedPull: extraWhere/extraWhereLive must not include `deletedAt`");
   }
-  if ("userId" in extraWhere) {
+  if ("userId" in extraWhere || "userId" in extraWhereLive) {
     // Reserve `userId` ownership. If a caller passes a different userId,
     // the wrap below would still apply — and we'd happily query someone
     // else's rows. Fail loud rather than expose a defense-in-depth hole
     // for a future refactor.
-    throw new Error("paginatedPull: extraWhere must not include `userId`");
+    throw new Error("paginatedPull: extraWhere/extraWhereLive must not include `userId`");
   }
 
   const cursorParts = parseCursor(cursor);
@@ -218,9 +246,18 @@ export async function paginatedPull<
   // spread `{ userId, ...extraWhere, AND: [cursor] }` would overwrite a
   // caller's top-level `AND` because object spread can't merge
   // same-key arrays. The wrap below sidesteps that entirely.
-  function buildWhere(): Record<string, unknown> {
+  //
+  // `liveOnly = true` adds `extraWhereLive` to the AND chain — used by
+  // the live query so caller-supplied filters constrain only the
+  // currently-visible rows, never the tombstone stream (which must
+  // pass through unfiltered so soft-deleted rows still emit a delete
+  // signal to replicating clients regardless of why they were hidden).
+  function buildWhere(opts: { liveOnly: boolean }): Record<string, unknown> {
     const clauses: Array<Record<string, unknown>> = [{ userId }];
     if (Object.keys(extraWhere).length > 0) clauses.push(extraWhere);
+    if (opts.liveOnly && Object.keys(extraWhereLive).length > 0) {
+      clauses.push(extraWhereLive);
+    }
     if (cursorClause) clauses.push(cursorClause);
     return clauses.length === 1 ? clauses[0] : { AND: clauses };
   }
@@ -232,7 +269,7 @@ export async function paginatedPull<
   // Live query — soft-delete extension auto-filters to `deletedAt: null`
   // because the resulting `where` has no top-level `deletedAt` key.
   const liveArgs = {
-    where: buildWhere(),
+    where: buildWhere({ liveOnly: true }),
     orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
     take: limit + 1,
   };
@@ -244,7 +281,7 @@ export async function paginatedPull<
   // the tombstone filter and silently returning zero rows.
   const deadArgs = includeTombstones
     ? {
-        where: { ...buildWhere(), deletedAt: { not: null } },
+        where: { ...buildWhere({ liveOnly: false }), deletedAt: { not: null } },
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         take: limit + 1,
       }
