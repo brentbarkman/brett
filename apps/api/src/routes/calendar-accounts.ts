@@ -9,7 +9,7 @@ import {
   stopWatch,
 } from "../lib/google-calendar.js";
 import { encryptToken } from "../lib/encryption.js";
-import { initialSync } from "../services/calendar-sync.js";
+import { initialSync, incrementalSync } from "../services/calendar-sync.js";
 import { resolveRelinkTask } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { google } from "googleapis";
@@ -328,11 +328,48 @@ calendarAccounts.patch("/:accountId/calendars/:calId", authMiddleware, async (c)
 
   const body = await c.req.json();
   const isVisible = typeof body.isVisible === "boolean" ? body.isVisible : calendar.isVisible;
+  const flipped = calendar.isVisible !== isVisible;
 
   const updated = await prisma.calendarList.update({
     where: { id: calendar.id },
     data: { isVisible },
   });
+
+  // Cascade visibility into the events table.
+  //
+  // Hide → soft-delete every event on the calendar. iOS clients pick up
+  // tombstones via /sync/pull and remove the events from their local
+  // cache; without this, sync-pull's `isVisible` filter only gates
+  // *future* events, leaving already-replicated rows behind forever.
+  //
+  // Show → clear the calendar's syncToken so the next incrementalSync
+  // does a full re-fetch from Google, then trigger the sync.
+  // `upsertEvents` clears `deletedAt` on the UPDATE branch, so events
+  // Google still has come back to life; events Google deleted during
+  // the hidden window stay tombstoned because they're never returned
+  // by the full fetch (Google omits hard-deleted events from
+  // `events.list` without a syncToken). Avoids zombie ghost entries
+  // a blanket un-soft-delete would create.
+  if (flipped) {
+    const now = new Date();
+    if (!isVisible) {
+      await prisma.calendarEvent.updateMany({
+        where: { calendarListId: calendar.id, deletedAt: null },
+        data: { deletedAt: now, updatedAt: now },
+      });
+    } else {
+      await prisma.calendarList.update({
+        where: { id: calendar.id },
+        data: { syncToken: null },
+      });
+      // Fire-and-forget — best-effort, not awaited so the PATCH stays
+      // snappy. If it fails (rate limit, network), the next periodic
+      // incrementalSync picks the cleared syncToken up and full-fetches.
+      incrementalSync(accountId).catch((err) => {
+        console.error("[calendar-accounts] post-toggle sync failed:", err);
+      });
+    }
+  }
 
   return c.json({
     id: updated.id,

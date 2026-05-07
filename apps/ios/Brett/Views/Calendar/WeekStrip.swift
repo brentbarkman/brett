@@ -71,6 +71,7 @@ struct WeekStrip: View {
                         .font(.system(size: 15, weight: isToday ? .bold : .regular))
                         .foregroundStyle(isToday ? .black : Color.white.opacity(isSelected ? 1.0 : 0.85))
                 }
+                .frame(width: 34, height: 34)
 
                 HStack(spacing: 3) {
                     if dots.isEmpty {

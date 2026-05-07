@@ -317,6 +317,93 @@ describe("POST /sync/pull", () => {
     expect(eventIds).toContain(recentEventId);
   });
 
+  it("excludes calendar events from invisible calendars (matches /calendar/events filter)", async () => {
+    clearAllRateLimits();
+
+    const visUser = await createTestUser("Visibility Sync User");
+
+    const googleAccountId = generateId();
+    await prisma.googleAccount.create({
+      data: {
+        id: googleAccountId,
+        userId: visUser.userId,
+        googleEmail: "vis-test@gmail.com",
+        googleUserId: `google-vis-${googleAccountId}`,
+        accessToken: encryptToken("fake-access-token"),
+        refreshToken: encryptToken("fake-refresh-token"),
+        tokenExpiresAt: new Date(Date.now() + 3600 * 1000),
+      },
+    });
+
+    // Two calendars: one visible (should sync), one hidden (should not).
+    const visibleCalId = generateId();
+    const hiddenCalId = generateId();
+    await prisma.calendarList.createMany({
+      data: [
+        {
+          id: visibleCalId,
+          googleAccountId,
+          googleCalendarId: "vis-primary",
+          name: "Mine",
+          color: "#4285f4",
+          isVisible: true,
+          isPrimary: true,
+        },
+        {
+          id: hiddenCalId,
+          googleAccountId,
+          googleCalendarId: "vis-shared",
+          name: "Shared (hidden)",
+          color: "#a142f4",
+          isVisible: false,
+          isPrimary: false,
+        },
+      ],
+    });
+
+    const visibleEventId = generateId();
+    const hiddenEventId = generateId();
+    const now = new Date();
+    await prisma.calendarEvent.createMany({
+      data: [
+        {
+          id: visibleEventId,
+          userId: visUser.userId,
+          googleAccountId,
+          calendarListId: visibleCalId,
+          googleEventId: `vis-evt-${visibleEventId}`,
+          title: "Visible event",
+          startTime: now,
+          endTime: new Date(now.getTime() + 3600 * 1000),
+        },
+        {
+          id: hiddenEventId,
+          userId: visUser.userId,
+          googleAccountId,
+          calendarListId: hiddenCalId,
+          googleEventId: `hid-evt-${hiddenEventId}`,
+          title: "Event on hidden calendar",
+          startTime: now,
+          endTime: new Date(now.getTime() + 3600 * 1000),
+        },
+      ],
+    });
+
+    const res = await authRequest("/sync/pull", visUser.token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+
+    const eventIds = body.changes.calendar_events.upserted.map((e: any) => e.id);
+    expect(eventIds).toContain(visibleEventId);
+    // Pre-fix: iOS replicated this row even though desktop's
+    // /calendar/events filter hides it. Post-fix: /sync/pull also
+    // applies the visibility filter so the two clients agree.
+    expect(eventIds).not.toContain(hiddenEventId);
+  });
+
   // ── On-demand sync filters (perf-driven hot/cold split) ──
 
   it("items filter: archived items are excluded from sync", async () => {
