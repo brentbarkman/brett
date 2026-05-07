@@ -8,7 +8,6 @@ import {
   ThingsList,
   ThingsEmptyState,
   CrossFade,
-  TriagePopup,
   SkeletonListView,
 } from "@brett/ui";
 import type { OmnibarProps, NextUpTimerState } from "@brett/ui";
@@ -28,7 +27,12 @@ import { useTodayKey } from "../hooks/useTodayKey";
 interface TodayViewProps {
   lists: NavList[];
   onItemClick: (item: Thing | CalendarEventDisplay) => void;
-  onTriageOpen: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen: (
+    mode: "list-first" | "date-first" | "list-only" | "date-only",
+    ids: string[],
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    anchorEl?: HTMLElement | null,
+  ) => void;
   onFocusChange?: (thing: Thing) => void;
   omnibarProps: OmnibarProps;
   nextUpEvent?: CalendarEventDisplay | null;

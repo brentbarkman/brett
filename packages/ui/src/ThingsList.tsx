@@ -13,7 +13,12 @@ interface ThingsListProps {
   onToggle?: (id: string) => void;
   onAdd: (title: string, listId: string | null) => void;
   onAddContent?: (url: string) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (
+    mode: "list-first" | "date-first" | "list-only" | "date-only",
+    ids: string[],
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    anchorEl?: HTMLElement | null,
+  ) => void;
   /** Called when keyboard nav changes focused item (for live detail panel updates) */
   onFocusChange?: (thing: Thing) => void;
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
@@ -43,6 +48,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
     return { uncompleted, done, grouped, allItems };
   })();
   const quickAddRef = useRef<QuickAddInputHandle>(null);
+  const cardEls = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
     items: allItems,
@@ -54,12 +60,14 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
       if (!focusedThing || !onTriageOpen) return false;
       if (e.key === "l") {
         e.preventDefault();
-        onTriageOpen("list-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        const anchor = cardEls.current.get(focusedThing.id) ?? null;
+        onTriageOpen("list-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision }, anchor);
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
-        onTriageOpen("date-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        const anchor = cardEls.current.get(focusedThing.id) ?? null;
+        onTriageOpen("date-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision }, anchor);
         return true;
       }
       return false;
@@ -93,13 +101,13 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           {header && <div>{header}</div>}
 
           {grouped.overdue.length > 0 && (
-            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
+            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} />
           )}
           {grouped.today.length > 0 && (
-            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
+            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} />
           )}
           {grouped.this_week.length > 0 && (
-            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
+            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} />
           )}
 
           {hasUncompleted && (
@@ -108,7 +116,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
 
           {done.length > 0 && (
             <div>
-              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
+              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} />
             </div>
           )}
         </div>
@@ -146,6 +154,7 @@ function Section({
   onReconnect,
   reconnectPendingSourceId,
   onInstallUpdate,
+  cardEls,
 }: {
   title: string;
   things: Thing[];
@@ -156,6 +165,7 @@ function Section({
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
   onInstallUpdate?: () => void;
+  cardEls: React.RefObject<Map<string, HTMLDivElement>>;
 }) {
   return (
     <div>
@@ -173,6 +183,10 @@ function Section({
               : undefined}
             reconnectPending={item.sourceId === reconnectPendingSourceId}
             onInstallUpdate={item.sourceId === "system:update" ? onInstallUpdate : undefined}
+            onElementRef={(el) => {
+              if (el) cardEls.current.set(item.id, el);
+              else cardEls.current.delete(item.id);
+            }}
           />
         ))}
       </div>

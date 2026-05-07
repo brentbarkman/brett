@@ -23,7 +23,9 @@ import {
   useNextUpTimer,
   DetailPanel,
   InboxView,
-  TriagePopup,
+  QuickDatePicker,
+  QuickListPicker,
+  TriageQuickPicker,
   InboxDragOverlay,
   ConfirmDialog,
   AppDropZone,
@@ -251,13 +253,23 @@ export function App() {
   const [selectedScoutId, setSelectedScoutId] = useState<string | null>(null);
   const [scoutRunning, setScoutRunning] = useState(false);
 
-  // Triage popup state
+  // Triage popup state.
+  // For Inbox triage (mode = list-first / date-first), pendingDate /
+  // pendingListId hold the user's first commit until the picker closes,
+  // so we only fire one mutation per triage flow. This keeps the row
+  // visible in the inbox during the morph between pickers; otherwise the
+  // first commit refetches the inbox and the row disappears underneath.
+  // `undefined` means "user did not commit this field"; an explicit value
+  // (including `null`) means they did and it gets flushed on close.
   const [triageState, setTriageState] = useState<{
     mode: "list-first" | "date-first" | "list-only" | "date-only";
     ids: string[];
     currentListId?: string | null;
     currentDueDate?: string | null;
     currentDueDatePrecision?: "day" | "week" | null;
+    anchorEl?: HTMLElement | null;
+    pendingDate?: Date | null;
+    pendingListId?: string | null;
   } | null>(null);
 
   // Semantic list suggestions for the active triage item
@@ -448,6 +460,20 @@ export function App() {
 
   // Active things for link search
   const { data: allActiveThings = [] } = useThings({ status: "active" });
+
+  // Recent list IDs — for the QuickListPicker chip column when AI suggestions
+  // aren't available. Order = most-recent activity first, dedup'd.
+  const recentListIds = useMemo(() => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const t of allActiveThings) {
+      if (!t.listId || seen.has(t.listId)) continue;
+      seen.add(t.listId);
+      out.push(t.listId);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }, [allActiveThings]);
 
   // Search items for linked items
   const handleSearchItems = async (query: string) => {
@@ -826,12 +852,14 @@ export function App() {
     document.documentElement.classList.add("dark");
   }, []);
 
-  // Handle escape key to close detail panel or navigate back from scout detail
+  // Handle escape key to close detail panel or navigate back from scout detail.
+  // The quick pickers handle their own Esc; this only catches Esc when no
+  // picker is open, so closing the detail panel still works.
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (triageState) {
-          setTriageState(null);
+          closeTriageWithFlush();
           return;
         }
         if (isDetailOpen) {
@@ -848,6 +876,21 @@ export function App() {
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [triageState, isDetailOpen, location.pathname, selectedScoutId]);
+
+  // Click-outside dismissal for the quick pickers. We can't rely on synthetic
+  // stopPropagation here — React 17+ synthetic events don't stop native
+  // bubbling to document listeners — so we filter by a data attribute on the
+  // picker root instead. The picker also handles Esc / commit-close itself.
+  useEffect(() => {
+    if (!triageState) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.("[data-quickpicker='root']")) return;
+      closeTriageWithFlush();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [triageState]);
 
   const handleItemClick = (item: Thing | CalendarEventDisplay) => {
     setSelectedItem(item);
@@ -1014,23 +1057,46 @@ export function App() {
     handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
   };
 
-  const handleTriageOpen = (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => {
-    setTriageState({ mode, ids, currentListId: thing?.listId, currentDueDate: thing?.dueDate, currentDueDatePrecision: thing?.dueDatePrecision });
-  };
-
-  const handleTriageConfirm = (updates: {
-    listId?: string | null;
-    dueDate?: string | null;
-    dueDatePrecision?: "day" | "week" | null;
-  }) => {
-    if (triageState) {
-      handleInboxTriage(triageState.ids, updates);
-    }
-    setTriageState(null);
+  const handleTriageOpen = (
+    mode: "list-first" | "date-first" | "list-only" | "date-only",
+    ids: string[],
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    anchorEl?: HTMLElement | null,
+  ) => {
+    setTriageState({
+      mode,
+      ids,
+      currentListId: thing?.listId,
+      currentDueDate: thing?.dueDate,
+      currentDueDatePrecision: thing?.dueDatePrecision,
+      anchorEl: anchorEl ?? null,
+    });
   };
 
   const handleTriageCancel = () => {
     setTriageState(null);
+  };
+
+  // Close the triage popup, flushing any pending Inbox commits. Called by
+  // TriageQuickPicker.onClose, the Escape effect, and click-outside.
+  // Today/list flows (date-only, list-only) commit immediately and never
+  // populate pendingDate/pendingListId, so the flush is a no-op for them.
+  const closeTriageWithFlush = () => {
+    setTriageState((s) => {
+      if (!s) return null;
+      const updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null } = {};
+      if (s.pendingDate !== undefined) {
+        updates.dueDate = s.pendingDate ? s.pendingDate.toISOString() : null;
+        updates.dueDatePrecision = s.pendingDate ? "day" : null;
+      }
+      if (s.pendingListId !== undefined) {
+        updates.listId = s.pendingListId;
+      }
+      if (Object.keys(updates).length > 0) {
+        handleInboxTriage(s.ids, updates);
+      }
+      return null;
+    });
   };
 
   const handleArchiveList = (id: string, knownIncompleteCount?: number) => {
@@ -1519,21 +1585,71 @@ export function App() {
           )}
         </DragOverlay>
 
-        {/* Triage popup (global — works from any view) */}
-        {triageState && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-2xl">
-            <TriagePopup
-              mode={triageState.mode}
+        {/* Quick pickers — anchored to the row that triggered the open */}
+        {triageState && triageState.anchorEl && (() => {
+          const initialDate = triageState.currentDueDate ? new Date(triageState.currentDueDate) : null;
+          const aiSuggestions = listSuggestionsData?.suggestions;
+          const suggestedListIds = aiSuggestions && aiSuggestions.length > 0
+            ? aiSuggestions.map((s) => s.listId)
+            : recentListIds;
+          const suggestionMode: "suggested" | "recent" | "empty" =
+            aiSuggestions && aiSuggestions.length > 0 ? "suggested"
+              : recentListIds.length > 0 ? "recent" : "empty";
+
+          if (triageState.mode === "list-first" || triageState.mode === "date-first") {
+            return (
+              <TriageQuickPicker
+                anchorEl={triageState.anchorEl}
+                initialDate={initialDate}
+                initialListId={triageState.currentListId ?? null}
+                lists={lists}
+                suggestedListIds={suggestedListIds}
+                suggestionMode={suggestionMode}
+                startWith={triageState.mode === "list-first" ? "list" : "date"}
+                onCommitDate={(date) =>
+                  setTriageState((s) => (s ? { ...s, pendingDate: date } : s))
+                }
+                onCommitList={(listId) =>
+                  setTriageState((s) => (s ? { ...s, pendingListId: listId } : s))
+                }
+                onClose={closeTriageWithFlush}
+              />
+            );
+          }
+
+          if (triageState.mode === "date-only") {
+            return (
+              <QuickDatePicker
+                anchorEl={triageState.anchorEl}
+                initialDate={initialDate}
+                onCommit={(date) => {
+                  handleInboxTriage(triageState.ids, {
+                    dueDate: date ? date.toISOString() : null,
+                    dueDatePrecision: date ? "day" : null,
+                  });
+                  handleTriageCancel();
+                }}
+                onCancel={handleTriageCancel}
+              />
+            );
+          }
+
+          // list-only
+          return (
+            <QuickListPicker
+              anchorEl={triageState.anchorEl}
+              initialListId={triageState.currentListId ?? null}
               lists={lists}
-              currentListId={triageState.currentListId}
-              currentDueDate={triageState.currentDueDate}
-              currentDueDatePrecision={triageState.currentDueDatePrecision}
-              suggestedLists={listSuggestionsData?.suggestions}
-              onConfirm={handleTriageConfirm}
+              suggestedListIds={suggestedListIds}
+              suggestionMode={suggestionMode}
+              onCommit={(listId) => {
+                handleInboxTriage(triageState.ids, { listId });
+                handleTriageCancel();
+              }}
               onCancel={handleTriageCancel}
             />
-          </div>
-        )}
+          );
+        })()}
 
         {/* Delete list confirmation */}
         {deleteListConfirm && (

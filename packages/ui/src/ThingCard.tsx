@@ -14,9 +14,11 @@ interface ThingCardProps {
   onReconnect?: () => void;
   reconnectPending?: boolean;
   onInstallUpdate?: () => void;
+  /** Forwards the card's DOM element so the parent can anchor a popover to it. */
+  onElementRef?: (el: HTMLDivElement | null) => void;
 }
 
-export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending, onInstallUpdate }: ThingCardProps) {
+export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending, onInstallUpdate, onElementRef }: ThingCardProps) {
   const shownTitle = useDisplayTitle(thing.id, thing.title, "thing");
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
@@ -93,6 +95,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       ref={(node) => {
         setNodeRef(node);
         cardRef.current = node;
+        onElementRef?.(node);
       }}
       {...attributes}
       {...listeners}
