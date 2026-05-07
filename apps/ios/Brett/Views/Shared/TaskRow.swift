@@ -488,27 +488,15 @@ struct TaskRow: View {
 
     // MARK: - Real-Item formatters
 
-    private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter
-    }()
-
-    /// Time whisper — render the time-of-day when the due date
-    /// carries one ("9:00 am"); for overdue items without a time-of-
-    /// day fall back to the weekday name ("Friday", "Wednesday") so
-    /// the row tells the user *when* it slipped without resorting to
-    /// "X days overdue" math (the section header already says
-    /// OVERDUE). Items in any non-overdue bucket without a time
-    /// stay quiet — `nil` means "no time whisper, skip the segment."
+    /// Overdue whisper — render the weekday name ("Friday",
+    /// "Wednesday") for items whose due date has slipped, so the row
+    /// tells the user *when* it slipped without resorting to "X days
+    /// overdue" math (the section header already says OVERDUE). We
+    /// don't render time-of-day; there's no UI to set a time on a
+    /// task and desktop's `ThingCard` doesn't display one either.
+    /// `nil` means "no whisper, skip the segment."
     private static func timeLabel(for item: Item) -> String? {
         guard let due = item.dueDate else { return nil }
-        let comps = Calendar.current.dateComponents([.hour, .minute], from: due)
-        let hasTimeOfDay = (comps.hour ?? 0) != 0 || (comps.minute ?? 0) != 0
-        if hasTimeOfDay {
-            return timeFormatter.string(from: due).lowercased()
-        }
-        // Overdue + midnight-only date → weekday whisper.
         if due < Calendar.current.startOfDay(for: Date()) {
             return weekdayFormatter.string(from: due)
         }
