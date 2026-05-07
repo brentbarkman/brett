@@ -107,6 +107,20 @@ final class BackgroundService {
     /// type to leak internals.
     var debug_rendererCount: Int { rendererCount }
     var debug_hasTickTask: Bool { tickTask != nil }
+
+    /// Reset the cached remote URL state so a test starts from a known
+    /// "first launch ever" baseline. Necessary because the singleton
+    /// caches `currentRemoteURL` from `UserDefaults` at init, and tests
+    /// asserting on the no-cache fallback path would otherwise be
+    /// non-deterministic across simulator runs that have ever opened
+    /// the app.
+    func debug_resetRemoteCache() {
+        currentRemoteURL = nil
+        currentFallbackAsset = ""
+        currentSolidColor = nil
+        displayedKey = ""
+        Self.cachedRemoteURL = nil
+    }
     #endif
 
     /// Profile values last pushed by a renderer. All renderers see the
@@ -296,36 +310,78 @@ final class BackgroundService {
         }
     }
 
+    /// Pause the 60s rotation timer. Called from the scene-phase
+    /// `.background` handler so a backgrounded process isn't holding a
+    /// `Task.sleep` that will count wall-time toward the next rotation
+    /// during suspension. Without this, a >60s background period causes
+    /// the tick to fire immediately on resume — crossfading the
+    /// wallpaper to a different random photo from the same tier *while*
+    /// `MainContainer.replayAwakening()` is playing the warm-launch
+    /// reveal. Idempotent.
+    func pauseRotation() {
+        tickTask?.cancel()
+        tickTask = nil
+    }
+
+    /// Restart the 60s rotation timer with a fresh window. Called from
+    /// the scene-phase `.active` handler so the user gets a full 60
+    /// seconds of viewing the same wallpaper after foregrounding before
+    /// the next rotation. No-op if no renderer is currently mounted —
+    /// the next `registerRenderer()` will start the tick on its own.
+    /// Idempotent.
+    func resumeRotation() {
+        guard rendererCount > 0, tickTask == nil else { return }
+        startTick()
+    }
+
     /// Push the latest user profile values from a renderer. Recomputes
     /// the rendered state immediately so user-driven changes (picking a
     /// new wallpaper in Settings) reflect without waiting for the next
     /// 60s tick. Multiple renderers all push the same profile (they all
     /// observe the same SwiftData row), so last-writer-wins is correct.
     func updateProfile(style: String?, pinned: String?, initial: Bool = false) {
+        // `initial:` is no longer consulted — recompute now preserves
+        // the cached auto-mode URL by default and a separate `rotate()`
+        // handles explicit fresh picks. The parameter is kept for
+        // call-site compatibility (BackgroundView, tests) but ignored.
+        _ = initial
         lastProfileStyle = style
         lastProfilePinned = pinned
-        recompute(initial: initial)
+        recompute()
     }
 
-    /// One tick of the 60s loop. Crosses time-of-day segments, picks a
-    /// new manifest image when appropriate, and bumps `displayedKey` so
-    /// the renderer's crossfade transition fires.
+    /// One tick of the 60s loop. Picks a fresh photo from the current
+    /// time-of-day tier (auto mode only) so the wallpaper rotates
+    /// while the app is open. `recompute()` preserves the cached URL
+    /// instead of repicking, so the tick is the ONLY path that
+    /// deliberately rotates the auto-mode photo.
     private func startTick() {
         tickTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
                 if Task.isCancelled { return }
-                self?.recompute(initial: false)
+                self?.rotate()
             }
         }
     }
 
     /// Resolve `currentSolidColor` / `currentRemoteURL` / `currentFallbackAsset`
-    /// from the last-known profile values. `initial: true` skips the
-    /// `displayedKey` change when the new key is the same — protects
-    /// the cold-launch path from triggering an unnecessary crossfade
-    /// from the cached remote URL to itself.
-    private func recompute(initial: Bool) {
+    /// from the last-known profile values.
+    ///
+    /// **Auto mode preserves the cached URL.** Cold launch jank used to
+    /// look like: cached photo paints → BackgroundView.onAppear runs
+    /// updateProfile → recompute downgrades to a bundled asset (manifest
+    /// not loaded yet) → BackgroundView.task awaits load() → updateProfile
+    /// runs again → currentImageURL picks a *different* random photo
+    /// from the same tier → crossfade. Two visible swaps every launch.
+    ///
+    /// Now: in auto mode (no pinned image), if `currentRemoteURL`
+    /// already has a value (either from the UserDefaults cache at init
+    /// or from a prior tick this process), recompute keeps it.
+    /// Explicit settings changes (pinned image, solid style, style
+    /// switch) still reroute through the appropriate branches below;
+    /// the 60s ticker calls `rotate()` for fresh picks.
+    private func recompute() {
         let style = lastProfileStyle ?? Style.photography.rawValue
         let pinned = lastProfilePinned
 
@@ -358,29 +414,45 @@ final class BackgroundService {
             return style
         }()
 
-        if let url = currentImageURL(style: effectiveStyle, pinned: pinned) {
+        // Pinned-image path: user picked a specific photo, honor it.
+        // (`solid:` sentinels are handled in the solid branch above.)
+        if let pinned, !pinned.hasPrefix("solid:") {
+            if let url = currentImageURL(style: effectiveStyle, pinned: pinned) {
+                applyRemote(url: url)
+                return
+            }
+            // currentImageURL needs `storageBaseUrl`; if it isn't loaded
+            // yet (cold launch, before /config returns), keep the cached
+            // URL rather than downgrading to a bundled asset. The
+            // post-load `updateProfile` call will rerun this branch with
+            // the URL resolvable — usually the same URL the cache held,
+            // so no crossfade fires.
+            if currentRemoteURL != nil { return }
+        } else if let cached = currentRemoteURL {
+            // Auto mode + we already have a cached URL painted (either
+            // from UserDefaults at init or set by a prior `rotate()`
+            // tick this process). Keep it — refreshing the wash sample
+            // along the way — instead of picking a fresh random URL
+            // that would trigger a crossfade to a different photo
+            // from the same tier.
             currentSolidColor = nil
-            currentRemoteURL = url
             currentFallbackAsset = ""
-            // Set wash from the disk cache synchronously when we have
-            // it (avoids a default-color flash on cold launch). When
-            // we don't, ride the default until `kickWashSample(...)`
-            // resolves the download + sample on a background task and
-            // writes the real value back. SwiftUI re-paints any
-            // subscribed view automatically because `currentWashColor`
-            // is a stored `@Observable` property.
-            currentWashColor = WashColorSampler.cachedWash(forURL: url)
+            currentWashColor = WashColorSampler.cachedWash(forURL: cached)
                 ?? Self.defaultWashColor
-            kickWashSample(url: url)
-            Self.cachedRemoteURL = url
-            let key = url.absoluteString
-            if displayedKey != key { displayedKey = key }
+            kickWashSample(url: cached)
+            return
+        } else if let url = currentImageURL(style: effectiveStyle, pinned: nil) {
+            // Auto mode, first launch ever (no cached URL). Pick fresh
+            // from the manifest. Subsequent launches enter the cached
+            // branch above and skip this.
+            applyRemote(url: url)
             return
         }
 
-        // Service hasn't loaded yet (cold launch, offline) — fall back
-        // to the bundled asset for the current hour. Renderer paints
-        // this without a crossfade so the user never sees a blank screen.
+        // Service hasn't loaded yet (cold launch, offline) AND no
+        // cached URL to fall back to — paint the bundled asset for
+        // the current hour so the user never sees a blank screen.
+        // Renderer paints this without a crossfade.
         let asset = Self.assetNameForHour(Calendar.current.component(.hour, from: Date()))
         currentSolidColor = nil
         currentRemoteURL = nil
@@ -391,6 +463,60 @@ final class BackgroundService {
         currentWashColor = WashColorSampler.sampledWash(forAssetNamed: asset)
             ?? Self.defaultWashColor
         if displayedKey != asset { displayedKey = asset }
+    }
+
+    /// Force a fresh random pick from the manifest in auto mode. Called
+    /// by the 60s ticker so the wallpaper rotates while the app is open.
+    /// In pinned/solid modes this just routes through `recompute()` to
+    /// pick up any setting changes — there's nothing to "rotate" in
+    /// those modes.
+    private func rotate() {
+        let style = lastProfileStyle ?? Style.photography.rawValue
+        let pinned = lastProfilePinned
+
+        // Pinned image or solid color: nothing to rotate, just sync any
+        // setting changes through the normal recompute path.
+        if style == Style.solid.rawValue
+            || (pinned != nil && !(pinned?.hasPrefix("solid:") ?? false)) {
+            recompute()
+            return
+        }
+
+        let effectiveStyle: String = {
+            if style == Style.solid.rawValue { return Style.photography.rawValue }
+            return style
+        }()
+
+        // Auto mode — explicit fresh pick. If currentImageURL can't
+        // resolve (manifest not loaded), fall back to recompute which
+        // will preserve cached state or render the bundled asset.
+        if let url = currentImageURL(style: effectiveStyle, pinned: nil) {
+            applyRemote(url: url)
+        } else {
+            recompute()
+        }
+    }
+
+    /// Apply a remote URL: set state, sample wash, persist to cache,
+    /// bump displayedKey. Shared by `recompute()` and `rotate()` so the
+    /// "set up state for a remote photo" sequence is consistent.
+    private func applyRemote(url: URL) {
+        currentSolidColor = nil
+        currentRemoteURL = url
+        currentFallbackAsset = ""
+        // Set wash from the disk cache synchronously when we have
+        // it (avoids a default-color flash on cold launch). When we
+        // don't, ride the default until `kickWashSample(...)` resolves
+        // the download + sample on a background task and writes the
+        // real value back. SwiftUI re-paints any subscribed view
+        // automatically because `currentWashColor` is a stored
+        // `@Observable` property.
+        currentWashColor = WashColorSampler.cachedWash(forURL: url)
+            ?? Self.defaultWashColor
+        kickWashSample(url: url)
+        Self.cachedRemoteURL = url
+        let key = url.absoluteString
+        if displayedKey != key { displayedKey = key }
     }
 
     /// Async sample for a remote photo — kicks off only when the cache

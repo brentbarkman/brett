@@ -118,14 +118,6 @@ final class AwakeningState {
             heroOpacity = 1.0
         }
     }
-
-    /// Snap back to 0 (no animation) so the next `playReveal()` has a
-    /// visible delta to animate. Used by the warm-reentry path before
-    /// a `playReveal()` on the next runloop tick.
-    func resetForReplay() {
-        contentOpacity = 0
-        heroOpacity = 0
-    }
 }
 
 struct MainContainer: View {
@@ -337,22 +329,36 @@ struct MainContainer: View {
             //   background → inactive → active    (returning)
             // so a literal `previous == .background` check on the
             // immediate transition never matches. Track the prior
-            // background state explicitly via `wasBackgrounded`: set it
-            // on entering `.background`, fire the replay on the next
-            // `.active` we see and clear the flag. Skipped under Reduce
-            // Motion and before the first cold-launch reveal (the cold
-            // path's own `.task` / `hasCompletedInitialSync` observer
-            // handles that case).
+            // background state explicitly via `wasBackgrounded` so the
+            // resume path only fires after a real background trip
+            // (skipping the brief `.inactive` flicker from a
+            // notification banner / control-center pull).
+            //
+            // No awakening replay on warm reentry — without an
+            // app-switcher privacy cover overlaying the snap-to-0
+            // moment, replaying the cold-launch reveal would visibly
+            // flicker the UI to invisible and back on every return.
+            // Returning to the app should feel instantaneous; the
+            // wallpaper + UI the user left is exactly what they
+            // expect to see.
             .onChange(of: scenePhase) { _, current in
                 if current == .background {
                     wasBackgrounded = true
+                    // Pause wallpaper rotation so the 60s `Task.sleep`
+                    // can't count wall-time during suspension and fire
+                    // a rotate() the moment iOS resumes the process —
+                    // which would crossfade the wallpaper to a
+                    // different photo from the same tier right as the
+                    // user returns.
+                    BackgroundService.shared.pauseRotation()
                     return
                 }
                 if current == .active && wasBackgrounded {
                     wasBackgrounded = false
-                    if awakeningTriggered && !BrettAnimation.isReduceMotionEnabled {
-                        replayAwakening()
-                    }
+                    // Restart with a fresh 60s window so the user gets
+                    // a full minute of viewing the same wallpaper after
+                    // foregrounding before any rotation kicks in.
+                    BackgroundService.shared.resumeRotation()
                 }
             }
             // Badge refresh runs in `BadgeRefreshController` mounted below
@@ -628,18 +634,6 @@ struct MainContainer: View {
         Awakening.sessionPlayed = true
         awakeningTriggered = true
         awakening.playReveal()
-    }
-
-    /// Re-run the fade-in for warm re-entries (background → active). The
-    /// reset must happen OUTSIDE `withAnimation` and the rebuild must
-    /// happen ON the next runloop tick — otherwise SwiftUI coalesces
-    /// "0 then back to 1" into a no-op transaction and skips the
-    /// animation entirely.
-    private func replayAwakening() {
-        awakening.resetForReplay()
-        DispatchQueue.main.async {
-            awakening.playReveal()
-        }
     }
 
     /// Per-page omnibar placeholder copy verbatim from the v18 mockup
