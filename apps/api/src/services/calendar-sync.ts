@@ -481,7 +481,17 @@ export async function upsertEvents(
   for (const event of events) {
     if (!event.id) continue;
 
-    // Handle cancelled events — soft-delete by setting status, preserving user notes
+    // Handle cancelled events. Set BOTH `status: "cancelled"` and
+    // `deletedAt = now()` so:
+    //   • the live filter in /calendar/events and /sync/pull excludes
+    //     the row (status check),
+    //   • /sync/pull emits a tombstone to iOS via `deleted[]` so the
+    //     local SwiftData copy gets purged (deletedAt + bumped
+    //     updatedAt advances past the client's cursor).
+    // The CalendarEventNote is keyed separately and survives — user
+    // notes on cancelled events aren't lost. If Google ever reinstates
+    // a cancelled event (rare), the upsert path below clears
+    // `deletedAt` on the next sync (see updateData spread).
     if (event.status === "cancelled") {
       const existing = await prisma.calendarEvent.findUnique({
         where: {
@@ -492,9 +502,10 @@ export async function upsertEvents(
         },
       });
       if (existing) {
+        const now = new Date();
         await prisma.calendarEvent.update({
           where: { id: existing.id },
-          data: { status: "cancelled" },
+          data: { status: "cancelled", deletedAt: now, updatedAt: now },
         });
         deleted.push(existing.id);
       }
