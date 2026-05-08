@@ -7,7 +7,7 @@ import { useDisplayTitle } from "./lib/demoMode";
 interface NextUpCardProps {
   event: CalendarEventDisplay;
   timer: NextUpTimerState;
-  variant: "compact" | "expanded";
+  variant: "compact" | "expanded" | "hero";
   onEventClick: () => void;
 }
 
@@ -15,7 +15,60 @@ export function NextUpCard({ event, timer, variant, onEventClick }: NextUpCardPr
   if (variant === "compact") {
     return <CompactCard event={event} timer={timer} onEventClick={onEventClick} />;
   }
+  if (variant === "hero") {
+    return <HeroCard event={event} timer={timer} onEventClick={onEventClick} />;
+  }
   return <ExpandedCard event={event} timer={timer} onEventClick={onEventClick} />;
+}
+
+const HERO_SHADOW = "[text-shadow:0_1px_2px_rgba(0,0,0,0.7),0_0_8px_rgba(0,0,0,0.55)]";
+
+function HeroCard({
+  event,
+  timer,
+  onEventClick,
+}: {
+  event: CalendarEventDisplay;
+  timer: NextUpTimerState;
+  onEventClick: () => void;
+}) {
+  const shownTitle = useDisplayTitle(event.id, event.title, "calendar");
+  const isNow = timer.isHappening;
+
+  // Match iOS countdown phrasing: "In 24 minutes." / "Now."
+  const countdown = isNow ? "Now." : `${timer.label}.`;
+
+  return (
+    <button
+      onClick={onEventClick}
+      className="group block text-left w-full px-1 py-3 cursor-pointer outline-none"
+    >
+      {/* Countdown — serif italic, peach/gold */}
+      <div
+        className={`font-serif italic text-[22px] leading-tight text-[rgb(255,229,199)]/95 ${HERO_SHADOW}`}
+      >
+        {countdown}
+      </div>
+
+      {/* Title */}
+      <div
+        className={`mt-1 text-[17px] font-medium text-white leading-snug line-clamp-2 group-hover:text-white/90 transition-colors ${HERO_SHADOW}`}
+      >
+        {shownTitle}
+      </div>
+
+      {/* Meta whisper — time + location */}
+      <div className={`mt-1 text-[13px] text-white/75 ${HERO_SHADOW}`}>
+        {formatTimeRange(event.startTime, event.endTime)}
+        {event.location && (
+          <>
+            <span className="text-white/40 mx-1.5">·</span>
+            {event.location}
+          </>
+        )}
+      </div>
+    </button>
+  );
 }
 
 function CompactCard({

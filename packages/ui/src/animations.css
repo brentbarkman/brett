@@ -22,7 +22,7 @@
   transform: scale(1);
 }
 
-.toggle-icon:hover > span:first-child {
+.toggle-icon:hover .type-icon {
   opacity: 0;
   transform: scale(0.75);
 }

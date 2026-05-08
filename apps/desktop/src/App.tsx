@@ -140,8 +140,14 @@ function MainLayout({ children, onEventClick, calendarEvents, isLoadingCalendar,
   nextUpTimer?: import("@brett/ui").NextUpTimerState | null;
   assistantName?: string;
 }) {
-  // Show compact card in sidebar when not urgent (>10 min) or happening now
-  const showCompactInSidebar = nextUpTimer && !nextUpTimer.isExpired && !(nextUpTimer.isUrgent && !nextUpTimer.isHappening);
+  // Hide the sidebar's compact NextUp on /today — TodayView renders a hero NextUp instead,
+  // so showing both would duplicate the same event in two places.
+  const isToday = useLocation().pathname === "/today";
+  const showCompactInSidebar =
+    !isToday &&
+    !!nextUpTimer &&
+    !nextUpTimer.isExpired &&
+    !(nextUpTimer.isUrgent && !nextUpTimer.isHappening);
 
   return (
     <>

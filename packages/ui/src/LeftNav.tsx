@@ -357,12 +357,13 @@ function SortableListItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
-
   // Convert colorClass like "bg-blue-500" to a low-opacity version for drop highlight
   const dropHighlight =
     isOver && list.colorClass
       ? list.colorClass.replace(/(-\d+)$/, "$1/20")
       : "";
+
+  const activeCount = Math.max(0, list.count - list.completedCount);
 
   return (
     <div ref={setNodeRef} style={style} className="relative group">
@@ -392,7 +393,7 @@ function SortableListItem({
               isOver
                 ? `${dropHighlight} border border-white/20 text-white`
                 : isActive
-                  ? "bg-white/10 text-white border border-transparent relative before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-brett-gold before:rounded-full"
+                  ? "bg-white/10 text-white border border-transparent"
                   : "text-white/80 hover:bg-white/5 hover:text-white/90 border border-transparent"
             }
           `}
@@ -405,9 +406,16 @@ function SortableListItem({
 
           {!isCollapsed && (
             <>
-              <span className="text-sm font-medium flex-1 text-left truncate">
+              <span className="text-sm font-light flex-1 text-left truncate">
                 {list.name}
               </span>
+              {activeCount > 0 && (
+                <span
+                  className={`text-[11px] font-light tabular-nums leading-tight flex-shrink-0 transition-opacity ${(onRename || onDelete) ? "group-hover:opacity-0" : ""} ${isActive ? "text-white/80" : "text-white/50"}`}
+                >
+                  {activeCount}
+                </span>
+              )}
               {(onRename || onDelete) && (
                 <button
                   ref={menuButtonRef}
@@ -415,7 +423,7 @@ function SortableListItem({
                     e.stopPropagation();
                     setShowMenu(!showMenu);
                   }}
-                  className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-white/70 transition-all p-0.5 rounded hover:bg-white/10 flex-shrink-0"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-white/30 hover:text-white/70 transition-all p-0.5 rounded hover:bg-white/10"
                 >
                   <MoreHorizontal size={14} />
                 </button>
@@ -485,7 +493,7 @@ function ProgressDot({
   colorClass: string;
 }) {
   const size = 20;
-  const strokeWidth = 3;
+  const strokeWidth = 2; // thinner ring for cleaner crispness
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = count > 0 ? completedCount / count : 0;
@@ -493,28 +501,69 @@ function ProgressDot({
 
   const strokeColor = COLOR_MAP[colorClass] ?? "rgba(255,255,255,0.4)";
 
-  // Empty list — show a dot in the list's color
+  // Empty list — small glassy bead. Same gradient + sheen as the all-done
+  // bead so the empty/in-progress/done states all read as one family.
   if (count === 0) {
+    const gradId = `pd-empty-${colorClass.replace(/\W/g, "-")}`;
     return (
-      <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
-        <div
-          className="w-2.5 h-2.5 rounded-full"
-          style={{ backgroundColor: strokeColor, opacity: 0.6 }}
+      <svg width={size} height={size} className="flex-shrink-0">
+        <defs>
+          <radialGradient id={gradId} cx="35%" cy="32%" r="80%">
+            <stop offset="0%" stopColor={strokeColor} stopOpacity="0.85" />
+            <stop offset="100%" stopColor={strokeColor} stopOpacity="0.45" />
+          </radialGradient>
+        </defs>
+        <circle cx={size / 2} cy={size / 2} r={5} fill={`url(#${gradId})`} />
+        <ellipse
+          cx={size / 2 - 1.6}
+          cy={size / 2 - 1.6}
+          rx={1.6}
+          ry={0.9}
+          fill="white"
+          opacity={0.22}
         />
-      </div>
+      </svg>
     );
   }
 
-  // All done — filled circle
+  // All done — glass bead. Two-stop radial gradient gives "lit from above"
+  // sphere feel, plus a soft white sheen at top-left and a faint dark wash
+  // at the bottom edge to suggest a dome.
   if (progress >= 1) {
+    const gradId = `pd-fill-${colorClass.replace(/\W/g, "-")}`;
+    const shadeId = `pd-shade-${colorClass.replace(/\W/g, "-")}`;
     return (
       <svg width={size} height={size} className="flex-shrink-0">
+        <defs>
+          <radialGradient id={gradId} cx="35%" cy="30%" r="80%">
+            <stop offset="0%" stopColor={strokeColor} stopOpacity="1" />
+            <stop offset="100%" stopColor={strokeColor} stopOpacity="0.65" />
+          </radialGradient>
+          <radialGradient id={shadeId} cx="50%" cy="100%" r="80%">
+            <stop offset="0%" stopColor="black" stopOpacity="0.22" />
+            <stop offset="60%" stopColor="black" stopOpacity="0" />
+          </radialGradient>
+        </defs>
         <circle
           cx={size / 2}
           cy={size / 2}
-          r={radius}
-          fill={strokeColor}
-          opacity={0.8}
+          r={radius + 0.5}
+          fill={`url(#${gradId})`}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius + 0.5}
+          fill={`url(#${shadeId})`}
+        />
+        {/* sheen highlight — soft white-ish ellipse top-left */}
+        <ellipse
+          cx={size / 2 - 2.4}
+          cy={size / 2 - 2.6}
+          rx={2.6}
+          ry={1.5}
+          fill="white"
+          opacity={0.28}
         />
       </svg>
     );
@@ -527,16 +576,17 @@ function ProgressDot({
       className="flex-shrink-0"
       style={{ transform: "rotate(-90deg)" }}
     >
-      {/* Background ring */}
+      {/* Background ring — slightly subtler than before */}
       <circle
         cx={size / 2}
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="rgba(255,255,255,0.15)"
+        stroke="rgba(255,255,255,0.12)"
         strokeWidth={strokeWidth}
+        strokeLinecap="round"
       />
-      {/* Progress arc */}
+      {/* Progress arc — animated stroke transitions when the count changes */}
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -546,6 +596,7 @@ function ProgressDot({
         strokeWidth={strokeWidth}
         strokeDasharray={`${filled} ${circumference - filled}`}
         strokeLinecap="round"
+        style={{ transition: "stroke-dasharray 300ms cubic-bezier(0.16, 1, 0.3, 1)" }}
       />
     </svg>
   );
@@ -577,7 +628,7 @@ function NavItem({
       relative flex items-center w-full rounded-lg transition-colors duration-200 group
       ${isCollapsed ? "justify-center p-2.5" : "px-2 py-1.5 gap-3"}
       ${isActive
-        ? "bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-brett-gold before:rounded-full"
+        ? "bg-white/10 text-white"
         : "text-white/80 hover:bg-white/5 hover:text-white/90"
       }
     `}
@@ -590,7 +641,7 @@ function NavItem({
 
       {!isCollapsed && (
         <>
-          <span className="text-sm font-medium flex-1 text-left truncate">
+          <span className="text-sm font-light flex-1 text-left truncate">
             {label}
           </span>
           {tag && (
@@ -599,7 +650,7 @@ function NavItem({
             </span>
           )}
           {badge !== undefined && badge > 0 && (
-            <span className="bg-brett-gold/10 text-brett-gold/70 border border-brett-gold/15 text-[11px] font-semibold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-tight">
+            <span className={`text-[11px] font-light tabular-nums leading-tight ${isActive ? "text-white/80" : "text-white/50"}`}>
               {badge}
             </span>
           )}
@@ -687,7 +738,7 @@ function ArchivedListItem({
         `}
       >
         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
-        <span className="text-sm font-medium flex-1 text-left truncate">{list.name}</span>
+        <span className="text-sm font-normal flex-1 text-left truncate">{list.name}</span>
         {(onUnarchive || onDelete) && (
           <button
             ref={menuButtonRef}

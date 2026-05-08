@@ -111,7 +111,7 @@ export function InboxItemRow({
       tabIndex={0}
       role={undefined}
       className={`
-        group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer
+        group flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer
         transition-colors duration-200 outline-none
         ${isDragging ? "opacity-30" : ""}
         ${isFocused
@@ -123,33 +123,36 @@ export function InboxItemRow({
       `}
       style={animationStyle}
     >
-      {/* Toggle button */}
+      {/* Toggle button — matches ThingCard's filled glass orb so toggles
+          read identically across Today/Lists/Inbox. */}
       <button
         tabIndex={-1}
         onClick={handleToggle}
         onPointerDown={(e) => e.stopPropagation()}
         className={`
-          toggle-btn flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center
+          toggle-btn flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
           transition-all duration-150 relative outline-none
           ${completing
-            ? "bg-brett-teal/20 border-brett-teal/40"
-            : `border-white/20 hover:border-brett-teal/40 hover:bg-brett-teal/10`
+            ? "bg-brett-teal/20 border-2 border-brett-teal/50"
+            : "bg-black/20 border border-white/10 hover:border-brett-teal/40 hover:bg-brett-teal/10"
           }
         `}
       >
+        {/* Glass sheen — same treatment as ThingCard's toggle for visual parity. */}
+        <span className="absolute inset-0 rounded-full bg-gradient-to-b from-white/15 via-white/5 to-transparent pointer-events-none" />
         {completing ? (
-          <Check size={13} className="text-brett-teal check-pop" />
+          <Check size={13} className="relative text-brett-teal check-pop" />
         ) : (
           <>
-            <span className="toggle-icon"><Icon size={12} className={iconColor} /></span>
-            <span className="toggle-check"><Check size={13} className="text-brett-teal" /></span>
+            <span className="relative toggle-icon"><Icon size={12} className={iconColor} /></span>
+            <span className="relative toggle-check"><Check size={13} className="text-brett-teal" /></span>
           </>
         )}
       </button>
 
       {/* Title + provenance */}
       <div className="flex-1 min-w-0">
-        <span className="text-sm text-white/90 truncate block">
+        <span className="text-sm font-light text-white/90 truncate block">
           {shownTitle}
         </span>
         {((thing.source === "scout" && thing.scoutName) ||

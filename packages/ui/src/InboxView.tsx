@@ -457,11 +457,14 @@ export function InboxView({
               if (!items || items.length === 0) return null;
               return (
                 <React.Fragment key={bucket}>
-                  <div className="flex items-center gap-3 pt-2">
+                  <div className="flex items-center gap-3 pt-2 mb-2">
                     <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 whitespace-nowrap">
                       {bucket}
                     </span>
                     <div className="flex-1 h-px bg-white/10" />
+                    <span className="text-[10px] tabular-nums text-white/40 flex-shrink-0">
+                      {items.length}
+                    </span>
                   </div>
                   {items.map((thing) => {
                     const isOut = animatingOutIds.has(thing.id);

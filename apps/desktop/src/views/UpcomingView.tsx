@@ -105,8 +105,8 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
 
         return (
           <div key={section.label} className={sectionIdx > 0 ? "mt-4" : ""}>
-            <SectionHeader title={section.label} />
-            <div className="flex flex-col gap-2">
+            <SectionHeader title={section.label} count={section.things.length} />
+            <div className="flex flex-col gap-1.5">
               {section.things.map((thing, i) => (
                 <ThingCard
                   key={thing.id}

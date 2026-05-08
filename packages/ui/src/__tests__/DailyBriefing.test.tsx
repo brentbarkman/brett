@@ -8,7 +8,6 @@ function renderBriefing() {
     <DailyBriefing
       content={"- First bullet\n- Second bullet"}
       hasAI={true}
-      onDismiss={() => {}}
     />,
   );
 }

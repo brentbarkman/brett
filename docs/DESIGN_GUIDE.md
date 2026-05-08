@@ -91,7 +91,7 @@ When users see this color, they know Brett is involved. This creates instant vis
 | Role | Color | Hex | Usage |
 |------|-------|-----|-------|
 | **Success/complete** | Teal | `#48BBA0` | Completion checkmarks, "done" states |
-| **Error/danger** | Red | `#F87171` | Overdue badges, errors, destructive confirms |
+| **Error/danger** | Red | `#F56565` | Overdue badges, errors, destructive confirms |
 | **Warning** | Amber (lighter gold) | — | Approaching deadlines, caution states |
 | **Calendar accents** | Teal, violet, coral, blue | Various | Event color coding (each at /20 bg, /50 border) |
 
@@ -707,7 +707,7 @@ Standardize on: `focus-visible:ring-1 focus-visible:ring-[#E8B931]/30 focus-visi
 Add a subtle gradient glow around the current hour band. Make past hours slightly more faded (`opacity-60`) vs upcoming hours (`opacity-100`).
 
 ### 9. LeftNav Active State
-Add a subtle left border accent (`border-l-2 border-[#E8B931]`) or a glass highlight (`bg-white/10 rounded-lg`) on the active item for stronger spatial anchoring.
+Active nav items use the glass highlight pattern (`bg-white/10 text-white`) for spatial anchoring — no colored accent rail. Labels and badges stay neutral (`text-white/80` inactive, `text-white` active) so the active state is read through the surface, not a color cue. Gold is reserved for the brand mark + completion pulse.
 
 ---
 
@@ -744,7 +744,7 @@ The native iOS app (`apps/ios/`) must maintain visual consistency with the Elect
 | Brand gold | `#E8B931` | `BrettColors.gold` | |
 | Brett cerulean | `#4682C3` | `BrettColors.cerulean` | Reserved for AI surfaces only |
 | Success/teal | `#48BBA0` | `BrettColors.success` | Checkmarks, completion |
-| Error/red | `#F87171` | `BrettColors.error` | Overdue, destructive |
+| Error/red | `#F56565` | `BrettColors.overdueRed` | Overdue, destructive |
 | Emerald | `#34D399` | `BrettColors.emerald` | Scout active status |
 | Purple-400 | `#C084FC` | `BrettColors.purple400` | Insight findings |
 | Amber-400 | `#FBBF24` | `BrettColors.amber400` | Task findings |
