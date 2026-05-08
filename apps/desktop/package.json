@@ -90,6 +90,7 @@
     "@brett/utils": "workspace:*",
     "@carrot-kpi/switzer-font": "^0.1.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
+    "@fontsource-variable/source-serif-4": "^5.2.9",
     "@tanstack/react-query": "^5.60.0",
     "better-auth": "^1.6.6",
     "electron-store": "^8.2.0",
