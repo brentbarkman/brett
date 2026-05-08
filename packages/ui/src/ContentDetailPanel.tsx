@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
-import { CheckCircle, Radar, RotateCw, ThumbsUp, ThumbsDown, X } from "lucide-react";
+import { CheckCircle, FolderPlus, Inbox, Radar, RotateCw, ThumbsUp, ThumbsDown, X } from "lucide-react";
 import { BrettMark } from "./BrettMark";
 import type {
   ThingDetail,
   DueDatePrecision,
   ReminderType,
   RecurrenceType,
+  NavList,
   Thing,
 } from "@brett/types";
 import { OverflowMenu } from "./OverflowMenu";
@@ -27,7 +28,9 @@ interface ContentDetailPanelProps {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
-  onMoveToList: (id: string) => void;
+  // List picker — opens a popover anchored to the in-panel list pill
+  lists?: NavList[];
+  onSetList?: (id: string, anchorEl: HTMLElement) => void;
   // Schedule callbacks
   onUpdateDueDate?: (dueDate: string | null, precision: DueDatePrecision) => void;
   onUpdateReminder?: (reminder: ReminderType | null) => void;
@@ -74,7 +77,8 @@ export function ContentDetailPanel({
   onToggle,
   onDelete,
   onDuplicate,
-  onMoveToList,
+  lists,
+  onSetList,
   onUpdateDueDate,
   onUpdateReminder,
   onUpdateRecurrence,
@@ -111,6 +115,10 @@ export function ContentDetailPanel({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(detail.title);
   const titleRef = useRef<HTMLInputElement>(null);
+  const listButtonRef = useRef<HTMLButtonElement>(null);
+  const currentListColor = detail.listId
+    ? lists?.find((l) => l.id === detail.listId)?.colorClass
+    : undefined;
 
   useEffect(() => {
     setTitleValue(detail.title);
@@ -156,7 +164,6 @@ export function ContentDetailPanel({
               <OverflowMenu
                 onDelete={() => onDelete(detail.id)}
                 onDuplicate={() => onDuplicate(detail.id)}
-                onMoveToList={() => onMoveToList(detail.id)}
                 onCopyLink={() =>
                   navigator.clipboard.writeText(`brett://things/${detail.id}`)
                 }
@@ -195,6 +202,37 @@ export function ContentDetailPanel({
             >
               {shownTitle}
             </h2>
+          )}
+
+          {/* List pill — click to open list picker */}
+          {onSetList && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                ref={listButtonRef}
+                onClick={() => listButtonRef.current && onSetList(detail.id, listButtonRef.current)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+              >
+                {detail.listId ? (
+                  <>
+                    <span className={`w-1.5 h-1.5 rounded-full ${currentListColor ?? "bg-white/40"}`} />
+                    <span>{detail.list}</span>
+                  </>
+                ) : detail.list && detail.list !== "Inbox" ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                    <span>{detail.list}</span>
+                  </>
+                ) : (
+                  <>
+                    <Inbox size={11} className="text-white/50" />
+                    <span>Inbox</span>
+                    <span className="text-white/30">·</span>
+                    <FolderPlus size={11} className="text-white/50" />
+                    <span className="text-white/50">Add to list</span>
+                  </>
+                )}
+              </button>
+            </div>
           )}
 
           {/* Scout provenance + feedback */}

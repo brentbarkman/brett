@@ -84,7 +84,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       case "overdue":
         return "bg-transparent text-brett-red border-transparent";
       case "today":
-        return "bg-amber-500/20 text-amber-400 border border-amber-500/20";
+        return "bg-transparent text-brett-gold border-transparent";
       default:
         return "bg-white/5 text-white/50 border border-white/5";
     }
