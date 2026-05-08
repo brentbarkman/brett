@@ -1,18 +1,16 @@
 import React, { useState, useRef } from "react";
-import { MoreHorizontal, Trash2, Copy, ArrowRight, Link2 } from "lucide-react";
+import { MoreHorizontal, Trash2, Copy, Link2 } from "lucide-react";
 import { useClickOutside } from "./useClickOutside";
 
 interface OverflowMenuProps {
   onDelete: () => void;
   onDuplicate: () => void;
-  onMoveToList: () => void;
   onCopyLink: () => void;
 }
 
 export function OverflowMenu({
   onDelete,
   onDuplicate,
-  onMoveToList,
   onCopyLink,
 }: OverflowMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -26,7 +24,6 @@ export function OverflowMenu({
     action: () => void;
   }[] = [
     { icon: Copy, label: "Duplicate", action: onDuplicate },
-    { icon: ArrowRight, label: "Move to List\u2026", action: onMoveToList },
     { icon: Link2, label: "Copy Link", action: onCopyLink },
   ];
 

@@ -9,6 +9,7 @@ import type {
   DueDatePrecision,
   ReminderType,
   RecurrenceType,
+  NavList,
 } from "@brett/types";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { ContentDetailPanel } from "./ContentDetailPanel";
@@ -26,7 +27,9 @@ interface DetailPanelProps {
   onUpdate?: (updates: Record<string, unknown>) => void;
   onDelete?: (id: string) => void;
   onDuplicate?: (id: string) => void;
-  onMoveToList?: (id: string) => void;
+  // List picker — opens a popover anchored to the in-panel list pill
+  lists?: NavList[];
+  onSetList?: (id: string, anchorEl: HTMLElement) => void;
   // Schedule
   onUpdateDueDate?: (dueDate: string | null, precision: DueDatePrecision) => void;
   onUpdateReminder?: (reminder: ReminderType | null) => void;
@@ -111,7 +114,8 @@ export function DetailPanel({
   onUpdate,
   onDelete,
   onDuplicate,
-  onMoveToList,
+  lists,
+  onSetList,
   onUpdateDueDate,
   onUpdateReminder,
   onUpdateRecurrence,
@@ -216,7 +220,8 @@ export function DetailPanel({
             onToggle={onToggle ?? (() => {})}
             onDelete={onDelete ?? (() => {})}
             onDuplicate={onDuplicate ?? (() => {})}
-            onMoveToList={onMoveToList ?? (() => {})}
+            lists={lists}
+            onSetList={onSetList}
             onUpdateDueDate={onUpdateDueDate}
             onUpdateReminder={onUpdateReminder}
             onUpdateRecurrence={onUpdateRecurrence}
@@ -269,7 +274,8 @@ export function DetailPanel({
             onToggle={onToggle ?? (() => {})}
             onDelete={onDelete ?? (() => {})}
             onDuplicate={onDuplicate ?? (() => {})}
-            onMoveToList={onMoveToList ?? (() => {})}
+            lists={lists}
+            onSetList={onSetList}
             onUpdateDueDate={onUpdateDueDate}
             onUpdateReminder={onUpdateReminder}
             onUpdateRecurrence={onUpdateRecurrence}

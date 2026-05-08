@@ -247,6 +247,9 @@ importers:
       '@fontsource-variable/plus-jakarta-sans':
         specifier: ^5.2.8
         version: 5.2.8
+      '@fontsource-variable/source-serif-4':
+        specifier: ^5.2.9
+        version: 5.2.9
       '@tanstack/react-query':
         specifier: ^5.60.0
         version: 5.90.21(react@19.2.5)
@@ -2313,6 +2316,10 @@ packages:
 
   /@fontsource-variable/plus-jakarta-sans@5.2.8:
     resolution: {integrity: sha512-iQecBizIdZxezODNHzOn4SvvRMrZL/S8k4MEXGDynCmUrImVW0VmX+tIAMqnADwH4haXlHSXqMgU6+kcfBQJdw==}
+    dev: false
+
+  /@fontsource-variable/source-serif-4@5.2.9:
+    resolution: {integrity: sha512-PPcxjLFk/fS0WHg79pDM2YNvz61kC+oYZ5cWZZyCS0DHpJncmuYOuiZAsvj4tDxlWPBEvxxcRLQQNmSaRbPkqw==}
     dev: false
 
   /@google/generative-ai@0.24.1:

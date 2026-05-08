@@ -60,6 +60,8 @@ module.exports = {
       },
       fontFamily: {
         sans: ['"Switzer"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        display: ['"New York"', 'ui-serif', 'Georgia', '"Times New Roman"', 'serif'],
+        prose: ['"Source Serif 4 Variable"', '"Source Serif 4"', 'Georgia', 'serif'],
       },
       borderRadius: {
         lg: "var(--radius)",

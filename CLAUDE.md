@@ -111,17 +111,27 @@ Brett is in production with real users. All code changes flow through a gated re
 
 ```
 commit to main → push → CI tests run
-main → PR to release → CI tests + deploy → live
+main → PR to release → CI tests + API deploy
+                       ↓
+                       (then: desktop + iOS built locally on macOS)
 ```
 
 - **`main`** — development branch. Brent commits and pushes directly. CI (`.github/workflows/ci.yml`) runs typecheck + tests on every push.
-- **`release`** — production branch. Merging `main → release` via PR triggers the full deploy pipeline (`.github/workflows/release.yml`): tests → Railway API deploy → health check → desktop build → artifact upload.
+- **`release`** — production branch. Merging `main → release` via PR triggers `.github/workflows/release.yml`: tests → Railway API deploy → health check. **That's all CI does.** No desktop build, no iOS build, no artifact upload (GitHub's Mac runners are paid on private repos, and the signing certs / notarytool profile / App Store Connect API key live in the local login keychain).
 - **Never push directly to `release`.** Always go through a PR from `main`.
 - **Never force-push to `main` or `release`.**
 
 ### Deploying
 
-To cut a release: open a PR from `main` to `release` on GitHub, review the diff, merge. The deploy pipeline runs automatically.
+A full release is **three things**, not one. Don't stop after the merge — the API ships automatically but the clients don't:
+
+1. **API** — open a PR from `main` to `release`, merge it. The Railway deploy runs automatically. Watch [the run](https://github.com/brentbarkman/brett/actions) until the health check passes.
+2. **Desktop** — locally: `git checkout release && git pull && scripts/release.sh desktop`. Builds a signed + notarized DMG/ZIP, uploads to `brett-releases`, overwrites `latest-mac.yml`. **Without this step, every existing desktop user sees "you're up to date" against the previous version's manifest** — the autoupdater has no idea anything changed.
+3. **iOS** — locally: `scripts/release.sh ios` (from the release branch). Builds the IPA via Fastlane and uploads to TestFlight.
+
+Verify what's actually live: `curl -s https://api.brett.brentbarkman.com/releases/latest-mac.yml | head -3` shows the version the desktop autoupdater will offer. If that doesn't match the merge commit's `git rev-list --count HEAD`, the desktop step hasn't been run yet.
+
+When the user asks for "a release" / "ship it" / "merge to release," assume they want **all three** unless they specify otherwise. The merge alone is not a release.
 
 ### Rolling Back
 

@@ -1079,10 +1079,10 @@ export function App() {
     createThing.mutate({ type: "task", title: `${item.title} (copy)`, listId: item.listId ?? undefined });
   };
 
-  const handleMoveToList = (id: string) => {
+  const handleSetList = (id: string, anchorEl: HTMLElement) => {
     if (!selectedItem || "googleEventId" in selectedItem) return;
     const item = selectedItem as Thing;
-    handleTriageOpen("list-first", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision });
+    handleTriageOpen("list-only", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision }, anchorEl);
   };
 
   const handleTriageOpen = (
@@ -1417,7 +1417,8 @@ export function App() {
           onUpdate={handleUpdateThing}
           onDelete={handleDeleteThing}
           onDuplicate={handleDuplicateThing}
-          onMoveToList={handleMoveToList}
+          lists={lists}
+          onSetList={handleSetList}
           onUpdateDueDate={(dueDate, precision) => {
             if (selectedId) updateThing.mutate({ id: selectedId, dueDate, dueDatePrecision: precision });
           }}

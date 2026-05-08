@@ -88,17 +88,16 @@ function renderEditorial(
 
   const parts = text.split(/(\*\*[^*]+\*\*|"[^"]+")/g);
 
+  const linkChip =
+    "font-medium text-white hover:text-brett-gold underline decoration-brett-gold decoration-2 underline-offset-4 transition-colors cursor-pointer";
+
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       const inner = part.slice(2, -2);
       const matched = matchItem(inner);
       if (matched && onItemClick) {
         return (
-          <button
-            key={i}
-            onClick={() => onItemClick(matched.id)}
-            className="font-medium text-brett-gold hover:text-brett-gold/80 transition-colors cursor-pointer"
-          >
+          <button key={i} onClick={() => onItemClick(matched.id)} className={linkChip}>
             {inner}
           </button>
         );
@@ -111,11 +110,7 @@ function renderEditorial(
       const matched = matchItem(inner);
       if (matched && onItemClick) {
         return (
-          <button
-            key={i}
-            onClick={() => onItemClick(matched.id)}
-            className="text-brett-gold hover:text-brett-gold/80 transition-colors cursor-pointer"
-          >
+          <button key={i} onClick={() => onItemClick(matched.id)} className={linkChip}>
             {inner}
           </button>
         );
@@ -127,10 +122,7 @@ function renderEditorial(
   });
 }
 
-// Single hero-zone shadow — tight outline + medium halo. Reads at every type size
-// so the greeting, date, and brief all carry the same legibility treatment over
-// any wallpaper.
-const HERO_SHADOW = "[text-shadow:0_1px_2px_rgba(0,0,0,0.7),0_0_8px_rgba(0,0,0,0.55)]";
+const HERO_SHADOW = "";
 
 function BriefingProseSkeleton() {
   return (
@@ -187,9 +179,9 @@ export function DailyBriefing({
         </div>
       )}
 
-      {/* Greeting — editorial 38px serif */}
+      {/* Greeting — editorial 38px display serif (system New York on Apple) */}
       <h1
-        className={`font-serif text-[38px] leading-[1.05] font-medium tracking-[-0.02em] text-white ${HERO_SHADOW}`}
+        className={`font-display text-[38px] leading-[1.05] font-medium tracking-[-0.02em] text-white ${HERO_SHADOW}`}
       >
         {greeting}
       </h1>
@@ -214,7 +206,7 @@ export function DailyBriefing({
             </p>
           ) : prose.length > 0 ? (
             <p
-              className={`text-[18px] leading-relaxed text-white font-normal ${HERO_SHADOW}`}
+              className={`font-prose text-[19px] leading-[1.65] text-white/[0.92] font-normal ${HERO_SHADOW}`}
             >
               {renderEditorial(prose, titleMap, knownItems, onItemClick)}
               {isGenerating && (
@@ -227,11 +219,11 @@ export function DailyBriefing({
         ) : !summary ? (
           <BriefingProseSkeleton />
         ) : isDayEmpty ? (
-          <p className={`text-[18px] leading-relaxed text-white font-normal ${HERO_SHADOW}`}>
+          <p className={`font-prose text-[19px] leading-[1.65] text-white/[0.92] font-normal ${HERO_SHADOW}`}>
             Nothing on the books today. A rare opening — use it well.
           </p>
         ) : (
-          <p className={`text-[18px] leading-relaxed text-white font-normal ${HERO_SHADOW}`}>
+          <p className={`font-prose text-[19px] leading-[1.65] text-white/[0.92] font-normal ${HERO_SHADOW}`}>
             {[
               summary.dueTodayTasks > 0 &&
                 `${summary.dueTodayTasks} task${summary.dueTodayTasks !== 1 ? "s" : ""} due today`,
