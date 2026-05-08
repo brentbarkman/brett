@@ -15,7 +15,12 @@ interface ListViewProps {
   listsFetching?: boolean;
   onItemClick: (item: Thing) => void;
   onArchiveList?: (id: string, incompleteCount: number) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (
+    mode: "list-first" | "date-first" | "list-only" | "date-only",
+    ids: string[],
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    anchorEl?: HTMLElement | null,
+  ) => void;
   onFocusChange?: (thing: Thing) => void;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
@@ -48,6 +53,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
 
   // Quick add
   const quickAddRef = useRef<QuickAddInputHandle>(null);
+  const cardEls = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
     if (isEditingName) {
@@ -95,12 +101,14 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
       if (!focusedThing || !onTriageOpen) return false;
       if (e.key === "l") {
         e.preventDefault();
-        onTriageOpen("list-only", [focusedThing.id], focusedThing);
+        const anchor = cardEls.current.get(focusedThing.id) ?? null;
+        onTriageOpen("list-only", [focusedThing.id], focusedThing, anchor);
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
-        onTriageOpen("date-only", [focusedThing.id], focusedThing);
+        const anchor = cardEls.current.get(focusedThing.id) ?? null;
+        onTriageOpen("date-only", [focusedThing.id], focusedThing, anchor);
         return true;
       }
       return false;
@@ -310,6 +318,10 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
                     ? () => onReconnect(thing.sourceId!)
                     : undefined}
                   reconnectPending={thing.sourceId === reconnectPendingSourceId}
+                  onElementRef={(el) => {
+                    if (el) cardEls.current.set(thing.id, el);
+                    else cardEls.current.delete(thing.id);
+                  }}
                 />
               ))}
             </div>
@@ -333,6 +345,10 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
                     ? () => onReconnect(thing.sourceId!)
                     : undefined}
                   reconnectPending={thing.sourceId === reconnectPendingSourceId}
+                  onElementRef={(el) => {
+                    if (el) cardEls.current.set(thing.id, el);
+                    else cardEls.current.delete(thing.id);
+                  }}
                 />
               ))}
             </div>

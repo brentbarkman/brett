@@ -84,16 +84,16 @@ interface GlassColorDefinition extends CalendarGlassColor {
 }
 
 const GLASS_COLORS: GlassColorDefinition[] = [
-  { name: "red", hue: 0, hueRange: [346, 15], bg: "rgba(239, 68, 68, 0.12)", border: "rgba(239, 68, 68, 0.25)", text: "rgb(252, 165, 165)" },
-  { name: "orange", hue: 30, hueRange: [15, 40], bg: "rgba(249, 115, 22, 0.12)", border: "rgba(249, 115, 22, 0.25)", text: "rgb(253, 186, 116)" },
-  { name: "amber", hue: 45, hueRange: [40, 55], bg: "rgba(245, 158, 11, 0.12)", border: "rgba(245, 158, 11, 0.25)", text: "rgb(252, 211, 77)" },
-  { name: "green", hue: 142, hueRange: [100, 170], bg: "rgba(34, 197, 94, 0.12)", border: "rgba(34, 197, 94, 0.25)", text: "rgb(134, 239, 172)" },
-  { name: "teal", hue: 175, hueRange: [170, 190], bg: "rgba(20, 184, 166, 0.12)", border: "rgba(20, 184, 166, 0.25)", text: "rgb(94, 234, 212)" },
-  { name: "cyan", hue: 195, hueRange: [190, 210], bg: "rgba(6, 182, 212, 0.12)", border: "rgba(6, 182, 212, 0.25)", text: "rgb(103, 232, 249)" },
-  { name: "blue", hue: 220, hueRange: [210, 250], bg: "rgba(59, 130, 246, 0.12)", border: "rgba(59, 130, 246, 0.25)", text: "rgb(147, 197, 253)" },
-  { name: "indigo", hue: 260, hueRange: [250, 280], bg: "rgba(99, 102, 241, 0.12)", border: "rgba(99, 102, 241, 0.25)", text: "rgb(165, 180, 252)" },
-  { name: "purple", hue: 290, hueRange: [280, 320], bg: "rgba(168, 85, 247, 0.12)", border: "rgba(168, 85, 247, 0.25)", text: "rgb(216, 180, 254)" },
-  { name: "pink", hue: 335, hueRange: [320, 346], bg: "rgba(236, 72, 153, 0.12)", border: "rgba(236, 72, 153, 0.25)", text: "rgb(249, 168, 212)" },
+  { name: "red", hue: 0, hueRange: [346, 15], bg: "rgba(239, 68, 68, 0.45)", border: "rgba(248, 113, 113, 1)", text: "rgb(254, 226, 226)" },
+  { name: "orange", hue: 30, hueRange: [15, 40], bg: "rgba(249, 115, 22, 0.45)", border: "rgba(251, 146, 60, 1)", text: "rgb(255, 237, 213)" },
+  { name: "amber", hue: 45, hueRange: [40, 55], bg: "rgba(245, 158, 11, 0.45)", border: "rgba(251, 191, 36, 1)", text: "rgb(254, 243, 199)" },
+  { name: "green", hue: 142, hueRange: [100, 170], bg: "rgba(34, 197, 94, 0.45)", border: "rgba(74, 222, 128, 1)", text: "rgb(220, 252, 231)" },
+  { name: "teal", hue: 175, hueRange: [170, 190], bg: "rgba(20, 184, 166, 0.45)", border: "rgba(45, 212, 191, 1)", text: "rgb(204, 251, 241)" },
+  { name: "cyan", hue: 195, hueRange: [190, 210], bg: "rgba(6, 182, 212, 0.45)", border: "rgba(34, 211, 238, 1)", text: "rgb(207, 250, 254)" },
+  { name: "blue", hue: 220, hueRange: [210, 250], bg: "rgba(59, 130, 246, 0.45)", border: "rgba(96, 165, 250, 1)", text: "rgb(219, 234, 254)" },
+  { name: "indigo", hue: 260, hueRange: [250, 280], bg: "rgba(99, 102, 241, 0.45)", border: "rgba(129, 140, 248, 1)", text: "rgb(224, 231, 255)" },
+  { name: "purple", hue: 290, hueRange: [280, 320], bg: "rgba(168, 85, 247, 0.45)", border: "rgba(192, 132, 252, 1)", text: "rgb(243, 232, 255)" },
+  { name: "pink", hue: 335, hueRange: [320, 346], bg: "rgba(236, 72, 153, 0.45)", border: "rgba(244, 114, 182, 1)", text: "rgb(252, 231, 243)" },
 ];
 
 const DEFAULT_GLASS: CalendarGlassColor = GLASS_COLORS.find((c) => c.name === "blue")!;

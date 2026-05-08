@@ -1,6 +1,6 @@
 import React from "react";
-import { X, RefreshCw, Loader2, Settings } from "lucide-react";
-import { displayTitle, useDemoMode } from "./lib/demoMode";
+import { RefreshCw, Loader2 } from "lucide-react";
+import { useDemoMode } from "./lib/demoMode";
 
 interface OverdueItem {
   title: string;
@@ -27,16 +27,11 @@ interface DailyBriefingProps {
   hasAI: boolean;
   generatedAt?: string | null;
   items?: BriefingItem[];
-  onDismiss: () => void;
   onRegenerate?: () => void;
   onItemClick?: (id: string) => void;
   assistantName?: string;
 }
 
-/**
- * Parse inline markdown and linkify item references.
- * Handles: **bold**, "quoted text" matched against known items.
- */
 const STOP_WORDS = new Set([
   "the", "a", "an", "to", "for", "of", "in", "on", "at", "and", "or",
   "my", "your", "this", "that", "it", "is", "was", "be", "been", "being",
@@ -45,12 +40,10 @@ const STOP_WORDS = new Set([
   "than", "before", "after", "about", "between", "through", "during",
 ]);
 
-/** Extract significant words from text (no stop words, >2 chars) */
 function sigWords(text: string): string[] {
   return text.toLowerCase().split(/\s+/).filter((w) => !STOP_WORDS.has(w) && w.length > 2);
 }
 
-/** Fuzzy match: find an item whose title shares enough significant words with the text */
 function fuzzyMatchItem(text: string, items: BriefingItem[]): BriefingItem | undefined {
   const textWords = sigWords(text);
   if (textWords.length === 0) return undefined;
@@ -71,7 +64,19 @@ function fuzzyMatchItem(text: string, items: BriefingItem[]): BriefingItem | und
   return bestMatch;
 }
 
-function renderBriefingLine(
+/** Collapse a bulleted briefing into one editorial paragraph, preserving inline
+ * markdown markers so item references still link. Mirrors iOS stripMarkdownToPlain. */
+function collapseToProse(content: string): string {
+  return content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#") && !line.startsWith(">") && !line.startsWith("```"))
+    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
+    .filter((line) => line.length > 0)
+    .join(" ");
+}
+
+function renderEditorial(
   text: string,
   titleMap: Map<string, BriefingItem>,
   items: BriefingItem[],
@@ -81,11 +86,9 @@ function renderBriefingLine(
     return titleMap.get(text.toLowerCase()) ?? fuzzyMatchItem(text, items);
   }
 
-  // Split on **bold** and "quoted" patterns, preserving delimiters
   const parts = text.split(/(\*\*[^*]+\*\*|"[^"]+")/g);
 
   return parts.map((part, i) => {
-    // Bold: **text** — match against items (exact then fuzzy)
     if (part.startsWith("**") && part.endsWith("**")) {
       const inner = part.slice(2, -2);
       const matched = matchItem(inner);
@@ -94,16 +97,15 @@ function renderBriefingLine(
           <button
             key={i}
             onClick={() => onItemClick(matched.id)}
-            className="font-semibold text-brett-gold hover:text-brett-gold/80 transition-colors cursor-pointer"
+            className="font-medium text-brett-gold hover:text-brett-gold/80 transition-colors cursor-pointer"
           >
             {inner}
           </button>
         );
       }
-      return <strong key={i} className="font-semibold text-white/90">{inner}</strong>;
+      return <strong key={i} className="font-medium text-white">{inner}</strong>;
     }
 
-    // Quoted: "text" — match against items (exact then fuzzy)
     if (part.startsWith('"') && part.endsWith('"')) {
       const inner = part.slice(1, -1);
       const matched = matchItem(inner);
@@ -121,20 +123,21 @@ function renderBriefingLine(
       return <span key={i}>&ldquo;{inner}&rdquo;</span>;
     }
 
-    // Plain text — render as-is, no guessing
     return <span key={i}>{part}</span>;
   });
 }
 
-function BriefingSkeleton({ rows }: { rows: number }) {
+// Single hero-zone shadow — tight outline + medium halo. Reads at every type size
+// so the greeting, date, and brief all carry the same legibility treatment over
+// any wallpaper.
+const HERO_SHADOW = "[text-shadow:0_1px_2px_rgba(0,0,0,0.7),0_0_8px_rgba(0,0,0,0.55)]";
+
+function BriefingProseSkeleton() {
   return (
-    <div className="space-y-2.5">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex items-start gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-white/5 animate-pulse mt-2 flex-shrink-0" />
-          <div className={`bg-white/5 animate-pulse rounded-lg h-3.5 ${i === 0 ? "w-full" : i === 1 ? "w-5/6" : "w-2/3"}`} />
-        </div>
-      ))}
+    <div className="space-y-2">
+      <div className="h-4 bg-white/8 rounded w-full animate-pulse" />
+      <div className="h-4 bg-white/8 rounded w-11/12 animate-pulse" />
+      <div className="h-4 bg-white/8 rounded w-3/4 animate-pulse" />
     </div>
   );
 }
@@ -145,25 +148,23 @@ export function DailyBriefing({
   isError,
   summary,
   hasAI,
-  generatedAt,
   items: knownItems = [],
-  onDismiss,
   onRegenerate,
   onItemClick,
   assistantName = "Brett",
 }: DailyBriefingProps) {
   useDemoMode();
 
-  const titleMap = new Map(knownItems.map(item => [item.title.toLowerCase(), item]));
+  const titleMap = new Map(knownItems.map((item) => [item.title.toLowerCase(), item]));
 
-  const renderLine = (text: string) => renderBriefingLine(text, titleMap, knownItems, onItemClick);
+  const now = new Date();
+  const greeting = now.toLocaleDateString("en-US", { weekday: "long" }) + ".";
+  const dateLine = now
+    .toLocaleDateString("en-US", { month: "long", day: "numeric" })
+    .toUpperCase();
 
-  // Parse AI content into bullet points
-  const bulletItems = content
-    ? content.split("\n").map((line) => line.replace(/^[-*•]\s*/, "").trim()).filter((line) => line.length > 0)
-    : [];
+  const prose = content ? collapseToProse(content) : "";
 
-  // Check if the day is completely empty
   const isDayEmpty =
     summary &&
     summary.overdueTasks === 0 &&
@@ -171,129 +172,79 @@ export function DailyBriefing({
     summary.todayEvents === 0;
 
   return (
-    <div className="relative w-full bg-black/40 backdrop-blur-md border border-brett-cerulean/50 rounded-xl p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40">
-            Daily Briefing
-          </span>
-          {isGenerating && (
-            <Loader2 size={12} className="animate-spin text-brett-cerulean/60" />
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          {hasAI && onRegenerate && (
-            <button
-              onClick={onRegenerate}
-              disabled={isGenerating}
-              className="text-white/40 hover:text-white/80 transition-colors rounded-full p-1 hover:bg-white/10 disabled:opacity-30"
-              aria-label="Regenerate briefing"
-            >
-              <RefreshCw size={12} />
-            </button>
-          )}
+    <div className="group relative px-1 pt-2 pb-4">
+      {/* Hover-only regenerate. The briefing is permanent — no dismiss. */}
+      {hasAI && onRegenerate && (
+        <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={onDismiss}
-            className="text-white/40 hover:text-white/80 transition-colors rounded-full p-1 hover:bg-white/10"
-            aria-label="Dismiss briefing"
+            onClick={onRegenerate}
+            disabled={isGenerating}
+            className="text-white/40 hover:text-white/80 transition-colors rounded-full p-1 hover:bg-white/10 disabled:opacity-30"
+            aria-label="Regenerate briefing"
           >
-            <X size={14} />
+            <RefreshCw size={12} />
           </button>
         </div>
+      )}
+
+      {/* Greeting — editorial 38px serif */}
+      <h1
+        className={`font-serif text-[38px] leading-[1.05] font-medium tracking-[-0.02em] text-white ${HERO_SHADOW}`}
+      >
+        {greeting}
+      </h1>
+
+      {/* Date sub-line */}
+      <div
+        className={`mt-1 text-[12px] uppercase tracking-[0.04em] font-medium text-white/85 ${HERO_SHADOW}`}
+      >
+        {dateLine}
       </div>
 
-      {/* AI briefing content */}
-      {hasAI && (
-        <>
-          {isError ? (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
-              <p className="text-sm text-red-400/90">
-                Failed to generate briefing.
-              </p>
-              <p className="text-xs text-white/40 mt-1">
+      {/* Brief paragraph */}
+      <div className="mt-4">
+        {hasAI ? (
+          isError ? (
+            <p className={`text-base text-brett-red/90 leading-relaxed ${HERO_SHADOW}`}>
+              Failed to generate briefing.{" "}
+              <span className="text-white/60">
                 Try again — if this keeps happening, check your AI provider in Settings.
-              </p>
-            </div>
-          ) : bulletItems.length > 0 ? (
-            <ul className="space-y-2">
-              {bulletItems.map((line, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-start gap-2 text-sm text-white/80 leading-relaxed"
-                >
-                  <span className="text-brett-cerulean/50 mt-1">•</span>
-                  <span>{renderLine(line)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <BriefingSkeleton rows={3} />
-          )}
-          {generatedAt && !isGenerating && (
-            <p className="mt-3 text-[10px] text-white/20">
-              Generated{" "}
-              {new Date(generatedAt).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-              })}
+              </span>
+              {isGenerating && <Loader2 size={12} className="ml-2 inline animate-spin text-white/40" />}
             </p>
-          )}
-        </>
-      )}
-
-      {/* Static fallback (no AI) */}
-      {!hasAI && (
-        <div className="space-y-3">
-          {!summary ? (
-            <BriefingSkeleton rows={2} />
-          ) : isDayEmpty ? (
-            <p className="text-sm text-white/60">
-              Nothing on the books today. A rare opening — use it well.
-            </p>
-          ) : (
-            <>
-              <p className="text-sm text-white/70">
-                {[
-                  summary.dueTodayTasks > 0 &&
-                    `${summary.dueTodayTasks} task${summary.dueTodayTasks !== 1 ? "s" : ""} due today`,
-                  summary.overdueTasks > 0 &&
-                    `${summary.overdueTasks} overdue`,
-                  summary.todayEvents > 0 &&
-                    `${summary.todayEvents} meeting${summary.todayEvents !== 1 ? "s" : ""}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-              {summary.overdueItems.length > 0 && (
-                <ul className="space-y-1">
-                  {summary.overdueItems.map((item, idx) => {
-                    const matchedId = titleMap.get(item.title.toLowerCase())?.id;
-                    return (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-2 text-sm text-white/60 leading-relaxed"
-                      >
-                        <span className="text-amber-500/50 mt-1">•</span>
-                        <span>
-                          {displayTitle(matchedId ?? item.title, item.title, "thing")}{" "}
-                          <span className="text-white/30">
-                            (due {item.dueDate})
-                          </span>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
+          ) : prose.length > 0 ? (
+            <p
+              className={`text-[18px] leading-relaxed text-white font-normal ${HERO_SHADOW}`}
+            >
+              {renderEditorial(prose, titleMap, knownItems, onItemClick)}
+              {isGenerating && (
+                <Loader2 size={12} className="ml-2 inline align-middle animate-spin text-white/40" />
               )}
-            </>
-          )}
-          <p className="text-[11px] text-white/20 flex items-center gap-1">
-            <Settings size={10} />
-            {assistantName} needs an AI provider. Set one up in Settings.
+            </p>
+          ) : (
+            <BriefingProseSkeleton />
+          )
+        ) : !summary ? (
+          <BriefingProseSkeleton />
+        ) : isDayEmpty ? (
+          <p className={`text-[18px] leading-relaxed text-white font-normal ${HERO_SHADOW}`}>
+            Nothing on the books today. A rare opening — use it well.
           </p>
-        </div>
-      )}
+        ) : (
+          <p className={`text-[18px] leading-relaxed text-white font-normal ${HERO_SHADOW}`}>
+            {[
+              summary.dueTodayTasks > 0 &&
+                `${summary.dueTodayTasks} task${summary.dueTodayTasks !== 1 ? "s" : ""} due today`,
+              summary.overdueTasks > 0 && `${summary.overdueTasks} overdue`,
+              summary.todayEvents > 0 &&
+                `${summary.todayEvents} meeting${summary.todayEvents !== 1 ? "s" : ""}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            .
+          </p>
+        )}
+      </div>
     </div>
   );
 }

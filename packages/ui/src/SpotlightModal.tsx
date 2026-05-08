@@ -579,21 +579,18 @@ export function SpotlightModal({
         {!hasConversation && !showSuggestions && !showSearchResults && !confirmedTask && (
           <div className="px-5 py-6">
             {!hasAI ? (
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-brett-cerulean/5 border border-brett-cerulean/10">
-                <BrettMark size={16} className="flex-shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-sm text-white/70">
-                    Add an AI provider to unlock {assistantName}'s full capabilities — ask questions, get briefings, and manage everything with natural language.
-                  </p>
-                  {onNavigateToSettings && (
-                    <button
-                      onClick={() => { onNavigateToSettings(); onClose(); }}
-                      className="mt-2 text-xs text-brett-cerulean hover:text-brett-cerulean/80 transition-colors"
-                    >
-                      Configure AI in Settings →
-                    </button>
-                  )}
-                </div>
+              <div className="p-3 rounded-lg bg-brett-cerulean/5 border border-brett-cerulean/10">
+                <p className="text-sm text-white/70">
+                  Add an AI provider to unlock {assistantName}'s full capabilities — ask questions, get briefings, and manage everything with natural language.
+                </p>
+                {onNavigateToSettings && (
+                  <button
+                    onClick={() => { onNavigateToSettings(); onClose(); }}
+                    className="mt-2 text-xs text-brett-cerulean hover:text-brett-cerulean/80 transition-colors"
+                  >
+                    Configure AI in Settings →
+                  </button>
+                )}
               </div>
             ) : (
               <p className="text-sm text-white/30 text-center">

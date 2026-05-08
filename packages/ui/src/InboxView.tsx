@@ -20,7 +20,12 @@ interface InboxViewProps {
     ids: string[],
     updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
   ) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (
+    mode: "list-first" | "date-first" | "list-only" | "date-only",
+    ids: string[],
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    anchorEl?: HTMLElement | null,
+  ) => void;
   onFocusChange?: (thing: Thing) => void;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
@@ -56,6 +61,8 @@ export function InboxView({
   const [addInputFocused, setAddInputFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<QuickAddInputHandle>(null);
+  // Tracks each visible row's DOM element so we can anchor a popover to it.
+  const rowEls = useRef<Map<string, HTMLDivElement>>(new Map());
   // useNow returns a state value (not a ref), so each tick triggers a
   // re-render and the temporal buckets recompute against the current
   // clock — including across local-midnight rollover when the app stays
@@ -364,7 +371,8 @@ export function InboxView({
         if (ids.length === 0) return;
         // Pass focused thing's values for single-item triage
         const singleThing = ids.length === 1 ? activeThings.find((t) => t.id === ids[0]) : undefined;
-        onTriageOpen?.("list-first", ids, singleThing ? { listId: singleThing.listId, dueDate: singleThing.dueDate, dueDatePrecision: singleThing.dueDatePrecision } : undefined);
+        const anchor = singleThing ? rowEls.current.get(singleThing.id) ?? null : null;
+        onTriageOpen?.("list-first", ids, singleThing ? { listId: singleThing.listId, dueDate: singleThing.dueDate, dueDatePrecision: singleThing.dueDatePrecision } : undefined, anchor);
         return;
       }
 
@@ -374,7 +382,8 @@ export function InboxView({
         const ids = getTargetIds();
         if (ids.length === 0) return;
         const singleThing = ids.length === 1 ? activeThings.find((t) => t.id === ids[0]) : undefined;
-        onTriageOpen?.("date-first", ids, singleThing ? { listId: singleThing.listId, dueDate: singleThing.dueDate, dueDatePrecision: singleThing.dueDatePrecision } : undefined);
+        const anchor = singleThing ? rowEls.current.get(singleThing.id) ?? null : null;
+        onTriageOpen?.("date-first", ids, singleThing ? { listId: singleThing.listId, dueDate: singleThing.dueDate, dueDatePrecision: singleThing.dueDatePrecision } : undefined, anchor);
         return;
       }
     };
@@ -448,11 +457,14 @@ export function InboxView({
               if (!items || items.length === 0) return null;
               return (
                 <React.Fragment key={bucket}>
-                  <div className="flex items-center gap-3 pt-2">
+                  <div className="flex items-center gap-3 pt-2 mb-2">
                     <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 whitespace-nowrap">
                       {bucket}
                     </span>
                     <div className="flex-1 h-px bg-white/10" />
+                    <span className="text-[10px] tabular-nums text-white/40 flex-shrink-0">
+                      {items.length}
+                    </span>
                   </div>
                   {items.map((thing) => {
                     const isOut = animatingOutIds.has(thing.id);
@@ -523,6 +535,10 @@ export function InboxView({
                             : undefined}
                           reconnectPending={thing.sourceId === reconnectPendingSourceId}
                           onInstallUpdate={thing.sourceId === "system:update" ? onInstallUpdate : undefined}
+                          onElementRef={(el) => {
+                            if (el) rowEls.current.set(thing.id, el);
+                            else rowEls.current.delete(thing.id);
+                          }}
                         />
                       </div>
                     );

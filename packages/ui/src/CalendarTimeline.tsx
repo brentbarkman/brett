@@ -469,7 +469,7 @@ export function CalendarTimeline({
                   onClick={() => onEventClick(event)}
                   onContextMenu={(e) => handleContextMenu(e, event)}
                   className={`
-                    absolute rounded-md border-l-2 p-2 cursor-pointer
+                    absolute rounded-md border-l-[3px] p-2 cursor-pointer
                     hover:brightness-125 transition-all duration-200 overflow-hidden
                     ${isOverlapping ? "border-amber-500/30" : ""}
                   `}
@@ -487,7 +487,7 @@ export function CalendarTimeline({
                   }}
                 >
                   <div className="flex justify-between items-start">
-                    <h4 className="text-xs font-semibold truncate pr-4">
+                    <h4 className="text-xs font-normal truncate pr-4">
                       {displayTitle(event.id, event.title, "calendar")}
                     </h4>
                     <div className="flex items-center gap-1 flex-shrink-0">

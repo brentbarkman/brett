@@ -2,15 +2,21 @@ import React from "react";
 
 interface SectionHeaderProps {
   title: string;
+  count?: number;
 }
 
-export function SectionHeader({ title }: SectionHeaderProps) {
+export function SectionHeader({ title, count }: SectionHeaderProps) {
   return (
     <div className="flex items-center gap-3 mb-2">
       <h3 className="text-[10px] uppercase tracking-[0.15em] font-semibold text-white/40 flex-shrink-0">
         {title}
       </h3>
       <div className="h-px bg-white/10 flex-1" />
+      {count !== undefined && count > 0 && (
+        <span className="text-[10px] tabular-nums text-white/40 flex-shrink-0">
+          {count}
+        </span>
+      )}
     </div>
   );
 }

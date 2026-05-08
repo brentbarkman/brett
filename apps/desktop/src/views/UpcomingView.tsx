@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Clock } from "lucide-react";
 import { ThingCard, ItemListShell, useListKeyboardNav, useDeferredToggle, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
 import type { Thing, FilterType } from "@brett/types";
@@ -8,7 +8,12 @@ import { useAutoUpdate } from "../hooks/useAutoUpdate";
 
 interface UpcomingViewProps {
   onItemClick: (item: Thing) => void;
-  onTriageOpen: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen: (
+    mode: "list-first" | "date-first" | "list-only" | "date-only",
+    ids: string[],
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    anchorEl?: HTMLElement | null,
+  ) => void;
   onFocusChange?: (thing: Thing) => void;
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
@@ -33,6 +38,7 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
   // Deferred batch toggle — matches ThingsList + InboxView so rapid-fire
   // clicks in Upcoming don't fire one API mutation per tap.
   const handleToggle = useDeferredToggle((id: string) => toggleThing.mutate(id));
+  const cardEls = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
     items: allItems,
@@ -43,12 +49,14 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
       if (!focusedThing) return false;
       if (e.key === "l") {
         e.preventDefault();
-        onTriageOpen("list-only", [focusedThing.id], focusedThing);
+        const anchor = cardEls.current.get(focusedThing.id) ?? null;
+        onTriageOpen("list-only", [focusedThing.id], focusedThing, anchor);
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
-        onTriageOpen("date-only", [focusedThing.id], focusedThing);
+        const anchor = cardEls.current.get(focusedThing.id) ?? null;
+        onTriageOpen("date-only", [focusedThing.id], focusedThing, anchor);
         return true;
       }
       return false;
@@ -97,8 +105,8 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
 
         return (
           <div key={section.label} className={sectionIdx > 0 ? "mt-4" : ""}>
-            <SectionHeader title={section.label} />
-            <div className="flex flex-col gap-2">
+            <SectionHeader title={section.label} count={section.things.length} />
+            <div className="flex flex-col gap-1.5">
               {section.things.map((thing, i) => (
                 <ThingCard
                   key={thing.id}
@@ -112,6 +120,10 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
                     : undefined}
                   reconnectPending={thing.sourceId === reconnectPendingSourceId}
                   onInstallUpdate={thing.sourceId === "system:update" ? installUpdate : undefined}
+                  onElementRef={(el) => {
+                    if (el) cardEls.current.set(thing.id, el);
+                    else cardEls.current.delete(thing.id);
+                  }}
                 />
               ))}
             </div>

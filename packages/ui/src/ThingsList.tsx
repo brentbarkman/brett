@@ -13,7 +13,12 @@ interface ThingsListProps {
   onToggle?: (id: string) => void;
   onAdd: (title: string, listId: string | null) => void;
   onAddContent?: (url: string) => void;
-  onTriageOpen?: (mode: "list-first" | "date-first" | "list-only" | "date-only", ids: string[], thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null }) => void;
+  onTriageOpen?: (
+    mode: "list-first" | "date-first" | "list-only" | "date-only",
+    ids: string[],
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    anchorEl?: HTMLElement | null,
+  ) => void;
   /** Called when keyboard nav changes focused item (for live detail panel updates) */
   onFocusChange?: (thing: Thing) => void;
   /** Optional element rendered at the top of the card (e.g. all-completed banner) */
@@ -24,9 +29,13 @@ interface ThingsListProps {
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
   onInstallUpdate?: () => void;
+  /** When set, the matching section's in-flow header is rendered with
+   * `visibility: hidden` so it still occupies layout space but doesn't
+   * duplicate the chrome active-section header above the inner scroll. */
+  hiddenHeaderKey?: string | null;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare, onReconnect, reconnectPendingSourceId, onInstallUpdate }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare, onReconnect, reconnectPendingSourceId, onInstallUpdate, hiddenHeaderKey }: ThingsListProps) {
   // Shared across ThingsList, InboxView, and UpcomingView — see CLAUDE.md
   // list-consistency rule.
   const handleToggleWithFreeze = useDeferredToggle(onToggle);
@@ -43,6 +52,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
     return { uncompleted, done, grouped, allItems };
   })();
   const quickAddRef = useRef<QuickAddInputHandle>(null);
+  const cardEls = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const { focusedIndex, setFocusedIndex } = useListKeyboardNav({
     items: allItems,
@@ -54,12 +64,14 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
       if (!focusedThing || !onTriageOpen) return false;
       if (e.key === "l") {
         e.preventDefault();
-        onTriageOpen("list-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        const anchor = cardEls.current.get(focusedThing.id) ?? null;
+        onTriageOpen("list-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision }, anchor);
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
-        onTriageOpen("date-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision });
+        const anchor = cardEls.current.get(focusedThing.id) ?? null;
+        onTriageOpen("date-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision }, anchor);
         return true;
       }
       return false;
@@ -93,13 +105,13 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           {header && <div>{header}</div>}
 
           {grouped.overdue.length > 0 && (
-            <Section title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
+            <Section sectionKey="overdue" title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "overdue"} />
           )}
           {grouped.today.length > 0 && (
-            <Section title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
+            <Section sectionKey="today" title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "today"} />
           )}
           {grouped.this_week.length > 0 && (
-            <Section title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
+            <Section sectionKey="this-week" title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-week"} />
           )}
 
           {hasUncompleted && (
@@ -108,7 +120,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
 
           {done.length > 0 && (
             <div>
-              <Section title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} />
+              <Section sectionKey="done-today" title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "done-today"} />
             </div>
           )}
         </div>
@@ -137,6 +149,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
 }
 
 function Section({
+  sectionKey,
   title,
   things,
   onItemClick,
@@ -146,7 +159,15 @@ function Section({
   onReconnect,
   reconnectPendingSourceId,
   onInstallUpdate,
+  cardEls,
+  hideHeader,
 }: {
+  /** Stable identifier matched against TodayView's section list to drive the
+   * chrome active-section header. The chrome header pins at the top of the
+   * card; this in-flow header acts as a divider that scrolls with the section
+   * and gets clipped by the inner scroll's `overflow-hidden` as the next
+   * section takes over. */
+  sectionKey: string;
   title: string;
   things: Thing[];
   onItemClick: (thing: Thing) => void;
@@ -156,11 +177,28 @@ function Section({
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
   onInstallUpdate?: () => void;
+  cardEls: React.RefObject<Map<string, HTMLDivElement>>;
+  /** When the chrome above the inner scroll is already showing this section's
+   * header, hide the in-flow copy with `visibility: hidden` so we don't
+   * duplicate. Layout space is preserved so the chrome→in-flow handoff during
+   * scroll doesn't jump. */
+  hideHeader?: boolean;
 }) {
   return (
-    <div>
-      <SectionHeader title={title} />
-      <div className="flex flex-col gap-2">
+    <div data-section-key={sectionKey}>
+      {/* For non-active sections the in-flow header is a visible divider
+       *  with -mb-2 absorbing SectionHeader's mb-2 so the header sits tight
+       *  to its items. For the active section we drop the header entirely
+       *  (display:none) so items sit flush at the top of data-section-key —
+       *  the chrome above the inner scroll already shows this section's
+       *  name. TodayView compensates scrollTop on transitions so the layout
+       *  shift doesn't pop the viewport. */}
+      {!hideHeader && (
+        <div className="-mb-2">
+          <SectionHeader title={title} count={things.length} />
+        </div>
+      )}
+      <div className="flex flex-col gap-1.5">
         {things.map((item, i) => (
           <ThingCard
             key={item.id}
@@ -173,6 +211,10 @@ function Section({
               : undefined}
             reconnectPending={item.sourceId === reconnectPendingSourceId}
             onInstallUpdate={item.sourceId === "system:update" ? onInstallUpdate : undefined}
+            onElementRef={(el) => {
+              if (el) cardEls.current.set(item.id, el);
+              else cardEls.current.delete(item.id);
+            }}
           />
         ))}
       </div>

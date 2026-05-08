@@ -14,9 +14,11 @@ interface ThingCardProps {
   onReconnect?: () => void;
   reconnectPending?: boolean;
   onInstallUpdate?: () => void;
+  /** Forwards the card's DOM element so the parent can anchor a popover to it. */
+  onElementRef?: (el: HTMLDivElement | null) => void;
 }
 
-export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending, onInstallUpdate }: ThingCardProps) {
+export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending, onInstallUpdate, onElementRef }: ThingCardProps) {
   const shownTitle = useDisplayTitle(thing.id, thing.title, "thing");
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
@@ -80,7 +82,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
   const getUrgencyColor = () => {
     switch (thing.urgency) {
       case "overdue":
-        return "bg-brett-red/20 text-brett-red border border-brett-red/20 font-semibold";
+        return "bg-transparent text-brett-red border-transparent";
       case "today":
         return "bg-amber-500/20 text-amber-400 border border-amber-500/20";
       default:
@@ -93,13 +95,14 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       ref={(node) => {
         setNodeRef(node);
         cardRef.current = node;
+        onElementRef?.(node);
       }}
       {...attributes}
       {...listeners}
       onClick={() => { onFocus?.(); onClick(); }}
       onFocus={onFocus}
       className={`
-        group relative flex items-center gap-3 p-3 rounded-lg cursor-pointer
+        group relative flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer
         border transition-all duration-200 outline-none
         ${completing
           ? "bg-brett-teal/[0.03] border-brett-teal/15"
@@ -129,8 +132,15 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
           animation: "togglePulse 600ms cubic-bezier(0.16, 1, 0.3, 1)",
         } : undefined}
       >
-        {/* Default type icon — hidden via CSS when .toggle-icon:hover */}
-        <span className="transition-all duration-150">
+        {/* Glass sheen — subtle top-to-transparent highlight gives the orb
+            a soft "lit from above" dimensional feel. */}
+        <span className="absolute inset-0 rounded-full bg-gradient-to-b from-white/15 via-white/5 to-transparent pointer-events-none" />
+
+        {/* Default type icon — hidden via CSS when .toggle-icon:hover.
+            `type-icon` class is the hook the CSS rule keys off (used to
+            be `:first-child`, broken now that the sheen overlay is the
+            first child). */}
+        <span className="type-icon relative transition-all duration-150">
           {!completing && getIcon()}
         </span>
 
@@ -162,7 +172,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h4
-            className={`text-sm font-medium truncate transition-all duration-300 ${
+            className={`text-sm font-light truncate transition-all duration-300 ${
               thing.isCompleted || completing
                 ? "line-through text-white/40"
                 : "text-white"

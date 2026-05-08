@@ -140,9 +140,6 @@ export function LocationSection() {
 
   // ── Briefing state ──
   const [briefingEnabled, setBriefingEnabled] = usePreference("briefingEnabled");
-  const [dismissedDate, setDismissedDate] = usePreference("briefingDismissedDate");
-  const today = new Date().toLocaleDateString("en-CA");
-  const isDismissedToday = dismissedDate === today;
 
   // ── Memory state ──
   const { data: factsData, isLoading: factsLoading, error: factsError } = useUserFacts();
@@ -338,30 +335,13 @@ export function LocationSection() {
           <div className="h-px bg-white/10" />
 
           {/* Daily briefing */}
-          <div className="space-y-3">
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm text-white/70">Daily briefing</span>
-              <SettingsToggle
-                checked={briefingEnabled}
-                onChange={() => setBriefingEnabled(!briefingEnabled)}
-              />
-            </label>
-
-            {briefingEnabled && isDismissedToday && (
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-white/60">Dismissed for today</p>
-                  <p className="text-xs text-white/30 mt-0.5">Reappears tomorrow automatically.</p>
-                </div>
-                <button
-                  onClick={() => setDismissedDate(null)}
-                  className="text-xs text-brett-gold/90 hover:text-brett-gold-dark transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
-                >
-                  Show now
-                </button>
-              </div>
-            )}
-          </div>
+          <label className="flex items-center justify-between cursor-pointer">
+            <span className="text-sm text-white/70">Daily briefing</span>
+            <SettingsToggle
+              checked={briefingEnabled}
+              onChange={() => setBriefingEnabled(!briefingEnabled)}
+            />
+          </label>
 
           {/* Divider */}
           <div className="h-px bg-white/10" />
