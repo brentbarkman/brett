@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { slugify, getEventGlassColor, getTaskDestinationLabel } from "@brett/utils";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
@@ -858,6 +858,28 @@ export function App() {
     document.documentElement.classList.add("dark");
   }, []);
 
+  // Close the triage popup, flushing any pending Inbox commits. Called by
+  // TriageQuickPicker.onClose, the Escape effect, and click-outside.
+  // Today/list flows (date-only, list-only) commit immediately and never
+  // populate pendingDate/pendingListId, so the flush is a no-op for them.
+  const closeTriageWithFlush = useCallback(() => {
+    setTriageState((s) => {
+      if (!s) return null;
+      const updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null } = {};
+      if (s.pendingDate !== undefined) {
+        updates.dueDate = s.pendingDate ? s.pendingDate.toISOString() : null;
+        updates.dueDatePrecision = s.pendingDate ? "day" : null;
+      }
+      if (s.pendingListId !== undefined) {
+        updates.listId = s.pendingListId;
+      }
+      if (Object.keys(updates).length > 0) {
+        bulkUpdate.mutate({ ids: s.ids, updates });
+      }
+      return null;
+    });
+  }, [bulkUpdate]);
+
   // Handle escape key to close detail panel or navigate back from scout detail.
   // The quick pickers handle their own Esc; this only catches Esc when no
   // picker is open, so closing the detail panel still works.
@@ -881,7 +903,7 @@ export function App() {
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [triageState, isDetailOpen, location.pathname, selectedScoutId]);
+  }, [triageState, isDetailOpen, location.pathname, selectedScoutId, closeTriageWithFlush]);
 
   // Click-outside dismissal for the quick pickers. We can't rely on synthetic
   // stopPropagation here — React 17+ synthetic events don't stop native
@@ -896,7 +918,7 @@ export function App() {
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [triageState]);
+  }, [triageState, closeTriageWithFlush]);
 
   const handleItemClick = (item: Thing | CalendarEventDisplay) => {
     setSelectedItem(item);
@@ -1083,27 +1105,6 @@ export function App() {
     setTriageState(null);
   };
 
-  // Close the triage popup, flushing any pending Inbox commits. Called by
-  // TriageQuickPicker.onClose, the Escape effect, and click-outside.
-  // Today/list flows (date-only, list-only) commit immediately and never
-  // populate pendingDate/pendingListId, so the flush is a no-op for them.
-  const closeTriageWithFlush = () => {
-    setTriageState((s) => {
-      if (!s) return null;
-      const updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null } = {};
-      if (s.pendingDate !== undefined) {
-        updates.dueDate = s.pendingDate ? s.pendingDate.toISOString() : null;
-        updates.dueDatePrecision = s.pendingDate ? "day" : null;
-      }
-      if (s.pendingListId !== undefined) {
-        updates.listId = s.pendingListId;
-      }
-      if (Object.keys(updates).length > 0) {
-        handleInboxTriage(s.ids, updates);
-      }
-      return null;
-    });
-  };
 
   const handleArchiveList = (id: string, knownIncompleteCount?: number) => {
     const list = [...lists, ...archivedLists].find((l) => l.id === id);
