@@ -88,8 +88,9 @@ function renderEditorial(
 
   const parts = text.split(/(\*\*[^*]+\*\*|"[^"]+")/g);
 
-  const linkChip =
-    "font-medium text-white hover:text-brett-gold underline decoration-brett-gold decoration-2 underline-offset-4 transition-colors cursor-pointer";
+  // briefing-link is the V1 refined wash — gradient stops live in
+  // apps/desktop/src/index.css.
+  const linkChip = "briefing-link font-medium text-white cursor-pointer";
 
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
