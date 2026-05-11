@@ -73,6 +73,7 @@ async function handleNewsletterIngest(c: Context) {
   const date: string = body.Date ?? body.date ?? new Date().toISOString();
   const messageId: string = body.MessageID ?? body.messageId ?? "";
   const to: string = body.To ?? body.to ?? "";
+  const originalRecipient: string = body.OriginalRecipient ?? body.originalRecipient ?? "";
 
   if (!from || !subject || (!htmlBody && !textBody) || !messageId) {
     return c.json({ ok: true, skipped: "missing required fields" }, 200);
@@ -85,11 +86,22 @@ async function handleNewsletterIngest(c: Context) {
     return c.json({ ok: true, skipped: "body too large" }, 200);
   }
 
-  // 5. Resolve user from To address — parse ingest+{token}@domain.com
-  const toEmail = extractEmail(to);
-  const tokenMatch = toEmail.match(/^ingest\+([a-z0-9]+)@/);
+  // 5. Resolve user from envelope recipient — parse ingest+{token}@domain.com.
+  // Prefer Postmark's OriginalRecipient (envelope RCPT TO) over the RFC 5322
+  // To header: Gmail filter forwards rewrite the envelope to the ingest
+  // address but leave the original To header intact, so reading To alone
+  // misses every auto-forwarded newsletter.
+  const recipientEmail = extractEmail(originalRecipient || to);
+  const tokenMatch = recipientEmail.match(/^ingest\+([a-z0-9]+)@/);
   if (!tokenMatch) {
-    return c.json({ ok: true, skipped: "no ingest token in To address" }, 200);
+    console.warn("[newsletter-webhook] skipped — no ingest token in recipient", {
+      to,
+      originalRecipient,
+      from,
+      subject,
+      messageId,
+    });
+    return c.json({ ok: true, skipped: "no ingest token in recipient" }, 200);
   }
 
   const user = await prisma.user.findUnique({

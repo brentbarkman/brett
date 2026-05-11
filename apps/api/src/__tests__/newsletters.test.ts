@@ -224,6 +224,59 @@ describe("newsletter webhook + sender management", () => {
     });
   });
 
+  // ── Webhook: Auto-forwarded inbound (envelope recipient only) ──
+
+  describe("auto-forwarded inbound", () => {
+    it("resolves user from OriginalRecipient when To header is the original list address", async () => {
+      // Gmail filter forwarding rewrites the SMTP envelope to point at the
+      // ingest address but leaves the RFC 5322 To header as the original
+      // recipient. Postmark surfaces the envelope as `OriginalRecipient`.
+      const msgId = `msg-autofwd-${generateId()}`;
+      const payload = makePayload({
+        From: "newsletter@listserver.example",
+        FromName: "List Server",
+        Subject: "Auto-forwarded issue",
+        MessageID: msgId,
+        To: "brentbarkman@gmail.com",
+        OriginalRecipient: `ingest+${TEST_INGEST_TOKEN}@example.com`,
+      });
+
+      const res = await app.request(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { skipped?: string };
+      expect(body.skipped).toBeUndefined();
+
+      const pending = await prisma.pendingNewsletter.findFirst({
+        where: { postmarkMessageId: msgId, userId },
+      });
+      expect(pending).toBeTruthy();
+      expect(pending!.senderEmail).toBe("newsletter@listserver.example");
+    });
+
+    it("skips when neither To nor OriginalRecipient carry an ingest token", async () => {
+      const msgId = `msg-noingest-${generateId()}`;
+      const payload = makePayload({
+        From: "stranger@example.com",
+        MessageID: msgId,
+        To: "someone@gmail.com",
+        OriginalRecipient: "other@gmail.com",
+      });
+
+      const res = await app.request(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { skipped?: string };
+      expect(body.skipped).toBe("no ingest token in recipient");
+    });
+  });
+
   // ── Webhook: Blocked Sender ──
 
   describe("blocked sender", () => {
