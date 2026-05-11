@@ -31,6 +31,19 @@ struct TodayHero: View {
     /// in `MainContainer.swift`.
     @State private var awakening = AwakeningState.shared
 
+    /// Reactive read of the wallpaper luminance state. The greeting +
+    /// date sub-line stay white-on-shadow regardless (short editorial
+    /// text reads fine against anything with the halo); only the
+    /// briefing prose adapts, because a 3-line paragraph laid across a
+    /// sunlit photo doesn't survive on shadow alone.
+    @State private var background = BackgroundService.shared
+
+    /// Warm near-black for prose on bright photos. Matches the default
+    /// wash so the dark-text variant feels like it belongs to the same
+    /// palette as everything else in the app, rather than a pure-black
+    /// stamp that reads "system."
+    private static let darkProseColor = Color(red: 26/255, green: 22/255, blue: 18/255)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             // Greeting + date sub-line. Per v18 mockup:
@@ -55,19 +68,20 @@ struct TodayHero: View {
             }
 
             // Brief — only when present and not dismissed-for-today.
-            // 18pt full-white with the same legibility shadow as the
-            // greeting. Mockup spec was 17pt; bumped one notch for
-            // device readability so the editorial prose carries the
-            // same comfort as the section rows below it (15pt task
-            // title). Kept to a single paragraph; longer briefings
-            // get sentence-truncated so the hero stays scannable.
+            // 18pt with adaptive color: white-on-shadow on the typical
+            // moody photo, warm near-black on the rare sunlit photo.
+            // The greeting + sub-line above stay white regardless;
+            // short labels survive on shadow alone, so we don't pay
+            // the swap cost there. See `BackgroundService.currentWashIsLight`
+            // for the threshold/hysteresis.
             if let brief = briefSummary {
                 Text(brief)
                     .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(background.currentWashIsLight ? Self.darkProseColor : .white)
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
-                    .modifier(HeroLegibilityShadow())
+                    .modifier(HeroLegibilityShadow(visible: !background.currentWashIsLight))
+                    .animation(.easeInOut(duration: 0.2), value: background.currentWashIsLight)
                     .transition(.opacity)
             }
         }
@@ -253,11 +267,21 @@ struct TodayHero: View {
 /// outline + a soft 8pt halo — same trick the v18 mockup uses. Composed
 /// as a modifier so each text element in the hero applies it identically
 /// without per-element duplication.
+///
+/// `visible` lets a caller opt out — used by the briefing prose when
+/// it switches to a dark color over a bright photo, where a black halo
+/// around dark text gains nothing and just muddies the boundary.
 private struct HeroLegibilityShadow: ViewModifier {
+    var visible: Bool = true
+
+    /// Use opacity to elide the shadow rather than branching the view
+    /// tree on `visible` — keeps SwiftUI's diff on a single structural
+    /// shape, so the prose's color transition animates as a single
+    /// property change instead of a view-identity swap.
     func body(content: Content) -> some View {
         content
-            .shadow(color: Color.black.opacity(0.40), radius: 1, x: 0, y: 0)
-            .shadow(color: Color.black.opacity(0.30), radius: 8, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(visible ? 0.40 : 0), radius: 1, x: 0, y: 0)
+            .shadow(color: Color.black.opacity(visible ? 0.30 : 0), radius: 8, x: 0, y: 2)
     }
 }
 

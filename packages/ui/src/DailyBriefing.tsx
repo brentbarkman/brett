@@ -30,6 +30,12 @@ interface DailyBriefingProps {
   onRegenerate?: () => void;
   onItemClick?: (id: string) => void;
   assistantName?: string;
+  /** When true, the wallpaper behind the briefing is bright enough
+   *  that the prose paragraph should render in warm-dark instead of
+   *  white. The greeting + date sub-line stay white-on-shadow either
+   *  way — short editorial text reads on shadow alone, so we don't
+   *  pay the swap cost there. */
+  washIsLight?: boolean;
 }
 
 const STOP_WORDS = new Set([
@@ -145,8 +151,18 @@ export function DailyBriefing({
   onRegenerate,
   onItemClick,
   assistantName = "Brett",
+  washIsLight = false,
 }: DailyBriefingProps) {
   useDemoMode();
+
+  // Prose color flips between white-on-dark-photo and warm-near-black-on-bright-photo
+  // based on the sampled wallpaper luminance. `transition-colors` smooths
+  // the swap during wallpaper rotation so a borderline-bright photo
+  // doesn't snap. The greeting + date sub-line above don't get the swap:
+  // short editorial text reads on white-on-shadow against anything.
+  const proseClass = `font-prose text-[19px] leading-[1.65] font-normal transition-colors duration-200 ${
+    washIsLight ? "text-[#1a1612]" : "text-white/[0.92]"
+  } ${HERO_SHADOW}`;
 
   const titleMap = new Map(knownItems.map((item) => [item.title.toLowerCase(), item]));
 
@@ -207,7 +223,7 @@ export function DailyBriefing({
             </p>
           ) : prose.length > 0 ? (
             <p
-              className={`font-prose text-[19px] leading-[1.65] text-white/[0.92] font-normal ${HERO_SHADOW}`}
+              className={proseClass}
             >
               {renderEditorial(prose, titleMap, knownItems, onItemClick)}
               {isGenerating && (
@@ -220,11 +236,11 @@ export function DailyBriefing({
         ) : !summary ? (
           <BriefingProseSkeleton />
         ) : isDayEmpty ? (
-          <p className={`font-prose text-[19px] leading-[1.65] text-white/[0.92] font-normal ${HERO_SHADOW}`}>
+          <p className={proseClass}>
             Nothing on the books today. A rare opening — use it well.
           </p>
         ) : (
-          <p className={`font-prose text-[19px] leading-[1.65] text-white/[0.92] font-normal ${HERO_SHADOW}`}>
+          <p className={proseClass}>
             {[
               summary.dueTodayTasks > 0 &&
                 `${summary.dueTodayTasks} task${summary.dueTodayTasks !== 1 ? "s" : ""} due today`,
