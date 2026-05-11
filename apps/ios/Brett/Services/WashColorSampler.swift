@@ -68,6 +68,28 @@ enum WashColorSampler {
         readCache(key: url.absoluteString)?.color
     }
 
+    /// WCAG relative luminance (0..1) of the un-darkened photo band
+    /// behind the URL, derived from the cached darkened RGB. Returns
+    /// nil for first-sight photos. Used to decide light- vs dark-text
+    /// for content that sits directly on the photo (Today hero on iOS,
+    /// briefing prose on desktop's photo-direct layout).
+    ///
+    /// We invert the 0.85 darkening to recover the raw photo RGB before
+    /// running the WCAG formula, because the text sits on the *photo*,
+    /// not on the (darkened) wash bed.
+    static func cachedPhotoLuminance(forURL url: URL) -> Double? {
+        readCache(key: url.absoluteString).map(Self.luminance(fromDarkenedRGB:))
+    }
+
+    /// Same as `cachedPhotoLuminance(forURL:)` but for the bundled
+    /// asset path used during cold-launch fallback. The bundled photo
+    /// is sampled synchronously, so a non-nil here is essentially
+    /// guaranteed the moment the matching `sampledWash(forAssetNamed:)`
+    /// has run.
+    static func cachedPhotoLuminance(forAssetNamed name: String) -> Double? {
+        readCache(key: name).map(Self.luminance(fromDarkenedRGB:))
+    }
+
     enum SamplerError: Error {
         case decodeFailed
     }
@@ -153,6 +175,39 @@ enum WashColorSampler {
         g: 22/255.0,
         b: 18/255.0
     )
+
+    // MARK: - Luminance
+
+    /// Multiplier applied in `averageRGB` to darken the wash. Kept as
+    /// a named constant so the inverse-darken in luminance derivation
+    /// stays in lock-step — change one, change the other.
+    static let washDarken: Double = 0.85
+
+    /// WCAG relative luminance (0..1) for a single sRGB channel. The
+    /// gamma piece-wise: linear below ~3.9% to match the standard
+    /// formula, then the 2.4 curve above. Public-but-internal-ish so
+    /// `luminance(fromDarkenedRGB:)` can call it and tests can pin
+    /// the math.
+    static func linearize(_ c: Double) -> Double {
+        let clamped = max(0, min(1, c))
+        if clamped <= 0.03928 {
+            return clamped / 12.92
+        }
+        return pow((clamped + 0.055) / 1.055, 2.4)
+    }
+
+    /// Relative luminance of the *raw* photo band recovered from a
+    /// cached darkened `RGB`. Inverts the 0.85 darken first, then
+    /// applies the WCAG weighted sum. Returns 0..1.
+    static func luminance(fromDarkenedRGB rgb: RGB) -> Double {
+        let rawR = min(1.0, rgb.r / washDarken)
+        let rawG = min(1.0, rgb.g / washDarken)
+        let rawB = min(1.0, rgb.b / washDarken)
+        let linR = linearize(rawR)
+        let linG = linearize(rawG)
+        let linB = linearize(rawB)
+        return 0.2126 * linR + 0.7152 * linG + 0.0722 * linB
+    }
 
     // MARK: - Cache
 

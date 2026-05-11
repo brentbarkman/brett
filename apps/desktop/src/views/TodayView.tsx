@@ -41,9 +41,14 @@ interface TodayViewProps {
   onReconnect?: (sourceId: string) => void;
   reconnectPendingSourceId?: string;
   assistantName?: string;
+  /** When true, the wallpaper behind the briefing is bright enough
+   *  that the prose should render in warm-dark instead of white.
+   *  Derived in App from `useBackgroundLuminance`. Default false keeps
+   *  the prose white during cold launch / sample-in-flight. */
+  washIsLight?: boolean;
 }
 
-export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps, nextUpEvent, nextUpTimer, onReconnect, reconnectPendingSourceId, assistantName }: TodayViewProps) {
+export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omnibarProps, nextUpEvent, nextUpTimer, onReconnect, reconnectPendingSourceId, assistantName, washIsLight }: TodayViewProps) {
   const { install: installUpdate } = useAutoUpdate();
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [briefingEnabled] = usePreference("briefingEnabled");
@@ -336,6 +341,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
                 if (item) onItemClick(item);
               }}
               assistantName={assistantName}
+              washIsLight={washIsLight}
             />
           </div>
         )}
