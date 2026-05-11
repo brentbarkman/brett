@@ -194,6 +194,37 @@ It contains the full design system: surface patterns, color system, typography, 
 - Do NOT commit .env files
 - When doing deployment/infra work, do a full security review pass before committing
 - When modifying the Docker build, mentally trace the full layer chain — what's copied, what's missing, what symlinks expect
+- Think Before Coding
+State assumptions explicitly. If uncertain, ask rather than guess.
+Present multiple interpretations when ambiguity exists.
+Push back when a simpler approach exists.
+Stop when confused. Name what's unclear.
+- Simplicity First
+Minimum code that solves the problem. Nothing speculative.
+No features beyond what was asked. No abstractions for single-use code.
+Test: would a senior engineer say this is overcomplicated? If yes, simplify.
+- Surgical Changes
+Touch only what you must. Clean up only your own mess.
+Don't "improve" adjacent code, comments, or formatting.
+Don't refactor what isn't broken. Match existing style.
+- Goal-Driven Execution
+Define success criteria. Loop until verified.
+Don't follow steps. Define success and iterate.
+Strong success criteria let you loop independently.
+- Surface conflicts, don't average them
+If two patterns contradict, pick one (more recent / more tested).
+Explain why. Flag the other for cleanup.
+Don't blend conflicting patterns.
+- Tests verify intent, not just behavior
+Tests must encode WHY behavior matters, not just WHAT it does.
+A test that can't fail when business logic changes is wrong.
+- Match the codebase's conventions, even if you disagree
+Conformance > taste inside the codebase.
+If you genuinely think a convention is harmful, surface it. Don't fork silently.
+- Fail loud
+"Completed" is wrong if anything was skipped silently.
+"Tests pass" is wrong if any were skipped.
+Default to surfacing uncertainty, not hiding it.
 - **List behavior consistency:** When changing how any list view works (Inbox, Today, Upcoming, custom lists), the same behavior MUST apply to ALL list views. There are three list components: `InboxView` (uses `InboxItemRow`), `ThingsList` (uses `ThingCard`, powers Today + custom lists), and `UpcomingView` (uses `ThingCard`). If you're not sure whether a change makes sense across all views, ask before implementing.
 - **List container chrome consistency (iOS + desktop):** The visual chrome of list containers — header treatment (icon? color? count placement?), background material, border, corner radius — MUST be identical across every list-bearing surface. On iOS that's `TaskSection` (Today), `InboxPage.inboxCard` (Inbox), `ListView.stickyHeaderContent` (custom lists), `DailyBriefing`, `NextUpCard`, `ScoutsRosterView`, etc. On desktop it's `ThingsList`, `InboxView`, `UpcomingView`, `DailyBriefing`. If you're tweaking ONE container's header/background/border, apply the same tweak to ALL containers, OR explicitly justify why this one is different.
 - **iOS ↔ Desktop visual parity:** The two clients should look like the same product. Before adding a visual flourish to either platform, check whether the OTHER platform does it too. If desktop has it and iOS doesn't (or vice versa), align them. Common drift points: section-header icons (desktop has none, iOS used to have them), card borders (desktop tints AI-surface borders cerulean, iOS now matches), title color (desktop uses neutral white/40 for ALL section labels, iOS used to use gold/colored). Reference the relevant desktop component before designing an iOS one.
