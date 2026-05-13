@@ -383,7 +383,13 @@ private struct TodayPageBody: View {
             onDelete: delete
         )
 
-        TaskSection(
+        // Chronological ordering: weekend first on Sat/Sun, week first on
+        // Mon-Fri. Mirrors the same rule on desktop's ThingsList +
+        // TodayView. The two TaskSection calls are identical aside from
+        // their inputs — kept inline so the builder doesn't fight us.
+        let weekday = Calendar.current.component(.weekday, from: Date())
+        let isWeekendNow = weekday == 1 || weekday == 7
+        let weekSection = TaskSection(
             label: "This Week",
             icon: "calendar",
             items: s.thisWeek,
@@ -395,6 +401,26 @@ private struct TodayPageBody: View {
             onArchive: archive,
             onDelete: delete
         )
+        let weekendSection = TaskSection(
+            label: "This Weekend",
+            icon: "sparkles",
+            items: s.thisWeekend,
+            labelColor: .white,
+            listNameProvider: nameProvider,
+            onToggle: toggle,
+            onSelect: select,
+            onSchedule: schedule,
+            onArchive: archive,
+            onDelete: delete
+        )
+
+        if isWeekendNow {
+            weekendSection
+            weekSection
+        } else {
+            weekSection
+            weekendSection
+        }
 
         TaskSection(
             label: "Next Week",

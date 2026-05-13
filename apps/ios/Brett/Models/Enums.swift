@@ -18,6 +18,7 @@ enum Urgency: String, Codable, CaseIterable {
     case overdue
     case today
     case thisWeek = "this_week"
+    case thisWeekend = "this_weekend"
     case nextWeek = "next_week"
     case later
     case done

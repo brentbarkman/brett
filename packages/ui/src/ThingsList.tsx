@@ -40,6 +40,14 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
   // list-consistency rule.
   const handleToggleWithFreeze = useDeferredToggle(onToggle);
 
+  // On Sat/Sun, "This Weekend" is what's imminent — render it before
+  // "This Week" (the upcoming workweek). On Mon-Fri, the workweek comes
+  // first chronologically.
+  const isWeekendNow = (() => {
+    const dow = new Date().getUTCDay();
+    return dow === 0 || dow === 6;
+  })();
+
   const { uncompleted, done, grouped, allItems } = (() => {
     const uncompleted = things.filter((t) => !t.isCompleted);
     const done = things.filter((t) => t.isCompleted);
@@ -47,8 +55,12 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
       overdue: uncompleted.filter((t) => t.urgency === "overdue"),
       today: uncompleted.filter((t) => t.urgency === "today"),
       this_week: uncompleted.filter((t) => t.urgency === "this_week"),
+      this_weekend: uncompleted.filter((t) => t.urgency === "this_weekend"),
     };
-    const allItems = [...grouped.overdue, ...grouped.today, ...grouped.this_week, ...done];
+    const weekChunks = isWeekendNow
+      ? [...grouped.this_weekend, ...grouped.this_week]
+      : [...grouped.this_week, ...grouped.this_weekend];
+    const allItems = [...grouped.overdue, ...grouped.today, ...weekChunks, ...done];
     return { uncompleted, done, grouped, allItems };
   })();
   const quickAddRef = useRef<QuickAddInputHandle>(null);
@@ -86,15 +98,22 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
 
   const hasUncompleted = uncompleted.length > 0;
 
-  // Compute running offset so Section knows which indices are "focused"
+  // Compute running offset so Section knows which indices are "focused".
+  // The order here MUST match the `allItems` concat above — weekend comes
+  // before week on Sat/Sun, otherwise after.
   let offset = 0;
   const overdueOffset = offset;
   offset += grouped.overdue.length;
   const todayOffset = offset;
   offset += grouped.today.length;
-  const thisWeekOffset = offset;
-  offset += grouped.this_week.length;
+  const firstWeekChunkOffset = offset;
+  const firstWeekChunkLength = isWeekendNow ? grouped.this_weekend.length : grouped.this_week.length;
+  offset += firstWeekChunkLength;
+  const secondWeekChunkOffset = offset;
+  offset += isWeekendNow ? grouped.this_week.length : grouped.this_weekend.length;
   const doneOffset = offset;
+  const thisWeekOffset = isWeekendNow ? secondWeekChunkOffset : firstWeekChunkOffset;
+  const thisWeekendOffset = isWeekendNow ? firstWeekChunkOffset : secondWeekChunkOffset;
 
   const cardClass = bare ? "" : "bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4";
 
@@ -110,8 +129,24 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           {grouped.today.length > 0 && (
             <Section sectionKey="today" title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "today"} />
           )}
-          {grouped.this_week.length > 0 && (
-            <Section sectionKey="this-week" title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-week"} />
+          {isWeekendNow ? (
+            <>
+              {grouped.this_weekend.length > 0 && (
+                <Section sectionKey="this-weekend" title="This Weekend" things={grouped.this_weekend} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekendOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-weekend"} />
+              )}
+              {grouped.this_week.length > 0 && (
+                <Section sectionKey="this-week" title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-week"} />
+              )}
+            </>
+          ) : (
+            <>
+              {grouped.this_week.length > 0 && (
+                <Section sectionKey="this-week" title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-week"} />
+              )}
+              {grouped.this_weekend.length > 0 && (
+                <Section sectionKey="this-weekend" title="This Weekend" things={grouped.this_weekend} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekendOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-weekend"} />
+              )}
+            </>
           )}
 
           {hasUncompleted && (

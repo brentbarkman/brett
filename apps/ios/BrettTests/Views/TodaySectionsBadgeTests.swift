@@ -2,123 +2,162 @@ import Foundation
 import Testing
 @testable import Brett
 
-/// Tests for `TodaySections.badgeCount(items:)` — the number that drives
-/// the iOS home-screen badge. Count = overdue + due today + this week,
-/// excluding Next Week, completed, and archived items.
+/// Tests for `TodaySections.badgeCount(items:now:)` — the number that
+/// drives the iOS home-screen badge.
+///
+/// Rules under test:
+///   - Always: overdue + today + thisWeek
+///   - On Sat/Sun only: + thisWeekend (weekend items roll in once it IS
+///     the weekend)
+///
+/// Anchored on fixed dates (Wednesday + Saturday) to make assertions
+/// time-independent. Calendar is forced to UTC so date arithmetic agrees
+/// with `TodaySections.bucket()` regardless of the host timezone.
 @Suite("TodaySections.badgeCount", .tags(.views))
 struct TodaySectionsBadgeTests {
 
-    /// Fixtures align to the same UTC calendar `TodaySections.bucket()`
-    /// uses internally — without this, a "noon today (local)" date can
-    /// land in a different UTC bucket on machines whose timezone shifts
-    /// it across midnight UTC. Matches desktop's bucketing semantics.
     private let calendar: Calendar = {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
         return cal
     }()
 
-    // MARK: - Dates
+    // MARK: - Fixed reference dates
 
-    private var startOfToday: Date { calendar.startOfDay(for: Date()) }
-    private var yesterday: Date { calendar.date(byAdding: .day, value: -1, to: startOfToday)! }
-    private var noonToday: Date { calendar.date(byAdding: .hour, value: 12, to: startOfToday)! }
-    /// A date strictly inside "this week" but after today. Mirrors the
-    /// `bucket()` formula: end-of-this-week is start-of-Monday UTC (one
-    /// day past the upcoming Sunday, matching desktop's inclusive
-    /// `<= endOfThisWeek` boundary). Returning one hour before that lands
-    /// inside `thisWeek` on every weekday including Saturday and Sunday.
-    private var laterThisWeek: Date {
-        let weekday = calendar.component(.weekday, from: Date())
-        let daysUntilEndOfWeek = weekday == 1 ? 8 : (9 - weekday)
-        let endOfWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday)!
-        return calendar.date(byAdding: .hour, value: -1, to: endOfWeek)!
-    }
-    private var nextWeek: Date {
-        let weekday = calendar.component(.weekday, from: Date())
-        let daysUntilEndOfWeek = weekday == 1 ? 8 : (9 - weekday)
-        let endOfWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday)!
-        return calendar.date(byAdding: .day, value: 2, to: endOfWeek)!
+    /// Wednesday April 15, 2026 at 12:00 UTC — mid-week anchor.
+    private static let wednesdayNow: Date = {
+        var c = DateComponents()
+        c.year = 2026; c.month = 4; c.day = 15; c.hour = 12
+        c.timeZone = TimeZone(identifier: "UTC")
+        return Calendar(identifier: .gregorian).date(from: c)!
+    }()
+
+    /// Saturday April 18, 2026 at 12:00 UTC — weekend anchor.
+    private static let saturdayNow: Date = {
+        var c = DateComponents()
+        c.year = 2026; c.month = 4; c.day = 18; c.hour = 12
+        c.timeZone = TimeZone(identifier: "UTC")
+        return Calendar(identifier: .gregorian).date(from: c)!
+    }()
+
+    private func days(_ n: Int, from base: Date) -> Date {
+        calendar.date(byAdding: .day, value: n, to: base)!
     }
 
     // MARK: - Cases
 
     @Test func emptyInputReturnsZero() {
-        #expect(TodaySections.badgeCount(items: []) == 0)
+        #expect(TodaySections.badgeCount(items: [], now: Self.wednesdayNow) == 0)
     }
 
-    @Test func countsOverdue() {
+    @Test func countsOverdueOnWeekday() {
+        let yesterday = days(-1, from: Self.wednesdayNow)
         let items = [
             TestFixtures.makeItem(status: .active, dueDate: yesterday),
             TestFixtures.makeItem(status: .active, dueDate: yesterday),
         ]
-        #expect(TodaySections.badgeCount(items: items) == 2)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 2)
     }
 
-    @Test func countsToday() {
+    @Test func countsTodayOnWeekday() {
         let items = [
-            TestFixtures.makeItem(status: .active, dueDate: noonToday),
+            TestFixtures.makeItem(status: .active, dueDate: Self.wednesdayNow),
         ]
-        #expect(TodaySections.badgeCount(items: items) == 1)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 1)
     }
 
-    @Test func countsThisWeek() {
+    @Test func countsThisWeekOnWeekday() {
+        // Thu/Fri from Wed → thisWeek bucket → counted.
+        let thursday = days(1, from: Self.wednesdayNow)
+        let friday = days(2, from: Self.wednesdayNow)
         let items = [
-            TestFixtures.makeItem(status: .active, dueDate: laterThisWeek),
+            TestFixtures.makeItem(status: .active, dueDate: thursday),
+            TestFixtures.makeItem(status: .active, dueDate: friday),
         ]
-        #expect(TodaySections.badgeCount(items: items) == 1)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 2)
+    }
+
+    @Test func excludesThisWeekendOnWeekday() {
+        // The key new rule: Saturday and Sunday do NOT count toward the
+        // badge while today is a weekday. Sat/Sun from Wed land in
+        // `thisWeekend`, which is excluded until the weekend arrives.
+        let saturday = days(3, from: Self.wednesdayNow)
+        let sunday = days(4, from: Self.wednesdayNow)
+        let items = [
+            TestFixtures.makeItem(status: .active, dueDate: saturday),
+            TestFixtures.makeItem(status: .active, dueDate: sunday),
+        ]
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
+    }
+
+    @Test func includesThisWeekendOnSaturday() {
+        // Same Sat/Sun items, now evaluated on Saturday — they should
+        // count toward the badge ("until it IS the weekend").
+        let sunday = days(1, from: Self.saturdayNow)
+        let items = [
+            TestFixtures.makeItem(status: .active, dueDate: Self.saturdayNow), // today urgency
+            TestFixtures.makeItem(status: .active, dueDate: sunday),            // thisWeekend
+        ]
+        #expect(TodaySections.badgeCount(items: items, now: Self.saturdayNow) == 2)
     }
 
     @Test func excludesNextWeek() {
+        // Eight days past Wed = Thu of next week — well into nextWeek.
+        let eightDaysOut = days(8, from: Self.wednesdayNow)
         let items = [
-            TestFixtures.makeItem(status: .active, dueDate: nextWeek),
+            TestFixtures.makeItem(status: .active, dueDate: eightDaysOut),
         ]
-        #expect(TodaySections.badgeCount(items: items) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
     }
 
     @Test func excludesCompletedItems() {
+        let yesterday = days(-1, from: Self.wednesdayNow)
         let items = [
             TestFixtures.makeItem(status: .done, dueDate: yesterday),
-            TestFixtures.makeItem(status: .done, dueDate: noonToday),
+            TestFixtures.makeItem(status: .done, dueDate: Self.wednesdayNow),
         ]
-        #expect(TodaySections.badgeCount(items: items) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
     }
 
     @Test func excludesArchivedItems() {
+        let yesterday = days(-1, from: Self.wednesdayNow)
         let items = [
             TestFixtures.makeItem(status: .archived, dueDate: yesterday),
         ]
-        #expect(TodaySections.badgeCount(items: items) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
     }
 
     @Test func excludesSnoozedItems() {
-        // Snoozed items are hidden from the Today view until their snooze
-        // expires, so the badge should match what the user sees on-screen
-        // — zero contribution regardless of the due date.
+        let yesterday = days(-1, from: Self.wednesdayNow)
         let items = [
             TestFixtures.makeItem(status: .snoozed, dueDate: yesterday),
-            TestFixtures.makeItem(status: .snoozed, dueDate: noonToday),
+            TestFixtures.makeItem(status: .snoozed, dueDate: Self.wednesdayNow),
         ]
-        #expect(TodaySections.badgeCount(items: items) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
     }
 
     @Test func excludesItemsWithoutDueDate() {
         let items = [
             TestFixtures.makeItem(status: .active, dueDate: nil),
         ]
-        #expect(TodaySections.badgeCount(items: items) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
     }
 
-    @Test func sumsBucketsTogether() {
+    @Test func sumsBucketsTogetherOnWeekday() {
+        let yesterday = days(-1, from: Self.wednesdayNow)
+        let thursday = days(1, from: Self.wednesdayNow)
+        let saturday = days(3, from: Self.wednesdayNow)
+        let nextThursday = days(8, from: Self.wednesdayNow)
         let items = [
-            TestFixtures.makeItem(status: .active,  dueDate: yesterday),
-            TestFixtures.makeItem(status: .active,  dueDate: noonToday),
-            TestFixtures.makeItem(status: .active,  dueDate: laterThisWeek),
-            TestFixtures.makeItem(status: .active,  dueDate: nextWeek),       // excluded
-            TestFixtures.makeItem(status: .done,    dueDate: noonToday),       // excluded
-            TestFixtures.makeItem(status: .snoozed, dueDate: yesterday),       // excluded
-            TestFixtures.makeItem(status: .active,  dueDate: nil),             // excluded
+            TestFixtures.makeItem(status: .active,  dueDate: yesterday),         // overdue ✓
+            TestFixtures.makeItem(status: .active,  dueDate: Self.wednesdayNow), // today ✓
+            TestFixtures.makeItem(status: .active,  dueDate: thursday),          // thisWeek ✓
+            TestFixtures.makeItem(status: .active,  dueDate: saturday),          // thisWeekend ✗ (weekday)
+            TestFixtures.makeItem(status: .active,  dueDate: nextThursday),      // nextWeek ✗
+            TestFixtures.makeItem(status: .done,    dueDate: Self.wednesdayNow), // ✗
+            TestFixtures.makeItem(status: .snoozed, dueDate: yesterday),         // ✗
+            TestFixtures.makeItem(status: .active,  dueDate: nil),               // ✗
         ]
-        #expect(TodaySections.badgeCount(items: items) == 3)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 3)
     }
 }

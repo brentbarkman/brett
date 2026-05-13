@@ -139,11 +139,10 @@ struct TodaySectionsTests {
         return Calendar(identifier: .gregorian).date(from: c)!
     }
 
-    @Test func sundayDueOnSaturdayBucketsAsThisWeek() throws {
-        // The exact bug we shipped against: on Saturday, a task due the
-        // upcoming Sunday must land in `thisWeek` to match desktop's
-        // `computeUrgency` (`packages/business/src/index.ts`), which treats
-        // `dueMs <= endOfThisWeek` (Sunday midnight UTC) as inclusive.
+    @Test func sundayDueOnSaturdayBucketsAsThisWeekend() throws {
+        // On Saturday, the upcoming Sunday is the second day of the
+        // current weekend — must land in `thisWeekend`, not `thisWeek`.
+        // Mirrors desktop's `computeUrgency` returning "this_weekend".
         let ctx = try makeContext()
         let saturday = Self.utcDate(2026, 4, 25, 12)         // Sat noon UTC
         let sundayDue = Self.utcDate(2026, 4, 26, 0)         // Sun 00:00 UTC — boundary
@@ -152,14 +151,15 @@ struct TodaySectionsTests {
 
         let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
 
-        #expect(sections.thisWeek.map(\.id) == [item.id])
+        #expect(sections.thisWeekend.map(\.id) == [item.id])
+        #expect(sections.thisWeek.isEmpty)
         #expect(sections.nextWeek.isEmpty)
     }
 
-    @Test func sundayDueLaterInDayOnSaturdayBucketsAsThisWeek() throws {
-        // Same day-of-week boundary, but with a non-midnight time on the
-        // due date. Desktop strips to `utcDay(dueDate)` so any moment on
-        // Sunday counts as "this week" today (Saturday).
+    @Test func sundayDueLaterInDayOnSaturdayBucketsAsThisWeekend() throws {
+        // Same day-of-week boundary, non-midnight time. `bucket()` strips
+        // to start-of-day before comparing day-of-week, so any moment on
+        // Sunday classifies as `thisWeekend` when today is Saturday.
         let ctx = try makeContext()
         let saturday = Self.utcDate(2026, 4, 25, 12)
         let sundayLate = Self.utcDate(2026, 4, 26, 23)       // Sun 23:00 UTC
@@ -168,14 +168,13 @@ struct TodaySectionsTests {
 
         let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
 
-        #expect(sections.thisWeek.map(\.id) == [item.id])
-        #expect(sections.nextWeek.isEmpty)
+        #expect(sections.thisWeekend.map(\.id) == [item.id])
+        #expect(sections.thisWeek.isEmpty)
     }
 
-    @Test func mondayDueOnSaturdayBucketsAsNextWeek() throws {
-        // Sanity check the upper edge — Monday must still fall to
-        // `nextWeek`. Catches an over-correction (e.g. +2 days instead of
-        // +1) that would also pull Monday in.
+    @Test func mondayDueOnSaturdayBucketsAsThisWeek() throws {
+        // On Saturday, the upcoming Mon-Fri is treated as "this week" —
+        // the next workweek begins after the current weekend ends.
         let ctx = try makeContext()
         let saturday = Self.utcDate(2026, 4, 25, 12)
         let mondayDue = Self.utcDate(2026, 4, 27, 0)
@@ -184,14 +183,14 @@ struct TodaySectionsTests {
 
         let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
 
-        #expect(sections.nextWeek.map(\.id) == [item.id])
-        #expect(sections.thisWeek.isEmpty)
+        #expect(sections.thisWeek.map(\.id) == [item.id])
+        #expect(sections.thisWeekend.isEmpty)
+        #expect(sections.nextWeek.isEmpty)
     }
 
     @Test func nextSundayDueOnSaturdayBucketsAsNextWeek() throws {
-        // Desktop puts a task on the *following* Sunday into `nextWeek`
-        // (`dueMs <= endOfNextWeek`, where `endOfNextWeek = endOfThisWeek
-        // + 7 days`). Before parity work iOS dropped this row entirely.
+        // The Sunday a week from this Saturday — falls past `thisWeekend`
+        // (which is today + tomorrow only on Saturday) and into `nextWeek`.
         let ctx = try makeContext()
         let saturday = Self.utcDate(2026, 4, 25, 12)
         let nextSunday = Self.utcDate(2026, 5, 3, 0)
@@ -201,12 +200,13 @@ struct TodaySectionsTests {
         let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
 
         #expect(sections.nextWeek.map(\.id) == [item.id])
+        #expect(sections.thisWeekend.isEmpty)
     }
 
-    @Test func sundayTodayPutsTodayItemInTodayNotThisWeek() throws {
+    @Test func sundayTodayPutsTodayItemInTodayNotElsewhere() throws {
         // When today *is* Sunday, an item dated today must still land in
-        // `today`, not `thisWeek` — verifies the `weekday == 1` branch
-        // doesn't pull today's row forward.
+        // `today`, not in `thisWeekend` or `thisWeek` — `today` urgency
+        // takes precedence in the bucket switch.
         let ctx = try makeContext()
         let sunday = Self.utcDate(2026, 4, 26, 12)
         let sundayDue = Self.utcDate(2026, 4, 26, 18)
@@ -217,6 +217,38 @@ struct TodaySectionsTests {
 
         #expect(sections.today.map(\.id) == [item.id])
         #expect(sections.thisWeek.isEmpty)
+        #expect(sections.thisWeekend.isEmpty)
+    }
+
+    @Test func saturdayDueOnWednesdayBucketsAsThisWeekend() throws {
+        // Mid-week reference. Sat & Sun of this week are the `thisWeekend`
+        // bucket — splitting them out from `thisWeek` (which is Mon-Fri).
+        let ctx = try makeContext()
+        let wednesday = Self.utcDate(2026, 4, 22, 12)
+        let saturdayDue = Self.utcDate(2026, 4, 25, 0)
+        let sundayDue = Self.utcDate(2026, 4, 26, 0)
+        let sat = itemDue(saturdayDue)
+        let sun = itemDue(sundayDue)
+        ctx.insert(sat); ctx.insert(sun)
+
+        let sections = TodaySections.bucket(items: [sat, sun], reflowKey: 0, now: wednesday)
+
+        #expect(Set(sections.thisWeekend.map(\.id)) == Set([sat.id, sun.id]))
+        #expect(sections.thisWeek.isEmpty)
+    }
+
+    @Test func fridayDueOnWednesdayBucketsAsThisWeek() throws {
+        // Mid-week weekday → still in `thisWeek` under the new split.
+        let ctx = try makeContext()
+        let wednesday = Self.utcDate(2026, 4, 22, 12)
+        let fridayDue = Self.utcDate(2026, 4, 24, 0)
+        let item = itemDue(fridayDue)
+        ctx.insert(item)
+
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: wednesday)
+
+        #expect(sections.thisWeek.map(\.id) == [item.id])
+        #expect(sections.thisWeekend.isEmpty)
     }
 
     @Test func sortingPutsNewestCreatedFirst() throws {

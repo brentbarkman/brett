@@ -13,11 +13,12 @@ struct TodaySections {
     let overdue: [Item]
     let today: [Item]
     let thisWeek: [Item]
+    let thisWeekend: [Item]
     let nextWeek: [Item]
     let doneToday: [Item]
 
     var activeCount: Int {
-        overdue.count + today.count + thisWeek.count + nextWeek.count
+        overdue.count + today.count + thisWeek.count + thisWeekend.count + nextWeek.count
     }
 
     var hasDoneToday: Bool { !doneToday.isEmpty }
@@ -25,14 +26,25 @@ struct TodaySections {
     var isEveryActiveSectionEmpty: Bool { activeCount == 0 }
 
     /// Count shown on the iOS home-screen badge and the macOS dock badge.
-    /// Overdue + due today + due this week, excluding Next Week, completed,
-    /// archived, and items without a due date. Semantically identical to
-    /// desktop's `activeThingsForCount.length` in `apps/desktop/src/App.tsx`
-    /// — both bucket on the same UTC day/week boundaries, so a row that
-    /// counts on one client counts on the other.
+    ///
+    /// Inclusion rules (must stay in lockstep with desktop's `App.tsx`
+    /// `badgeCount`):
+    ///   - Always: overdue + today + thisWeek
+    ///   - On Sat/Sun: + thisWeekend (the weekend has arrived)
+    ///
+    /// Weekend items deliberately stay out of the badge on weekdays —
+    /// a Saturday task shouldn't nag the user on Tuesday — but roll in
+    /// once the weekend itself arrives.
     static func badgeCount(items: [Item], now: Date = Date()) -> Int {
         let s = bucket(items: items, reflowKey: 0, now: now)
-        return s.overdue.count + s.today.count + s.thisWeek.count
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let weekday = cal.component(.weekday, from: now) // Sun=1..Sat=7
+        let isWeekend = weekday == 1 || weekday == 7
+        return s.overdue.count
+            + s.today.count
+            + s.thisWeek.count
+            + (isWeekend ? s.thisWeekend.count : 0)
     }
 
     /// UTC calendar — matches desktop's `getTodayUTC` / `getEndOfWeekUTC`
@@ -73,26 +85,46 @@ struct TodaySections {
         let startOfToday = calendar.startOfDay(for: now)
         let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday.addingTimeInterval(86_400)
 
-        // Boundary mirrors desktop's `computeUrgency`
-        // (`packages/business/src/index.ts`) exactly: "this week" is
-        // inclusive of the upcoming Sunday; on Sunday itself it extends
-        // a full 7 days. Desktop achieves this with `dueMs <=
-        // endOfThisWeek` against start-of-Sunday UTC. We use `<` against
-        // start-of-Monday UTC (one day past Sunday) so the comparison
-        // stays symmetric with `endOfToday` and so a row stored anywhere
-        // on Sunday — including 00:00:00 UTC — buckets identically on
-        // both clients. The previous off-by-one (boundary at start-of-
-        // Sunday with `<`) was dropping every Sunday-due task into
-        // `nextWeek` and every following-Sunday task out of the bucket
-        // entirely.
-        let weekday = calendar.component(.weekday, from: now)
-        let daysUntilEndOfWeek = weekday == 1 ? 8 : (9 - weekday) // Sunday = 1; +1 day past upcoming Sunday
-        let endOfThisWeek = calendar.date(byAdding: .day, value: daysUntilEndOfWeek, to: startOfToday) ?? endOfToday
-        let endOfNextWeek = calendar.date(byAdding: .day, value: 7, to: endOfThisWeek) ?? endOfThisWeek.addingTimeInterval(7 * 86_400)
+        // Boundary offsets mirror desktop's TS `urgencyBucketRanges` in
+        // `packages/business/src/index.ts` EXACTLY — change one, change
+        // the other. The four forward-looking buckets are partitioned by
+        // (day-of-week of today) × (day-of-week of the due date):
+        //
+        //   - thisWeek    = next upcoming Mon-Fri workweek
+        //   - thisWeekend = next upcoming Sat-Sun pair
+        //   - nextWeek    = the calendar week after thisWeekend
+        //   - everything beyond → dropped (this surface only renders
+        //     overdue..nextWeek; "later" doesn't render here)
+        //
+        // We compute END boundaries as "start of the day AFTER the last
+        // included day" so `<` against `startOfDueDay` (UTC-stripped)
+        // gives inclusive semantics on the named end day. The TS layer
+        // uses `<=` against the named end day directly; mathematically
+        // identical when both sides are start-of-day UTC.
+        let weekday = calendar.component(.weekday, from: now) // Sun=1..Sat=7
+        let dow = weekday - 1 // 0=Sun..6=Sat (matches TS getUTCDay())
+
+        struct Ranges { let thisWeekStart, thisWeekEnd, thisWeekendStart, thisWeekendEnd, nextWeekEnd: Int }
+        let r: Ranges = {
+            if dow == 0 {
+                return Ranges(thisWeekStart: 1, thisWeekEnd: 5, thisWeekendStart: 6, thisWeekendEnd: 7, nextWeekEnd: 14)
+            }
+            if dow == 6 {
+                return Ranges(thisWeekStart: 2, thisWeekEnd: 6, thisWeekendStart: 1, thisWeekendEnd: 1, nextWeekEnd: 8)
+            }
+            return Ranges(
+                thisWeekStart: 1,
+                thisWeekEnd: 5 - dow,
+                thisWeekendStart: 6 - dow,
+                thisWeekendEnd: 7 - dow,
+                nextWeekEnd: 14 - dow
+            )
+        }()
 
         var overdue: [Item] = []
         var today: [Item] = []
         var thisWeek: [Item] = []
+        var thisWeekend: [Item] = []
         var nextWeek: [Item] = []
         var doneToday: [Item] = []
 
@@ -113,17 +145,28 @@ struct TodaySections {
                 continue
             }
 
-            // Active tasks only from here on out.
             if effectiveStatus != .active { continue }
             guard let due = item.dueDate else { continue }
 
             if due < startOfToday {
                 overdue.append(item)
-            } else if due < endOfToday {
+                continue
+            }
+            if due < endOfToday {
                 today.append(item)
-            } else if due < endOfThisWeek {
+                continue
+            }
+
+            let startOfDueDay = calendar.startOfDay(for: due)
+            let diff = calendar.dateComponents([.day], from: startOfToday, to: startOfDueDay).day ?? 0
+            let dueWeekday = calendar.component(.weekday, from: startOfDueDay)
+            let isWeekendDay = dueWeekday == 1 || dueWeekday == 7
+
+            if isWeekendDay && diff >= r.thisWeekendStart && diff <= r.thisWeekendEnd {
+                thisWeekend.append(item)
+            } else if !isWeekendDay && diff >= r.thisWeekStart && diff <= r.thisWeekEnd {
                 thisWeek.append(item)
-            } else if due < endOfNextWeek {
+            } else if diff <= r.nextWeekEnd {
                 nextWeek.append(item)
             }
         }
@@ -144,6 +187,7 @@ struct TodaySections {
             overdue: overdue.sorted(by: activeSort),
             today: today.sorted(by: activeSort),
             thisWeek: thisWeek.sorted(by: activeSort),
+            thisWeekend: thisWeekend.sorted(by: activeSort),
             nextWeek: nextWeek.sorted(by: activeSort),
             doneToday: doneToday.sorted {
                 if let a = $0.completedAt, let b = $1.completedAt, a != b {

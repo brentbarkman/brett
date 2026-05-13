@@ -120,6 +120,49 @@ function getDateParts(date: Date, timezone: string): {
   };
 }
 
+/**
+ * Day-offset ranges (relative to today, in UTC days) for the four
+ * forward-looking urgency buckets. Reflects the user-facing rule:
+ *   - `this_week`     = the next upcoming Mon-Fri workweek
+ *   - `this_weekend`  = the next upcoming Sat-Sun pair
+ *   - `next_week`     = the calendar week following `this_weekend`
+ *   - everything else = `later`
+ *
+ * On Mon-Fri, "this week" is the remainder of the current calendar week.
+ * On Fri specifically, `thisWeek` is empty (Fri = today; Sat-Sun is the
+ * upcoming weekend; the workweek itself has no future days left).
+ * On Sat-Sun, "this week" rolls forward to the NEXT workweek and
+ * "this weekend" is what remains of the current weekend.
+ */
+function urgencyBucketRanges(dayOfWeek: number): {
+  thisWeekStart: number;
+  thisWeekEnd: number;
+  thisWeekendStart: number;
+  thisWeekendEnd: number;
+  nextWeekEnd: number;
+} {
+  if (dayOfWeek === 0) {
+    // Sun: this_week = next Mon-Fri (today+1..today+5).
+    //      this_weekend = next Sat-Sun (today+6..today+7).
+    //      next_week extends to today+14 (a full subsequent calendar week).
+    return { thisWeekStart: 1, thisWeekEnd: 5, thisWeekendStart: 6, thisWeekendEnd: 7, nextWeekEnd: 14 };
+  }
+  if (dayOfWeek === 6) {
+    // Sat: this_week = next Mon-Fri (today+2..today+6).
+    //      this_weekend = tomorrow's Sun only (today+1).
+    //      next_week extends through the Sun after that (today+8).
+    return { thisWeekStart: 2, thisWeekEnd: 6, thisWeekendStart: 1, thisWeekendEnd: 1, nextWeekEnd: 8 };
+  }
+  // Mon-Fri (1..5). On Fri, thisWeekEnd === 0, leaving the bucket empty.
+  return {
+    thisWeekStart: 1,
+    thisWeekEnd: 5 - dayOfWeek,
+    thisWeekendStart: 6 - dayOfWeek,
+    thisWeekendEnd: 7 - dayOfWeek,
+    nextWeekEnd: 14 - dayOfWeek,
+  };
+}
+
 export function computeUrgency(
   dueDate: Date | null,
   dueDatePrecision: DueDatePrecision | null,
@@ -128,39 +171,35 @@ export function computeUrgency(
 ): Urgency {
   if (!dueDate) return completedAt ? "done" : "later";
 
-  // Week-precision dates: urgency comes from the range, not the specific date
+  const todayMs = utcDay(now);
+  const dueMs = utcDay(dueDate);
+  const DAY_MS = 86400000;
+  const dayOfWeek = now.getUTCDay(); // 0=Sun..6=Sat
+  const r = urgencyBucketRanges(dayOfWeek);
+  const weekendEndMs = todayMs + r.thisWeekendEnd * DAY_MS;
+  const nextWeekEndMs = todayMs + r.nextWeekEnd * DAY_MS;
+
+  if (dueMs < todayMs) return "overdue";
+
+  // Week-precision items (the "this week" preset, stored as Sunday) — they're
+  // a soft "sometime this week" tag, NOT a Saturday-specific commitment. Keep
+  // them in `this_week` regardless of their stored day-of-week so the picker's
+  // intent (loose targeting) is preserved.
   if (dueDatePrecision === "week") {
-    const todayMs = utcDay(now);
-    const dueMs = utcDay(dueDate);
-
-    // End of this week (next Sunday); on Sunday, "this week" means the upcoming week
-    const dayOfWeek = now.getUTCDay();
-    const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
-    const endOfThisWeekMs = todayMs + daysUntilSunday * 86400000;
-    const endOfNextWeekMs = endOfThisWeekMs + 7 * 86400000;
-
-    // If the stored Sunday has passed, it's overdue
-    if (dueMs < todayMs) return "overdue";
-    if (dueMs <= endOfThisWeekMs) return "this_week";
-    if (dueMs <= endOfNextWeekMs) return "next_week";
+    if (dueMs <= weekendEndMs) return "this_week";
+    if (dueMs <= nextWeekEndMs) return "next_week";
     return "later";
   }
 
-  // Day-precision dates: compare exact days
-  const todayMs = utcDay(now);
-  const dueMs = utcDay(dueDate);
-
-  if (dueMs < todayMs) return "overdue";
+  // Day-precision items: split Sat/Sun into `this_weekend`.
   if (dueMs === todayMs) return "today";
+  const diff = (dueMs - todayMs) / DAY_MS;
+  const dueDayOfWeek = new Date(dueMs).getUTCDay();
+  const isWeekendDay = dueDayOfWeek === 0 || dueDayOfWeek === 6;
 
-  // End of this week (next Sunday); on Sunday, "this week" means the upcoming week
-  const dayOfWeek = now.getUTCDay();
-  const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
-  const endOfThisWeekMs = todayMs + daysUntilSunday * 86400000;
-  const endOfNextWeekMs = endOfThisWeekMs + 7 * 86400000;
-
-  if (dueMs <= endOfThisWeekMs) return "this_week";
-  if (dueMs <= endOfNextWeekMs) return "next_week";
+  if (isWeekendDay && diff >= r.thisWeekendStart && diff <= r.thisWeekendEnd) return "this_weekend";
+  if (!isWeekendDay && diff >= r.thisWeekStart && diff <= r.thisWeekEnd) return "this_week";
+  if (diff <= r.nextWeekEnd) return "next_week";
   return "later";
 }
 
@@ -618,7 +657,7 @@ export function validateBulkUpdate(
   };
 }
 
-export type TriageDatePreset = "today" | "tomorrow" | "this_week" | "next_week" | "next_month";
+export type TriageDatePreset = "today" | "tomorrow" | "this_weekend" | "this_week" | "next_week" | "next_month";
 
 export interface TriageResult {
   dueDate: string; // ISO string
@@ -637,6 +676,15 @@ export function computeTriageResult(
     case "tomorrow":
       d.setUTCDate(d.getUTCDate() + 1);
       return { dueDate: d.toISOString(), dueDatePrecision: "day" };
+    case "this_weekend": {
+      // If today is Saturday (6) or Sunday (0), we ARE in the weekend — use today.
+      // Otherwise jump to the next upcoming Saturday.
+      const dayOfWeek = d.getUTCDay();
+      if (dayOfWeek !== 6 && dayOfWeek !== 0) {
+        d.setUTCDate(d.getUTCDate() + (6 - dayOfWeek));
+      }
+      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
+    }
     case "this_week": {
       // Next Sunday (end of current week); if already Sunday, use next Sunday
       const dayOfWeek = d.getUTCDay(); // 0=Sun

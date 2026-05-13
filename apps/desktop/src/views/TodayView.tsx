@@ -135,15 +135,32 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
       overdue: uncompleted.filter((t) => t.urgency === "overdue"),
       today: uncompleted.filter((t) => t.urgency === "today"),
       thisWeek: uncompleted.filter((t) => t.urgency === "this_week"),
+      thisWeekend: uncompleted.filter((t) => t.urgency === "this_weekend"),
       done,
     };
   }, [filteredThings]);
 
   const sections = useMemo(() => {
+    const dow = new Date().getUTCDay();
+    const isWeekendNow = dow === 0 || dow === 6;
     const list: Array<{ key: string; title: string; count: number }> = [];
     if (grouped.overdue.length > 0) list.push({ key: "overdue", title: "Overdue", count: grouped.overdue.length });
     if (grouped.today.length > 0) list.push({ key: "today", title: "Today", count: grouped.today.length });
-    if (grouped.thisWeek.length > 0) list.push({ key: "this-week", title: "This Week", count: grouped.thisWeek.length });
+    const weekend = grouped.thisWeekend.length > 0
+      ? { key: "this-weekend", title: "This Weekend", count: grouped.thisWeekend.length }
+      : null;
+    const week = grouped.thisWeek.length > 0
+      ? { key: "this-week", title: "This Week", count: grouped.thisWeek.length }
+      : null;
+    // Chronological ordering — weekend first on Sat/Sun (it's imminent),
+    // week first on Mon-Fri (Fri comes before the weekend).
+    if (isWeekendNow) {
+      if (weekend) list.push(weekend);
+      if (week) list.push(week);
+    } else {
+      if (week) list.push(week);
+      if (weekend) list.push(weekend);
+    }
     if (grouped.done.length > 0) list.push({ key: "done-today", title: "Done Today", count: grouped.done.length });
     return list;
   }, [grouped]);
