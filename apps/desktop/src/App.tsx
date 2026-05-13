@@ -496,24 +496,39 @@ export function App() {
   const endOfWeekISO = useMemo(() => getEndOfWeekUTC(new Date(todayKey)).toISOString(), [todayKey]);
   const { data: activeThingsForCount = [], isSuccess: todayQuerySuccess } = useActiveThings(endOfWeekISO);
 
-  // Push the Today count (overdue + due today + this week) to the macOS
-  // dock via the main process. Gates on `todayQuerySuccess` so the dock
-  // doesn't flash 0 during the brief hydration window before the first
-  // Today query resolves. Clears to 0 when signed out so the dock doesn't
-  // keep a stale number for the previous user. No-op in browsers and on
+  // Push the Today count to the macOS dock via the main process.
+  //
+  // Inclusion rules:
+  //   - Always: overdue + today + this_week (the upcoming workweek)
+  //   - On Sat/Sun only: + this_weekend (the current weekend has arrived)
+  //
+  // Weekend items are intentionally excluded from the badge during the
+  // workweek — the user shouldn't see a Saturday item pestering them on
+  // Tuesday. Once Saturday rolls around, those items roll into the badge.
+  //
+  // Gates on `todayQuerySuccess` so the dock doesn't flash 0 during the
+  // hydration window. Clears to 0 when signed out. No-op in browsers /
   // Windows. iOS parity lives in apps/ios/Brett/Services/BadgeManager.
   const badgeUserId = user?.id ?? null;
+  const isWeekendNow = useMemo(() => {
+    const dow = new Date(todayKey).getUTCDay();
+    return dow === 0 || dow === 6;
+  }, [todayKey]);
+  const badgeCount = useMemo(() => {
+    if (!badgeUserId) return 0;
+    return activeThingsForCount.filter((t: { urgency?: string }) => {
+      if (t.urgency === "this_weekend") return isWeekendNow;
+      return true;
+    }).length;
+  }, [badgeUserId, activeThingsForCount, isWeekendNow]);
   useEffect(() => {
     const api = (window as { electronAPI?: { setBadgeCount?: (n: number) => Promise<void> } }).electronAPI;
     if (!api?.setBadgeCount) return;
-    // While signed in, wait for the first successful query before writing
-    // a number. While signed out, push 0 immediately to clear.
     if (badgeUserId && !todayQuerySuccess) return;
-    const count = badgeUserId ? activeThingsForCount.length : 0;
-    api.setBadgeCount(count).catch(() => {
+    api.setBadgeCount(badgeCount).catch(() => {
       // Ignore — losing a badge update is strictly cosmetic.
     });
-  }, [badgeUserId, todayQuerySuccess, activeThingsForCount.length]);
+  }, [badgeUserId, todayQuerySuccess, badgeCount]);
 
   // Upcoming badge count
   const { data: upcomingThings = [] } = useUpcomingThings();
@@ -1257,7 +1272,7 @@ export function App() {
             isCollapsed={isDetailOpen || (location.pathname === "/scouts" && selectedScoutId !== null)}
             lists={lists}
             user={user}
-            incompleteCount={activeThingsForCount.length}
+            incompleteCount={badgeCount}
             currentPath={location.pathname}
             navigate={navigate}
             upcomingCount={upcomingThings.length}

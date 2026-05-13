@@ -56,18 +56,14 @@ enum QuickScheduleOption: String, CaseIterable, Identifiable {
         case .tomorrow:
             return calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: now) ?? now)
         case .thisWeekend:
-            // Next Saturday (weekday 7 in Gregorian). If today *is* Saturday,
-            // prefer the upcoming one — users interpret "this weekend" as
-            // "the weekend ahead of me."
+            // If today is already Saturday (7) or Sunday (1), we ARE in the weekend
+            // — pick today. Otherwise jump to the upcoming Saturday.
             let today = calendar.startOfDay(for: now)
             let weekday = calendar.component(.weekday, from: today) // Sun=1..Sat=7
-            let daysUntilSaturday: Int
-            if weekday == 7 {
-                daysUntilSaturday = 7 // today is Saturday — jump to next one
-            } else {
-                daysUntilSaturday = 7 - weekday
+            if weekday == 7 || weekday == 1 {
+                return today
             }
-            return calendar.date(byAdding: .day, value: daysUntilSaturday, to: today)
+            return calendar.date(byAdding: .day, value: 7 - weekday, to: today)
         case .nextWeek:
             return calendar.startOfDay(for: calendar.date(byAdding: .day, value: 7, to: now) ?? now)
         case .inAMonth:

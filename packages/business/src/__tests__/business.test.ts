@@ -68,9 +68,10 @@ describe("computeUrgency", () => {
       expect(computeUrgency(new Date("2026-03-13"), "day", null, NOW)).toBe("today");
     });
 
-    it("this_week when dueDate is later this week", () => {
-      expect(computeUrgency(new Date("2026-03-14"), "day", null, NOW)).toBe("this_week");
-      expect(computeUrgency(new Date("2026-03-15"), "day", null, NOW)).toBe("this_week");
+    it("this_weekend when dueDate is Sat/Sun of the upcoming weekend", () => {
+      // From Friday, Sat (Mar 14) and Sun (Mar 15) are the upcoming weekend.
+      expect(computeUrgency(new Date("2026-03-14"), "day", null, NOW)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-15"), "day", null, NOW)).toBe("this_weekend");
     });
 
     it("next_week when dueDate is next week", () => {
@@ -89,8 +90,10 @@ describe("computeUrgency", () => {
       expect(computeUrgency(new Date("2026-03-13T23:59:59Z"), "day", null, NOW)).toBe("today");
     });
 
-    it("tomorrow is this_week (not today)", () => {
-      expect(computeUrgency(new Date("2026-03-14"), "day", null, NOW)).toBe("this_week");
+    it("tomorrow (Saturday) is this_weekend when today is Friday", () => {
+      // Confirmed semantic — Friday's "tomorrow" is the start of the weekend
+      // bucket, never the workweek bucket.
+      expect(computeUrgency(new Date("2026-03-14"), "day", null, NOW)).toBe("this_weekend");
     });
   });
 
@@ -150,24 +153,32 @@ describe("computeUrgency", () => {
       expect(computeUrgency(new Date("2026-03-16"), "day", null, SUNDAY)).toBe("this_week");
     });
 
-    it("on Sunday, next Sunday is 'this_week'", () => {
-      expect(computeUrgency(new Date("2026-03-22"), "day", null, SUNDAY)).toBe("this_week");
+    it("on Sunday, next Sunday is 'this_weekend'", () => {
+      // Sun day-precision in the upcoming Sat-Sun pair → this_weekend.
+      expect(computeUrgency(new Date("2026-03-22"), "day", null, SUNDAY)).toBe("this_weekend");
     });
 
     it("on Sunday, Monday after next is 'next_week'", () => {
       expect(computeUrgency(new Date("2026-03-23"), "day", null, SUNDAY)).toBe("next_week");
     });
 
-    it("on Saturday, Sunday (tomorrow) is 'this_week'", () => {
-      expect(computeUrgency(new Date("2026-03-15"), "day", null, SATURDAY)).toBe("this_week");
+    it("on Saturday, Sunday (tomorrow) is 'this_weekend'", () => {
+      // Sat's tomorrow is still in the current weekend.
+      expect(computeUrgency(new Date("2026-03-15"), "day", null, SATURDAY)).toBe("this_weekend");
     });
 
-    it("on Saturday, next Monday is 'next_week'", () => {
-      expect(computeUrgency(new Date("2026-03-16"), "day", null, SATURDAY)).toBe("next_week");
+    it("on Saturday, next Monday is 'this_week' (upcoming workweek)", () => {
+      // On Sat/Sun, the next Mon-Fri is treated as "this week".
+      expect(computeUrgency(new Date("2026-03-16"), "day", null, SATURDAY)).toBe("this_week");
     });
 
-    it("on Monday, this Sunday is 'this_week'", () => {
-      expect(computeUrgency(new Date("2026-03-22"), "day", null, MONDAY)).toBe("this_week");
+    it("on Monday, this Sunday is 'this_weekend'", () => {
+      expect(computeUrgency(new Date("2026-03-22"), "day", null, MONDAY)).toBe("this_weekend");
+    });
+
+    it("on Monday, this Friday is 'this_week'", () => {
+      // Friday is the tail of the upcoming workweek bucket.
+      expect(computeUrgency(new Date("2026-03-20"), "day", null, MONDAY)).toBe("this_week");
     });
 
     it("on Monday, next Monday is 'next_week'", () => {
@@ -176,6 +187,38 @@ describe("computeUrgency", () => {
 
     it("on Monday, two Mondays out is 'later'", () => {
       expect(computeUrgency(new Date("2026-03-30"), "day", null, MONDAY)).toBe("later");
+    });
+  });
+
+  describe("this_week vs this_weekend split", () => {
+    // Mid-week reference: Wednesday March 11, 2026.
+    const WEDNESDAY = new Date("2026-03-11T12:00:00Z");
+
+    it("Thu and Fri from Wed are this_week", () => {
+      expect(computeUrgency(new Date("2026-03-12"), "day", null, WEDNESDAY)).toBe("this_week");
+      expect(computeUrgency(new Date("2026-03-13"), "day", null, WEDNESDAY)).toBe("this_week");
+    });
+
+    it("Sat and Sun from Wed are this_weekend", () => {
+      expect(computeUrgency(new Date("2026-03-14"), "day", null, WEDNESDAY)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-15"), "day", null, WEDNESDAY)).toBe("this_weekend");
+    });
+
+    it("Mon (next week) from Wed is next_week", () => {
+      expect(computeUrgency(new Date("2026-03-16"), "day", null, WEDNESDAY)).toBe("next_week");
+    });
+
+    it("on Saturday, next-week's weekend lands in next_week (not this_weekend)", () => {
+      const SATURDAY = new Date("2026-03-14T12:00:00Z");
+      // Sat Mar 21 = 7 days after Sat Mar 14 → next_week, not this_weekend.
+      expect(computeUrgency(new Date("2026-03-21"), "day", null, SATURDAY)).toBe("next_week");
+    });
+
+    it("week-precision items stay in this_week regardless of weekday split", () => {
+      // Even though Sun (Mar 15) day-precision would be this_weekend,
+      // a week-precision item stored as that Sunday is the "this week"
+      // tag and must round-trip to this_week.
+      expect(computeUrgency(new Date("2026-03-15"), "week", null, WEDNESDAY)).toBe("this_week");
     });
   });
 
@@ -261,6 +304,10 @@ describe("computeTriageResult", () => {
     it("next_month → day precision", () => {
       expect(computeTriageResult("next_month", NOW).dueDatePrecision).toBe("day");
     });
+
+    it("this_weekend → day precision", () => {
+      expect(computeTriageResult("this_weekend", NOW).dueDatePrecision).toBe("day");
+    });
   });
 
   describe("dates from Friday (March 13)", () => {
@@ -283,6 +330,10 @@ describe("computeTriageResult", () => {
     it("next_month → April 1", () => {
       expect(computeTriageResult("next_month", NOW).dueDate).toBe("2026-04-01T00:00:00.000Z");
     });
+
+    it("this_weekend → Saturday March 14", () => {
+      expect(computeTriageResult("this_weekend", NOW).dueDate).toBe("2026-03-14T00:00:00.000Z");
+    });
   });
 
   describe("Sunday edge cases (March 15)", () => {
@@ -295,11 +346,16 @@ describe("computeTriageResult", () => {
     it("next_week → Sunday March 29", () => {
       expect(computeTriageResult("next_week", SUNDAY).dueDate).toBe("2026-03-29T00:00:00.000Z");
     });
+
+    it("this_weekend on Sunday → today (already in the weekend)", () => {
+      expect(computeTriageResult("this_weekend", SUNDAY).dueDate).toBe("2026-03-15T00:00:00.000Z");
+    });
   });
 
   describe("other days", () => {
     const MONDAY = new Date("2026-03-16T12:00:00Z");
     const SATURDAY = new Date("2026-03-14T12:00:00Z");
+    const WEDNESDAY = new Date("2026-03-11T12:00:00Z");
 
     it("this_week on Monday → Sunday March 22", () => {
       expect(computeTriageResult("this_week", MONDAY).dueDate).toBe("2026-03-22T00:00:00.000Z");
@@ -308,6 +364,18 @@ describe("computeTriageResult", () => {
     it("this_week on Saturday → Sunday March 15", () => {
       expect(computeTriageResult("this_week", SATURDAY).dueDate).toBe("2026-03-15T00:00:00.000Z");
     });
+
+    it("this_weekend on Saturday → today (already in the weekend)", () => {
+      expect(computeTriageResult("this_weekend", SATURDAY).dueDate).toBe("2026-03-14T00:00:00.000Z");
+    });
+
+    it("this_weekend on Monday → upcoming Saturday March 21", () => {
+      expect(computeTriageResult("this_weekend", MONDAY).dueDate).toBe("2026-03-21T00:00:00.000Z");
+    });
+
+    it("this_weekend on Wednesday → upcoming Saturday March 14", () => {
+      expect(computeTriageResult("this_weekend", WEDNESDAY).dueDate).toBe("2026-03-14T00:00:00.000Z");
+    });
   });
 });
 
@@ -315,7 +383,7 @@ describe("computeTriageResult", () => {
 
 describe("triage → urgency round-trip", () => {
   function triageAndClassify(
-    preset: "today" | "tomorrow" | "this_week" | "next_week" | "next_month",
+    preset: "today" | "tomorrow" | "this_weekend" | "this_week" | "next_week" | "next_month",
     now: Date
   ): Urgency {
     const result = computeTriageResult(preset, now);
@@ -324,7 +392,10 @@ describe("triage → urgency round-trip", () => {
 
   describe("from Friday (March 13)", () => {
     it("today → 'today'", () => expect(triageAndClassify("today", NOW)).toBe("today"));
-    it("tomorrow → 'this_week'", () => expect(triageAndClassify("tomorrow", NOW)).toBe("this_week"));
+    it("tomorrow → 'this_weekend'", () =>
+      // Tomorrow on Friday is Saturday — falls into the weekend bucket.
+      expect(triageAndClassify("tomorrow", NOW)).toBe("this_weekend"));
+    it("this_weekend → 'this_weekend'", () => expect(triageAndClassify("this_weekend", NOW)).toBe("this_weekend"));
     it("this_week → 'this_week'", () => expect(triageAndClassify("this_week", NOW)).toBe("this_week"));
     it("next_week → 'next_week'", () => expect(triageAndClassify("next_week", NOW)).toBe("next_week"));
     it("next_month → 'later'", () => expect(triageAndClassify("next_month", NOW)).toBe("later"));
@@ -334,6 +405,10 @@ describe("triage → urgency round-trip", () => {
     const SUNDAY = new Date("2026-03-15T12:00:00Z");
 
     it("today → 'today'", () => expect(triageAndClassify("today", SUNDAY)).toBe("today"));
+    it("this_weekend → 'today'", () =>
+      // On Sun, the "this_weekend" preset stores today → urgency is "today",
+      // not "this_weekend" (today takes precedence in the urgency switch).
+      expect(triageAndClassify("this_weekend", SUNDAY)).toBe("today"));
     it("this_week → 'this_week'", () => expect(triageAndClassify("this_week", SUNDAY)).toBe("this_week"));
     it("next_week → 'next_week'", () => expect(triageAndClassify("next_week", SUNDAY)).toBe("next_week"));
   });
@@ -342,6 +417,7 @@ describe("triage → urgency round-trip", () => {
     const MONDAY = new Date("2026-03-16T12:00:00Z");
 
     it("today → 'today'", () => expect(triageAndClassify("today", MONDAY)).toBe("today"));
+    it("this_weekend → 'this_weekend'", () => expect(triageAndClassify("this_weekend", MONDAY)).toBe("this_weekend"));
     it("this_week → 'this_week'", () => expect(triageAndClassify("this_week", MONDAY)).toBe("this_week"));
     it("next_week → 'next_week'", () => expect(triageAndClassify("next_week", MONDAY)).toBe("next_week"));
   });
@@ -349,6 +425,9 @@ describe("triage → urgency round-trip", () => {
   describe("from Saturday (March 14)", () => {
     const SATURDAY = new Date("2026-03-14T12:00:00Z");
 
+    it("this_weekend → 'today'", () =>
+      // On Sat, the "this_weekend" preset stores today → "today" urgency.
+      expect(triageAndClassify("this_weekend", SATURDAY)).toBe("today"));
     it("this_week → 'this_week'", () => expect(triageAndClassify("this_week", SATURDAY)).toBe("this_week"));
     it("next_week → 'next_week'", () => expect(triageAndClassify("next_week", SATURDAY)).toBe("next_week"));
   });
@@ -375,7 +454,7 @@ describe("triage → label round-trip", () => {
 // ── today view filtering ──
 
 describe("today view filtering", () => {
-  const TODAY_VIEW_URGENCIES = new Set(["overdue", "today", "this_week"]);
+  const TODAY_VIEW_URGENCIES = new Set(["overdue", "today", "this_week", "this_weekend"]);
 
   function isVisibleInTodayView(urgency: Urgency): boolean {
     return TODAY_VIEW_URGENCIES.has(urgency);
@@ -384,6 +463,7 @@ describe("today view filtering", () => {
   it("shows overdue", () => expect(isVisibleInTodayView("overdue")).toBe(true));
   it("shows today", () => expect(isVisibleInTodayView("today")).toBe(true));
   it("shows this_week", () => expect(isVisibleInTodayView("this_week")).toBe(true));
+  it("shows this_weekend", () => expect(isVisibleInTodayView("this_weekend")).toBe(true));
   it("hides next_week", () => expect(isVisibleInTodayView("next_week")).toBe(false));
   it("hides later", () => expect(isVisibleInTodayView("later")).toBe(false));
   it("hides done", () => expect(isVisibleInTodayView("done")).toBe(false));

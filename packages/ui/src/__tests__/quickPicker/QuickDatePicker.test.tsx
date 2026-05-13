@@ -41,17 +41,20 @@ function renderPicker(
 }
 
 describe("QuickDatePicker", () => {
-  it("renders the five preset chips with letters and resolved dates", () => {
+  it("renders the six preset chips with letters and resolved dates", () => {
     renderPicker();
     expect(screen.getByTestId("chip-today")).toHaveTextContent("Today");
     expect(screen.getByTestId("chip-today")).toHaveTextContent("Thu · May 7");
     expect(screen.getByTestId("chip-tomorrow")).toHaveTextContent("Tomorrow");
+    expect(screen.getByTestId("chip-this_weekend")).toHaveTextContent("This Weekend");
+    expect(screen.getByTestId("chip-this_weekend")).toHaveTextContent("Sat · May 9");
     expect(screen.getByTestId("chip-this_week")).toHaveTextContent("This Week");
     expect(screen.getByTestId("chip-next_week")).toHaveTextContent("Next Week");
     expect(screen.getByTestId("chip-next_month")).toHaveTextContent("Next Month");
 
     expect(screen.getByTestId("chip-today")).toHaveTextContent("T");
     expect(screen.getByTestId("chip-tomorrow")).toHaveTextContent("M");
+    expect(screen.getByTestId("chip-this_weekend")).toHaveTextContent("S");
     expect(screen.getByTestId("chip-this_week")).toHaveTextContent("W");
     expect(screen.getByTestId("chip-next_week")).toHaveTextContent("N");
     expect(screen.getByTestId("chip-next_month")).toHaveTextContent("X");
@@ -71,6 +74,14 @@ describe("QuickDatePicker", () => {
     expect(onCommit).toHaveBeenCalledTimes(1);
     const date = onCommit.mock.calls[0][0] as Date;
     expect(date.toISOString()).toBe("2026-05-08T00:00:00.000Z");
+  });
+
+  it("commits the upcoming Saturday when 's' is pressed", () => {
+    const { onCommit } = renderPicker();
+    fireEvent.keyDown(window, { key: "s" });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const date = onCommit.mock.calls[0][0] as Date;
+    expect(date.toISOString()).toBe("2026-05-09T00:00:00.000Z");
   });
 
   it("clears the date on Backspace and Delete", () => {

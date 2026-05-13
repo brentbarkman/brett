@@ -27,11 +27,23 @@ struct QuickScheduleTests {
 
     private func saturdayAnchor() -> Date {
         // Saturday, April 18, 2026 at 09:00 local — used to verify the
-        // "today is Saturday → roll over to next Saturday" case.
+        // "today is Saturday → resolve to today" case.
         var comps = DateComponents()
         comps.year = 2026
         comps.month = 4
         comps.day = 18
+        comps.hour = 9
+        comps.minute = 0
+        return Calendar(identifier: .gregorian).date(from: comps)!
+    }
+
+    private func sundayAnchor() -> Date {
+        // Sunday, April 19, 2026 at 09:00 local — used to verify the
+        // "today is Sunday → resolve to today" case.
+        var comps = DateComponents()
+        comps.year = 2026
+        comps.month = 4
+        comps.day = 19
         comps.hour = 9
         comps.minute = 0
         return Calendar(identifier: .gregorian).date(from: comps)!
@@ -73,12 +85,22 @@ struct QuickScheduleTests {
         #expect(diff == 4, "Tue → Sat is 4 days away")
     }
 
-    @Test("This Weekend rolls to NEXT Saturday when today is already Saturday")
-    func weekendRollsWhenTodayIsSaturday() {
+    @Test("This Weekend resolves to today when today is already Saturday")
+    func weekendIsTodayWhenSaturday() {
         let now = saturdayAnchor()
         let resolved = QuickScheduleOption.thisWeekend.resolvedDate(now: now, calendar: calendar)!
+        #expect(calendar.isDate(resolved, inSameDayAs: now), "Saturday should resolve to today — we ARE in the weekend")
         let diff = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: resolved).day
-        #expect(diff == 7, "Saturday should resolve to *next* Saturday, not today")
+        #expect(diff == 0)
+    }
+
+    @Test("This Weekend resolves to today when today is Sunday")
+    func weekendIsTodayWhenSunday() {
+        let now = sundayAnchor()
+        let resolved = QuickScheduleOption.thisWeekend.resolvedDate(now: now, calendar: calendar)!
+        #expect(calendar.isDate(resolved, inSameDayAs: now), "Sunday should resolve to today — we ARE in the weekend")
+        let diff = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: resolved).day
+        #expect(diff == 0)
     }
 
     // MARK: - Next Week
