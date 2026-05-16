@@ -221,17 +221,16 @@ function Section({
 }) {
   return (
     <div data-section-key={sectionKey}>
-      {/* For non-active sections the in-flow header is a visible divider
-       *  with -mb-2 absorbing SectionHeader's mb-2 so the header sits tight
-       *  to its items. For the active section we drop the header entirely
-       *  (display:none) so items sit flush at the top of data-section-key —
-       *  the chrome above the inner scroll already shows this section's
-       *  name. TodayView compensates scrollTop on transitions so the layout
-       *  shift doesn't pop the viewport. */}
+      {/* For non-active sections the in-flow header is a visible divider.
+       *  Its natural mb-2 gives the same 8px breathing room below the rule
+       *  as the chrome active-section header above the inner scroll, so
+       *  spacing is consistent across sections. For the active section we
+       *  drop the header entirely so items sit flush at the top of
+       *  data-section-key — the chrome already shows the name. TodayView
+       *  compensates scrollTop on transitions so the layout shift doesn't
+       *  pop the viewport. */}
       {!hideHeader && (
-        <div className="-mb-2">
-          <SectionHeader title={title} count={things.length} />
-        </div>
+        <SectionHeader title={title} count={things.length} />
       )}
       <div className="flex flex-col gap-1.5">
         {things.map((item, i) => (
