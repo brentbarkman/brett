@@ -286,7 +286,11 @@ private struct TaskDetailBody: View {
                     .accessibilityIdentifier("detail.titleField")
             }
         }
-        .padding(.top, 4)
+        // Pads below the sheet's drag indicator so the breadcrumb/title
+        // doesn't sit right under it. DetailViewContainer's own top
+        // padding of 8 leaves only ~12pt of breathing room which reads
+        // tight against the indicator and the sheet's rounded edge.
+        .padding(.top, 16)
     }
 
     @ViewBuilder
