@@ -61,83 +61,67 @@ describe("computeUrgency", () => {
 
   describe("day-precision dates", () => {
     it("overdue when dueDate is before today", () => {
-      expect(computeUrgency(new Date("2026-03-10"), "day", null, NOW)).toBe("overdue");
+      expect(computeUrgency(new Date("2026-03-10"), null, NOW)).toBe("overdue");
     });
 
     it("today when dueDate is today", () => {
-      expect(computeUrgency(new Date("2026-03-13"), "day", null, NOW)).toBe("today");
+      expect(computeUrgency(new Date("2026-03-13"), null, NOW)).toBe("today");
     });
 
     it("this_weekend when dueDate is Sat/Sun of the upcoming weekend", () => {
       // From Friday, Sat (Mar 14) and Sun (Mar 15) are the upcoming weekend.
-      expect(computeUrgency(new Date("2026-03-14"), "day", null, NOW)).toBe("this_weekend");
-      expect(computeUrgency(new Date("2026-03-15"), "day", null, NOW)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-14"), null, NOW)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-15"), null, NOW)).toBe("this_weekend");
     });
 
     it("next_week when dueDate is next week", () => {
-      expect(computeUrgency(new Date("2026-03-18"), "day", null, NOW)).toBe("next_week");
+      expect(computeUrgency(new Date("2026-03-18"), null, NOW)).toBe("next_week");
     });
 
     it("later when dueDate is beyond next week", () => {
-      expect(computeUrgency(new Date("2026-03-25"), "day", null, NOW)).toBe("later");
+      expect(computeUrgency(new Date("2026-03-25"), null, NOW)).toBe("later");
     });
 
     it("midnight boundary: due today at midnight is today", () => {
-      expect(computeUrgency(new Date("2026-03-13T00:00:00Z"), "day", null, NOW)).toBe("today");
+      expect(computeUrgency(new Date("2026-03-13T00:00:00Z"), null, NOW)).toBe("today");
     });
 
     it("end-of-day boundary: due today at 23:59 is today", () => {
-      expect(computeUrgency(new Date("2026-03-13T23:59:59Z"), "day", null, NOW)).toBe("today");
+      expect(computeUrgency(new Date("2026-03-13T23:59:59Z"), null, NOW)).toBe("today");
     });
 
     it("tomorrow (Saturday) is this_weekend when today is Friday", () => {
       // Confirmed semantic — Friday's "tomorrow" is the start of the weekend
       // bucket, never the workweek bucket.
-      expect(computeUrgency(new Date("2026-03-14"), "day", null, NOW)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-14"), null, NOW)).toBe("this_weekend");
     });
   });
 
-  describe("week-precision dates", () => {
-    it("this_week when stored Sunday is end of current week", () => {
-      // Friday → end of week is Sunday March 15
-      expect(computeUrgency(new Date("2026-03-15"), "week", null, NOW)).toBe("this_week");
-    });
-
-    it("next_week when stored Sunday is end of next week", () => {
-      expect(computeUrgency(new Date("2026-03-22"), "week", null, NOW)).toBe("next_week");
-    });
-
-    it("overdue when stored Sunday is in the past", () => {
-      expect(computeUrgency(new Date("2026-03-08"), "week", null, NOW)).toBe("overdue");
-    });
-
-    it("later when stored Sunday is far out", () => {
-      expect(computeUrgency(new Date("2026-04-05"), "week", null, NOW)).toBe("later");
-    });
-  });
+  // Week-precision urgency tests removed when the dueDatePrecision arg was
+  // dropped from `computeUrgency`. Storage convention after the
+  // 20260515230000_normalize_due_date_to_utc_midnight_and_friday migration:
+  // every dueDate is day-precision and Friday-anchored for "this_week" /
+  // "next_week" presets. The week branch is dead code.
 
   describe("no due date", () => {
     it("later when not completed", () => {
-      expect(computeUrgency(null, null, null, NOW)).toBe("later");
+      expect(computeUrgency(null, null, NOW)).toBe("later");
     });
 
     it("done when completed", () => {
-      expect(computeUrgency(null, null, new Date("2026-03-12"), NOW)).toBe("done");
+      expect(computeUrgency(null, new Date("2026-03-12"), NOW)).toBe("done");
     });
   });
 
   describe("completed items with due dates", () => {
     it("overdue for completed item due in the past", () => {
-      expect(computeUrgency(new Date("2026-03-10"), "day", new Date("2026-03-12"), NOW)).toBe("overdue");
+      expect(computeUrgency(new Date("2026-03-10"), new Date("2026-03-12"), NOW)).toBe("overdue");
     });
 
     it("today for completed item due today", () => {
-      expect(computeUrgency(new Date("2026-03-13"), "day", new Date("2026-03-13"), NOW)).toBe("today");
+      expect(computeUrgency(new Date("2026-03-13"), new Date("2026-03-13"), NOW)).toBe("today");
     });
 
-    it("this_week for completed week-precision item", () => {
-      expect(computeUrgency(new Date("2026-03-15"), "week", new Date("2026-03-13"), NOW)).toBe("this_week");
-    });
   });
 
   describe("week boundaries from different days", () => {
@@ -146,47 +130,47 @@ describe("computeUrgency", () => {
     const MONDAY = new Date("2026-03-16T12:00:00Z");
 
     it("on Sunday, today is 'today'", () => {
-      expect(computeUrgency(new Date("2026-03-15"), "day", null, SUNDAY)).toBe("today");
+      expect(computeUrgency(new Date("2026-03-15"), null, SUNDAY)).toBe("today");
     });
 
     it("on Sunday, Monday is 'this_week' (upcoming week)", () => {
-      expect(computeUrgency(new Date("2026-03-16"), "day", null, SUNDAY)).toBe("this_week");
+      expect(computeUrgency(new Date("2026-03-16"), null, SUNDAY)).toBe("this_week");
     });
 
     it("on Sunday, next Sunday is 'this_weekend'", () => {
       // Sun day-precision in the upcoming Sat-Sun pair → this_weekend.
-      expect(computeUrgency(new Date("2026-03-22"), "day", null, SUNDAY)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-22"), null, SUNDAY)).toBe("this_weekend");
     });
 
     it("on Sunday, Monday after next is 'next_week'", () => {
-      expect(computeUrgency(new Date("2026-03-23"), "day", null, SUNDAY)).toBe("next_week");
+      expect(computeUrgency(new Date("2026-03-23"), null, SUNDAY)).toBe("next_week");
     });
 
     it("on Saturday, Sunday (tomorrow) is 'this_weekend'", () => {
       // Sat's tomorrow is still in the current weekend.
-      expect(computeUrgency(new Date("2026-03-15"), "day", null, SATURDAY)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-15"), null, SATURDAY)).toBe("this_weekend");
     });
 
     it("on Saturday, next Monday is 'this_week' (upcoming workweek)", () => {
       // On Sat/Sun, the next Mon-Fri is treated as "this week".
-      expect(computeUrgency(new Date("2026-03-16"), "day", null, SATURDAY)).toBe("this_week");
+      expect(computeUrgency(new Date("2026-03-16"), null, SATURDAY)).toBe("this_week");
     });
 
     it("on Monday, this Sunday is 'this_weekend'", () => {
-      expect(computeUrgency(new Date("2026-03-22"), "day", null, MONDAY)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-22"), null, MONDAY)).toBe("this_weekend");
     });
 
     it("on Monday, this Friday is 'this_week'", () => {
       // Friday is the tail of the upcoming workweek bucket.
-      expect(computeUrgency(new Date("2026-03-20"), "day", null, MONDAY)).toBe("this_week");
+      expect(computeUrgency(new Date("2026-03-20"), null, MONDAY)).toBe("this_week");
     });
 
     it("on Monday, next Monday is 'next_week'", () => {
-      expect(computeUrgency(new Date("2026-03-23"), "day", null, MONDAY)).toBe("next_week");
+      expect(computeUrgency(new Date("2026-03-23"), null, MONDAY)).toBe("next_week");
     });
 
     it("on Monday, two Mondays out is 'later'", () => {
-      expect(computeUrgency(new Date("2026-03-30"), "day", null, MONDAY)).toBe("later");
+      expect(computeUrgency(new Date("2026-03-30"), null, MONDAY)).toBe("later");
     });
   });
 
@@ -195,40 +179,34 @@ describe("computeUrgency", () => {
     const WEDNESDAY = new Date("2026-03-11T12:00:00Z");
 
     it("Thu and Fri from Wed are this_week", () => {
-      expect(computeUrgency(new Date("2026-03-12"), "day", null, WEDNESDAY)).toBe("this_week");
-      expect(computeUrgency(new Date("2026-03-13"), "day", null, WEDNESDAY)).toBe("this_week");
+      expect(computeUrgency(new Date("2026-03-12"), null, WEDNESDAY)).toBe("this_week");
+      expect(computeUrgency(new Date("2026-03-13"), null, WEDNESDAY)).toBe("this_week");
     });
 
     it("Sat and Sun from Wed are this_weekend", () => {
-      expect(computeUrgency(new Date("2026-03-14"), "day", null, WEDNESDAY)).toBe("this_weekend");
-      expect(computeUrgency(new Date("2026-03-15"), "day", null, WEDNESDAY)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-14"), null, WEDNESDAY)).toBe("this_weekend");
+      expect(computeUrgency(new Date("2026-03-15"), null, WEDNESDAY)).toBe("this_weekend");
     });
 
     it("Mon (next week) from Wed is next_week", () => {
-      expect(computeUrgency(new Date("2026-03-16"), "day", null, WEDNESDAY)).toBe("next_week");
+      expect(computeUrgency(new Date("2026-03-16"), null, WEDNESDAY)).toBe("next_week");
     });
 
     it("on Saturday, next-week's weekend lands in next_week (not this_weekend)", () => {
       const SATURDAY = new Date("2026-03-14T12:00:00Z");
       // Sat Mar 21 = 7 days after Sat Mar 14 → next_week, not this_weekend.
-      expect(computeUrgency(new Date("2026-03-21"), "day", null, SATURDAY)).toBe("next_week");
+      expect(computeUrgency(new Date("2026-03-21"), null, SATURDAY)).toBe("next_week");
     });
 
-    it("week-precision items stay in this_week regardless of weekday split", () => {
-      // Even though Sun (Mar 15) day-precision would be this_weekend,
-      // a week-precision item stored as that Sunday is the "this week"
-      // tag and must round-trip to this_week.
-      expect(computeUrgency(new Date("2026-03-15"), "week", null, WEDNESDAY)).toBe("this_week");
-    });
   });
 
   describe("null precision treated as day-precision", () => {
     it("today with null precision", () => {
-      expect(computeUrgency(new Date("2026-03-13"), null, null, NOW)).toBe("today");
+      expect(computeUrgency(new Date("2026-03-13"), null, NOW)).toBe("today");
     });
 
     it("overdue with null precision", () => {
-      expect(computeUrgency(new Date("2026-03-10"), null, null, NOW)).toBe("overdue");
+      expect(computeUrgency(new Date("2026-03-10"), null, NOW)).toBe("overdue");
     });
   });
 });
@@ -238,47 +216,37 @@ describe("computeUrgency", () => {
 describe("computeDueDateLabel", () => {
   describe("day-precision", () => {
     it("returns undefined for null dueDate", () => {
-      expect(computeDueDateLabel(null, null, NOW)).toBeUndefined();
+      expect(computeDueDateLabel(null, NOW)).toBeUndefined();
     });
 
     it("Today for today", () => {
-      expect(computeDueDateLabel(new Date("2026-03-13"), "day", NOW)).toBe("Today");
+      expect(computeDueDateLabel(new Date("2026-03-13"), NOW)).toBe("Today");
     });
 
     it("Tomorrow for tomorrow", () => {
-      expect(computeDueDateLabel(new Date("2026-03-14"), "day", NOW)).toBe("Tomorrow");
+      expect(computeDueDateLabel(new Date("2026-03-14"), NOW)).toBe("Tomorrow");
     });
 
     it("1 day ago for yesterday", () => {
-      expect(computeDueDateLabel(new Date("2026-03-12"), "day", NOW)).toBe("1 day ago");
+      expect(computeDueDateLabel(new Date("2026-03-12"), NOW)).toBe("1 day ago");
     });
 
     it("N days ago for past dates", () => {
-      expect(computeDueDateLabel(new Date("2026-03-10"), "day", NOW)).toBe("3 days ago");
+      expect(computeDueDateLabel(new Date("2026-03-10"), NOW)).toBe("3 days ago");
     });
 
     it("short day name within the week", () => {
-      expect(computeDueDateLabel(new Date("2026-03-16"), "day", NOW)).toBe("Mon");
+      expect(computeDueDateLabel(new Date("2026-03-16"), NOW)).toBe("Mon");
     });
 
     it("month+day for dates more than 6 days out", () => {
-      expect(computeDueDateLabel(new Date("2026-03-25"), "day", NOW)).toBe("Mar 25");
+      expect(computeDueDateLabel(new Date("2026-03-25"), NOW)).toBe("Mar 25");
     });
   });
 
-  describe("week-precision", () => {
-    it("This Week for current week", () => {
-      expect(computeDueDateLabel(new Date("2026-03-15"), "week", NOW)).toBe("This Week");
-    });
-
-    it("Next Week for next week", () => {
-      expect(computeDueDateLabel(new Date("2026-03-22"), "week", NOW)).toBe("Next Week");
-    });
-
-    it("Overdue for past week", () => {
-      expect(computeDueDateLabel(new Date("2026-03-08"), "week", NOW)).toBe("Overdue");
-    });
-  });
+  // Week-precision label cases removed alongside the dueDatePrecision arg.
+  // After the normalize migration, every dueDate is day-precision and the
+  // label reflects the stored calendar date directly.
 });
 
 // ── computeTriageResult ──
@@ -293,12 +261,12 @@ describe("computeTriageResult", () => {
       expect(computeTriageResult("tomorrow", NOW).dueDatePrecision).toBe("day");
     });
 
-    it("this_week → week precision", () => {
-      expect(computeTriageResult("this_week", NOW).dueDatePrecision).toBe("week");
+    it("this_week → day precision (Friday-anchored)", () => {
+      expect(computeTriageResult("this_week", NOW).dueDatePrecision).toBe("day");
     });
 
-    it("next_week → week precision", () => {
-      expect(computeTriageResult("next_week", NOW).dueDatePrecision).toBe("week");
+    it("next_week → day precision (Friday-anchored)", () => {
+      expect(computeTriageResult("next_week", NOW).dueDatePrecision).toBe("day");
     });
 
     it("next_month → day precision", () => {
@@ -319,12 +287,12 @@ describe("computeTriageResult", () => {
       expect(computeTriageResult("tomorrow", NOW).dueDate).toBe("2026-03-14T00:00:00.000Z");
     });
 
-    it("this_week → Sunday March 15", () => {
-      expect(computeTriageResult("this_week", NOW).dueDate).toBe("2026-03-15T00:00:00.000Z");
+    it("this_week → today (Friday March 13 — this week's Friday)", () => {
+      expect(computeTriageResult("this_week", NOW).dueDate).toBe("2026-03-13T00:00:00.000Z");
     });
 
-    it("next_week → Sunday March 22", () => {
-      expect(computeTriageResult("next_week", NOW).dueDate).toBe("2026-03-22T00:00:00.000Z");
+    it("next_week → Friday March 20 (next week's Friday)", () => {
+      expect(computeTriageResult("next_week", NOW).dueDate).toBe("2026-03-20T00:00:00.000Z");
     });
 
     it("next_month → April 1", () => {
@@ -339,12 +307,12 @@ describe("computeTriageResult", () => {
   describe("Sunday edge cases (March 15)", () => {
     const SUNDAY = new Date("2026-03-15T12:00:00Z");
 
-    it("this_week → NEXT Sunday (March 22)", () => {
-      expect(computeTriageResult("this_week", SUNDAY).dueDate).toBe("2026-03-22T00:00:00.000Z");
+    it("this_week → upcoming Friday March 20", () => {
+      expect(computeTriageResult("this_week", SUNDAY).dueDate).toBe("2026-03-20T00:00:00.000Z");
     });
 
-    it("next_week → Sunday March 29", () => {
-      expect(computeTriageResult("next_week", SUNDAY).dueDate).toBe("2026-03-29T00:00:00.000Z");
+    it("next_week → Friday March 27", () => {
+      expect(computeTriageResult("next_week", SUNDAY).dueDate).toBe("2026-03-27T00:00:00.000Z");
     });
 
     it("this_weekend on Sunday → today (already in the weekend)", () => {
@@ -357,12 +325,17 @@ describe("computeTriageResult", () => {
     const SATURDAY = new Date("2026-03-14T12:00:00Z");
     const WEDNESDAY = new Date("2026-03-11T12:00:00Z");
 
-    it("this_week on Monday → Sunday March 22", () => {
-      expect(computeTriageResult("this_week", MONDAY).dueDate).toBe("2026-03-22T00:00:00.000Z");
+    it("this_week on Monday → upcoming Friday March 20", () => {
+      expect(computeTriageResult("this_week", MONDAY).dueDate).toBe("2026-03-20T00:00:00.000Z");
     });
 
-    it("this_week on Saturday → Sunday March 15", () => {
-      expect(computeTriageResult("this_week", SATURDAY).dueDate).toBe("2026-03-15T00:00:00.000Z");
+    it("this_week on Saturday → next Friday March 20", () => {
+      // Sat → upcoming Friday is the Friday of the next workweek.
+      expect(computeTriageResult("this_week", SATURDAY).dueDate).toBe("2026-03-20T00:00:00.000Z");
+    });
+
+    it("next_week on Saturday → Friday-after-next March 27", () => {
+      expect(computeTriageResult("next_week", SATURDAY).dueDate).toBe("2026-03-27T00:00:00.000Z");
     });
 
     it("this_weekend on Saturday → today (already in the weekend)", () => {
@@ -387,7 +360,7 @@ describe("triage → urgency round-trip", () => {
     now: Date
   ): Urgency {
     const result = computeTriageResult(preset, now);
-    return computeUrgency(new Date(result.dueDate), result.dueDatePrecision, null, now);
+    return computeUrgency(new Date(result.dueDate), null, now);
   }
 
   describe("from Friday (March 13)", () => {
@@ -396,7 +369,8 @@ describe("triage → urgency round-trip", () => {
       // Tomorrow on Friday is Saturday — falls into the weekend bucket.
       expect(triageAndClassify("tomorrow", NOW)).toBe("this_weekend"));
     it("this_weekend → 'this_weekend'", () => expect(triageAndClassify("this_weekend", NOW)).toBe("this_weekend"));
-    it("this_week → 'this_week'", () => expect(triageAndClassify("this_week", NOW)).toBe("this_week"));
+    it("this_week → 'today' (Friday IS this week's Friday — collapses with today)", () =>
+      expect(triageAndClassify("this_week", NOW)).toBe("today"));
     it("next_week → 'next_week'", () => expect(triageAndClassify("next_week", NOW)).toBe("next_week"));
     it("next_month → 'later'", () => expect(triageAndClassify("next_month", NOW)).toBe("later"));
   });
@@ -441,13 +415,15 @@ describe("triage → label round-trip", () => {
     now: Date
   ): string | undefined {
     const result = computeTriageResult(preset, now);
-    return computeDueDateLabel(new Date(result.dueDate), result.dueDatePrecision, now);
+    return computeDueDateLabel(new Date(result.dueDate), now);
   }
 
   it("today → 'Today'", () => expect(triageAndLabel("today", NOW)).toBe("Today"));
   it("tomorrow → 'Tomorrow'", () => expect(triageAndLabel("tomorrow", NOW)).toBe("Tomorrow"));
-  it("this_week → 'This Week'", () => expect(triageAndLabel("this_week", NOW)).toBe("This Week"));
-  it("next_week → 'Next Week'", () => expect(triageAndLabel("next_week", NOW)).toBe("Next Week"));
+  // On Friday, this_week stores today (Friday) → label collapses with Today.
+  it("this_week on Friday → 'Today'", () => expect(triageAndLabel("this_week", NOW)).toBe("Today"));
+  // next_week is +7 → outside the weekday window, shows date.
+  it("next_week → 'Mar 20' (next Friday)", () => expect(triageAndLabel("next_week", NOW)).toBe("Mar 20"));
   it("next_month → 'Apr 1'", () => expect(triageAndLabel("next_month", NOW)).toBe("Apr 1"));
 });
 
@@ -473,17 +449,17 @@ describe("today view filtering", () => {
 
     it("'today' stays visible", () => {
       const r = computeTriageResult("today", MONDAY);
-      expect(isVisibleInTodayView(computeUrgency(new Date(r.dueDate), r.dueDatePrecision, null, MONDAY))).toBe(true);
+      expect(isVisibleInTodayView(computeUrgency(new Date(r.dueDate), null, MONDAY))).toBe(true);
     });
 
     it("'this_week' stays visible", () => {
       const r = computeTriageResult("this_week", MONDAY);
-      expect(isVisibleInTodayView(computeUrgency(new Date(r.dueDate), r.dueDatePrecision, null, MONDAY))).toBe(true);
+      expect(isVisibleInTodayView(computeUrgency(new Date(r.dueDate), null, MONDAY))).toBe(true);
     });
 
     it("'next_week' leaves view", () => {
       const r = computeTriageResult("next_week", MONDAY);
-      expect(isVisibleInTodayView(computeUrgency(new Date(r.dueDate), r.dueDatePrecision, null, MONDAY))).toBe(false);
+      expect(isVisibleInTodayView(computeUrgency(new Date(r.dueDate), null, MONDAY))).toBe(false);
     });
   });
 });
@@ -508,12 +484,25 @@ describe("itemToThing", () => {
     expect(thing.dueDatePrecision).toBe("day");
   });
 
-  it("transforms a week-precision item", () => {
+  it("transforms a Friday-anchored 'this_week' item (post-migration shape)", () => {
+    // After the normalize migration, `this_week` is day-precision Friday.
+    // Friday Mar 13 IS today in this fixture, so urgency collapses to today.
+    const item = makeItem({ dueDate: new Date("2026-03-13"), dueDatePrecision: "day" });
+    const thing = itemToThing(item, NOW);
+
+    expect(thing.urgency).toBe("today");
+    expect(thing.dueDatePrecision).toBe("day");
+  });
+
+  it("passes through a legacy week-precision row without crashing", () => {
+    // The dueDatePrecision field still lives in the DB for backwards compat,
+    // and the API mirrors it back on the wire. The bucketer ignores it now —
+    // a Sunday with precision='week' classifies as `this_weekend` because
+    // Sunday IS a weekend day under the day-precision rules.
     const item = makeItem({ dueDate: new Date("2026-03-15"), dueDatePrecision: "week" });
     const thing = itemToThing(item, NOW);
 
-    expect(thing.urgency).toBe("this_week");
-    expect(thing.dueDateLabel).toBe("This Week");
+    expect(thing.urgency).toBe("this_weekend");
     expect(thing.dueDatePrecision).toBe("week");
   });
 

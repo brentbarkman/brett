@@ -34,7 +34,11 @@ struct TaskRow: View {
     // Gesture handlers — called when swipe actions fire. Caller wires them
     // to their store (ItemStore.update/delete) so this leaf view stays free
     // of environment lookups.
-    private let onSchedule: (_ dueDate: Date?) -> Void
+    /// Fires when a swipe-action or sheet picks a due date. `precision`
+    /// is `.day` for Today/Tomorrow/This Weekend/Next Month/raw calendar
+    /// picks and `.week` for This Week / Next Week — pass it through to
+    /// the mutation so week-precision picks don't bucketize as weekend.
+    private let onSchedule: (_ dueDate: Date?, _ precision: DueDatePrecision) -> Void
     private let onArchive: () -> Void
     private let onDelete: () -> Void
 
@@ -61,7 +65,7 @@ struct TaskRow: View {
         dragIDs: [String] = [],
         onToggle: @escaping () -> Void,
         onSelect: @escaping () -> Void,
-        onSchedule: @escaping (_ dueDate: Date?) -> Void = { _ in },
+        onSchedule: @escaping (_ dueDate: Date?, _ precision: DueDatePrecision) -> Void = { _, _ in },
         onArchive: @escaping () -> Void = {},
         onDelete: @escaping () -> Void = {},
         onReorder: @escaping (_ newOrder: [String]) -> Void = { _ in }
@@ -112,15 +116,14 @@ struct TaskRow: View {
             .applyIf(allowSwipeRight) { view in
                 view.swipeActions(edge: .leading, allowsFullSwipe: true) {
                     Button {
-                        apply(dueDate: Calendar.current.startOfDay(for: Date()))
+                        apply(dueDate: QuickScheduleOption.today.resolvedDate(), precision: .day)
                     } label: {
                         Label("Today", systemImage: "sun.max.fill")
                     }
                     .tint(BrettColors.gold)
 
                     Button {
-                        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-                        apply(dueDate: Calendar.current.startOfDay(for: tomorrow))
+                        apply(dueDate: QuickScheduleOption.tomorrow.resolvedDate(), precision: .day)
                     } label: {
                         Label("Tomorrow", systemImage: "sunrise.fill")
                     }
@@ -161,8 +164,8 @@ struct TaskRow: View {
                 )
             }
             .sheet(isPresented: $showsScheduleSheet) {
-                QuickScheduleSheet { date in
-                    apply(dueDate: date)
+                QuickScheduleSheet { date, precision in
+                    apply(dueDate: date, precision: precision)
                 }
             }
     }
@@ -409,11 +412,13 @@ struct TaskRow: View {
     }
 
     /// Central landing for "a schedule action fired." Drives the haptic,
-    /// trigger the gold pulse, and dispatch to the caller.
-    private func apply(dueDate: Date?) {
+    /// trigger the gold pulse, and dispatch to the caller. `precision` is
+    /// always supplied — week-precision picks (This Week / Next Week)
+    /// must round-trip as `.week` or they bucketize as the weekend.
+    private func apply(dueDate: Date?, precision: DueDatePrecision) {
         HapticManager.medium()
         pulseTrigger &+= 1
-        onSchedule(dueDate)
+        onSchedule(dueDate, precision)
     }
 
     /// VoiceOver label — built from the `ViewModel` so the announced whisper

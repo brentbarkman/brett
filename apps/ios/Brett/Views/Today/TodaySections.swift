@@ -35,11 +35,15 @@ struct TodaySections {
     /// Weekend items deliberately stay out of the badge on weekdays —
     /// a Saturday task shouldn't nag the user on Tuesday — but roll in
     /// once the weekend itself arrives.
-    static func badgeCount(items: [Item], now: Date = Date()) -> Int {
-        let s = bucket(items: items, reflowKey: 0, now: now)
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "UTC")!
-        let weekday = cal.component(.weekday, from: now) // Sun=1..Sat=7
+    static func badgeCount(
+        items: [Item],
+        now: Date = Date(),
+        localCalendar: Calendar = .current
+    ) -> Int {
+        let s = bucket(items: items, reflowKey: 0, now: now, localCalendar: localCalendar)
+        // "Weekend now" is decided from the user's LOCAL day-of-week, not
+        // UTC's. Friday 9:43 PM MT is still Friday for the badge.
+        let weekday = localCalendar.component(.weekday, from: now) // Sun=1..Sat=7
         let isWeekend = weekday == 1 || weekday == 7
         return s.overdue.count
             + s.today.count
@@ -47,14 +51,12 @@ struct TodaySections {
             + (isWeekend ? s.thisWeekend.count : 0)
     }
 
-    /// UTC calendar — matches desktop's `getTodayUTC` / `getEndOfWeekUTC`
-    /// (`packages/business/src/index.ts`). Both clients now bucket on
-    /// the same UTC day boundaries so a row in "Today" on iOS is in
-    /// "Today" on desktop, regardless of where the user is. Trade-off:
-    /// users west of UTC see "today" roll over before local midnight;
-    /// users east see it roll over after. Acceptable cost for cross-
-    /// platform consistency, which is what the user explicitly asked for.
-    private static let utcCalendar: Calendar = {
+    /// UTC calendar — used for reading calendar-date components of stored
+    /// `dueDate` values (which are encoded as UTC midnight of the user's
+    /// intended local calendar date). The "today" anchor is derived from
+    /// the user's local calendar, not from this one — mixing the two was
+    /// the source of the Friday-evening-MT bug.
+    static let utcCalendar: Calendar = {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
         return cal
@@ -78,30 +80,23 @@ struct TodaySections {
         items: [Item],
         reflowKey: Int,
         pendingDoneIDs: Set<String> = [],
-        now: Date = Date()
+        now: Date = Date(),
+        localCalendar: Calendar = .current
     ) -> TodaySections {
         _ = reflowKey // force re-derivation on change; see toggle() in the parent
-        let calendar = Self.utcCalendar
-        let startOfToday = calendar.startOfDay(for: now)
-        let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday.addingTimeInterval(86_400)
+
+        // "Today" = UTC midnight of the user's LOCAL calendar date. The
+        // old code used the UTC calendar's startOfDay for everything,
+        // which on Friday 9:43 PM MDT (= Sat 3:43 AM UTC) thought today
+        // was Saturday — collapsing weekend tasks into Today.
+        let startOfToday = DateHelpers.utcMidnightOfLocalDate(now, in: localCalendar)
+        let startOfTomorrow = DateHelpers.utcCalendar.date(byAdding: .day, value: 1, to: startOfToday)
+            ?? startOfToday.addingTimeInterval(86_400)
 
         // Boundary offsets mirror desktop's TS `urgencyBucketRanges` in
         // `packages/business/src/index.ts` EXACTLY — change one, change
-        // the other. The four forward-looking buckets are partitioned by
-        // (day-of-week of today) × (day-of-week of the due date):
-        //
-        //   - thisWeek    = next upcoming Mon-Fri workweek
-        //   - thisWeekend = next upcoming Sat-Sun pair
-        //   - nextWeek    = the calendar week after thisWeekend
-        //   - everything beyond → dropped (this surface only renders
-        //     overdue..nextWeek; "later" doesn't render here)
-        //
-        // We compute END boundaries as "start of the day AFTER the last
-        // included day" so `<` against `startOfDueDay` (UTC-stripped)
-        // gives inclusive semantics on the named end day. The TS layer
-        // uses `<=` against the named end day directly; mathematically
-        // identical when both sides are start-of-day UTC.
-        let weekday = calendar.component(.weekday, from: now) // Sun=1..Sat=7
+        // the other. Day-of-week comes from the LOCAL today anchor.
+        let weekday = DateHelpers.utcCalendar.component(.weekday, from: startOfToday) // Sun=1..Sat=7
         let dow = weekday - 1 // 0=Sun..6=Sat (matches TS getUTCDay())
 
         struct Ranges { let thisWeekStart, thisWeekEnd, thisWeekendStart, thisWeekendEnd, nextWeekEnd: Int }
@@ -131,15 +126,11 @@ struct TodaySections {
         for item in items {
             if item.itemStatus == .archived { continue }
 
-            // If this item is being held in its previous section, override
-            // its effective status. The TaskRow still reads `isCompleted`
-            // from the live model so the checkbox + strikethrough still
-            // show as done — only the section assignment is delayed.
             let effectiveStatus: ItemStatus = pendingDoneIDs.contains(item.id) ? .active : item.itemStatus
 
             if effectiveStatus == .done {
                 if let completed = item.completedAt,
-                   completed >= startOfToday && completed < endOfToday {
+                   completed >= startOfToday && completed < startOfTomorrow {
                     doneToday.append(item)
                 }
                 continue
@@ -152,14 +143,13 @@ struct TodaySections {
                 overdue.append(item)
                 continue
             }
-            if due < endOfToday {
+
+            let diff = DateHelpers.utcCalendar.dateComponents([.day], from: startOfToday, to: due).day ?? 0
+            if diff == 0 {
                 today.append(item)
                 continue
             }
-
-            let startOfDueDay = calendar.startOfDay(for: due)
-            let diff = calendar.dateComponents([.day], from: startOfToday, to: startOfDueDay).day ?? 0
-            let dueWeekday = calendar.component(.weekday, from: startOfDueDay)
+            let dueWeekday = DateHelpers.utcCalendar.component(.weekday, from: due)
             let isWeekendDay = dueWeekday == 1 || dueWeekday == 7
 
             if isWeekendDay && diff >= r.thisWeekendStart && diff <= r.thisWeekendEnd {

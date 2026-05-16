@@ -153,7 +153,10 @@ struct DetailsCard: View {
     // MARK: - Labels
 
     private var dueDateLabel: String {
-        draft.dueDate.map(DateHelpers.formatRelativeDate) ?? "Not set"
+        // formatRelativeDate normalises legacy local-midnight values and
+        // compares the stored UTC calendar date against the user's local
+        // "today" — so the label matches the section the row appears in.
+        draft.dueDate.map { DateHelpers.formatRelativeDate($0) } ?? "Not set"
     }
 
     private var dueDateAccent: Color {
@@ -199,6 +202,7 @@ struct DetailsCard: View {
         case .dueDate:
             DueDateEditor(
                 date: $draft.dueDate,
+                precision: $draft.dueDatePrecision,
                 dismiss: { activeEditor = nil }
             )
         case .list:
@@ -239,6 +243,9 @@ struct DetailsCard: View {
 
 private struct DueDateEditor: View {
     @Binding var date: Date?
+    /// Bound so quick presets can flip `dueDatePrecision` alongside the
+    /// date in a single commit. Calendar-grid picks always write `.day`.
+    @Binding var precision: String?
     let dismiss: () -> Void
 
     /// What the user is currently pointing at. Committed to `date` only on
@@ -257,7 +264,10 @@ private struct DueDateEditor: View {
                     .foregroundStyle(.white)
                 Spacer()
                 Button("Done") {
-                    date = working
+                    // Calendar-grid pick → day-precision, UTC-midnight of
+                    // the user's local calendar date.
+                    date = DateHelpers.utcMidnightOfLocalDate(working, in: .current)
+                    precision = DueDatePrecision.day.rawValue
                     HapticManager.light()
                     dismiss()
                 }
@@ -294,6 +304,7 @@ private struct DueDateEditor: View {
             if date != nil {
                 Button {
                     date = nil
+                    precision = nil
                     HapticManager.medium()
                     dismiss()
                 } label: {
@@ -332,31 +343,36 @@ private struct DueDateEditor: View {
         }
     }
 
-    /// Four quick-preset buttons. Each commits its date immediately and
-    /// dismisses the sheet — the user typing "Today" on the omnibar is
-    /// the fast path, this is its sheet-surface equivalent. Mirrors the
-    /// desktop's ScheduleRow options.
+    /// Five quick-preset buttons matching the desktop chip picker. Each
+    /// commits its date+precision immediately and dismisses the sheet.
+    /// Delegates date math to `QuickScheduleOption` so the detail panel,
+    /// swipe actions, and the bottom-sheet picker all agree byte-for-byte.
     private var quickOptions: some View {
-        HStack(spacing: 8) {
-            presetButton(label: "Today", date: presetDate(days: 0))
-            presetButton(label: "Tomorrow", date: presetDate(days: 1))
-            presetButton(label: "This week", date: endOfThisWeek())
-            presetButton(label: "Next week", date: nextMonday())
+        HStack(spacing: 6) {
+            presetButton(.today)
+            presetButton(.tomorrow)
+            presetButton(.thisWeekend)
+            presetButton(.thisWeek)
+            presetButton(.nextWeek)
         }
         .padding(.horizontal, 20)
     }
 
-    private func presetButton(label: String, date presetDate: Date) -> some View {
+    private func presetButton(_ option: QuickScheduleOption) -> some View {
         Button {
-            date = presetDate
+            date = option.resolvedDate()
+            precision = option.precision.rawValue
             HapticManager.light()
             dismiss()
         } label: {
-            Text(label)
-                .font(.system(size: 13, weight: .medium))
+            Text(option.label)
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(BrettColors.textBody)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
+                .padding(.horizontal, 4)
                 .background {
                     Capsule()
                         .fill(Color.white.opacity(0.06))
@@ -366,50 +382,6 @@ private struct DueDateEditor: View {
                 }
         }
         .buttonStyle(.plain)
-    }
-
-    /// `days` days from today at 9am local. 0 = today.
-    private func presetDate(days: Int) -> Date {
-        let calendar = Calendar.current
-        let base = calendar.date(byAdding: .day, value: days, to: Date()) ?? Date()
-        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
-    }
-
-    /// "This week" → Sunday of the current week at 9am. If today is
-    /// already Sunday, returns Sunday this evening (still "this week").
-    /// Matches Things-style "this week" semantics: bucket somewhere
-    /// inside the current week.
-    private func endOfThisWeek() -> Date {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let weekday = calendar.component(.weekday, from: today) // Sun=1 ... Sat=7
-        // Days remaining until Sunday (end of the current week, ISO/US).
-        // Sun=0, Mon=6, Tue=5, ..., Sat=1.
-        let offset = (8 - weekday) % 7
-        let base = calendar.date(byAdding: .day, value: offset, to: today) ?? today
-        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
-    }
-
-    /// "Next week" → next Monday at 9am. Always lands on the first
-    /// weekday of the upcoming week regardless of what today is.
-    private func nextMonday() -> Date {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let weekday = calendar.component(.weekday, from: today) // Sun=1 ... Sat=7
-        // Mon offsets: Sun→1, Mon→7 (next Mon), Tue→6, Wed→5, Thu→4, Fri→3, Sat→2.
-        let offset: Int = {
-            switch weekday {
-            case 1: return 1
-            case 2: return 7
-            case 3: return 6
-            case 4: return 5
-            case 5: return 4
-            case 6: return 3
-            default: return 2
-            }
-        }()
-        let base = calendar.date(byAdding: .day, value: offset, to: today) ?? today
-        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
     }
 }
 

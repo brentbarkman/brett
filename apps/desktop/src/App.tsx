@@ -276,6 +276,11 @@ export function App() {
     currentDueDatePrecision?: "day" | "week" | null;
     anchorEl?: HTMLElement | null;
     pendingDate?: Date | null;
+    /** Precision committed alongside pendingDate. "day" for raw calendar
+     *  picks and the day-anchored presets, "week" for This Week / Next Week.
+     *  Hard-coding "day" here silently corrupts week-precision picks into
+     *  weekend-bucketed day items. */
+    pendingPrecision?: "day" | "week";
     pendingListId?: string | null;
   } | null>(null);
 
@@ -893,7 +898,7 @@ export function App() {
       const updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null } = {};
       if (s.pendingDate !== undefined) {
         updates.dueDate = s.pendingDate ? s.pendingDate.toISOString() : null;
-        updates.dueDatePrecision = s.pendingDate ? "day" : null;
+        updates.dueDatePrecision = s.pendingDate ? (s.pendingPrecision ?? "day") : null;
       }
       if (s.pendingListId !== undefined) {
         updates.listId = s.pendingListId;
@@ -1640,8 +1645,8 @@ export function App() {
                 suggestedListIds={suggestedListIds}
                 suggestionMode={suggestionMode}
                 startWith={triageState.mode === "list-first" ? "list" : "date"}
-                onCommitDate={(date) =>
-                  setTriageState((s) => (s ? { ...s, pendingDate: date } : s))
+                onCommitDate={(date, precision) =>
+                  setTriageState((s) => (s ? { ...s, pendingDate: date, pendingPrecision: precision } : s))
                 }
                 onCommitList={(listId) =>
                   setTriageState((s) => (s ? { ...s, pendingListId: listId } : s))
@@ -1656,10 +1661,10 @@ export function App() {
               <QuickDatePicker
                 anchorEl={triageState.anchorEl}
                 initialDate={initialDate}
-                onCommit={(date) => {
+                onCommit={(date, precision) => {
                   handleInboxTriage(triageState.ids, {
                     dueDate: date ? date.toISOString() : null,
-                    dueDatePrecision: date ? "day" : null,
+                    dueDatePrecision: date ? precision : null,
                   });
                   handleTriageCancel();
                 }}

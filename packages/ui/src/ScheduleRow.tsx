@@ -125,8 +125,8 @@ export function ScheduleRow({
             <QuickDatePicker
               anchorEl={anchorEl}
               initialDate={dueDate ? new Date(dueDate) : null}
-              onCommit={(date) => {
-                onUpdateDueDate(date ? date.toISOString() : null, "day");
+              onCommit={(date, precision) => {
+                onUpdateDueDate(date ? date.toISOString() : null, precision);
                 close();
               }}
               onCancel={close}

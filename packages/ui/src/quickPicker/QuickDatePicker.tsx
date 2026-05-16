@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { computeTriageResult, type TriageDatePreset } from "@brett/business";
+import type { DueDatePrecision } from "@brett/types";
 import { ScrollableCalendar } from "./ScrollableCalendar";
 import { useAnchoredPosition } from "./useAnchoredPosition";
 import {
@@ -13,7 +14,15 @@ import {
 export interface QuickDatePickerProps {
   anchorEl: HTMLElement | null;
   initialDate: Date | null;
-  onCommit: (date: Date | null) => void;
+  /**
+   * Fires when the user commits a date. `precision` is `"week"` for the
+   * "This Week" / "Next Week" chips (which intentionally land in the loose
+   * week bucket) and `"day"` for everything else, including raw calendar
+   * picks. Callers that previously hard-coded `"day"` should pass `precision`
+   * through verbatim — otherwise week-precision picks silently corrupt into
+   * weekend-bucketed day-precision items.
+   */
+  onCommit: (date: Date | null, precision: DueDatePrecision) => void;
   onCancel: () => void;
   placement?: "bottom-end" | "bottom-start" | "top-end" | "top-start";
   now?: Date;
@@ -33,11 +42,6 @@ const MONTHDAY_FMT = new Intl.DateTimeFormat("en-US", {
 function presetSublabel(preset: TriageDatePreset, now: Date): string {
   const result = computeTriageResult(preset, now);
   const date = new Date(result.dueDate);
-  if (preset === "this_week") {
-    const fri = new Date(date);
-    fri.setUTCDate(fri.getUTCDate() - 2);
-    return `by ${WEEKDAY_FMT.format(fri)} ${MONTHDAY_FMT.format(fri)}`;
-  }
   return `${WEEKDAY_FMT.format(date)} · ${MONTHDAY_FMT.format(date)}`;
 }
 
@@ -77,7 +81,7 @@ export function QuickDatePicker({
   const commitPreset = useCallback(
     (preset: TriageDatePreset) => {
       const result = computeTriageResult(preset, now ?? new Date());
-      onCommit(new Date(result.dueDate));
+      onCommit(new Date(result.dueDate), result.dueDatePrecision);
     },
     [onCommit, now],
   );
@@ -93,7 +97,7 @@ export function QuickDatePicker({
       }
       if (lower === "backspace" || lower === "delete") {
         e.preventDefault();
-        onCommit(null);
+        onCommit(null, "day");
         return;
       }
       if (lower in DATE_LETTER_TO_PRESET) {
@@ -143,7 +147,7 @@ export function QuickDatePicker({
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        onCommit(highlighted);
+        onCommit(highlighted, "day");
         return;
       }
     }
@@ -163,9 +167,13 @@ export function QuickDatePicker({
     >
       <ChipColumn
         initialDate={initialDate}
-        now={today}
+        // Pass the raw `now` (not the UTC-midnight-anchored `today`) so the
+        // preset sublabels reflect the user's local calendar day. Passing the
+        // normalized `today` flips the date for any TZ west of UTC because
+        // computeTriageResult re-interprets the input through local components.
+        now={now ?? new Date()}
         onCommitPreset={commitPreset}
-        onClear={() => onCommit(null)}
+        onClear={() => onCommit(null, "day")}
       />
       <div className="w-[185px] border-l border-white/5 pl-2">
         <ScrollableCalendar
@@ -173,7 +181,7 @@ export function QuickDatePicker({
           highlightedDate={highlighted}
           selectedDate={initialDate}
           onHighlight={setHighlighted}
-          onCommit={onCommit}
+          onCommit={(d) => onCommit(d, "day")}
           now={today}
         />
       </div>

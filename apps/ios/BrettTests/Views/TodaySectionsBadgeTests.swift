@@ -47,7 +47,7 @@ struct TodaySectionsBadgeTests {
     // MARK: - Cases
 
     @Test func emptyInputReturnsZero() {
-        #expect(TodaySections.badgeCount(items: [], now: Self.wednesdayNow) == 0)
+        #expect(TodaySections.badgeCount(items: [], now: Self.wednesdayNow, localCalendar: calendar) == 0)
     }
 
     @Test func countsOverdueOnWeekday() {
@@ -56,14 +56,14 @@ struct TodaySectionsBadgeTests {
             TestFixtures.makeItem(status: .active, dueDate: yesterday),
             TestFixtures.makeItem(status: .active, dueDate: yesterday),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 2)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 2)
     }
 
     @Test func countsTodayOnWeekday() {
         let items = [
             TestFixtures.makeItem(status: .active, dueDate: Self.wednesdayNow),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 1)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 1)
     }
 
     @Test func countsThisWeekOnWeekday() {
@@ -74,7 +74,7 @@ struct TodaySectionsBadgeTests {
             TestFixtures.makeItem(status: .active, dueDate: thursday),
             TestFixtures.makeItem(status: .active, dueDate: friday),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 2)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 2)
     }
 
     @Test func excludesThisWeekendOnWeekday() {
@@ -87,7 +87,7 @@ struct TodaySectionsBadgeTests {
             TestFixtures.makeItem(status: .active, dueDate: saturday),
             TestFixtures.makeItem(status: .active, dueDate: sunday),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 0)
     }
 
     @Test func includesThisWeekendOnSaturday() {
@@ -98,7 +98,7 @@ struct TodaySectionsBadgeTests {
             TestFixtures.makeItem(status: .active, dueDate: Self.saturdayNow), // today urgency
             TestFixtures.makeItem(status: .active, dueDate: sunday),            // thisWeekend
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.saturdayNow) == 2)
+        #expect(TodaySections.badgeCount(items: items, now: Self.saturdayNow, localCalendar: calendar) == 2)
     }
 
     @Test func excludesNextWeek() {
@@ -107,7 +107,7 @@ struct TodaySectionsBadgeTests {
         let items = [
             TestFixtures.makeItem(status: .active, dueDate: eightDaysOut),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 0)
     }
 
     @Test func excludesCompletedItems() {
@@ -116,7 +116,7 @@ struct TodaySectionsBadgeTests {
             TestFixtures.makeItem(status: .done, dueDate: yesterday),
             TestFixtures.makeItem(status: .done, dueDate: Self.wednesdayNow),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 0)
     }
 
     @Test func excludesArchivedItems() {
@@ -124,7 +124,7 @@ struct TodaySectionsBadgeTests {
         let items = [
             TestFixtures.makeItem(status: .archived, dueDate: yesterday),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 0)
     }
 
     @Test func excludesSnoozedItems() {
@@ -133,14 +133,14 @@ struct TodaySectionsBadgeTests {
             TestFixtures.makeItem(status: .snoozed, dueDate: yesterday),
             TestFixtures.makeItem(status: .snoozed, dueDate: Self.wednesdayNow),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 0)
     }
 
     @Test func excludesItemsWithoutDueDate() {
         let items = [
             TestFixtures.makeItem(status: .active, dueDate: nil),
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 0)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 0)
     }
 
     @Test func sumsBucketsTogetherOnWeekday() {
@@ -158,6 +158,6 @@ struct TodaySectionsBadgeTests {
             TestFixtures.makeItem(status: .snoozed, dueDate: yesterday),         // ✗
             TestFixtures.makeItem(status: .active,  dueDate: nil),               // ✗
         ]
-        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow) == 3)
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 3)
     }
 }

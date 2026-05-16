@@ -559,13 +559,23 @@ private struct TodayPageBody: View {
     /// The pre-edit row comes from this view's `@Query`-backed `items`
     /// array, which is already user-scoped — no need for a separate store
     /// fetch (those public read methods were removed in Wave B).
-    private func schedule(_ id: String, dueDate: Date?) {
+    private func schedule(_ id: String, dueDate: Date?, precision: DueDatePrecision) {
         guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
+        // Persist both dueDate and dueDatePrecision in a single mutation so
+        // a week-precision pick (This Week / Next Week) doesn't get bucketed
+        // as the weekend by the day-precision branch of computeUrgency.
+        let newPrecision: Any? = dueDate == nil ? nil : precision.rawValue
         itemStore.update(
             id: id,
-            changes: ["dueDate": dueDate as Any? ?? NSNull()],
-            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()],
+            changes: [
+                "dueDate": dueDate as Any? ?? NSNull(),
+                "dueDatePrecision": newPrecision ?? NSNull(),
+            ],
+            previousValues: [
+                "dueDate": item.dueDate as Any? ?? NSNull(),
+                "dueDatePrecision": item.dueDatePrecision as Any? ?? NSNull(),
+            ],
             userId: userId
         )
     }
