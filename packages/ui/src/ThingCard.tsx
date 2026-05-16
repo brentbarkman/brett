@@ -109,16 +109,15 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       onClick={() => { onFocus?.(); onClick(); }}
       onFocus={onFocus}
       className={`
-        group/row relative flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer
-        border-t border-white/[0.04] first:border-t-0
+        group/row relative flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer
+        border-t border-white/[0.05] first:border-t-0
         transition-colors duration-150 outline-none
         ${completing
           ? "bg-brett-teal/[0.05]"
           : isFocused
-            ? "bg-white/10 ring-1 ring-inset ring-brett-gold/30"
+            ? "bg-brett-gold/[0.08]"
             : "hover:bg-white/[0.04]"
         }
-        ${thing.isCompleted && !completing ? "opacity-70" : "opacity-100"}
         ${isDragging ? "opacity-50" : ""}
       `}
     >

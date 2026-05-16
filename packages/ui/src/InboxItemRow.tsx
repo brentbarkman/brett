@@ -118,15 +118,16 @@ export function InboxItemRow({
       tabIndex={0}
       role={undefined}
       className={`
-        group/row flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer
-        border-t border-white/[0.04]
+        group/row flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer
+        border-t border-white/[0.05]
         transition-colors duration-150 outline-none
         ${isDragging ? "opacity-30" : ""}
-        ${isFocused || isSelected
-          ? "bg-white/10"
-          : "hover:bg-white/[0.04]"
+        ${isFocused
+          ? "bg-brett-gold/[0.08]"
+          : isSelected
+            ? "bg-white/[0.06]"
+            : "hover:bg-white/[0.04]"
         }
-        ${isFocused ? "ring-1 ring-inset ring-brett-gold/30" : ""}
       `}
       style={animationStyle}
     >

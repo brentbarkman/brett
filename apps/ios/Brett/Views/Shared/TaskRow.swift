@@ -256,11 +256,11 @@ struct TaskRow: View {
                     reconnectPill(for: relink.type)
                 }
             }
-            // Naked-row density: tighter row padding (~40pt total height
+            // Naked-row density: tighter row padding (~44pt total height
             // vs the prior ~54pt). Parent containers (TaskSection,
             // InboxPage, ListView) should be eyeballed for hollow feel.
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
         .buttonStyle(.plain)
     }
