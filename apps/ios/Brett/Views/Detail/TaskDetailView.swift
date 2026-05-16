@@ -520,9 +520,24 @@ private struct TaskDetailBody: View {
 
     private func toggleComplete() async {
         guard let item else { return }
+        let wasCompleted = item.itemStatus == .done
         itemStore.toggleStatus(id: item.id, userId: userId)
         // No manual reload needed — `@Query` reactively republishes the
         // matched row through `matchedItems` after the save lands.
+
+        // On the incomplete → complete transition, dismiss the sheet
+        // so the user gets out of the way of the thing they just
+        // finished. Un-completing (complete → incomplete) leaves the
+        // sheet open — that's a "bring this back" gesture, not a
+        // "done with it" one.
+        //
+        // The brief sleep gives the gold-fill checkmark animation time
+        // to land before the dismiss animation starts; without it the
+        // dismiss eats the visual confirmation.
+        if !wasCompleted {
+            try? await Task.sleep(for: .milliseconds(250))
+            dismiss()
+        }
     }
 
     private func addLink(_ targetId: String) async {
