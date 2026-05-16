@@ -217,11 +217,20 @@ export async function processActionItems(
     },
   });
 
-  // Check user preferences for which items to auto-create
-  const account = await prisma.granolaAccount.findUnique({
-    where: { userId },
-    select: { autoCreateMyTasks: true, autoCreateFollowUps: true },
+  // Check per-account preferences for which items to auto-create.
+  // The meeting note carries its own granolaAccountId — use it directly
+  // rather than picking an arbitrary account by userId, which would be
+  // incorrect for users with multiple Granola accounts.
+  const meetingForPrefs = await prisma.meetingNote.findUnique({
+    where: { id: meetingNoteId },
+    select: { granolaAccountId: true },
   });
+  const account = meetingForPrefs?.granolaAccountId
+    ? await prisma.granolaAccount.findUnique({
+        where: { id: meetingForPrefs.granolaAccountId },
+        select: { autoCreateMyTasks: true, autoCreateFollowUps: true },
+      })
+    : null;
   const createMyTasks = account?.autoCreateMyTasks ?? true;
   const createFollowUps = account?.autoCreateFollowUps ?? true;
 

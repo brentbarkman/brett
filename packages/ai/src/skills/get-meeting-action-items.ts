@@ -38,8 +38,9 @@ export const getMeetingActionItemsSkill: Skill = {
     const { meeting, otherMatches } = await findMeetings(ctx, p);
 
     if (!meeting) {
-      const hasMeetingNotes = await ctx.prisma.granolaAccount.findUnique({
+      const hasMeetingNotes = await ctx.prisma.granolaAccount.findFirst({
         where: { userId: ctx.userId },
+        select: { id: true },
       });
 
       return {
