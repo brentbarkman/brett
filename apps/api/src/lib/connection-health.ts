@@ -80,6 +80,12 @@ export async function createRelinkTask(
  * Auto-complete re-link tasks when the connection is successfully restored.
  * Uses startsWith matching on sourceId so it resolves tasks regardless of
  * which specific accountId/configId created them (handles key rotation, re-auth).
+ *
+ * Provider-wide resolver — use this for single-account integrations or for
+ * cases where ANY account becoming healthy should clear the prompt. For
+ * multi-account providers (Granola), prefer `resolveRelinkTaskForAccount`
+ * so one account's re-auth doesn't silently dismiss another account's
+ * pending re-link prompt.
  */
 export async function resolveRelinkTask(
   userId: string,
@@ -92,6 +98,32 @@ export async function resolveRelinkTask(
       userId,
       source: "system",
       sourceId: { startsWith: prefix },
+      status: { in: ["active", "snoozed"] },
+    },
+    data: {
+      status: "done",
+      completedAt: new Date(),
+    },
+  });
+}
+
+/**
+ * Auto-complete the re-link task for a specific accountId. Use this on
+ * successful re-auth or voluntary disconnect of a multi-account provider
+ * so other accounts' re-link prompts stay visible.
+ */
+export async function resolveRelinkTaskForAccount(
+  userId: string,
+  type: ConnectionType,
+  accountId: string,
+): Promise<void> {
+  const sourceId = buildSourceId(type, accountId);
+
+  await prisma.item.updateMany({
+    where: {
+      userId,
+      source: "system",
+      sourceId,
       status: { in: ["active", "snoozed"] },
     },
     data: {

@@ -342,14 +342,26 @@ private struct GranolaIntegrationSection: View {
     @State private var granolaStatus: GranolaAuthStatus?
     @State private var isGranolaLoading = false
     @State private var isConnectingGranola = false
-    @State private var isDisconnectingGranola = false
-    @State private var pendingDisconnectGranola = false
+    /// Account ID currently mid-disconnect (drives the per-card spinner).
+    /// Multi-account: a single `Bool` would conflate which row is busy.
+    @State private var disconnectingAccountId: String?
+    /// Account ID the user has tapped Disconnect on (drives the
+    /// confirmation dialog). Optional so we can bind the dialog
+    /// presentation to whether this is non-nil.
+    @State private var pendingDisconnectAccountId: String?
     @State private var granolaErrorMessage: String?
+
+    private var isDialogPresented: Binding<Bool> {
+        Binding(
+            get: { pendingDisconnectAccountId != nil },
+            set: { if !$0 { pendingDisconnectAccountId = nil } }
+        )
+    }
 
     var body: some View {
         BrettSettingsSection("Meeting Notes") {
-            if let status = granolaStatus, status.connected, let account = status.account {
-                granolaConnectedRows(account)
+            if let status = granolaStatus, status.connected, !status.accounts.isEmpty {
+                granolaAccountsList(status.accounts)
             } else {
                 granolaDisconnectedRows
             }
@@ -357,15 +369,17 @@ private struct GranolaIntegrationSection: View {
         .task { await refreshGranolaStatus() }
         .confirmationDialog(
             "Disconnect Granola?",
-            isPresented: $pendingDisconnectGranola,
+            isPresented: isDialogPresented,
             titleVisibility: .visible
         ) {
             Button("Disconnect", role: .destructive) {
-                Task { await disconnectGranola() }
+                if let id = pendingDisconnectAccountId {
+                    Task { await disconnectGranola(accountId: id) }
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Meeting notes and any tasks auto-created from them will stop syncing. Past synced data will be removed.")
+            Text("Meeting notes for this account and any tasks auto-created from them will stop syncing. Past synced data from this account will be removed.")
         }
     }
 
@@ -408,12 +422,62 @@ private struct GranolaIntegrationSection: View {
     }
 
     @ViewBuilder
-    private func granolaConnectedRows(_ account: GranolaAccount) -> some View {
-        // Row 1 — identity + last sync + reconnect affordance.
-        // The Reconnect button is always visible when connected because the
-        // server doesn't expose a per-account "broken" flag. Users who land
-        // here from a re-link task need a way to re-run OAuth without first
-        // disconnecting; healthy users won't bother tapping it.
+    private func granolaAccountsList(_ accounts: [GranolaAccount]) -> some View {
+        ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
+            if index > 0 {
+                BrettSettingsDivider()
+            }
+            granolaAccountRows(account)
+        }
+
+        // "Connect Another" affordance — always visible when at least one
+        // account is connected, so users can add their personal alongside
+        // their work account (or vice versa).
+        BrettSettingsDivider()
+        Button {
+            Task { await connectGranola() }
+        } label: {
+            HStack(spacing: 10) {
+                if isConnectingGranola {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(BrettColors.gold)
+                        .frame(width: 16)
+                } else {
+                    Image(systemName: "plus.circle")
+                        .foregroundStyle(BrettColors.gold)
+                        .frame(width: 16)
+                }
+                Text("Connect Another")
+                    .foregroundStyle(BrettColors.gold)
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isConnectingGranola)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+
+        if let granolaErrorMessage {
+            BrettSettingsDivider()
+            Text(granolaErrorMessage)
+                .font(BrettTypography.taskMeta)
+                .foregroundStyle(BrettColors.error)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+        }
+    }
+
+    @ViewBuilder
+    private func granolaAccountRows(_ account: GranolaAccount) -> some View {
+        let isDisconnecting = disconnectingAccountId == account.id
+
+        // Row 1 — identity + last sync.
+        // No per-card Reconnect button: it would open generic OAuth without a
+        // login_hint, which can't actually target this specific email row. To
+        // re-auth, users tap "Connect Another" below and authenticate as the
+        // same Google identity — the callback's upsert on (userId, email)
+        // refreshes tokens on this row.
         HStack(spacing: 12) {
             Image(systemName: "note.text")
                 .foregroundStyle(BrettColors.gold)
@@ -426,39 +490,16 @@ private struct GranolaIntegrationSection: View {
                     .foregroundStyle(BrettColors.textMeta)
             }
             Spacer()
-            Button {
-                Task { await connectGranola() }
-            } label: {
-                HStack(spacing: 4) {
-                    if isConnectingGranola {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(BrettColors.gold)
-                            .controlSize(.mini)
-                    } else {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    Text("Reconnect")
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundStyle(BrettColors.gold)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(BrettColors.gold.opacity(0.15)))
-            }
-            .buttonStyle(.plain)
-            .disabled(isConnectingGranola)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
 
-        // Row 2 — auto-create my tasks
+        // Row 2 — auto-create my tasks (per-account)
         BrettSettingsDivider()
         Toggle(isOn: Binding(
             get: { account.autoCreateMyTasks },
             set: { newValue in
-                Task { await updateGranolaPreferences(autoCreateMyTasks: newValue) }
+                Task { await updateGranolaPreferences(accountId: account.id, autoCreateMyTasks: newValue) }
             }
         )) {
             HStack(spacing: 10) {
@@ -474,12 +515,12 @@ private struct GranolaIntegrationSection: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
 
-        // Row 3 — auto-create follow-ups
+        // Row 3 — auto-create follow-ups (per-account)
         BrettSettingsDivider()
         Toggle(isOn: Binding(
             get: { account.autoCreateFollowUps },
             set: { newValue in
-                Task { await updateGranolaPreferences(autoCreateFollowUps: newValue) }
+                Task { await updateGranolaPreferences(accountId: account.id, autoCreateFollowUps: newValue) }
             }
         )) {
             HStack(spacing: 10) {
@@ -495,22 +536,13 @@ private struct GranolaIntegrationSection: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
 
-        if let granolaErrorMessage {
-            BrettSettingsDivider()
-            Text(granolaErrorMessage)
-                .font(BrettTypography.taskMeta)
-                .foregroundStyle(BrettColors.error)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-        }
-
-        // Row 4 — disconnect
+        // Row 4 — disconnect (per-account)
         BrettSettingsDivider()
         Button(role: .destructive) {
-            pendingDisconnectGranola = true
+            pendingDisconnectAccountId = account.id
         } label: {
             HStack(spacing: 10) {
-                if isDisconnectingGranola {
+                if isDisconnecting {
                     ProgressView().progressViewStyle(.circular).tint(BrettColors.error)
                         .frame(width: 16)
                 } else {
@@ -518,13 +550,13 @@ private struct GranolaIntegrationSection: View {
                         .foregroundStyle(BrettColors.error)
                         .frame(width: 16)
                 }
-                Text("Disconnect Granola")
+                Text("Disconnect")
                     .foregroundStyle(BrettColors.error)
                 Spacer()
             }
         }
         .buttonStyle(.plain)
-        .disabled(isDisconnectingGranola)
+        .disabled(isDisconnecting)
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
     }
@@ -585,7 +617,7 @@ private struct GranolaIntegrationSection: View {
             // Soft-fail: if the user has never connected Granola, show
             // the disconnected state rather than an error banner. Only
             // surface the message on a real connected-status fetch fail.
-            granolaStatus = GranolaAuthStatus(connected: false, account: nil)
+            granolaStatus = GranolaAuthStatus(connected: false, accounts: [])
         }
     }
 
@@ -616,14 +648,14 @@ private struct GranolaIntegrationSection: View {
         }
     }
 
-    private func disconnectGranola() async {
-        isDisconnectingGranola = true
-        defer { isDisconnectingGranola = false }
+    private func disconnectGranola(accountId: String) async {
+        disconnectingAccountId = accountId
+        defer { disconnectingAccountId = nil }
         granolaErrorMessage = nil
 
         do {
             _ = try await APIClient.shared.rawRequest(
-                path: "/granola/auth",
+                path: "/granola/auth/\(accountId)",
                 method: "DELETE"
             )
             await refreshGranolaStatus()
@@ -632,17 +664,21 @@ private struct GranolaIntegrationSection: View {
         }
     }
 
-    /// Shared preferences patch — callers pass just the field they want
-    /// to change; nil fields are omitted from the body so we don't
-    /// overwrite the companion preference.
+    /// Per-account preferences patch — callers pass the accountId plus
+    /// just the field they want to change; nil fields are omitted from the
+    /// body so we don't overwrite the companion preference.
     private func updateGranolaPreferences(
+        accountId: String,
         autoCreateMyTasks: Bool? = nil,
         autoCreateFollowUps: Bool? = nil
     ) async {
-        guard let current = granolaStatus?.account else { return }
+        guard let status = granolaStatus,
+              let currentIndex = status.accounts.firstIndex(where: { $0.id == accountId })
+        else { return }
+        let current = status.accounts[currentIndex]
 
         // Optimistic local update so the toggle animates instantly.
-        let previous = current
+        let previousAccounts = status.accounts
         let updatedAccount = GranolaAccount(
             id: current.id,
             email: current.email,
@@ -652,12 +688,14 @@ private struct GranolaIntegrationSection: View {
             createdAt: current.createdAt,
             updatedAt: current.updatedAt
         )
-        granolaStatus = GranolaAuthStatus(connected: true, account: updatedAccount)
+        var nextAccounts = status.accounts
+        nextAccounts[currentIndex] = updatedAccount
+        granolaStatus = GranolaAuthStatus(connected: true, accounts: nextAccounts)
 
         do {
             _ = try await APIClient.shared.request(
                 GranolaPreferencesResponse.self,
-                path: "/granola/auth/preferences",
+                path: "/granola/auth/\(accountId)/preferences",
                 method: "PATCH",
                 body: GranolaPreferencesBody(
                     autoCreateMyTasks: autoCreateMyTasks,
@@ -667,7 +705,7 @@ private struct GranolaIntegrationSection: View {
             granolaErrorMessage = nil
         } catch {
             // Roll back optimistic update.
-            granolaStatus = GranolaAuthStatus(connected: true, account: previous)
+            granolaStatus = GranolaAuthStatus(connected: true, accounts: previousAccounts)
             granolaErrorMessage = "Couldn't update preference. Please try again."
         }
     }
@@ -691,7 +729,7 @@ struct GranolaAccount: Decodable, Equatable {
 
 struct GranolaAuthStatus: Decodable, Equatable {
     let connected: Bool
-    let account: GranolaAccount?
+    let accounts: [GranolaAccount]
 }
 
 /// Matches `POST /granola/auth/connect` response.

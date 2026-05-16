@@ -12,7 +12,7 @@ export interface GranolaAccountRecord {
 
 export interface GranolaAccountStatus {
   connected: boolean;
-  account: GranolaAccountRecord | null;
+  accounts: GranolaAccountRecord[];
 }
 
 // ── Meeting note types (provider-agnostic) ──

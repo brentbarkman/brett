@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { encryptToken } from "../lib/encryption.js";
-import { resolveRelinkTask } from "../lib/connection-health.js";
+import { resolveRelinkTaskForAccount } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { randomBytes, createHash } from "crypto";
 import type { Context } from "hono";
@@ -90,18 +90,16 @@ export function clearRegisteredClient(): void {
 
 const granolaAuth = new Hono<AuthEnv>();
 
-// GET / — Connection status
+// GET / — Connection status (returns ALL of the user's Granola accounts)
 granolaAuth.get("/", authMiddleware, async (c) => {
   const user = c.get("user");
-  const account = await prisma.granolaAccount.findUnique({
+  const accounts = await prisma.granolaAccount.findMany({
     where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
   });
-  if (!account) {
-    return c.json({ connected: false, account: null });
-  }
   return c.json({
-    connected: true,
-    account: {
+    connected: accounts.length > 0,
+    accounts: accounts.map((account) => ({
       id: account.id,
       email: account.email,
       lastSyncAt: account.lastSyncAt?.toISOString() ?? null,
@@ -109,36 +107,67 @@ granolaAuth.get("/", authMiddleware, async (c) => {
       autoCreateFollowUps: account.autoCreateFollowUps,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
-    },
+    })),
   });
 });
 
-// PATCH /preferences — Update auto-create settings
-granolaAuth.patch("/preferences", authMiddleware, async (c) => {
+// PATCH /:accountId/preferences — Update per-account auto-create settings
+granolaAuth.patch("/:accountId/preferences", authMiddleware, async (c) => {
   const user = c.get("user");
+  const accountId = c.req.param("accountId");
   const body = await c.req.json<{
     autoCreateMyTasks?: boolean;
     autoCreateFollowUps?: boolean;
   }>();
 
+  // Ownership check — without this, any authed user could mutate any account by ID
+  const account = await prisma.granolaAccount.findFirst({
+    where: { id: accountId, userId: user.id },
+  });
+  if (!account) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
   const data: Record<string, boolean> = {};
   if (typeof body.autoCreateMyTasks === "boolean") data.autoCreateMyTasks = body.autoCreateMyTasks;
   if (typeof body.autoCreateFollowUps === "boolean") data.autoCreateFollowUps = body.autoCreateFollowUps;
 
-  const account = await prisma.granolaAccount.update({
-    where: { userId: user.id },
+  const updated = await prisma.granolaAccount.update({
+    where: { id: account.id },
     data,
   });
 
   return c.json({
-    autoCreateMyTasks: account.autoCreateMyTasks,
-    autoCreateFollowUps: account.autoCreateFollowUps,
+    autoCreateMyTasks: updated.autoCreateMyTasks,
+    autoCreateFollowUps: updated.autoCreateFollowUps,
   });
 });
+
+// Per-user cap on connected Granola accounts. Prevents account-flooding
+// (each new account fans out into the granolaProvider iteration on every
+// cron tick). 5 covers the realistic personal+work+side-project case
+// without enabling abuse.
+const MAX_GRANOLA_ACCOUNTS_PER_USER = 5;
 
 // POST /connect — Initiate OAuth (returns URL)
 granolaAuth.post("/connect", authMiddleware, async (c) => {
   const user = c.get("user");
+
+  // Enforce per-user account cap BEFORE starting OAuth. Counted at /connect
+  // rather than at the callback so users get an immediate, actionable error
+  // instead of seeing a confusing OAuth-tab failure.
+  const existingCount = await prisma.granolaAccount.count({
+    where: { userId: user.id },
+  });
+  if (existingCount >= MAX_GRANOLA_ACCOUNTS_PER_USER) {
+    return c.json(
+      {
+        error: `You can connect up to ${MAX_GRANOLA_ACCOUNTS_PER_USER} Granola accounts. Disconnect one before adding another.`,
+      },
+      400,
+    );
+  }
+
   let client;
   try {
     client = await ensureClientRegistered();
@@ -278,23 +307,23 @@ granolaAuth.get("/callback", async (c) => {
     });
   }
 
-  // Extract email from id_token (JWT payload), token response, or fall back to user email
-  let email = tokens.email;
-  if (!email && tokens.id_token) {
-    try {
-      const payload = JSON.parse(
-        Buffer.from(tokens.id_token.split(".")[1], "base64url").toString("utf8"),
-      );
-      email = payload.email;
-    } catch {
-      // Malformed id_token — fall through
-    }
-  }
-  if (!email) email = user.email;
+  // Resolve the Granola account email.
+  //
+  // We trust `tokens.email` (the top-level claim in Granola's token-endpoint
+  // JSON response, delivered over TLS) but do NOT trust `tokens.id_token`:
+  // parsing the JWT payload without JWKS signature verification means a
+  // forged or MITM'd id_token could inject an arbitrary email into the
+  // upsert key `(userId, email)`, allowing cross-account pollution.
+  //
+  // If `tokens.email` is missing we fall back to the authenticated Brett
+  // user's own email rather than chase an unsigned id_token.
+  const email = tokens.email ?? user.email;
 
-  // Upsert GranolaAccount
+  // Upsert GranolaAccount keyed on (userId, email) so re-authing the same Google
+  // identity refreshes tokens on the existing row, and authorizing a different
+  // identity creates a new account for the same Brett user.
   const granolaAccount = await prisma.granolaAccount.upsert({
-    where: { userId },
+    where: { userId_email: { userId, email } },
     create: {
       id: generateId(),
       userId,
@@ -306,7 +335,6 @@ granolaAuth.get("/callback", async (c) => {
         : new Date(Date.now() + 3600 * 1000),
     },
     update: {
-      email,
       accessToken: encryptToken(tokens.access_token),
       refreshToken: encryptToken(tokens.refresh_token),
       tokenExpiresAt: tokens.expires_in
@@ -315,14 +343,17 @@ granolaAuth.get("/callback", async (c) => {
     },
   });
 
-  // Resolve any existing re-link task for this connection
-  await resolveRelinkTask(userId, "granola").catch((e) =>
+  // Resolve the re-link task for THIS account specifically. With
+  // multi-account, a provider-wide resolver would silently clear
+  // re-link prompts for OTHER (still broken) accounts.
+  await resolveRelinkTaskForAccount(userId, "granola", granolaAccount.id).catch((e) =>
     console.error("[granola-auth] Failed to resolve re-link task:", e),
   );
 
-  // Trigger initial sync in background
-  import("../services/granola-sync.js")
-    .then(({ initialGranolaSync }: { initialGranolaSync: (userId: string) => Promise<void> }) => initialGranolaSync(userId))
+  // Trigger initial sync in background via the coordinator (handles
+  // MeetingNoteSource merging correctly and supports multiple accounts).
+  import("../services/meeting-providers/registry.js")
+    .then(({ meetingCoordinator }) => meetingCoordinator.initialSync(userId, "granola"))
     .catch((err: unknown) => console.error("[granola-auth] Initial sync failed:", err));
 
   return callbackHtml(c, {
@@ -331,23 +362,41 @@ granolaAuth.get("/callback", async (c) => {
   });
 });
 
-// DELETE / — Disconnect
-granolaAuth.delete("/", authMiddleware, async (c) => {
+// DELETE /:accountId — Disconnect one specific account
+granolaAuth.delete("/:accountId", authMiddleware, async (c) => {
   const user = c.get("user");
-  const account = await prisma.granolaAccount.findUnique({ where: { userId: user.id } });
+  const accountId = c.req.param("accountId");
+
+  // Ownership check — without this, any authed user could delete any account by ID
+  const account = await prisma.granolaAccount.findFirst({
+    where: { id: accountId, userId: user.id },
+  });
   if (!account) {
-    return c.json({ error: "Not connected" }, 404);
+    return c.json({ error: "Not found" }, 404);
   }
-  // Null out meetingNoteId on any linked items before cascade delete
+
+  // Null out meetingNoteId on items linked to meetings from THIS account only.
+  // Items linked to meetings from the user's other accounts must be preserved.
   await prisma.item.updateMany({
-    where: { meetingNoteId: { not: null }, userId: user.id },
+    where: {
+      meetingNoteId: { not: null },
+      userId: user.id,
+      meetingNote: { granolaAccountId: account.id },
+    },
     data: { meetingNoteId: null },
   });
-  // Cascade delete: GranolaAccount -> MeetingNote
+
+  // Delete the GranolaAccount. The MeetingNote.granolaAccountId FK is
+  // declared SetNull (not Cascade) — cross-source notes (e.g. ones that
+  // also carry a google_meet MeetingNoteSource) survive the disconnect
+  // with their granolaAccountId nulled out. MeetingNoteSource rows for
+  // this account are also SetNull on their granolaAccountId column.
   await prisma.granolaAccount.delete({ where: { id: account.id } });
 
-  // Resolve any existing re-link task — user is in a valid state now (account removed)
-  await resolveRelinkTask(user.id, "granola").catch((e) =>
+  // Resolve the re-link task for THIS account only — provider-wide
+  // resolution would clear prompts for the user's other (still broken)
+  // Granola accounts.
+  await resolveRelinkTaskForAccount(user.id, "granola", account.id).catch((e) =>
     console.error("[granola-auth] Failed to resolve re-link task:", e),
   );
 
