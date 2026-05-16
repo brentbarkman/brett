@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { StaleTooltip } from "./StaleTooltip";
-import { Zap, BookOpen, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
+import { Zap, Calendar, Check, RotateCcw, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Thing } from "@brett/types";
 import { useDisplayTitle } from "./lib/demoMode";
@@ -41,7 +41,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
     if (isFocused) cardRef.current?.scrollIntoView({ block: "nearest" });
   }, [isFocused]);
 
-  const handleToggleClick = 
+  const handleToggleClick =
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!onToggle || completing) return;
@@ -62,33 +62,40 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
     if (thing.type === "content") {
       switch (thing.contentType) {
         case "tweet":
-          return <MessageSquare size={16} className="text-amber-400" />;
+          return <MessageSquare size={13} className="text-amber-400" />;
         case "article":
-          return <FileText size={16} className="text-amber-400" />;
+          return <FileText size={13} className="text-amber-400" />;
         case "video":
-          return <Play size={16} className="text-amber-400" />;
+          return <Play size={13} className="text-amber-400" />;
         case "pdf":
-          return <File size={16} className="text-amber-400" />;
+          return <File size={13} className="text-amber-400" />;
         case "podcast":
-          return <Headphones size={16} className="text-amber-400" />;
+          return <Headphones size={13} className="text-amber-400" />;
         case "web_page":
         default:
-          return <Globe size={16} className="text-amber-400" />;
+          return <Globe size={13} className="text-amber-400" />;
       }
     }
-    return <Zap size={16} className="text-brett-gold" />;
+    return <Zap size={13} className="text-brett-gold" />;
   };
 
-  const getUrgencyColor = () => {
+  const getDueTextColor = () => {
     switch (thing.urgency) {
       case "overdue":
-        return "bg-transparent text-brett-red border-transparent";
+        return "text-brett-red";
       case "today":
-        return "bg-transparent text-brett-gold border-transparent";
+        return "text-brett-gold";
       default:
-        return "bg-white/5 text-white/50 border border-white/5";
+        return "text-white/45";
     }
   };
+
+  const provenance =
+    thing.source === "scout" && thing.scoutName
+      ? thing.scoutName
+      : thing.source === "Granola" && thing.meetingNoteTitle
+        ? thing.meetingNoteTitle
+        : null;
 
   return (
     <div
@@ -102,103 +109,83 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       onClick={() => { onFocus?.(); onClick(); }}
       onFocus={onFocus}
       className={`
-        group relative flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer
-        border transition-all duration-200 outline-none
+        group/row relative flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer
+        border-t border-white/[0.04] first:border-t-0
+        transition-colors duration-150 outline-none
         ${completing
-          ? "bg-brett-teal/[0.03] border-brett-teal/15"
+          ? "bg-brett-teal/[0.05]"
           : isFocused
-            ? "bg-white/10 border-brett-gold/30"
-            : "bg-white/5 hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg border-white/5 hover:border-white/10"
+            ? "bg-white/10 ring-1 ring-inset ring-brett-gold/30"
+            : "hover:bg-white/[0.04]"
         }
-        ${thing.isCompleted && !completing ? "opacity-60" : "opacity-100"}
+        ${thing.isCompleted && !completing ? "opacity-70" : "opacity-100"}
         ${isDragging ? "opacity-50" : ""}
       `}
     >
-      {/* Clickable toggle icon */}
+      {/* Toggle — bare type icon by default; on row hover, the icon hides
+          and a hollow ring takes its place. Clicking either completes. */}
       <button
         tabIndex={-1}
         onClick={handleToggleClick}
-        className={`
-          toggle-icon relative flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-          transition-all duration-200 outline-none
-          ${completing
-            ? "bg-brett-teal/20 border-2 border-brett-teal/50"
-            : thing.isCompleted
-              ? "bg-black/20 border border-white/10 hover:border-white/30 hover:bg-white/10"
-              : "bg-black/20 border border-white/10 hover:border-brett-teal/40 hover:bg-brett-teal/10"
-          }
-        `}
-        style={completing ? {
-          animation: "togglePulse 600ms cubic-bezier(0.16, 1, 0.3, 1)",
-        } : undefined}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="group/btn relative flex-shrink-0 w-4 h-4 flex items-center justify-center outline-none"
+        aria-label={thing.isCompleted ? "Mark as not done" : "Complete"}
       >
-        {/* Glass sheen — subtle top-to-transparent highlight gives the orb
-            a soft "lit from above" dimensional feel. */}
-        <span className="absolute inset-0 rounded-full bg-gradient-to-b from-white/15 via-white/5 to-transparent pointer-events-none" />
-
-        {/* Default type icon — hidden via CSS when .toggle-icon:hover.
-            `type-icon` class is the hook the CSS rule keys off (used to
-            be `:first-child`, broken now that the sheen overlay is the
-            first child). */}
-        <span className="type-icon relative transition-all duration-150">
-          {!completing && getIcon()}
-        </span>
-
-        {/* Check overlay on hover (uncompleted) / undo overlay (completed) */}
-        {!completing && !thing.isCompleted && (
+        {completing ? (
           <Check
-            size={16}
-            className="check-overlay absolute text-brett-teal transition-all duration-150"
-          />
-        )}
-        {!completing && thing.isCompleted && (
-          <RotateCcw
             size={14}
-            className="check-overlay absolute text-white/50 transition-all duration-150"
-          />
-        )}
-
-        {/* Check icon when completing */}
-        {completing && (
-          <Check
-            size={18}
             strokeWidth={2.5}
-            className="absolute text-brett-teal"
+            className="text-brett-teal"
             style={{ animation: "checkPop 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
           />
+        ) : thing.isCompleted ? (
+          <>
+            {/* Completed: dim icon stays; row-hover swaps to undo glyph. */}
+            <span className="group-hover/row:hidden flex items-center justify-center text-white/30">
+              {getIcon()}
+            </span>
+            <RotateCcw
+              size={13}
+              className="hidden group-hover/row:block text-white/55 group-hover/btn:text-white"
+            />
+          </>
+        ) : (
+          <>
+            {/* Idle: bare type icon. Row-hover: hollow ring. Button-hover: ring fills teal. */}
+            <span className="group-hover/row:hidden flex items-center justify-center">
+              {getIcon()}
+            </span>
+            <span className="hidden group-hover/row:flex items-center justify-center w-3.5 h-3.5 rounded-full border border-white/40 transition-colors duration-100 group-hover/btn:border-brett-teal group-hover/btn:bg-brett-teal/20" />
+          </>
         )}
       </button>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h4
-            className={`text-sm font-light truncate transition-all duration-300 ${
-              thing.isCompleted || completing
-                ? "line-through text-white/40"
-                : "text-white"
-            }`}
-          >
-            {shownTitle}
-          </h4>
-          {thing.stalenessDays && !thing.isCompleted && !completing && (
-            <StaleTooltip days={thing.stalenessDays}>
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60 flex-shrink-0" />
-            </StaleTooltip>
-          )}
-        </div>
-        {/* Provenance subtitle — shown below title when from a scout or meeting */}
-        {!thing.isCompleted && !completing && (
-          (thing.source === "Granola" && thing.meetingNoteTitle) ||
-          (thing.source === "scout" && thing.scoutName)
-        ) && (
-          <span className="text-[10px] text-white/50 truncate block mt-0.5">
-            from {thing.source === "scout" ? thing.scoutName : thing.meetingNoteTitle}
+      {/* Title + inline provenance + stale dot */}
+      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+        <h4
+          className={`text-[13.5px] font-normal truncate transition-colors duration-300 ${
+            thing.isCompleted || completing
+              ? "line-through text-white/40"
+              : "text-white"
+          }`}
+        >
+          {shownTitle}
+        </h4>
+        {provenance && !thing.isCompleted && !completing && (
+          <span className="text-[11px] text-white/40 truncate flex-shrink min-w-0 hidden sm:inline">
+            · from {provenance}
           </span>
+        )}
+        {thing.stalenessDays && !thing.isCompleted && !completing && (
+          <StaleTooltip days={thing.stalenessDays}>
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60 flex-shrink-0" />
+          </StaleTooltip>
         )}
       </div>
 
-      <div className="flex-shrink-0 flex items-center gap-2">
-        {/* Install update button for system update tasks */}
+      {/* Trailing meta — no pill chrome; color encodes urgency on the date */}
+      <div className="flex-shrink-0 flex items-center gap-2.5">
+        {/* Install update — keeps CTA pill chrome */}
         {onInstallUpdate && thing.sourceId === "system:update" && (
           <button
             onClick={(e) => { e.stopPropagation(); onInstallUpdate(); }}
@@ -209,7 +196,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
             Install &amp; Restart
           </button>
         )}
-        {/* Reconnect button for broken integrations */}
+        {/* Reconnect — keeps CTA pill chrome */}
         {onReconnect && thing.sourceId?.startsWith("relink:") && (
           <button
             onClick={(e) => { e.stopPropagation(); onReconnect(); }}
@@ -222,22 +209,16 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
           </button>
         )}
         {thing.list && thing.list !== "Inbox" && (
-          <span className="text-xs text-white/50 truncate max-w-[100px]">{thing.list}</span>
+          <span className="text-[11px] text-white/40 truncate max-w-[100px]">{thing.list}</span>
         )}
-        {thing.dueDateLabel ? (
-          <div
-            className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-              thing.isCompleted
-                ? "bg-white/5 text-white/30 border border-white/5"
-                : getUrgencyColor()
+        {thing.dueDateLabel && (
+          <span
+            className={`text-xs font-medium tabular-nums ${
+              thing.isCompleted ? "text-white/30" : getDueTextColor()
             }`}
           >
             {thing.dueDateLabel}
-          </div>
-        ) : (
-          <div className="w-8 h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Calendar size={14} className="text-white/30" />
-          </div>
+          </span>
         )}
       </div>
 

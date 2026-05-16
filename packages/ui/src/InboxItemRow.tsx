@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Zap, BookOpen, Check, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
+import { Zap, Check, MessageSquare, FileText, Play, File, Headphones, Globe, RefreshCw, Download } from "lucide-react";
 import type { Thing } from "@brett/types";
 import { useDraggable } from "@dnd-kit/core";
 import { useDisplayTitle } from "./lib/demoMode";
@@ -97,6 +97,13 @@ export function InboxItemRow({
     }, 600);
   };
 
+  const provenance =
+    thing.source === "scout" && thing.scoutName
+      ? thing.scoutName
+      : thing.source === "Granola" && thing.meetingNoteTitle
+        ? thing.meetingNoteTitle
+        : null;
+
   return (
     <div
       ref={(node) => {
@@ -111,66 +118,65 @@ export function InboxItemRow({
       tabIndex={0}
       role={undefined}
       className={`
-        group flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer
-        transition-colors duration-200 outline-none
+        group/row flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer
+        border-t border-white/[0.04]
+        transition-colors duration-150 outline-none
         ${isDragging ? "opacity-30" : ""}
-        ${isFocused
-          ? "bg-white/10 border border-white/5"
-          : isSelected
-            ? "bg-white/10 border border-white/5"
-            : "border border-transparent hover:bg-white/10 hover:-translate-y-[1px] hover:shadow-lg"
+        ${isFocused || isSelected
+          ? "bg-white/10"
+          : "hover:bg-white/[0.04]"
         }
+        ${isFocused ? "ring-1 ring-inset ring-brett-gold/30" : ""}
       `}
       style={animationStyle}
     >
-      {/* Toggle button — matches ThingCard's filled glass orb so toggles
-          read identically across Today/Lists/Inbox. */}
+      {/* Toggle — bare type icon by default; row-hover swaps it for a
+          hollow ring. Same pattern as ThingCard so Today/Inbox/Lists read
+          identically (CLAUDE.md list-consistency rule). */}
       <button
         tabIndex={-1}
         onClick={handleToggle}
         onPointerDown={(e) => e.stopPropagation()}
-        className={`
-          toggle-btn flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-          transition-all duration-150 relative outline-none
-          ${completing
-            ? "bg-brett-teal/20 border-2 border-brett-teal/50"
-            : "bg-black/20 border border-white/10 hover:border-brett-teal/40 hover:bg-brett-teal/10"
-          }
-        `}
+        className="group/btn relative flex-shrink-0 w-4 h-4 flex items-center justify-center outline-none"
+        aria-label="Complete"
       >
-        {/* Glass sheen — same treatment as ThingCard's toggle for visual parity. */}
-        <span className="absolute inset-0 rounded-full bg-gradient-to-b from-white/15 via-white/5 to-transparent pointer-events-none" />
         {completing ? (
-          <Check size={13} className="relative text-brett-teal check-pop" />
+          <Check
+            size={14}
+            strokeWidth={2.5}
+            className="text-brett-teal"
+            style={{ animation: "checkPop 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
+          />
         ) : (
           <>
-            <span className="relative toggle-icon"><Icon size={12} className={iconColor} /></span>
-            <span className="relative toggle-check"><Check size={13} className="text-brett-teal" /></span>
+            <span className="group-hover/row:hidden flex items-center justify-center">
+              <Icon size={13} className={iconColor} />
+            </span>
+            <span className="hidden group-hover/row:flex items-center justify-center w-3.5 h-3.5 rounded-full border border-white/40 transition-colors duration-100 group-hover/btn:border-brett-teal group-hover/btn:bg-brett-teal/20" />
           </>
         )}
       </button>
 
-      {/* Title + provenance */}
-      <div className="flex-1 min-w-0">
-        <span className="text-sm font-light text-white/90 truncate block">
+      {/* Title + inline provenance */}
+      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+        <span className="text-[13.5px] font-normal text-white/90 truncate">
           {shownTitle}
         </span>
-        {((thing.source === "scout" && thing.scoutName) ||
-          (thing.source === "Granola" && thing.meetingNoteTitle)) && (
-          <span className="text-[10px] text-white/50 truncate block mt-0.5">
-            from {thing.source === "scout" ? thing.scoutName : thing.meetingNoteTitle}
+        {provenance && (
+          <span className="text-[11px] text-white/40 truncate flex-shrink min-w-0 hidden sm:inline">
+            · from {provenance}
           </span>
         )}
       </div>
 
-      {/* Source pill */}
+      {/* Source pill — small enough to coexist with the naked row */}
       {!hideSource && thing.source && thing.source !== "Brett" && (
-        <span className="flex-shrink-0 text-[11px] text-white/40 px-1.5 py-0.5 rounded bg-white/5">
+        <span className="flex-shrink-0 text-[10.5px] text-white/40 px-1.5 py-0.5 rounded bg-white/5">
           {thing.source}
         </span>
       )}
 
-      {/* Install update button for system update tasks */}
+      {/* Install update — CTA pill chrome stays */}
       {onInstallUpdate && thing.sourceId === "system:update" && (
         <button
           onClick={(e) => { e.stopPropagation(); onInstallUpdate(); }}
@@ -182,7 +188,7 @@ export function InboxItemRow({
         </button>
       )}
 
-      {/* Reconnect button for broken integrations */}
+      {/* Reconnect — CTA pill chrome stays */}
       {onReconnect && thing.sourceId?.startsWith("relink:") && (
         <button
           onClick={(e) => { e.stopPropagation(); onReconnect(); }}
@@ -196,7 +202,7 @@ export function InboxItemRow({
       )}
 
       {/* Relative age */}
-      <span className="flex-shrink-0 text-xs text-white/40 tabular-nums">
+      <span className="flex-shrink-0 text-[11px] text-white/40 tabular-nums">
         {relativeAge}
       </span>
 
