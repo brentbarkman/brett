@@ -3,9 +3,9 @@ import { apiFetch } from "./client";
 import { invalidateAllThings } from "./invalidate";
 import type { GranolaAccountStatus, MeetingNoteDetail } from "@brett/types";
 
-export function useGranolaAccount() {
+export function useGranolaAccounts() {
   return useQuery({
-    queryKey: ["granola", "account"],
+    queryKey: ["granola", "accounts"],
     queryFn: () => apiFetch<GranolaAccountStatus>("/granola/auth"),
   });
 }
@@ -28,8 +28,8 @@ export function useConnectGranola() {
 export function useDisconnectGranola() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () =>
-      apiFetch("/granola/auth", { method: "DELETE" }),
+    mutationFn: (accountId: string) =>
+      apiFetch(`/granola/auth/${accountId}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["granola"] });
     },
@@ -39,29 +39,37 @@ export function useDisconnectGranola() {
 export function useUpdateGranolaPreferences() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (prefs: { autoCreateMyTasks?: boolean; autoCreateFollowUps?: boolean }) =>
-      apiFetch("/granola/auth/preferences", {
+    mutationFn: ({
+      accountId,
+      prefs,
+    }: {
+      accountId: string;
+      prefs: { autoCreateMyTasks?: boolean; autoCreateFollowUps?: boolean };
+    }) =>
+      apiFetch(`/granola/auth/${accountId}/preferences`, {
         method: "PATCH",
         body: JSON.stringify(prefs),
       }),
-    onMutate: async (prefs) => {
-      await queryClient.cancelQueries({ queryKey: ["granola", "account"] });
-      const prev = queryClient.getQueryData<GranolaAccountStatus>(["granola", "account"]);
-      if (prev?.account) {
-        queryClient.setQueryData<GranolaAccountStatus>(["granola", "account"], {
+    onMutate: async ({ accountId, prefs }) => {
+      await queryClient.cancelQueries({ queryKey: ["granola", "accounts"] });
+      const prev = queryClient.getQueryData<GranolaAccountStatus>(["granola", "accounts"]);
+      if (prev) {
+        queryClient.setQueryData<GranolaAccountStatus>(["granola", "accounts"], {
           ...prev,
-          account: { ...prev.account, ...prefs },
+          accounts: prev.accounts.map((a) =>
+            a.id === accountId ? { ...a, ...prefs } : a,
+          ),
         });
       }
       return { prev };
     },
-    onError: (_err, _prefs, ctx) => {
+    onError: (_err, _vars, ctx) => {
       if (ctx?.prev !== undefined) {
-        queryClient.setQueryData(["granola", "account"], ctx.prev);
+        queryClient.setQueryData(["granola", "accounts"], ctx.prev);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["granola", "account"] });
+      queryClient.invalidateQueries({ queryKey: ["granola", "accounts"] });
     },
   });
 }
