@@ -314,6 +314,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
                   onToggle={handleToggle}
                   onFocus={() => setFocusedIndex(i)}
                   isFocused={focusedIndex === i}
+                  hideListName
                   onReconnect={thing.sourceId?.startsWith("relink:") && onReconnect
                     ? () => onReconnect(thing.sourceId!)
                     : undefined}
@@ -341,6 +342,7 @@ export function ListView({ lists, archivedLists, listsFetching, onItemClick, onA
                   onToggle={handleToggle}
                   onFocus={() => setFocusedIndex(activeThings.length + i)}
                   isFocused={focusedIndex === activeThings.length + i}
+                  hideListName
                   onReconnect={thing.sourceId?.startsWith("relink:") && onReconnect
                     ? () => onReconnect(thing.sourceId!)
                     : undefined}

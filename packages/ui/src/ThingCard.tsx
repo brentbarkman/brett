@@ -14,11 +14,14 @@ interface ThingCardProps {
   onReconnect?: () => void;
   reconnectPending?: boolean;
   onInstallUpdate?: () => void;
+  /** Suppress the trailing list-name tag — the caller already implies the
+   *  list context (e.g. a custom list view, where every row is in that list). */
+  hideListName?: boolean;
   /** Forwards the card's DOM element so the parent can anchor a popover to it. */
   onElementRef?: (el: HTMLDivElement | null) => void;
 }
 
-export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending, onInstallUpdate, onElementRef }: ThingCardProps) {
+export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReconnect, reconnectPending, onInstallUpdate, hideListName, onElementRef }: ThingCardProps) {
   const shownTitle = useDisplayTitle(thing.id, thing.title, "thing");
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: thing.id,
@@ -206,7 +209,7 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
             {reconnectPending ? "Connecting..." : "Reconnect"}
           </button>
         )}
-        {thing.list && thing.list !== "Inbox" && (
+        {!hideListName && thing.list && thing.list !== "Inbox" && (
           <span className="text-[11px] text-white/40 truncate max-w-[100px]">{thing.list}</span>
         )}
         {thing.dueDateLabel && (
