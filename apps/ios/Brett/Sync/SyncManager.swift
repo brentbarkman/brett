@@ -125,7 +125,9 @@ final class SyncManager {
     /// 5 minutes). Debounced / user-initiated syncs are NOT throttled —
     /// they fire immediately because the user just expressed intent.
     /// Reset to 0 on any successful sync.
-    private var consecutiveFailures: Int = 0
+    /// Read-only outside the class so tests can pin the backoff side-effect
+    /// of cancellations vs. real failures. Mutated only by `sync()`.
+    private(set) var consecutiveFailures: Int = 0
 
     /// Upper bound on the backoff window. Five minutes — longer than the
     /// default 30s poll, but short enough that a user returning from a
@@ -209,14 +211,22 @@ final class SyncManager {
         defer { isSyncing = false }
 
         var firstError: String?
+        var anyPhaseSucceeded = false
 
         // Phase 1: push. Capture errors but still attempt the pull so a one-off
         // push hiccup doesn't block incoming server changes indefinitely.
+        // Cancellations (URLError.cancelled / CancellationError) aren't real
+        // failures — they just mean Task.cancel() reached an in-flight request
+        // (debounce overlap, sign-out, app backgrounding) — so they bypass
+        // both the error state and the backoff counter.
         state = .pushing
         do {
             _ = try await pushEngine.push()
+            anyPhaseSucceeded = true
         } catch {
-            firstError = describe(error)
+            if !Self.isCancellation(error) {
+                firstError = describe(error)
+            }
         }
 
         // Phase 2: pull. Always attempted so the server has the final say on
@@ -230,21 +240,29 @@ final class SyncManager {
                 _ = try await pullEngine.pull()
             }
             lastSyncedAt = Date()
+            anyPhaseSucceeded = true
         } catch {
-            // Preserve the push error if we had one — it's the more actionable
-            // signal (a push failure means local mutations haven't landed).
-            firstError = firstError ?? describe(error)
+            if !Self.isCancellation(error) {
+                // Preserve the push error if we had one — it's the more
+                // actionable signal (a push failure means local mutations
+                // haven't landed).
+                firstError = firstError ?? describe(error)
+            }
         }
 
         // Final state reflects whether either phase errored. The backoff
         // counter tracks consecutive failures so the poll loop can throttle
-        // repeated retries on a flaky network.
+        // repeated retries on a flaky network. A cancellation-only cycle
+        // (no real error, no successful phase) leaves the counter alone —
+        // we didn't fail and we didn't succeed.
         if let message = firstError {
             state = .error(message)
             consecutiveFailures += 1
         } else {
             state = .idle
-            consecutiveFailures = 0
+            if anyPhaseSucceeded {
+                consecutiveFailures = 0
+            }
         }
     }
 
@@ -265,7 +283,7 @@ final class SyncManager {
         do {
             _ = try await pushEngine.push()
         } catch {
-            state = .error(describe(error))
+            state = Self.isCancellation(error) ? .idle : .error(describe(error))
             throw error
         }
 
@@ -278,7 +296,7 @@ final class SyncManager {
             state = .idle
             lastSyncedAt = Date()
         } catch {
-            state = .error(describe(error))
+            state = Self.isCancellation(error) ? .idle : .error(describe(error))
             throw error
         }
     }
@@ -425,6 +443,35 @@ final class SyncManager {
         let base = pollInterval * pow(2.0, Double(min(consecutiveFailures, 10)))
         let capped = min(base, maxBackoff)
         return capped * jitter
+    }
+
+    // MARK: - Cancellation classification
+
+    /// True when an error originates from `Task.cancel()` propagating into a
+    /// URLSession request (or surfacing as `CancellationError` directly).
+    /// Kept `nonisolated static` so tests can exercise the matrix without a
+    /// SyncManager instance, and so it's safe to call from any actor.
+    ///
+    /// Three shapes show up in practice:
+    ///  - `URLError(.cancelled)` — `URLSession.data(for:)` after the parent
+    ///    Task is cancelled.
+    ///  - `CancellationError` — Swift concurrency primitives (e.g.
+    ///    `Task.checkCancellation()`).
+    ///  - `APIError.unknown(URLError(.cancelled))` — the same URLError after
+    ///    `APIClient.map(urlError:)` wraps it for callers downstream.
+    nonisolated static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return true
+        }
+        if let apiError = error as? APIError,
+           case .unknown(let underlying) = apiError {
+            if underlying is CancellationError { return true }
+            if let urlError = underlying as? URLError, urlError.code == .cancelled {
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: - Crash recovery
