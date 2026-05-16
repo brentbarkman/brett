@@ -183,6 +183,14 @@ export async function ingestNewsletter(params: {
   // Fire-and-forget embedding for search
   enqueueEmbed({ entityType: "item", entityId: item.id, userId: params.userId });
 
+  // Fire-and-forget: mark the briefing dirty so the new newsletter shows
+  // up in the next refresh (detector decides if it's actually worth
+  // surfacing). See briefing pipeline v2 spec.
+  const { markBriefingDirty } = await import("./briefing/triggers.js");
+  markBriefingDirty(params.userId, "inbound").catch((err) =>
+    console.error("[newsletter-ingest] markBriefingDirty failed:", err),
+  );
+
   return { itemId: item.id };
 }
 

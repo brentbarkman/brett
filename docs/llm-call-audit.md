@@ -68,7 +68,8 @@ Complete map of every LLM invocation in Brett's codebase — when it fires, what
 | ❷ | Fact Extraction | small | No (async) | After conversation turn | High — every chat interaction |
 | ❸ | Graph Extraction | small | No (async) | After content creation | High — every chat + meeting + embed |
 | ❹ | Entity Fact Extraction | small | No (async) | After non-conversation embeds | Medium — tasks, meetings |
-| ❺ | Daily Briefing | medium | Yes | User opens briefing | Low — once per day |
+| ❺ | Daily Briefing — detector | small | No | Dirty bit set + client `/refresh` | Bounded: ≤ 6/day per user (30min floor + 6/day ceiling) |
+| ❺ | Daily Briefing — writer | medium | No | Detector returned non-empty picks | ~50% of detector runs (skipped on quiet days) |
 | ❻ | Brett's Take | small | Yes | User views item take | Low — on-demand |
 | ❼ | Scout Query Gen | small | No | Each scout run cycle | Low — per scout cadence |
 | ❽ | Scout Judgment | small/medium | No | After scout search | Low — per scout cadence |
@@ -79,7 +80,7 @@ Complete map of every LLM invocation in Brett's codebase — when it fires, what
 
 ## Shared Security Block
 
-Appended to prompts ❶ ❷ ❺ ❻ and prepended to ❸ ❹:
+Appended to prompts ❶ ❷ ❺ (both stages) ❻ and prepended to ❸ ❹:
 
 ```
 ## Security
@@ -161,7 +162,7 @@ change_settings, submit_feedback
 
 | Mode | When | Savings |
 |------|------|---------|
-| `"none"` | Briefing, Brett's Take | ~2,500 tokens (no tool defs sent) |
+| `"none"` | Brett's Take (Briefing is now its own pipeline, not via assembler) | ~2,500 tokens (no tool defs sent) |
 | `"contextual"` | Omnibar, Brett thread | ~1,000 tokens (filtered by message content) |
 | `"all"` | Fallback | All registered tools |
 
@@ -487,68 +488,98 @@ the design tools line item. Check Figma enterprise vs team pricing.
 
 ---
 
-## ❺ Daily Briefing
+## ❺ Daily Briefing (two-stage pipeline)
 
-**File:** `packages/ai/src/context/system-prompts.ts` → `getBriefingPrompt()`
-**Trigger:** User opens daily briefing
-**Model:** `medium` (hardcoded in assembler)
-**Streaming:** Yes
+The v1 single-call bullet briefing was replaced (2026-05-16) by a two-
+stage personal-assistant pipeline: cheap Haiku detector picks the 3-4
+most-newsworthy signals (or returns empty), then a focused Sonnet
+writer turns them into 1-2 prose sentences. NextUp is non-AI and the
+writer is told what it shows so the brief never duplicates that
+content. See `docs/superpowers/specs/2026-05-16-briefing-pipeline-v2-design.md`.
 
-### System Prompt
+**Files:**
+- `packages/ai/src/context/system-prompts.ts` → `getBriefingDetectorPrompt()`, `getBriefingWriterPrompt()`
+- `apps/api/src/lib/briefing/{collectors,pipeline,templates,triggers,types}.ts`
+
+**Trigger:** Client POSTs `/brett/briefing/refresh` after seeing
+`staleness === "dirty"` from `GET /brett/briefing/current`. The dirty
+bit is set by: morning bootstrap cron (~7am user-local), calendar sync
+deltas, newsletter ingest.
+
+**Caps:** 30-minute floor between regens; 6/day per user ceiling.
+
+### Stage 1 — Detector
+
+- **Model:** `small` (Haiku 4.5)
+- **Streaming:** No (collected to single JSON string)
+- **Max tokens:** 200
+- **Response format:** `json_schema` (native Anthropic structured output)
+
+System prompt judges signal candidates against the user's `nextUpVisible`,
+`lastBriefAt`, and `priorBriefSignalIds`. Returns `{empty, picks[], reason}`.
+On empty: skip Stage 2 and render an empty-state template. On malformed
+JSON or any error: same — fall back to template.
+
+### Stage 2 — Writer
+
+- **Model:** `medium` (Sonnet 4.6)
+- **Streaming:** No
+- **Max tokens:** 110 (room for 80-token output + safety margin)
+- **Temperature:** 0.4 (slight variance keeps quiet days from sounding identical)
+
+System prompt receives ONLY the detector's picks plus `nextUpVisible`.
+Hard rules: never duplicate NextUp content, no task counts, no
+fabrication, no cheerful openers ("Good morning", "Heads up"). Output
+is post-processed: strip banned openers via regex, truncate to ≤2
+sentences.
+
+### Sample detector input
+
+```json
+{
+  "timeOfDay": "morning",
+  "nextUpVisible": { "title": "Standup", "startsInMin": 12 },
+  "lastBriefAt": "2026-05-16T07:00:00.000Z",
+  "priorBriefSignalIds": [],
+  "signals": [
+    {
+      "id": "schedule_delta:evt_sara2pm:moved",
+      "type": "schedule_delta",
+      "event": { "id": "evt_sara2pm", "title": "Q3 review with Sara",
+                 "startTime": "2026-05-16T22:30:00.000Z", "durationMin": 30 },
+      "change": "moved", "details": "rescheduled",
+      "occurredAt": "2026-05-16T06:42:00.000Z"
+    },
+    {
+      "id": "prep_gap:evt_board",
+      "type": "prep_gap",
+      "event": { "id": "evt_board", "title": "Board call",
+                 "startTime": "2026-05-16T17:00:00.000Z", "durationMin": 60 },
+      "lastTouchedDays": 14, "hasNotes": false
+    }
+  ]
+}
+```
+
+### Sample writer input
+
+```json
+{
+  "timeOfDay": "morning",
+  "nextUpVisible": { "title": "Standup", "startsInMin": 12 },
+  "picks": [
+    { "oneLiner": "Sara pushed your 2pm Q3 review to 3:30",
+      "why": "Calendar moved overnight." },
+    { "oneLiner": "Board call at 5pm has no notes, last touched 14 days ago",
+      "why": "Prep gap on a high-stakes meeting." }
+  ]
+}
+```
+
+### Sample writer output
 
 ```
-You are ${assistantName} generating a daily briefing. Direct, specific, no
-filler. You have opinions about what matters.
-
-## Structure
-3-5 bullet points. One sentence each. Under 100 words total.
-
-## What to cover (in order, skip categories with no data)
-1. Overdue tasks — mention the count and name 2-3 important ones. Do NOT
-   list every overdue task.
-2. Tasks due today — name them.
-3. Calendar events — times, names, attendees worth noting.
-4. One actionable suggestion — what to tackle first and why.
-
-## Formatting rules
-- Wrap every task name in **bold** — e.g., **Ship release notes**.
-- When referring back to a task with shorthand, still bold it.
-- Never mention a task more than once.
-- Never mention empty categories. Just skip them.
-- Never repeat information across bullets.
-- Be opinionated about priority — tell the user what to do first.
-- Weather: only mention when actionable (rain, extreme temps, severe alerts).
-- Air quality: only mention when AQI > 100.
-
-## Example
-- 2 overdue: **Q3 budget review** (3 days late) and **Reply to Sarah's
-  proposal** (1 day).
-- Due today: **Ship v2.1 release notes** — been sitting since Monday.
-- 10:00 AM: Product sync with Design (Lena, Marcus). 2:30 PM: 1:1 with
-  Jordan.
-- Start with **Sarah's proposal** — it's quick, then block time for the
-  budget review.
-
-[SECURITY_BLOCK]
-```
-
-### Sample User Message (assembled by briefing assembler)
-
-```
-## Today's Tasks (due today)
-- Ship v2.1 release notes (due: today)
-- Review design mockups (due: today)
-
-## Overdue Tasks
-- Q3 budget review (due: 3 days ago)
-- Reply to Sarah's proposal (due: yesterday)
-
-## Calendar Events
-- 10:00 AM - 10:30 AM: Product sync with Design (Lena Park, Marcus Chen)
-- 2:30 PM - 3:00 PM: 1:1 with Jordan
-
-## Weather
-San Francisco: 62°F, partly cloudy
+Sara pushed Q3 to 3:30 — your 5pm board call still has no notes attached.
 ```
 
 ---
@@ -906,7 +937,8 @@ Q3 planning prep. Reviewed Jordan's feature analysis — approved for Q3.
 | ❷ Fact Extraction | ~400 | ~200-1,000 | ~600-1,400 |
 | ❸ Graph Extraction | ~300 | ~200-1,000 | ~500-1,300 |
 | ❹ Entity Fact Extraction | ~200 | ~200-1,000 | ~400-1,200 |
-| ❺ Daily Briefing | ~400 | ~300-800 | ~700-1,200 |
+| ❺ Daily Briefing — detector | ~250 | ~150-450 | ~400-700 (out: ~120) |
+| ❺ Daily Briefing — writer | ~250 | ~50-150 | ~300-400 (out: ~60-80) |
 | ❻ Brett's Take | ~350 | ~100-300 | ~450-650 |
 | ❼ Scout Query Gen | ~200 | ~100-500 | ~300-700 |
 | ❽ Scout Judgment | ~800 | ~500-3,000 | ~1,300-3,800 |
@@ -974,7 +1006,8 @@ Granola meeting syncs
 | ❷ Fact Extraction | Conversation transcript | SECURITY_BLOCK + facts validated before storage |
 | ❸ Graph Extraction | Content in `<user_data>` tags | SECURITY_BLOCK prepended + `<user_data>` wrapping |
 | ❹ Entity Fact Extraction | Entity content in `<user_data>` tags | SECURITY_BLOCK prepended + `<user_data>` wrapping |
-| ❺ Daily Briefing | Task/event data (indirect) | SECURITY_BLOCK + data from user's own DB records |
+| ❺ Daily Briefing — detector | Signal bundle (titles, summaries) as JSON | SECURITY_BLOCK + data from user's own DB records; output schema-constrained |
+| ❺ Daily Briefing — writer | Detector picks (`oneLiner`, `why`) as JSON | SECURITY_BLOCK + only sees pre-filtered text, not raw user content |
 | ❻ Brett's Take | Item data (indirect) | SECURITY_BLOCK + data from user's own DB records |
 | ❼ Scout Query Gen | User goal + context | SECURITY_BLOCK prepended (defense-in-depth) |
 | ❽ Scout Judgment | Web search results in `<result>` tags | Explicit security warning + `<memories>` warning |

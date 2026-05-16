@@ -3,36 +3,48 @@ import Observation
 
 /// Observable facade around the Daily Briefing API.
 ///
-/// Endpoints (mounted at `/brett` — see `apps/api/src/app.ts`):
-/// - `GET /brett/briefing` → returns today's cached briefing or `{ briefing: null }`
-/// - `POST /brett/briefing/generate` → streams SSE tokens; we swallow the stream
-///   and then re-fetch via `GET /brett/briefing` once the server has finalised
-///   the persisted message. The streaming consumer path is desktop-only today;
-///   iOS is happy with the simpler "kick off regenerate, then pull" pattern.
+/// v2 contract (mounted at `/brett` — see `apps/api/src/app.ts`):
+/// - `GET /brett/briefing/current` → `{ briefing, staleness: fresh|dirty|capped }`
+/// - `POST /brett/briefing/refresh` → 202 (fire-and-forget; pipeline runs
+///   server-side and updates the row in place).
+///
+/// Client behavior:
+/// - `fetch()` always returns instantly with the cached row.
+/// - If `staleness == .dirty`, fire `/refresh` once and schedule a refetch
+///   ~2.5s later. Subsequent dirty states (e.g. re-foreground) only re-fire
+///   when the server has produced a new briefing since the last refresh.
 ///
 /// "Dismissed today" is tracked in `UserDefaults` per-day so closing the app
 /// doesn't bring it back, but tomorrow's briefing will reappear.
+///
+/// See docs/superpowers/specs/2026-05-16-briefing-pipeline-v2-design.md.
 @MainActor
 @Observable
 final class BriefingStore: Clearable {
-    /// Raw Markdown content from the server. `nil` when no briefing exists yet
-    /// for today.
+    /// Prose content from the server (1-2 sentences). `nil` when no briefing
+    /// exists yet for this user.
     private(set) var briefing: String?
 
-    /// Timestamp of the underlying assistant message. Useful if the UI wants
+    /// Whether this briefing was generated from a quiet-day template (vs.
+    /// the Sonnet writer). UI may render templated copy with a subtler tone.
+    private(set) var isEmpty: Bool = false
+
+    /// Timestamp the briefing was last materialized. Useful if the UI wants
     /// to show "generated 12 minutes ago" style copy.
     private(set) var generatedAt: Date?
 
+    /// Whether we're currently waiting for a refresh to land. The card shows
+    /// the previous content immediately; this only affects subtle affordances
+    /// like the regenerate spinner.
     private(set) var isGenerating: Bool = false
 
-    /// Last error message from fetch/regenerate — surfaced to the card so the
+    /// Last error message from fetch/refresh — surfaced to the card so the
     /// user gets something better than a silent empty state.
     private(set) var lastError: String?
 
     /// Computed every access so the "dismissed today" bit rolls over the
-    /// moment the local date changes — otherwise a briefing dismissed yesterday
-    /// stayed hidden after midnight because the stored key was frozen at init.
-    /// Scoped per-user so two accounts on the same device don't share state.
+    /// moment the local date changes. Scoped per-user so two accounts on
+    /// the same device don't share state.
     private var defaultsKey: String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -49,6 +61,12 @@ final class BriefingStore: Clearable {
         set { UserDefaults.standard.set(newValue, forKey: defaultsKey) }
     }
 
+    /// Tracks the `generatedAt` of the last briefing we fired `/refresh` for.
+    /// Clears whenever the server produces a new briefing, so the next dirty
+    /// signal triggers a fresh refresh — without this, a single dirty state
+    /// could fire `/refresh` repeatedly across re-foreground events.
+    private var refreshFiredForGeneratedAt: Date?
+
     private let api: APIClient
 
     init(api: APIClient = APIClient.shared) {
@@ -60,12 +78,8 @@ final class BriefingStore: Clearable {
         // brief so the editorial hero on Today shows real copy
         // instead of just the greeting + date.
         if ProcessInfo.processInfo.arguments.contains("-UITEST_FAKE_AUTH") {
-            // Verbatim from the v18 mockup hero — three sentences,
-            // ~140 chars. The earlier copy added "with back-to-backs"
-            // and a "Block 30 minutes around lunch to breathe" tail
-            // that pushed the brief to 4 lines, eating into the
-            // visible card area below the hero.
-            self.briefing = "Two things slipped past Friday — clear those first. Q2 board prep is your highest-leverage piece today. The afternoon is heavy."
+            // Verbatim from the v2 design spec — 1-2 sentences, ~140 chars.
+            self.briefing = "Sara pushed your 2pm to 3:30, and the board call still has no notes. Alex replied on Q3 — and you owe him a hiring update."
             self.generatedAt = Date()
         }
         #endif
@@ -75,15 +89,18 @@ final class BriefingStore: Clearable {
 
     func clearForSignOut() {
         briefing = nil
+        isEmpty = false
         generatedAt = nil
         lastError = nil
         isGenerating = false
+        refreshFiredForGeneratedAt = nil
     }
 
     #if DEBUG
     /// Test-only: populate in-memory state without touching the network.
-    func injectForTesting(briefing: String?, error: String? = nil) {
+    func injectForTesting(briefing: String?, isEmpty: Bool = false, error: String? = nil) {
         self.briefing = briefing
+        self.isEmpty = isEmpty
         self.generatedAt = briefing != nil ? Date() : nil
         self.lastError = error
     }
@@ -91,29 +108,37 @@ final class BriefingStore: Clearable {
 
     // MARK: - Public API
 
-    /// Fetch today's cached briefing. Safe to call repeatedly — the server
-    /// returns whatever was last persisted; there's no autogeneration trigger.
+    /// Fetch the current briefing and, if the server reports `dirty`, fire a
+    /// background refresh + schedule a refetch. Safe to call repeatedly — the
+    /// refresh-fired latch prevents thrash on focus events.
     ///
     /// Failure mode: if the request errors out we DO NOT replace an existing
-    /// cached briefing with an error message — the user pulled to refresh
-    /// the inbox and ended up with a transient sync error overwriting their
-    /// briefing. A quiet retry on the next fetch is better than a loud
-    /// "something went wrong" replacing real content.
+    /// cached briefing with an error message — a transient sync error
+    /// shouldn't blow away real content. A quiet retry on the next fetch is
+    /// better than a loud "something went wrong" overwriting the brief.
     func fetch() async {
         do {
-            let response: BriefingResponse = try await api.request(
-                BriefingResponse.self,
-                path: "/brett/briefing",
+            let response: BriefingCurrentResponse = try await api.request(
+                BriefingCurrentResponse.self,
+                path: "/brett/briefing/current",
                 method: "GET"
             )
-            briefing = response.briefing?.content
-            generatedAt = response.briefing?.generatedAt
+            if let payload = response.briefing {
+                briefing = payload.content
+                isEmpty = payload.isEmpty
+                generatedAt = payload.generatedAt
+                // Clear the refresh latch when the server has produced a new
+                // briefing since we last fired refresh.
+                if refreshFiredForGeneratedAt != payload.generatedAt {
+                    refreshFiredForGeneratedAt = nil
+                }
+            }
             lastError = nil
+
+            if response.staleness == .dirty {
+                await fireBackgroundRefresh()
+            }
         } catch {
-            // Only surface the error if there's no cached briefing to keep
-            // showing. Even then, only on regenerate (user-initiated) does
-            // the card render the error prominently — passive fetches that
-            // fail just leave the card in its "no briefing yet" state.
             if briefing == nil {
                 #if DEBUG
                 print("[BriefingStore] fetch failed with no cache: \(error)")
@@ -126,10 +151,9 @@ final class BriefingStore: Clearable {
         }
     }
 
-    /// Ask the server to generate a fresh briefing. The generate endpoint is
-    /// SSE-streamed on desktop; here we just let the stream run to completion
-    /// then re-fetch the final persisted briefing. We read the response as
-    /// raw bytes so the decoder doesn't trip on the SSE payload.
+    /// Manual regenerate (e.g. user pulls a refresh affordance). Bypasses the
+    /// client-side latch but still respects server-side gates (30min floor,
+    /// 6/day ceiling) so a rapid tap does not burn tokens.
     func regenerate() async {
         guard !isGenerating else { return }
         isGenerating = true
@@ -138,13 +162,15 @@ final class BriefingStore: Clearable {
 
         do {
             _ = try await api.rawRequest(
-                path: "/brett/briefing/generate",
+                path: "/brett/briefing/refresh",
                 method: "POST",
                 body: nil,
-                timeout: 120
+                timeout: 30
             )
+            // The pipeline runs server-side; give it ~2.5s before re-fetching.
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             await fetch()
-            // Re-generating also implicitly "undismisses" — the user clearly
+            // Regenerating also implicitly "undismisses" — the user clearly
             // wants to see the new version.
             isDismissedToday = false
         } catch {
@@ -158,24 +184,16 @@ final class BriefingStore: Clearable {
     }
 
     // MARK: - Markdown rendering
+    //
+    // The v2 writer emits prose, not bullets — there's no markdown structure
+    // to flatten anymore. We keep `parsedBlocks` / `parsedContent` so existing
+    // UI call sites still compile; both now just wrap the plain prose.
 
-    /// Parse the cached `briefing` Markdown into a block-structured view
-    /// model. Returns `nil` when there's no briefing.
-    ///
-    /// Callers typically render via `MarkdownRenderer(source: …)` directly
-    /// — this hook is here so tests and non-SwiftUI consumers can inspect
-    /// the block segmentation without touching the rendering pipeline.
     func parsedBlocks() -> [MarkdownBlock] {
         guard let briefing, !briefing.isEmpty else { return [] }
         return MarkdownBlock.parse(briefing)
     }
 
-    /// Inline-only `AttributedString` for the briefing, with full syntax
-    /// support (bold, italic, code spans, links) and newlines preserved.
-    ///
-    /// Returns `nil` when there's no briefing cached. Useful for quick
-    /// inline renders (e.g. Today header preview) without spinning up the
-    /// block renderer.
     func parsedContent() -> AttributedString? {
         guard let briefing, !briefing.isEmpty else { return nil }
         let options = AttributedString.MarkdownParsingOptions(
@@ -186,6 +204,28 @@ final class BriefingStore: Clearable {
     }
 
     // MARK: - Helpers
+
+    /// Fire a one-shot background refresh + schedule a refetch. Idempotent
+    /// per-generatedAt so concurrent focus events don't re-fire.
+    private func fireBackgroundRefresh() async {
+        if refreshFiredForGeneratedAt == generatedAt && generatedAt != nil {
+            return
+        }
+        refreshFiredForGeneratedAt = generatedAt
+        Task.detached { [api] in
+            _ = try? await api.rawRequest(
+                path: "/brett/briefing/refresh",
+                method: "POST",
+                body: nil,
+                timeout: 30
+            )
+        }
+        // Refetch after the pipeline likely settled.
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            await self?.fetch()
+        }
+    }
 
     private static func describe(_ error: Error) -> String {
         if let apiError = error as? APIError {
@@ -210,12 +250,19 @@ final class BriefingStore: Clearable {
 
 // MARK: - Wire types
 
-private struct BriefingResponse: Decodable {
+private struct BriefingCurrentResponse: Decodable {
     let briefing: BriefingPayload?
+    let staleness: Staleness
+
+    enum Staleness: String, Decodable {
+        case fresh
+        case dirty
+        case capped
+    }
 }
 
 private struct BriefingPayload: Decodable {
-    let sessionId: String
     let content: String
+    let isEmpty: Bool
     let generatedAt: Date
 }

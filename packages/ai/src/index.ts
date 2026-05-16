@@ -108,7 +108,8 @@ export type { RetrievalContext, RetrievalResult } from "./retrieval/types.js";
 // Context
 export {
   getSystemPrompt,
-  getBriefingPrompt,
+  getBriefingDetectorPrompt,
+  getBriefingWriterPrompt,
   getBrettsTakePrompt,
   getFactExtractionPrompt,
   SCOUT_CREATION_PROMPT,

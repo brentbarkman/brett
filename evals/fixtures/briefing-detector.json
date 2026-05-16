@@ -1,0 +1,190 @@
+[
+  {
+    "name": "quiet_morning_returns_empty",
+    "description": "No deltas, no inbound, no prep gaps — detector must return empty rather than invent picks",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": null,
+      "priorBriefSignalIds": [],
+      "signals": []
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  },
+  {
+    "name": "nextup_duplication_trap",
+    "description": "The only signal is a prep_gap for the same event NextUp is showing. Detector must reject it since title alone duplicates what the user sees.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": {
+        "title": "Q3 review with Sara",
+        "startsInMin": 24
+      },
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "prep_gap:evt_q3review",
+          "type": "prep_gap",
+          "event": {
+            "id": "evt_q3review",
+            "title": "Q3 review with Sara",
+            "startTime": "2026-05-16T13:00:00.000Z",
+            "durationMin": 45
+          },
+          "lastTouchedDays": null,
+          "hasNotes": false
+        }
+      ]
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  },
+  {
+    "name": "prep_gap_with_extra_context_picked",
+    "description": "Prep gap on a separate event from NextUp — picked",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": {
+        "title": "Standup",
+        "startsInMin": 12
+      },
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "prep_gap:evt_board",
+          "type": "prep_gap",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T17:00:00.000Z",
+            "durationMin": 60
+          },
+          "lastTouchedDays": 14,
+          "hasNotes": false
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["prep_gap:evt_board"]
+    }
+  },
+  {
+    "name": "schedule_delta_after_morning",
+    "description": "A 2pm meeting moved overnight. Detector must pick the delta.",
+    "input": {
+      "timeOfDay": "midday",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_sara2pm:moved",
+          "type": "schedule_delta",
+          "event": {
+            "id": "evt_sara2pm",
+            "title": "Sync with Sara",
+            "startTime": "2026-05-16T22:30:00.000Z",
+            "durationMin": 30
+          },
+          "change": "moved",
+          "details": "rescheduled",
+          "occurredAt": "2026-05-16T14:42:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["schedule_delta:evt_sara2pm:moved"]
+    }
+  },
+  {
+    "name": "same_event_signals_collapse",
+    "description": "Three signals all about the same event. Detector must collapse to one pick, not return three.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_board:moved",
+          "type": "schedule_delta",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T17:00:00.000Z",
+            "durationMin": 60
+          },
+          "change": "moved",
+          "details": "rescheduled",
+          "occurredAt": "2026-05-16T13:00:00.000Z"
+        },
+        {
+          "id": "prep_gap:evt_board",
+          "type": "prep_gap",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T17:00:00.000Z",
+            "durationMin": 60
+          },
+          "lastTouchedDays": 14,
+          "hasNotes": false
+        },
+        {
+          "id": "meeting_context:evt_board",
+          "type": "meeting_context",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T17:00:00.000Z",
+            "durationMin": 60
+          },
+          "relevantPriorNote": "Last board call you committed to a hiring update.",
+          "noteSource": "embedding"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIdsMaxCount": 2
+    }
+  },
+  {
+    "name": "stale_repeat_rejected",
+    "description": "Signal already in priorBriefSignalIds must be skipped unless materially updated.",
+    "input": {
+      "timeOfDay": "midday",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": ["schedule_delta:evt_sara2pm:moved"],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_sara2pm:moved",
+          "type": "schedule_delta",
+          "event": {
+            "id": "evt_sara2pm",
+            "title": "Sync with Sara",
+            "startTime": "2026-05-16T22:30:00.000Z",
+            "durationMin": 30
+          },
+          "change": "moved",
+          "details": "rescheduled",
+          "occurredAt": "2026-05-16T08:00:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  }
+]

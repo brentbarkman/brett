@@ -18,7 +18,16 @@ const LEASE = {
   verificationCleanup: 5 * 60_000,
   idempotencyCleanup: 5 * 60_000,
   newsletterCleanup: 5 * 60_000,
+  briefingMorningBootstrap: 5 * 60_000,
 } as const;
+
+// Briefing morning bootstrap window — local time at the user. We sweep
+// every 5 min (the cron cadence) and any user whose local time is in
+// this window AND hasn't been triggered today gets a fresh dirty bit.
+// Width must be ≥ cron cadence so we never miss the window across a
+// boundary. Picked 7:00am as the centerpoint, ±5 min for safety.
+const BRIEFING_BOOTSTRAP_HOUR_MIN = 6 * 60 + 55; // 6:55am local
+const BRIEFING_BOOTSTRAP_HOUR_MAX = 7 * 60 + 5; // 7:05am local
 
 export function startCronJobs(): void {
   // SSE heartbeat — every 30 seconds
@@ -257,9 +266,114 @@ export function startCronJobs(): void {
     });
   });
 
+  // Briefing morning bootstrap — every 5 minutes.
+  //
+  // Find every user whose local time is in the 6:55-7:05 window AND
+  // who hasn't been bootstrapped today, then set dirtyAt + reset the
+  // per-day regen counter in a single bulk update. The actual pipeline
+  // runs lazily on the next client /briefing/refresh after they open
+  // the app.
+  //
+  // Iterates all users in memory (one User query + one UserBriefing
+  // query) and issues a single bulk `updateMany`. At current scale
+  // (low thousands) this is fine; the per-user TZ math is cheap
+  // compared to a per-user `findUnique` round-trip.
+  cron.schedule("*/5 * * * *", async () => {
+    await withCronLock(
+      "briefingMorningBootstrap",
+      LEASE.briefingMorningBootstrap,
+      async () => {
+        const now = new Date();
+
+        const localMinutesAndDay = (
+          tz: string,
+        ): { mins: number; dayKey: string } | null => {
+          try {
+            const parts = new Intl.DateTimeFormat("en-CA", {
+              timeZone: tz,
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            }).formatToParts(now);
+            const get = (t: string) =>
+              parts.find((p) => p.type === t)?.value ?? "";
+            const hour = parseInt(get("hour"), 10) % 24;
+            const minute = parseInt(get("minute"), 10);
+            return {
+              mins: hour * 60 + minute,
+              dayKey: `${get("year")}-${get("month")}-${get("day")}`,
+            };
+          } catch {
+            return null;
+          }
+        };
+
+        // 1. All users (id + timezone). Cheap select.
+        const users = await prisma.user.findMany({
+          select: { id: true, timezone: true },
+        });
+
+        // 2. Filter to those currently in the bootstrap window.
+        const inWindow: Array<{ id: string; dayKey: string }> = [];
+        for (const u of users) {
+          const parts = localMinutesAndDay(u.timezone);
+          if (!parts) continue;
+          if (
+            parts.mins < BRIEFING_BOOTSTRAP_HOUR_MIN ||
+            parts.mins >= BRIEFING_BOOTSTRAP_HOUR_MAX
+          )
+            continue;
+          inWindow.push({ id: u.id, dayKey: parts.dayKey });
+        }
+        if (inWindow.length === 0) return;
+
+        // 3. One bulk query to find existing rows that need updating.
+        //    A row needs an update when regenDayKey != today (the day
+        //    rolled over) — that's the only condition under which we
+        //    haven't already bootstrapped today. Group by dayKey so we
+        //    can update each group efficiently.
+        const byDayKey = new Map<string, string[]>();
+        for (const u of inWindow) {
+          const arr = byDayKey.get(u.dayKey) ?? [];
+          arr.push(u.id);
+          byDayKey.set(u.dayKey, arr);
+        }
+
+        let totalBootstrapped = 0;
+        for (const [dayKey, userIds] of byDayKey) {
+          const result = await prisma.userBriefing.updateMany({
+            where: {
+              userId: { in: userIds },
+              // Only bootstrap once per user-local day — if regenDayKey
+              // already matches today, we've already fired the morning
+              // dirty bit for this user.
+              regenDayKey: { not: dayKey },
+            },
+            data: {
+              dirtyAt: now,
+              regenCountToday: 0,
+              regenDayKey: dayKey,
+              lastTriggerSource: "morning_bootstrap",
+            },
+          });
+          totalBootstrapped += result.count;
+        }
+
+        if (totalBootstrapped > 0) {
+          console.log(
+            `[cron] Bootstrapped morning briefing for ${totalBootstrapped} users`,
+          );
+        }
+      },
+    );
+  });
+
   console.log("[cron] Started: Scout tick (5m)");
 
   console.log(
-    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), meeting post-event (5m), meeting sweep (30m), verification cleanup (1h), newsletter cleanup (daily)",
+    "[cron] Started: SSE heartbeat (30s), webhook renewal (6h), reconciliation (4h), meeting post-event (5m), meeting sweep (30m), verification cleanup (1h), newsletter cleanup (daily), briefing bootstrap (5m)",
   );
 }
