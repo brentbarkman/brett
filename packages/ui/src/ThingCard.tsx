@@ -110,7 +110,6 @@ export function ThingCard({ thing, onClick, onToggle, onFocus, isFocused, onReco
       onFocus={onFocus}
       className={`
         group/row relative flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer
-        border-t border-white/[0.05] first:border-t-0
         transition-colors duration-150 outline-none
         ${completing
           ? "bg-brett-teal/[0.05]"

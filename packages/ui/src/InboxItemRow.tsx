@@ -119,7 +119,6 @@ export function InboxItemRow({
       role={undefined}
       className={`
         group/row flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer
-        border-t border-white/[0.05]
         transition-colors duration-150 outline-none
         ${isDragging ? "opacity-30" : ""}
         ${isFocused
