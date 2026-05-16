@@ -365,6 +365,13 @@ final class BackgroundService {
     /// Idempotent.
     func resumeRotation() {
         guard rendererCount > 0, tickTask == nil else { return }
+        // Re-run recompute so a stale-segment cached URL (long
+        // background period crossing a time-of-day boundary, e.g.
+        // overnight) is refreshed on foreground. Same-segment caches
+        // are preserved by `recompute()`, so the original "no
+        // spurious crossfade on resume" intent is unchanged for the
+        // common short-background case. See #161.
+        recompute()
         startTick()
     }
 
@@ -463,13 +470,21 @@ final class BackgroundService {
             // the URL resolvable — usually the same URL the cache held,
             // so no crossfade fires.
             if currentRemoteURL != nil { return }
-        } else if let cached = currentRemoteURL {
-            // Auto mode + we already have a cached URL painted (either
-            // from UserDefaults at init or set by a prior `rotate()`
-            // tick this process). Keep it — refreshing the wash sample
-            // along the way — instead of picking a fresh random URL
-            // that would trigger a crossfade to a different photo
-            // from the same tier.
+        } else if let cached = currentRemoteURL,
+                  Self.segment(forURL: cached)
+                      == Self.segment(forHour: Calendar.current.component(.hour, from: Date())) {
+            // Auto mode + the cached URL's photo belongs to the
+            // current time-of-day segment. Keep it — refreshing the
+            // wash sample along the way — instead of picking a fresh
+            // random URL that would trigger a crossfade to a
+            // different photo from the same tier.
+            //
+            // The segment check guards #161: closing the app at night
+            // with a `photo/night/...` URL cached, then cold-launching
+            // at 7 AM, would otherwise paint the stale night photo
+            // until the 60s rotation timer fired. Falling through to
+            // the fresh-pick branch below resolves the right segment
+            // immediately.
             currentSolidColor = nil
             currentFallbackAsset = ""
             currentWashColor = WashColorSampler.cachedWash(forURL: cached)
@@ -762,6 +777,39 @@ final class BackgroundService {
         case 17...18: return .goldenHour
         case 19...20: return .evening
         default: return .night // 21-4
+        }
+    }
+
+    /// Extract a `Segment` from a manifest-shaped URL whose path encodes
+    /// the segment as a directory name — e.g. `photo/night/light-2.webp`
+    /// or `photo-portrait/golden-hour/light-1.webp`. Returns `nil` for
+    /// URLs that don't fit the shape so callers can fall back rather
+    /// than misclassify.
+    ///
+    /// Used by `recompute()` to detect when a cached URL from a prior
+    /// session belongs to a different time-of-day segment than "now"
+    /// — the cold-launch path that produced #161 (cached night photo
+    /// persisting into a morning launch).
+    nonisolated static func segment(forURL url: URL) -> Segment? {
+        let components = url.pathComponents
+        for (idx, comp) in components.enumerated() {
+            guard comp == "photo" || comp == "photo-portrait" else { continue }
+            let next = idx + 1
+            guard next < components.count else { return nil }
+            return segment(forFolderName: components[next])
+        }
+        return nil
+    }
+
+    private static func segment(forFolderName folder: String) -> Segment? {
+        switch folder {
+        case "dawn": return .dawn
+        case "morning": return .morning
+        case "afternoon": return .afternoon
+        case "golden-hour": return .goldenHour
+        case "evening": return .evening
+        case "night": return .night
+        default: return nil
         }
     }
 
