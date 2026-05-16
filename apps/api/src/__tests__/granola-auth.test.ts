@@ -119,6 +119,66 @@ describe("Granola Auth routes", () => {
       expect(stillThere).not.toBeNull();
     });
 
+    it("only resolves the deleted account's re-link task, not other accounts'", async () => {
+      // Regression guard for the multi-account re-link bug: the provider-wide
+      // resolveRelinkTask used to dismiss every Granola re-link task for the
+      // user — so disconnecting a healthy account would silently clear a
+      // broken account's prompt. We now scope the resolve by accountId.
+      const user = await createTestUser("Granola DELETE scoped relink");
+
+      const brokenAccount = await prisma.granolaAccount.create({
+        data: {
+          userId: user.userId,
+          email: `broken-${Date.now()}@example.com`,
+          accessToken: "encrypted:fake",
+          refreshToken: "encrypted:fake",
+          tokenExpiresAt: new Date(Date.now() + 3600_000),
+        },
+      });
+      const healthyAccount = await prisma.granolaAccount.create({
+        data: {
+          userId: user.userId,
+          email: `healthy-${Date.now()}@example.com`,
+          accessToken: "encrypted:fake",
+          refreshToken: "encrypted:fake",
+          tokenExpiresAt: new Date(Date.now() + 3600_000),
+        },
+      });
+
+      // Both accounts have re-link tasks (e.g. both failed at some point)
+      await createRelinkTask(user.userId, "granola", brokenAccount.id, "broken");
+      await createRelinkTask(user.userId, "granola", healthyAccount.id, "healthy was once broken");
+
+      const res = await authRequest(
+        `/granola/auth/${healthyAccount.id}`,
+        user.token,
+        { method: "DELETE" },
+      );
+      expect(res.status).toBe(200);
+
+      // The broken account's re-link task must still be active.
+      const brokenTaskAfter = await prisma.item.findFirst({
+        where: {
+          userId: user.userId,
+          source: "system",
+          sourceId: `relink:granola:${brokenAccount.id}`,
+          status: "active",
+        },
+      });
+      expect(brokenTaskAfter).not.toBeNull();
+
+      // The deleted (healthy) account's re-link task should be resolved.
+      const healthyTaskAfter = await prisma.item.findFirst({
+        where: {
+          userId: user.userId,
+          source: "system",
+          sourceId: `relink:granola:${healthyAccount.id}`,
+          status: "active",
+        },
+      });
+      expect(healthyTaskAfter).toBeNull();
+    });
+
     it("returns 404 when the accountId does not exist", async () => {
       const user = await createTestUser("Granola DELETE nonexistent");
       const res = await authRequest(

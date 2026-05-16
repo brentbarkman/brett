@@ -8,7 +8,14 @@ import { createRelinkTask } from "../../lib/connection-health.js";
 
 function isAuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes("Token refresh failed") || /^(401|403)\b/.test(msg);
+  // Explicit refresh failure thrown by granola-mcp.ts on a refresh non-2xx.
+  if (msg.includes("Token refresh failed")) return true;
+  // Match 401 or 403 anywhere with word boundaries. The MCP SDK wraps HTTP
+  // errors in varying envelopes ("HTTP error 401", "401 Unauthorized",
+  // "Server responded with status 403"); a contains-match is safer than the
+  // original ^anchor at the cost of an occasional false positive (which
+  // resolves on next successful sync).
+  return /\b(401|403)\b/.test(msg);
 }
 
 const RELINK_MESSAGE =

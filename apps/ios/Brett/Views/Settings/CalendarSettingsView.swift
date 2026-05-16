@@ -472,11 +472,12 @@ private struct GranolaIntegrationSection: View {
     private func granolaAccountRows(_ account: GranolaAccount) -> some View {
         let isDisconnecting = disconnectingAccountId == account.id
 
-        // Row 1 — identity + last sync + reconnect affordance.
-        // The Reconnect button is always visible when connected because the
-        // server doesn't expose a per-account "broken" flag. Reconnect runs
-        // OAuth; the callback upserts on (userId, email) so re-auth of the
-        // same identity refreshes tokens on this row.
+        // Row 1 — identity + last sync.
+        // No per-card Reconnect button: it would open generic OAuth without a
+        // login_hint, which can't actually target this specific email row. To
+        // re-auth, users tap "Connect Another" below and authenticate as the
+        // same Google identity — the callback's upsert on (userId, email)
+        // refreshes tokens on this row.
         HStack(spacing: 12) {
             Image(systemName: "note.text")
                 .foregroundStyle(BrettColors.gold)
@@ -489,29 +490,6 @@ private struct GranolaIntegrationSection: View {
                     .foregroundStyle(BrettColors.textMeta)
             }
             Spacer()
-            Button {
-                Task { await connectGranola() }
-            } label: {
-                HStack(spacing: 4) {
-                    if isConnectingGranola {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(BrettColors.gold)
-                            .controlSize(.mini)
-                    } else {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    Text("Reconnect")
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundStyle(BrettColors.gold)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(BrettColors.gold.opacity(0.15)))
-            }
-            .buttonStyle(.plain)
-            .disabled(isConnectingGranola)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

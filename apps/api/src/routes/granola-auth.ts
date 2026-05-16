@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { encryptToken } from "../lib/encryption.js";
-import { resolveRelinkTask } from "../lib/connection-health.js";
+import { resolveRelinkTaskForAccount } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { randomBytes, createHash } from "crypto";
 import type { Context } from "hono";
@@ -323,8 +323,10 @@ granolaAuth.get("/callback", async (c) => {
     },
   });
 
-  // Resolve any existing re-link task for this connection
-  await resolveRelinkTask(userId, "granola").catch((e) =>
+  // Resolve the re-link task for THIS account specifically. With
+  // multi-account, a provider-wide resolver would silently clear
+  // re-link prompts for OTHER (still broken) accounts.
+  await resolveRelinkTaskForAccount(userId, "granola", granolaAccount.id).catch((e) =>
     console.error("[granola-auth] Failed to resolve re-link task:", e),
   );
 
@@ -364,12 +366,17 @@ granolaAuth.delete("/:accountId", authMiddleware, async (c) => {
     data: { meetingNoteId: null },
   });
 
-  // Cascade delete: GranolaAccount -> MeetingNote(where granolaAccountId=this) -> MeetingNoteSource
+  // Delete the GranolaAccount. The MeetingNote.granolaAccountId FK is
+  // declared SetNull (not Cascade) — cross-source notes (e.g. ones that
+  // also carry a google_meet MeetingNoteSource) survive the disconnect
+  // with their granolaAccountId nulled out. MeetingNoteSource rows for
+  // this account are also SetNull on their granolaAccountId column.
   await prisma.granolaAccount.delete({ where: { id: account.id } });
 
-  // Resolve any existing re-link task for this user/provider — covers the
-  // common case where the broken account is the one being removed.
-  await resolveRelinkTask(user.id, "granola").catch((e) =>
+  // Resolve the re-link task for THIS account only — provider-wide
+  // resolution would clear prompts for the user's other (still broken)
+  // Granola accounts.
+  await resolveRelinkTaskForAccount(user.id, "granola", account.id).catch((e) =>
     console.error("[granola-auth] Failed to resolve re-link task:", e),
   );
 
