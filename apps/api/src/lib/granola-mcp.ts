@@ -150,14 +150,21 @@ interface GranolaTranscript {
  * Create an authenticated MCP client for a Granola account.
  * Handles token refresh if the access token has expired.
  * Uses a per-account mutex to prevent concurrent refresh races.
+ *
+ * SECURITY: Always pass `userId`. The account lookup is scoped to
+ * `(id, userId)` so a bug in a caller that passed an attacker-supplied
+ * accountId can't load and decrypt another user's tokens.
  */
-async function getGranolaClient(granolaAccountId: string): Promise<Client> {
+async function getGranolaClient(
+  granolaAccountId: string,
+  userId: string,
+): Promise<Client> {
   // Wait for any in-progress refresh for this account
   const existing = refreshLocks.get(granolaAccountId);
   if (existing) await existing;
 
-  const account = await prisma.granolaAccount.findUniqueOrThrow({
-    where: { id: granolaAccountId },
+  const account = await prisma.granolaAccount.findFirstOrThrow({
+    where: { id: granolaAccountId, userId },
   });
 
   // Check if token needs refresh
@@ -278,12 +285,17 @@ export interface GranolaTools {
 /**
  * Create a single MCP client for a batch of operations, avoiding
  * multiple connect/close cycles.
+ *
+ * SECURITY: `userId` is required and used to enforce ownership at the
+ * library layer. This means a future caller can't accidentally access
+ * another user's Granola data by passing only an accountId.
  */
 export async function withGranolaClient<T>(
   granolaAccountId: string,
+  userId: string,
   fn: (tools: GranolaTools) => Promise<T>,
 ): Promise<T> {
-  const client = await getGranolaClient(granolaAccountId);
+  const client = await getGranolaClient(granolaAccountId, userId);
   // Client is already connected by getGranolaClient -> createAndConnectClient
   try {
     const tools: GranolaTools = {
@@ -337,41 +349,3 @@ export async function withGranolaClient<T>(
   }
 }
 
-export async function listGranolaMeetings(
-  granolaAccountId: string,
-  timeRange: "this_week" | "last_week" | "last_30_days" | "custom",
-  customStart?: string,
-  customEnd?: string,
-): Promise<GranolaMeetingListItem[]> {
-  return withGranolaClient(granolaAccountId, (tools) =>
-    tools.listMeetings(timeRange, customStart, customEnd),
-  );
-}
-
-export async function getGranolaMeetings(
-  granolaAccountId: string,
-  meetingIds: string[],
-): Promise<GranolaMeetingDetail[]> {
-  return withGranolaClient(granolaAccountId, (tools) =>
-    tools.getMeetings(meetingIds),
-  );
-}
-
-export async function getGranolaTranscript(
-  granolaAccountId: string,
-  meetingId: string,
-): Promise<GranolaTranscript | null> {
-  return withGranolaClient(granolaAccountId, (tools) =>
-    tools.getTranscript(meetingId),
-  );
-}
-
-export async function queryGranolaMeetings(
-  granolaAccountId: string,
-  query: string,
-  documentIds?: string[],
-): Promise<string> {
-  return withGranolaClient(granolaAccountId, (tools) =>
-    tools.query(query, documentIds),
-  );
-}

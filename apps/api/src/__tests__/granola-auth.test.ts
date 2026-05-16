@@ -190,6 +190,36 @@ describe("Granola Auth routes", () => {
     });
   });
 
+  describe("POST /granola/auth/connect (per-user cap)", () => {
+    it("rejects /connect with 400 when the user is already at the account cap", async () => {
+      // Abuse-prevention guard. The route enforces a per-user cap on
+      // GranolaAccount rows so a malicious or buggy client can't accumulate
+      // unbounded accounts (each new account fans out into every cron tick).
+      const user = await createTestUser("Granola cap");
+
+      // Seed up to the cap (currently 5). Use distinct emails so the
+      // (userId, email) unique constraint doesn't fight us.
+      for (let i = 0; i < 5; i++) {
+        await prisma.granolaAccount.create({
+          data: {
+            userId: user.userId,
+            email: `cap-${i}-${Date.now()}@example.com`,
+            accessToken: "encrypted:fake",
+            refreshToken: "encrypted:fake",
+            tokenExpiresAt: new Date(Date.now() + 3600_000),
+          },
+        });
+      }
+
+      const res = await authRequest("/granola/auth/connect", user.token, {
+        method: "POST",
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toMatch(/Disconnect one before adding another/);
+    });
+  });
+
   describe("PATCH /granola/auth/:accountId/preferences", () => {
     it("updates per-account preferences with ownership check", async () => {
       const user = await createTestUser("Granola PATCH prefs");

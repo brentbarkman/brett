@@ -143,9 +143,31 @@ granolaAuth.patch("/:accountId/preferences", authMiddleware, async (c) => {
   });
 });
 
+// Per-user cap on connected Granola accounts. Prevents account-flooding
+// (each new account fans out into the granolaProvider iteration on every
+// cron tick). 5 covers the realistic personal+work+side-project case
+// without enabling abuse.
+const MAX_GRANOLA_ACCOUNTS_PER_USER = 5;
+
 // POST /connect — Initiate OAuth (returns URL)
 granolaAuth.post("/connect", authMiddleware, async (c) => {
   const user = c.get("user");
+
+  // Enforce per-user account cap BEFORE starting OAuth. Counted at /connect
+  // rather than at the callback so users get an immediate, actionable error
+  // instead of seeing a confusing OAuth-tab failure.
+  const existingCount = await prisma.granolaAccount.count({
+    where: { userId: user.id },
+  });
+  if (existingCount >= MAX_GRANOLA_ACCOUNTS_PER_USER) {
+    return c.json(
+      {
+        error: `You can connect up to ${MAX_GRANOLA_ACCOUNTS_PER_USER} Granola accounts. Disconnect one before adding another.`,
+      },
+      400,
+    );
+  }
+
   let client;
   try {
     client = await ensureClientRegistered();
@@ -285,19 +307,17 @@ granolaAuth.get("/callback", async (c) => {
     });
   }
 
-  // Extract email from id_token (JWT payload), token response, or fall back to user email
-  let email = tokens.email;
-  if (!email && tokens.id_token) {
-    try {
-      const payload = JSON.parse(
-        Buffer.from(tokens.id_token.split(".")[1], "base64url").toString("utf8"),
-      );
-      email = payload.email;
-    } catch {
-      // Malformed id_token — fall through
-    }
-  }
-  if (!email) email = user.email;
+  // Resolve the Granola account email.
+  //
+  // We trust `tokens.email` (the top-level claim in Granola's token-endpoint
+  // JSON response, delivered over TLS) but do NOT trust `tokens.id_token`:
+  // parsing the JWT payload without JWKS signature verification means a
+  // forged or MITM'd id_token could inject an arbitrary email into the
+  // upsert key `(userId, email)`, allowing cross-account pollution.
+  //
+  // If `tokens.email` is missing we fall back to the authenticated Brett
+  // user's own email rather than chase an unsigned id_token.
+  const email = tokens.email ?? user.email;
 
   // Upsert GranolaAccount keyed on (userId, email) so re-authing the same Google
   // identity refreshes tokens on the existing row, and authorizing a different

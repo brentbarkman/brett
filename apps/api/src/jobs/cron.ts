@@ -179,14 +179,23 @@ export function startCronJobs(): void {
         ...googleUsers.map((a) => a.userId),
       ])];
 
+      if (userIds.length === 0) return;
+
+      // Batch the timezone lookup. The previous per-iteration findUnique was
+      // O(users) round-trips inside the cron-lock lease window — amplified
+      // by multi-Granola (each user can have N accounts so the upstream
+      // findMany returns more rows even though we dedupe). One query here.
+      const usersWithTz = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, timezone: true },
+      });
+      const tzByUserId = new Map(usersWithTz.map((u) => [u.id, u.timezone]));
+
       for (const userId of userIds) {
         try {
           // Skip users outside working hours (8am-7pm in their timezone)
-          const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { timezone: true },
-          });
-          if (user?.timezone && !isWithinWorkingHours(user.timezone)) {
+          const tz = tzByUserId.get(userId);
+          if (tz && !isWithinWorkingHours(tz)) {
             continue;
           }
 

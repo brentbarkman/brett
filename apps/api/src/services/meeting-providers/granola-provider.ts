@@ -59,18 +59,17 @@ export class GranolaProvider implements MeetingNoteProvider {
       attendees: extractCalendarAttendeeEmails(calendarEvent),
     };
 
-    // Collect best-match from each account, pick the highest score across accounts.
-    // Per-account auth failure logs + creates a re-link task scoped to that
-    // accountId and continues with remaining accounts.
-    let best: {
-      accountId: string;
-      listItem: GranolaMeetingListItem;
-      score: number;
-    } | null = null;
+    // For each account, list candidate meetings, find the best match against
+    // the calendar event, and (if matched) fetch full details — all inside a
+    // single client scope so a token-refresh boundary doesn't fall between
+    // the list call and the detail call. Then pick the highest-scoring
+    // ProviderMeetingData across all accounts. Per-account auth failure
+    // creates a re-link task scoped to that accountId and continues.
+    let best: { score: number; data: ProviderMeetingData } | null = null;
 
     for (const account of accounts) {
       try {
-        const result = await withGranolaClient(account.id, async (tools) => {
+        const result = await withGranolaClient(account.id, userId, async (tools) => {
           const meetings = await tools.listMeetings(
             "custom",
             windowStart.toISOString(),
@@ -93,27 +92,28 @@ export class GranolaProvider implements MeetingNoteProvider {
               bestForAccount = { listItem: meeting, score: match.score };
             }
           }
-          return bestForAccount;
+          if (!bestForAccount) return null;
+
+          // Same-client-scope detail fetch — avoids a second connect/refresh
+          // round-trip and prevents the token-expiry-between-calls race.
+          const data = await fetchMeetingData(
+            tools,
+            bestForAccount.listItem,
+            account.id,
+            calendarEvent.id,
+          );
+          return { score: bestForAccount.score, data };
         });
 
         if (result && (!best || result.score > best.score)) {
-          best = { accountId: account.id, ...result };
+          best = result;
         }
       } catch (err) {
         await handleAccountError(userId, account.id, err);
       }
     }
 
-    if (!best) return null;
-
-    try {
-      return await withGranolaClient(best.accountId, (tools) =>
-        fetchMeetingData(tools, best!.listItem, best!.accountId, calendarEvent.id),
-      );
-    } catch (err) {
-      await handleAccountError(userId, best.accountId, err);
-      return null;
-    }
+    return best?.data ?? null;
   }
 
   async fetchRecent(
@@ -128,7 +128,7 @@ export class GranolaProvider implements MeetingNoteProvider {
 
     for (const account of accounts) {
       try {
-        const accountResults = await withGranolaClient(account.id, async (tools) => {
+        const accountResults = await withGranolaClient(account.id, userId, async (tools) => {
           const meetings = await tools.listMeetings(
             "custom",
             since.toISOString(),
