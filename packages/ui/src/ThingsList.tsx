@@ -232,7 +232,7 @@ function Section({
       {!hideHeader && (
         <SectionHeader title={title} count={things.length} />
       )}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col">
         {things.map((item, i) => (
           <ThingCard
             key={item.id}
