@@ -72,6 +72,21 @@ final class BriefingStore: Clearable {
     init(api: APIClient = APIClient.shared) {
         self.api = api
         ClearableStoreRegistry.register(self)
+
+        // Cross-device push: when another device (or the server cron)
+        // produces a new briefing, the API fires a `briefing.updated`
+        // SSE event and SSEEventHandler relays it as this notification.
+        // We refetch immediately so the user sees the latest brief
+        // without waiting for the next view focus.
+        NotificationCenter.default.addObserver(
+            forName: .briefingUpdated,
+            object: nil,
+            queue: .main,
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.fetch()
+            }
+        }
         #if DEBUG
         // UI-test launches and design-review sessions skip the
         // network fetch; pre-populate the store with a representative

@@ -10,6 +10,7 @@ import {
   type AIProvider,
 } from "@brett/ai";
 import { prisma } from "../prisma.js";
+import { publishSSE } from "../sse.js";
 import { collectAllSignals } from "./collectors.js";
 import { pickEmptyTemplate } from "./templates.js";
 import type {
@@ -354,6 +355,17 @@ export async function runBriefingPipeline(
         regenDayKey: dayKey,
         lastTriggerSource: triggerSource,
       },
+    });
+
+    // Notify all of this user's connected clients (desktop, multiple iOS
+    // devices) so they refetch /briefing/current immediately. This is
+    // how we keep multi-device consistency without putting UserBriefing
+    // into SYNC_TABLES — the row's shape (no separate id, no deletedAt)
+    // isn't sync-pull-compatible, and on-demand refetch on a tiny push
+    // signal is the established pattern for single-row resources.
+    publishSSE(opts.userId, {
+      type: "briefing.updated",
+      payload: { generatedAt: now.toISOString(), isEmpty },
     });
 
     return { content, isEmpty, signalsUsedIds };

@@ -84,4 +84,10 @@ enum SSEEventType: String, CaseIterable, Sendable {
 
     // Content extraction pipeline
     case contentExtracted = "content.extracted"
+
+    // Daily briefing — fired after the v2 pipeline writes a new row.
+    // Lets a second device pick up the new briefing immediately instead
+    // of waiting for the next view-focus refetch. See
+    // docs/superpowers/specs/2026-05-16-briefing-pipeline-v2-design.md.
+    case briefingUpdated = "briefing.updated"
 }

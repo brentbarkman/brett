@@ -29,6 +29,10 @@ extension SyncManager: SSESyncTrigger {}
 /// trying to apply a partial SSE payload into SwiftData directly.
 ///
 extension Notification.Name {
+    /// Fired when an SSE event indicates the user's daily briefing was
+    /// regenerated server-side. BriefingStore listens and refetches.
+    static let briefingUpdated = Notification.Name("brett.briefing.updated")
+
     /// Fired when an SSE event indicates a scout's state changed
     /// somewhere (created, paused, deleted, finding arrived). Listened
     /// for by `ScoutsRosterView` so the user-facing roster refreshes
@@ -137,6 +141,13 @@ final class SSEEventHandler {
             // A specific item finished content extraction — the item was
             // updated server-side, so pull will pick up the new preview.
             syncTrigger?.schedulePushDebounced()
+
+        case .briefingUpdated:
+            // The briefing pipeline wrote a new row server-side. The
+            // briefing isn't part of SwiftData/sync (single-row, no
+            // deletedAt) — BriefingStore re-fetches via /current on
+            // this notification.
+            NotificationCenter.default.post(name: .briefingUpdated, object: nil)
         }
     }
 }
