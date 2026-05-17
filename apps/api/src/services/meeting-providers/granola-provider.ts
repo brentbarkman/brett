@@ -4,12 +4,37 @@ import type { MeetingTranscriptTurn, MeetingNoteAttendee } from "@brett/types";
 import { prisma } from "../../lib/prisma.js";
 import { withGranolaClient, type GranolaTools } from "../../lib/granola-mcp.js";
 import { findBestMatch, type MatchCandidate } from "../meeting-matcher.js";
+import { createRelinkTask } from "../../lib/connection-health.js";
+
+function isAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  // Explicit refresh failure thrown by granola-mcp.ts on a refresh non-2xx.
+  if (msg.includes("Token refresh failed")) return true;
+  // Match 401 or 403 anywhere with word boundaries. The MCP SDK wraps HTTP
+  // errors in varying envelopes ("HTTP error 401", "401 Unauthorized",
+  // "Server responded with status 403"); a contains-match is safer than the
+  // original ^anchor at the cost of an occasional false positive (which
+  // resolves on next successful sync).
+  return /\b(401|403)\b/.test(msg);
+}
+
+const RELINK_MESSAGE =
+  "Granola sync failed — your connection was lost or the token expired. Go to Settings → Granola to reconnect.";
+
+async function handleAccountError(userId: string, accountId: string, err: unknown): Promise<void> {
+  console.error(`[granola-provider] Account ${accountId} sync failed:`, err);
+  if (isAuthError(err)) {
+    await createRelinkTask(userId, "granola", accountId, RELINK_MESSAGE).catch((e) =>
+      console.error("[granola-provider] Failed to create re-link task:", e),
+    );
+  }
+}
 
 export class GranolaProvider implements MeetingNoteProvider {
   readonly provider = "granola";
 
   async isAvailable(userId: string): Promise<boolean> {
-    const account = await prisma.granolaAccount.findUnique({
+    const account = await prisma.granolaAccount.findFirst({
       where: { userId },
       select: { id: true },
     });
@@ -20,56 +45,75 @@ export class GranolaProvider implements MeetingNoteProvider {
     userId: string,
     calendarEvent: CalendarEvent,
   ): Promise<ProviderMeetingData | null> {
-    const account = await prisma.granolaAccount.findUnique({
-      where: { userId },
-    });
-    if (!account) return null;
+    const accounts = await prisma.granolaAccount.findMany({ where: { userId } });
+    if (accounts.length === 0) return null;
 
-    // Build a search window: 15min before to 30min after the calendar event
     const windowStart = new Date(calendarEvent.startTime.getTime() - 15 * 60 * 1000);
     const windowEnd = new Date(calendarEvent.endTime.getTime() + 30 * 60 * 1000);
 
-    return withGranolaClient(account.id, async (tools) => {
-      const meetings = await tools.listMeetings(
-        "custom",
-        windowStart.toISOString(),
-        windowEnd.toISOString(),
-      );
+    const calendarCandidate: MatchCandidate = {
+      id: calendarEvent.id,
+      title: calendarEvent.title,
+      startTime: calendarEvent.startTime,
+      endTime: calendarEvent.endTime,
+      attendees: extractCalendarAttendeeEmails(calendarEvent),
+    };
 
-      if (meetings.length === 0) return null;
+    // For each account, list candidate meetings, find the best match against
+    // the calendar event, and (if matched) fetch full details — all inside a
+    // single client scope so a token-refresh boundary doesn't fall between
+    // the list call and the detail call. Then pick the highest-scoring
+    // ProviderMeetingData across all accounts. Per-account auth failure
+    // creates a re-link task scoped to that accountId and continues.
+    let best: { score: number; data: ProviderMeetingData } | null = null;
 
-      // Build MatchCandidates from calendar event for matching against granola meetings
-      const calendarCandidate: MatchCandidate = {
-        id: calendarEvent.id,
-        title: calendarEvent.title,
-        startTime: calendarEvent.startTime,
-        endTime: calendarEvent.endTime,
-        attendees: extractCalendarAttendeeEmails(calendarEvent),
-      };
+    for (const account of accounts) {
+      try {
+        const result = await withGranolaClient(account.id, userId, async (tools) => {
+          const meetings = await tools.listMeetings(
+            "custom",
+            windowStart.toISOString(),
+            windowEnd.toISOString(),
+          );
+          if (meetings.length === 0) return null;
 
-      // Find the best Granola meeting that matches this calendar event
-      // We treat each Granola meeting as the "input" and the calendar event as the candidate
-      let bestMeeting: { id: string; score: number } | null = null;
-      for (const meeting of meetings) {
-        const result = findBestMatch(
-          {
-            title: meeting.title,
-            startTime: new Date(meeting.start_time),
-            endTime: new Date(meeting.end_time),
-            attendees: (meeting.attendees ?? []).map((a) => ({ email: a.email })),
-          },
-          [calendarCandidate],
-        );
-        if (result && (!bestMeeting || result.score > bestMeeting.score)) {
-          bestMeeting = { id: meeting.id, score: result.score };
+          let bestForAccount: { listItem: GranolaMeetingListItem; score: number } | null = null;
+          for (const meeting of meetings) {
+            const match = findBestMatch(
+              {
+                title: meeting.title,
+                startTime: new Date(meeting.start_time),
+                endTime: new Date(meeting.end_time),
+                attendees: (meeting.attendees ?? []).map((a) => ({ email: a.email })),
+              },
+              [calendarCandidate],
+            );
+            if (match && (!bestForAccount || match.score > bestForAccount.score)) {
+              bestForAccount = { listItem: meeting, score: match.score };
+            }
+          }
+          if (!bestForAccount) return null;
+
+          // Same-client-scope detail fetch — avoids a second connect/refresh
+          // round-trip and prevents the token-expiry-between-calls race.
+          const data = await fetchMeetingData(
+            tools,
+            bestForAccount.listItem,
+            account.id,
+            calendarEvent.id,
+          );
+          return { score: bestForAccount.score, data };
+        });
+
+        if (result && (!best || result.score > best.score)) {
+          best = result;
         }
+      } catch (err) {
+        await handleAccountError(userId, account.id, err);
       }
+    }
 
-      if (!bestMeeting) return null;
-
-      const matchedListItem = meetings.find((m) => m.id === bestMeeting!.id)!;
-      return fetchMeetingData(tools, matchedListItem, account.id, calendarEvent.id);
-    });
+    return best?.data ?? null;
   }
 
   async fetchRecent(
@@ -77,27 +121,35 @@ export class GranolaProvider implements MeetingNoteProvider {
     since: Date,
     until: Date,
   ): Promise<ProviderMeetingData[]> {
-    const account = await prisma.granolaAccount.findUnique({
-      where: { userId },
-    });
-    if (!account) return [];
+    const accounts = await prisma.granolaAccount.findMany({ where: { userId } });
+    if (accounts.length === 0) return [];
 
-    return withGranolaClient(account.id, async (tools) => {
-      const meetings = await tools.listMeetings(
-        "custom",
-        since.toISOString(),
-        until.toISOString(),
-      );
+    const all: ProviderMeetingData[] = [];
 
-      if (meetings.length === 0) return [];
+    for (const account of accounts) {
+      try {
+        const accountResults = await withGranolaClient(account.id, userId, async (tools) => {
+          const meetings = await tools.listMeetings(
+            "custom",
+            since.toISOString(),
+            until.toISOString(),
+          );
+          if (meetings.length === 0) return [];
 
-      const results: ProviderMeetingData[] = [];
-      for (const meeting of meetings) {
-        const data = await fetchMeetingData(tools, meeting, account.id);
-        results.push(data);
+          const results: ProviderMeetingData[] = [];
+          for (const meeting of meetings) {
+            const data = await fetchMeetingData(tools, meeting, account.id);
+            results.push(data);
+          }
+          return results;
+        });
+        all.push(...accountResults);
+      } catch (err) {
+        await handleAccountError(userId, account.id, err);
       }
-      return results;
-    });
+    }
+
+    return all;
   }
 }
 
@@ -117,7 +169,6 @@ async function fetchMeetingData(
   accountId: string,
   calendarEventId?: string,
 ): Promise<ProviderMeetingData> {
-  // Fetch details and transcript in parallel
   const [details, transcript] = await Promise.all([
     tools.getMeetings([listItem.id]),
     tools.getTranscript(listItem.id),
@@ -125,7 +176,6 @@ async function fetchMeetingData(
 
   const detail = details[0];
 
-  // Map transcript turns to the shared type
   const mappedTranscript: MeetingTranscriptTurn[] | null = transcript
     ? transcript.turns.map((t) => ({
         source: t.source === "microphone" ? ("microphone" as const) : ("speaker" as const),
@@ -134,7 +184,6 @@ async function fetchMeetingData(
       }))
     : null;
 
-  // Use detail attendees if available, fall back to list item attendees
   const rawAttendees = detail?.attendees ?? listItem.attendees ?? [];
   const attendees: MeetingNoteAttendee[] = rawAttendees.map((a) => ({
     name: a.name,
@@ -156,10 +205,6 @@ async function fetchMeetingData(
   };
 }
 
-/**
- * Extract attendee emails from a CalendarEvent's JSON attendees field.
- * The field is Prisma Json? — typed as unknown at runtime.
- */
 function extractCalendarAttendeeEmails(
   event: CalendarEvent,
 ): { email: string }[] {

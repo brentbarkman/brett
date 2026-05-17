@@ -4,7 +4,11 @@ import "@testing-library/jest-dom/vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QuickDatePicker } from "../../quickPicker/QuickDatePicker";
 
-const MAY_7 = new Date(Date.UTC(2026, 4, 7)); // Thursday
+// Noon UTC so the test is timezone-stable: every TZ within ±12 hours of UTC
+// agrees that the local calendar date is May 7. (Midnight UTC would be May 6
+// evening in any timezone west of UTC, breaking the picker now that it uses
+// the user's local "today" instead of UTC.)
+const MAY_7 = new Date(Date.UTC(2026, 4, 7, 12)); // Thursday May 7, noon UTC
 
 function renderPicker(
   overrides: Partial<React.ComponentProps<typeof QuickDatePicker>> = {},
@@ -87,11 +91,11 @@ describe("QuickDatePicker", () => {
   it("clears the date on Backspace and Delete", () => {
     const { onCommit } = renderPicker({ initialDate: MAY_7 });
     fireEvent.keyDown(window, { key: "Backspace" });
-    expect(onCommit).toHaveBeenLastCalledWith(null);
+    expect(onCommit).toHaveBeenLastCalledWith(null, "day");
 
     onCommit.mockClear();
     fireEvent.keyDown(window, { key: "Delete" });
-    expect(onCommit).toHaveBeenLastCalledWith(null);
+    expect(onCommit).toHaveBeenLastCalledWith(null, "day");
   });
 
   it("calls onCancel on Escape and does not commit", () => {
@@ -121,5 +125,49 @@ describe("QuickDatePicker", () => {
   it("highlights the existing date on open when initialDate is set", () => {
     renderPicker({ initialDate: new Date(Date.UTC(2026, 4, 20)) });
     expect(screen.getByTestId("day-2026-05-20").dataset.selected).toBe("true");
+  });
+
+  // Regression: the picker used to hard-code precision="day" at the call
+  // site, which silently corrupted week-precision picks (this_week / next_week)
+  // into Sunday day-precision items that then bucketed as this_weekend.
+  describe("precision pass-through", () => {
+    it("'t' (today) commits with 'day' precision", () => {
+      const { onCommit } = renderPicker();
+      fireEvent.keyDown(window, { key: "t" });
+      expect(onCommit.mock.calls[0][1]).toBe("day");
+    });
+
+    it("'s' (this_weekend) commits with 'day' precision", () => {
+      const { onCommit } = renderPicker();
+      fireEvent.keyDown(window, { key: "s" });
+      expect(onCommit.mock.calls[0][1]).toBe("day");
+    });
+
+    it("'w' (this_week) commits with 'day' precision (Friday-anchored, post-migration)", () => {
+      const { onCommit } = renderPicker();
+      fireEvent.keyDown(window, { key: "w" });
+      expect(onCommit.mock.calls[0][1]).toBe("day");
+    });
+
+    it("'n' (next_week) commits with 'day' precision (Friday-anchored)", () => {
+      const { onCommit } = renderPicker();
+      fireEvent.keyDown(window, { key: "n" });
+      expect(onCommit.mock.calls[0][1]).toBe("day");
+    });
+
+    it("raw calendar click commits with 'day' precision", () => {
+      const { onCommit } = renderPicker();
+      fireEvent.click(screen.getByTestId("day-2026-05-12"));
+      expect(onCommit.mock.calls[0][1]).toBe("day");
+    });
+
+    it("'this_week' and 'next_week' sublabels both display a Friday (Friday-anchored)", () => {
+      // Post-migration both presets store Friday day-precision. Labels read
+      // straight off the stored date — no "by Friday" transform layered on
+      // top of a Sunday-stored value.
+      renderPicker();
+      expect(screen.getByTestId("chip-this_week")).toHaveTextContent("Fri");
+      expect(screen.getByTestId("chip-next_week")).toHaveTextContent("Fri");
+    });
   });
 });

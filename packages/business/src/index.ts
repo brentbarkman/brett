@@ -22,9 +22,40 @@ import { RRule } from "rrule";
 
 // ── Compute helpers ──
 
-/** Strip time component using UTC to avoid timezone drift */
+/**
+ * Extract the calendar date from a stored `dueDate`. By convention `dueDate`
+ * is encoded as UTC midnight of the user's intended calendar day, so reading
+ * the UTC components gives back the calendar date the user picked.
+ */
 function utcDay(d: Date): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/**
+ * Calendar-date parts (year, 1-indexed month, day) of `now` interpreted in
+ * the given IANA timezone. With `timezone` omitted, falls back to the JS
+ * runtime's local timezone — which on a client device matches the user.
+ */
+function localDateParts(
+  now: Date,
+  timezone?: string
+): { year: number; month: number; day: number } {
+  if (timezone) {
+    const p = getDateParts(now, timezone);
+    return { year: p.year, month: p.month, day: p.day };
+  }
+  return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
+}
+
+/**
+ * UTC-midnight timestamp representing the user's local "today". This is the
+ * anchor for every urgency / preset computation — we never compare the raw
+ * instant of `now` against `dueDate`, because that conflates wall-clock day
+ * with timezone offset and lands the user in the wrong bucket near midnight.
+ */
+function localTodayUtcMs(now: Date, timezone?: string): number {
+  const { year, month, day } = localDateParts(now, timezone);
+  return Date.UTC(year, month - 1, day);
 }
 
 /** UTC start-of-day as a Date — stable for cache keys and date comparisons */
@@ -150,8 +181,11 @@ function urgencyBucketRanges(dayOfWeek: number): {
   if (dayOfWeek === 6) {
     // Sat: this_week = next Mon-Fri (today+2..today+6).
     //      this_weekend = tomorrow's Sun only (today+1).
-    //      next_week extends through the Sun after that (today+8).
-    return { thisWeekStart: 2, thisWeekEnd: 6, thisWeekendStart: 1, thisWeekendEnd: 1, nextWeekEnd: 8 };
+    //      next_week extends through Fri-after-next (today+13). Was today+8
+    //      historically, which clipped the "next_week" preset's Friday-after-next
+    //      pick (today+13) into the `later` bucket. Widening to 13 keeps the
+    //      preset and the bucket in sync on Sat.
+    return { thisWeekStart: 2, thisWeekEnd: 6, thisWeekendStart: 1, thisWeekendEnd: 1, nextWeekEnd: 13 };
   }
   // Mon-Fri (1..5). On Fri, thisWeekEnd === 0, leaving the bucket empty.
   return {
@@ -163,37 +197,42 @@ function urgencyBucketRanges(dayOfWeek: number): {
   };
 }
 
+/**
+ * Bucket `dueDate` into a forward-looking urgency category, using the user's
+ * LOCAL calendar day as the "today" anchor.
+ *
+ * Storage convention enforced by the
+ * `20260515230000_normalize_due_date_to_utc_midnight_and_friday` migration:
+ * every `dueDate` is at UTC midnight of the user's intended calendar date,
+ * and every `dueDatePrecision` is `"day"` (or NULL). The week-precision
+ * branch this function used to carry is now dead code — removed alongside
+ * `normalizeDueDate` so there's only one shape to reason about.
+ */
 export function computeUrgency(
   dueDate: Date | null,
-  dueDatePrecision: DueDatePrecision | null,
   completedAt: Date | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  timezone?: string
 ): Urgency {
   if (!dueDate) return completedAt ? "done" : "later";
 
-  const todayMs = utcDay(now);
+  const todayMs = localTodayUtcMs(now, timezone);
   const dueMs = utcDay(dueDate);
   const DAY_MS = 86400000;
-  const dayOfWeek = now.getUTCDay(); // 0=Sun..6=Sat
+  // Day-of-week from `todayMs` (UTC midnight of the user's local today) —
+  // `getUTCDay()` here is intentional, because `todayMs` already encodes the
+  // user's local date.
+  const dayOfWeek = new Date(todayMs).getUTCDay(); // 0=Sun..6=Sat
   const r = urgencyBucketRanges(dayOfWeek);
-  const weekendEndMs = todayMs + r.thisWeekendEnd * DAY_MS;
-  const nextWeekEndMs = todayMs + r.nextWeekEnd * DAY_MS;
 
   if (dueMs < todayMs) return "overdue";
 
-  // Week-precision items (the "this week" preset, stored as Sunday) — they're
-  // a soft "sometime this week" tag, NOT a Saturday-specific commitment. Keep
-  // them in `this_week` regardless of their stored day-of-week so the picker's
-  // intent (loose targeting) is preserved.
-  if (dueDatePrecision === "week") {
-    if (dueMs <= weekendEndMs) return "this_week";
-    if (dueMs <= nextWeekEndMs) return "next_week";
-    return "later";
-  }
-
-  // Day-precision items: split Sat/Sun into `this_weekend`.
-  if (dueMs === todayMs) return "today";
-  const diff = (dueMs - todayMs) / DAY_MS;
+  // Calendar-day diff (integer) — `dueMs` is at UTC midnight of the dueDate's
+  // UTC date and `todayMs` at UTC midnight of the user's local date, so this
+  // is the days-between count regardless of any sub-day time component a
+  // legacy row might still carry.
+  const diff = Math.floor((dueMs - todayMs) / DAY_MS);
+  if (diff === 0) return "today";
   const dueDayOfWeek = new Date(dueMs).getUTCDay();
   const isWeekendDay = dueDayOfWeek === 0 || dueDayOfWeek === 6;
 
@@ -203,28 +242,20 @@ export function computeUrgency(
   return "later";
 }
 
+/**
+ * Human-readable label for a dueDate (e.g., "Today", "Tomorrow", "Mon",
+ * "Mar 25"). All dueDates are day-precision per the storage convention —
+ * the previous `dueDatePrecision` parameter and its week-bucket branch
+ * disappeared with the normalize-to-Friday migration.
+ */
 export function computeDueDateLabel(
   dueDate: Date | null,
-  dueDatePrecision: DueDatePrecision | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  timezone?: string
 ): string | undefined {
   if (!dueDate) return undefined;
 
-  // Week-precision: show "This Week" / "Next Week" / "Overdue"
-  if (dueDatePrecision === "week") {
-    const urgency = computeUrgency(dueDate, "week", null, now);
-    if (urgency === "overdue") return "Overdue";
-    if (urgency === "this_week") return "This Week";
-    if (urgency === "next_week") return "Next Week";
-    return dueDate.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC",
-    });
-  }
-
-  // Day-precision: show specific date labels
-  const todayMs = utcDay(now);
+  const todayMs = localTodayUtcMs(now, timezone);
   const dueMs = utcDay(dueDate);
   const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24));
 
@@ -273,7 +304,8 @@ type ItemWithRelations = ItemRecord & {
 
 export function itemToThing(
   item: ItemWithRelations,
-  now: Date = new Date()
+  now: Date = new Date(),
+  timezone?: string
 ): Thing {
   const precision = (item.dueDatePrecision as DueDatePrecision) ?? null;
   return {
@@ -285,10 +317,10 @@ export function itemToThing(
     status: item.status as ItemStatus,
     source: item.source,
     sourceUrl: item.sourceUrl ?? undefined,
-    urgency: computeUrgency(item.dueDate, precision, item.completedAt, now),
+    urgency: computeUrgency(item.dueDate, item.completedAt, now, timezone),
     dueDate: item.dueDate?.toISOString(),
     dueDatePrecision: precision ?? undefined,
-    dueDateLabel: computeDueDateLabel(item.dueDate, precision, now),
+    dueDateLabel: computeDueDateLabel(item.dueDate, now, timezone),
     isCompleted: item.completedAt !== null,
     completedAt: item.completedAt?.toISOString(),
     brettObservation: item.brettObservation ?? undefined,
@@ -664,11 +696,26 @@ export interface TriageResult {
   dueDatePrecision: DueDatePrecision;
 }
 
+/**
+ * Resolve a triage preset to a stored dueDate. All presets are day-precision
+ * and anchored at UTC midnight of the user's LOCAL calendar date — see the
+ * storage convention enforced by the
+ * `20260515230000_normalize_due_date_to_utc_midnight_and_friday` migration.
+ *
+ * `this_week` and `next_week` both land on Friday so the labels read
+ * consistently ("This Week → Fri X" / "Next Week → Fri Y") and so the
+ * picker chip date matches the stored value exactly (no "by Friday"
+ * transformation hack required).
+ */
 export function computeTriageResult(
   preset: TriageDatePreset,
-  now: Date = new Date()
+  now: Date = new Date(),
+  timezone?: string
 ): TriageResult {
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // Build a UTC-midnight anchor for the user's LOCAL calendar day. Using UTC
+  // components of `now` here would treat Friday-evening-MT as Saturday and
+  // collapse "this_weekend" onto "today" — see the timezone test suite.
+  const d = new Date(localTodayUtcMs(now, timezone));
 
   switch (preset) {
     case "today":
@@ -686,23 +733,30 @@ export function computeTriageResult(
       return { dueDate: d.toISOString(), dueDatePrecision: "day" };
     }
     case "this_week": {
-      // Next Sunday (end of current week); if already Sunday, use next Sunday
-      const dayOfWeek = d.getUTCDay(); // 0=Sun
-      const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
-      d.setUTCDate(d.getUTCDate() + daysUntilSunday);
-      return { dueDate: d.toISOString(), dueDatePrecision: "week" };
+      // Friday of the current workweek (today if today IS Friday).
+      // On Sat-Sun, jump to next Friday since the current workweek has ended.
+      d.setUTCDate(d.getUTCDate() + daysUntilUpcomingFriday(d.getUTCDay()));
+      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
     }
     case "next_week": {
-      // Sunday after "this_week" Sunday
-      const dayOfWeek = d.getUTCDay();
-      const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
-      d.setUTCDate(d.getUTCDate() + daysUntilSunday + 7);
-      return { dueDate: d.toISOString(), dueDatePrecision: "week" };
+      // The Friday after "this_week"'s Friday — i.e., the end of next
+      // workweek. Stays in lockstep with `this_week` by construction.
+      d.setUTCDate(d.getUTCDate() + daysUntilUpcomingFriday(d.getUTCDay()) + 7);
+      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
     }
     case "next_month":
       d.setUTCMonth(d.getUTCMonth() + 1, 1);
       return { dueDate: d.toISOString(), dueDatePrecision: "day" };
   }
+}
+
+/**
+ * Day offset (0..6) from `dayOfWeek` to the upcoming Friday. Returns 0 on
+ * Friday itself, 6 on Saturday (next Fri), 5 on Sunday (the upcoming Fri).
+ * Sun=0..Sat=6.
+ */
+function daysUntilUpcomingFriday(dayOfWeek: number): number {
+  return (5 - dayOfWeek + 7) % 7;
 }
 
 /** Tailwind colorClass → hex value map (used by LeftNav, ListView, etc.) */

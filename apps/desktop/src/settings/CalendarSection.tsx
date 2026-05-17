@@ -11,8 +11,8 @@ import {
   useReauthCalendar,
 } from "../api/calendar-accounts";
 import { useFetchCalendarRange } from "../api/calendar";
-import { useGranolaAccount, useConnectGranola, useDisconnectGranola, useUpdateGranolaPreferences } from "../api/granola";
-import type { ConnectedCalendarAccount } from "@brett/types";
+import { useGranolaAccounts, useConnectGranola, useDisconnectGranola, useUpdateGranolaPreferences } from "../api/granola";
+import type { ConnectedCalendarAccount, GranolaAccountRecord } from "@brett/types";
 import { useAssistantName } from "../api/assistant-name";
 
 const isDev = import.meta.env.DEV;
@@ -154,16 +154,119 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
   );
 }
 
+interface GranolaAccountRowProps {
+  account: GranolaAccountRecord;
+  assistantName: string;
+}
+
+function GranolaAccountRow({ account, assistantName }: GranolaAccountRowProps) {
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const disconnect = useDisconnectGranola();
+  const updatePrefs = useUpdateGranolaPreferences();
+
+  return (
+    <div className="bg-white/5 rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+          <span className="text-sm text-white truncate">{account.email}</span>
+          {account.lastSyncAt && (
+            <span className="text-[10px] text-white/30 flex-shrink-0">
+              Synced{" "}
+              {new Date(account.lastSyncAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </span>
+          )}
+        </div>
+        {confirmDisconnect ? (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs text-white/50">Remove this account's meeting data?</span>
+            <button
+              onClick={() => {
+                disconnect.mutate(account.id, {
+                  onSuccess: () => setConfirmDisconnect(false),
+                });
+              }}
+              disabled={disconnect.isPending}
+              className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-40"
+            >
+              {disconnect.isPending ? "Removing..." : "Yes"}
+            </button>
+            <button
+              onClick={() => setConfirmDisconnect(false)}
+              className="text-xs text-white/40 hover:text-white/60 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDisconnect(true)}
+            className="flex items-center gap-1 text-xs text-white/40 hover:text-red-400 transition-colors flex-shrink-0 ml-2"
+          >
+            <Trash2 size={12} />
+            Disconnect
+          </button>
+        )}
+      </div>
+
+      {/* Per-account auto-create settings */}
+      <div className="px-3 py-3 border-t border-white/10 space-y-3">
+        <label className="flex items-center justify-between cursor-pointer">
+          <div className="flex-1 mr-3">
+            <span className="text-sm text-white/70">Create tasks for me</span>
+            <p className="text-[10px] text-white/30 mt-0.5">
+              Auto-create tasks assigned to you from meeting action items
+            </p>
+          </div>
+          <SettingsToggle
+            checked={account.autoCreateMyTasks}
+            onChange={() =>
+              updatePrefs.mutate({
+                accountId: account.id,
+                prefs: { autoCreateMyTasks: !account.autoCreateMyTasks },
+              })
+            }
+          />
+        </label>
+
+        <label className="flex items-center justify-between cursor-pointer">
+          <div className="flex-1 mr-3">
+            <span className="text-sm text-white/70">Create follow-ups</span>
+            <p className="text-[10px] text-white/30 mt-0.5">
+              Auto-create follow-up tasks for action items assigned to others
+            </p>
+          </div>
+          <SettingsToggle
+            checked={account.autoCreateFollowUps}
+            onChange={() =>
+              updatePrefs.mutate({
+                accountId: account.id,
+                prefs: { autoCreateFollowUps: !account.autoCreateFollowUps },
+              })
+            }
+          />
+        </label>
+
+        <p className="text-[10px] text-white/20 leading-relaxed">
+          {`${assistantName} uses AI to determine which action items are relevant and rewrites them as clear, actionable tasks with due dates when mentioned.`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function CalendarSection() {
   const assistantName = useAssistantName();
   const { data: accounts = [], isLoading, error } = useCalendarAccounts();
   const connectCalendar = useConnectCalendar();
   const fetchRange = useFetchCalendarRange();
-  const { data: granolaAccount } = useGranolaAccount();
+  const { data: granolaData } = useGranolaAccounts();
   const connectGranola = useConnectGranola();
-  const disconnectGranola = useDisconnectGranola();
-  const updatePrefs = useUpdateGranolaPreferences();
-  const [confirmGranolaDisconnect, setConfirmGranolaDisconnect] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
 
   return (
@@ -240,95 +343,29 @@ export function CalendarSection() {
       <SettingsCard>
         <div className="flex items-center justify-between mb-4">
           <SettingsHeader className="mb-0">Meeting Notes</SettingsHeader>
-          {!(granolaAccount?.connected && granolaAccount.account) && (
-            <button
-              onClick={() => connectGranola.mutate()}
-              disabled={connectGranola.isPending}
-              className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Plus size={12} />
-              {connectGranola.isPending ? "Connecting..." : "Connect Granola"}
-            </button>
-          )}
+          <button
+            onClick={() => connectGranola.mutate()}
+            disabled={connectGranola.isPending}
+            className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Plus size={12} />
+            {connectGranola.isPending
+              ? "Connecting..."
+              : granolaData?.connected
+                ? "Connect Another"
+                : "Connect Granola"}
+          </button>
         </div>
 
-        {granolaAccount?.connected && granolaAccount.account ? (
-          <div className="bg-white/5 rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-                <span className="text-sm text-white truncate">{granolaAccount.account.email}</span>
-                {granolaAccount.account.lastSyncAt && (
-                  <span className="text-[10px] text-white/30 flex-shrink-0">
-                    Synced {new Date(granolaAccount.account.lastSyncAt).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                )}
-              </div>
-              {confirmGranolaDisconnect ? (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-xs text-white/50">Remove all meeting data?</span>
-                  <button
-                    onClick={() => {
-                      disconnectGranola.mutate(undefined, {
-                        onSuccess: () => setConfirmGranolaDisconnect(false),
-                      });
-                    }}
-                    disabled={disconnectGranola.isPending}
-                    className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-40"
-                  >
-                    {disconnectGranola.isPending ? "Removing..." : "Yes"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmGranolaDisconnect(false)}
-                    className="text-xs text-white/40 hover:text-white/60 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setConfirmGranolaDisconnect(true)}
-                  className="flex items-center gap-1 text-xs text-white/40 hover:text-red-400 transition-colors flex-shrink-0 ml-2"
-                >
-                  <Trash2 size={12} />
-                  Disconnect
-                </button>
-              )}
-            </div>
-
-            {/* Auto-create settings */}
-            <div className="px-3 py-3 border-t border-white/10 space-y-3">
-              <label className="flex items-center justify-between cursor-pointer">
-                <div className="flex-1 mr-3">
-                  <span className="text-sm text-white/70">Create tasks for me</span>
-                  <p className="text-[10px] text-white/30 mt-0.5">Auto-create tasks assigned to you from meeting action items</p>
-                </div>
-                <SettingsToggle
-                  checked={granolaAccount.account.autoCreateMyTasks}
-                  onChange={() => updatePrefs.mutate({ autoCreateMyTasks: !granolaAccount.account!.autoCreateMyTasks })}
-                />
-              </label>
-
-              <label className="flex items-center justify-between cursor-pointer">
-                <div className="flex-1 mr-3">
-                  <span className="text-sm text-white/70">Create follow-ups</span>
-                  <p className="text-[10px] text-white/30 mt-0.5">Auto-create follow-up tasks for action items assigned to others</p>
-                </div>
-                <SettingsToggle
-                  checked={granolaAccount.account.autoCreateFollowUps}
-                  onChange={() => updatePrefs.mutate({ autoCreateFollowUps: !granolaAccount.account!.autoCreateFollowUps })}
-                />
-              </label>
-
-              <p className="text-[10px] text-white/20 leading-relaxed">
-                {`${assistantName} uses AI to determine which action items are relevant and rewrites them as clear, actionable tasks with due dates when mentioned.`}
-              </p>
-            </div>
+        {granolaData?.connected && granolaData.accounts.length > 0 ? (
+          <div className="space-y-3">
+            {granolaData.accounts.map((account) => (
+              <GranolaAccountRow
+                key={account.id}
+                account={account}
+                assistantName={assistantName}
+              />
+            ))}
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 py-6 text-center">

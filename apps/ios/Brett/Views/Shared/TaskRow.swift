@@ -34,7 +34,11 @@ struct TaskRow: View {
     // Gesture handlers — called when swipe actions fire. Caller wires them
     // to their store (ItemStore.update/delete) so this leaf view stays free
     // of environment lookups.
-    private let onSchedule: (_ dueDate: Date?) -> Void
+    /// Fires when a swipe-action or sheet picks a due date. `precision`
+    /// is `.day` for Today/Tomorrow/This Weekend/Next Month/raw calendar
+    /// picks and `.week` for This Week / Next Week — pass it through to
+    /// the mutation so week-precision picks don't bucketize as weekend.
+    private let onSchedule: (_ dueDate: Date?, _ precision: DueDatePrecision) -> Void
     private let onArchive: () -> Void
     private let onDelete: () -> Void
 
@@ -61,7 +65,7 @@ struct TaskRow: View {
         dragIDs: [String] = [],
         onToggle: @escaping () -> Void,
         onSelect: @escaping () -> Void,
-        onSchedule: @escaping (_ dueDate: Date?) -> Void = { _ in },
+        onSchedule: @escaping (_ dueDate: Date?, _ precision: DueDatePrecision) -> Void = { _, _ in },
         onArchive: @escaping () -> Void = {},
         onDelete: @escaping () -> Void = {},
         onReorder: @escaping (_ newOrder: [String]) -> Void = { _ in }
@@ -112,15 +116,14 @@ struct TaskRow: View {
             .applyIf(allowSwipeRight) { view in
                 view.swipeActions(edge: .leading, allowsFullSwipe: true) {
                     Button {
-                        apply(dueDate: Calendar.current.startOfDay(for: Date()))
+                        apply(dueDate: QuickScheduleOption.today.resolvedDate(), precision: .day)
                     } label: {
                         Label("Today", systemImage: "sun.max.fill")
                     }
                     .tint(BrettColors.gold)
 
                     Button {
-                        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-                        apply(dueDate: Calendar.current.startOfDay(for: tomorrow))
+                        apply(dueDate: QuickScheduleOption.tomorrow.resolvedDate(), precision: .day)
                     } label: {
                         Label("Tomorrow", systemImage: "sunrise.fill")
                     }
@@ -161,8 +164,8 @@ struct TaskRow: View {
                 )
             }
             .sheet(isPresented: $showsScheduleSheet) {
-                QuickScheduleSheet { date in
-                    apply(dueDate: date)
+                QuickScheduleSheet { date, precision in
+                    apply(dueDate: date, precision: precision)
                 }
             }
     }
@@ -173,17 +176,10 @@ struct TaskRow: View {
         Button {
             onSelect()
         } label: {
-            // Mockup `.task { padding: 12px 14px; gap: 10px }` —
-            // icon flush with the card's left padding (no 44pt
-            // tap-target frame around it). Was previously a 44pt
-            // tap-target frame around a 28pt icon, which pushed the
-            // title another 8pt right and made the icon look
-            // floating-in-padding. The icon glyph itself is 28pt
-            // which is just under HIG's recommended 44pt minimum;
-            // expanded `.contentShape` brings the tap area to the
-            // full 28×40 (icon + extra vertical padding from the
-            // row's vertical padding above + below).
-            HStack(spacing: 12) {
+            // Naked-row density: bare glyph (no gold-tinted circle chrome),
+            // tighter vertical padding. Tap target stays HIG-safe via the
+            // 30×30 contentShape around the smaller glyph.
+            HStack(spacing: 10) {
                 leadingGlyph
                     .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
@@ -260,10 +256,11 @@ struct TaskRow: View {
                     reconnectPill(for: relink.type)
                 }
             }
-            // Mockup `.task { padding: 12px 14px }` — icon flush
-            // with the 14pt inset from the card's leading edge.
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            // Naked-row density: tighter row padding (~44pt total height
+            // vs the prior ~54pt). Parent containers (TaskSection,
+            // InboxPage, ListView) should be eyeballed for hollow feel.
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .buttonStyle(.plain)
     }
@@ -318,61 +315,22 @@ struct TaskRow: View {
         .transition(.scale.combined(with: .opacity))
     }
 
-    /// 28pt gold-tinted glass circle per the v18 calm-hero mockup
-    /// (`.type-icon`). All user-content rows (task + content) wear
-    /// the same chrome — type is signalled by the glyph shape, not
-    /// the tile color. Cerulean is reserved for Brett-generated
-    /// surfaces and never appears on row icons.
-    ///
-    /// Mockup CSS:
-    ///   width: 28; background: rgba(199,154,77,0.18);
-    ///   border: 1px solid rgba(199,154,77,0.40);
-    ///   color: rgba(255,230,200,0.95); inset highlight at top.
+    /// Bare document glyph for content items (newsletters, articles).
+    /// No tile chrome — the glyph stands on its own at full gold
+    /// saturation, matching desktop's naked-row pattern. Dims to 30%
+    /// on completion alongside the title strikethrough.
     private var contentGlyph: some View {
-        typeIconCircle {
-            Image(systemName: "doc.text")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color(red: 1.0, green: 0.90, blue: 0.78).opacity(0.95))
-        }
+        Image(systemName: "doc.text")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(BrettColors.gold.opacity(viewModel.isCompleted ? 0.30 : 1.0))
     }
 
-    /// Tasks: bolt glyph in the gold-tinted circle. The v18 mockup
-    /// happened to render task circles empty (the SVG paths in the
-    /// HTML were broken), but the calm-hero spec — and the user's
-    /// preference — is to keep our `bolt.fill` glyph so the icon
-    /// communicates "task" at-a-glance even in a list with no
-    /// content items for contrast.
+    /// Bare bolt glyph for task items. Mirrors `contentGlyph` — type
+    /// is signalled by glyph shape alone, not by tile color.
     private var taskGlyph: some View {
-        typeIconCircle {
-            Image(systemName: "bolt.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color(red: 1.0, green: 0.90, blue: 0.78).opacity(0.95))
-        }
-    }
-
-    /// Shared circle chrome for task + content type icons. Matches
-    /// the v18 mockup's `.type-icon` exactly so a row in the iOS
-    /// app reads the same as the mockup at-a-glance.
-    @ViewBuilder
-    private func typeIconCircle<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        ZStack {
-            Circle()
-                .fill(BrettColors.gold.opacity(0.18))
-                .overlay {
-                    Circle().strokeBorder(BrettColors.gold.opacity(0.40), lineWidth: 1)
-                }
-                .overlay(alignment: .top) {
-                    // Inset top highlight (mockup `box-shadow:
-                    // inset 0 1px 0 rgba(255,255,255,0.06)`).
-                    Circle()
-                        .trim(from: 0, to: 0.5)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                        .frame(width: 28, height: 28)
-                        .rotationEffect(.degrees(180))
-                }
-                .frame(width: 30, height: 30)
-            content()
-        }
+        Image(systemName: "bolt.fill")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(BrettColors.gold.opacity(viewModel.isCompleted ? 0.30 : 1.0))
     }
 
     @ViewBuilder
@@ -409,11 +367,13 @@ struct TaskRow: View {
     }
 
     /// Central landing for "a schedule action fired." Drives the haptic,
-    /// trigger the gold pulse, and dispatch to the caller.
-    private func apply(dueDate: Date?) {
+    /// trigger the gold pulse, and dispatch to the caller. `precision` is
+    /// always supplied — week-precision picks (This Week / Next Week)
+    /// must round-trip as `.week` or they bucketize as the weekend.
+    private func apply(dueDate: Date?, precision: DueDatePrecision) {
         HapticManager.medium()
         pulseTrigger &+= 1
-        onSchedule(dueDate)
+        onSchedule(dueDate, precision)
     }
 
     /// VoiceOver label — built from the `ViewModel` so the announced whisper

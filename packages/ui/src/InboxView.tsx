@@ -478,9 +478,8 @@ export function InboxView({
                         style={{
                           overflow: "hidden",
                           maxHeight: isOut ? 0 : 60,
-                          marginBottom: isOut ? 0 : 4,
                           transition: isOut
-                            ? "max-height 200ms ease-out 120ms, margin-bottom 200ms ease-out 120ms"
+                            ? "max-height 200ms ease-out 120ms"
                             : "none",
                           animation: isNewItem
                             ? "inboxItemExpand 250ms ease-out"

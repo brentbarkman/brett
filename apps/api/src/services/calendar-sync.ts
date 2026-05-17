@@ -164,6 +164,21 @@ export async function initialSync(googleAccountId: string): Promise<void> {
   generatePendingTakes(account.userId).catch((err) =>
     console.error("[calendar-sync] Brett's Take generation failed:", err),
   );
+
+  // Fire-and-forget: mark the briefing dirty if the calendar actually
+  // changed. The pipeline runs lazily on the next client refresh.
+  const hadChangesFull =
+    changeset.created.length > 0 ||
+    changeset.updated.length > 0 ||
+    changeset.deleted.length > 0;
+  if (hadChangesFull) {
+    const { markBriefingDirty } = await import(
+      "../lib/briefing/triggers.js"
+    );
+    markBriefingDirty(account.userId, "calendar_delta").catch((err) =>
+      console.error("[calendar-sync] markBriefingDirty failed:", err),
+    );
+  }
 }
 
 /**
@@ -319,6 +334,24 @@ export async function incrementalSync(googleAccountId: string): Promise<void> {
     generatePendingTakes(account.userId).catch((err) =>
       console.error("[calendar-sync] Brett's Take generation failed:", err),
     );
+
+    // Fire-and-forget: mark the briefing dirty if the calendar actually
+    // changed. The pipeline runs lazily on the next client refresh.
+    const hadChanges =
+      changeset.created.length > 0 ||
+      changeset.updated.length > 0 ||
+      changeset.deleted.length > 0;
+    if (hadChanges) {
+      const { markBriefingDirty } = await import(
+        "../lib/briefing/triggers.js"
+      );
+      markBriefingDirty(account.userId, "calendar_delta").catch((err) =>
+        console.error(
+          "[calendar-sync] markBriefingDirty failed:",
+          err,
+        ),
+      );
+    }
   } finally {
     inFlightSyncs.delete(googleAccountId);
     recordSyncCompleted(googleAccountId);
@@ -374,6 +407,19 @@ export async function onDemandFetch(
     type: "calendar.sync.complete",
     payload: { googleAccountId, changeset },
   });
+
+  const hadChangesOnDemand =
+    changeset.created.length > 0 ||
+    changeset.updated.length > 0 ||
+    changeset.deleted.length > 0;
+  if (hadChangesOnDemand) {
+    const { markBriefingDirty } = await import(
+      "../lib/briefing/triggers.js"
+    );
+    markBriefingDirty(account.userId, "calendar_delta").catch((err) =>
+      console.error("[calendar-sync] markBriefingDirty failed:", err),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

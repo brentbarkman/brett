@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { NavList } from "@brett/types";
+import type { NavList, DueDatePrecision } from "@brett/types";
 import { QuickDatePicker } from "./QuickDatePicker";
 import { QuickListPicker } from "./QuickListPicker";
 
@@ -11,7 +11,7 @@ export interface TriageQuickPickerProps {
   suggestedListIds: string[];
   suggestionMode: "suggested" | "recent" | "empty";
   startWith: "date" | "list";
-  onCommitDate: (date: Date | null) => void;
+  onCommitDate: (date: Date | null, precision: DueDatePrecision) => void;
   onCommitList: (listId: string | null) => void;
   onClose: () => void;
   placement?: "bottom-end" | "bottom-start" | "top-end" | "top-start";
@@ -22,8 +22,8 @@ export function TriageQuickPicker(props: TriageQuickPickerProps) {
   const { startWith } = props;
   const [step, setStep] = useState<"date" | "list">(startWith);
 
-  const handleDateCommit = (date: Date | null) => {
-    props.onCommitDate(date);
+  const handleDateCommit = (date: Date | null, precision: DueDatePrecision) => {
+    props.onCommitDate(date, precision);
     if (step !== startWith) {
       // We are on step 2 (i.e. startWith was "list", we already committed a list)
       props.onClose();

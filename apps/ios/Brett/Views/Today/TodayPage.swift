@@ -311,9 +311,12 @@ private struct TodayPageBody: View {
             }
         }
         .task {
-            // Initial briefing fetch — only when the user hasn't already
-            // dismissed today's and we don't already have one cached.
-            if !briefingStore.isDismissedToday && briefingStore.briefing == nil {
+            // Always call fetch() — it returns the cached row instantly and
+            // (if the server reports `staleness == .dirty`) fires a
+            // background refresh + scheduled refetch. The store latches
+            // refresh-fired per-generatedAt, so repeated calls are safe.
+            // See briefing pipeline v2 spec.
+            if !briefingStore.isDismissedToday {
                 await briefingStore.fetch()
             }
         }
@@ -559,13 +562,23 @@ private struct TodayPageBody: View {
     /// The pre-edit row comes from this view's `@Query`-backed `items`
     /// array, which is already user-scoped — no need for a separate store
     /// fetch (those public read methods were removed in Wave B).
-    private func schedule(_ id: String, dueDate: Date?) {
+    private func schedule(_ id: String, dueDate: Date?, precision: DueDatePrecision) {
         guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
+        // Persist both dueDate and dueDatePrecision in a single mutation so
+        // a week-precision pick (This Week / Next Week) doesn't get bucketed
+        // as the weekend by the day-precision branch of computeUrgency.
+        let newPrecision: Any? = dueDate == nil ? nil : precision.rawValue
         itemStore.update(
             id: id,
-            changes: ["dueDate": dueDate as Any? ?? NSNull()],
-            previousValues: ["dueDate": item.dueDate as Any? ?? NSNull()],
+            changes: [
+                "dueDate": dueDate as Any? ?? NSNull(),
+                "dueDatePrecision": newPrecision ?? NSNull(),
+            ],
+            previousValues: [
+                "dueDate": item.dueDate as Any? ?? NSNull(),
+                "dueDatePrecision": item.dueDatePrecision as Any? ?? NSNull(),
+            ],
             userId: userId
         )
     }

@@ -5,11 +5,9 @@ import Foundation
 @Suite("DateHelpers")
 struct DateHelpersTests {
     /// Pin `now` and `dueDate` fixtures to fixed UTC moments so assertions
-    /// don't depend on when the suite runs — the helper is UTC-based, so
-    /// `Calendar.current` fixtures drifted across UTC midnight. Same
-    /// fixture style as `TodaySectionsTests` so both helpers — the
-    /// section bucketer and the urgency-only helper used by detail-card
-    /// colors — share a parity story.
+    /// don't depend on when the suite runs. Pair with the UTC `localCalendar`
+    /// in each call so the "user's local today" anchor lines up with the
+    /// UTC fixtures regardless of simulator TZ.
     private static func utcDate(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
         var c = DateComponents()
         c.year = y; c.month = m; c.day = d; c.hour = h
@@ -17,30 +15,37 @@ struct DateHelpersTests {
         return Calendar(identifier: .gregorian).date(from: c)!
     }
 
+    /// UTC calendar shared by every test — the helper derives the user's
+    /// "today" from this calendar's TZ, so pinning it to UTC keeps the
+    /// fixtures deterministic on every simulator host.
+    private static let utcCal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }()
+
     private static let saturdayNoon: Date = utcDate(2026, 4, 25, 12)
 
     @Test func computeUrgencyOverdue() {
         let yesterday = Self.utcDate(2026, 4, 24, 12)
-        #expect(DateHelpers.computeUrgency(dueDate: yesterday, isCompleted: false, now: Self.saturdayNoon) == .overdue)
+        #expect(DateHelpers.computeUrgency(dueDate: yesterday, isCompleted: false, now: Self.saturdayNoon, localCalendar: Self.utcCal) == .overdue)
     }
 
     @Test func computeUrgencyToday() {
-        let laterToday = Self.utcDate(2026, 4, 25, 18)
-        #expect(DateHelpers.computeUrgency(dueDate: laterToday, isCompleted: false, now: Self.saturdayNoon) == .today)
+        // dueDate is at UTC midnight of April 25 (post-migration canonical
+        // form). "now" can be any time on that calendar day in the user's TZ.
+        let today = Self.utcDate(2026, 4, 25, 0)
+        #expect(DateHelpers.computeUrgency(dueDate: today, isCompleted: false, now: Self.saturdayNoon, localCalendar: Self.utcCal) == .today)
     }
 
-    @Test func computeUrgencyThisWeek() {
-        // Sunday-on-Saturday — the inclusive boundary case. Old
-        // `Calendar.current` + `7 - weekday` formula collapsed this to
-        // `endOfWeek == today`, dropping Sunday into `.nextWeek` and
-        // diverging from desktop's `computeUrgency`.
-        let sunday = Self.utcDate(2026, 4, 26, 18)
-        #expect(DateHelpers.computeUrgency(dueDate: sunday, isCompleted: false, now: Self.saturdayNoon) == .thisWeek)
+    @Test func computeUrgencyThisWeekend() {
+        // On Saturday, the upcoming Sunday is the rest of this weekend.
+        let sunday = Self.utcDate(2026, 4, 26, 0)
+        #expect(DateHelpers.computeUrgency(dueDate: sunday, isCompleted: false, now: Self.saturdayNoon, localCalendar: Self.utcCal) == .thisWeekend)
     }
 
     @Test func computeUrgencyDone() {
-        // `done` short-circuits before any date math, so a stale
-        // `Date()` here can't drift the result.
+        // `done` short-circuits before any date math.
         #expect(DateHelpers.computeUrgency(dueDate: Self.saturdayNoon, isCompleted: true) == .done)
     }
 
@@ -50,27 +55,46 @@ struct DateHelpersTests {
 
     // MARK: - Boundary parity with desktop
 
-    @Test func mondayDueOnSaturdayIsNextWeek() {
-        // Sanity check the upper edge — Monday must still classify as
-        // `.nextWeek`. Catches over-correcting the boundary by +2 days.
+    @Test func mondayDueOnSaturdayIsThisWeek() {
+        // On Saturday, the upcoming Mon-Fri workweek is `.thisWeek` — the
+        // current weekend ends, the next workweek begins. Mirrors desktop
+        // `computeUrgency(Mon, "day", null, SATURDAY) == "this_week"` in
+        // packages/business/src/__tests__/business.test.ts.
         let mondayDue = Self.utcDate(2026, 4, 27, 0)
-        #expect(DateHelpers.computeUrgency(dueDate: mondayDue, isCompleted: false, now: Self.saturdayNoon) == .nextWeek)
+        #expect(DateHelpers.computeUrgency(dueDate: mondayDue, isCompleted: false, now: Self.saturdayNoon, localCalendar: Self.utcCal) == .thisWeek)
     }
 
-    @Test func nextSundayDueOnSundayIsThisWeek() {
-        // On Sunday, "this week" extends a full 7 days through next
-        // Sunday. Verifies the `weekday == 1` branch matches desktop.
+    @Test func sundayAfterNextOnSaturdayIsNextWeek() {
+        // Sat → +8 days = Sun May 3. Bucket: Sun is a weekend day; on Sat
+        // the upcoming weekend is only +1 day (Sun Apr 26), so Sun May 3
+        // overflows into `.nextWeek`. Mirrors desktop.
+        let sundayDue = Self.utcDate(2026, 5, 3, 0)
+        #expect(DateHelpers.computeUrgency(dueDate: sundayDue, isCompleted: false, now: Self.saturdayNoon, localCalendar: Self.utcCal) == .nextWeek)
+    }
+
+    @Test func fridayInTwoWeeksOnSaturdayIsNextWeek() {
+        // Sat → +13 days = Fri May 8. The `next_week` preset on Sat stores
+        // this date — it MUST land in `.nextWeek`, not `.later`. Guards the
+        // widened Sat range (nextWeekEnd=13) against accidental tightening.
+        let fridayDue = Self.utcDate(2026, 5, 8, 0)
+        #expect(DateHelpers.computeUrgency(dueDate: fridayDue, isCompleted: false, now: Self.saturdayNoon, localCalendar: Self.utcCal) == .nextWeek)
+    }
+
+    @Test func nextSundayDueOnSundayIsThisWeekend() {
+        // On Sunday, day-precision next Sunday is in the upcoming weekend pair.
         let sunday = Self.utcDate(2026, 4, 26, 12)
         let nextSundayDue = Self.utcDate(2026, 5, 3, 0)
-        #expect(DateHelpers.computeUrgency(dueDate: nextSundayDue, isCompleted: false, now: sunday) == .thisWeek)
+        #expect(DateHelpers.computeUrgency(dueDate: nextSundayDue, isCompleted: false, now: sunday, localCalendar: Self.utcCal) == .thisWeekend)
     }
 
     @Test func formatRelativeDate() {
-        let today = Calendar.current.startOfDay(for: Date())
-        #expect(DateHelpers.formatRelativeDate(today).contains("Today"))
-
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
-        #expect(DateHelpers.formatRelativeDate(tomorrow).contains("Tomorrow"))
+        // Use the UTC calendar + a UTC-midnight stored value, matching the
+        // storage convention enforced by QuickScheduleTimezoneTests.
+        let today = Self.utcDate(2026, 4, 25, 0)
+        let tomorrow = Self.utcDate(2026, 4, 26, 0)
+        let now = Self.utcDate(2026, 4, 25, 12)
+        #expect(DateHelpers.formatRelativeDate(today, now: now, localCalendar: Self.utcCal) == "Today")
+        #expect(DateHelpers.formatRelativeDate(tomorrow, now: now, localCalendar: Self.utcCal) == "Tomorrow")
     }
 
     @Test func formatTime() {

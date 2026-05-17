@@ -13,84 +13,102 @@ describe("Briefing routes", () => {
     userId = user.userId;
   });
 
-  describe("GET /brett/briefing", () => {
-    it("returns null when no briefing exists", async () => {
-      const res = await authRequest("/brett/briefing", token);
+  describe("GET /brett/briefing/current", () => {
+    it("returns null + dirty when no briefing row exists", async () => {
+      // Clean slate — make sure no row for this user.
+      await prisma.userBriefing.deleteMany({ where: { userId } });
+
+      const res = await authRequest("/brett/briefing/current", token);
       expect(res.status).toBe(200);
       const body = (await res.json()) as any;
       expect(body.briefing).toBeNull();
+      expect(body.staleness).toBe("dirty");
     });
 
-    it("returns cached briefing from today", async () => {
-      const session = await prisma.conversationSession.create({
-        data: {
+    it("returns the cached briefing row + fresh staleness", async () => {
+      // Upsert a recent, clean briefing row.
+      await prisma.userBriefing.upsert({
+        where: { userId },
+        create: {
           userId,
-          source: "briefing",
-          modelTier: "medium",
-          modelUsed: "test",
+          content: "Quiet morning. Nothing moved overnight.",
+          isEmpty: false,
+          signalsUsedIds: [],
+          generatedAt: new Date(),
+          dirtyAt: null,
+          regenCountToday: 1,
+          regenDayKey: "2026-05-16",
         },
-      });
-      await prisma.conversationMessage.create({
-        data: {
-          sessionId: session.id,
-          role: "assistant",
-          content: "Test briefing content",
+        update: {
+          content: "Quiet morning. Nothing moved overnight.",
+          isEmpty: false,
+          generatedAt: new Date(),
+          dirtyAt: null,
         },
       });
 
-      const res = await authRequest("/brett/briefing", token);
+      const res = await authRequest("/brett/briefing/current", token);
       expect(res.status).toBe(200);
       const body = (await res.json()) as any;
       expect(body.briefing).not.toBeNull();
-      expect(body.briefing.content).toBe("Test briefing content");
-      expect(body.briefing.sessionId).toBe(session.id);
+      expect(body.briefing.content).toBe(
+        "Quiet morning. Nothing moved overnight.",
+      );
+      expect(body.briefing.isEmpty).toBe(false);
+      expect(body.staleness).toBe("fresh");
+    });
+
+    it("reports dirty staleness when dirtyAt > generatedAt and outside 30min floor", async () => {
+      const generatedAt = new Date(Date.now() - 60 * 60 * 1000); // 1h ago
+      const dirtyAt = new Date(Date.now() - 5 * 60 * 1000); // 5m ago
+      await prisma.userBriefing.upsert({
+        where: { userId },
+        create: {
+          userId,
+          content: "Hour-old briefing.",
+          isEmpty: false,
+          signalsUsedIds: [],
+          generatedAt,
+          dirtyAt,
+          regenCountToday: 1,
+          regenDayKey: "2026-05-16",
+        },
+        update: { generatedAt, dirtyAt, regenCountToday: 1 },
+      });
+
+      const res = await authRequest("/brett/briefing/current", token);
+      const body = (await res.json()) as any;
+      expect(body.staleness).toBe("dirty");
+    });
+
+    it("reports capped staleness when the daily ceiling is hit", async () => {
+      await prisma.userBriefing.upsert({
+        where: { userId },
+        create: {
+          userId,
+          content: "At the daily ceiling.",
+          isEmpty: false,
+          signalsUsedIds: [],
+          generatedAt: new Date(Date.now() - 60 * 60 * 1000),
+          dirtyAt: new Date(),
+          regenCountToday: 6, // === ceiling
+          regenDayKey: "2026-05-16",
+        },
+        update: {
+          regenCountToday: 6,
+          dirtyAt: new Date(),
+          generatedAt: new Date(Date.now() - 60 * 60 * 1000),
+        },
+      });
+
+      const res = await authRequest("/brett/briefing/current", token);
+      const body = (await res.json()) as any;
+      expect(body.staleness).toBe("capped");
     });
 
     it("requires authentication", async () => {
-      const res = await authRequest("/brett/briefing", "invalid-token");
+      const res = await authRequest("/brett/briefing/current", "invalid-token");
       expect(res.status).toBe(401);
-    });
-
-    it("excludes briefings outside the user's timezone day boundary", async () => {
-      // Set user timezone to Asia/Tokyo (UTC+9)
-      await authRequest("/users/timezone", token, {
-        method: "PATCH",
-        body: JSON.stringify({ timezone: "Asia/Tokyo", auto: true }),
-      });
-
-      // Create a briefing session with createdAt that is "tomorrow" in Tokyo
-      // Tokyo's "today" (March 27) ends at 2026-03-27T15:00:00Z
-      // So 2026-03-27T16:00:00Z = March 28 01:00 in Tokyo (outside today)
-      const futureSession = await prisma.conversationSession.create({
-        data: {
-          userId,
-          source: "briefing",
-          modelTier: "medium",
-          modelUsed: "test",
-          createdAt: new Date("2026-03-27T16:00:00Z"),
-        },
-      });
-      await prisma.conversationMessage.create({
-        data: {
-          sessionId: futureSession.id,
-          role: "assistant",
-          content: "Tomorrow briefing in Tokyo",
-        },
-      });
-
-      const res = await authRequest("/brett/briefing", token);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as any;
-      // The briefing from "tomorrow" in Tokyo should not be returned
-      if (body.briefing) {
-        expect(body.briefing.content).not.toBe("Tomorrow briefing in Tokyo");
-      }
-
-      // Reset timezone for other tests
-      await authRequest("/users/timezone", token, {
-        method: "PATCH",
-        body: JSON.stringify({ timezone: "America/Los_Angeles", auto: true }),
-      });
     });
   });
 

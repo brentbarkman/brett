@@ -3,13 +3,10 @@ import type { ModelTier } from "@brett/types";
 import type { Message } from "../providers/types.js";
 import {
   getSystemPrompt,
-  getBriefingPrompt,
   getBrettsTakePrompt,
   SCOUT_CREATION_PROMPT,
 } from "./system-prompts.js";
 import { AI_CONFIG } from "../config.js";
-import { getUserDayBounds } from "@brett/business";
-import { resolveTempUnit, convertTemp } from "@brett/utils";
 import { getCachedUserProfile, formatProfileForPrompt } from "../memory/user-profile.js";
 
 // ─── Input types ───
@@ -38,15 +35,6 @@ interface BrettThreadContext {
   assistantName?: string;
 }
 
-interface BriefingContext {
-  type: "briefing";
-  userId: string;
-  timezone: string;
-  /** Pre-loaded embedding search results for context enrichment */
-  embeddingContext?: string;
-  assistantName?: string;
-}
-
 interface BrettsTakeContext {
   type: "bretts_take";
   userId: string;
@@ -60,7 +48,6 @@ interface BrettsTakeContext {
 export type AssemblerInput =
   | OmnibarContext
   | BrettThreadContext
-  | BriefingContext
   | BrettsTakeContext;
 
 export type ToolMode = "all" | "contextual" | "none";
@@ -72,7 +59,7 @@ export interface AssembledContext {
   /** Controls which tools the orchestrator sends to the LLM.
    *  - "contextual": filter tools by user message (default for omnibar)
    *  - "all": send all registered tools
-   *  - "none": pure text generation, no tools (briefing, bretts_take)
+   *  - "none": pure text generation, no tools (bretts_take)
    */
   toolMode: ToolMode;
   maxTokens?: number;
@@ -355,183 +342,6 @@ async function assembleBrettThread(
   return { system, messages, modelTier: "medium", toolMode: "contextual" };
 }
 
-async function assembleBriefing(
-  input: BriefingContext,
-  prisma: ExtendedPrismaClient
-): Promise<AssembledContext> {
-  // Briefing needs minimal facts — just enough for tone/context, not the full 20
-  const [allFacts, profileBlock] = await Promise.all([
-    loadUserFacts(prisma, input.userId),
-    loadUserProfile(prisma, input.userId),
-  ]);
-  const facts = allFacts.slice(0, 5);
-
-  // Validate timezone at point-of-use (defense-in-depth)
-  const timezone = input.timezone;
-  const now = new Date();
-  let currentDate: string;
-  try {
-    currentDate = now.toLocaleDateString("en-CA", { timeZone: timezone });
-  } catch {
-    currentDate = now.toLocaleDateString("en-CA", { timeZone: "UTC" });
-  }
-
-  // Validate timezone for system prompt (defense-in-depth)
-  const safeTimezone = VALID_TIMEZONES.has(timezone) ? timezone : "UTC";
-
-  const system =
-    getBriefingPrompt(input.assistantName ?? "Brett") +
-    formatFacts(facts) +
-    profileBlock +
-    formatEmbeddingContext(input.embeddingContext) +
-    `\nCurrent date: ${currentDate}` +
-    `\nCurrent timezone: ${safeTimezone}`;
-
-  const { startOfDay, endOfDay } = getUserDayBounds(timezone, now);
-
-  // Only include events from visible calendars
-  const visibleCalendars = await prisma.calendarList.findMany({
-    where: { googleAccount: { userId: input.userId }, isVisible: true },
-    select: { id: true },
-  });
-  const visibleCalendarIds = visibleCalendars.map((c) => c.id);
-
-  const [overdueTasksRaw, overdueCount, dueTodayTasks, todayEvents, weatherData] = await Promise.all([
-    prisma.item.findMany({
-      where: {
-        userId: input.userId,
-        type: "task",
-        status: "active",
-        dueDate: { lt: startOfDay },
-      },
-      select: { title: true, dueDate: true },
-      orderBy: { dueDate: "desc" },
-      take: 5,
-    }),
-    prisma.item.count({
-      where: {
-        userId: input.userId,
-        type: "task",
-        status: "active",
-        dueDate: { lt: startOfDay },
-      },
-    }),
-    prisma.item.findMany({
-      where: {
-        userId: input.userId,
-        type: "task",
-        status: "active",
-        dueDate: { gte: startOfDay, lt: endOfDay },
-      },
-      select: { title: true, dueDate: true },
-      orderBy: { dueDate: "asc" },
-      take: 20,
-    }),
-    prisma.calendarEvent.findMany({
-      where: {
-        userId: input.userId,
-        calendarListId: { in: visibleCalendarIds },
-        startTime: { gte: startOfDay, lt: endOfDay },
-        status: "confirmed",
-        myResponseStatus: { not: "observer" },
-      },
-      select: {
-        title: true,
-        startTime: true,
-        endTime: true,
-        attendees: true,
-        location: true,
-        meetingLink: true,
-      },
-      orderBy: { startTime: "asc" },
-      take: 20,
-    }),
-    prisma.weatherCache.findUnique({
-      where: { userId: input.userId },
-      select: { current: true, daily: true },
-    }).then(async (cache) => {
-      if (!cache) return null;
-      const user = await prisma.user.findUnique({
-        where: { id: input.userId },
-        select: { weatherEnabled: true, tempUnit: true, countryCode: true },
-      });
-      if (!user?.weatherEnabled) return null;
-      return { cache, tempUnit: user.tempUnit, countryCode: user.countryCode };
-    }),
-  ]);
-
-  const dataParts: string[] = [];
-
-  if (overdueCount > 0) {
-    const lines = overdueTasksRaw.map(
-      (t) => `- ${t.title} (due ${t.dueDate!.toISOString().split("T")[0]})`
-    );
-    const header = overdueCount > overdueTasksRaw.length
-      ? `Overdue tasks (${overdueCount} total, showing ${overdueTasksRaw.length} most recent):`
-      : `Overdue tasks (${overdueCount}):`;
-    dataParts.push(`${header}\n${lines.join("\n")}`);
-  }
-
-  if (dueTodayTasks.length > 0) {
-    const lines = dueTodayTasks.map((t) => `- ${t.title}`);
-    dataParts.push(`Due today:\n${lines.join("\n")}`);
-  }
-
-  if (todayEvents.length > 0) {
-    const lines = todayEvents.map((e) => {
-      const start = e.startTime.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: timezone,
-      });
-      const attendeeStr = formatAttendees(e.attendees);
-      return `- ${start}: ${e.title}${attendeeStr !== "None" ? ` (with ${attendeeStr})` : ""}`;
-    });
-    dataParts.push(`Today's calendar:\n${lines.join("\n")}`);
-  }
-
-  if (weatherData) {
-    const current = weatherData.cache.current as Record<string, unknown>;
-    const dailyArr = weatherData.cache.daily as unknown[];
-    const daily = dailyArr?.[0] as Record<string, unknown> | undefined;
-
-    // Validate cached data shape before using
-    if (typeof current?.temp === "number" && typeof current?.condition === "string") {
-      const unit = resolveTempUnit(weatherData.tempUnit, weatherData.countryCode ?? undefined);
-      const unitLabel = unit === "fahrenheit" ? "F" : "C";
-      const convert = (t: number) => convertTemp(t, unit);
-
-      let weatherBlock = `Current weather: ${convert(current.temp as number)}\u00B0${unitLabel}, ${current.condition}`;
-      if (daily && typeof daily.high === "number" && typeof daily.low === "number") {
-        weatherBlock += `\nToday: High ${convert(daily.high as number)}\u00B0${unitLabel}, Low ${convert(daily.low as number)}\u00B0${unitLabel}, ${daily.precipProb ?? 0}% chance of rain`;
-      }
-      const airQuality = current.airQuality as { aqi?: number; category?: string } | undefined;
-      if (airQuality && typeof airQuality.aqi === "number") {
-        weatherBlock += `\nAir Quality: AQI ${airQuality.aqi} (${airQuality.category ?? "Unknown"})`;
-      }
-      dataParts.push(weatherBlock);
-    }
-  }
-
-  const dataBlock =
-    dataParts.length > 0
-      ? dataParts.join("\n\n")
-      : "No tasks due and no calendar events today.";
-
-  const messages: Message[] = [
-    {
-      role: "user",
-      content: `Generate my daily briefing based on the following data:\n\n${wrapUserData("briefing_data", dataBlock)}`,
-    },
-  ];
-
-  // Briefing runs at most once per day per user but sets the tone for every
-  // downstream interaction (chat context, dashboard). The per-request premium
-  // of `medium` over `small` is trivial at that frequency; the quality gap is
-  // not — `small` produced flatter, more hallucination-prone briefings in
-  // evals.
-  return { system, messages, modelTier: "medium", toolMode: "none" };
-}
 
 async function assembleBrettsTake(
   input: BrettsTakeContext,
@@ -673,8 +483,6 @@ export async function assembleContext(
       return assembleOmnibar(input, prisma);
     case "brett_thread":
       return assembleBrettThread(input, prisma);
-    case "briefing":
-      return assembleBriefing(input, prisma);
     case "bretts_take":
       return assembleBrettsTake(input, prisma);
   }

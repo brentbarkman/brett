@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { assembleContext, type AssemblerInput } from "../assembler.js";
-import { getUserDayBounds } from "@brett/business";
 
 // ─── Mock system prompts ───
 
@@ -9,18 +8,11 @@ vi.mock("../system-prompts.js", () => ({
   // string; return a stable string so tests can assert on prompt contents
   // without pulling in the real prompt bodies.
   getSystemPrompt: () => "BRETT_SYSTEM_PROMPT",
-  getBriefingPrompt: () => "BRIEFING_SYSTEM_PROMPT daily briefing",
   getBrettsTakePrompt: () => "BRETTS_TAKE_SYSTEM_PROMPT",
   getFactExtractionPrompt: () => "FACT_EXTRACTION_PROMPT",
   SCOUT_CREATION_PROMPT: "SCOUT_CREATION_PROMPT",
 }));
 
-vi.mock("@brett/business", () => ({
-  getUserDayBounds: vi.fn().mockReturnValue({
-    startOfDay: new Date("2026-03-26T00:00:00Z"),
-    endOfDay: new Date("2026-03-27T00:00:00Z"),
-  }),
-}));
 
 // ─── Mock Prisma ───
 
@@ -250,20 +242,6 @@ describe("assembleContext", () => {
       expect(ctx.toolMode).toBe("contextual");
     });
 
-    it('returns "medium" for briefing (pure text, no tools needed)', async () => {
-      // Briefing is once per day per user — the marginal cost of `medium`
-      // over `small` is trivial and evals showed `small` produced flatter,
-      // more hallucination-prone briefings.
-      const input: AssemblerInput = {
-        type: "briefing",
-        userId: "user-1",
-        timezone: "UTC",
-      };
-      const ctx = await assembleContext(input, mockPrisma);
-      expect(ctx.modelTier).toBe("medium");
-      expect(ctx.toolMode).toBe("none");
-    });
-
     it('returns "small" for bretts_take (pure text, no tools needed)', async () => {
       const input: AssemblerInput = {
         type: "bretts_take",
@@ -275,95 +253,4 @@ describe("assembleContext", () => {
     });
   });
 
-  // ─── Briefing timezone ───
-
-  describe("briefing timezone", () => {
-    it("passes timezone to date queries (uses getUserDayBounds)", async () => {
-      const input: AssemblerInput = {
-        type: "briefing",
-        userId: "user-1",
-        timezone: "Asia/Tokyo",
-      };
-      const ctx = await assembleContext(input, mockPrisma);
-      expect(ctx.system).toContain("Asia/Tokyo");
-      expect(getUserDayBounds).toHaveBeenCalledWith("Asia/Tokyo", expect.any(Date));
-    });
-
-    it("includes timezone-formatted current date in system prompt", async () => {
-      const input: AssemblerInput = {
-        type: "briefing",
-        userId: "user-1",
-        timezone: "America/New_York",
-      };
-      const ctx = await assembleContext(input, mockPrisma);
-      expect(ctx.system).toMatch(/Current date: \d{4}-\d{2}-\d{2}/);
-    });
-
-    it("says 'daily briefing' not 'morning briefing' in user message", async () => {
-      const input: AssemblerInput = {
-        type: "briefing",
-        userId: "user-1",
-        timezone: "UTC",
-      };
-      const ctx = await assembleContext(input, mockPrisma);
-      const userMsg = ctx.messages[ctx.messages.length - 1];
-      expect(userMsg.content).toContain("daily briefing");
-      expect(userMsg.content).not.toContain("morning briefing");
-    });
-
-    it("includes overdue tasks in data block", async () => {
-      mockPrisma.item.findMany
-        .mockResolvedValueOnce([
-          { title: "Overdue report", dueDate: new Date("2026-03-20") },
-        ])
-        .mockResolvedValueOnce([]);
-      mockPrisma.item.count.mockResolvedValue(1);
-      mockPrisma.calendarEvent.findMany.mockResolvedValue([]);
-
-      const input: AssemblerInput = {
-        type: "briefing",
-        userId: "user-1",
-        timezone: "UTC",
-      };
-      const ctx = await assembleContext(input, mockPrisma);
-      const userMsg = ctx.messages[ctx.messages.length - 1];
-      expect(userMsg.content).toContain("Overdue report");
-      expect(userMsg.content).toContain("Overdue tasks");
-    });
-
-    it("formats event times in user timezone", async () => {
-      mockPrisma.item.findMany.mockResolvedValue([]);
-      mockPrisma.calendarEvent.findMany.mockResolvedValue([
-        {
-          title: "Team sync",
-          startTime: new Date("2026-03-26T14:00:00Z"),
-          endTime: new Date("2026-03-26T15:00:00Z"),
-          attendees: null,
-          location: null,
-          meetingLink: null,
-        },
-      ]);
-
-      const input: AssemblerInput = {
-        type: "briefing",
-        userId: "user-1",
-        timezone: "America/New_York",
-      };
-      const ctx = await assembleContext(input, mockPrisma);
-      const userMsg = ctx.messages[ctx.messages.length - 1];
-      expect(userMsg.content).toContain("10:00 AM");
-      expect(userMsg.content).toContain("Team sync");
-    });
-
-    it("shows empty message when no data", async () => {
-      const input: AssemblerInput = {
-        type: "briefing",
-        userId: "user-1",
-        timezone: "UTC",
-      };
-      const ctx = await assembleContext(input, mockPrisma);
-      const userMsg = ctx.messages[ctx.messages.length - 1];
-      expect(userMsg.content).toContain("No tasks due and no calendar events today");
-    });
-  });
 });

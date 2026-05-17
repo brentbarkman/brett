@@ -56,7 +56,7 @@ model User {
   embeddings             Embedding[]
   usageLogs            AIUsageLog[]
   weatherCache         WeatherCache?
-  granolaAccount         GranolaAccount?
+  granolaAccounts        GranolaAccount[]
   meetingNotes           MeetingNote[]
   meetingNoteSources     MeetingNoteSource[]
   scouts                 Scout[]
@@ -66,6 +66,7 @@ model User {
   pendingNewsletters   PendingNewsletter[]
   knowledgeEntities       KnowledgeEntity[]
   knowledgeRelationships  KnowledgeRelationship[]
+  briefing                UserBriefing?
 }
 
 model Session {
@@ -390,7 +391,7 @@ model CalendarEventNote {
 
 model GranolaAccount {
   id              String    @id @default(uuid())
-  userId          String    @unique  // one Granola account per user
+  userId          String
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   email           String
   accessToken     String    @db.Text  // Encrypted (AES-256-GCM)
@@ -405,6 +406,7 @@ model GranolaAccount {
   meetingNotes    MeetingNote[]
   meetingNoteSources MeetingNoteSource[]
 
+  @@unique([userId, email])
   @@index([userId])
 }
 
@@ -910,4 +912,27 @@ model CronLock {
   updatedAt  DateTime @updatedAt
 
   @@index([expiresAt])
+}
+
+/// Current daily-briefing state per user. One row per user, updated in
+/// place by the two-stage pipeline (Haiku detector -> Sonnet writer or
+/// template). Triggers (morning cron, calendar webhooks, overdue scanner,
+/// newsletter ingest) set `dirtyAt`; the next client refresh call
+/// materializes a new brief if dirty + outside 30min floor + under 6/day
+/// ceiling. See docs/superpowers/specs/2026-05-16-briefing-pipeline-v2-design.md.
+model UserBriefing {
+  userId            String    @id
+  content           String    @db.Text
+  isEmpty           Boolean   @default(false)
+  signalsUsedIds    String[]
+  generatedAt       DateTime
+  dirtyAt           DateTime?
+  regenCountToday   Int       @default(0)
+  regenDayKey       String    // "YYYY-MM-DD" in user-local TZ
+  lastTriggerSource String?
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([dirtyAt])
 }

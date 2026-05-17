@@ -1,0 +1,490 @@
+[
+  {
+    "name": "dense_morning_two_signals",
+    "description": "Two strong picks — schedule shift + prep gap. Writer should produce 1-2 sentences covering both.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "Standup", "startsInMin": 12 },
+      "picks": [
+        {
+          "oneLiner": "Sara pushed your 2pm Q3 review to 3:30",
+          "why": "Calendar moved overnight — user has not seen this yet."
+        },
+        {
+          "oneLiner": "Board call at 5pm has no notes attached, last touched 14 days ago",
+          "why": "Prep gap on a high-stakes meeting."
+        }
+      ]
+    },
+    "criteria": [
+      "Output is 1 or 2 sentences total",
+      "Output mentions both the schedule shift to 3:30 AND the missing board-call prep",
+      "Output does NOT start with 'Good morning', 'Heads up', 'Quick', or 'Just'",
+      "Output does NOT use task counts like 'you have 2 things' or '2 items'",
+      "Output reads like a PA — clipped, observational, never cheerful or coaching"
+    ],
+    "bannedPhrases": [
+      "good morning",
+      "good afternoon",
+      "heads up",
+      "you have"
+    ]
+  },
+  {
+    "name": "single_signal_one_sentence",
+    "description": "Only one signal — writer should produce one tight sentence, not pad to two.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Alex replied overnight on the Q3 thread with three open questions",
+          "why": "Inbound that the user has not seen yet."
+        }
+      ]
+    },
+    "criteria": [
+      "Output is exactly 1 sentence",
+      "Output references Alex's overnight reply on Q3",
+      "Output does NOT invent a second beat to pad length",
+      "Output does NOT start with 'Good morning', 'Heads up', 'Quick', or 'Just'"
+    ],
+    "bannedPhrases": [
+      "good morning",
+      "heads up",
+      "you have"
+    ]
+  },
+  {
+    "name": "nextup_duplication_trap",
+    "description": "Writer is told NextUp shows 'Q3 review with Sara'. Output must NOT mention that title or time.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "Q3 review with Sara", "startsInMin": 24 },
+      "picks": [
+        {
+          "oneLiner": "Sara replied to the deck overnight with three open questions still unanswered",
+          "why": "Inbound that adds context not visible on the NextUp card."
+        }
+      ]
+    },
+    "criteria": [
+      "Output is 1 or 2 sentences",
+      "Output references Sara's reply on the deck and the open questions",
+      "Output does NOT include the phrase 'Q3 review' verbatim",
+      "Output does NOT mention the time '1pm', '13:00', or '24 min'"
+    ],
+    "bannedPhrases": [
+      "Q3 review",
+      "24 min",
+      "1pm"
+    ]
+  },
+  {
+    "name": "task_count_trap",
+    "description": "Picks describe two overdue boundaries crossed. Writer must NOT collapse this into 'you have N overdue'.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Acme proposal slipped past 3 days overdue",
+          "why": "Overdue threshold crossed; user has not addressed it."
+        },
+        {
+          "oneLiner": "Reply to Sarah's RFP crossed 1 day overdue",
+          "why": "Overdue threshold crossed today."
+        }
+      ]
+    },
+    "criteria": [
+      "Output is 1 or 2 sentences",
+      "Output references the Acme proposal and Sarah's RFP by name",
+      "Output does NOT say 'you have 2 overdue' or 'you have 2 items' or any 'N tasks/items/things' phrasing"
+    ],
+    "bannedPhrases": [
+      "you have",
+      "2 overdue",
+      "two overdue",
+      "2 tasks",
+      "2 items"
+    ]
+  },
+  {
+    "name": "voice_no_cheerful_opener",
+    "description": "Even on a positive-feeling signal, writer must not slip into cheerful PR-speak.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Tomorrow's offsite was cancelled by the organizer late last night",
+          "why": "Schedule delta that frees up an entire day."
+        }
+      ]
+    },
+    "criteria": [
+      "Output references the offsite cancellation",
+      "Output does NOT start with 'Good morning' or other greeting openers",
+      "Output does NOT include cheerful framing like 'Great news!', 'Awesome', or 'Nice'",
+      "Output reads as clipped and observational, not enthusiastic"
+    ],
+    "bannedPhrases": [
+      "good morning",
+      "great news",
+      "awesome",
+      "nice",
+      "heads up"
+    ]
+  },
+  {
+    "name": "past_meeting_context_pickup",
+    "description": "Meeting context signal should be woven in as a hint of unfinished commitment, not summarized as 'last time you said...'",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "1:1 with Alex", "startsInMin": 95 },
+      "picks": [
+        {
+          "oneLiner": "Last 1:1 with Alex you committed to a hiring update; nothing attached today",
+          "why": "Past meeting note ties into upcoming event."
+        }
+      ]
+    },
+    "criteria": [
+      "Output is 1 or 2 sentences",
+      "Output references the unfinished hiring update commitment for Alex",
+      "Output does NOT include the literal phrase '1:1 with Alex' (NextUp shows this)",
+      "Output does NOT include the literal time '95 min'"
+    ],
+    "bannedPhrases": [
+      "1:1 with Alex",
+      "95 min",
+      "in 95"
+    ]
+  },
+  {
+    "name": "no_bullets_or_markdown",
+    "description": "Writer must emit prose. No bullets, no asterisks, no list markers.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        { "oneLiner": "Sara pushed 2pm to 3:30", "why": "Calendar moved." },
+        { "oneLiner": "Acme proposal slipped 3 days", "why": "Overdue." }
+      ]
+    },
+    "criteria": [
+      "Output contains NO bullet characters (-, *, •, or numbered list)",
+      "Output contains NO markdown bold or italic markers (**, __, *)",
+      "Output is 1 or 2 sentences of prose"
+    ],
+    "bannedPhrases": ["**", "•", "- "]
+  },
+  {
+    "name": "no_assistant_voice",
+    "description": "Writer must not slip into assistant-y phrasings like 'let me know' or 'I can help with'.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "RFP from Acme arrived overnight with a Friday deadline",
+          "why": "Inbound deadline the user has not seen."
+        }
+      ]
+    },
+    "criteria": [
+      "Output references the Acme RFP and Friday deadline",
+      "Output does NOT use first-person AI phrasing ('I can help', 'let me know', 'I'll')",
+      "Output does NOT ask the user a question"
+    ],
+    "bannedPhrases": [
+      "let me know",
+      "i can help",
+      "i'll",
+      "happy to help",
+      "would you like"
+    ]
+  },
+  {
+    "name": "conflict_pick_one_framing",
+    "description": "Conflict signal should be surfaced as a stark pick-one observation, not vague.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Standup and recruiter screen are double-booked at 9am",
+          "why": "Calendar conflict the user has not resolved."
+        }
+      ]
+    },
+    "criteria": [
+      "Output names BOTH conflicting events (standup + recruiter screen)",
+      "Output is 1 sentence",
+      "Output makes the conflict obvious — not just 'a conflict at 9am'"
+    ],
+    "bannedPhrases": [
+      "heads up",
+      "you have"
+    ]
+  },
+  {
+    "name": "afternoon_what_changed_since_morning",
+    "description": "Midday brief should reflect what changed since morning, not restate the morning.",
+    "input": {
+      "timeOfDay": "midday",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Mark added a 4pm demo prep slot 20 minutes ago",
+          "why": "New event since the morning brief."
+        }
+      ]
+    },
+    "criteria": [
+      "Output references Mark's new 4pm demo prep slot",
+      "Output is 1 sentence",
+      "Output does NOT use morning greetings ('Good afternoon' is also banned)"
+    ],
+    "bannedPhrases": [
+      "good afternoon",
+      "this morning"
+    ]
+  },
+  {
+    "name": "three_picks_drops_weakest",
+    "description": "Three picks provided but only the top 2 should fit in 2 sentences.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        { "oneLiner": "Sara pushed 2pm to 3:30", "why": "Calendar moved overnight." },
+        { "oneLiner": "Acme RFP arrived overnight, Friday deadline", "why": "Hidden deadline." },
+        { "oneLiner": "Newsletter on AI antitrust landed", "why": "Tangentially relevant." }
+      ]
+    },
+    "criteria": [
+      "Output is 1 or 2 sentences (≤ 2 — under no circumstances should it list all three)",
+      "Output references at least one of the top two: Sara's move OR the Acme RFP",
+      "Output may omit the newsletter mention — that is correct behavior"
+    ],
+    "bannedPhrases": [
+      "you have",
+      "three things",
+      "3 things"
+    ]
+  },
+  {
+    "name": "no_time_redundancy",
+    "description": "Don't repeat 'today' or the same time across both sentences.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        { "oneLiner": "Quarterly review moved from 2pm to 3:30pm", "why": "Calendar moved." },
+        { "oneLiner": "Lunch with Mara cancelled", "why": "Calendar delta." }
+      ]
+    },
+    "criteria": [
+      "Output is 1 or 2 sentences",
+      "Output references both the quarterly review move AND Mara's lunch cancellation",
+      "Output does NOT repeat the word 'today' more than once"
+    ],
+    "bannedPhrases": ["you have"]
+  },
+  {
+    "name": "quiet_signal_one_sentence",
+    "description": "A single mild signal — produce one clean sentence, not two.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Standup at 9 was cancelled by Mara",
+          "why": "Schedule delta."
+        }
+      ]
+    },
+    "criteria": [
+      "Output is exactly 1 sentence",
+      "Output references the cancelled standup",
+      "Output does NOT speculate about why or pad with 'so you have...' framing"
+    ],
+    "bannedPhrases": [
+      "so you have",
+      "you have",
+      "this means"
+    ]
+  },
+  {
+    "name": "newsletter_only_picked",
+    "description": "Single inbound newsletter — surface it specifically, not vaguely.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Stratechery dropped a long teardown of yesterday's DOJ AI filing",
+          "why": "Inbound the user has not seen."
+        }
+      ]
+    },
+    "criteria": [
+      "Output references Stratechery (or the DOJ AI teardown) specifically",
+      "Output is 1 sentence",
+      "Output does NOT use generic phrasing like 'a newsletter arrived'"
+    ],
+    "bannedPhrases": [
+      "a newsletter",
+      "you have",
+      "good morning"
+    ]
+  },
+  {
+    "name": "evening_wrap",
+    "description": "Evening brief on a quiet day — short and observational.",
+    "input": {
+      "timeOfDay": "evening",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Sara's deck reply still has three open questions sitting from this morning",
+          "why": "Unfinished commitment from earlier today."
+        }
+      ]
+    },
+    "criteria": [
+      "Output references Sara's deck questions",
+      "Output is 1 sentence",
+      "Output does NOT use 'good evening' or any greeting opener"
+    ],
+    "bannedPhrases": [
+      "good evening",
+      "heads up",
+      "you have"
+    ]
+  },
+  {
+    "name": "long_signal_text_compressed",
+    "description": "A wordy oneLiner — writer must compress it, not echo verbatim.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Detailed RFP arrived from Acme legal with seven open questions about indemnification, MSA scope, and a clarification request on the data-handling addendum that requires sign-off from your VP of Eng before Friday's deadline",
+          "why": "Inbound with a real deadline."
+        }
+      ]
+    },
+    "criteria": [
+      "Output is 1 or 2 sentences, ≤ 80 tokens",
+      "Output references the Acme RFP and the Friday deadline",
+      "Output does NOT copy the oneLiner verbatim — it must compress the detail"
+    ],
+    "bannedPhrases": ["heads up", "you have"]
+  },
+  {
+    "name": "honest_quiet_acknowledgement",
+    "description": "Detector picked something weak; writer should still produce honest output, not invent urgency.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Mara added a tentative coffee at 4pm — not confirmed yet",
+          "why": "Tentative event added overnight."
+        }
+      ]
+    },
+    "criteria": [
+      "Output references Mara's tentative 4pm coffee",
+      "Output is 1 sentence",
+      "Output does NOT use urgent framing ('important', 'urgent', 'critical') for this mild signal"
+    ],
+    "bannedPhrases": ["urgent", "critical", "important to", "you have"]
+  },
+  {
+    "name": "two_distinct_signal_types_natural_connector",
+    "description": "Schedule delta + inbound — writer should connect them with natural prose, not 'and also'.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "Standup", "startsInMin": 12 },
+      "picks": [
+        {
+          "oneLiner": "1:1 with Jordan moved from 11 to 4pm",
+          "why": "Schedule delta."
+        },
+        {
+          "oneLiner": "Renewal proposal from Vendor X landed in your inbox overnight",
+          "why": "Inbound."
+        }
+      ]
+    },
+    "criteria": [
+      "Output is 1 or 2 sentences",
+      "Output references both Jordan's move and the Vendor X renewal proposal",
+      "Output does NOT use stilted connectors like 'and also' or 'in addition'"
+    ],
+    "bannedPhrases": [
+      "and also",
+      "in addition",
+      "additionally",
+      "you have"
+    ]
+  },
+  {
+    "name": "no_meta_commentary_on_brief",
+    "description": "Writer must not narrate its own existence ('here's your briefing', 'today's update').",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "Acme contract countersignature came back overnight, no changes",
+          "why": "Inbound that clears a blocker."
+        }
+      ]
+    },
+    "criteria": [
+      "Output references Acme's countersignature returning unchanged",
+      "Output does NOT contain meta-phrasing like 'here's your', 'today's update', 'your briefing'"
+    ],
+    "bannedPhrases": [
+      "here's your",
+      "today's update",
+      "your briefing",
+      "your update",
+      "good morning"
+    ]
+  },
+  {
+    "name": "conflict_plus_prep_gap_mix",
+    "description": "Two strong picks of different types — writer should weave them in one or two sentences.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "picks": [
+        {
+          "oneLiner": "9am standup and 9:15 recruiter screen overlap",
+          "why": "Conflict."
+        },
+        {
+          "oneLiner": "Board call at 4pm has no notes, last touched two weeks ago",
+          "why": "Prep gap."
+        }
+      ]
+    },
+    "criteria": [
+      "Output references both the 9am overlap AND the board call prep gap",
+      "Output is 1 or 2 sentences",
+      "Output does NOT use task counts"
+    ],
+    "bannedPhrases": [
+      "you have",
+      "two things",
+      "2 things"
+    ]
+  }
+]

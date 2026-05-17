@@ -39,7 +39,7 @@ struct TodaySectionsTests {
         let item = itemDue(yesterday)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, localCalendar: utcCalendar)
 
         #expect(sections.overdue.map(\.id) == [item.id])
         #expect(sections.today.isEmpty)
@@ -52,7 +52,7 @@ struct TodaySectionsTests {
         let item = itemDue(today)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, localCalendar: utcCalendar)
 
         #expect(sections.today.map(\.id) == [item.id])
         #expect(sections.overdue.isEmpty)
@@ -64,7 +64,7 @@ struct TodaySectionsTests {
         let item = itemDue(now, completedAt: now, status: .done)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, localCalendar: utcCalendar)
 
         #expect(sections.doneToday.map(\.id) == [item.id])
         #expect(sections.hasDoneToday)
@@ -76,7 +76,7 @@ struct TodaySectionsTests {
         let item = itemDue(yesterday, completedAt: yesterday, status: .done)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, localCalendar: utcCalendar)
 
         #expect(sections.doneToday.isEmpty)
         #expect(sections.activeCount == 0)
@@ -89,7 +89,7 @@ struct TodaySectionsTests {
         item.status = ItemStatus.archived.rawValue
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, localCalendar: utcCalendar)
 
         #expect(sections.activeCount == 0)
         #expect(sections.doneToday.isEmpty)
@@ -107,7 +107,8 @@ struct TodaySectionsTests {
         let sections = TodaySections.bucket(
             items: [item],
             reflowKey: 0,
-            pendingDoneIDs: [item.id]
+            pendingDoneIDs: [item.id],
+            localCalendar: utcCalendar
         )
 
         // Should still be in Today even though status == done.
@@ -122,7 +123,7 @@ struct TodaySectionsTests {
         let item = itemDue(nil)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, localCalendar: utcCalendar)
 
         #expect(sections.activeCount == 0)
     }
@@ -149,7 +150,7 @@ struct TodaySectionsTests {
         let item = itemDue(sundayDue)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday, localCalendar: utcCalendar)
 
         #expect(sections.thisWeekend.map(\.id) == [item.id])
         #expect(sections.thisWeek.isEmpty)
@@ -166,7 +167,7 @@ struct TodaySectionsTests {
         let item = itemDue(sundayLate)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday, localCalendar: utcCalendar)
 
         #expect(sections.thisWeekend.map(\.id) == [item.id])
         #expect(sections.thisWeek.isEmpty)
@@ -181,7 +182,7 @@ struct TodaySectionsTests {
         let item = itemDue(mondayDue)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday, localCalendar: utcCalendar)
 
         #expect(sections.thisWeek.map(\.id) == [item.id])
         #expect(sections.thisWeekend.isEmpty)
@@ -197,7 +198,7 @@ struct TodaySectionsTests {
         let item = itemDue(nextSunday)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: saturday, localCalendar: utcCalendar)
 
         #expect(sections.nextWeek.map(\.id) == [item.id])
         #expect(sections.thisWeekend.isEmpty)
@@ -213,7 +214,7 @@ struct TodaySectionsTests {
         let item = itemDue(sundayDue)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: sunday)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: sunday, localCalendar: utcCalendar)
 
         #expect(sections.today.map(\.id) == [item.id])
         #expect(sections.thisWeek.isEmpty)
@@ -231,7 +232,7 @@ struct TodaySectionsTests {
         let sun = itemDue(sundayDue)
         ctx.insert(sat); ctx.insert(sun)
 
-        let sections = TodaySections.bucket(items: [sat, sun], reflowKey: 0, now: wednesday)
+        let sections = TodaySections.bucket(items: [sat, sun], reflowKey: 0, now: wednesday, localCalendar: utcCalendar)
 
         #expect(Set(sections.thisWeekend.map(\.id)) == Set([sat.id, sun.id]))
         #expect(sections.thisWeek.isEmpty)
@@ -245,7 +246,7 @@ struct TodaySectionsTests {
         let item = itemDue(fridayDue)
         ctx.insert(item)
 
-        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: wednesday)
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, now: wednesday, localCalendar: utcCalendar)
 
         #expect(sections.thisWeek.map(\.id) == [item.id])
         #expect(sections.thisWeekend.isEmpty)
@@ -265,7 +266,7 @@ struct TodaySectionsTests {
         ctx.insert(earlierCreated)
         ctx.insert(laterCreated)
 
-        let sections = TodaySections.bucket(items: [earlierCreated, laterCreated], reflowKey: 0)
+        let sections = TodaySections.bucket(items: [earlierCreated, laterCreated], reflowKey: 0, localCalendar: utcCalendar)
 
         // Newest first — laterCreated (created -3600) should precede earlierCreated.
         #expect(sections.today.map(\.createdAt) == [laterCreated.createdAt, earlierCreated.createdAt])

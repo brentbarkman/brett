@@ -1,5 +1,5 @@
 import React from "react";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useDemoMode } from "./lib/demoMode";
 
 interface OverdueItem {
@@ -21,7 +21,6 @@ interface BriefingItem {
 
 interface DailyBriefingProps {
   content: string | null;
-  isGenerating?: boolean;
   isError?: boolean;
   summary?: BriefingSummary | null;
   hasAI: boolean;
@@ -68,18 +67,6 @@ function fuzzyMatchItem(text: string, items: BriefingItem[]): BriefingItem | und
   }
 
   return bestMatch;
-}
-
-/** Collapse a bulleted briefing into one editorial paragraph, preserving inline
- * markdown markers so item references still link. Mirrors iOS stripMarkdownToPlain. */
-function collapseToProse(content: string): string {
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#") && !line.startsWith(">") && !line.startsWith("```"))
-    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
-    .filter((line) => line.length > 0)
-    .join(" ");
 }
 
 function renderEditorial(
@@ -143,7 +130,6 @@ function BriefingProseSkeleton() {
 
 export function DailyBriefing({
   content,
-  isGenerating,
   isError,
   summary,
   hasAI,
@@ -172,7 +158,8 @@ export function DailyBriefing({
     .toLocaleDateString("en-US", { month: "long", day: "numeric" })
     .toUpperCase();
 
-  const prose = content ? collapseToProse(content) : "";
+  // The v2 writer emits prose directly — no bullets to flatten.
+  const prose = content ?? "";
 
   const isDayEmpty =
     summary &&
@@ -187,8 +174,7 @@ export function DailyBriefing({
         <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={onRegenerate}
-            disabled={isGenerating}
-            className="text-white/40 hover:text-white/80 transition-colors rounded-full p-1 hover:bg-white/10 disabled:opacity-30"
+            className="text-white/40 hover:text-white/80 transition-colors rounded-full p-1 hover:bg-white/10"
             aria-label="Regenerate briefing"
           >
             <RefreshCw size={12} />
@@ -215,20 +201,14 @@ export function DailyBriefing({
         {hasAI ? (
           isError ? (
             <p className={`text-base text-brett-red/90 leading-relaxed ${HERO_SHADOW}`}>
-              Failed to generate briefing.{" "}
+              Failed to load briefing.{" "}
               <span className="text-white/60">
                 Try again — if this keeps happening, check your AI provider in Settings.
               </span>
-              {isGenerating && <Loader2 size={12} className="ml-2 inline animate-spin text-white/40" />}
             </p>
           ) : prose.length > 0 ? (
-            <p
-              className={proseClass}
-            >
+            <p className={proseClass}>
               {renderEditorial(prose, titleMap, knownItems, onItemClick)}
-              {isGenerating && (
-                <Loader2 size={12} className="ml-2 inline align-middle animate-spin text-white/40" />
-              )}
             </p>
           ) : (
             <BriefingProseSkeleton />

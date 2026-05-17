@@ -1,16 +1,38 @@
 import Foundation
 
 enum DateHelpers {
-    /// UTC calendar — matches `TodaySections.bucket()` and desktop's
-    /// `computeUrgency` (`packages/business/src/index.ts`). Switching off
-    /// `Calendar.current` makes this helper agree with the section
-    /// bucketer rather than disagreeing once UTC and local fall on
-    /// different days.
-    private static let utcCalendar: Calendar = {
+    /// UTC calendar — used for reading the calendar-date components of a
+    /// stored `dueDate`. The storage convention is "UTC midnight of the
+    /// user's intended local calendar date" (matches desktop's
+    /// `packages/business/src/index.ts`), so extracting UTC components
+    /// recovers the calendar date the user picked.
+    static let utcCalendar: Calendar = {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
         return cal
     }()
+
+    /// Encode a moment as the UTC midnight that represents its calendar
+    /// date in `localCalendar`'s timezone. This is the storage convention
+    /// for `dueDate` — every preset resolves through this and every read
+    /// can trust the result is already canonical (the API migration
+    /// `20260515230000_normalize_due_date_to_utc_midnight_and_friday`
+    /// snapped historical rows).
+    ///
+    /// Example: `now = 2026-05-15T21:43-06:00` (Friday evening MDT) →
+    /// `2026-05-15T00:00:00.000Z`. Without this anchor, iOS-on-MDT would
+    /// store `2026-05-15T06:00:00Z` (local midnight), which on read
+    /// extracts as the *previous* UTC day and bucketizes wrong.
+    static func utcMidnightOfLocalDate(_ moment: Date, in localCalendar: Calendar) -> Date {
+        let local = localCalendar.dateComponents([.year, .month, .day], from: moment)
+        var utc = DateComponents()
+        utc.year = local.year
+        utc.month = local.month
+        utc.day = local.day
+        utc.timeZone = TimeZone(identifier: "UTC")
+        // The TZ on `utc` makes the calendar irrelevant for this conversion.
+        return Calendar(identifier: .gregorian).date(from: utc)!
+    }
 
     /// Day-offset ranges (relative to today) used to classify due dates
     /// into the four forward-looking urgency buckets. Mirrors the TS
@@ -32,7 +54,10 @@ enum DateHelpers {
             return UrgencyRanges(thisWeekStart: 1, thisWeekEnd: 5, thisWeekendStart: 6, thisWeekendEnd: 7, nextWeekEnd: 14)
         }
         if dow == 6 {
-            return UrgencyRanges(thisWeekStart: 2, thisWeekEnd: 6, thisWeekendStart: 1, thisWeekendEnd: 1, nextWeekEnd: 8)
+            // nextWeekEnd: 13 (was 8) so the Friday-after-next picked by the
+            // `next_week` preset on Sat lands in `nextWeek` instead of
+            // dropping to `later`. Matches the desktop range exactly.
+            return UrgencyRanges(thisWeekStart: 2, thisWeekEnd: 6, thisWeekendStart: 1, thisWeekendEnd: 1, nextWeekEnd: 13)
         }
         return UrgencyRanges(
             thisWeekStart: 1,
@@ -43,25 +68,29 @@ enum DateHelpers {
         )
     }
 
-    static func computeUrgency(dueDate: Date?, isCompleted: Bool, now: Date = Date()) -> Urgency {
+    static func computeUrgency(
+        dueDate: Date?,
+        isCompleted: Bool,
+        now: Date = Date(),
+        localCalendar: Calendar = .current
+    ) -> Urgency {
         if isCompleted { return .done }
         guard let dueDate else { return .later }
 
-        let calendar = Self.utcCalendar
-        let startOfToday = calendar.startOfDay(for: now)
-        let startOfDueDay = calendar.startOfDay(for: dueDate)
+        // "Today" = UTC-midnight anchor of the user's LOCAL calendar date.
+        // Using UTC for both today and dueDate would flip the bucket near
+        // midnight (see QuickScheduleTimezoneTests).
+        let startOfToday = utcMidnightOfLocalDate(now, in: localCalendar)
 
-        if startOfDueDay < startOfToday {
-            return .overdue
-        }
-        if startOfDueDay == startOfToday {
-            return .today
-        }
+        if dueDate < startOfToday { return .overdue }
 
-        let weekday = calendar.component(.weekday, from: now)
+        // Weekday of the user's local today (derived from the UTC-midnight
+        // anchor, which carries the local date in its UTC components).
+        let weekday = utcCalendar.component(.weekday, from: startOfToday)
         let r = urgencyRanges(weekday: weekday)
-        let diff = calendar.dateComponents([.day], from: startOfToday, to: startOfDueDay).day ?? 0
-        let dueWeekday = calendar.component(.weekday, from: startOfDueDay)
+        let diff = utcCalendar.dateComponents([.day], from: startOfToday, to: dueDate).day ?? 0
+        if diff == 0 { return .today }
+        let dueWeekday = utcCalendar.component(.weekday, from: dueDate)
         let isWeekendDay = dueWeekday == 1 || dueWeekday == 7 // Sun or Sat
 
         if isWeekendDay && diff >= r.thisWeekendStart && diff <= r.thisWeekendEnd {
@@ -76,35 +105,44 @@ enum DateHelpers {
         return .later
     }
 
-    // Cached formatters — list rendering calls formatRelativeDate once per
-    // row, and allocating a DateFormatter each call shows up in Instruments.
-    private static let weekdayFormatter: DateFormatter = {
+    /// Format a stored `dueDate` against the user's local "today". Critical
+    /// to interpret `date` via UTC components (the storage convention) and
+    /// "today" via local components — using `Calendar.current` for both
+    /// flips the answer near midnight because the stored UTC-midnight value
+    /// translates to "yesterday evening" in any TZ west of UTC.
+    static func formatRelativeDate(
+        _ date: Date,
+        now: Date = Date(),
+        localCalendar: Calendar = .current
+    ) -> String {
+        let startOfToday = utcMidnightOfLocalDate(now, in: localCalendar)
+        let dayDiff = utcCalendar.dateComponents([.day], from: startOfToday, to: date).day ?? 0
+
+        if dayDiff == 0 { return "Today" }
+        if dayDiff == 1 { return "Tomorrow" }
+        if dayDiff == -1 { return "Yesterday" }
+
+        // Within the same week (forward), show weekday name. Use the UTC
+        // calendar to read the date so the label matches the calendar grid.
+        if dayDiff > 0 && dayDiff < 7 {
+            return Self.utcWeekdayFormatter.string(from: date)
+        }
+        return Self.utcMonthDayFormatter.string(from: date)
+    }
+
+    private static let utcWeekdayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "EEEE"
+        f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
 
-    private static let monthDayFormatter: DateFormatter = {
+    private static let utcMonthDayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "MMM d"
+        f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
-
-    static func formatRelativeDate(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let now = Date()
-
-        if calendar.isDateInToday(date) { return "Today" }
-        if calendar.isDateInTomorrow(date) { return "Tomorrow" }
-        if calendar.isDateInYesterday(date) { return "Yesterday" }
-
-        // Within the same week
-        let dayDiff = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
-        if dayDiff > 0 && dayDiff < 7 {
-            return weekdayFormatter.string(from: date)
-        }
-        return monthDayFormatter.string(from: date)
-    }
 
     static func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()

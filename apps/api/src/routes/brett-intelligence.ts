@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { aiMiddleware, type AIEnv } from "../middleware/ai.js";
 import { rateLimiter } from "../middleware/rate-limit.js";
 import { prisma } from "../lib/prisma.js";
@@ -8,6 +8,7 @@ import { buildStream, sseResponse } from "../lib/ai-stream.js";
 import { getUserDayBounds } from "@brett/business";
 import { getEmbeddingProvider, getRerankProvider } from "../lib/embedding-provider.js";
 import { loadEmbeddingContext } from "../lib/embedding-context.js";
+import { runBriefingPipeline } from "../lib/briefing/pipeline.js";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
@@ -27,48 +28,73 @@ const brettIntelligence = new Hono<AIEnv>();
 // Auth on all routes
 brettIntelligence.use("*", authMiddleware);
 
-// ─── GET /briefing — Get today's cached briefing ───
+// ─── GET /briefing/current — Personal-assistant briefing (cached) ───
+//
+// Returns the latest UserBriefing row instantly + a staleness flag so the
+// client can decide whether to POST /refresh. See
+// docs/superpowers/specs/2026-05-16-briefing-pipeline-v2-design.md.
 
-brettIntelligence.get("/briefing", rateLimiter(60), async (c) => {
+const REGEN_FLOOR_MS = 30 * 60 * 1000;
+const REGEN_DAILY_CEILING = 6;
+
+brettIntelligence.get("/briefing/current", rateLimiter(60), async (c) => {
   const user = c.get("user");
-
-  const { timezone } = await getUserSettings(user.id);
-  const { startOfDay, endOfDay } = getUserDayBounds(timezone);
-
-  const session = await prisma.conversationSession.findFirst({
-    where: {
-      userId: user.id,
-      source: "briefing",
-      createdAt: { gte: startOfDay, lt: endOfDay },
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      messages: {
-        where: { role: "assistant" },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { content: true, createdAt: true },
-      },
-    },
+  const row = await prisma.userBriefing.findUnique({
+    where: { userId: user.id },
   });
 
-  if (!session || session.messages.length === 0) {
-    return c.json({ briefing: null });
+  if (!row) {
+    return c.json({ briefing: null, staleness: "dirty" as const });
   }
 
-  const content = session.messages[0].content;
-  if (!content || !content.trim()) {
-    return c.json({ briefing: null });
+  const now = Date.now();
+  let staleness: "fresh" | "dirty" | "capped" = "fresh";
+  if (row.dirtyAt && row.dirtyAt.getTime() > row.generatedAt.getTime()) {
+    const withinFloor = now - row.generatedAt.getTime() < REGEN_FLOOR_MS;
+    const capped = row.regenCountToday >= REGEN_DAILY_CEILING;
+    staleness = withinFloor || capped ? "capped" : "dirty";
   }
 
   return c.json({
     briefing: {
-      sessionId: session.id,
-      content,
-      generatedAt: session.messages[0].createdAt.toISOString(),
+      content: row.content,
+      isEmpty: row.isEmpty,
+      generatedAt: row.generatedAt.toISOString(),
     },
+    staleness,
   });
 });
+
+// ─── POST /briefing/refresh — Materialize a new briefing if dirty ───
+//
+// Fire-and-forget. Always returns 202; the pipeline (if it runs) updates
+// the row in place. Subsequent /current calls see the new content.
+// Concurrent callers are filtered server-side via a per-user advisory
+// lock so we never run the pipeline twice in parallel for the same user.
+
+brettIntelligence.post(
+  "/briefing/refresh",
+  rateLimiter(20),
+  aiMiddleware,
+  async (c) => {
+    const user = c.get("user");
+    const provider = c.get("aiProvider");
+    const providerName = c.get("aiProviderName");
+
+    // Fire-and-forget — return 202 before the pipeline runs. The pipeline
+    // itself enforces dirty / floor / ceiling and handles its own errors.
+    runBriefingPipeline({
+      userId: user.id,
+      provider,
+      providerName,
+      triggerSource: "manual",
+    }).catch((err) =>
+      console.error(`[briefing] pipeline failed for ${user.id}:`, err),
+    );
+
+    return c.body(null, 202);
+  },
+);
 
 // ─── GET /briefing/summary — Lightweight counts, no AI required ───
 
@@ -134,55 +160,6 @@ brettIntelligence.get("/briefing/summary", rateLimiter(30), async (c) => {
     })),
   });
 });
-
-// ─── POST /briefing/generate — Force-regenerate briefing (streaming) ───
-
-brettIntelligence.post(
-  "/briefing/generate",
-  rateLimiter(10),
-  aiMiddleware,
-  async (c) => {
-    const user = c.get("user");
-    const provider = c.get("aiProvider");
-    const providerName = c.get("aiProviderName");
-
-    const { timezone, assistantName } = await getUserSettings(user.id);
-
-    // Load embedding context for the briefing — search for recent activity patterns
-    const embeddingProvider = getEmbeddingProvider();
-    const embeddingContext = await loadEmbeddingContext(
-      user.id,
-      "daily briefing tasks calendar meetings priorities",
-      embeddingProvider,
-      prisma,
-      3,
-    );
-
-    const session = await prisma.conversationSession.create({
-      data: {
-        userId: user.id,
-        source: "briefing",
-        modelTier: "medium",
-        modelUsed: "",
-      },
-    });
-
-    const input = {
-      type: "briefing" as const,
-      userId: user.id,
-      assistantName,
-      timezone,
-      embeddingContext: embeddingContext || undefined,
-    };
-
-    const { stream } = buildStream(
-      { input, provider, providerName, prisma, registry, sessionId: session.id, embeddingProvider, rerankProvider: getRerankProvider() },
-      session.id,
-    );
-
-    return sseResponse(stream);
-  },
-);
 
 // ─── POST /take/event/:eventId — Brett's Take on calendar event (streaming) ───
 

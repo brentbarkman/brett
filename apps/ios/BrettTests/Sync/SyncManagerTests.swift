@@ -215,6 +215,116 @@ struct SyncManagerTests {
 
         #expect(fixture.pull.callCount == 1)
     }
+
+    // MARK: - Cancellation handling
+    //
+    // `URLError(.cancelled)` propagates whenever Swift `Task.cancel()` reaches
+    // an in-flight URLSession data task — debounce overlap, sign-out, app
+    // backgrounding, etc. None of those are real sync failures, so the red-dot
+    // indicator and exponential backoff should ignore them entirely. See #148.
+
+    @MainActor
+    @Test func syncIgnoresPushCancellationFromURLError() async {
+        let fixture = await TestHarness.make()
+        fixture.push.errorToThrow = URLError(.cancelled)
+
+        await fixture.sut.sync()
+
+        if case .error = fixture.sut.state {
+            Issue.record("cancelled push must not surface as a sync error")
+        }
+        // Pull still ran and succeeded — `lastSyncedAt` should be stamped.
+        #expect(fixture.sut.lastSyncedAt != nil)
+    }
+
+    @MainActor
+    @Test func syncIgnoresPullCancellationFromAPIErrorWrapper() async {
+        let fixture = await TestHarness.make()
+        fixture.pull.errorToThrow = APIError.unknown(URLError(.cancelled))
+
+        await fixture.sut.sync()
+
+        if case .error = fixture.sut.state {
+            Issue.record("cancelled pull (wrapped in APIError.unknown) must not surface as error")
+        }
+    }
+
+    @MainActor
+    @Test func syncDoesNotBumpFailureCountForCancellationOnly() async {
+        // Two consecutive syncs that get cancelled in both phases shouldn't
+        // accumulate any backoff — there's no failure to back off from.
+        let fixture = await TestHarness.make()
+        fixture.push.errorToThrow = URLError(.cancelled)
+        fixture.pull.errorToThrow = CancellationError()
+
+        await fixture.sut.sync()
+        await fixture.sut.sync()
+
+        #expect(fixture.sut.consecutiveFailures == 0)
+        if case .error = fixture.sut.state {
+            Issue.record("cancellation-only syncs should leave state idle")
+        }
+    }
+
+    @MainActor
+    @Test func syncResetsFailuresWhenCancelledPushButPullSucceeds() async {
+        // Prime a non-zero failure count via a real failure, then run a
+        // cycle where push is cancelled but pull succeeds. Pull's success
+        // is a useful round trip with the server, so failures must reset.
+        let fixture = await TestHarness.make()
+        fixture.push.errorToThrow = TestError.boom
+
+        await fixture.sut.sync()
+        #expect(fixture.sut.consecutiveFailures == 1)
+
+        fixture.push.errorToThrow = URLError(.cancelled)
+        fixture.pull.errorToThrow = nil
+        await fixture.sut.sync()
+
+        #expect(fixture.sut.consecutiveFailures == 0)
+    }
+
+    @MainActor
+    @Test func pullToRefreshClearsStateOnCancellationButRethrows() async {
+        let fixture = await TestHarness.make()
+        fixture.pull.errorToThrow = URLError(.cancelled)
+
+        do {
+            try await fixture.sut.pullToRefresh()
+            Issue.record("expected pullToRefresh to rethrow the cancellation")
+        } catch {
+            // Rethrow is correct — caller (pull-to-refresh gesture) decides
+            // whether to surface anything. State must NOT be .error.
+            if case .error = fixture.sut.state {
+                Issue.record("cancellation must not paint the sync indicator red")
+            }
+        }
+    }
+
+    // MARK: - Cancellation detector (pure helper)
+
+    @Test func isCancellationDetectsURLErrorCancelled() {
+        #expect(SyncManager.isCancellation(URLError(.cancelled)))
+    }
+
+    @Test func isCancellationDetectsSwiftCancellationError() {
+        #expect(SyncManager.isCancellation(CancellationError()))
+    }
+
+    @Test func isCancellationDetectsAPIErrorWrappedURLCancelled() {
+        #expect(SyncManager.isCancellation(APIError.unknown(URLError(.cancelled))))
+    }
+
+    @Test func isCancellationIgnoresOtherURLErrors() {
+        #expect(!SyncManager.isCancellation(URLError(.timedOut)))
+        #expect(!SyncManager.isCancellation(URLError(.notConnectedToInternet)))
+    }
+
+    @Test func isCancellationIgnoresOtherAPIErrors() {
+        #expect(!SyncManager.isCancellation(APIError.serverError(500)))
+        #expect(!SyncManager.isCancellation(APIError.unauthorized))
+        #expect(!SyncManager.isCancellation(APIError.unknown(URLError(.timedOut))))
+    }
 }
 
 // MARK: - Test harness

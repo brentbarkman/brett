@@ -12,6 +12,11 @@ struct ItemDraft: Equatable {
     var title: String
     var notes: String
     var dueDate: Date?
+    /// `"day"` | `"week"` | nil. Tracked alongside `dueDate` so picking
+    /// "This Week" / "Next Week" in the detail panel persists the
+    /// week-precision bucket instead of getting silently downgraded to
+    /// day-precision and re-bucketed as a weekend item.
+    var dueDatePrecision: String?
     var listId: String?
     var reminder: String?
     var recurrence: String?
@@ -21,6 +26,7 @@ struct ItemDraft: Equatable {
         self.title = item.title
         self.notes = item.notes ?? ""
         self.dueDate = item.dueDate
+        self.dueDatePrecision = item.dueDatePrecision
         self.listId = item.listId
         self.reminder = item.reminder
         self.recurrence = item.recurrence
@@ -32,6 +38,7 @@ struct ItemDraft: Equatable {
         title: String = "",
         notes: String = "",
         dueDate: Date? = nil,
+        dueDatePrecision: String? = nil,
         listId: String? = nil,
         reminder: String? = nil,
         recurrence: String? = nil
@@ -39,6 +46,7 @@ struct ItemDraft: Equatable {
         self.title = title
         self.notes = notes
         self.dueDate = dueDate
+        self.dueDatePrecision = dueDatePrecision
         self.listId = listId
         self.reminder = reminder
         self.recurrence = recurrence
@@ -87,6 +95,12 @@ struct ItemDraft: Equatable {
         // Due date
         if !datesEqual(dueDate, item.dueDate) {
             record("dueDate", newValue: dueDate, oldValue: item.dueDate)
+        }
+
+        // Precision — typically changes alongside dueDate, but tracked
+        // separately so a precision-only flip (rare) still round-trips.
+        if dueDatePrecision != item.dueDatePrecision {
+            record("dueDatePrecision", newValue: dueDatePrecision, oldValue: item.dueDatePrecision)
         }
 
         // List id

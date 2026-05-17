@@ -16,7 +16,7 @@ struct TaskSection: View {
     // Swipe handlers — default no-ops so existing callers keep working.
     // Today page wires these to ItemStore so swipe-to-schedule/archive/delete
     // actually persist through the sync engine.
-    var onSchedule: ((String, Date?) -> Void)? = nil
+    var onSchedule: ((String, Date?, DueDatePrecision) -> Void)? = nil
     var onArchive: ((String) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
     // Drag-to-reorder inputs. When absent, drag is disabled on rows in this
@@ -184,7 +184,7 @@ struct TaskSection: View {
             dragIDs: reorderIDs,
             onToggle: { onToggle(item.id) },
             onSelect: { onSelect?(item.id) },
-            onSchedule: { dueDate in onSchedule?(item.id, dueDate) },
+            onSchedule: { dueDate, precision in onSchedule?(item.id, dueDate, precision) },
             onArchive: { onArchive?(item.id) },
             onDelete: { onDelete?(item.id) },
             onReorder: { newOrder in onReorder?(newOrder) }

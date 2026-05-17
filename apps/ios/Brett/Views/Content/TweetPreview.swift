@@ -89,6 +89,14 @@ struct TweetPreview: View {
 
             viewOnX
         }
+        // Pin the card to the parent's full proposed width. Without
+        // `maxWidth: .infinity`, a VStack(alignment: .leading) sizes to
+        // its widest child; tweet body text can contain expanded URLs
+        // hundreds of chars long with no word-break opportunities, which
+        // force the VStack wider than the offered width and bleed the
+        // card past the detail-pane horizontal padding on both sides.
+        // The explicit frame gives Text a finite width to wrap into.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
