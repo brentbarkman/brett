@@ -12,6 +12,10 @@ import {
 import { prisma } from "../prisma.js";
 import { publishSSE } from "../sse.js";
 import { collectAllSignals } from "./collectors.js";
+import {
+  buildDetectorUserMessage,
+  buildWriterUserMessage,
+} from "./prompt-messages.js";
 import { pickEmptyTemplate } from "./templates.js";
 import type {
   DetectorInput,
@@ -37,12 +41,15 @@ const DETECTOR_SCHEMA = {
     empty: { type: "boolean" },
     picks: {
       type: "array",
+      maxItems: 4,
       items: {
         type: "object",
         properties: {
-          signalId: { type: "string" },
-          oneLiner: { type: "string" },
-          why: { type: "string" },
+          // Defensive bounds: the LLM could echo arbitrary text from
+          // injected user content into these fields without these caps.
+          signalId: { type: "string", maxLength: 200 },
+          oneLiner: { type: "string", maxLength: 240 },
+          why: { type: "string", maxLength: 160 },
         },
         required: ["signalId", "oneLiner", "why"],
         additionalProperties: false,
@@ -130,7 +137,7 @@ async function runDetector(
       maxTokens: DETECTOR_MAX_TOKENS,
       system: getBriefingDetectorPrompt(),
       messages: [
-        { role: "user", content: JSON.stringify(input) },
+        { role: "user", content: buildDetectorUserMessage(input) },
       ],
       responseFormat: {
         type: "json_schema",
@@ -183,7 +190,7 @@ async function runWriter(
       maxTokens: WRITER_MAX_TOKENS,
       system: getBriefingWriterPrompt(),
       messages: [
-        { role: "user", content: JSON.stringify(input) },
+        { role: "user", content: buildWriterUserMessage(input) },
       ],
       temperature: 0.4,
     });
@@ -222,26 +229,42 @@ export async function runBriefingPipeline(
   const { hour, dayKey } = userLocalParts(timezone, now);
   const timeOfDay = timeOfDayFromHour(hour);
 
-  // Acquire a SESSION-level advisory lock so concurrent /refresh callers
-  // never run the pipeline twice. We do NOT hold a DB transaction across
-  // the LLM calls — that would tie up a connection pool slot for 2-4
-  // seconds per pipeline run. Instead:
-  //   1. Try to grab the session lock; bail if held.
-  //   2. Re-read gate state non-transactionally.
-  //   3. Run collectors + LLM calls (no DB lock).
-  //   4. Upsert the row.
-  //   5. Release the lock in `finally`.
+  // ── Claim phase ──
+  //
+  // Concurrency rules:
+  //   * Two refresh calls for the same user could arrive within ms of
+  //     each other (multi-device, fast-tap, double-fire). Without a
+  //     claim, both would pass the gate, both would call the LLM, the
+  //     daily-regen counter would over-increment, and cost doubles.
+  //   * We previously tried `pg_try_advisory_lock` (session-scoped) but
+  //     Prisma's pooler can return DIFFERENT connections for the
+  //     acquire and release calls, so the lock would silently leak.
+  //
+  // Fix: do gate-check + claim atomically in a SHORT tx. The advisory
+  // lock here is `_xact_` (transaction-scoped) so it's bound to the
+  // tx's connection and auto-released on commit. Inside the tx we set
+  // `dirtyAt = null` — that is the visible claim. Any second worker
+  // arriving while we run the LLM sees `dirtyAt = null` and bails.
+  //
+  // Failure handling: if the LLM call throws or the writer fails, the
+  // empty-state template fires and we still upsert a row. We don't
+  // need to restore `dirtyAt` because a brief WAS produced (even if
+  // it's a template).
   const lockKey = stableLockKey("briefing:" + opts.userId);
-  const lockRows = await prisma.$queryRaw<Array<{ acquired: boolean }>>(
-    Prisma.sql`SELECT pg_try_advisory_lock(${lockKey}::bigint) AS acquired`,
-  );
-  if (!lockRows[0]?.acquired) {
-    // Another worker is already running the pipeline for this user.
-    return null;
-  }
 
-  try {
-    const current = await prisma.userBriefing.findUnique({
+  type ClaimResult =
+    | { kind: "claimed"; lastBriefAt: Date | null; priorBriefSignalIds: string[]; counterToday: number }
+    | { kind: "skip" };
+
+  const claim: ClaimResult = await prisma.$transaction(async (tx) => {
+    const lockRows = await tx.$queryRaw<Array<{ acquired: boolean }>>(
+      Prisma.sql`SELECT pg_try_advisory_xact_lock(${lockKey}::bigint) AS acquired`,
+    );
+    if (!lockRows[0]?.acquired) {
+      return { kind: "skip" } as const;
+    }
+
+    const current = await tx.userBriefing.findUnique({
       where: { userId: opts.userId },
     });
 
@@ -251,20 +274,40 @@ export async function runBriefingPipeline(
 
     if (!opts.force && current) {
       if (!current.dirtyAt || current.dirtyAt <= current.generatedAt) {
-        return null; // Not dirty.
+        return { kind: "skip" } as const; // Not dirty.
       }
       if (now.getTime() - current.generatedAt.getTime() < REGEN_FLOOR_MS) {
-        return null; // 30-min floor.
+        return { kind: "skip" } as const; // 30-min floor.
       }
       if (counterToday >= REGEN_DAILY_CEILING) {
-        return null; // 6/day ceiling.
+        return { kind: "skip" } as const; // 6/day ceiling.
       }
     }
 
-    // ── Gather signals (parallel reads, no LLM yet) ──
-    const lastBriefAt = current?.generatedAt ?? null;
-    const priorBriefSignalIds = current?.signalsUsedIds ?? [];
+    // Claim: clear dirtyAt so any concurrent worker sees we're handling
+    // it. Only updates an existing row — if no row yet, the final
+    // upsert will create one (and there's no concurrent worker risk on
+    // a row that doesn't exist).
+    if (current) {
+      await tx.userBriefing.update({
+        where: { userId: opts.userId },
+        data: { dirtyAt: null },
+      });
+    }
 
+    return {
+      kind: "claimed",
+      lastBriefAt: current?.generatedAt ?? null,
+      priorBriefSignalIds: current?.signalsUsedIds ?? [],
+      counterToday,
+    } as const;
+  });
+
+  if (claim.kind === "skip") return null;
+  const { lastBriefAt, priorBriefSignalIds, counterToday } = claim;
+
+  try {
+    // ── Gather signals (parallel reads, no LLM yet) ──
     const [signals, nextUpVisible] = await Promise.all([
       collectAllSignals({
         userId: opts.userId,
@@ -369,15 +412,13 @@ export async function runBriefingPipeline(
     });
 
     return { content, isEmpty, signalsUsedIds };
-  } finally {
-    // Always release — pg_try_advisory_lock is session-scoped, not
-    // transaction-scoped, so a missed unlock leaks the lock until the
-    // connection closes.
-    await prisma
-      .$executeRaw(Prisma.sql`SELECT pg_advisory_unlock(${lockKey}::bigint)`)
-      .catch((err: unknown) =>
-        console.error("[briefing] advisory_unlock failed:", err),
-      );
+  } catch (err) {
+    // If the pipeline body throws AFTER the claim tx committed,
+    // `dirtyAt` is null but no brief was written. The next trigger
+    // will set dirtyAt again so the system recovers — we just log so
+    // the failure isn't silent.
+    console.error("[briefing] pipeline body threw after claim:", err);
+    throw err;
   }
 }
 
@@ -403,9 +444,21 @@ async function loadNextUpVisible(
   now: Date,
 ): Promise<DetectorInput["nextUpVisible"]> {
   const horizon = new Date(now.getTime() + NEXTUP_HORIZON_MIN * 60 * 1000);
+
+  // Filter by visible calendars so hidden-calendar events don't get
+  // suppressed as "user already sees this" — they don't, the NextUp
+  // card honors the same visibility filter the collectors use.
+  const visibleCalendars = await prisma.calendarList.findMany({
+    where: { googleAccount: { userId }, isVisible: true },
+    select: { id: true },
+  });
+  const calendarIds = visibleCalendars.map((c) => c.id);
+  if (calendarIds.length === 0) return null;
+
   const next = await prisma.calendarEvent.findFirst({
     where: {
       userId,
+      calendarListId: { in: calendarIds },
       startTime: { gt: now, lt: horizon },
       status: "confirmed",
       myResponseStatus: { not: "observer" },

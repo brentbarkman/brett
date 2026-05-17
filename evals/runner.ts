@@ -523,6 +523,47 @@ async function runParameterExtraction(fixtures: ParameterExtractionFixture[]): P
   };
 }
 
+// MUST mirror apps/api/src/lib/briefing/prompt-messages.ts. Without
+// matching the production user-message construction (incl. `<user_data>`
+// wrapping that defuses prompt-injection from newsletter / calendar /
+// meeting-note content), the eval tests a different surface than ships.
+// If either changes, update both.
+function evalEscapeUserData(content: string): string {
+  return content.replace(/<\/user_data>/gi, "&lt;/user_data&gt;");
+}
+function evalWrapUserData(label: string, content: string): string {
+  const safeLabel = label.replace(/[^a-z0-9_-]/gi, "");
+  return `<user_data label="${safeLabel}">\n${evalEscapeUserData(content)}\n</user_data>`;
+}
+function evalBuildDetectorUserMessage(input: BriefingDetectorFixture["input"]): string {
+  const control = JSON.stringify({
+    timeOfDay: input.timeOfDay,
+    lastBriefAt: input.lastBriefAt,
+    priorBriefSignalIds: input.priorBriefSignalIds,
+  });
+  const untrustedNextUp = input.nextUpVisible
+    ? JSON.stringify(input.nextUpVisible)
+    : "null";
+  const untrustedSignals = JSON.stringify(input.signals);
+  return [
+    `Trusted control:\n${control}`,
+    `\nNextUp the user can already see (inside the next 8h):\n${evalWrapUserData("next_up", untrustedNextUp)}`,
+    `\nCandidate signals to judge:\n${evalWrapUserData("signals", untrustedSignals)}`,
+  ].join("\n");
+}
+function evalBuildWriterUserMessage(input: BriefingWriterFixture["input"]): string {
+  const control = JSON.stringify({ timeOfDay: input.timeOfDay });
+  const untrustedNextUp = input.nextUpVisible
+    ? JSON.stringify(input.nextUpVisible)
+    : "null";
+  const untrustedPicks = JSON.stringify(input.picks);
+  return [
+    `Trusted control:\n${control}`,
+    `\nNextUp the user can already see:\n${evalWrapUserData("next_up", untrustedNextUp)}`,
+    `\nPre-filtered signals to write about:\n${evalWrapUserData("picks", untrustedPicks)}`,
+  ].join("\n");
+}
+
 async function runBriefingDetector(fixtures: BriefingDetectorFixture[]): Promise<SuiteResult> {
   const detectorModel = resolveModel(providerName, "small");
   const timestamp = new Date().toISOString();
@@ -545,7 +586,7 @@ async function runBriefingDetector(fixtures: BriefingDetectorFixture[]): Promise
         const { text, usage: u } = await streamText({
           model: detectorModel,
           system: getBriefingDetectorPrompt(),
-          userMessage: JSON.stringify(fixture.input),
+          userMessage: evalBuildDetectorUserMessage(fixture.input),
           maxTokens: 200,
           temperature: 0,
         });
@@ -667,7 +708,7 @@ async function runBriefingWriter(fixtures: BriefingWriterFixture[]): Promise<Sui
       const { text: output, usage } = await streamText({
         model: writerModel,
         system: getBriefingWriterPrompt(),
-        userMessage: JSON.stringify(fixture.input),
+        userMessage: evalBuildWriterUserMessage(fixture.input),
         maxTokens: 110,
         temperature: 0.4,
       });
@@ -1674,8 +1715,10 @@ const SECURITY_ENTRY_POINTS: Record<
     // Security-injection entry point: feed the payload as the
     // pre-filtered picks list. The detector wouldn't normally pass an
     // injection through, but we test the writer's resilience independently.
+    // Uses the same `<user_data>` wrapping production does — that's
+    // the layer the security block can defend against.
     const writerModel = resolveModel(providerName, "medium");
-    const input = {
+    const input: BriefingWriterFixture["input"] = {
       timeOfDay: "morning",
       nextUpVisible: null,
       picks: [{ oneLiner: payload, why: "test fixture" }],
@@ -1683,7 +1726,7 @@ const SECURITY_ENTRY_POINTS: Record<
     const { text, usage } = await streamText({
       model: writerModel,
       system: getBriefingWriterPrompt(),
-      userMessage: JSON.stringify(input),
+      userMessage: evalBuildWriterUserMessage(input),
       maxTokens: 110,
     });
     return { output: text, usage };

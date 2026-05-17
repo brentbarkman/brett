@@ -115,7 +115,7 @@ export {
   SCOUT_CREATION_PROMPT,
   SECURITY_BLOCK,
 } from "./context/system-prompts.js";
-export { assembleContext } from "./context/assembler.js";
+export { assembleContext, wrapUserData, escapeUserContent } from "./context/assembler.js";
 export type { AssemblerInput, AssembledContext } from "./context/assembler.js";
 
 // Prompts — extracted from their call sites so the eval harness can import
