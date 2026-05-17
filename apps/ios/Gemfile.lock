@@ -237,4 +237,4 @@ DEPENDENCIES
   xcodeproj (~> 1.25)
 
 BUNDLED WITH
-  4.0.10
+  2.5.4
