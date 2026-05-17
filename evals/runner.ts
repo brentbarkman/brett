@@ -12,7 +12,8 @@ import {
   resolveModel,
   createRegistry,
   getSystemPrompt,
-  getBriefingPrompt,
+  getBriefingDetectorPrompt,
+  getBriefingWriterPrompt,
   getBrettsTakePrompt,
   getFactExtractionPrompt,
   GRAPH_EXTRACTION_PROMPT,
@@ -78,11 +79,41 @@ interface ParameterExtractionFixture {
   acceptableSkills?: string[];
 }
 
-interface BriefingQualityFixture {
+// ─── Briefing v2 fixtures ────────────────────────────────────────────────
+//
+// Replaces the old single-stage briefing-quality eval with two stage-
+// specific suites. See
+// docs/superpowers/specs/2026-05-16-briefing-pipeline-v2-design.md.
+
+interface BriefingDetectorFixture {
   name: string;
   description: string;
-  inputData: string;
+  input: {
+    timeOfDay: string;
+    nextUpVisible: { title: string; startsInMin: number } | null;
+    lastBriefAt: string | null;
+    priorBriefSignalIds: string[];
+    signals: Array<Record<string, unknown> & { id: string; type: string }>;
+  };
+  expected: {
+    empty: boolean;
+    // Either a strict set of signal IDs we expect picked, OR a max-count
+    // bound (for "collapse duplicates" assertions). At least one is set.
+    signalIds?: string[];
+    signalIdsMaxCount?: number;
+  };
+}
+
+interface BriefingWriterFixture {
+  name: string;
+  description: string;
+  input: {
+    timeOfDay: string;
+    nextUpVisible: { title: string; startsInMin: number } | null;
+    picks: Array<{ oneLiner: string; why: string }>;
+  };
   criteria: string[];
+  bannedPhrases?: string[];
 }
 
 interface ActionItemExtractionFixture {
@@ -492,23 +523,202 @@ async function runParameterExtraction(fixtures: ParameterExtractionFixture[]): P
   };
 }
 
-async function runBriefingQuality(fixtures: BriefingQualityFixture[]): Promise<SuiteResult> {
-  const briefingModel = resolveModel(providerName, "medium");
+// MUST mirror apps/api/src/lib/briefing/prompt-messages.ts. Without
+// matching the production user-message construction (incl. `<user_data>`
+// wrapping that defuses prompt-injection from newsletter / calendar /
+// meeting-note content), the eval tests a different surface than ships.
+// If either changes, update both.
+function evalEscapeUserData(content: string): string {
+  return content.replace(/<\/user_data>/gi, "&lt;/user_data&gt;");
+}
+function evalWrapUserData(label: string, content: string): string {
+  const safeLabel = label.replace(/[^a-z0-9_-]/gi, "");
+  return `<user_data label="${safeLabel}">\n${evalEscapeUserData(content)}\n</user_data>`;
+}
+function evalBuildDetectorUserMessage(input: BriefingDetectorFixture["input"]): string {
+  const control = JSON.stringify({
+    timeOfDay: input.timeOfDay,
+    lastBriefAt: input.lastBriefAt,
+    priorBriefSignalIds: input.priorBriefSignalIds,
+  });
+  const untrustedNextUp = input.nextUpVisible
+    ? JSON.stringify(input.nextUpVisible)
+    : "null";
+  const untrustedSignals = JSON.stringify(input.signals);
+  return [
+    `Trusted control:\n${control}`,
+    `\nNextUp the user can already see (inside the next 8h):\n${evalWrapUserData("next_up", untrustedNextUp)}`,
+    `\nCandidate signals to judge:\n${evalWrapUserData("signals", untrustedSignals)}`,
+  ].join("\n");
+}
+function evalBuildWriterUserMessage(input: BriefingWriterFixture["input"]): string {
+  const control = JSON.stringify({ timeOfDay: input.timeOfDay });
+  const untrustedNextUp = input.nextUpVisible
+    ? JSON.stringify(input.nextUpVisible)
+    : "null";
+  const untrustedPicks = JSON.stringify(input.picks);
+  return [
+    `Trusted control:\n${control}`,
+    `\nNextUp the user can already see:\n${evalWrapUserData("next_up", untrustedNextUp)}`,
+    `\nPre-filtered signals to write about:\n${evalWrapUserData("picks", untrustedPicks)}`,
+  ].join("\n");
+}
+
+async function runBriefingDetector(fixtures: BriefingDetectorFixture[]): Promise<SuiteResult> {
+  const detectorModel = resolveModel(providerName, "small");
+  const timestamp = new Date().toISOString();
+
+  console.log(`\nRunning briefing-detector (${fixtures.length} cases, concurrency=${concurrency})...\n`);
+
+  const results = await runWithConcurrency(
+    fixtures,
+    concurrency,
+    async (fixture, _idx) => {
+      let passed: boolean;
+      let note: string | undefined;
+      let actualDesc: string;
+      let usage: CallUsage | undefined;
+      let latencyMs: number | undefined;
+      let capturedOutput: string | undefined;
+
+      try {
+        const callStart = Date.now();
+        const { text, usage: u } = await streamText({
+          model: detectorModel,
+          system: getBriefingDetectorPrompt(),
+          userMessage: evalBuildDetectorUserMessage(fixture.input),
+          maxTokens: 200,
+          temperature: 0,
+        });
+        latencyMs = Date.now() - callStart;
+        usage = u;
+        capturedOutput = text.length > 1200 ? `${text.slice(0, 1200)}...` : text;
+
+        let parsed: { empty?: boolean; picks?: Array<{ signalId?: string }> };
+        try {
+          parsed = JSON.parse(text.trim());
+        } catch {
+          passed = false;
+          note = "detector returned non-JSON";
+          actualDesc = "parse failed";
+          return {
+            input: fixture.name,
+            expected: "JSON matching expected shape",
+            actual: actualDesc,
+            passed,
+            note,
+            tokens: usage,
+            latencyMs,
+            output: capturedOutput,
+          } as EvalResult;
+        }
+
+        const actualEmpty = parsed.empty === true;
+        const actualIds = (parsed.picks ?? [])
+          .map((p) => p.signalId)
+          .filter((s): s is string => typeof s === "string");
+
+        const expectedEmpty = fixture.expected.empty;
+        const checks: string[] = [];
+
+        if (actualEmpty !== expectedEmpty) {
+          checks.push(`empty=${actualEmpty} vs expected ${expectedEmpty}`);
+        }
+        if (fixture.expected.signalIds) {
+          const expectedSet = new Set(fixture.expected.signalIds);
+          const actualSet = new Set(actualIds);
+          if (
+            expectedSet.size !== actualSet.size ||
+            [...expectedSet].some((id) => !actualSet.has(id))
+          ) {
+            checks.push(
+              `signalIds=[${actualIds.join(",")}] vs expected [${fixture.expected.signalIds.join(",")}]`,
+            );
+          }
+        }
+        if (
+          fixture.expected.signalIdsMaxCount !== undefined &&
+          actualIds.length > fixture.expected.signalIdsMaxCount
+        ) {
+          checks.push(
+            `${actualIds.length} picks exceeds max ${fixture.expected.signalIdsMaxCount}`,
+          );
+        }
+
+        if (checks.length === 0) {
+          passed = true;
+          note = undefined;
+          actualDesc = "match";
+        } else {
+          passed = false;
+          note = checks.join("; ");
+          actualDesc = "mismatch";
+        }
+      } catch (err) {
+        passed = false;
+        note = `runtime error: ${err instanceof Error ? err.message : String(err)}`;
+        actualDesc = "error";
+      }
+
+      return {
+        input: fixture.name,
+        expected: "matches expected picks/empty",
+        actual: actualDesc,
+        passed,
+        note,
+        tokens: usage,
+        latencyMs,
+        output: capturedOutput,
+      } as EvalResult;
+    },
+    (fixture, idx, result) => {
+      const label = `  [${idx + 1}/${fixtures.length}] "${fixture.name}"`;
+      console.log(result.passed ? `${label} → PASS` : `${label} → FAIL — ${result.note}`);
+    },
+  );
+
+  const passedCount = results.filter((r) => r.passed).length;
+  const total = results.length;
+  const score = total > 0 ? passedCount / total : 0;
+  const tokensInput = results.reduce((n, r) => n + (r.tokens?.input ?? 0), 0);
+  const tokensOutput = results.reduce((n, r) => n + (r.tokens?.output ?? 0), 0);
+
+  return {
+    suite: "briefing-detector",
+    provider: providerName,
+    model: detectorModel,
+    timestamp,
+    passed: passedCount,
+    total,
+    score,
+    results,
+    promptHash: PROMPT_HASHES.briefing_detector,
+    fixtureHash: fixtureHash("briefing-detector.json"),
+    tokensInput,
+    tokensOutput,
+  };
+}
+
+async function runBriefingWriter(fixtures: BriefingWriterFixture[]): Promise<SuiteResult> {
+  const writerModel = resolveModel(providerName, "medium");
   return runJudgedSuite(
-    "briefing-quality",
+    "briefing-writer",
     fixtures,
     async (fixture) => {
       const { text: output, usage } = await streamText({
-        model: briefingModel,
-        system: getBriefingPrompt("Brett"),
-        userMessage: `Generate my daily briefing based on the following data:\n\n<user_data label="briefing_data">\n${fixture.inputData}\n</user_data>`,
-        maxTokens: 512,
-        temperature: 0,
+        model: writerModel,
+        system: getBriefingWriterPrompt(),
+        userMessage: evalBuildWriterUserMessage(fixture.input),
+        maxTokens: 110,
+        temperature: 0.4,
       });
       return { output, usage };
     },
-    briefingModel,
-    { promptHash: PROMPT_HASHES.briefing_system, fixtureFile: "briefing-quality.json" },
+    writerModel,
+    {
+      promptHash: PROMPT_HASHES.briefing_writer,
+      fixtureFile: "briefing-writer.json",
+    },
   );
 }
 
@@ -1030,7 +1240,8 @@ function hash(str: string): string {
 
 const PROMPT_HASHES: Record<string, string> = {
   orchestrator: hash(getSystemPrompt("Brett")),
-  briefing_system: hash(getBriefingPrompt("Brett")),
+  briefing_detector: hash(getBriefingDetectorPrompt()),
+  briefing_writer: hash(getBriefingWriterPrompt()),
   bretts_take: hash(getBrettsTakePrompt("Brett")),
   fact_extraction: hash(getFactExtractionPrompt("Brett")),
   graph_extraction: hash(GRAPH_EXTRACTION_PROMPT),
@@ -1500,13 +1711,23 @@ const SECURITY_ENTRY_POINTS: Record<
     });
     return { output: text, usage };
   },
-  briefing: async (payload) => {
-    const briefingModel = resolveModel(providerName, "medium");
+  "briefing-writer": async (payload) => {
+    // Security-injection entry point: feed the payload as the
+    // pre-filtered picks list. The detector wouldn't normally pass an
+    // injection through, but we test the writer's resilience independently.
+    // Uses the same `<user_data>` wrapping production does — that's
+    // the layer the security block can defend against.
+    const writerModel = resolveModel(providerName, "medium");
+    const input: BriefingWriterFixture["input"] = {
+      timeOfDay: "morning",
+      nextUpVisible: null,
+      picks: [{ oneLiner: payload, why: "test fixture" }],
+    };
     const { text, usage } = await streamText({
-      model: briefingModel,
-      system: getBriefingPrompt("Brett"),
-      userMessage: `Generate my daily briefing based on the following data:\n\n<user_data label="briefing_data">\n${payload}\n</user_data>`,
-      maxTokens: 512,
+      model: writerModel,
+      system: getBriefingWriterPrompt(),
+      userMessage: evalBuildWriterUserMessage(input),
+      maxTokens: 110,
     });
     return { output: text, usage };
   },
@@ -1646,7 +1867,8 @@ const SUITE_ORDER = [
   "orchestrator-format",
   "orchestrator-ambiguity",
   "orchestrator-refusal",
-  "briefing-quality",
+  "briefing-detector",
+  "briefing-writer",
   "bretts-take",
   "action-item-extraction",
   "fact-extraction",
@@ -1665,7 +1887,8 @@ const SUITE_LABELS: Record<(typeof SUITE_ORDER)[number], string> = {
   "orchestrator-format": "Format",
   "orchestrator-ambiguity": "Ambig",
   "orchestrator-refusal": "Refusal",
-  "briefing-quality": "Briefing",
+  "briefing-detector": "BriefDet",
+  "briefing-writer": "BriefWri",
   "bretts-take": "Take",
   "action-item-extraction": "Actions",
   "fact-extraction": "Facts",
@@ -1743,7 +1966,8 @@ async function main(): Promise<void> {
   await runSuite<JudgedFixture>("orchestrator-format", "orchestrator-format.json", runOrchestratorFormat);
   await runSuite<JudgedFixture>("orchestrator-ambiguity", "orchestrator-ambiguity.json", runOrchestratorAmbiguity);
   await runSuite<OrchestratorRefusalFixture>("orchestrator-refusal", "orchestrator-refusal.json", runOrchestratorRefusal);
-  await runSuite<BriefingQualityFixture>("briefing-quality", "briefing-quality.json", runBriefingQuality);
+  await runSuite<BriefingDetectorFixture>("briefing-detector", "briefing-detector.json", runBriefingDetector);
+  await runSuite<BriefingWriterFixture>("briefing-writer", "briefing-writer.json", runBriefingWriter);
   await runSuite<BrettsTakeFixture>("bretts-take", "bretts-take.json", runBrettsTake);
   await runSuite<ActionItemExtractionFixture>("action-item-extraction", "action-item-extraction.json", runActionItemExtraction);
   await runSuite<FactExtractionFixture>("fact-extraction", "fact-extraction.json", runFactExtraction);

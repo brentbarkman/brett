@@ -1,0 +1,520 @@
+[
+  {
+    "name": "quiet_morning_returns_empty",
+    "description": "No deltas, no inbound, no prep gaps — detector must return empty rather than invent picks",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": null,
+      "priorBriefSignalIds": [],
+      "signals": []
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  },
+  {
+    "name": "quiet_morning_with_nextup_still_empty",
+    "description": "User has a visible NextUp but no actual deltas or hidden signals — still empty",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "Standup", "startsInMin": 11 },
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": []
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  },
+  {
+    "name": "nextup_duplication_trap_prep_gap",
+    "description": "The only signal is a prep_gap for the same event NextUp shows; reject since prep_gap on the visible event duplicates the title",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "Q3 review with Sara", "startsInMin": 24 },
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "prep_gap:evt_q3review",
+          "type": "prep_gap",
+          "event": {
+            "id": "evt_q3review",
+            "title": "Q3 review with Sara",
+            "startTime": "2026-05-16T13:00:00.000Z",
+            "durationMin": 45
+          },
+          "lastTouchedDays": null,
+          "hasNotes": false
+        }
+      ]
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  },
+  {
+    "name": "nextup_duplication_trap_schedule_delta",
+    "description": "Schedule delta on the same event NextUp shows must be rejected — user already sees that event",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "Board call", "startsInMin": 45 },
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_board:moved",
+          "type": "schedule_delta",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T13:45:00.000Z",
+            "durationMin": 60
+          },
+          "change": "moved",
+          "details": "rescheduled by 30 min",
+          "occurredAt": "2026-05-16T07:01:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  },
+  {
+    "name": "prep_gap_on_unrelated_event_picked",
+    "description": "Prep gap on an event that is NOT the one NextUp is showing — picked",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "Standup", "startsInMin": 12 },
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "prep_gap:evt_board",
+          "type": "prep_gap",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T17:00:00.000Z",
+            "durationMin": 60
+          },
+          "lastTouchedDays": 14,
+          "hasNotes": false
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["prep_gap:evt_board"]
+    }
+  },
+  {
+    "name": "schedule_delta_moved_picked",
+    "description": "A 2pm meeting moved overnight — pick the delta",
+    "input": {
+      "timeOfDay": "midday",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_sara2pm:moved",
+          "type": "schedule_delta",
+          "event": {
+            "id": "evt_sara2pm",
+            "title": "Sync with Sara",
+            "startTime": "2026-05-16T22:30:00.000Z",
+            "durationMin": 30
+          },
+          "change": "moved",
+          "details": "rescheduled",
+          "occurredAt": "2026-05-16T14:42:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["schedule_delta:evt_sara2pm:moved"]
+    }
+  },
+  {
+    "name": "schedule_delta_cancelled_picked",
+    "description": "Cancelled meeting frees up time — pick the delta",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_offsite:cancelled",
+          "type": "schedule_delta",
+          "event": {
+            "id": "evt_offsite",
+            "title": "Team offsite planning",
+            "startTime": "2026-05-17T14:00:00.000Z",
+            "durationMin": 240
+          },
+          "change": "cancelled",
+          "details": "cancelled by organizer",
+          "occurredAt": "2026-05-16T06:30:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["schedule_delta:evt_offsite:cancelled"]
+    }
+  },
+  {
+    "name": "conflict_picked",
+    "description": "Two events overlap — pick the conflict",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "conflict:evt_a:evt_b",
+          "type": "conflict",
+          "events": [
+            {
+              "id": "evt_a",
+              "title": "Design review",
+              "startTime": "2026-05-16T20:00:00.000Z",
+              "durationMin": 60
+            },
+            {
+              "id": "evt_b",
+              "title": "1:1 with Jordan",
+              "startTime": "2026-05-16T20:30:00.000Z",
+              "durationMin": 30
+            }
+          ],
+          "window": "20:00-21:00"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["conflict:evt_a:evt_b"]
+    }
+  },
+  {
+    "name": "inbound_newsletter_picked",
+    "description": "Newsletter arrived since last brief — picked",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "inbound:item_news123",
+          "type": "inbound",
+          "source": "newsletter",
+          "subject": "Stratechery: Antitrust and the AI economy",
+          "summary": "Ben Thompson on yesterday's DOJ filing and what it means for downstream AI builders.",
+          "score": 1.0,
+          "arrivedAt": "2026-05-16T05:42:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["inbound:item_news123"]
+    }
+  },
+  {
+    "name": "same_event_signals_collapse",
+    "description": "Three signals all about the same event — collapse to at most 2 picks (not 3)",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_board:moved",
+          "type": "schedule_delta",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T17:00:00.000Z",
+            "durationMin": 60
+          },
+          "change": "moved",
+          "details": "rescheduled",
+          "occurredAt": "2026-05-16T13:00:00.000Z"
+        },
+        {
+          "id": "prep_gap:evt_board",
+          "type": "prep_gap",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T17:00:00.000Z",
+            "durationMin": 60
+          },
+          "lastTouchedDays": 14,
+          "hasNotes": false
+        },
+        {
+          "id": "meeting_context:evt_board",
+          "type": "meeting_context",
+          "event": {
+            "id": "evt_board",
+            "title": "Board call",
+            "startTime": "2026-05-16T17:00:00.000Z",
+            "durationMin": 60
+          },
+          "relevantPriorNote": "Last board call you committed to a hiring update.",
+          "noteSource": "embedding"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIdsMaxCount": 2
+    }
+  },
+  {
+    "name": "stale_repeat_rejected",
+    "description": "Signal already in priorBriefSignalIds must be skipped",
+    "input": {
+      "timeOfDay": "midday",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": ["schedule_delta:evt_sara2pm:moved"],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_sara2pm:moved",
+          "type": "schedule_delta",
+          "event": {
+            "id": "evt_sara2pm",
+            "title": "Sync with Sara",
+            "startTime": "2026-05-16T22:30:00.000Z",
+            "durationMin": 30
+          },
+          "change": "moved",
+          "details": "rescheduled",
+          "occurredAt": "2026-05-16T08:00:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  },
+  {
+    "name": "dense_morning_picks_top_3_or_4",
+    "description": "Six distinct signals — pick the best 3-4, not all six",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_sara2pm:moved",
+          "type": "schedule_delta",
+          "event": { "id": "evt_sara2pm", "title": "Sync with Sara", "startTime": "2026-05-16T22:30:00.000Z", "durationMin": 30 },
+          "change": "moved",
+          "details": "rescheduled overnight",
+          "occurredAt": "2026-05-16T05:00:00.000Z"
+        },
+        {
+          "id": "prep_gap:evt_board",
+          "type": "prep_gap",
+          "event": { "id": "evt_board", "title": "Board call", "startTime": "2026-05-16T17:00:00.000Z", "durationMin": 60 },
+          "lastTouchedDays": 14,
+          "hasNotes": false
+        },
+        {
+          "id": "inbound:item_news123",
+          "type": "inbound",
+          "source": "newsletter",
+          "subject": "Q3 RFP from Acme",
+          "summary": "Detailed RFP requirements — deadline Friday.",
+          "score": 1.0,
+          "arrivedAt": "2026-05-16T04:42:00.000Z"
+        },
+        {
+          "id": "overdue_threshold:item_drft:3d",
+          "type": "overdue_threshold",
+          "item": { "id": "item_drft", "title": "Draft renewal terms", "dueDate": "2026-05-13" },
+          "daysSlipped": 3,
+          "crossedAt": "2026-05-16T07:00:00.000Z"
+        },
+        {
+          "id": "meeting_context:evt_alex1on1",
+          "type": "meeting_context",
+          "event": { "id": "evt_alex1on1", "title": "1:1 with Alex", "startTime": "2026-05-16T20:00:00.000Z", "durationMin": 30 },
+          "relevantPriorNote": "Last 1:1 you committed to a hiring update.",
+          "noteSource": "embedding"
+        },
+        {
+          "id": "conflict:evt_x:evt_y",
+          "type": "conflict",
+          "events": [
+            { "id": "evt_x", "title": "Standup", "startTime": "2026-05-16T16:00:00.000Z", "durationMin": 30 },
+            { "id": "evt_y", "title": "Recruiter screen", "startTime": "2026-05-16T16:15:00.000Z", "durationMin": 30 }
+          ],
+          "window": "16:00-16:45"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIdsMaxCount": 4
+    }
+  },
+  {
+    "name": "overdue_threshold_picked",
+    "description": "Item crossed 3-day overdue boundary — picked",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-15T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "overdue_threshold:item_acmeproposal:3d",
+          "type": "overdue_threshold",
+          "item": { "id": "item_acmeproposal", "title": "Acme proposal", "dueDate": "2026-05-13" },
+          "daysSlipped": 3,
+          "crossedAt": "2026-05-16T07:00:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["overdue_threshold:item_acmeproposal:3d"]
+    }
+  },
+  {
+    "name": "meeting_context_only_picked_when_event_in_8h",
+    "description": "Past-meeting context tied to a meeting in 6h — picked",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": { "title": "Standup", "startsInMin": 12 },
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "meeting_context:evt_alex1on1",
+          "type": "meeting_context",
+          "event": { "id": "evt_alex1on1", "title": "1:1 with Alex", "startTime": "2026-05-16T20:00:00.000Z", "durationMin": 30 },
+          "relevantPriorNote": "Last 1:1 you committed to send Alex a hiring update.",
+          "noteSource": "embedding"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["meeting_context:evt_alex1on1"]
+    }
+  },
+  {
+    "name": "two_distinct_signals_both_picked",
+    "description": "Prep gap on board call + inbound RFP — both worth saying, both picked",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "prep_gap:evt_board",
+          "type": "prep_gap",
+          "event": { "id": "evt_board", "title": "Board call", "startTime": "2026-05-16T17:00:00.000Z", "durationMin": 60 },
+          "lastTouchedDays": 14,
+          "hasNotes": false
+        },
+        {
+          "id": "inbound:item_acmeRFP",
+          "type": "inbound",
+          "source": "newsletter",
+          "subject": "Q3 RFP from Acme",
+          "summary": "RFP requirements + Friday deadline.",
+          "score": 1.0,
+          "arrivedAt": "2026-05-16T05:30:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIdsMaxCount": 2
+    }
+  },
+  {
+    "name": "afternoon_with_one_strong_signal",
+    "description": "Afternoon brief with a single strong signal — picked",
+    "input": {
+      "timeOfDay": "afternoon",
+      "nextUpVisible": { "title": "Recruiter call", "startsInMin": 90 },
+      "lastBriefAt": "2026-05-16T11:30:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "schedule_delta:evt_demo:new",
+          "type": "schedule_delta",
+          "event": { "id": "evt_demo", "title": "Demo prep with Sales", "startTime": "2026-05-16T22:00:00.000Z", "durationMin": 30 },
+          "change": "new",
+          "details": "added to calendar by Mark",
+          "occurredAt": "2026-05-16T18:42:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "empty": false,
+      "signalIds": ["schedule_delta:evt_demo:new"]
+    }
+  },
+  {
+    "name": "evening_quiet_returns_empty",
+    "description": "End of day, no real signals — return empty",
+    "input": {
+      "timeOfDay": "evening",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T14:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": []
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  },
+  {
+    "name": "prep_gap_with_notes_filtered_by_collector_not_seen",
+    "description": "Sanity: when only `prep_gap` signals reach the detector with `hasNotes: true` (should never happen — collector filters — but the rule should still hold), detector treats them as not surfacing-worthy.",
+    "input": {
+      "timeOfDay": "morning",
+      "nextUpVisible": null,
+      "lastBriefAt": "2026-05-16T07:00:00.000Z",
+      "priorBriefSignalIds": [],
+      "signals": [
+        {
+          "id": "prep_gap:evt_notesexist",
+          "type": "prep_gap",
+          "event": { "id": "evt_notesexist", "title": "Eng review", "startTime": "2026-05-16T19:00:00.000Z", "durationMin": 30 },
+          "lastTouchedDays": 1,
+          "hasNotes": true
+        }
+      ]
+    },
+    "expected": {
+      "empty": true,
+      "signalIds": []
+    }
+  }
+]

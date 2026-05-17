@@ -346,7 +346,6 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
           <div className="mt-4">
             <DailyBriefing
               content={briefing.content}
-              isGenerating={briefing.isGenerating}
               isError={briefing.isError}
               summary={summary.data ?? null}
               hasAI={briefing.hasAI}

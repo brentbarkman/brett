@@ -311,9 +311,12 @@ private struct TodayPageBody: View {
             }
         }
         .task {
-            // Initial briefing fetch — only when the user hasn't already
-            // dismissed today's and we don't already have one cached.
-            if !briefingStore.isDismissedToday && briefingStore.briefing == nil {
+            // Always call fetch() — it returns the cached row instantly and
+            // (if the server reports `staleness == .dirty`) fires a
+            // background refresh + scheduled refetch. The store latches
+            // refresh-fired per-generatedAt, so repeated calls are safe.
+            // See briefing pipeline v2 spec.
+            if !briefingStore.isDismissedToday {
                 await briefingStore.fetch()
             }
         }

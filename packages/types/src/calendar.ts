@@ -143,7 +143,8 @@ export type SSEEventType =
   | "scout.finding.created"
   | "scout.run.completed"
   | "scout.status.changed"
-  | "meeting.note.synced";
+  | "meeting.note.synced"
+  | "briefing.updated";
 
 export interface SSEEvent {
   type: SSEEventType;

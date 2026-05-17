@@ -254,6 +254,15 @@ export function useEventStream(): void {
         qc.invalidateQueries({ queryKey: ["things"] });
         qc.invalidateQueries({ queryKey: ["broken-connections"] });
       });
+
+      // Briefing updates — fires after the server-side pipeline writes a
+      // new briefing row. Lets a second device (or a second window on the
+      // same machine) pick up the new brief immediately instead of
+      // waiting for the next focus event. Cheap: just a query
+      // invalidation, useBriefing's refetch handles the rest.
+      es.addEventListener("briefing.updated", () => {
+        qc.invalidateQueries({ queryKey: ["briefing"] });
+      });
     };
 
     const handleVisibility = () => {
