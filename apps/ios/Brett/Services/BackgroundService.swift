@@ -801,7 +801,7 @@ final class BackgroundService {
         return nil
     }
 
-    private static func segment(forFolderName folder: String) -> Segment? {
+    nonisolated private static func segment(forFolderName folder: String) -> Segment? {
         switch folder {
         case "dawn": return .dawn
         case "morning": return .morning
