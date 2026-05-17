@@ -102,11 +102,11 @@ struct BackgroundView: View {
                 }
             }
             .ignoresSafeArea()
-            // Crossfade ONLY after the initial key has landed. Cold
-            // launch's first key swap (empty → resolved) would
-            // otherwise look like the photo "animating in" — calm-hero
-            // wants the wallpaper to just BE there.
-            .animation(hasInitialPaint ? crossfadeAnimation : nil, value: service.displayedKey)
+            // Cold-launch first paint gets a short 0.6s ease-in so the photo
+            // "lifts in" instead of snapping into existence. Subsequent
+            // rotations use the longer 2.0s crossfade for that calm,
+            // unhurried transition between time segments / tier shifts.
+            .animation(hasInitialPaint ? crossfadeAnimation : firstPaintAnimation, value: service.displayedKey)
             .onChange(of: service.displayedKey, initial: false) { _, newKey in
                 if !hasInitialPaint && !newKey.isEmpty {
                     hasInitialPaint = true
@@ -221,11 +221,22 @@ struct BackgroundView: View {
         return BackgroundService.assetNameForHour(Calendar.current.component(.hour, from: Date()))
     }
 
-    /// 1.5s ease-in-out crossfade, or `nil` when Reduce Motion is on so
-    /// the image swap is instant.
+    /// 2.0s ease-in-out crossfade between wallpapers (rotation, segment
+    /// boundary, busyness tier change, settings pin swap). Matches the
+    /// desktop CROSSFADE_MS constant — keeps platforms feeling identical.
+    /// `nil` under Reduce Motion so the swap is instant.
     private var crossfadeAnimation: Animation? {
         BrettAnimation.isReduceMotionEnabled
             ? nil
-            : .easeInOut(duration: 1.5)
+            : .easeInOut(duration: 2.0)
+    }
+
+    /// Cold-launch first paint — 0.6s ease-in so the wallpaper lifts in
+    /// gently instead of snapping. Shorter than the rotation crossfade so
+    /// the user isn't waiting on a long fade just to see their app.
+    private var firstPaintAnimation: Animation? {
+        BrettAnimation.isReduceMotionEnabled
+            ? nil
+            : .easeIn(duration: 0.6)
     }
 }

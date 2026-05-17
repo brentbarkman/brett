@@ -1,22 +1,64 @@
 // scripts/backgrounds/unsplash-queries.ts
+//
+// Per-slot search definitions for the wallpaper library.
+//
+// Design rules:
+//
+// 1. SEGMENT defines color story + light direction (unchanged).
+//      dawn       — cool/pastel, low directional light, haze
+//      morning    — bright, clear, optimistic, fresh
+//      afternoon  — warm mid-day clarity
+//      goldenHour — amber, low-angle warm
+//      evening    — cooling, twilight blues/violets
+//      night      — deep, low chroma, stars/moonlit
+//
+// 2. TIER varies MOOD ONLY, not visual complexity.
+//      light      — airy, open horizons, distant subject, breathing room
+//      moderate   — balanced, mid-distance, layered (mountains/fog bands)
+//      packed     — grounded, intimate, close atmospheric subject
+//      → A "packed day" wallpaper is NOT busier or more dramatic. It is
+//        closer / softer / more enveloping so the user reads the UI
+//        without fighting the photo. Drama was the old failure mode.
+//
+// 3. COMPOSITION terms bias every query toward dual-crop survival
+//    (16:9 desktop + 9:19.5 iOS portrait):
+//      - "minimal", "atmospheric", "soft light", "haze", "negative space"
+//      - top-to-bottom interest (skies + foreground, not horizontal-bias)
+//      - one clear subject or one clear mood
+//      - avoid "dramatic", "intense", "vivid", "electric", "chaotic"
+//
+// 4. The sourcing script pairs every query with order_by=editorial
+//    (Unsplash's curated set), which has a far higher photobook hit
+//    rate than relevance-sorted stock.
 
 export const QUERY_BY_CATEGORY: Record<string, string> = {
-  "dawn/light":         "misty lake dawn pastel landscape soft",
-  "dawn/moderate":      "rolling hills fog dawn landscape",
-  "dawn/packed":        "mountain ridge predawn dramatic landscape",
-  "morning/light":      "open beach clear sky morning landscape",
-  "morning/moderate":   "alpine meadow bright morning landscape",
-  "morning/packed":     "dense forest canopy morning sunlight landscape",
-  "afternoon/light":    "desert expanse wide horizon afternoon landscape",
-  "afternoon/moderate": "vineyard rows afternoon warm landscape",
-  "afternoon/packed":   "canyon walls dramatic afternoon shadows landscape",
-  "goldenHour/light":   "calm shoreline golden hour amber landscape",
-  "goldenHour/moderate":"wheat field golden hour landscape",
-  "goldenHour/packed":  "volcanic landscape golden hour intense orange",
-  "evening/light":      "still water cool blue evening landscape",
-  "evening/moderate":   "city distance twilight skyline landscape",
-  "evening/packed":     "moody coastline dark clouds evening landscape",
-  "night/light":        "starfield open sky night landscape",
-  "night/moderate":     "moon over mountains night landscape",
-  "night/packed":       "northern lights aurora night landscape electric",
+  // ── DAWN ─────────────────────────────────────────────────────────────
+  "dawn/light":         "misty lake dawn pastel calm minimal",
+  "dawn/moderate":      "layered fog hills dawn atmospheric soft",
+  "dawn/packed":        "forest mist dawn intimate soft light",
+
+  // ── MORNING ──────────────────────────────────────────────────────────
+  "morning/light":      "open meadow morning soft light minimal",
+  "morning/moderate":   "lakeside morning calm reflection atmospheric",
+  "morning/packed":     "pine forest morning soft light haze",
+
+  // ── AFTERNOON ────────────────────────────────────────────────────────
+  "afternoon/light":    "desert plain afternoon soft warm minimal",
+  "afternoon/moderate": "rolling hills afternoon warm light atmospheric",
+  "afternoon/packed":   "tropical foliage afternoon soft light intimate",
+
+  // ── GOLDEN HOUR ──────────────────────────────────────────────────────
+  "goldenHour/light":   "calm ocean golden hour amber minimal",
+  "goldenHour/moderate":"wheat field golden hour soft warm",
+  "goldenHour/packed":  "forest golden hour soft rays intimate",
+
+  // ── EVENING ──────────────────────────────────────────────────────────
+  "evening/light":      "still water twilight blue pastel minimal",
+  "evening/moderate":   "mountain ridge twilight layered atmospheric",
+  "evening/packed":     "coastal evening soft moody intimate",
+
+  // ── NIGHT ────────────────────────────────────────────────────────────
+  "night/light":        "starry sky open landscape calm minimal",
+  "night/moderate":     "moonlit lake mountains atmospheric soft",
+  "night/packed":       "milky way mountain peaceful long exposure",
 };

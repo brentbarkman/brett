@@ -48,7 +48,7 @@ export function LivingBackground({
         <>
           {/* Gradient layer A — current */}
           <div
-            className="absolute inset-0 transition-opacity duration-[3000ms]"
+            className="absolute inset-0 transition-opacity duration-[2000ms]"
             style={{
               background: gradient,
               opacity: isTransitioning ? 0 : 1,
@@ -57,7 +57,7 @@ export function LivingBackground({
 
           {/* Gradient layer B — next */}
           <div
-            className="absolute inset-0 transition-opacity duration-[3000ms]"
+            className="absolute inset-0 transition-opacity duration-[2000ms]"
             style={{
               background: nextGradient ?? gradient,
               opacity: isTransitioning ? 1 : 0,
@@ -91,7 +91,7 @@ export function LivingBackground({
             <img
               src={nextImageUrl ?? imageUrl}
               alt=""
-              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[3000ms] ease-in-out"
+              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[2000ms] ease-in-out"
               style={{ opacity: isTransitioning ? 1 : 0, ...zoomStyle }}
               draggable={false}
             />

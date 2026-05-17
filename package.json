@@ -26,6 +26,7 @@
     "upload:backgrounds": "npx tsx scripts/upload-backgrounds.ts",
     "audit:backgrounds": "npx tsx scripts/backgrounds/audit-cli.ts",
     "source:backgrounds": "npx tsx scripts/backgrounds/unsplash-source.ts",
+    "source:candidates": "npx tsx scripts/backgrounds/source-candidates.ts",
     "process:backgrounds": "npx tsx scripts/backgrounds/process-images.ts",
     "portraits:backgrounds": "npx tsx scripts/backgrounds/generate-portraits.ts",
     "release": "./scripts/release.sh"

@@ -1,0 +1,159 @@
+{
+  "dawn/light": {
+    "locked": true,
+    "images": [
+      { "id": "U1cpCMOy1H0", "path": "downloads/candidates/dawn/light/U1cpCMOy1H0.jpg",
+        "why": "Single swan on pastel pre-dawn lake. Smooth pink/violet sky, smooth water middle band. Painterly." },
+      { "id": "8mTgxXVpGGI", "path": "downloads/candidates/dawn/light/8mTgxXVpGGI.jpg",
+        "why": "Misty lake with bare trees, soft reflection in calm water. Gentle and atmospheric." }
+    ]
+  },
+  "dawn/moderate": {
+    "locked": true,
+    "images": [
+      { "id": "mvby_QPxVxg", "path": "downloads/candidates/dawn/moderate/mvby_QPxVxg.jpg",
+        "why": "Misty valley filled with fir trees in layered fog. Moody, gray-green, atmospheric." },
+      { "id": "bLgjbyf4wzw", "path": "downloads/candidates/dawn/moderate/bLgjbyf4wzw.jpg",
+        "why": "Foggy bare pine forest in monochrome gray. Calm, painterly, no bright spots." }
+    ]
+  },
+  "dawn/packed": {
+    "locked": true,
+    "note": "Dropped to single image (bLgjbyf4wzw — the kept one). Couldn't find a clean second pick without bright-white left edge breaking nav. Confirm or push back.",
+    "images": [
+      { "id": "bLgjbyf4wzw", "path": "downloads/candidates/dawn/packed/bLgjbyf4wzw.jpg", "approved": true,
+        "why": "Atmospheric pre-dawn fog through pine silhouettes. Enveloping, calming." }
+    ]
+  },
+  "morning/light": {
+    "images": [
+      { "id": "JfevklT8m7A", "path": "downloads/candidates/morning/light/JfevklT8m7A.jpg", "approved": true,
+        "why": "Vast open prairie under clean gradient teal sky. Maximum breathing room." },
+      { "id": "mybaeBtxOj8", "path": "downloads/candidates/morning/light-darker-v2/mybaeBtxOj8.jpg",
+        "why": "Layered mountain silhouettes with deep dark-blue ridge anchoring the left, opening to luminous peach sky right. Dark-left protects nav text." }
+    ]
+  },
+  "morning/moderate": {
+    "images": [
+      { "id": "9DrQ22CSpGs", "path": "downloads/candidates/morning/moderate-darker-v2/9DrQ22CSpGs.jpg",
+        "why": "Silky fog waves cascading over redwood forest at sunrise. Warm orange sky, blue-grey fog mid-band, dark conifer silhouettes anchor the left." },
+      { "id": "HLvjhUqi1bM", "path": "downloads/candidates/morning/moderate-darker-v2/HLvjhUqi1bM.jpg",
+        "why": "Lenticular streaked clouds over fog-wrapped hilltop with single tree silhouette. Painterly, layered, dark conifer treeline on left." }
+    ]
+  },
+  "morning/packed": {
+    "images": [
+      { "id": "lbBEb7L3MrI", "path": "downloads/candidates/morning/packed-noppl-v2/lbBEb7L3MrI.jpg",
+        "why": "Misty forest path with dark arching trunks framing a vanishing point. Crisp, atmospheric, enveloping." },
+      { "id": "2guLc9yMYgU", "path": "downloads/candidates/morning/packed-v2/2guLc9yMYgU.jpg", "approved": true,
+        "why": "Misty tropical forest with double-canopy layering. Atmospheric, intimate, calm." }
+    ]
+  },
+  "afternoon/light": {
+    "locked": true,
+    "images": [
+      { "id": "te8vIciszAk", "path": "downloads/candidates/afternoon/light/te8vIciszAk.jpg",
+        "why": "Warm terracotta desert fading to luminous salt flat under clean pale-blue sky." },
+      { "id": "5-r1P92zYNE", "path": "downloads/candidates/afternoon/light/5-r1P92zYNE.jpg",
+        "why": "Open landscape with sandy-rose tones. Minimal and unhurried." }
+    ]
+  },
+  "afternoon/moderate": {
+    "locked": true,
+    "images": [
+      { "id": "HNgcfT5MG3o", "path": "downloads/candidates/afternoon/moderate/HNgcfT5MG3o.jpg",
+        "why": "Golden meadow with pale-blue top third. Cohesive warm-amber middle wash." },
+      { "id": "gR5B7ocb-Ww", "path": "downloads/candidates/afternoon/moderate/gR5B7ocb-Ww.jpg",
+        "why": "Balanced rolling landscape with warm afternoon clarity." }
+    ]
+  },
+  "afternoon/packed": {
+    "locked": true,
+    "images": [
+      { "id": "j8iPllhcWWg", "path": "downloads/candidates/afternoon/packed-v2/j8iPllhcWWg.jpg",
+        "why": "Tall old-growth trunks rising into misty green canopy. Grounded, enveloping understory." },
+      { "id": "Ic_lvVv3Dz0", "path": "downloads/candidates/afternoon/packed-v2/Ic_lvVv3Dz0.jpg",
+        "why": "Dense fern-and-moss forest floor with warm afternoon light. Intimate, rooted." }
+    ]
+  },
+  "goldenHour/light": {
+    "locked": true,
+    "images": [
+      { "id": "pi9UmWpTId0", "path": "downloads/candidates/goldenHour/light/pi9UmWpTId0.jpg",
+        "why": "Warm amber-peach sky over glassy open horizon, minimal grass silhouettes." },
+      { "id": "LrgFJd61TvY", "path": "downloads/candidates/goldenHour/light/LrgFJd61TvY.jpg",
+        "why": "Open golden-hour horizon with airy warm light." }
+    ]
+  },
+  "goldenHour/moderate": {
+    "locked": true,
+    "images": [
+      { "id": "EdBdyuAMaJo", "path": "downloads/candidates/goldenHour/moderate-v2/EdBdyuAMaJo.jpg",
+        "why": "Painterly warm mauve and rose layered alpine ridges with pale-gold (not white) sky." },
+      { "id": "eYBNVOJWnBc", "path": "downloads/candidates/goldenHour/moderate-v2/eYBNVOJWnBc.jpg",
+        "why": "Deep amber-orange glow saturates the frame, layered mountain silhouettes, classic golden-hour warmth." }
+    ]
+  },
+  "goldenHour/packed": {
+    "locked": true,
+    "images": [
+      { "id": "3pW91fGAKiE", "path": "downloads/candidates/goldenHour/packed/3pW91fGAKiE.jpg",
+        "why": "Misty layered forest at golden hour with warm amber glow in smooth mid-band." },
+      { "id": "WGyIq07D3kY", "path": "downloads/candidates/goldenHour/packed-alt-v2/WGyIq07D3kY.jpg",
+        "why": "Autumn forest path with golden-amber haze and fallen leaves. Intimate, painterly." }
+    ]
+  },
+  "evening/light": {
+    "locked": true,
+    "images": [
+      { "id": "8xXeYkZMm-c", "path": "downloads/candidates/evening/light/8xXeYkZMm-c.jpg",
+        "why": "Above-clouds twilight, smooth pale blush-to-pink sky, periwinkle blue middle band." },
+      { "id": "U1cpCMOy1H0", "path": "downloads/candidates/evening/light/U1cpCMOy1H0.jpg",
+        "why": "Calm pastel evening lake with single distant subject. Airy and unhurried." }
+    ]
+  },
+  "evening/moderate": {
+    "locked": true,
+    "images": [
+      { "id": "Z0YaTkx9pFk", "path": "downloads/candidates/evening/moderate-v2/Z0YaTkx9pFk.jpg",
+        "why": "Post-sunset blue hour over Norwegian fjord — cool teal water, layered snow-capped ridges." },
+      { "id": "PMO6SIGHh9A", "path": "downloads/candidates/evening/moderate-v2/PMO6SIGHh9A.jpg",
+        "why": "Cool blue twilight landscape with layered atmosphere. Calm post-sunset mood." }
+    ]
+  },
+  "evening/packed": {
+    "locked": true,
+    "images": [
+      { "id": "MVfyR-s5dF0", "path": "downloads/candidates/evening/packed/MVfyR-s5dF0.jpg",
+        "why": "Deeply tonal blue-teal post-sunset seascape, single clean horizon." },
+      { "id": "HI3aq0LRYos", "path": "downloads/candidates/evening/packed/HI3aq0LRYos.jpg",
+        "why": "Coastal evening with twilight mood. Cool, calm, intimate." }
+    ]
+  },
+  "night/light": {
+    "locked": true,
+    "images": [
+      { "id": "LuH6F1tgdB8", "path": "downloads/candidates/night/light-v2/LuH6F1tgdB8.jpg",
+        "why": "Crescent moon over deep teal mountain silhouette. Smooth dark sky, single calm focal point." },
+      { "id": "rBHDjvgld5c", "path": "downloads/candidates/night/light-v2/rBHDjvgld5c.jpg",
+        "why": "Milky Way as one coherent vertical band over the Matterhorn with mirror reflection." }
+    ]
+  },
+  "night/moderate": {
+    "images": [
+      { "id": "o5nOR7XVPZw", "path": "downloads/candidates/night/moderate/o5nOR7XVPZw.jpg", "approved": true,
+        "why": "Deep blue twilight with layered dark mountains, glowing alpenglow peaks." },
+      { "id": "txXfF_2YZpY", "path": "downloads/candidates/night/moderate-darker2-v2/txXfF_2YZpY.jpg",
+        "why": "Deep teal starry night over snow-capped alpine peaks. Dark navy mid-band — briefing prose reads cleanly." }
+    ]
+  },
+  "night/packed": {
+    "locked": true,
+    "images": [
+      { "id": "1E3gWJFOXms", "path": "downloads/candidates/night/packed/1E3gWJFOXms.jpg",
+        "why": "Deep navy starfield top third with monochromatic blue-black middle band." },
+      { "id": "kh-WRlKnEkQ", "path": "downloads/candidates/night/packed/kh-WRlKnEkQ.jpg",
+        "why": "Intimate night scene with deep cool tones. Enveloping, calm." }
+    ]
+  }
+}

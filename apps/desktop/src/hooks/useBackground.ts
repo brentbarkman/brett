@@ -21,7 +21,9 @@ const TIERS: BusynessTier[] = ["light", "moderate", "packed"];
 
 const ROTATION_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 const SEGMENT_CHECK_MS = 60 * 1000; // 60 seconds
-const CROSSFADE_MS = 3000;
+// 2.0s matches iOS BackgroundView.crossfadeAnimation — keeps the two
+// platforms feeling identical when the wallpaper rotates.
+const CROSSFADE_MS = 2000;
 
 interface UseBackgroundInput {
   meetingCount: number;
@@ -111,7 +113,39 @@ export function useBackground({
     }, CROSSFADE_MS);
   };
 
+  // Crossfade-transition the displayed photo to an arbitrary URL. Shared
+  // by smart-rotation (rotateImage below) and pinned-image swaps from
+  // Settings. First-load is an atomic swap so the App-level Ken Burns
+  // reveal isn't stomped on by a fallback-to-real crossfade.
+  const transitionToImage = (fullUrl: string) => {
+    if (!fullUrl) return;
+    cancelTransition();
+    const img = new Image();
+    img.onload = () => {
+      if (!hasLoadedImageRef.current) {
+        hasLoadedImageRef.current = true;
+        setCurrentImage(fullUrl);
+        setHasLoadedImage(true);
+        return;
+      }
+      setNextImage(fullUrl);
+      startCrossfade(() => {
+        setCurrentImage(fullUrl);
+        setNextImage(null);
+      });
+    };
+    img.onerror = () => {
+      // Silently fail — stay on current
+    };
+    img.src = fullUrl;
+  };
+
   const rotateImage = () => {
+    // While pinned to a specific image, skip smart rotation entirely —
+    // the pin-watching effect below owns the image, and rotating under
+    // it would replace the pinned wallpaper every 10 minutes.
+    if (pinnedBackground && !pinnedBackground.startsWith("solid:")) return;
+
     const seg = getTimeSegment(new Date().getHours());
     const tier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
 
@@ -125,45 +159,17 @@ export function useBackground({
     setSegment(seg);
     setBusynessTier(tier);
 
-    {
-      // Photography and Abstract both use images from the manifest
-      const relativePath = selectImage(
-        manifest as BackgroundManifest,
-        isAbstract ? "abstract" : backgroundStyle,
-        seg,
-        tier,
-        shownRef.current as string[]
-      );
+    const relativePath = selectImage(
+      manifest as BackgroundManifest,
+      isAbstract ? "abstract" : backgroundStyle,
+      seg,
+      tier,
+      shownRef.current as string[]
+    );
 
-      if (!relativePath || !baseUrl) return;
-
-      const fullUrl = buildUrl(relativePath);
-      shownRef.current.push(relativePath);
-
-      cancelTransition();
-
-      const img = new Image();
-      img.onload = () => {
-        // First load: atomic swap, no crossfade. Lets the App-level
-        // awakening (Ken Burns) run on the real image without a
-        // fallback-to-real crossfade stomping on it.
-        if (!hasLoadedImageRef.current) {
-          hasLoadedImageRef.current = true;
-          setCurrentImage(fullUrl);
-          setHasLoadedImage(true);
-          return;
-        }
-        setNextImage(fullUrl);
-        startCrossfade(() => {
-          setCurrentImage(fullUrl);
-          setNextImage(null);
-        });
-      };
-      img.onerror = () => {
-        // Silently fail — stay on current, retry next rotation
-      };
-      img.src = fullUrl;
-    }
+    if (!relativePath || !baseUrl) return;
+    shownRef.current.push(relativePath);
+    transitionToImage(buildUrl(relativePath));
   };
 
   // Stash the latest rotateImage in a ref. The interval/visibility/style
@@ -234,6 +240,31 @@ export function useBackground({
     }
   }, [backgroundStyle]);
 
+  // Pinned-image transitions. When the user picks a specific wallpaper in
+  // Settings — or clears the pin — drive the change through the same
+  // crossfade as a normal rotation instead of an instant snap. Solid pins
+  // are handled by the gradient layers in LivingBackground (they already
+  // cross-opacity smoothly), so this only runs for image pins.
+  const prevPinnedRef = useRef(pinnedBackground);
+  useEffect(() => {
+    if (!baseUrl) return;
+    const prev = prevPinnedRef.current;
+    prevPinnedRef.current = pinnedBackground;
+
+    const isImagePin = pinnedBackground && !pinnedBackground.startsWith("solid:");
+    const wasImagePin = prev && !prev.startsWith("solid:");
+
+    if (isImagePin) {
+      transitionToImage(buildUrl(pinnedBackground!));
+    } else if (wasImagePin) {
+      // Unpinned (or switched to solid) — return to smart rotation. The
+      // solid case falls through to its own gradient-layer crossfade and
+      // doesn't need a fresh image transition.
+      if (!pinnedBackground) rotateImageRef.current();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinnedBackground, baseUrl]);
+
   // Preload next segment's image 5 minutes before boundary. Paused while
   // hidden — preloading offscreen wastes bandwidth and keeps the renderer
   // awake. The visibility-aware interval re-creates each render so the
@@ -300,35 +331,21 @@ export function useBackground({
     img.src = fullUrl;
   };
 
-  // Resolve pinned background — overrides smart rotation
-  if (pinnedBackground) {
-    if (pinnedBackground.startsWith("solid:")) {
-      const color = pinnedBackground.slice(6);
-      const solid = solidColors.find((s) => s.color === color);
-      return {
-        imageUrl: fallbackBg,
-        nextImageUrl: null,
-        isTransitioning: false,
-        segment,
-        busynessTier,
-        gradient: solid?.color ?? color,
-        nextGradient: null,
-        hasLoadedImage: true,
-        devNext,
-        devLabel,
-      };
-    }
-    // Photography or Abstract pin: "photo/dawn/light-1.webp" or "abstract/dawn/light-1.webp"
-    const pinnedUrl = baseUrl ? buildUrl(pinnedBackground) : fallbackBg;
+  // Solid pin: gradient layers in LivingBackground handle the smooth
+  // cross-opacity swap. Image pins flow through normal state via the
+  // pinned-watch effect above, which calls transitionToImage to crossfade.
+  if (pinnedBackground?.startsWith("solid:")) {
+    const color = pinnedBackground.slice(6);
+    const solid = solidColors.find((s) => s.color === color);
     return {
-      imageUrl: pinnedUrl,
+      imageUrl: fallbackBg,
       nextImageUrl: null,
       isTransitioning: false,
       segment,
       busynessTier,
-      gradient: null,
+      gradient: solid?.color ?? color,
       nextGradient: null,
-      hasLoadedImage: Boolean(baseUrl),
+      hasLoadedImage: true,
       devNext,
       devLabel,
     };
