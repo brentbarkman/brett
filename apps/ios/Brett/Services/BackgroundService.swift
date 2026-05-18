@@ -9,10 +9,19 @@ import SwiftUI
 ///      "busyness" tier.
 ///   2. `/config` (network) — gives us the `storageBaseUrl` where images
 ///      actually live. Cached in-memory for the session; re-fetched on
-///      each fresh app launch.
+///      each fresh app launch and after `clearForSignOut()`.
 ///   3. `UserProfile.backgroundStyle` + `UserProfile.pinnedBackground` —
 ///      what the user picked. Either a relative path (e.g.
 ///      "photo/evening/light-2.webp") or a "solid:#RRGGBB" sentinel.
+///
+/// **No on-disk URL cache.** The service deliberately does not persist
+/// the last-resolved URL to UserDefaults. Cold launch starts from the
+/// wash bed (`defaultWashColor`) and the resolved photo fades in over
+/// it via `BackgroundView.paintAnimation` once `load()` + `recompute()`
+/// complete. The previous design persisted the URL to skip a blank
+/// frame, but that produced a cross-user leak (the cached URL survived
+/// sign-out) and a visible cached → resolved swap on every cold
+/// launch. See `BackgroundView` for the rendering pipeline.
 ///
 /// The service is a singleton on the main actor because `BackgroundView`
 /// reads it from SwiftUI, and because the manifest + base URL are
@@ -20,14 +29,15 @@ import SwiftUI
 /// can construct an instance with `init(client:)` directly.
 @MainActor
 @Observable
-final class BackgroundService {
+final class BackgroundService: Clearable {
     static let shared = BackgroundService()
 
     // MARK: - Public state
 
     /// Parsed manifest once loaded from the bundle. `nil` until `load()`
-    /// runs — callers should fall back to the asset-catalog images in
-    /// that window.
+    /// runs — `currentImageURL(...)` returns `nil` until then, which
+    /// pushes `recompute()` into the wash-only fallback branch and
+    /// `BackgroundView` renders just the wash bed.
     private(set) var manifest: BackgroundManifest?
 
     /// Base URL of the storage server (e.g.
@@ -51,19 +61,29 @@ final class BackgroundService {
 
     /// Current remote image URL (nil for solid backgrounds or before
     /// `/config` resolves).
-    private(set) var currentRemoteURL: URL? = BackgroundService.cachedRemoteURL
+    ///
+    /// **No UserDefaults seeding on cold launch.** An earlier version of
+    /// this service persisted the last-resolved URL to `UserDefaults` and
+    /// re-read it at init so the wallpaper could paint synchronously
+    /// before `/config` returned. That produced two regressions: (1) the
+    /// previous user's URL leaked into the next sign-in (the
+    /// UserDefaults key survived sign-out and `wipeAllData()`), and (2)
+    /// every cold launch painted a stale photo that visibly swapped to
+    /// the freshly-resolved one when the manifest landed. Now the
+    /// wallpaper starts as `BackgroundService.defaultWashColor` (the
+    /// burnt-umber wash bed) and the resolved photo fades in on top
+    /// once `load()` + `recompute()` complete — see
+    /// `BackgroundView.paintAnimation`.
+    private(set) var currentRemoteURL: URL?
 
     /// Current solid color when style is "solid".
     private(set) var currentSolidColor: Color?
 
-    /// Fallback asset-catalog name when neither remote nor solid applies.
-    /// Empty string means "not yet resolved" — callers fall back to
-    /// `assetNameForHour(...)` directly.
-    private(set) var currentFallbackAsset: String = ""
-
     /// Stable identity that drives the crossfade animation. Changes
-    /// whenever the rendered image changes.
-    private(set) var displayedKey: String = BackgroundService.cachedRemoteURL?.absoluteString ?? ""
+    /// whenever the rendered image changes. Empty string means "no
+    /// image resolved yet" — `BackgroundView` renders only the wash bed
+    /// in that state.
+    private(set) var displayedKey: String = ""
 
     /// Solid "wash" color used as the bed for non-Today pages and below
     /// the hero on Today. Calm-hero design (2026-05-04) uses the same
@@ -142,18 +162,26 @@ final class BackgroundService {
     var debug_rendererCount: Int { rendererCount }
     var debug_hasTickTask: Bool { tickTask != nil }
 
-    /// Reset the cached remote URL state so a test starts from a known
-    /// "first launch ever" baseline. Necessary because the singleton
-    /// caches `currentRemoteURL` from `UserDefaults` at init, and tests
-    /// asserting on the no-cache fallback path would otherwise be
-    /// non-deterministic across simulator runs that have ever opened
-    /// the app.
+    /// Reset the in-memory renderer state — and the bootstrap
+    /// (`manifest`, `storageBaseUrl`) — so a test starts from a known
+    /// "first launch ever" baseline. The singleton survives between
+    /// tests, so without this a test that resolved a URL leaves the
+    /// next test asserting on stale state. Bootstrap state is included
+    /// because the wash-only fallback only triggers when
+    /// `storageBaseUrl` is `nil` — a test that asserts on the
+    /// fallback path needs the bootstrap cleared, not just the
+    /// renderer state.
     func debug_resetRemoteCache() {
+        manifest = nil
+        storageBaseUrl = nil
         currentRemoteURL = nil
-        currentFallbackAsset = ""
         currentSolidColor = nil
         displayedKey = ""
-        Self.cachedRemoteURL = nil
+        currentWashColor = Self.defaultWashColor
+        currentWashLuminance = 0.0
+        currentWashIsLight = false
+        lastProfileStyle = nil
+        lastProfilePinned = nil
     }
     #endif
 
@@ -169,6 +197,50 @@ final class BackgroundService {
 
     init(client: APIClient = .shared) {
         self.client = client
+        // Register so `Session.tearDown()` (called from `AuthManager.signOut`
+        // and `clearInvalidSession`) wipes the resolved wallpaper before the
+        // next sign-in. Without this, user A's pinned photo paints behind
+        // user B's first frame post-login, and user B's first cold launch
+        // sees user A's photo swap to their own — exactly the leak this
+        // service was rebuilt to prevent.
+        ClearableStoreRegistry.register(self)
+    }
+
+    // MARK: - Clearable
+
+    /// Wipe in-memory wallpaper state on sign-out. Called from
+    /// `ClearableStoreRegistry.clearAll()` immediately before
+    /// `PersistenceController.wipeAllData()` removes the SwiftData
+    /// `UserProfile` row that drove the resolution. Resetting here
+    /// ensures the next render — whether it's the sign-in screen, an
+    /// in-process user switch, or the first frame of a fresh sign-in
+    /// — starts from the wash bed, not the prior session's photo.
+    ///
+    /// **Why we also wipe `manifest` + `storageBaseUrl`:** there's a
+    /// brief render-batching window between this method running and
+    /// `wipeAllData()` finishing, in which SignInView's BackgroundView
+    /// can mount, observe the still-present prior-user UserProfile row
+    /// via `@Query`, and call `updateProfile(...)` with stale values.
+    /// If `storageBaseUrl` is still cached, `currentImageURL(...)`
+    /// happily resolves the prior user's pinned URL → leaked photo.
+    /// Clearing the bootstrap forces `currentImageURL(...)` to return
+    /// `nil` for that intervening call, so the worst case stays at
+    /// "wash bed for an extra ~100ms on the next sign-in" instead of
+    /// "prior user's photo flashes on the sign-in screen." SwiftUI's
+    /// render batching usually hides the race in practice, but
+    /// `Clearable` is expected to be defensive about exactly this
+    /// kind of cross-session leak.
+    func clearForSignOut() {
+        manifest = nil
+        storageBaseUrl = nil
+        currentRemoteURL = nil
+        currentSolidColor = nil
+        displayedKey = ""
+        currentWashColor = Self.defaultWashColor
+        currentWashLuminance = 0.0
+        currentWashIsLight = false
+        lastProfileStyle = nil
+        lastProfilePinned = nil
     }
 
     // MARK: - Manifest
@@ -406,22 +478,19 @@ final class BackgroundService {
         }
     }
 
-    /// Resolve `currentSolidColor` / `currentRemoteURL` / `currentFallbackAsset`
-    /// from the last-known profile values.
+    /// Resolve `currentSolidColor` / `currentRemoteURL` from the
+    /// last-known profile values.
     ///
-    /// **Auto mode preserves the cached URL.** Cold launch jank used to
-    /// look like: cached photo paints → BackgroundView.onAppear runs
-    /// updateProfile → recompute downgrades to a bundled asset (manifest
-    /// not loaded yet) → BackgroundView.task awaits load() → updateProfile
-    /// runs again → currentImageURL picks a *different* random photo
-    /// from the same tier → crossfade. Two visible swaps every launch.
-    ///
-    /// Now: in auto mode (no pinned image), if `currentRemoteURL`
-    /// already has a value (either from the UserDefaults cache at init
-    /// or from a prior tick this process), recompute keeps it.
-    /// Explicit settings changes (pinned image, solid style, style
-    /// switch) still reroute through the appropriate branches below;
-    /// the 60s ticker calls `rotate()` for fresh picks.
+    /// **Auto mode preserves the in-memory URL across reruns within a
+    /// session.** Once `applyRemote(url:)` has populated
+    /// `currentRemoteURL`, subsequent recomputes (foreground resume,
+    /// re-pushed profile, manifest reload) keep it as long as the
+    /// segment still matches the current hour — otherwise they pick a
+    /// fresh URL from the right segment. Cold launch starts with
+    /// `currentRemoteURL == nil` (no UserDefaults seeding by design)
+    /// and falls into the wash-only branch at the bottom until the
+    /// first successful resolve. The 60s ticker calls `rotate()` for
+    /// the deliberate in-session photo rotation.
     private func recompute() {
         let style = lastProfileStyle ?? Style.photography.rawValue
         let pinned = lastProfilePinned
@@ -434,7 +503,6 @@ final class BackgroundService {
             if let color = Self.color(forHex: hex) {
                 currentRemoteURL = nil
                 currentSolidColor = color
-                currentFallbackAsset = ""
                 // Wash matches the user's solid pick. Without this,
                 // non-Today pages would render in the default warm-dark
                 // while Today shows the user's solid — the two surfaces
@@ -479,14 +547,16 @@ final class BackgroundService {
             // random URL that would trigger a crossfade to a
             // different photo from the same tier.
             //
-            // The segment check guards #161: closing the app at night
-            // with a `photo/night/...` URL cached, then cold-launching
-            // at 7 AM, would otherwise paint the stale night photo
-            // until the 60s rotation timer fired. Falling through to
-            // the fresh-pick branch below resolves the right segment
-            // immediately.
+            // The segment check guards #161: a long-background period
+            // crossing a time-of-day boundary (foregrounding the app at
+            // 7 AM after closing it the night before) would otherwise
+            // keep the stale night photo until the 60s rotation timer
+            // fired. Falling through to the fresh-pick branch below
+            // resolves the right segment immediately on resume. (No
+            // cold-launch implication anymore — we never seed
+            // `currentRemoteURL` from disk; this only matters once
+            // `applyRemote` has populated it during a live session.)
             currentSolidColor = nil
-            currentFallbackAsset = ""
             currentWashColor = WashColorSampler.cachedWash(forURL: cached)
                 ?? Self.defaultWashColor
             applyLuminance(forURL: cached)
@@ -500,21 +570,22 @@ final class BackgroundService {
             return
         }
 
-        // Service hasn't loaded yet (cold launch, offline) AND no
-        // cached URL to fall back to — paint the bundled asset for
-        // the current hour so the user never sees a blank screen.
-        // Renderer paints this without a crossfade.
-        let asset = Self.assetNameForHour(Calendar.current.component(.hour, from: Date()))
+        // Cold launch, offline, or signed-out — nothing to resolve. Hold
+        // the wash bed and clear any prior image state. `BackgroundView`
+        // renders the wash alone in this state, and the photo (or solid)
+        // fades in on top once `recompute()` is called again with a
+        // resolvable profile + loaded `/config`.
+        //
+        // We deliberately do NOT paint the bundled hour-keyed asset
+        // here. That used to be the cold-launch fallback, but it created
+        // the exact jank this rewrite removes: paint bundled asset →
+        // load completes → swap to remote photo, a visible crossfade
+        // the user reads as "old image, then real image."
         currentSolidColor = nil
         currentRemoteURL = nil
-        currentFallbackAsset = asset
-        // Bundled assets sample synchronously — UIImage(named:) hits
-        // the asset catalog with no I/O wait, and the average is
-        // CoreGraphics-fast. Cache result on first sight.
-        currentWashColor = WashColorSampler.sampledWash(forAssetNamed: asset)
-            ?? Self.defaultWashColor
-        applyLuminance(forAssetNamed: asset)
-        if displayedKey != asset { displayedKey = asset }
+        currentWashColor = Self.defaultWashColor
+        updateIsLight(luminance: Self.defaultPhotoLuminance)
+        if !displayedKey.isEmpty { displayedKey = "" }
     }
 
     /// Force a fresh random pick from the manifest in auto mode. Called
@@ -555,19 +626,17 @@ final class BackgroundService {
     private func applyRemote(url: URL) {
         currentSolidColor = nil
         currentRemoteURL = url
-        currentFallbackAsset = ""
-        // Set wash from the disk cache synchronously when we have
-        // it (avoids a default-color flash on cold launch). When we
-        // don't, ride the default until `kickWashSample(...)` resolves
-        // the download + sample on a background task and writes the
-        // real value back. SwiftUI re-paints any subscribed view
+        // Set wash from the in-memory cache synchronously when we have
+        // it (avoids a default-color flash on rotation). When we don't,
+        // ride the default until `kickWashSample(...)` resolves the
+        // download + sample on a background task and writes the real
+        // value back. SwiftUI re-paints any subscribed view
         // automatically because `currentWashColor` is a stored
         // `@Observable` property.
         currentWashColor = WashColorSampler.cachedWash(forURL: url)
             ?? Self.defaultWashColor
         applyLuminance(forURL: url)
         kickWashSample(url: url)
-        Self.cachedRemoteURL = url
         let key = url.absoluteString
         if displayedKey != key { displayedKey = key }
     }
@@ -677,21 +746,6 @@ final class BackgroundService {
             g: Double((value >> 8) & 0xFF) / 255.0,
             b: Double(value & 0xFF) / 255.0
         )
-    }
-
-    /// Bundled asset for the current hour. Mirrors the prior
-    /// `BackgroundView.assetNameForHour` so the fallback path picks
-    /// the same image the view used to compute itself. Public for
-    /// `BackgroundView` to use when the caller pinned an `imageName`
-    /// override (previews, auth screens with a specific look).
-    static func assetNameForHour(_ hour: Int) -> String {
-        switch hour {
-        case 5..<8: return "bg-morning"
-        case 8..<12: return "bg-morning"
-        case 12..<17: return "bg-golden"
-        case 17..<20: return "bg-evening"
-        default: return "bg-night"
-        }
     }
 
     // MARK: - Resolution
@@ -828,32 +882,6 @@ final class BackgroundService {
         case .goldenHour: return segments.goldenHour
         case .evening: return segments.evening
         case .night: return segments.night
-        }
-    }
-
-    // MARK: - Last URL cache
-    //
-    // Persisted in UserDefaults so a cold launch can paint the user's last
-    // wallpaper immediately from URLCache, while `/config` + manifest
-    // resolve in the background. This is what kills the "asset → remote"
-    // crossfade jank at startup: when the cache is seeded, BackgroundView
-    // starts directly in the remote branch and the first service resolution
-    // is usually a no-op (same URL) or at worst a deliberate segment
-    // crossfade. `nonisolated` so View property initializers can read it.
-
-    nonisolated private static let lastRemoteURLKey = "brett.background.lastRemoteURL"
-
-    nonisolated static var cachedRemoteURL: URL? {
-        get {
-            guard let raw = UserDefaults.standard.string(forKey: lastRemoteURLKey) else { return nil }
-            return URL(string: raw)
-        }
-        set {
-            if let newValue {
-                UserDefaults.standard.set(newValue.absoluteString, forKey: lastRemoteURLKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: lastRemoteURLKey)
-            }
         }
     }
 
