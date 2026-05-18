@@ -469,7 +469,7 @@ export function useListSuggestions(itemId: string | null) {
     queryKey: ["list-suggestions", itemId],
     queryFn: () =>
       apiFetch<{ suggestions: Array<{ listId: string; listName: string; similarity: number }> }>(
-        `/things/${itemId}/list-suggestions`
+        `/api/things/${itemId}/list-suggestions`
       ),
     enabled: !!itemId,
   });

@@ -16,6 +16,11 @@ const MAX_TOTAL_TOKENS = AI_CONFIG.orchestrator.maxTotalTokens;
 const MAX_TOOL_RESULT_SIZE = AI_CONFIG.orchestrator.maxToolResultSize;
 const MAX_DURATION_MS = AI_CONFIG.orchestrator.maxDurationMs;
 
+// How many of the most recent user turns to feed into intent classification.
+// 3 covers a typical "ask → clarify → answer" loop without leaking unrelated
+// intent from earlier in a long session.
+const INTENT_HISTORY_WINDOW = 3;
+
 // Matches common API key patterns (Bearer tokens, sk-*, key-*, etc.) — an
 // allowlist of known-bad prefixes is more precise than entropy guessing and
 // won't over-redact legitimate identifiers.
@@ -132,10 +137,22 @@ export async function* orchestrate(
     // - "none": pure text generation (briefing, bretts_take) — saves ~2,500 tokens
     // - "contextual": filter tools by user message (omnibar, brett_thread) — saves ~1,000 tokens
     // - "all": send all registered tools (fallback)
+    //
+    // For contextual mode we also fold in intent from the last few user turns
+    // so a multi-turn refinement ("401k" → "yes" → "just to set it up") keeps
+    // create_task available even when the final turn only carries mutate words.
+    const recentUserMessages = messages
+      .filter((m) => m.role === "user")
+      .map((m) => m.content)
+      .filter((s) => s.length > 0)
+      .slice(-INTENT_HISTORY_WINDOW);
     const tools = ctx.toolMode === "none"
       ? []
       : ctx.toolMode === "contextual" && "message" in input
-        ? registry.toToolDefinitionsForMessage((input as { message: string }).message)
+        ? registry.toToolDefinitionsForMessage(
+            (input as { message: string }).message,
+            recentUserMessages,
+          )
         : registry.toToolDefinitions();
     let totalInputTokens = 0;
     let totalOutputTokens = 0;

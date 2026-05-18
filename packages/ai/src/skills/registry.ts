@@ -62,31 +62,44 @@ export class SkillRegistry {
   }
 
   /**
-   * Intent-based tool selection — classifies the message into intents
-   * and sends only the tools for matched intent groups.
+   * Intent-based tool selection — classifies the message (and optionally
+   * a sliding window of recent prior user turns) into intents and sends
+   * only the tools for matched intent groups.
    * Falls back to query + create + mutate for ambiguous messages.
+   *
+   * `recentUserMessages` is included to handle multi-turn refinement flows
+   * where the latest turn ("just to set it up") no longer carries the
+   * original intent word ("create"). Without it, a clarifying back-and-forth
+   * can silently drop the create_task tool partway through the conversation.
    */
-  toToolDefinitionsForMessage(message: string): ToolDefinition[] {
-    const lower = message.toLowerCase();
-
-    // Classify intents from the message
+  toToolDefinitionsForMessage(
+    message: string,
+    recentUserMessages: string[] = [],
+  ): ToolDefinition[] {
+    // Classify each message independently. If a message matches no patterns,
+    // it's individually ambiguous and contributes the fallback (query + create
+    // + mutate) — same behavior as the original single-message path. The
+    // union across the window is what gets sent to the LLM, so ambiguous
+    // priors (e.g. "401k", "yes") keep create_task available even when the
+    // latest turn locks in on mutate.
+    const AMBIGUOUS_FALLBACK = ["query", "create", "mutate"];
     const matchedIntents = new Set<string>();
-    for (const { intent, pattern } of INTENT_PATTERNS) {
-      if (pattern.test(lower)) {
-        matchedIntents.add(intent);
+    for (const msg of [message, ...recentUserMessages]) {
+      const lower = msg.toLowerCase();
+      const msgIntents = new Set<string>();
+      for (const { intent, pattern } of INTENT_PATTERNS) {
+        if (pattern.test(lower)) {
+          msgIntents.add(intent);
+        }
       }
-    }
-
-    // URL in message → likely saving content
-    if (/https?:\/\//.test(lower)) {
-      matchedIntents.add("create");
-    }
-
-    // No intents matched → ambiguous, send query + create + mutate (skip meta)
-    if (matchedIntents.size === 0) {
-      matchedIntents.add("query");
-      matchedIntents.add("create");
-      matchedIntents.add("mutate");
+      // URL in message → likely saving content
+      if (/https?:\/\//.test(lower)) {
+        msgIntents.add("create");
+      }
+      if (msgIntents.size === 0) {
+        for (const i of AMBIGUOUS_FALLBACK) msgIntents.add(i);
+      }
+      for (const i of msgIntents) matchedIntents.add(i);
     }
 
     // Collect unique tool names from matched groups
