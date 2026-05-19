@@ -58,6 +58,24 @@ struct TodaySectionsTests {
         #expect(sections.overdue.isEmpty)
     }
 
+    @Test func todayItemWithTonightFlagGoesToTonightBucket() throws {
+        // A today-day item with `tonight=true` must leave the Today bucket
+        // and land in the Tonight bucket. Splitting is presentation-only;
+        // both buckets together still feed the badge (covered separately
+        // in TodaySectionsBadgeTests). If this regresses, Tonight items
+        // appear twice or get hidden under Today's header.
+        let ctx = try makeContext()
+        let today = utcCalendar.startOfDay(for: Date()).addingTimeInterval(3600)
+        let item = itemDue(today)
+        item.tonight = true
+        ctx.insert(item)
+
+        let sections = TodaySections.bucket(items: [item], reflowKey: 0, localCalendar: utcCalendar)
+
+        #expect(sections.tonight.map(\.id) == [item.id])
+        #expect(sections.today.isEmpty)
+    }
+
     @Test func itemCompletedTodayGoesToDoneToday() throws {
         let ctx = try makeContext()
         let now = Date()
