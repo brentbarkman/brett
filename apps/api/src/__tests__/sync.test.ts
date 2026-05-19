@@ -1363,3 +1363,135 @@ describe("Sync Push", () => {
     expect(body.results[0].record!.contentStatus).toBeNull();
   });
 });
+
+describe("Sync — tonight field", () => {
+  let token: string;
+  const nonce = `tonight-${Date.now().toString(36)}`;
+
+  beforeAll(async () => {
+    const user = await createTestUser("Tonight Sync User");
+    token = user.token;
+  });
+
+  it("accepts tonight=true on item CREATE and returns it on pull", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+
+    const pushRes = await authRequest("/sync/push", token, {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: 1,
+        mutations: [{
+          idempotencyKey: `${nonce}-create-${entityId}`,
+          entityType: "item",
+          entityId,
+          action: "CREATE",
+          payload: {
+            type: "task",
+            title: "Pick up groceries",
+            status: "active",
+            dueDate: new Date().toISOString(),
+            dueDatePrecision: "day",
+            tonight: true,
+          },
+        }],
+      }),
+    });
+    expect(pushRes.status).toBe(200);
+    const pushBody = (await pushRes.json()) as SyncPushResponse;
+    expect(pushBody.results[0].status).toBe("applied");
+    expect((pushBody.results[0].record as any).tonight).toBe(true);
+
+    clearAllRateLimits();
+
+    const pullRes = await authRequest("/sync/pull", token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    expect(pullRes.status).toBe(200);
+    const pullBody = (await pullRes.json()) as any;
+    const row = pullBody.changes.items.upserted.find((r: any) => r.id === entityId);
+    expect(row).toBeDefined();
+    expect(row.tonight).toBe(true);
+  });
+
+  it("accepts tonight=true on item UPDATE with previousValues", async () => {
+    clearAllRateLimits();
+
+    // Create with tonight=false via /things to get a baseline
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "task",
+        title: "Tonight UPDATE target",
+        status: "active",
+      }),
+    });
+    const created = (await createRes.json()) as any;
+
+    clearAllRateLimits();
+
+    const updateRes = await authRequest("/sync/push", token, {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: 1,
+        mutations: [{
+          idempotencyKey: `${nonce}-update-${created.id}`,
+          entityType: "item",
+          entityId: created.id,
+          action: "UPDATE",
+          payload: { tonight: true },
+          changedFields: ["tonight"],
+          previousValues: { tonight: false },
+          baseUpdatedAt: created.updatedAt,
+        }],
+      }),
+    });
+    expect(updateRes.status).toBe(200);
+    const updateBody = (await updateRes.json()) as SyncPushResponse;
+    expect(updateBody.results[0].status).toBe("applied");
+
+    clearAllRateLimits();
+
+    const pullRes = await authRequest("/sync/pull", token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    const pullBody = (await pullRes.json()) as any;
+    const row = pullBody.changes.items.upserted.find((r: any) => r.id === created.id);
+    expect(row.tonight).toBe(true);
+  });
+
+  it("defaults tonight=false on items created without it (older clients)", async () => {
+    clearAllRateLimits();
+    const entityId = generateId();
+
+    // Simulate an older client that omits `tonight` in the payload.
+    await authRequest("/sync/push", token, {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: 1,
+        mutations: [{
+          idempotencyKey: `${nonce}-legacy-${entityId}`,
+          entityType: "item",
+          entityId,
+          action: "CREATE",
+          payload: { type: "task", title: "Legacy client item", status: "active" },
+        }],
+      }),
+    });
+
+    clearAllRateLimits();
+
+    const pullRes = await authRequest("/sync/pull", token, {
+      method: "POST",
+      body: JSON.stringify({ protocolVersion: 1, cursors: {} }),
+    });
+    const pullBody = (await pullRes.json()) as any;
+    const row = pullBody.changes.items.upserted.find((r: any) => r.id === entityId);
+    expect(row).toBeDefined();
+    // Default value must surface explicitly (false), not undefined — older clients
+    // that don't know the field still receive a stable shape.
+    expect(row.tonight).toBe(false);
+  });
+});

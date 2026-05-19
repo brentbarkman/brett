@@ -80,7 +80,7 @@ export type PushableEntityType = (typeof PUSHABLE_ENTITY_TYPES)[number];
 export const MUTABLE_FIELDS: Record<PushableEntityType, readonly string[]> = {
   item: ["title", "description", "notes", "status", "dueDate", "dueDatePrecision",
          "completedAt", "snoozedUntil", "reminder", "recurrence", "recurrenceRule",
-         "listId", "brettObservation", "contentType", "contentStatus"],
+         "listId", "brettObservation", "contentType", "contentStatus", "tonight"],
   list: ["name", "colorClass", "sortOrder", "archivedAt"],
   calendar_event_note: ["content"],
 };
