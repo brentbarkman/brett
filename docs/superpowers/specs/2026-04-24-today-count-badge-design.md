@@ -16,15 +16,23 @@ outstanding items for the Today view.
 
 ## Count definition
 
-**`overdue + due today + due this week`**, excluding Next Week and completed
-items. Matches the existing in-app sidebar badge on desktop.
+**`overdue + due today`**, excluding This Week, This Weekend, Next Week, and
+completed items. The badge is intentionally narrow — it answers "what needs my
+attention right now," not "what's coming up."
 
-- Desktop: `activeThingsForCount.length` from `apps/desktop/src/App.tsx`
-  (active items whose `dueDate ≤ endOfWeekUTC`) is already exactly this number
-  — reuse it.
-- iOS: a new `TodaySections.badgeCount` computed property returns
-  `overdue.count + today.count + thisWeek.count`. Keeps the bucket math in one
-  place, so desktop and iOS agree on what "Today" means.
+Tonight items are counted as today (they have `dueDate = today`; the `tonight`
+flag only affects sectioning, not counting).
+
+- Desktop: `computeBadgeCount(activeThingsForCount)` from
+  `apps/desktop/src/lib/badgeCount.ts` — filters the week-long fetch down to
+  items whose `dueDate ≤ end of today UTC`, dropping completed.
+- iOS: `TodaySections.badgeCount(items:)` returns
+  `overdue.count + today.count`. Keeps the bucket math in one place, so
+  desktop and iOS agree on what "Today" means.
+
+History: between 2026-04-24 and 2026-05-18 the badge included This Week (and,
+on Sat/Sun, This Weekend). The 2026-05-18 tuning spec narrowed it to overdue
++ today — see `docs/superpowers/specs/2026-05-18-brett-tuning-may-design.md`.
 
 ## Desktop — macOS dock badge
 
