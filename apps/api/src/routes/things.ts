@@ -279,6 +279,9 @@ things.get("/", async (c) => {
 // GET /things/broken-connections — active re-link tasks with per-account details.
 // Returns { count, types, details } — `count`/`types` preserved for older clients;
 // `details` is additive for per-account warning chrome in Settings.
+//
+// Auth: enforced router-wide via `things.use("*", authMiddleware)` above —
+// no per-handler middleware required.
 things.get("/broken-connections", async (c) => {
   const user = c.get("user");
   const result = await getBrokenConnections(user.id);
