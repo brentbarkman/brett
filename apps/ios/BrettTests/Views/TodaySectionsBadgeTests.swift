@@ -150,6 +150,62 @@ struct TodaySectionsBadgeTests {
         #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 0)
     }
 
+    // MARK: - Spec-named regression guards (2026-05-18 brett-tuning plan, Task A2)
+    //
+    // These tests intentionally duplicate behavior already covered above. The
+    // 2026-05-18 plan named three regression guards by exact identifier
+    // (`narrowsToTodayOnly`, `excludesWeekendOnWeekend`, `countsTonight`) so
+    // future reviewers grepping the plan can find them without trawling the
+    // broader suite. Don't fold them back in — the explicit names are the
+    // point.
+
+    @Test func narrowsToTodayOnly() {
+        // The badge counts overdue + today and NOTHING ELSE. Plan §A2 spec:
+        // "overdue + today only". This is the canonical assertion — if you
+        // add a new bucket to TodaySections, this test must keep passing
+        // unchanged.
+        let yesterday = days(-1, from: Self.wednesdayNow)
+        let thursday = days(1, from: Self.wednesdayNow)         // thisWeek
+        let saturday = days(3, from: Self.wednesdayNow)         // thisWeekend
+        let items = [
+            TestFixtures.makeItem(status: .active, dueDate: yesterday),         // overdue ✓
+            TestFixtures.makeItem(status: .active, dueDate: Self.wednesdayNow), // today ✓
+            TestFixtures.makeItem(status: .active, dueDate: thursday),          // ✗
+            TestFixtures.makeItem(status: .active, dueDate: saturday),          // ✗
+        ]
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 2)
+    }
+
+    @Test func excludesWeekendOnWeekend() {
+        // On Saturday, the upcoming Sunday is in the `thisWeekend` bucket and
+        // MUST NOT count toward the badge. Before 2026-05-18, the badge added
+        // `thisWeekend` on weekends — drop that, or the badge stays noisy
+        // through the weekend.
+        let sunday = days(1, from: Self.saturdayNow) // thisWeekend on Saturday
+        let items = [
+            TestFixtures.makeItem(status: .active, dueDate: sunday),
+        ]
+        #expect(TodaySections.badgeCount(items: items, now: Self.saturdayNow, localCalendar: calendar) == 0)
+    }
+
+    @Test func countsTonight() {
+        // Forward-looking stub for Phase B. "Tonight" items are items dated
+        // for today's end (dueDate = today). They live in the `today` bucket
+        // via dueDate; the `tonight` flag only affects sectioning, not
+        // counting. This branch doesn't yet have the `tonight` field on
+        // Item — when Phase B merges, replace the dueDate-only setup with
+        // a real tonight=true item and confirm the count is unchanged.
+        let today = Self.wednesdayNow
+        // Simulate the "tonight" shape we'll get post-Phase B: a today-dated
+        // item with no other distinguishing field. Adds to the badge today.
+        let items = [
+            TestFixtures.makeItem(status: .active, dueDate: today),
+        ]
+        // TODO(phase-b): once Item.tonight exists, set tonight=true here and
+        // re-confirm the count == 1 (tonight-flag must not change counting).
+        #expect(TodaySections.badgeCount(items: items, now: Self.wednesdayNow, localCalendar: calendar) == 1)
+    }
+
     @Test func sumsBucketsTogetherOnWeekday() {
         let yesterday = days(-1, from: Self.wednesdayNow)
         let thursday = days(1, from: Self.wednesdayNow)
