@@ -10,6 +10,7 @@ import {
   validateBulkUpdate,
   computeTriageResult,
   groupUpcomingThings,
+  type TriageDatePreset,
 } from "../index";
 import type { ItemRecord, Urgency, DueDatePrecision, Thing } from "@brett/types";
 
@@ -348,6 +349,35 @@ describe("computeTriageResult", () => {
 
     it("this_weekend on Wednesday → upcoming Saturday March 14", () => {
       expect(computeTriageResult("this_weekend", WEDNESDAY).dueDate).toBe("2026-03-14T00:00:00.000Z");
+    });
+  });
+
+  describe("tonight flag", () => {
+    it("tonight → same dueDate as today + tonight=true", () => {
+      const today = computeTriageResult("today", NOW);
+      const tonight = computeTriageResult("tonight", NOW);
+      // Calendar day must match — `tonight` is a display/expand hint, not a
+      // different stored due date. Older clients that ignore the flag still
+      // see the task in their Today bucket.
+      expect(tonight.dueDate).toBe(today.dueDate);
+      expect(tonight.dueDatePrecision).toBe("day");
+      expect(tonight.tonight).toBe(true);
+    });
+
+    it("every non-tonight preset clears tonight=false", () => {
+      // Picking any other preset must explicitly produce tonight=false so
+      // re-triaging a previously-Tonight task to e.g. Tomorrow drops the flag.
+      const presets: TriageDatePreset[] = [
+        "today",
+        "tomorrow",
+        "this_weekend",
+        "this_week",
+        "next_week",
+        "next_month",
+      ];
+      for (const preset of presets) {
+        expect(computeTriageResult(preset, NOW).tonight).toBe(false);
+      }
     });
   });
 });

@@ -29,6 +29,11 @@ final class Item {
     var brettObservation: String?
     var brettTakeGeneratedAt: Date?
 
+    /// Evening hint: a today-day task that should surface in the "Tonight"
+    /// section of the Today view. Stored on the server; default `false` so
+    /// older clients that don't know the field still produce valid items.
+    var tonight: Bool = false
+
     // MARK: - Content (link / article / etc.)
     var contentType: String?
     var contentStatus: String?
@@ -121,6 +126,7 @@ extension Item: Codable {
         case recurrenceRule
         case brettObservation
         case brettTakeGeneratedAt
+        case tonight
         case contentType
         case contentStatus
         case contentTitle
@@ -181,6 +187,9 @@ extension Item: Codable {
         self.recurrenceRule = try container.decodeIfPresent(String.self, forKey: .recurrenceRule)
         self.brettObservation = try container.decodeIfPresent(String.self, forKey: .brettObservation)
         self.brettTakeGeneratedAt = try container.decodeIfPresent(Date.self, forKey: .brettTakeGeneratedAt)
+        // Older API responses may omit `tonight`; default to false so the
+        // model still decodes cleanly.
+        self.tonight = try container.decodeIfPresent(Bool.self, forKey: .tonight) ?? false
         self.contentType = try container.decodeIfPresent(String.self, forKey: .contentType)
         self.contentStatus = try container.decodeIfPresent(String.self, forKey: .contentStatus)
         self.contentTitle = try container.decodeIfPresent(String.self, forKey: .contentTitle)
@@ -217,6 +226,7 @@ extension Item: Codable {
         try container.encode(recurrenceRule, forKey: .recurrenceRule)
         try container.encode(brettObservation, forKey: .brettObservation)
         try container.encode(brettTakeGeneratedAt, forKey: .brettTakeGeneratedAt)
+        try container.encode(tonight, forKey: .tonight)
         try container.encode(contentType, forKey: .contentType)
         try container.encode(contentStatus, forKey: .contentStatus)
         try container.encode(contentTitle, forKey: .contentTitle)

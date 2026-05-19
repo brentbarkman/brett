@@ -282,6 +282,10 @@ export function App() {
      *  Hard-coding "day" here silently corrupts week-precision picks into
      *  weekend-bucketed day items. */
     pendingPrecision?: "day" | "week";
+    /** Tonight flag committed alongside pendingDate. Set to `true` only when
+     *  the Tonight chip was picked; every other commit path passes `false`,
+     *  which clears a previously set flag. */
+    pendingTonight?: boolean;
     pendingListId?: string | null;
   } | null>(null);
 
@@ -889,10 +893,13 @@ export function App() {
   const closeTriageWithFlush = useCallback(() => {
     setTriageState((s) => {
       if (!s) return null;
-      const updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null } = {};
+      const updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null; tonight?: boolean } = {};
       if (s.pendingDate !== undefined) {
         updates.dueDate = s.pendingDate ? s.pendingDate.toISOString() : null;
         updates.dueDatePrecision = s.pendingDate ? (s.pendingPrecision ?? "day") : null;
+        // Clearing the date clears tonight; otherwise carry through whatever
+        // the picker reported (defaults to `false` for every non-Tonight chip).
+        updates.tonight = s.pendingDate ? (s.pendingTonight ?? false) : false;
       }
       if (s.pendingListId !== undefined) {
         updates.listId = s.pendingListId;
@@ -1081,7 +1088,7 @@ export function App() {
 
   const handleInboxTriage = (
     ids: string[],
-    updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null }
+    updates: { listId?: string | null; dueDate?: string | null; dueDatePrecision?: "day" | "week" | null; tonight?: boolean }
   ) => {
     bulkUpdate.mutate({ ids, updates });
   };
@@ -1444,8 +1451,8 @@ export function App() {
           onDuplicate={handleDuplicateThing}
           lists={lists}
           onSetList={handleSetList}
-          onUpdateDueDate={(dueDate, precision) => {
-            if (selectedId) updateThing.mutate({ id: selectedId, dueDate, dueDatePrecision: precision });
+          onUpdateDueDate={(dueDate, precision, tonight) => {
+            if (selectedId) updateThing.mutate({ id: selectedId, dueDate, dueDatePrecision: precision, tonight });
           }}
           onUpdateReminder={(reminder) => {
             if (selectedId) updateThing.mutate({ id: selectedId, reminder });
@@ -1639,8 +1646,8 @@ export function App() {
                 suggestedListIds={suggestedListIds}
                 suggestionMode={suggestionMode}
                 startWith={triageState.mode === "list-first" ? "list" : "date"}
-                onCommitDate={(date, precision) =>
-                  setTriageState((s) => (s ? { ...s, pendingDate: date, pendingPrecision: precision } : s))
+                onCommitDate={(date, precision, tonight) =>
+                  setTriageState((s) => (s ? { ...s, pendingDate: date, pendingPrecision: precision, pendingTonight: tonight } : s))
                 }
                 onCommitList={(listId) =>
                   setTriageState((s) => (s ? { ...s, pendingListId: listId } : s))
@@ -1655,10 +1662,11 @@ export function App() {
               <QuickDatePicker
                 anchorEl={triageState.anchorEl}
                 initialDate={initialDate}
-                onCommit={(date, precision) => {
+                onCommit={(date, precision, tonight) => {
                   handleInboxTriage(triageState.ids, {
                     dueDate: date ? date.toISOString() : null,
                     dueDatePrecision: date ? precision : null,
+                    tonight,
                   });
                   handleTriageCancel();
                 }}

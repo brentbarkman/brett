@@ -25,11 +25,14 @@ import { usePreference } from "../api/preferences";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useTodayKey } from "../hooks/useTodayKey";
 import { useLocalStorageBoolean } from "../lib/useLocalStorageBoolean";
+import { useTonightExpansion } from "../lib/useTonightAutoExpand";
 
-/** Section keys that render as collapsibles (default collapsed) on Today.
+/** Section keys that render as collapsibles on Today. `tonight` is
+ *  collapsible too but its open-state comes from `useTonightExpansion` (6pm
+ *  auto-open with sticky per-day override) instead of localStorage.
  *  Overdue + Today stay always-expanded — they're the badge bucket and the
  *  reason the user opened the view. */
-const COLLAPSIBLE_SECTION_KEYS = new Set(["this-week", "this-weekend", "done-today"]);
+const COLLAPSIBLE_SECTION_KEYS = new Set(["tonight", "this-week", "this-weekend", "done-today"]);
 
 interface TodayViewProps {
   lists: NavList[];
@@ -137,9 +140,13 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   const grouped = useMemo(() => {
     const uncompleted = filteredThings.filter((t) => !t.isCompleted);
     const done = filteredThings.filter((t) => t.isCompleted);
+    const todayAll = uncompleted.filter((t) => t.urgency === "today");
     return {
       overdue: uncompleted.filter((t) => t.urgency === "overdue"),
-      today: uncompleted.filter((t) => t.urgency === "today"),
+      // Split today-day items: tonight render in their own section but
+      // remain "today" tasks semantically (badge, urgency, etc.).
+      today: todayAll.filter((t) => !t.tonight),
+      tonight: todayAll.filter((t) => t.tonight),
       thisWeek: uncompleted.filter((t) => t.urgency === "this_week"),
       thisWeekend: uncompleted.filter((t) => t.urgency === "this_weekend"),
       done,
@@ -152,6 +159,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     const list: Array<{ key: string; title: string; count: number }> = [];
     if (grouped.overdue.length > 0) list.push({ key: "overdue", title: "Overdue", count: grouped.overdue.length });
     if (grouped.today.length > 0) list.push({ key: "today", title: "Today", count: grouped.today.length });
+    if (grouped.tonight.length > 0) list.push({ key: "tonight", title: "Tonight", count: grouped.tonight.length });
     const weekend = grouped.thisWeekend.length > 0
       ? { key: "this-weekend", title: "This Weekend", count: grouped.thisWeekend.length }
       : null;
@@ -178,11 +186,17 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   const [thisWeekendOpen, setThisWeekendOpen] = useLocalStorageBoolean("today.section.this-weekend.open", false);
   const [doneTodayOpen, setDoneTodayOpen] = useLocalStorageBoolean("today.section.done-today.open", false);
 
+  // Tonight section's open/closed state: 6pm auto-expand with sticky user
+  // override (per-date). Only meaningful on Today since custom-list and
+  // Upcoming views don't surface Tonight as a separate section.
+  const [tonightOpen, setTonightOpen] = useTonightExpansion();
+
   const collapsibleSections = useMemo(() => ({
+    "tonight": { open: tonightOpen, onOpenChange: setTonightOpen },
     "this-week": { open: thisWeekOpen, onOpenChange: setThisWeekOpen },
     "this-weekend": { open: thisWeekendOpen, onOpenChange: setThisWeekendOpen },
     "done-today": { open: doneTodayOpen, onOpenChange: setDoneTodayOpen },
-  }), [thisWeekOpen, setThisWeekOpen, thisWeekendOpen, setThisWeekendOpen, doneTodayOpen, setDoneTodayOpen]);
+  }), [tonightOpen, setTonightOpen, thisWeekOpen, setThisWeekOpen, thisWeekendOpen, setThisWeekendOpen, doneTodayOpen, setDoneTodayOpen]);
 
   // For the chrome active-section header above the inner scroll: a collapsed
   // section has no items to scroll past, so it must never become the active

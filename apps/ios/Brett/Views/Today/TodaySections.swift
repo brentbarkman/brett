@@ -12,13 +12,17 @@ import Foundation
 struct TodaySections {
     let overdue: [Item]
     let today: [Item]
+    /// Subset of today-day items where `tonight == true`. Split out for
+    /// presentation only — they remain "today" tasks semantically, just
+    /// rendered under a separate header in the Today view.
+    let tonight: [Item]
     let thisWeek: [Item]
     let thisWeekend: [Item]
     let nextWeek: [Item]
     let doneToday: [Item]
 
     var activeCount: Int {
-        overdue.count + today.count + thisWeek.count + thisWeekend.count + nextWeek.count
+        overdue.count + today.count + tonight.count + thisWeek.count + thisWeekend.count + nextWeek.count
     }
 
     var hasDoneToday: Bool { !doneToday.isEmpty }
@@ -44,7 +48,9 @@ struct TodaySections {
         localCalendar: Calendar = .current
     ) -> Int {
         let s = bucket(items: items, reflowKey: 0, now: now, localCalendar: localCalendar)
-        return s.overdue.count + s.today.count
+        // Tonight items are today-day items split out for presentation;
+        // they still count as "today" for the badge.
+        return s.overdue.count + s.today.count + s.tonight.count
     }
 
     /// UTC calendar — used for reading calendar-date components of stored
@@ -114,6 +120,7 @@ struct TodaySections {
 
         var overdue: [Item] = []
         var today: [Item] = []
+        var tonight: [Item] = []
         var thisWeek: [Item] = []
         var thisWeekend: [Item] = []
         var nextWeek: [Item] = []
@@ -142,7 +149,14 @@ struct TodaySections {
 
             let diff = DateHelpers.utcCalendar.dateComponents([.day], from: startOfToday, to: due).day ?? 0
             if diff == 0 {
-                today.append(item)
+                // Split today-day items: tonight==true items render under the
+                // Tonight header instead of Today, but still count as a "today"
+                // task everywhere else (badge, urgency math, etc.).
+                if item.tonight {
+                    tonight.append(item)
+                } else {
+                    today.append(item)
+                }
                 continue
             }
             let dueWeekday = DateHelpers.utcCalendar.component(.weekday, from: due)
@@ -172,6 +186,7 @@ struct TodaySections {
         return TodaySections(
             overdue: overdue.sorted(by: activeSort),
             today: today.sorted(by: activeSort),
+            tonight: tonight.sorted(by: activeSort),
             thisWeek: thisWeek.sorted(by: activeSort),
             thisWeekend: thisWeekend.sorted(by: activeSort),
             nextWeek: nextWeek.sorted(by: activeSort),
@@ -257,6 +272,10 @@ final class TodaySectionsCache {
             hasher.combine(item.status)
             hasher.combine(item.dueDate)
             hasher.combine(item.completedAt)
+            // Tonight flag flips an item between the Today and Tonight buckets
+            // without changing its dueDate — must participate in the cache key
+            // or toggling tonight on a today-day item won't reflow.
+            hasher.combine(item.tonight)
         }
         return hasher.finalize()
     }

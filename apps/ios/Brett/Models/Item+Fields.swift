@@ -35,6 +35,7 @@ extension Item: MutableFieldModel {
         case contentImageUrl
         case contentFavicon
         case contentDomain
+        case tonight
     }
 
     /// Every case is mutable from the client today. If we ever mark a field
@@ -64,6 +65,7 @@ extension Item: MutableFieldModel {
         case .contentImageUrl: return contentImageUrl
         case .contentFavicon: return contentFavicon
         case .contentDomain: return contentDomain
+        case .tonight: return tonight
         }
     }
 
@@ -94,6 +96,14 @@ extension Item: MutableFieldModel {
         case .contentImageUrl: self.contentImageUrl = v as? String
         case .contentFavicon: self.contentFavicon = v as? String
         case .contentDomain: self.contentDomain = v as? String
+        case .tonight:
+            // Bool field — accept Bool wire values; clear-on-null collapses
+            // to false (the schema default), matching the API behavior.
+            if let b = v as? Bool {
+                self.tonight = b
+            } else if value is NSNull || v == nil {
+                self.tonight = false
+            }
         }
     }
 }

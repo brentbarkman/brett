@@ -35,11 +35,10 @@ interface ThingsListProps {
    * duplicate the chrome active-section header above the inner scroll. */
   hiddenHeaderKey?: string | null;
   /** Controlled open-state map for sections that should be collapsible.
-   * Keys are section keys (e.g. "this-week", "this-weekend", "done-today");
-   * absent keys = section is always-expanded (Overdue, Today). When the
-   * parent owns this map (persisting state per-user via
-   * useLocalStorageBoolean), a section with `false` hides its items and
-   * shows a chevron header. */
+   * Keys are section keys (e.g. "tonight", "this-week", "this-weekend",
+   * "done-today"); absent keys = section is always-expanded (Overdue,
+   * Today). When the parent owns this map, a section with `false` hides
+   * its items and shows the on-brand animated chevron header. */
   collapsibleSections?: Record<string, { open: boolean; onOpenChange: (open: boolean) => void }>;
 }
 
@@ -59,16 +58,21 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
   const { uncompleted, done, grouped, allItems } = (() => {
     const uncompleted = things.filter((t) => !t.isCompleted);
     const done = things.filter((t) => t.isCompleted);
+    const todayAll = uncompleted.filter((t) => t.urgency === "today");
     const grouped = {
       overdue: uncompleted.filter((t) => t.urgency === "overdue"),
-      today: uncompleted.filter((t) => t.urgency === "today"),
+      // Today-day items where `tonight` is true render under a separate
+      // "Tonight" header. Splitting is presentation-only — they still
+      // contribute to keyboard nav and the all-items focus chain.
+      today: todayAll.filter((t) => !t.tonight),
+      tonight: todayAll.filter((t) => t.tonight),
       this_week: uncompleted.filter((t) => t.urgency === "this_week"),
       this_weekend: uncompleted.filter((t) => t.urgency === "this_weekend"),
     };
     const weekChunks = isWeekendNow
       ? [...grouped.this_weekend, ...grouped.this_week]
       : [...grouped.this_week, ...grouped.this_weekend];
-    const allItems = [...grouped.overdue, ...grouped.today, ...weekChunks, ...done];
+    const allItems = [...grouped.overdue, ...grouped.today, ...grouped.tonight, ...weekChunks, ...done];
     return { uncompleted, done, grouped, allItems };
   })();
   const quickAddRef = useRef<QuickAddInputHandle>(null);
@@ -107,13 +111,16 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
   const hasUncompleted = uncompleted.length > 0;
 
   // Compute running offset so Section knows which indices are "focused".
-  // The order here MUST match the `allItems` concat above — weekend comes
-  // before week on Sat/Sun, otherwise after.
+  // The order here MUST match the `allItems` concat above — Tonight slots
+  // right after Today; weekend comes before week on Sat/Sun, otherwise
+  // after.
   let offset = 0;
   const overdueOffset = offset;
   offset += grouped.overdue.length;
   const todayOffset = offset;
   offset += grouped.today.length;
+  const tonightOffset = offset;
+  offset += grouped.tonight.length;
   const firstWeekChunkOffset = offset;
   const firstWeekChunkLength = isWeekendNow ? grouped.this_weekend.length : grouped.this_week.length;
   offset += firstWeekChunkLength;
@@ -136,6 +143,9 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           )}
           {grouped.today.length > 0 && (
             <Section sectionKey="today" title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "today"} collapse={collapsibleSections?.["today"]} />
+          )}
+          {grouped.tonight.length > 0 && (
+            <Section sectionKey="tonight" title="Tonight" things={grouped.tonight} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={tonightOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "tonight"} collapse={collapsibleSections?.["tonight"]} />
           )}
           {isWeekendNow ? (
             <>
@@ -284,9 +294,7 @@ function Section({
        *  data-section-key — the chrome already shows the name. TodayView
        *  compensates scrollTop on transitions so the layout shift doesn't
        *  pop the viewport. */}
-      {!hideHeader && (
-        <SectionHeader title={title} count={things.length} />
-      )}
+      {!hideHeader && <SectionHeader title={title} count={things.length} />}
       {items}
     </div>
   );
