@@ -77,4 +77,31 @@ extension APIClient {
             method: "DELETE"
         )
     }
+
+    // MARK: - Broken connections
+
+    /// One entry per active re-link task. `accountId` is null for legacy
+    /// single-account integrations (today only "ai"); Granola + Google
+    /// Calendar entries always carry the specific accountId that broke so
+    /// Settings can tint the matching card.
+    struct BrokenConnectionDetail: Decodable, Hashable, Sendable {
+        let type: String
+        let accountId: String?
+        let reason: String?
+        let brokenSince: String
+    }
+
+    struct BrokenConnectionsResponse: Decodable {
+        let count: Int
+        let types: [String]
+        let details: [BrokenConnectionDetail]
+    }
+
+    func fetchBrokenConnections() async throws -> BrokenConnectionsResponse {
+        try await request(
+            BrokenConnectionsResponse.self,
+            path: "/things/broken-connections",
+            method: "GET"
+        )
+    }
 }
