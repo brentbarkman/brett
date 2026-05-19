@@ -51,7 +51,7 @@ enum QuickScheduleOption: String, CaseIterable, Identifiable {
         case .nextWeek: return "forward.fill"
         case .nextMonth: return "calendar"
         case .inAMonth: return "calendar.badge.clock"
-        case .someday: return "moon.stars.fill"
+        case .someday: return "moon.zzz.fill"
         case .pickDate: return "calendar.badge.plus"
         }
     }
