@@ -74,6 +74,7 @@ export interface ItemRecord {
   reminder: string | null;
   recurrence: string | null;
   recurrenceRule: string | null;
+  tonight?: boolean;
   brettTakeGeneratedAt: Date | null;
   contentType: string | null;
   contentStatus: string | null;
