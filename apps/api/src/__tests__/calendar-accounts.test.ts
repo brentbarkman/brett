@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { prisma } from "../lib/prisma.js";
 import { createRelinkTask } from "../lib/connection-health.js";
 import { encryptToken } from "../lib/encryption.js";
@@ -18,6 +21,69 @@ describe("Calendar Accounts routes", () => {
       const user = await createTestUser("Calendar Delete User");
       token = user.token;
       userId = user.userId;
+    });
+
+    it("only resolves the disconnected account's re-link task, not other accounts'", async () => {
+      // Regression guard for the multi-account re-link bug on Google Calendar:
+      // the provider-wide resolveRelinkTask used to dismiss every Google
+      // Calendar re-link task for the user — so disconnecting one account
+      // would silently clear another (broken) account's prompt. We now scope
+      // the resolve by accountId. Same bug pattern as Granola DELETE.
+      const user = await createTestUser("Calendar DELETE scoped relink");
+
+      const brokenAccount = await prisma.googleAccount.create({
+        data: {
+          userId: user.userId,
+          googleEmail: `broken-${Date.now()}@example.com`,
+          googleUserId: `google-broken-${Date.now()}`,
+          accessToken: encryptToken("fake-access-token"),
+          refreshToken: encryptToken("fake-refresh-token"),
+          tokenExpiresAt: new Date(Date.now() + 3600_000),
+        },
+      });
+      const healthyAccount = await prisma.googleAccount.create({
+        data: {
+          userId: user.userId,
+          googleEmail: `healthy-${Date.now()}@example.com`,
+          googleUserId: `google-healthy-${Date.now()}`,
+          accessToken: encryptToken("fake-access-token"),
+          refreshToken: encryptToken("fake-refresh-token"),
+          tokenExpiresAt: new Date(Date.now() + 3600_000),
+        },
+      });
+
+      // Both accounts have re-link tasks (e.g. both failed at some point)
+      await createRelinkTask(user.userId, "google-calendar", brokenAccount.id, "broken");
+      await createRelinkTask(user.userId, "google-calendar", healthyAccount.id, "healthy was once broken");
+
+      const res = await authRequest(
+        `/calendar/accounts/${healthyAccount.id}`,
+        user.token,
+        { method: "DELETE" },
+      );
+      expect(res.status).toBe(200);
+
+      // The broken account's re-link task must still be active.
+      const brokenTaskAfter = await prisma.item.findFirst({
+        where: {
+          userId: user.userId,
+          source: "system",
+          sourceId: `relink:google-calendar:${brokenAccount.id}`,
+          status: "active",
+        },
+      });
+      expect(brokenTaskAfter).not.toBeNull();
+
+      // The deleted (healthy) account's re-link task should be resolved.
+      const healthyTaskAfter = await prisma.item.findFirst({
+        where: {
+          userId: user.userId,
+          source: "system",
+          sourceId: `relink:google-calendar:${healthyAccount.id}`,
+          status: "active",
+        },
+      });
+      expect(healthyTaskAfter).toBeNull();
     });
 
     it("resolves the google-calendar re-link task so the broken-connection badge clears", async () => {
@@ -175,6 +241,33 @@ describe("Calendar Accounts routes", () => {
       // from Google. Without this, an incremental fetch using the stale
       // token would skip the events the user wants to see again.
       expect(updated?.syncToken).toBeNull();
+    });
+  });
+
+  describe("OAuth callback re-link scoping (source regression)", () => {
+    // We can't easily fake the full Google OAuth callback without mocking the
+    // entire googleapis chain (token exchange + userinfo.get). Instead, lock
+    // in the source-level invariant that catches the bug class directly:
+    // both the callback success path AND the disconnect path must use the
+    // PER-ACCOUNT resolver. If anyone reverts to the provider-wide
+    // `resolveRelinkTask(...)` here, reconnecting one Google Calendar account
+    // would silently dismiss every other Google Calendar account's broken
+    // prompt — exactly the user-visible bug we shipped a fix for.
+    it("calendar-accounts.ts uses the per-account resolver, never the provider-wide one", () => {
+      const here = dirname(fileURLToPath(import.meta.url));
+      const source = readFileSync(
+        resolve(here, "../routes/calendar-accounts.ts"),
+        "utf8",
+      );
+      // Strip line comments and the import line — only flag actual call sites.
+      const callSites = source
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("//"))
+        .filter((line) => !line.includes("import"))
+        .join("\n");
+      // `\b` ensures we don't match `resolveRelinkTaskForAccount`.
+      expect(callSites).not.toMatch(/\bresolveRelinkTask\s*\(/);
+      expect(callSites).toMatch(/resolveRelinkTaskForAccount\s*\(/);
     });
   });
 });

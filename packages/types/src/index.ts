@@ -74,6 +74,7 @@ export interface ItemRecord {
   reminder: string | null;
   recurrence: string | null;
   recurrenceRule: string | null;
+  tonight?: boolean;
   brettTakeGeneratedAt: Date | null;
   contentType: string | null;
   contentStatus: string | null;
@@ -108,6 +109,7 @@ export interface Thing {
   dueDateLabel?: string;
   isCompleted: boolean;
   completedAt?: string; // ISO string
+  tonight?: boolean;
   brettObservation?: string;
   description?: string;
   stalenessDays?: number;
@@ -188,6 +190,7 @@ export interface UpdateItemInput {
   sourceUrl?: string | null;
   dueDate?: string | null; // ISO string
   dueDatePrecision?: DueDatePrecision | null;
+  tonight?: boolean;
   brettObservation?: string | null;
   listId?: string | null;
   status?: ItemStatus;
@@ -223,6 +226,7 @@ export interface BulkUpdateInput {
     listId?: string | null;
     dueDate?: string | null;
     dueDatePrecision?: DueDatePrecision | null;
+    tonight?: boolean;
     status?: ItemStatus;
   };
 }

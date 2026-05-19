@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { prisma } from "../lib/prisma.js";
-import { createRelinkTask, resolveRelinkTask } from "../lib/connection-health.js";
+import {
+  createRelinkTask,
+  resolveRelinkTask,
+  resolveRelinkTaskForAccount,
+  getBrokenConnections,
+} from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 
 describe("connection-health", () => {
@@ -108,6 +113,74 @@ describe("connection-health", () => {
       const after = await findRelinkTasks(userId, "relink:ai:");
       const activeAfter = after.filter((t) => t.status === "active");
       expect(activeAfter).toHaveLength(0);
+    });
+  });
+
+  describe("getBrokenConnections", () => {
+    // Each subtest uses a fresh user so per-account counts aren't polluted by
+    // the createRelinkTask cases above.
+    it("returns details with per-account reason and brokenSince", async () => {
+      const user = await prisma.user.create({
+        data: {
+          id: generateId(),
+          name: "Broken Conn User",
+          email: `broken-${Date.now()}-${Math.random()}@test.com`,
+          emailVerified: true,
+        },
+      });
+      await createRelinkTask(user.id, "granola", "acc-1", "Token expired");
+
+      const result = await getBrokenConnections(user.id);
+
+      expect(result.count).toBe(1);
+      expect(result.types).toEqual(["granola"]);
+      expect(result.details).toHaveLength(1);
+      expect(result.details[0]).toMatchObject({
+        type: "granola",
+        accountId: "acc-1",
+        reason: "Token expired",
+      });
+      expect(result.details[0]!.brokenSince).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it("preserves backwards-compatible shape: count + types alongside details", async () => {
+      const user = await prisma.user.create({
+        data: {
+          id: generateId(),
+          name: "Multi Type User",
+          email: `multi-${Date.now()}-${Math.random()}@test.com`,
+          emailVerified: true,
+        },
+      });
+      await createRelinkTask(user.id, "granola", "g1", "Granola broke");
+      await createRelinkTask(user.id, "google-calendar", "gc1", "Calendar broke");
+
+      const result = await getBrokenConnections(user.id);
+
+      expect(result.count).toBe(2);
+      expect(new Set(result.types)).toEqual(new Set(["granola", "google-calendar"]));
+      expect(result.details).toHaveLength(2);
+    });
+
+    it("regression: reconnecting account B does not clear account A's re-link task", async () => {
+      const user = await prisma.user.create({
+        data: {
+          id: generateId(),
+          name: "Scoped Resolution User",
+          email: `scoped-${Date.now()}-${Math.random()}@test.com`,
+          emailVerified: true,
+        },
+      });
+      await createRelinkTask(user.id, "granola", "acc-A", "Token expired for A");
+      await createRelinkTask(user.id, "granola", "acc-B", "Token expired for B");
+
+      // Simulate reconnect of acc-B
+      await resolveRelinkTaskForAccount(user.id, "granola", "acc-B");
+
+      const result = await getBrokenConnections(user.id);
+      expect(result.details).toHaveLength(1);
+      expect(result.details[0]!.accountId).toBe("acc-A");
+      expect(result.details[0]!.reason).toBe("Token expired for A");
     });
   });
 });

@@ -31,7 +31,7 @@ interface DetailPanelProps {
   lists?: NavList[];
   onSetList?: (id: string, anchorEl: HTMLElement) => void;
   // Schedule
-  onUpdateDueDate?: (dueDate: string | null, precision: DueDatePrecision) => void;
+  onUpdateDueDate?: (dueDate: string | null, precision: DueDatePrecision, tonight: boolean) => void;
   onUpdateReminder?: (reminder: ReminderType | null) => void;
   onUpdateRecurrence?: (recurrence: RecurrenceType | null) => void;
   // Notes

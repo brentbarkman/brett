@@ -2,6 +2,10 @@ import type { TriageDatePreset } from "@brett/business";
 
 export const DATE_LETTER_TO_PRESET: Record<string, TriageDatePreset> = {
   t: "today",
+  // 'e' for evening — 'n' was the obvious pick but is already next_week;
+  // 't' / 'm' are taken by today/tomorrow; 'i' / 'g' from "tonight" read
+  // less naturally as a shortcut hint.
+  e: "tonight",
   m: "tomorrow",
   s: "this_weekend",
   w: "this_week",
@@ -11,6 +15,7 @@ export const DATE_LETTER_TO_PRESET: Record<string, TriageDatePreset> = {
 
 export const DATE_PRESET_ORDER: TriageDatePreset[] = [
   "today",
+  "tonight",
   "tomorrow",
   "this_weekend",
   "this_week",
@@ -20,6 +25,7 @@ export const DATE_PRESET_ORDER: TriageDatePreset[] = [
 
 export const DATE_PRESET_LABELS: Record<TriageDatePreset, string> = {
   today: "Today",
+  tonight: "Tonight",
   tomorrow: "Tomorrow",
   this_weekend: "This Weekend",
   this_week: "This Week",

@@ -9,6 +9,7 @@ describe("date picker letter map", () => {
   it("maps letters to presets in the spec'd order", () => {
     expect(DATE_LETTER_TO_PRESET).toEqual({
       t: "today",
+      e: "tonight",
       m: "tomorrow",
       s: "this_weekend",
       w: "this_week",
@@ -20,6 +21,7 @@ describe("date picker letter map", () => {
   it("exposes preset order matching chip layout (top to bottom)", () => {
     expect(DATE_PRESET_ORDER).toEqual([
       "today",
+      "tonight",
       "tomorrow",
       "this_weekend",
       "this_week",
@@ -30,6 +32,7 @@ describe("date picker letter map", () => {
 
   it("provides display labels for every preset", () => {
     expect(DATE_PRESET_LABELS.today).toBe("Today");
+    expect(DATE_PRESET_LABELS.tonight).toBe("Tonight");
     expect(DATE_PRESET_LABELS.tomorrow).toBe("Tomorrow");
     expect(DATE_PRESET_LABELS.this_weekend).toBe("This Weekend");
     expect(DATE_PRESET_LABELS.this_week).toBe("This Week");

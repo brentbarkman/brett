@@ -12,13 +12,17 @@ import Foundation
 struct TodaySections {
     let overdue: [Item]
     let today: [Item]
+    /// Subset of today-day items where `tonight == true`. Split out for
+    /// presentation only — they remain "today" tasks semantically, just
+    /// rendered under a separate header in the Today view.
+    let tonight: [Item]
     let thisWeek: [Item]
     let thisWeekend: [Item]
     let nextWeek: [Item]
     let doneToday: [Item]
 
     var activeCount: Int {
-        overdue.count + today.count + thisWeek.count + thisWeekend.count + nextWeek.count
+        overdue.count + today.count + tonight.count + thisWeek.count + thisWeekend.count + nextWeek.count
     }
 
     var hasDoneToday: Bool { !doneToday.isEmpty }
@@ -27,28 +31,26 @@ struct TodaySections {
 
     /// Count shown on the iOS home-screen badge and the macOS dock badge.
     ///
-    /// Inclusion rules (must stay in lockstep with desktop's `App.tsx`
-    /// `badgeCount`):
-    ///   - Always: overdue + today + thisWeek
-    ///   - On Sat/Sun: + thisWeekend (the weekend has arrived)
+    /// Inclusion rules (kept narrow on purpose — must stay in lockstep
+    /// with desktop's `apps/desktop/src/lib/badgeCount.ts`):
+    ///   - overdue + today only
+    ///   - Tonight items count as today (they live in the today bucket
+    ///     via dueDate = today; the `tonight` flag only affects
+    ///     sectioning, not counting)
     ///
-    /// Weekend items deliberately stay out of the badge on weekdays —
-    /// a Saturday task shouldn't nag the user on Tuesday — but roll in
-    /// once the weekend itself arrives.
+    /// History: before 2026-05-18 this also added `thisWeek` (and, on
+    /// Sat/Sun, `thisWeekend`). That made the badge noisy during the
+    /// workweek and conflated "due today" with "due eventually". Spec:
+    /// docs/superpowers/specs/2026-05-18-brett-tuning-may-design.md.
     static func badgeCount(
         items: [Item],
         now: Date = Date(),
         localCalendar: Calendar = .current
     ) -> Int {
         let s = bucket(items: items, reflowKey: 0, now: now, localCalendar: localCalendar)
-        // "Weekend now" is decided from the user's LOCAL day-of-week, not
-        // UTC's. Friday 9:43 PM MT is still Friday for the badge.
-        let weekday = localCalendar.component(.weekday, from: now) // Sun=1..Sat=7
-        let isWeekend = weekday == 1 || weekday == 7
-        return s.overdue.count
-            + s.today.count
-            + s.thisWeek.count
-            + (isWeekend ? s.thisWeekend.count : 0)
+        // Tonight items are today-day items split out for presentation;
+        // they still count as "today" for the badge.
+        return s.overdue.count + s.today.count + s.tonight.count
     }
 
     /// UTC calendar — used for reading calendar-date components of stored
@@ -118,6 +120,7 @@ struct TodaySections {
 
         var overdue: [Item] = []
         var today: [Item] = []
+        var tonight: [Item] = []
         var thisWeek: [Item] = []
         var thisWeekend: [Item] = []
         var nextWeek: [Item] = []
@@ -146,7 +149,14 @@ struct TodaySections {
 
             let diff = DateHelpers.utcCalendar.dateComponents([.day], from: startOfToday, to: due).day ?? 0
             if diff == 0 {
-                today.append(item)
+                // Split today-day items: tonight==true items render under the
+                // Tonight header instead of Today, but still count as a "today"
+                // task everywhere else (badge, urgency math, etc.).
+                if item.tonight {
+                    tonight.append(item)
+                } else {
+                    today.append(item)
+                }
                 continue
             }
             let dueWeekday = DateHelpers.utcCalendar.component(.weekday, from: due)
@@ -176,6 +186,7 @@ struct TodaySections {
         return TodaySections(
             overdue: overdue.sorted(by: activeSort),
             today: today.sorted(by: activeSort),
+            tonight: tonight.sorted(by: activeSort),
             thisWeek: thisWeek.sorted(by: activeSort),
             thisWeekend: thisWeekend.sorted(by: activeSort),
             nextWeek: nextWeek.sorted(by: activeSort),
@@ -261,6 +272,10 @@ final class TodaySectionsCache {
             hasher.combine(item.status)
             hasher.combine(item.dueDate)
             hasher.combine(item.completedAt)
+            // Tonight flag flips an item between the Today and Tonight buckets
+            // without changing its dueDate — must participate in the cache key
+            // or toggling tonight on a today-day item won't reflow.
+            hasher.combine(item.tonight)
         }
         return hasher.finalize()
     }

@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { prisma } from "../lib/prisma.js";
 import { createRelinkTask } from "../lib/connection-health.js";
 import { createTestUser, authRequest } from "./helpers.js";
@@ -284,6 +287,30 @@ describe("Granola Auth routes", () => {
         where: { id: account.id },
       });
       expect(unchanged?.autoCreateMyTasks).toBe(true);
+    });
+  });
+
+  describe("OAuth callback re-link scoping (source regression)", () => {
+    // Granola was the FIRST place we hit the multi-account re-link bug —
+    // the provider-wide resolveRelinkTask silently cleared every Granola
+    // re-link task when ANY account reconnected. The fix is to call the
+    // per-account resolver everywhere this route file resolves tasks.
+    // This source-level test catches a regression at the call site directly
+    // (the full OAuth callback chain is too heavy to mock end-to-end).
+    it("granola-auth.ts uses the per-account resolver, never the provider-wide one", () => {
+      const here = dirname(fileURLToPath(import.meta.url));
+      const source = readFileSync(
+        resolve(here, "../routes/granola-auth.ts"),
+        "utf8",
+      );
+      const callSites = source
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("//"))
+        .filter((line) => !line.includes("import"))
+        .join("\n");
+      // `\b` ensures we don't match `resolveRelinkTaskForAccount`.
+      expect(callSites).not.toMatch(/\bresolveRelinkTask\s*\(/);
+      expect(callSites).toMatch(/resolveRelinkTaskForAccount\s*\(/);
     });
   });
 });

@@ -386,6 +386,25 @@ private struct TodayPageBody: View {
             onDelete: delete
         )
 
+        // Tonight: today-day items the user flagged via the Tonight chip.
+        // Hidden entirely when empty (no "Tonight (0)" header). Always
+        // expanded on iOS — the spec's 6pm auto-expand is desktop-only
+        // because iOS sections don't support a collapsed state today.
+        if !s.tonight.isEmpty {
+            TaskSection(
+                label: "Tonight",
+                icon: "moon.stars",
+                items: s.tonight,
+                labelColor: .white,
+                listNameProvider: nameProvider,
+                onToggle: toggle,
+                onSelect: select,
+                onSchedule: schedule,
+                onArchive: archive,
+                onDelete: delete
+            )
+        }
+
         // Chronological ordering: weekend first on Sat/Sun, week first on
         // Mon-Fri. Mirrors the same rule on desktop's ThingsList +
         // TodayView. The two TaskSection calls are identical aside from
@@ -562,22 +581,28 @@ private struct TodayPageBody: View {
     /// The pre-edit row comes from this view's `@Query`-backed `items`
     /// array, which is already user-scoped — no need for a separate store
     /// fetch (those public read methods were removed in Wave B).
-    private func schedule(_ id: String, dueDate: Date?, precision: DueDatePrecision) {
+    private func schedule(_ id: String, dueDate: Date?, precision: DueDatePrecision, tonight: Bool) {
         guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
-        // Persist both dueDate and dueDatePrecision in a single mutation so
-        // a week-precision pick (This Week / Next Week) doesn't get bucketed
-        // as the weekend by the day-precision branch of computeUrgency.
+        // Persist dueDate + dueDatePrecision + tonight in a single mutation
+        // so a week-precision pick (This Week / Next Week) doesn't get
+        // bucketed as the weekend by the day-precision branch of
+        // computeUrgency, and so re-triaging clears any prior tonight flag.
         let newPrecision: Any? = dueDate == nil ? nil : precision.rawValue
+        // Clearing the date also clears tonight (no evening hint without a
+        // due date). Otherwise pass through whatever the picker reported.
+        let newTonight: Bool = dueDate == nil ? false : tonight
         itemStore.update(
             id: id,
             changes: [
                 "dueDate": dueDate as Any? ?? NSNull(),
                 "dueDatePrecision": newPrecision ?? NSNull(),
+                "tonight": newTonight,
             ],
             previousValues: [
                 "dueDate": item.dueDate as Any? ?? NSNull(),
                 "dueDatePrecision": item.dueDatePrecision as Any? ?? NSNull(),
+                "tonight": item.tonight,
             ],
             userId: userId
         )

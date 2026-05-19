@@ -21,8 +21,13 @@ export interface QuickDatePickerProps {
    * picks. Callers that previously hard-coded `"day"` should pass `precision`
    * through verbatim — otherwise week-precision picks silently corrupt into
    * weekend-bucketed day-precision items.
+   *
+   * `tonight` is `true` only when the user picked the Tonight chip. Every
+   * other commit path — other chips, raw calendar dates, clearing the date —
+   * passes `false`, which intentionally clears any previously set tonight
+   * flag on the item.
    */
-  onCommit: (date: Date | null, precision: DueDatePrecision) => void;
+  onCommit: (date: Date | null, precision: DueDatePrecision, tonight: boolean) => void;
   onCancel: () => void;
   placement?: "bottom-end" | "bottom-start" | "top-end" | "top-start";
   now?: Date;
@@ -81,7 +86,7 @@ export function QuickDatePicker({
   const commitPreset = useCallback(
     (preset: TriageDatePreset) => {
       const result = computeTriageResult(preset, now ?? new Date());
-      onCommit(new Date(result.dueDate), result.dueDatePrecision);
+      onCommit(new Date(result.dueDate), result.dueDatePrecision, result.tonight);
     },
     [onCommit, now],
   );
@@ -97,7 +102,7 @@ export function QuickDatePicker({
       }
       if (lower === "backspace" || lower === "delete") {
         e.preventDefault();
-        onCommit(null, "day");
+        onCommit(null, "day", false);
         return;
       }
       if (lower in DATE_LETTER_TO_PRESET) {
@@ -147,7 +152,7 @@ export function QuickDatePicker({
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        onCommit(highlighted, "day");
+        onCommit(highlighted, "day", false);
         return;
       }
     }
@@ -173,7 +178,7 @@ export function QuickDatePicker({
         // computeTriageResult re-interprets the input through local components.
         now={now ?? new Date()}
         onCommitPreset={commitPreset}
-        onClear={() => onCommit(null, "day")}
+        onClear={() => onCommit(null, "day", false)}
       />
       <div className="w-[185px] border-l border-white/5 pl-2">
         <ScrollableCalendar
@@ -181,7 +186,7 @@ export function QuickDatePicker({
           highlightedDate={highlighted}
           selectedDate={initialDate}
           onHighlight={setHighlighted}
-          onCommit={(d) => onCommit(d, "day")}
+          onCommit={(d) => onCommit(d, "day", false)}
           now={today}
         />
       </div>

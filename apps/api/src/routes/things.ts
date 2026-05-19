@@ -10,6 +10,7 @@ import type { ItemAssemblerInput, ContentAssemblerInput } from "@brett/ai";
 import type { ThingDetail, Attachment as AttachmentType, ItemLink as ItemLinkType, BrettMessage as BrettMessageType } from "@brett/types";
 import { getEmbeddingProvider } from "../lib/embedding-provider.js";
 import { paginatedPull, type PaginatedPullResult } from "../lib/sync/paginated-pull.js";
+import { getBrokenConnections } from "../lib/connection-health.js";
 
 const things = new Hono<AuthEnv>();
 
@@ -275,20 +276,16 @@ things.get("/", async (c) => {
   return c.json(thingsList);
 });
 
-// GET /things/broken-connections — count of active re-link tasks by type
+// GET /things/broken-connections — active re-link tasks with per-account details.
+// Returns { count, types, details } — `count`/`types` preserved for older clients;
+// `details` is additive for per-account warning chrome in Settings.
+//
+// Auth: enforced router-wide via `things.use("*", authMiddleware)` above —
+// no per-handler middleware required.
 things.get("/broken-connections", async (c) => {
   const user = c.get("user");
-  const items = await prisma.item.findMany({
-    where: {
-      userId: user.id,
-      source: "system",
-      sourceId: { startsWith: "relink:" },
-      status: { in: ["active", "snoozed"] },
-    },
-    select: { sourceId: true },
-  });
-  const types = [...new Set(items.map((i) => i.sourceId!.split(":")[1]))];
-  return c.json({ count: items.length, types });
+  const result = await getBrokenConnections(user.id);
+  return c.json(result);
 });
 
 // PATCH /things/bulk — bulk update
@@ -324,6 +321,7 @@ things.patch("/bulk", async (c) => {
     updateData.dueDate = data.updates.dueDate ? new Date(data.updates.dueDate) : null;
   if (data.updates.dueDatePrecision !== undefined)
     updateData.dueDatePrecision = data.updates.dueDatePrecision;
+  if (data.updates.tonight !== undefined) updateData.tonight = data.updates.tonight;
   if (data.updates.status !== undefined) updateData.status = data.updates.status;
 
   const result = await prisma.item.updateMany({
@@ -509,7 +507,7 @@ things.post("/", async (c) => {
 
 /** Spawn the next occurrence of a recurring task */
 async function spawnNextRecurrence(
-  item: { id: string; type: string; title: string; notes: string | null; description: string | null; source: string; dueDate: Date | null; dueDatePrecision: string | null; recurrence: string | null; recurrenceRule: string | null; listId: string | null; userId: string },
+  item: { id: string; type: string; title: string; notes: string | null; description: string | null; source: string; dueDate: Date | null; dueDatePrecision: string | null; recurrence: string | null; recurrenceRule: string | null; listId: string | null; userId: string; tonight: boolean },
   linksFrom: { toItemId: string; toItemType: string }[],
 ) {
   if (!item.recurrence) return;
@@ -533,6 +531,10 @@ async function spawnNextRecurrence(
       recurrenceRule: item.recurrenceRule,
       listId: item.listId,
       userId: item.userId,
+      // Carry tonight across spawns. Recurring evening tasks (e.g. nightly
+      // medication, "review tomorrow's calendar tonight") rely on this — the
+      // Tonight bucket is exactly the point of having those recurrences.
+      tonight: item.tonight,
     },
   });
 
@@ -581,6 +583,7 @@ things.patch("/:id", async (c) => {
     updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
   if (data.dueDatePrecision !== undefined)
     updateData.dueDatePrecision = data.dueDatePrecision;
+  if (data.tonight !== undefined) updateData.tonight = data.tonight;
   if (data.brettObservation !== undefined)
     updateData.brettObservation = data.brettObservation;
   if (data.listId !== undefined) updateData.listId = data.listId;

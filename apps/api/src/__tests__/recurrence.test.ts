@@ -119,6 +119,59 @@ describe("Recurring task toggle", () => {
     expect(matches.length).toBe(2); // original + 1 from toggle, NOT 3
   });
 
+  it("completing a recurring task with tonight=true spawns next occurrence with tonight=true", async () => {
+    // Recurring evening tasks (e.g. "take medication tonight", "review tomorrow's
+    // calendar tonight") are the whole point of the Tonight bucket — the flag
+    // MUST carry across spawns. Resetting it would silently change behavior.
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Tonight recurring" }),
+    });
+    const task = (await createRes.json()) as any;
+
+    // Set tonight + recurrence on the original (tonight is only mutable via PATCH).
+    await authRequest(`/things/${task.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({ recurrence: "daily", tonight: true }),
+    });
+
+    await authRequest(`/things/${task.id}/toggle`, token, { method: "PATCH" });
+
+    const allRes = await authRequest("/things?status=active", token);
+    const all = (await allRes.json()) as any[];
+    const newTask = all.find(
+      (t: any) => t.title === "Tonight recurring" && t.id !== task.id,
+    );
+    expect(newTask).toBeTruthy();
+    expect(newTask.tonight).toBe(true);
+  });
+
+  it("completing a recurring task with tonight=false spawns next occurrence with tonight=false", async () => {
+    // Sanity check: when the source isn't a Tonight task, the spawn must NOT
+    // suddenly opt-in to the Tonight bucket. Default flag stays default.
+    const createRes = await authRequest("/things", token, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", title: "Non-tonight recurring" }),
+    });
+    const task = (await createRes.json()) as any;
+    expect(task.tonight).toBe(false);
+
+    await authRequest(`/things/${task.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({ recurrence: "daily" }),
+    });
+
+    await authRequest(`/things/${task.id}/toggle`, token, { method: "PATCH" });
+
+    const allRes = await authRequest("/things?status=active", token);
+    const all = (await allRes.json()) as any[];
+    const newTask = all.find(
+      (t: any) => t.title === "Non-tonight recurring" && t.id !== task.id,
+    );
+    expect(newTask).toBeTruthy();
+    expect(newTask.tonight).toBe(false);
+  });
+
   it("uncompleting a task does NOT create a new task", async () => {
     const createRes = await authRequest("/things", token, {
       method: "POST",
