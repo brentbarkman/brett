@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Calendar, Plus, Trash2, RefreshCw } from "lucide-react";
+import { Calendar, Plus, Trash2, RefreshCw, AlertCircle } from "lucide-react";
 import { SettingsCard, SettingsHeader, SettingsToggle } from "./SettingsComponents";
 import { CalendarConnectModal } from "../components/CalendarConnectModal";
 import {
@@ -12,6 +12,7 @@ import {
 } from "../api/calendar-accounts";
 import { useFetchCalendarRange } from "../api/calendar";
 import { useGranolaAccounts, useConnectGranola, useDisconnectGranola, useUpdateGranolaPreferences } from "../api/granola";
+import { useBrokenConnections, findBrokenDetailForAccount, type BrokenConnectionDetail } from "../api/connection-health";
 import type { ConnectedCalendarAccount, GranolaAccountRecord } from "@brett/types";
 import { useAssistantName } from "../api/assistant-name";
 
@@ -40,11 +41,32 @@ function GoogleIcon() {
   );
 }
 
-interface ConnectedAccountRowProps {
-  account: ConnectedCalendarAccount;
+/**
+ * Inline warning chrome for a Settings account card that has an active re-link
+ * task. Shows a single amber header row with the reason text from the API. The
+ * caller is responsible for tinting its own border/background — this just owns
+ * the warning content.
+ */
+function AccountWarningRow({ broken }: { broken: BrokenConnectionDetail }) {
+  return (
+    <div className="flex items-start gap-2 px-3 py-2 border-b border-amber-400/20 bg-amber-500/10">
+      <AlertCircle size={14} className="text-amber-300 mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-amber-200">Needs reconnection</div>
+        {broken.reason && (
+          <div className="text-[11px] text-amber-200/70 mt-0.5 truncate">{broken.reason}</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
+interface ConnectedAccountRowProps {
+  account: ConnectedCalendarAccount;
+  broken: BrokenConnectionDetail | null;
+}
+
+function ConnectedAccountRow({ account, broken }: ConnectedAccountRowProps) {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const disconnectCalendar = useDisconnectCalendar();
   const toggleVisibility = useToggleCalendarVisibility();
@@ -58,7 +80,14 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
   }
 
   return (
-    <div className="bg-white/5 rounded-lg overflow-hidden">
+    <div
+      className={
+        broken
+          ? "bg-amber-500/5 rounded-lg overflow-hidden border border-amber-400/30"
+          : "bg-white/5 rounded-lg overflow-hidden"
+      }
+    >
+      {broken && <AccountWarningRow broken={broken} />}
       {/* Account header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10">
         <div className="flex items-center gap-2 min-w-0">
@@ -157,15 +186,23 @@ function ConnectedAccountRow({ account }: ConnectedAccountRowProps) {
 interface GranolaAccountRowProps {
   account: GranolaAccountRecord;
   assistantName: string;
+  broken: BrokenConnectionDetail | null;
 }
 
-function GranolaAccountRow({ account, assistantName }: GranolaAccountRowProps) {
+function GranolaAccountRow({ account, assistantName, broken }: GranolaAccountRowProps) {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const disconnect = useDisconnectGranola();
   const updatePrefs = useUpdateGranolaPreferences();
 
   return (
-    <div className="bg-white/5 rounded-lg overflow-hidden">
+    <div
+      className={
+        broken
+          ? "bg-amber-500/5 rounded-lg overflow-hidden border border-amber-400/30"
+          : "bg-white/5 rounded-lg overflow-hidden"
+      }
+    >
+      {broken && <AccountWarningRow broken={broken} />}
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
@@ -267,6 +304,7 @@ export function CalendarSection() {
   const fetchRange = useFetchCalendarRange();
   const { data: granolaData } = useGranolaAccounts();
   const connectGranola = useConnectGranola();
+  const { data: brokenConnections } = useBrokenConnections();
   const [showConnectModal, setShowConnectModal] = useState(false);
 
   return (
@@ -312,7 +350,11 @@ export function CalendarSection() {
         {!isLoading && !error && accounts.length > 0 && (
           <div className="space-y-3">
             {accounts.map((account) => (
-              <ConnectedAccountRow key={account.id} account={account} />
+              <ConnectedAccountRow
+                key={account.id}
+                account={account}
+                broken={findBrokenDetailForAccount(brokenConnections, "google-calendar", account.id)}
+              />
             ))}
           </div>
         )}
@@ -364,6 +406,7 @@ export function CalendarSection() {
                 key={account.id}
                 account={account}
                 assistantName={assistantName}
+                broken={findBrokenDetailForAccount(brokenConnections, "granola", account.id)}
               />
             ))}
           </div>
