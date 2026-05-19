@@ -45,10 +45,13 @@ function renderPicker(
 }
 
 describe("QuickDatePicker", () => {
-  it("renders the six preset chips with letters and resolved dates", () => {
+  it("renders the seven preset chips with letters and resolved dates", () => {
     renderPicker();
     expect(screen.getByTestId("chip-today")).toHaveTextContent("Today");
     expect(screen.getByTestId("chip-today")).toHaveTextContent("Thu · May 7");
+    expect(screen.getByTestId("chip-tonight")).toHaveTextContent("Tonight");
+    // Tonight resolves to the same calendar day as Today.
+    expect(screen.getByTestId("chip-tonight")).toHaveTextContent("Thu · May 7");
     expect(screen.getByTestId("chip-tomorrow")).toHaveTextContent("Tomorrow");
     expect(screen.getByTestId("chip-this_weekend")).toHaveTextContent("This Weekend");
     expect(screen.getByTestId("chip-this_weekend")).toHaveTextContent("Sat · May 9");
@@ -57,11 +60,28 @@ describe("QuickDatePicker", () => {
     expect(screen.getByTestId("chip-next_month")).toHaveTextContent("Next Month");
 
     expect(screen.getByTestId("chip-today")).toHaveTextContent("T");
+    expect(screen.getByTestId("chip-tonight")).toHaveTextContent("E");
     expect(screen.getByTestId("chip-tomorrow")).toHaveTextContent("M");
     expect(screen.getByTestId("chip-this_weekend")).toHaveTextContent("S");
     expect(screen.getByTestId("chip-this_week")).toHaveTextContent("W");
     expect(screen.getByTestId("chip-next_week")).toHaveTextContent("N");
     expect(screen.getByTestId("chip-next_month")).toHaveTextContent("X");
+  });
+
+  it("commits tonight=true when the Tonight chip is picked, tonight=false for every other preset", () => {
+    const { onCommit } = renderPicker();
+    fireEvent.keyDown(window, { key: "e" });
+    expect(onCommit).toHaveBeenLastCalledWith(expect.any(Date), "day", true);
+
+    onCommit.mockClear();
+    fireEvent.keyDown(window, { key: "t" });
+    // Today (and every non-Tonight chip) must explicitly pass tonight=false
+    // so re-triaging a Tonight task into another bucket clears the flag.
+    expect(onCommit).toHaveBeenLastCalledWith(expect.any(Date), "day", false);
+
+    onCommit.mockClear();
+    fireEvent.keyDown(window, { key: "m" });
+    expect(onCommit).toHaveBeenLastCalledWith(expect.any(Date), "day", false);
   });
 
   it("commits today when 't' is pressed", () => {
@@ -91,11 +111,13 @@ describe("QuickDatePicker", () => {
   it("clears the date on Backspace and Delete", () => {
     const { onCommit } = renderPicker({ initialDate: MAY_7 });
     fireEvent.keyDown(window, { key: "Backspace" });
-    expect(onCommit).toHaveBeenLastCalledWith(null, "day");
+    // Clearing the date also clears any tonight flag — clears are never
+    // partial. The third arg is `false`, not `undefined`.
+    expect(onCommit).toHaveBeenLastCalledWith(null, "day", false);
 
     onCommit.mockClear();
     fireEvent.keyDown(window, { key: "Delete" });
-    expect(onCommit).toHaveBeenLastCalledWith(null, "day");
+    expect(onCommit).toHaveBeenLastCalledWith(null, "day", false);
   });
 
   it("calls onCancel on Escape and does not commit", () => {

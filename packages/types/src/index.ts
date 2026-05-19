@@ -190,6 +190,7 @@ export interface UpdateItemInput {
   sourceUrl?: string | null;
   dueDate?: string | null; // ISO string
   dueDatePrecision?: DueDatePrecision | null;
+  tonight?: boolean;
   brettObservation?: string | null;
   listId?: string | null;
   status?: ItemStatus;
@@ -225,6 +226,7 @@ export interface BulkUpdateInput {
     listId?: string | null;
     dueDate?: string | null;
     dueDatePrecision?: DueDatePrecision | null;
+    tonight?: boolean;
     status?: ItemStatus;
   };
 }

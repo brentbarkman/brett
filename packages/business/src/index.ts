@@ -500,6 +500,13 @@ export function validateUpdateItem(
     }
   }
 
+  if (obj.tonight !== undefined) {
+    if (typeof obj.tonight !== "boolean") {
+      return { ok: false, error: "tonight must be a boolean" };
+    }
+    data.tonight = obj.tonight;
+  }
+
   if (obj.snoozedUntil !== undefined) {
     if (obj.snoozedUntil !== null) {
       if (typeof obj.snoozedUntil !== "string" || isNaN(Date.parse(obj.snoozedUntil))) {
@@ -676,6 +683,10 @@ export function validateBulkUpdate(
     }
   }
 
+  if (updates.tonight !== undefined && typeof updates.tonight !== "boolean") {
+    return { ok: false, error: "updates.tonight must be a boolean" };
+  }
+
   return {
     ok: true,
     data: {
@@ -684,6 +695,7 @@ export function validateBulkUpdate(
         listId: updates.listId as string | null | undefined,
         dueDate: updates.dueDate as string | null | undefined,
         dueDatePrecision: updates.dueDatePrecision as DueDatePrecision | null | undefined,
+        tonight: updates.tonight as boolean | undefined,
         status: updates.status as ItemStatus | undefined,
       },
     },

@@ -10,7 +10,7 @@ interface ScheduleRowProps {
   dueDatePrecision?: DueDatePrecision;
   reminder?: ReminderType;
   recurrence?: RecurrenceType;
-  onUpdateDueDate: (dueDate: string | null, precision: DueDatePrecision) => void;
+  onUpdateDueDate: (dueDate: string | null, precision: DueDatePrecision, tonight: boolean) => void;
   onUpdateReminder: (reminder: ReminderType | null) => void;
   onUpdateRecurrence: (recurrence: RecurrenceType | null) => void;
 }
@@ -125,8 +125,8 @@ export function ScheduleRow({
             <QuickDatePicker
               anchorEl={anchorEl}
               initialDate={dueDate ? new Date(dueDate) : null}
-              onCommit={(date, precision) => {
-                onUpdateDueDate(date ? date.toISOString() : null, precision);
+              onCommit={(date, precision, tonight) => {
+                onUpdateDueDate(date ? date.toISOString() : null, precision, tonight);
                 close();
               }}
               onCancel={close}

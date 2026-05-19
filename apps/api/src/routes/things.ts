@@ -324,6 +324,7 @@ things.patch("/bulk", async (c) => {
     updateData.dueDate = data.updates.dueDate ? new Date(data.updates.dueDate) : null;
   if (data.updates.dueDatePrecision !== undefined)
     updateData.dueDatePrecision = data.updates.dueDatePrecision;
+  if (data.updates.tonight !== undefined) updateData.tonight = data.updates.tonight;
   if (data.updates.status !== undefined) updateData.status = data.updates.status;
 
   const result = await prisma.item.updateMany({
@@ -581,6 +582,7 @@ things.patch("/:id", async (c) => {
     updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
   if (data.dueDatePrecision !== undefined)
     updateData.dueDatePrecision = data.dueDatePrecision;
+  if (data.tonight !== undefined) updateData.tonight = data.tonight;
   if (data.brettObservation !== undefined)
     updateData.brettObservation = data.brettObservation;
   if (data.listId !== undefined) updateData.listId = data.listId;
