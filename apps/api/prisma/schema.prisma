@@ -161,6 +161,7 @@ model Item {
   reminder         String?   // "morning_of" | "1_hour_before" | "day_before" | "custom"
   recurrence       String?   // "daily" | "weekly" | "monthly" | "custom"
   recurrenceRule   String?   // iCal RRULE string for custom recurrence
+  tonight          Boolean   @default(false)
   brettTakeGeneratedAt DateTime?
   contentType        String?   // "tweet" | "article" | "video" | "pdf" | "podcast" | "web_page"
   contentStatus      String?   // "pending" | "extracted" | "failed"
