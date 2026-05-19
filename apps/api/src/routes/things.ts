@@ -510,7 +510,7 @@ things.post("/", async (c) => {
 
 /** Spawn the next occurrence of a recurring task */
 async function spawnNextRecurrence(
-  item: { id: string; type: string; title: string; notes: string | null; description: string | null; source: string; dueDate: Date | null; dueDatePrecision: string | null; recurrence: string | null; recurrenceRule: string | null; listId: string | null; userId: string },
+  item: { id: string; type: string; title: string; notes: string | null; description: string | null; source: string; dueDate: Date | null; dueDatePrecision: string | null; recurrence: string | null; recurrenceRule: string | null; listId: string | null; userId: string; tonight: boolean },
   linksFrom: { toItemId: string; toItemType: string }[],
 ) {
   if (!item.recurrence) return;
@@ -534,6 +534,10 @@ async function spawnNextRecurrence(
       recurrenceRule: item.recurrenceRule,
       listId: item.listId,
       userId: item.userId,
+      // Carry tonight across spawns. Recurring evening tasks (e.g. nightly
+      // medication, "review tomorrow's calendar tonight") rely on this — the
+      // Tonight bucket is exactly the point of having those recurrences.
+      tonight: item.tonight,
     },
   });
 
