@@ -6,6 +6,7 @@ import { useTodayKey } from "./hooks/useTodayKey";
 import { usePinnedDate } from "./hooks/usePinnedDate";
 import { getEndOfWeekUTC, isHiddenDeclined } from "@brett/business";
 import type { BackgroundStyle } from "@brett/business";
+import { computeBadgeCount } from "./lib/badgeCount";
 import {
   DndContext,
   DragOverlay,
@@ -503,29 +504,22 @@ export function App() {
 
   // Push the Today count to the macOS dock via the main process.
   //
-  // Inclusion rules:
-  //   - Always: overdue + today + this_week (the upcoming workweek)
-  //   - On Sat/Sun only: + this_weekend (the current weekend has arrived)
+  // Inclusion rules (kept narrow on purpose; see lib/badgeCount.ts for history):
+  //   - overdue + due today only
+  //   - Tonight items count as today (dueDate = today end)
   //
-  // Weekend items are intentionally excluded from the badge during the
-  // workweek — the user shouldn't see a Saturday item pestering them on
-  // Tuesday. Once Saturday rolls around, those items roll into the badge.
+  // The week-long fetch above stays — the rest of the Today view still needs
+  // this_week + this_weekend items. The badge just filters them down here.
   //
   // Gates on `todayQuerySuccess` so the dock doesn't flash 0 during the
   // hydration window. Clears to 0 when signed out. No-op in browsers /
-  // Windows. iOS parity lives in apps/ios/Brett/Services/BadgeManager.
+  // Windows. iOS parity lives in apps/ios/Brett/Views/Today/TodaySections.swift
+  // (`badgeCount` static method) — keep them in lockstep.
   const badgeUserId = user?.id ?? null;
-  const isWeekendNow = useMemo(() => {
-    const dow = new Date(todayKey).getUTCDay();
-    return dow === 0 || dow === 6;
-  }, [todayKey]);
   const badgeCount = useMemo(() => {
     if (!badgeUserId) return 0;
-    return activeThingsForCount.filter((t: { urgency?: string }) => {
-      if (t.urgency === "this_weekend") return isWeekendNow;
-      return true;
-    }).length;
-  }, [badgeUserId, activeThingsForCount, isWeekendNow]);
+    return computeBadgeCount(activeThingsForCount);
+  }, [badgeUserId, activeThingsForCount]);
   useEffect(() => {
     const api = (window as { electronAPI?: { setBadgeCount?: (n: number) => Promise<void> } }).electronAPI;
     if (!api?.setBadgeCount) return;

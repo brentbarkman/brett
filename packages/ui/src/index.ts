@@ -50,6 +50,7 @@ export { useListKeyboardNav } from "./useListKeyboardNav";
 export { useDeferredToggle } from "./useDeferredToggle";
 export { ItemListShell } from "./ItemListShell";
 export { SectionHeader } from "./SectionHeader";
+export { CollapsibleSection } from "./CollapsibleSection";
 export { useClickOutside } from "./useClickOutside";
 export { TaskDetailPanel } from "./TaskDetailPanel";
 export { OverflowMenu } from "./OverflowMenu";

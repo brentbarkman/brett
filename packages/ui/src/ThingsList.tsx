@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import type { Thing, NavList } from "@brett/types";
 import { ThingCard } from "./ThingCard";
 import { SectionHeader } from "./SectionHeader";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { QuickAddInput, type QuickAddInputHandle } from "./QuickAddInput";
 import { useListKeyboardNav } from "./useListKeyboardNav";
 import { useDeferredToggle } from "./useDeferredToggle";
@@ -33,9 +34,16 @@ interface ThingsListProps {
    * `visibility: hidden` so it still occupies layout space but doesn't
    * duplicate the chrome active-section header above the inner scroll. */
   hiddenHeaderKey?: string | null;
+  /** Controlled open-state map for sections that should be collapsible.
+   * Keys are section keys (e.g. "this-week", "this-weekend", "done-today");
+   * absent keys = section is always-expanded (Overdue, Today). When the
+   * parent owns this map (persisting state per-user via
+   * useLocalStorageBoolean), a section with `false` hides its items and
+   * shows a chevron header. */
+  collapsibleSections?: Record<string, { open: boolean; onOpenChange: (open: boolean) => void }>;
 }
 
-export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare, onReconnect, reconnectPendingSourceId, onInstallUpdate, hiddenHeaderKey }: ThingsListProps) {
+export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddContent, onTriageOpen, onFocusChange, header, activeFilter, bare, onReconnect, reconnectPendingSourceId, onInstallUpdate, hiddenHeaderKey, collapsibleSections }: ThingsListProps) {
   // Shared across ThingsList, InboxView, and UpcomingView — see CLAUDE.md
   // list-consistency rule.
   const handleToggleWithFreeze = useDeferredToggle(onToggle);
@@ -124,27 +132,27 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
           {header && <div>{header}</div>}
 
           {grouped.overdue.length > 0 && (
-            <Section sectionKey="overdue" title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "overdue"} />
+            <Section sectionKey="overdue" title="Overdue" things={grouped.overdue} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={overdueOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "overdue"} collapse={collapsibleSections?.["overdue"]} />
           )}
           {grouped.today.length > 0 && (
-            <Section sectionKey="today" title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "today"} />
+            <Section sectionKey="today" title="Today" things={grouped.today} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={todayOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "today"} collapse={collapsibleSections?.["today"]} />
           )}
           {isWeekendNow ? (
             <>
               {grouped.this_weekend.length > 0 && (
-                <Section sectionKey="this-weekend" title="This Weekend" things={grouped.this_weekend} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekendOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-weekend"} />
+                <Section sectionKey="this-weekend" title="This Weekend" things={grouped.this_weekend} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekendOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-weekend"} collapse={collapsibleSections?.["this-weekend"]} />
               )}
               {grouped.this_week.length > 0 && (
-                <Section sectionKey="this-week" title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-week"} />
+                <Section sectionKey="this-week" title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-week"} collapse={collapsibleSections?.["this-week"]} />
               )}
             </>
           ) : (
             <>
               {grouped.this_week.length > 0 && (
-                <Section sectionKey="this-week" title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-week"} />
+                <Section sectionKey="this-week" title="This Week" things={grouped.this_week} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-week"} collapse={collapsibleSections?.["this-week"]} />
               )}
               {grouped.this_weekend.length > 0 && (
-                <Section sectionKey="this-weekend" title="This Weekend" things={grouped.this_weekend} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekendOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-weekend"} />
+                <Section sectionKey="this-weekend" title="This Weekend" things={grouped.this_weekend} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={thisWeekendOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "this-weekend"} collapse={collapsibleSections?.["this-weekend"]} />
               )}
             </>
           )}
@@ -155,7 +163,7 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
 
           {done.length > 0 && (
             <div>
-              <Section sectionKey="done-today" title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "done-today"} />
+              <Section sectionKey="done-today" title="Done Today" things={done} onItemClick={handleItemClick} onToggle={handleToggleWithFreeze} focusedIndex={focusedIndex} indexOffset={doneOffset} onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={onInstallUpdate} cardEls={cardEls} hideHeader={hiddenHeaderKey === "done-today"} collapse={collapsibleSections?.["done-today"]} />
             </div>
           )}
         </div>
@@ -196,6 +204,7 @@ function Section({
   onInstallUpdate,
   cardEls,
   hideHeader,
+  collapse,
 }: {
   /** Stable identifier matched against TodayView's section list to drive the
    * chrome active-section header. The chrome header pins at the top of the
@@ -218,7 +227,53 @@ function Section({
    * duplicate. Layout space is preserved so the chrome→in-flow handoff during
    * scroll doesn't jump. */
   hideHeader?: boolean;
+  /** When provided, renders a CollapsibleSection header. Items render only
+   * when `open` is true. The chrome active-section header in TodayView
+   * already skips collapsed sections because there are no items to scroll
+   * past. */
+  collapse?: { open: boolean; onOpenChange: (open: boolean) => void };
 }) {
+  const items = (
+    <div className="flex flex-col">
+      {things.map((item, i) => (
+        <ThingCard
+          key={item.id}
+          thing={item}
+          onClick={() => onItemClick(item)}
+          onToggle={onToggle}
+          isFocused={focusedIndex === indexOffset + i}
+          onReconnect={item.sourceId?.startsWith("relink:") && onReconnect
+            ? () => onReconnect(item.sourceId!)
+            : undefined}
+          reconnectPending={item.sourceId === reconnectPendingSourceId}
+          onInstallUpdate={item.sourceId === "system:update" ? onInstallUpdate : undefined}
+          onElementRef={(el) => {
+            if (el) cardEls.current.set(item.id, el);
+            else cardEls.current.delete(item.id);
+          }}
+        />
+      ))}
+    </div>
+  );
+
+  // Collapsible variant: header is a chevron button, items render only when
+  // open. `hideHeader` doesn't apply — the chrome active-section header in
+  // TodayView never tracks collapsed sections.
+  if (collapse) {
+    return (
+      <div data-section-key={sectionKey}>
+        <CollapsibleSection
+          title={title}
+          count={things.length}
+          open={collapse.open}
+          onOpenChange={collapse.onOpenChange}
+        >
+          {items}
+        </CollapsibleSection>
+      </div>
+    );
+  }
+
   return (
     <div data-section-key={sectionKey}>
       {/* For non-active sections the in-flow header is a visible divider.
@@ -232,26 +287,7 @@ function Section({
       {!hideHeader && (
         <SectionHeader title={title} count={things.length} />
       )}
-      <div className="flex flex-col">
-        {things.map((item, i) => (
-          <ThingCard
-            key={item.id}
-            thing={item}
-            onClick={() => onItemClick(item)}
-            onToggle={onToggle}
-            isFocused={focusedIndex === indexOffset + i}
-            onReconnect={item.sourceId?.startsWith("relink:") && onReconnect
-              ? () => onReconnect(item.sourceId!)
-              : undefined}
-            reconnectPending={item.sourceId === reconnectPendingSourceId}
-            onInstallUpdate={item.sourceId === "system:update" ? onInstallUpdate : undefined}
-            onElementRef={(el) => {
-              if (el) cardEls.current.set(item.id, el);
-              else cardEls.current.delete(item.id);
-            }}
-          />
-        ))}
-      </div>
+      {items}
     </div>
   );
 }
