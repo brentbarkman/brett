@@ -323,6 +323,7 @@ export function itemToThing(
     dueDateLabel: computeDueDateLabel(item.dueDate, now, timezone),
     isCompleted: item.completedAt !== null,
     completedAt: item.completedAt?.toISOString(),
+    tonight: item.tonight ?? false,
     brettObservation: item.brettObservation ?? undefined,
     description: item.description ?? undefined,
     stalenessDays: computeStalenessDays(item.updatedAt, now),
@@ -689,11 +690,18 @@ export function validateBulkUpdate(
   };
 }
 
-export type TriageDatePreset = "today" | "tomorrow" | "this_weekend" | "this_week" | "next_week" | "next_month";
+export type TriageDatePreset = "today" | "tonight" | "tomorrow" | "this_weekend" | "this_week" | "next_week" | "next_month";
 
 export interface TriageResult {
   dueDate: string; // ISO string
   dueDatePrecision: DueDatePrecision;
+  /**
+   * Whether selecting this preset sets the `tonight` flag on the item. Only
+   * `"tonight"` produces `true`; every other preset explicitly produces
+   * `false` so that picking e.g. "Today" or "Tomorrow" clears a previously
+   * set tonight flag.
+   */
+  tonight: boolean;
 }
 
 /**
@@ -719,10 +727,16 @@ export function computeTriageResult(
 
   switch (preset) {
     case "today":
-      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
+      return { dueDate: d.toISOString(), dueDatePrecision: "day", tonight: false };
+    case "tonight":
+      // Same calendar day as "today" — `tonight` is just a presentation hint
+      // ("expand after 6pm", "show in the Tonight section"). The dueDate is
+      // identical to "today" so existing date-based logic (badges, urgency)
+      // keeps working unchanged.
+      return { dueDate: d.toISOString(), dueDatePrecision: "day", tonight: true };
     case "tomorrow":
       d.setUTCDate(d.getUTCDate() + 1);
-      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
+      return { dueDate: d.toISOString(), dueDatePrecision: "day", tonight: false };
     case "this_weekend": {
       // If today is Saturday (6) or Sunday (0), we ARE in the weekend — use today.
       // Otherwise jump to the next upcoming Saturday.
@@ -730,23 +744,23 @@ export function computeTriageResult(
       if (dayOfWeek !== 6 && dayOfWeek !== 0) {
         d.setUTCDate(d.getUTCDate() + (6 - dayOfWeek));
       }
-      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
+      return { dueDate: d.toISOString(), dueDatePrecision: "day", tonight: false };
     }
     case "this_week": {
       // Friday of the current workweek (today if today IS Friday).
       // On Sat-Sun, jump to next Friday since the current workweek has ended.
       d.setUTCDate(d.getUTCDate() + daysUntilUpcomingFriday(d.getUTCDay()));
-      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
+      return { dueDate: d.toISOString(), dueDatePrecision: "day", tonight: false };
     }
     case "next_week": {
       // The Friday after "this_week"'s Friday — i.e., the end of next
       // workweek. Stays in lockstep with `this_week` by construction.
       d.setUTCDate(d.getUTCDate() + daysUntilUpcomingFriday(d.getUTCDay()) + 7);
-      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
+      return { dueDate: d.toISOString(), dueDatePrecision: "day", tonight: false };
     }
     case "next_month":
       d.setUTCMonth(d.getUTCMonth() + 1, 1);
-      return { dueDate: d.toISOString(), dueDatePrecision: "day" };
+      return { dueDate: d.toISOString(), dueDatePrecision: "day", tonight: false };
   }
 }
 

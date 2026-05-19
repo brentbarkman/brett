@@ -109,6 +109,7 @@ export interface Thing {
   dueDateLabel?: string;
   isCompleted: boolean;
   completedAt?: string; // ISO string
+  tonight?: boolean;
   brettObservation?: string;
   description?: string;
   stalenessDays?: number;
