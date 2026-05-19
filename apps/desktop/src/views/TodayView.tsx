@@ -24,6 +24,15 @@ import { useBriefing, useBriefingSummary } from "../api/briefing";
 import { usePreference } from "../api/preferences";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useTodayKey } from "../hooks/useTodayKey";
+import { useLocalStorageBoolean } from "../lib/useLocalStorageBoolean";
+import { useTonightExpansion } from "../lib/useTonightAutoExpand";
+
+/** Section keys that render as collapsibles on Today. `tonight` is
+ *  collapsible too but its open-state comes from `useTonightExpansion` (6pm
+ *  auto-open with sticky per-day override) instead of localStorage.
+ *  Overdue + Today stay always-expanded — they're the badge bucket and the
+ *  reason the user opened the view. */
+const COLLAPSIBLE_SECTION_KEYS = new Set(["tonight", "this-week", "this-weekend", "done-today"]);
 
 interface TodayViewProps {
   lists: NavList[];
@@ -131,9 +140,13 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   const grouped = useMemo(() => {
     const uncompleted = filteredThings.filter((t) => !t.isCompleted);
     const done = filteredThings.filter((t) => t.isCompleted);
+    const todayAll = uncompleted.filter((t) => t.urgency === "today");
     return {
       overdue: uncompleted.filter((t) => t.urgency === "overdue"),
-      today: uncompleted.filter((t) => t.urgency === "today"),
+      // Split today-day items: tonight render in their own section but
+      // remain "today" tasks semantically (badge, urgency, etc.).
+      today: todayAll.filter((t) => !t.tonight),
+      tonight: todayAll.filter((t) => t.tonight),
       thisWeek: uncompleted.filter((t) => t.urgency === "this_week"),
       thisWeekend: uncompleted.filter((t) => t.urgency === "this_weekend"),
       done,
@@ -146,6 +159,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     const list: Array<{ key: string; title: string; count: number }> = [];
     if (grouped.overdue.length > 0) list.push({ key: "overdue", title: "Overdue", count: grouped.overdue.length });
     if (grouped.today.length > 0) list.push({ key: "today", title: "Today", count: grouped.today.length });
+    if (grouped.tonight.length > 0) list.push({ key: "tonight", title: "Tonight", count: grouped.tonight.length });
     const weekend = grouped.thisWeekend.length > 0
       ? { key: "this-weekend", title: "This Weekend", count: grouped.thisWeekend.length }
       : null;
@@ -165,19 +179,54 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     return list;
   }, [grouped]);
 
+  // Per-section collapsed state. Persisted per-user via localStorage so
+  // toggling a section, navigating away, and coming back retains the choice.
+  // Default `false` (collapsed) per the 2026-05-18 tuning spec.
+  const [thisWeekOpen, setThisWeekOpen] = useLocalStorageBoolean("today.section.this-week.open", false);
+  const [thisWeekendOpen, setThisWeekendOpen] = useLocalStorageBoolean("today.section.this-weekend.open", false);
+  const [doneTodayOpen, setDoneTodayOpen] = useLocalStorageBoolean("today.section.done-today.open", false);
+
+  // Tonight section's open/closed state: 6pm auto-expand with sticky user
+  // override (per-date). Only meaningful on Today since custom-list and
+  // Upcoming views don't surface Tonight as a separate section.
+  const [tonightOpen, setTonightOpen] = useTonightExpansion();
+
+  const collapsibleSections = useMemo(() => ({
+    "tonight": { open: tonightOpen, onOpenChange: setTonightOpen },
+    "this-week": { open: thisWeekOpen, onOpenChange: setThisWeekOpen },
+    "this-weekend": { open: thisWeekendOpen, onOpenChange: setThisWeekendOpen },
+    "done-today": { open: doneTodayOpen, onOpenChange: setDoneTodayOpen },
+  }), [tonightOpen, setTonightOpen, thisWeekOpen, setThisWeekOpen, thisWeekendOpen, setThisWeekendOpen, doneTodayOpen, setDoneTodayOpen]);
+
+  // For the chrome active-section header above the inner scroll: a collapsed
+  // section has no items to scroll past, so it must never become the active
+  // section. Track-only the visible (open or always-on) sections.
+  const trackableSectionKeys = useMemo(() => {
+    return new Set(
+      sections
+        .filter((s) =>
+          !COLLAPSIBLE_SECTION_KEYS.has(s.key) ||
+          collapsibleSections[s.key as keyof typeof collapsibleSections]?.open === true
+        )
+        .map((s) => s.key)
+    );
+  }, [sections, collapsibleSections]);
+
   const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null);
   const sectionsScrollRef = useRef<HTMLDivElement>(null);
   const outerScrollRef = useRef<HTMLDivElement>(null);
   const thingsCardRef = useRef<HTMLDivElement>(null);
 
   // Re-sync active section when the section list changes (filter pill,
-  // toggling done, etc.) so we don't stick on a key that no longer exists.
+  // toggling done, collapsing a section, etc.) so we don't stick on a key
+  // that no longer exists OR has been collapsed.
   useEffect(() => {
     setActiveSectionKey((prev) => {
-      if (prev && sections.some((s) => s.key === prev)) return prev;
-      return sections[0]?.key ?? null;
+      if (prev && trackableSectionKeys.has(prev)) return prev;
+      const firstVisible = sections.find((s) => trackableSectionKeys.has(s.key));
+      return firstVisible?.key ?? null;
     });
-  }, [sections]);
+  }, [sections, trackableSectionKeys]);
 
   // Scroll tracker — picks the LAST section whose top is at or above the
   // inner-scroll's viewport top. That's the section the user is currently
@@ -192,7 +241,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   //  3. An IntersectionObserver on each section, which fires whenever a
   //     section's intersection with the inner-scroll viewport changes —
   //     catches anything the scroll events might miss.
-  const sectionKeysHash = sections.map((s) => s.key).join(",");
+  // Hash also includes trackable keys so collapse/expand re-runs the
+  // recalc effect (the scroll listeners need fresh `trackableSectionKeys`
+  // in their closure).
+  const sectionKeysHash = sections.map((s) => s.key).join(",") +
+    "|" + Array.from(trackableSectionKeys).sort().join(",");
   useEffect(() => {
     const el = sectionsScrollRef.current;
     if (!el || sections.length === 0) return;
@@ -204,11 +257,16 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
         const sectionEls = el.querySelectorAll<HTMLElement>("[data-section-key]");
         if (sectionEls.length === 0) return;
         const scrollTop = el.getBoundingClientRect().top;
-        let activeKey: string | null = sections[0]?.key ?? null;
+        // Default to the first TRACKABLE section — never let a collapsed
+        // section become the chrome active section (no items to scroll past).
+        const firstTrackable = sections.find((s) => trackableSectionKeys.has(s.key));
+        let activeKey: string | null = firstTrackable?.key ?? null;
         for (const sectionEl of sectionEls) {
+          const key = sectionEl.dataset.sectionKey;
+          if (!key || !trackableSectionKeys.has(key)) continue;
           const t = sectionEl.getBoundingClientRect().top;
           if (t <= scrollTop + 1) {
-            activeKey = sectionEl.dataset.sectionKey ?? activeKey;
+            activeKey = key;
           } else {
             break;
           }
@@ -327,10 +385,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
       reconnectPendingSourceId={reconnectPendingSourceId}
       onInstallUpdate={installUpdate}
       hiddenHeaderKey={activeSectionKey}
+      collapsibleSections={collapsibleSections}
       header={<ThingsEmptyState activeFilter={activeFilter} hasThingsElsewhere allCompleted inline lists={lists} onAddTask={handleAddTask} onAddContent={handleAddContent} />}
     />
   ) : (
-    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} bare onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={installUpdate} hiddenHeaderKey={activeSectionKey} />
+    <ThingsList things={filteredThings} lists={lists} onItemClick={onItemClick} onToggle={handleToggle} onAdd={handleAddTask} onAddContent={handleQuickAddContent} onTriageOpen={onTriageOpen} onFocusChange={onFocusChange} activeFilter={activeFilter} bare onReconnect={onReconnect} reconnectPendingSourceId={reconnectPendingSourceId} onInstallUpdate={installUpdate} hiddenHeaderKey={activeSectionKey} collapsibleSections={collapsibleSections} />
   );
 
   return (

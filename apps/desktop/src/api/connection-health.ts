@@ -2,9 +2,31 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "./client";
 
+export interface BrokenConnectionDetail {
+  type: "granola" | "google-calendar" | "ai";
+  accountId: string | null;
+  reason: string | null;
+  brokenSince: string;
+}
+
 interface BrokenConnections {
   count: number;
   types: string[];
+  details: BrokenConnectionDetail[];
+}
+
+/**
+ * Find the broken-connection detail (if any) for a specific account so the
+ * Settings card for that account can render inline warning chrome. Returns
+ * null when the account is healthy or `data` is still loading.
+ */
+export function findBrokenDetailForAccount(
+  data: BrokenConnections | undefined,
+  type: "granola" | "google-calendar",
+  accountId: string,
+): BrokenConnectionDetail | null {
+  if (!data?.details) return null;
+  return data.details.find((d) => d.type === type && d.accountId === accountId) ?? null;
 }
 
 /**

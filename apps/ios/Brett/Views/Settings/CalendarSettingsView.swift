@@ -21,20 +21,28 @@ import AuthenticationServices
 ///   renders a page that calls `window.close()`, which the auth session
 ///   also interprets as completion.
 struct CalendarSettingsView: View {
+    /// Shared between the Google + Granola sections so we make a single
+    /// `/things/broken-connections` request when the view appears. Both
+    /// sections render warning chrome from the same source of truth.
+    @State private var brokenConnections = BrokenConnectionsStore()
+
     var body: some View {
         BrettSettingsScroll {
-            GoogleCalendarSection()
-            GranolaIntegrationSection()
+            GoogleCalendarSection(brokenConnections: brokenConnections)
+            GranolaIntegrationSection(brokenConnections: brokenConnections)
         }
         .navigationTitle("Calendar")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .task { await brokenConnections.refresh() }
     }
 }
 
 // MARK: - Google Calendar section
 
 private struct GoogleCalendarSection: View {
+    let brokenConnections: BrokenConnectionsStore
+
     @State private var store = CalendarAccountsStore()
     @State private var isConnecting = false
     @State private var errorMessage: String?
@@ -81,7 +89,15 @@ private struct GoogleCalendarSection: View {
             }
 
             ForEach(store.accounts) { account in
+                let broken = brokenConnections.brokenDetail(
+                    type: "google-calendar",
+                    accountId: account.id
+                )
                 BrettSettingsSection(account.googleEmail) {
+                    if let broken {
+                        AccountWarningRow(detail: broken)
+                        BrettSettingsDivider()
+                    }
                     accountHeaderRow(account)
 
                     BrettSettingsDivider()
@@ -339,6 +355,8 @@ private struct GoogleCalendarSection: View {
 // MARK: - Granola integration section
 
 private struct GranolaIntegrationSection: View {
+    let brokenConnections: BrokenConnectionsStore
+
     @State private var granolaStatus: GranolaAuthStatus?
     @State private var isGranolaLoading = false
     @State private var isConnectingGranola = false
@@ -471,6 +489,15 @@ private struct GranolaIntegrationSection: View {
     @ViewBuilder
     private func granolaAccountRows(_ account: GranolaAccount) -> some View {
         let isDisconnecting = disconnectingAccountId == account.id
+        let broken = brokenConnections.brokenDetail(
+            type: "granola",
+            accountId: account.id
+        )
+
+        if let broken {
+            AccountWarningRow(detail: broken)
+            BrettSettingsDivider()
+        }
 
         // Row 1 — identity + last sync.
         // No per-card Reconnect button: it would open generic OAuth without a
@@ -708,6 +735,43 @@ private struct GranolaIntegrationSection: View {
             granolaStatus = GranolaAuthStatus(connected: true, accounts: previousAccounts)
             granolaErrorMessage = "Couldn't update preference. Please try again."
         }
+    }
+}
+
+// MARK: - Account warning row
+
+/// Inline warning chrome rendered at the top of a Settings account card
+/// when the server has an active re-link task for that specific account.
+///
+/// Matches the row padding (14h / 12v) of every other row inside a
+/// `BrettSettingsCard` so it sits flush with the divider above the
+/// existing identity row. Uses system orange + SF Symbols to stay native
+/// on iOS — desktop uses amber for the same role; both clients carry the
+/// same content (title + reason).
+private struct AccountWarningRow: View {
+    let detail: APIClient.BrokenConnectionDetail
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Needs reconnection")
+                    .font(BrettTypography.taskTitle)
+                    .foregroundStyle(.orange)
+                if let reason = detail.reason, !reason.isEmpty {
+                    Text(reason)
+                        .font(BrettTypography.taskMeta)
+                        .foregroundStyle(.orange.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 }
 

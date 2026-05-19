@@ -22,7 +22,20 @@
 
 import { prisma } from "./prisma.js";
 
-type ConnectionType = "google-calendar" | "granola" | "ai";
+export type ConnectionType = "google-calendar" | "granola" | "ai";
+
+export interface BrokenConnectionDetail {
+  type: ConnectionType;
+  accountId: string | null;
+  reason: string | null;
+  brokenSince: string;
+}
+
+export interface BrokenConnectionsResponse {
+  count: number;
+  types: string[];
+  details: BrokenConnectionDetail[];
+}
 
 const TITLES: Record<ConnectionType, string> = {
   "google-calendar": "Re-link Google Calendar",
@@ -105,6 +118,47 @@ export async function resolveRelinkTask(
       completedAt: new Date(),
     },
   });
+}
+
+/**
+ * Aggregate every active/snoozed re-link task for a user into a structured
+ * response. Each entry carries the connection type, the specific accountId
+ * that broke, the human-readable reason (from Item.notes — written by
+ * createRelinkTask), and when the prompt was first created.
+ *
+ * Returns `count` + `types` for backwards compatibility with older clients
+ * that only consume the totals, plus the new `details` array for per-account
+ * UI chrome.
+ */
+export async function getBrokenConnections(
+  userId: string,
+): Promise<BrokenConnectionsResponse> {
+  const items = await prisma.item.findMany({
+    where: {
+      userId,
+      source: "system",
+      sourceId: { startsWith: "relink:" },
+      status: { in: ["active", "snoozed"] },
+    },
+    select: { sourceId: true, notes: true, createdAt: true },
+  });
+
+  const details: BrokenConnectionDetail[] = items.map((item: { sourceId: string | null; notes: string | null; createdAt: Date }) => {
+    // sourceId format: "relink:<type>:<accountId>" (accountId may be absent
+    // for legacy single-account integrations — split handles both cases).
+    const parts = (item.sourceId ?? "").split(":");
+    const type = (parts[1] ?? "") as ConnectionType;
+    const accountId = parts[2] ?? null;
+    return {
+      type,
+      accountId,
+      reason: item.notes ?? null,
+      brokenSince: item.createdAt.toISOString(),
+    };
+  });
+
+  const types = [...new Set(details.map((d) => d.type))];
+  return { count: details.length, types, details };
 }
 
 /**

@@ -11,7 +11,7 @@ export interface TriageQuickPickerProps {
   suggestedListIds: string[];
   suggestionMode: "suggested" | "recent" | "empty";
   startWith: "date" | "list";
-  onCommitDate: (date: Date | null, precision: DueDatePrecision) => void;
+  onCommitDate: (date: Date | null, precision: DueDatePrecision, tonight: boolean) => void;
   onCommitList: (listId: string | null) => void;
   onClose: () => void;
   placement?: "bottom-end" | "bottom-start" | "top-end" | "top-start";
@@ -22,8 +22,8 @@ export function TriageQuickPicker(props: TriageQuickPickerProps) {
   const { startWith } = props;
   const [step, setStep] = useState<"date" | "list">(startWith);
 
-  const handleDateCommit = (date: Date | null, precision: DueDatePrecision) => {
-    props.onCommitDate(date, precision);
+  const handleDateCommit = (date: Date | null, precision: DueDatePrecision, tonight: boolean) => {
+    props.onCommitDate(date, precision, tonight);
     if (step !== startWith) {
       // We are on step 2 (i.e. startWith was "list", we already committed a list)
       props.onClose();

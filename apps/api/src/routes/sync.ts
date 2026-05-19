@@ -38,7 +38,7 @@ const PUSHABLE_ENTITY_TYPES: readonly PushableEntityType[] = ["item", "list", "c
 const MUTABLE_FIELDS: Record<PushableEntityType, readonly string[]> = {
   item: ["title", "description", "notes", "status", "dueDate", "dueDatePrecision",
          "completedAt", "snoozedUntil", "reminder", "recurrence", "recurrenceRule",
-         "listId", "brettObservation", "contentType", "contentStatus"],
+         "listId", "brettObservation", "contentType", "contentStatus", "tonight"],
   list: ["name", "colorClass", "sortOrder", "archivedAt"],
   calendar_event_note: ["content"],
 };
@@ -56,7 +56,7 @@ const CREATABLE_FIELDS: Record<PushableEntityType, readonly string[]> = {
     "status", "dueDate", "dueDatePrecision", "completedAt", "snoozedUntil",
     "reminder", "recurrence", "recurrenceRule",
     "listId", "brettObservation",
-    "contentType", "contentStatus",
+    "contentType", "contentStatus", "tonight",
   ],
   list: ["name", "colorClass", "sortOrder", "archivedAt"],
   calendar_event_note: ["calendarEventId", "content"],
