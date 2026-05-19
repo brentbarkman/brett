@@ -14,6 +14,7 @@ import SwiftUI
 /// don't have desktop equivalents and don't need parity.
 enum QuickScheduleOption: String, CaseIterable, Identifiable {
     case today
+    case tonight
     case tomorrow
     case thisWeekend
     case thisWeek
@@ -28,6 +29,7 @@ enum QuickScheduleOption: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .today: return "Today"
+        case .tonight: return "Tonight"
         case .tomorrow: return "Tomorrow"
         case .thisWeekend: return "This Weekend"
         case .thisWeek: return "This Week"
@@ -42,6 +44,7 @@ enum QuickScheduleOption: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .today: return "sun.max.fill"
+        case .tonight: return "moon.stars.fill"
         case .tomorrow: return "sunrise.fill"
         case .thisWeekend: return "calendar"
         case .thisWeek: return "calendar.badge.clock"
@@ -51,6 +54,12 @@ enum QuickScheduleOption: String, CaseIterable, Identifiable {
         case .someday: return "moon.stars.fill"
         case .pickDate: return "calendar.badge.plus"
         }
+    }
+
+    /// True if picking this option should set `tonight=true` on the item.
+    /// Every other option implicitly clears the flag — see `handle(_:)`.
+    var setsTonight: Bool {
+        self == .tonight
     }
 
     /// True if this option should render with the muted (non-gold) tint.
@@ -85,6 +94,12 @@ enum QuickScheduleOption: String, CaseIterable, Identifiable {
 
         switch self {
         case .today:
+            return anchorAt(0)
+        case .tonight:
+            // Same calendar day as today — `tonight` is a presentation hint
+            // (Tonight section, 6pm auto-expand on desktop). The dueDate
+            // matches `today` exactly so existing date-based logic (urgency,
+            // bucketing) continues to behave correctly.
             return anchorAt(0)
         case .tomorrow:
             return anchorAt(1)
@@ -141,7 +156,12 @@ struct QuickScheduleSheet: View {
     /// Both `date` and `precision` are required so the caller can persist
     /// the picker's intent exactly. Week-precision presets stored as
     /// `.day` silently bucketize into the weekend.
-    let onConfirm: (_ date: Date?, _ precision: DueDatePrecision) -> Void
+    ///
+    /// `tonight` is `true` only when the user picked the Tonight chip.
+    /// Every other commit path (other presets, raw calendar pick, Someday)
+    /// passes `false`, which is the correct behavior — it clears any
+    /// previously set tonight flag when the user retriages the item.
+    let onConfirm: (_ date: Date?, _ precision: DueDatePrecision, _ tonight: Bool) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var showsDatePicker: Bool = false
@@ -151,7 +171,7 @@ struct QuickScheduleSheet: View {
     /// the desktop chip picker exactly so the two clients feel like the
     /// same product. iOS-only options come last.
     private static let presets: [QuickScheduleOption] = [
-        .today, .tomorrow, .thisWeekend, .thisWeek, .nextWeek, .nextMonth,
+        .today, .tonight, .tomorrow, .thisWeekend, .thisWeek, .nextWeek, .nextMonth,
         .inAMonth, .someday, .pickDate,
     ]
 
@@ -199,7 +219,10 @@ struct QuickScheduleSheet: View {
                                 // of the user's local date — see the storage
                                 // convention in `DateHelpers.utcMidnightOfLocalDate`.
                                 let stored = DateHelpers.utcMidnightOfLocalDate(pickedDate, in: .current)
-                                onConfirm(stored, .day)
+                                // Raw calendar picks always clear tonight — the
+                                // chip is the only Tonight entry point. Re-triaging
+                                // via the calendar drops the evening hint.
+                                onConfirm(stored, .day, false)
                                 dismiss()
                             } label: {
                                 Text("Confirm")
@@ -245,7 +268,7 @@ struct QuickScheduleSheet: View {
             return
         }
         HapticManager.medium()
-        onConfirm(option.resolvedDate(), option.precision)
+        onConfirm(option.resolvedDate(), option.precision, option.setsTonight)
         dismiss()
     }
 

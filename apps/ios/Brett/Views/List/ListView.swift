@@ -214,7 +214,7 @@ private struct ListViewBody: View {
                                             // `.taskDetail` is a sheet case.
                                             NavStore.shared.go(to: .taskDetail(id: item.id))
                                         },
-                                        onSchedule: { dueDate, precision in schedule(item.id, dueDate: dueDate, precision: precision) },
+                                        onSchedule: { dueDate, precision, tonight in schedule(item.id, dueDate: dueDate, precision: precision, tonight: tonight) },
                                         onArchive: { archive(item.id) },
                                         onDelete: { delete(item.id) },
                                         onReorder: { newOrder in reorder(newOrder) }
@@ -348,19 +348,24 @@ private struct ListViewBody: View {
     /// Pre-edit row comes from this view's `@Query`-backed `items` array,
     /// which is already user-scoped — no need for a separate store fetch
     /// (those public read methods were removed in Wave B).
-    private func schedule(_ id: String, dueDate: Date?, precision: DueDatePrecision) {
+    private func schedule(_ id: String, dueDate: Date?, precision: DueDatePrecision, tonight: Bool) {
         guard let item = items.first(where: { $0.id == id }) else { return }
         HapticManager.medium()
         let newPrecision: Any? = dueDate == nil ? nil : precision.rawValue
+        // Clearing the date also clears tonight — no evening hint without
+        // a due date.
+        let newTonight: Bool = dueDate == nil ? false : tonight
         itemStore.update(
             id: id,
             changes: [
                 "dueDate": dueDate as Any? ?? NSNull(),
                 "dueDatePrecision": newPrecision ?? NSNull(),
+                "tonight": newTonight,
             ],
             previousValues: [
                 "dueDate": item.dueDate as Any? ?? NSNull(),
                 "dueDatePrecision": item.dueDatePrecision as Any? ?? NSNull(),
+                "tonight": item.tonight,
             ],
             userId: userId
         )

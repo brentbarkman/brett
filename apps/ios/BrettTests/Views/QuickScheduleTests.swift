@@ -52,6 +52,33 @@ struct QuickScheduleTests {
         #expect(comps.hour == 0 && comps.minute == 0 && comps.second == 0)
     }
 
+    // MARK: - Tonight
+
+    @Test("Tonight resolves to the same date as Today")
+    func tonightIsSameDayAsToday() {
+        let now = tuesdayAnchor()
+        let today = QuickScheduleOption.today.resolvedDate(now: now, calendar: calendar)!
+        let tonight = QuickScheduleOption.tonight.resolvedDate(now: now, calendar: calendar)!
+        // Tonight is a presentation hint, not a different day — selecting it
+        // must store the same dueDate as Today so urgency math, badges, and
+        // bucketing all keep treating it as a today-day task.
+        #expect(tonight == today)
+    }
+
+    @Test("Only the Tonight chip sets the tonight flag; every other preset clears it")
+    func tonightFlagIsExclusive() {
+        // Spot-check: only `tonight` should advertise setsTonight=true.
+        // Every other preset must report false so re-triaging a Tonight item
+        // through any other chip drops the flag.
+        for option in QuickScheduleOption.allCases {
+            if option == .tonight {
+                #expect(option.setsTonight, "Tonight option should set tonight=true")
+            } else {
+                #expect(!option.setsTonight, "\(option.rawValue) must not set tonight=true")
+            }
+        }
+    }
+
     // MARK: - Tomorrow
 
     @Test("Tomorrow is now + 1 day, at start of day")
