@@ -10,7 +10,7 @@ import {
 } from "../lib/google-calendar.js";
 import { encryptToken } from "../lib/encryption.js";
 import { initialSync, incrementalSync } from "../services/calendar-sync.js";
-import { resolveRelinkTask } from "../lib/connection-health.js";
+import { resolveRelinkTaskForAccount } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { google } from "googleapis";
 import { signOAuthState, verifyOAuthState } from "../lib/oauth-state.js";
@@ -192,8 +192,11 @@ calendarAccounts.get("/callback", async (c) => {
     },
   });
 
-  // Resolve any existing re-link task for this connection
-  await resolveRelinkTask(user.id, "google-calendar").catch((e) =>
+  // Resolve any existing re-link task for THIS account only. Using the
+  // provider-wide resolver here would silently dismiss another Google
+  // Calendar account's re-link prompt — see the granola-auth fix for the
+  // same bug pattern.
+  await resolveRelinkTaskForAccount(user.id, "google-calendar", account.id).catch((e) =>
     console.error("[calendar-accounts] Failed to resolve re-link task:", e),
   );
 
@@ -297,8 +300,10 @@ calendarAccounts.delete("/:id", authMiddleware, async (c) => {
   // Cascade delete (GoogleAccount -> CalendarList -> CalendarEvent, etc.)
   await prisma.googleAccount.delete({ where: { id: account.id } });
 
-  // Resolve any existing re-link task — user is in a valid state now (account removed)
-  await resolveRelinkTask(user.id, "google-calendar").catch((e) =>
+  // Resolve any existing re-link task for THIS account only. The user may
+  // have other Google Calendar accounts whose re-link prompts must stay
+  // visible — see calendar callback for the same scoping rationale.
+  await resolveRelinkTaskForAccount(user.id, "google-calendar", account.id).catch((e) =>
     console.error("[calendar-accounts] Failed to resolve re-link task:", e),
   );
 
