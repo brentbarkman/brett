@@ -85,7 +85,13 @@ struct TodayHero: View {
                     .transition(.opacity)
             }
         }
-        .padding(.horizontal, 24)
+        // Match `BrettSpacing.pagePaddingX` (20pt) so the greeting +
+        // dateline align with the section-header text below ("TODAY",
+        // "OVERDUE", etc., which sit at 16pt card padding + 4pt header
+        // padding = 20pt from the screen edge). The earlier 24pt
+        // literal left the hero 4pt further right than every section
+        // header underneath it.
+        .padding(.horizontal, BrettSpacing.pagePaddingX)
         .padding(.top, 12)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, alignment: .leading)

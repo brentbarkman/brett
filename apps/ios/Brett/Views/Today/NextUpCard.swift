@@ -56,8 +56,9 @@ struct NextUpCard: View {
             // Vertical rhythm tuned by hand: ~16pt of breathing room
             // from the brief above so the editorial moment lands as a
             // separate beat, with a tight 4pt gap below so OVERDUE
-            // pulls right up under it.
-            .padding(.horizontal, 24)
+            // pulls right up under it. Horizontal matches the hero +
+            // section-header text edge — `BrettSpacing.pagePaddingX`.
+            .padding(.horizontal, BrettSpacing.pagePaddingX)
             .padding(.top, 16)
             .padding(.bottom, 4)
             .accessibilityElement(children: .combine)
