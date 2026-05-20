@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wallpaper Curation — Review</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --fg: #e8e8e8;
+    --muted: #888;
+    --muted-2: #555;
+    --line: #1c1c1d;
+    --card: #131314;
+    --accent: #ddb968;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    padding: 48px 32px 120px;
+    max-width: 1640px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { margin-bottom: 32px; }
+  h1 { font: 600 26px/1.2 -apple-system, "Inter", sans-serif; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); max-width: 720px; }
+  .toc {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin: 20px 0 32px;
+    padding: 12px 16px;
+    background: var(--card);
+    border-radius: 10px;
+  }
+  .toc a { color: var(--muted); text-decoration: none; font-size: 11px; padding: 3px 8px; border-radius: 5px; background: rgba(255,255,255,0.04); }
+  .toc a:hover { color: var(--fg); background: rgba(255,255,255,0.08); }
+  .notes {
+    margin: 16px 0 0;
+    padding: 12px 16px;
+    background: rgba(221, 185, 104, 0.06);
+    border: 1px solid rgba(221, 185, 104, 0.18);
+    border-radius: 8px;
+    font-size: 12px;
+    color: #c8b08c;
+  }
+  .note-row + .note-row { margin-top: 6px; }
+  .note-row b { color: #ddb968; font-weight: 600; margin-right: 4px; }
+
+  .slot { padding: 24px 0 28px; border-top: 1px solid var(--line); }
+  .slot-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .slot-title { font: 600 16px/1 -apple-system, sans-serif; letter-spacing: -0.01em; }
+  .slot-meta { color: var(--muted); font-size: 11px; }
+  .image-row { padding: 14px 0 18px; }
+  .image-row + .image-row { border-top: 1px dashed rgba(255,255,255,0.06); margin-top: 8px; padding-top: 16px; }
+  .image-why { color: #b8b8b8; font-size: 12px; max-width: 920px; margin: 0 0 12px; }
+
+  .slot-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px 56px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ─── Desktop mock — matches Brett's Today view ────────────────────── */
+  .desktop {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .desktop img.bg {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  .desktop-window {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-columns: 14% 1fr;
+    pointer-events: none;
+  }
+  .titlebar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 28px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 12px;
+    z-index: 5;
+  }
+  .traffic { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+
+  /* Left nav */
+  .leftnav {
+    padding: 36px 10px 12px;
+    color: rgba(255,255,255,0.78);
+    font-size: 10px;
+    display: flex; flex-direction: column;
+    gap: 1px;
+  }
+  .nav-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border-radius: 6px;
+    color: rgba(255,255,255,0.65);
+    line-height: 1;
+  }
+  .nav-row.active {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+  }
+  .nav-icon {
+    width: 12px; height: 12px;
+    border: 1px solid currentColor; border-radius: 2.5px;
+    flex: none;
+    opacity: 0.78;
+  }
+  .nav-badge { margin-left: auto; font: 9px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.5); }
+  .nav-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 10px 4px; }
+  .nav-section-label {
+    padding: 0 8px 6px;
+    font: 600 8px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.38);
+  }
+  .nav-list-row {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 8px; color: rgba(255,255,255,0.6);
+    font-size: 10px;
+  }
+  .nav-list-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .nav-search {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 8px;
+    color: rgba(255,255,255,0.32);
+    font-size: 10px;
+  }
+  .nav-kbd {
+    margin-left: auto;
+    font: 8px/1 -apple-system, sans-serif;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 3px;
+    padding: 1.5px 3px;
+    color: rgba(255,255,255,0.35);
+  }
+
+  /* Main content */
+  .main {
+    padding: 36px 28px 18px;
+    display: flex; flex-direction: column; gap: 10px;
+    overflow: hidden;
+  }
+  /* Briefing — stylized text DIRECTLY on wallpaper, no card */
+  .briefing {
+    padding-top: 4px;
+  }
+  .briefing-greeting {
+    font: 500 32px/1.05 ui-serif, "New York", Georgia, serif;
+    letter-spacing: -0.02em;
+    color: #fff;
+    text-shadow: 0 1px 12px rgba(0,0,0,0.32);
+  }
+  .briefing-date {
+    margin-top: 3px;
+    font: 600 9.5px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 1px 8px rgba(0,0,0,0.3);
+  }
+  .briefing-prose {
+    margin-top: 12px;
+    font: 400 13px/1.55 ui-serif, "New York", Georgia, serif;
+    color: rgba(255,255,255,0.92);
+    text-shadow: 0 1px 8px rgba(0,0,0,0.28);
+  }
+  .briefing-prose em {
+    font-style: normal; font-weight: 500; color: #fff;
+  }
+  .nextup-card {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(16,16,18,0.42);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+    backdrop-filter: blur(28px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 8px 12px;
+  }
+  .nextup-bar { width: 3px; height: 22px; border-radius: 2px; background: #5fa3ff; flex: none; }
+  .nextup-title { font-size: 11.5px; font-weight: 600; color: #fff; }
+  .nextup-sub { font-size: 10px; color: rgba(255,255,255,0.6); }
+  .nextup-time { margin-left: auto; font: 600 11px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.78); }
+
+  .things-card {
+    background: rgba(16,16,18,0.42);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+    backdrop-filter: blur(28px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 10px 12px 8px;
+    flex: 1; min-height: 0;
+    overflow: hidden;
+  }
+  .things-section-label {
+    display: flex; align-items: baseline; gap: 6px;
+    font: 600 9px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.5);
+    padding: 4px 0 5px;
+  }
+  .things-section-count { font: 600 9px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.35); }
+  .thing-row {
+    display: flex; align-items: center; gap: 9px;
+    padding: 4px 0;
+    font-size: 11px; color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  }
+  .check {
+    width: 12px; height: 12px;
+    border: 1.4px solid rgba(255,255,255,0.42);
+    border-radius: 50%; flex: none;
+  }
+  .check.done { background: rgba(255,255,255,0.35); border-color: rgba(255,255,255,0.55); }
+  .thing-row.done { color: rgba(255,255,255,0.55); text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.3); }
+  .thing-cal-bar { width: 3px; height: 12px; background: #5fa3ff; border-radius: 1.5px; flex: none; }
+  .thing-time { margin-left: auto; font: 11px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.55); }
+
+  /* ─── iOS mock — matches Today page ────────────────────────────────── */
+  .ios {
+    position: relative;
+    aspect-ratio: 9 / 19.5;
+    border-radius: 32px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.7), 0 0 0 4px #1a1a1c, 0 0 0 5px rgba(255,255,255,0.06);
+  }
+  .ios img.bg {
+    position: absolute; height: 100%; width: auto; left: 50%; top: 0;
+    transform: translateX(-50%); display: block;
+  }
+  .ios-ui {
+    position: absolute; inset: 0;
+    padding: 50px 14px 26px;
+    display: flex; flex-direction: column;
+    pointer-events: none;
+  }
+  .ios-notch {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 64px; height: 20px;
+    background: #000; border-radius: 11px;
+  }
+  /* iOS briefing — same stylized-text-on-wallpaper pattern as desktop */
+  .ios-briefing {
+    text-shadow: 0 1px 8px rgba(0,0,0,0.4);
+  }
+  .ios-greet {
+    font: 500 26px/1.05 ui-serif, "New York", Georgia, serif;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+  .ios-date {
+    margin-top: 3px;
+    font: 600 8.5px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.88);
+  }
+  .ios-briefing-prose {
+    margin-top: 10px;
+    font: 400 10.5px/1.55 ui-serif, "New York", Georgia, serif;
+    color: rgba(255,255,255,0.94);
+  }
+  .ios-briefing-prose em { font-style: normal; font-weight: 500; color: #fff; }
+  .ios-section {
+    margin-top: 14px;
+    background: rgba(0,0,0,0.30);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 9px 11px;
+  }
+  .ios-section-label {
+    font: 600 8px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.5);
+    padding-bottom: 5px;
+  }
+  .ios-row {
+    display: flex; align-items: center; gap: 7px;
+    padding: 3px 0; font-size: 10px; color: #fff;
+  }
+  .ios-row .check { width: 10px; height: 10px; }
+  .ios-row .thing-cal-bar { height: 10px; width: 2.5px; }
+  .ios-row .thing-time { font-size: 9.5px; }
+
+  /* ─── Wash bed ─────────────────────────────────────────────────────── */
+  .wash-col { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+  .wash { aspect-ratio: 9 / 19.5; border-radius: 10px; background: #222; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+  .wash-hex { text-align: center; font: 9px/1 ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); }
+  .wash-label { text-align: center; font: 8px/1 -apple-system, sans-serif; color: var(--muted-2); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .credit { margin-top: 10px; font-size: 10px; color: var(--muted-2); }
+  .credit a { color: var(--muted); text-decoration: none; }
+  .credit a:hover { color: var(--fg); text-decoration: underline; }
+  .credit .id { color: #444; margin-left: 8px; font: 10px/1 ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Wallpaper Curation — Review Queue</h1>
+  <p class="lede" id="status">Loading…</p>
+  <div class="notes" id="notes" style="display:none"></div>
+  <nav class="toc" id="toc"></nav>
+</header>
+
+<main id="slots"></main>
+
+<script>
+const SEG_LABEL = {
+  dawn:       { greet: "Good morning",   sub: "Pre-dawn, cool pastels & haze" },
+  morning:    { greet: "Good morning",   sub: "Clear, optimistic, blue/cream" },
+  afternoon:  { greet: "Good afternoon", sub: "Warm mid-day clarity" },
+  goldenHour: { greet: "Good evening",   sub: "Amber low-angle warmth" },
+  evening:    { greet: "Good evening",   sub: "Post-sunset cooling blues" },
+  night:      { greet: "Good evening",   sub: "Deep, low chroma, starlit" },
+};
+const TIER_LABEL = {
+  light:    "Light — airy, distant, breathing room",
+  moderate: "Moderate — balanced, layered, mid-distance",
+  packed:   "Packed — grounded, intimate, calm (NOT busy)",
+};
+const SEG_ORDER  = ["dawn","morning","afternoon","goldenHour","evening","night"];
+const TIER_ORDER = ["light","moderate","packed"];
+
+const WINNERS = WINNERS_DATA;
+const PHOTOG  = PHOTOG_DATA;
+
+// ─── Mock data — looks like a real day ────────────────────────────────
+const NAV_LISTS = [
+  { name: "Work",       color: "#5fa3ff" },
+  { name: "Personal",   color: "#b88de8" },
+  { name: "Reading",    color: "#ddb968" },
+  { name: "Brett app",  color: "#7ed8a6" },
+  { name: "Travel",     color: "#e88a8a" },
+];
+const NEXT_UP = { title: "Design review with Sasha", sub: "Google Meet · 4 attendees", time: "11:00" };
+const BRIEFING_DESKTOP =
+  "Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. " +
+  "Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar for tomorrow is already lighter; if you " +
+  "want a deep-work block, hold the 10–12 stretch.";
+const BRIEFING_IOS =
+  "Open morning — <em>ship the spec before design review</em>. 1:1 with Sasha might slide.";
+const SECTIONS = [
+  { label: "Today", count: 4, rows: [
+    { title: "Review wallpaper picks with Brent" },
+    { title: "Design review",  cal: true, time: "11:00" },
+    { title: "1:1 with Sasha", cal: true, time: "14:00" },
+    { title: "Finish briefing redesign spec" },
+  ]},
+  { label: "This Week", count: 3, rows: [
+    { title: "Cut desktop release + autoupdater" },
+    { title: "Triage Linear inbox · 6 open" },
+    { title: "Q3 OKR draft for staff sync" },
+  ]},
+  { label: "Done Today", count: 2, rows: [
+    { title: "Sourced new wallpaper candidates", done: true },
+    { title: "Standup", done: true },
+  ]},
+];
+const IOS_SECTION_ROWS = [
+  { title: "Standup",                   cal: true, time: "9:30" },
+  { title: "Design review",             cal: true, time: "11:00" },
+  { title: "Wallpaper picks with Brent" },
+  { title: "1:1 with Sasha",            cal: true, time: "14:00" },
+  { title: "Finish briefing spec" },
+];
+
+// ─── Wash sampling — mirrors WashColorSampler.swift ───────────────────
+function sampleWashRGB(img) {
+  const w = 64, h = 32;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  const sy = Math.floor(img.naturalHeight * 0.50);
+  const sh = Math.floor(img.naturalHeight * 0.15);
+  ctx.drawImage(img, 0, sy, img.naturalWidth, sh, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h).data;
+  let r=0,g=0,b=0,n=0;
+  for (let i=0;i<d.length;i+=4) { r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++; }
+  return [Math.round(r/n), Math.round(g/n), Math.round(b/n)];
+}
+function toHex(rgb) { return "#" + rgb.map(v => v.toString(16).padStart(2,"0")).join(""); }
+
+// ─── Render ────────────────────────────────────────────────────────────
+const NAV_HTML = `
+  <div class="leftnav">
+    <div class="nav-row"><div class="nav-icon"></div>Inbox<span class="nav-badge">3</span></div>
+    <div class="nav-row active"><div class="nav-icon"></div>Today<span class="nav-badge">7</span></div>
+    <div class="nav-row"><div class="nav-icon"></div>Upcoming<span class="nav-badge">12</span></div>
+    <div class="nav-row"><div class="nav-icon"></div>Calendar</div>
+    <div class="nav-row"><div class="nav-icon"></div>Scouts</div>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">My Lists</div>
+    ${NAV_LISTS.map(l => `
+      <div class="nav-list-row"><span class="nav-list-dot" style="background:${l.color}"></span>${l.name}</div>
+    `).join("")}
+    <div class="nav-search">⌕ Search<span class="nav-kbd">⌘F</span></div>
+  </div>
+`;
+const SECTIONS_HTML = SECTIONS.map(sec => `
+  <div class="things-section-label">${sec.label}<span class="things-section-count">${sec.count}</span></div>
+  ${sec.rows.map(r => `
+    <div class="thing-row ${r.done ? 'done' : ''}">
+      ${r.cal ? '<span class="thing-cal-bar"></span>' : `<span class="check ${r.done?'done':''}"></span>`}
+      <span>${r.title}</span>
+      ${r.time ? `<span class="thing-time">${r.time}</span>` : ''}
+    </div>
+  `).join("")}
+`).join("");
+const IOS_ROWS_HTML = IOS_SECTION_ROWS.map(r => `
+  <div class="ios-row">
+    ${r.cal ? '<span class="thing-cal-bar"></span>' : '<span class="check"></span>'}
+    <span>${r.title}</span>
+    ${r.time ? `<span class="thing-time">${r.time}</span>` : ''}
+  </div>
+`).join("");
+
+function renderImageRow(image, segLabel, rowKey) {
+  const path = "./" + image.path;
+  const id = image.id;
+  const photog = PHOTOG[id] || { name: "Unknown", url: "https://unsplash.com" };
+
+  const row = document.createElement("div");
+  row.className = "image-row";
+  row.innerHTML = `
+    <p class="image-why">${image.why}</p>
+    <div class="slot-row">
+      <div class="desktop">
+        <img class="bg" src="${path}" alt="">
+        <div class="titlebar">
+          <span class="traffic" style="background:#ff5f57"></span>
+          <span class="traffic" style="background:#febc2e"></span>
+          <span class="traffic" style="background:#28c840"></span>
+        </div>
+        <div class="desktop-window">
+          ${NAV_HTML}
+          <div class="main">
+            <div class="briefing">
+              <div class="briefing-greeting">Tuesday.</div>
+              <div class="briefing-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+              <div class="briefing-prose">${BRIEFING_DESKTOP}</div>
+            </div>
+            <div class="nextup-card">
+              <span class="nextup-bar"></span>
+              <div>
+                <div class="nextup-title">${NEXT_UP.title}</div>
+                <div class="nextup-sub">${NEXT_UP.sub}</div>
+              </div>
+              <span class="nextup-time">${NEXT_UP.time}</span>
+            </div>
+            <div class="things-card">${SECTIONS_HTML}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ios">
+        <div class="ios-notch"></div>
+        <img class="bg" src="${path}" alt="">
+        <div class="ios-ui">
+          <div class="ios-briefing">
+            <div class="ios-greet">${segLabel.greet}.</div>
+            <div class="ios-date">TUESDAY · MAY 19</div>
+            <div class="ios-briefing-prose">${BRIEFING_IOS}</div>
+          </div>
+          <div class="ios-section">
+            <div class="ios-section-label">Today · 5</div>
+            ${IOS_ROWS_HTML}
+          </div>
+        </div>
+      </div>
+
+      <div class="wash-col">
+        <div class="wash"></div>
+        <div class="wash-hex">—</div>
+        <div class="wash-label">iOS wash</div>
+      </div>
+    </div>
+    <div class="credit">
+      Photo by <a href="${photog.url}" target="_blank" rel="noopener">${photog.name}</a>
+      on <a href="https://unsplash.com/photos/${id}" target="_blank" rel="noopener">Unsplash</a>
+      <span class="id">${id}</span>
+    </div>
+  `;
+
+  const iosImg = row.querySelector(".ios img.bg");
+  iosImg.addEventListener("load", () => {
+    try {
+      const rgb = sampleWashRGB(iosImg);
+      const hex = toHex(rgb);
+      row.querySelector(".wash").style.background = hex;
+      row.querySelector(".wash-hex").textContent = hex.toUpperCase();
+    } catch (err) {
+      row.querySelector(".wash-hex").textContent = "err";
+    }
+  }, { once: true });
+
+  return row;
+}
+
+function renderSlot(slotKey, info, imagesToShow) {
+  const [seg, tier] = slotKey.split("/");
+  const segLabel = SEG_LABEL[seg];
+  const tierLabel = TIER_LABEL[tier];
+
+  const el = document.createElement("section");
+  el.className = "slot";
+  el.id = "slot-" + slotKey.replace("/","-");
+  el.innerHTML = `
+    <div class="slot-head">
+      <span class="slot-title">${seg} / ${tier}</span>
+      <span class="slot-meta">${segLabel.sub} · ${tierLabel}</span>
+    </div>
+  `;
+  imagesToShow.forEach((img, i) => {
+    el.appendChild(renderImageRow(img, segLabel, slotKey + "-" + i));
+  });
+  return el;
+}
+
+function build() {
+  const slotsRoot = document.getElementById("slots");
+  const tocRoot = document.getElementById("toc");
+  let imageCount = 0;
+  let lockedSlots = 0;
+  const notes = [];
+  for (const seg of SEG_ORDER) {
+    for (const tier of TIER_ORDER) {
+      const key = seg + "/" + tier;
+      const info = WINNERS[key];
+      if (!info) continue;
+      if (info.locked) {
+        lockedSlots++;
+        if (info.note) notes.push({ slot: key, text: info.note });
+        continue;
+      }
+      const unapproved = (info.images || []).filter(img => !img.approved);
+      if (unapproved.length === 0) {
+        lockedSlots++;
+        if (info.note) notes.push({ slot: key, text: info.note });
+        continue;
+      }
+      imageCount += unapproved.length;
+      slotsRoot.appendChild(renderSlot(key, info, unapproved));
+      const tocLink = document.createElement("a");
+      tocLink.href = "#slot-" + key.replace("/","-");
+      tocLink.textContent = key;
+      tocRoot.appendChild(tocLink);
+    }
+  }
+  document.getElementById("status").textContent =
+    `${imageCount} new image${imageCount === 1 ? "" : "s"} to review · ${lockedSlots} slots fully locked (hidden)`;
+  if (notes.length) {
+    const notesEl = document.getElementById("notes");
+    notesEl.style.display = "block";
+    notesEl.innerHTML = notes.map(n => `<div class="note-row"><b>${n.slot}</b> — ${n.text}</div>`).join("");
+  }
+}
+build();
+</script>
+</body>
+</html>
