@@ -17,7 +17,7 @@ interface ThingsListProps {
   onTriageOpen?: (
     mode: "list-first" | "date-first" | "list-only" | "date-only",
     ids: string[],
-    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null; tonight?: boolean },
     anchorEl?: HTMLElement | null,
   ) => void;
   /** Called when keyboard nav changes focused item (for live detail panel updates) */
@@ -89,13 +89,13 @@ export function ThingsList({ things, lists, onItemClick, onToggle, onAdd, onAddC
       if (e.key === "l") {
         e.preventDefault();
         const anchor = cardEls.current.get(focusedThing.id) ?? null;
-        onTriageOpen("list-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision }, anchor);
+        onTriageOpen("list-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision, tonight: focusedThing.tonight }, anchor);
         return true;
       }
       if (e.key === "d") {
         e.preventDefault();
         const anchor = cardEls.current.get(focusedThing.id) ?? null;
-        onTriageOpen("date-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision }, anchor);
+        onTriageOpen("date-only", [focusedThing.id], { listId: focusedThing.listId, dueDate: focusedThing.dueDate, dueDatePrecision: focusedThing.dueDatePrecision, tonight: focusedThing.tonight }, anchor);
         return true;
       }
       return false;

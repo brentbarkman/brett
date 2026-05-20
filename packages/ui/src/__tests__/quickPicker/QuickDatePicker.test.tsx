@@ -149,6 +149,30 @@ describe("QuickDatePicker", () => {
     expect(screen.getByTestId("day-2026-05-20").dataset.selected).toBe("true");
   });
 
+  // Today and Tonight resolve to the same calendar day, so a pure date match
+  // would light up both chips for any today-dated item. The tonight flag
+  // disambiguates: only the chip that matches the item's actual state should
+  // render as "currently set".
+  describe("today/tonight chip disambiguation", () => {
+    it("highlights only Today when item is dated today without tonight flag", () => {
+      renderPicker({ initialDate: MAY_7, initialTonight: false });
+      expect(screen.getByTestId("chip-today").dataset.current).toBe("true");
+      expect(screen.getByTestId("chip-tonight").dataset.current).toBe("false");
+    });
+
+    it("highlights only Tonight when item is dated today with tonight flag", () => {
+      renderPicker({ initialDate: MAY_7, initialTonight: true });
+      expect(screen.getByTestId("chip-today").dataset.current).toBe("false");
+      expect(screen.getByTestId("chip-tonight").dataset.current).toBe("true");
+    });
+
+    it("defaults to Today when initialTonight is omitted", () => {
+      renderPicker({ initialDate: MAY_7 });
+      expect(screen.getByTestId("chip-today").dataset.current).toBe("true");
+      expect(screen.getByTestId("chip-tonight").dataset.current).toBe("false");
+    });
+  });
+
   // Regression: the picker used to hard-code precision="day" at the call
   // site, which silently corrupted week-precision picks (this_week / next_week)
   // into Sunday day-precision items that then bucketed as this_weekend.

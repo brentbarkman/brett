@@ -275,6 +275,7 @@ export function App() {
     currentListId?: string | null;
     currentDueDate?: string | null;
     currentDueDatePrecision?: "day" | "week" | null;
+    currentTonight?: boolean;
     anchorEl?: HTMLElement | null;
     pendingDate?: Date | null;
     /** Precision committed alongside pendingDate. "day" for raw calendar
@@ -1113,13 +1114,13 @@ export function App() {
   const handleSetList = (id: string, anchorEl: HTMLElement) => {
     if (!selectedItem || "googleEventId" in selectedItem) return;
     const item = selectedItem as Thing;
-    handleTriageOpen("list-only", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision }, anchorEl);
+    handleTriageOpen("list-only", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision, tonight: item.tonight }, anchorEl);
   };
 
   const handleTriageOpen = (
     mode: "list-first" | "date-first" | "list-only" | "date-only",
     ids: string[],
-    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null; tonight?: boolean },
     anchorEl?: HTMLElement | null,
   ) => {
     setTriageState({
@@ -1128,6 +1129,7 @@ export function App() {
       currentListId: thing?.listId,
       currentDueDate: thing?.dueDate,
       currentDueDatePrecision: thing?.dueDatePrecision,
+      currentTonight: thing?.tonight,
       anchorEl: anchorEl ?? null,
     });
   };
@@ -1641,6 +1643,7 @@ export function App() {
               <TriageQuickPicker
                 anchorEl={triageState.anchorEl}
                 initialDate={initialDate}
+                initialTonight={triageState.currentTonight}
                 initialListId={triageState.currentListId ?? null}
                 lists={lists}
                 suggestedListIds={suggestedListIds}
@@ -1662,6 +1665,7 @@ export function App() {
               <QuickDatePicker
                 anchorEl={triageState.anchorEl}
                 initialDate={initialDate}
+                initialTonight={triageState.currentTonight}
                 onCommit={(date, precision, tonight) => {
                   handleInboxTriage(triageState.ids, {
                     dueDate: date ? date.toISOString() : null,

@@ -11,7 +11,7 @@ interface UpcomingViewProps {
   onTriageOpen: (
     mode: "list-first" | "date-first" | "list-only" | "date-only",
     ids: string[],
-    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null; tonight?: boolean },
     anchorEl?: HTMLElement | null,
   ) => void;
   onFocusChange?: (thing: Thing) => void;
