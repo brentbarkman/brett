@@ -457,19 +457,21 @@ struct TaskRow: View {
     /// don't render time-of-day; there's no UI to set a time on a
     /// task and desktop's `ThingCard` doesn't display one either.
     /// `nil` means "no whisper, skip the segment."
+    ///
+    /// "Overdue" is decided via `DateHelpers.computeUrgency`, which
+    /// anchors today to the UTC-midnight of the user's local calendar
+    /// date. A naïve `Calendar.current.startOfDay` check would
+    /// misclassify due-today tasks as overdue in any TZ west of UTC
+    /// (today's UTC-midnight stored value sorts before today's local
+    /// midnight), and then label them with yesterday's weekday because
+    /// a local-TZ formatter reads UTC-midnight as the previous day.
     private static func timeLabel(for item: Item) -> String? {
         guard let due = item.dueDate else { return nil }
-        if due < Calendar.current.startOfDay(for: Date()) {
-            return weekdayFormatter.string(from: due)
+        guard DateHelpers.computeUrgency(dueDate: due, isCompleted: false) == .overdue else {
+            return nil
         }
-        return nil
+        return DateHelpers.weekdayName(of: due)
     }
-
-    private static let weekdayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE"
-        return formatter
-    }()
 
     private static func capturedLabel(for item: Item) -> String? {
         // "Captured {relative}" for undated content/inbox items

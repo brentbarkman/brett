@@ -105,4 +105,31 @@ struct DateHelpersTests {
         let formatted = DateHelpers.formatTime(date)
         #expect(formatted.contains("2:30") || formatted.contains("14:30"))
     }
+
+    // MARK: - weekdayName
+
+    /// A stored `dueDate` is UTC midnight of the user's intended local
+    /// calendar date. Formatting it in any other timezone flips the
+    /// weekday near midnight (in TZs west of UTC, UTC-midnight reads as
+    /// "the previous day" locally) — which is the exact bug that put a
+    /// "Monday" subtext on tasks due Tuesday. Guard with a TZ-independent
+    /// assertion: Tuesday-UTC-midnight must read as "Tuesday" no matter
+    /// what TZ the host simulator is in.
+    @Test func weekdayNameUsesUTCCalendar() {
+        // 2026-05-19 is a Tuesday in UTC. A user in MDT (UTC-6) would
+        // pick this date locally and the storage layer normalises it
+        // to 2026-05-19T00:00Z (utcMidnightOfLocalDate). Formatting in
+        // the local TZ would yield "Monday" — guard against that.
+        let tuesday = Self.utcDate(2026, 5, 19, 0)
+        #expect(DateHelpers.weekdayName(of: tuesday) == "Tuesday")
+    }
+
+    @Test func weekdayNameAtUTCMidnightIsStableAcrossDays() {
+        // Spot-check several days of the week to make sure the formatter
+        // isn't just stuck on one value.
+        #expect(DateHelpers.weekdayName(of: Self.utcDate(2026, 5, 17, 0)) == "Sunday")
+        #expect(DateHelpers.weekdayName(of: Self.utcDate(2026, 5, 18, 0)) == "Monday")
+        #expect(DateHelpers.weekdayName(of: Self.utcDate(2026, 5, 19, 0)) == "Tuesday")
+        #expect(DateHelpers.weekdayName(of: Self.utcDate(2026, 5, 23, 0)) == "Saturday")
+    }
 }
