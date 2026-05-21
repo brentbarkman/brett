@@ -443,6 +443,14 @@ final class PullEngine {
         let health = fetchHealth()
         health.isPulling = false
         if let error {
+            // Cancellation isn't a real failure — it just means a newer
+            // sync superseded this one, the user navigated mid-request, or
+            // iOS suspended the URLSession. Mirrors SyncManager.sync()'s
+            // own isCancellation filter so SyncHealth.consecutiveFailures
+            // (which the StatusBanner reads as the "is the API reachable"
+            // signal) doesn't flare on routine churn.
+            guard !SyncManager.isCancellation(error) else { return }
+
             health.consecutiveFailures += 1
             // APIError's `description` is PII-redacted to bare category names
             // ("APIError.unknown") — useless when diagnosing an outage from

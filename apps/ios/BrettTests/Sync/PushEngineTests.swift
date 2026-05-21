@@ -382,4 +382,38 @@ struct PushEngineTests {
         // complete() must NOT be called.
         #expect(queue.completedIds.isEmpty)
     }
+
+    /// Cancellation errors (URLError.cancelled — debounced superseded, view
+    /// dismissed mid-refresh, iOS suspended URLSession) are NOT real
+    /// failures. SyncHealth.consecutiveFailures must stay at 0 so the
+    /// StatusBanner doesn't flare on routine churn. Mirrors the matching
+    /// filter in SyncManager.sync().
+    @Test func cancelledPushDoesNotIncrementConsecutiveFailures() async throws {
+        let context = try seedContext()
+        let queue = FakeMutationQueue()
+        queue.pending = [makePendingUpdate()]
+
+        MockURLProtocol.reset()
+        MockURLProtocol.stub(url: pushURL, error: URLError(.cancelled))
+
+        let engine = PushEngine(
+            mutationQueue: queue,
+            apiClient: makeStubbedClient(),
+            context: context
+        )
+
+        do {
+            _ = try await engine.push()
+            Issue.record("Expected push to throw on cancellation")
+        } catch {
+            // Expected — push still throws so the caller can react.
+        }
+
+        let health: [SyncHealth] = (try? context.fetch(FetchDescriptor<SyncHealth>())) ?? []
+        #expect(health.first?.consecutiveFailures ?? 0 == 0,
+                "cancellation must not count toward the API-unreachable signal")
+        // Mutation still returns to pending (handled before the
+        // cancellation guard fires) so the next push retries it.
+        #expect(queue.failedIds.count == 1)
+    }
 }
