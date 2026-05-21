@@ -290,6 +290,41 @@ describe("syncForEvent (coordinator)", () => {
     expect(mockPublishSSE).not.toHaveBeenCalled();
   });
 
+  it("first source but meeting older than 7 days — processActionItems is NOT called (avoid stale-backfill tasks)", async () => {
+    // Meeting started 14 days ago — outside the auto-create window
+    const oldMeetingDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    const providerData = makeProviderData({
+      meetingStartedAt: oldMeetingDate,
+      meetingEndedAt: new Date(oldMeetingDate.getTime() + 30 * 60_000),
+    });
+    const provider = makeMockProvider("granola", providerData);
+    mockGetAvailable.mockResolvedValue([provider]);
+
+    await syncForEvent(userId, calendarEvent);
+
+    // No tasks auto-created for an old meeting
+    expect(mockProcessActionItems).not.toHaveBeenCalled();
+
+    // But the note itself still embeds + emits SSE — the meeting is still valuable
+    expect(mockEnqueueEmbed).toHaveBeenCalledTimes(1);
+    expect(mockPublishSSE).toHaveBeenCalledTimes(1);
+  });
+
+  it("first source and meeting within the 7-day window — processActionItems IS called", async () => {
+    // Meeting 3 days ago — inside the window
+    const recentMeetingDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const providerData = makeProviderData({
+      meetingStartedAt: recentMeetingDate,
+      meetingEndedAt: new Date(recentMeetingDate.getTime() + 30 * 60_000),
+    });
+    const provider = makeMockProvider("granola", providerData);
+    mockGetAvailable.mockResolvedValue([provider]);
+
+    await syncForEvent(userId, calendarEvent);
+
+    expect(mockProcessActionItems).toHaveBeenCalledTimes(1);
+  });
+
   it("isFirstSource=false on update path — processActionItems is NOT called", async () => {
     const providerData = makeProviderData();
     const provider = makeMockProvider("granola", providerData);

@@ -12,6 +12,15 @@ import { providerRegistry } from "./registry.js";
 
 const log = (...args: unknown[]) => console.log("[meeting-coordinator]", ...args);
 
+// Skip auto-creating tasks for meetings older than this window. AI-inferred
+// due dates are anchored to the meeting date — backfilled meetings (initial
+// connect, post-reconnect catch-up, late-arriving notes) would otherwise
+// create tasks with already-past due dates and land in Today as multi-day-
+// overdue surprises. Users can still manually pull tasks from an old meeting
+// via the granola reprocess route.
+const AUTO_CREATE_TASK_CAP_DAYS = 7;
+const AUTO_CREATE_TASK_CAP_MS = AUTO_CREATE_TASK_CAP_DAYS * 24 * 60 * 60 * 1000;
+
 /** Safely serialize a value to Prisma's InputJsonValue, or DbNull if null/unserializable. */
 function jsonOrNull(value: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
   if (value == null) return Prisma.DbNull;
@@ -305,17 +314,27 @@ async function mergeProviderData(
       userId,
     });
 
-    // Action items only on first source (avoid duplicates)
+    // Action items only on first source (avoid duplicates) AND only for
+    // meetings recent enough that AI-inferred due dates won't already be
+    // stale. See AUTO_CREATE_TASK_CAP_DAYS at the top of this file.
     if (isFirstSource && merged.summary) {
-      processActionItems(
-        meetingNote.id,
-        calendarEventId,
-        userId,
-        merged.summary,
-        merged.title,
-        data.meetingStartedAt,
-        (merged.attendees ?? []) as { name: string; email: string }[],
-      ).catch((err) => log(`Action item extraction failed for ${meetingNote.id}:`, err));
+      const meetingAgeMs = Date.now() - data.meetingStartedAt.getTime();
+      if (meetingAgeMs <= AUTO_CREATE_TASK_CAP_MS) {
+        processActionItems(
+          meetingNote.id,
+          calendarEventId,
+          userId,
+          merged.summary,
+          merged.title,
+          data.meetingStartedAt,
+          (merged.attendees ?? []) as { name: string; email: string }[],
+        ).catch((err) => log(`Action item extraction failed for ${meetingNote.id}:`, err));
+      } else {
+        const ageDays = Math.floor(meetingAgeMs / (24 * 60 * 60 * 1000));
+        log(
+          `Skipping auto action-item extraction for ${meetingNote.id} — meeting is ${ageDays}d old (cap ${AUTO_CREATE_TASK_CAP_DAYS}d). Manual reprocess remains available.`,
+        );
+      }
     }
 
     // Notify client
