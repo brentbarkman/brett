@@ -74,7 +74,7 @@ All four primary pages and Scouts use the same editorial header treatment via `E
 
 - **Title:** 38pt serif (New York / `design: .serif`), white. On the Today hero the title is a time-of-day greeting ("Tuesday morning") with layered text-shadow for legibility against any photo. On non-Today pages the title is the page name ("Inbox", "May 4", "Lists", "Scouts") with no shadow.
 - **Sub-line:** 13pt sans, white at 0.7. Counts ("3 to triage", "2 events", "5 lists") or a date.
-- **Position:** leading-aligned, 24pt horizontal padding, top respects the safe-area inset (never hardcode 60pt).
+- **Position:** leading-aligned, `BrettSpacing.pagePaddingX` (20pt) horizontal padding so the title aligns with the section-header text that sits below it (sticky-card sections place their header at 16pt card padding + 4pt internal = 20pt from the screen edge). Top respects the safe-area inset (never hardcode 60pt).
 
 The legacy 28pt `BrettTypography.dateHeader` is **deprecated for top-level page titles**. It still applies to nested labels (e.g. a date inside a calendar day cell).
 
