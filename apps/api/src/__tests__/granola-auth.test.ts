@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { prisma } from "../lib/prisma.js";
 import { createRelinkTask } from "../lib/connection-health.js";
 import { createTestUser, authRequest } from "./helpers.js";
+import { fetchGranolaEmail } from "../routes/granola-auth.js";
 
 describe("Granola Auth routes", () => {
   describe("GET /granola/auth", () => {
@@ -290,6 +291,96 @@ describe("Granola Auth routes", () => {
     });
   });
 
+  describe("fetchGranolaEmail (userinfo lookup)", () => {
+    // The OAuth callback can't trust `tokens.email` (Granola does not return a
+    // top-level email claim on the token endpoint) and explicitly refuses to
+    // trust an unverified id_token. The fix is to fetch the email from the
+    // userinfo endpoint with the access token. These tests pin that behavior.
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("returns the email claim from the userinfo response", async () => {
+      const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ sub: "user-1", email: "work@example.com" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+      const email = await fetchGranolaEmail("access-token-1");
+      expect(email).toBe("work@example.com");
+
+      // Must hit the userinfo endpoint with a Bearer auth header.
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toBe("https://mcp-auth.granola.ai/oauth2/userinfo");
+      expect((init as RequestInit | undefined)?.headers).toMatchObject({
+        Authorization: "Bearer access-token-1",
+      });
+    });
+
+    it("normalizes the email to lowercase and trims whitespace", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ email: "  Brent@Example.COM  " }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      expect(await fetchGranolaEmail("token")).toBe("brent@example.com");
+    });
+
+    it("throws when userinfo returns a non-2xx response", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response("forbidden", { status: 403 }),
+      );
+      await expect(fetchGranolaEmail("expired-token")).rejects.toThrow(/userinfo/i);
+    });
+
+    it("throws when the userinfo response has no email claim", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ sub: "user-1" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      await expect(fetchGranolaEmail("token")).rejects.toThrow(/email/i);
+    });
+
+    it("throws when the userinfo response email is not a syntactically valid email", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ email: "not-an-email" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      await expect(fetchGranolaEmail("token")).rejects.toThrow(/email/i);
+    });
+
+    it("throws when userinfo returns invalid JSON", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response("<html>not json</html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
+      );
+      await expect(fetchGranolaEmail("token")).rejects.toThrow();
+    });
+
+    it("never logs the access token in thrown error messages", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response("forbidden", { status: 403 }),
+      );
+      const accessToken = "super-secret-access-token-xyz";
+      try {
+        await fetchGranolaEmail(accessToken);
+        throw new Error("expected fetchGranolaEmail to throw");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        expect(msg).not.toContain(accessToken);
+      }
+    });
+  });
+
   describe("OAuth callback re-link scoping (source regression)", () => {
     // Granola was the FIRST place we hit the multi-account re-link bug —
     // the provider-wide resolveRelinkTask silently cleared every Granola
@@ -311,6 +402,34 @@ describe("Granola Auth routes", () => {
       // `\b` ensures we don't match `resolveRelinkTaskForAccount`.
       expect(callSites).not.toMatch(/\bresolveRelinkTask\s*\(/);
       expect(callSites).toMatch(/resolveRelinkTaskForAccount\s*\(/);
+    });
+  });
+
+  describe("OAuth callback email resolution (source regression)", () => {
+    // Multi-account regression: the original code keyed every connect on
+    // `tokens.email ?? user.email`, which silently overwrote the previous
+    // GranolaAccount when Granola didn't return a top-level email claim
+    // (which is always — it doesn't). The fix routes email resolution
+    // through fetchGranolaEmail (which hits /userinfo).
+    it("granola-auth.ts uses fetchGranolaEmail and does not fall back to the Brett user email", () => {
+      const here = dirname(fileURLToPath(import.meta.url));
+      const source = readFileSync(
+        resolve(here, "../routes/granola-auth.ts"),
+        "utf8",
+      );
+      const codeOnly = source
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("//"))
+        .filter((line) => !line.includes("import"))
+        .join("\n");
+      // Positive: must call the userinfo helper somewhere in the route.
+      expect(codeOnly).toMatch(/fetchGranolaEmail\s*\(/);
+      // Negative: no email-resolution fallback through Brett's user.email
+      // or the unsigned tokens.email field. (The helper's own definition
+      // is at the top of the file; `user.email` and `tokens.email` are
+      // only meaningful as right-hand-side reads — we forbid both.)
+      expect(codeOnly).not.toMatch(/\buser\.email\b/);
+      expect(codeOnly).not.toMatch(/\btokens\.email\b/);
     });
   });
 });

@@ -12,6 +12,93 @@ import { signOAuthState, verifyOAuthState } from "../lib/oauth-state.js";
 const GRANOLA_AUTH_URL = "https://mcp-auth.granola.ai/oauth2/authorize";
 const GRANOLA_TOKEN_URL = "https://mcp-auth.granola.ai/oauth2/token";
 const GRANOLA_REGISTER_URL = "https://mcp-auth.granola.ai/oauth2/register";
+const GRANOLA_USERINFO_URL = "https://mcp-auth.granola.ai/oauth2/userinfo";
+
+// Outbound HTTP timeout for Granola endpoints. 10s matches the bounded
+// timeout already used for client registration — long enough for an honest
+// slow response, short enough that an outage doesn't hang the OAuth callback.
+const GRANOLA_FETCH_TIMEOUT_MS = 10_000;
+
+// Cap on the userinfo response body. The endpoint normally returns a few
+// hundred bytes (sub, email, optional name). A 64KB cap is generous for
+// legitimate use while bounding memory if Granola or a MITM ever streamed
+// a multi-megabyte response into JSON.parse.
+const USERINFO_MAX_BYTES = 64 * 1024;
+
+// Conservative RFC-5321-ish email syntax check. We are not validating
+// deliverability — only that the value looks like an email at all, to
+// prevent a misconfigured upstream from pushing arbitrary strings into
+// the (userId, email) unique key.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 254;
+
+/**
+ * Fetch the authenticated Granola account's email via the OIDC userinfo
+ * endpoint. Throws on any failure path (non-2xx, missing claim, malformed
+ * email, oversize body). Never includes the access token in thrown errors
+ * or logs.
+ *
+ * Exported only so the unit test in `__tests__/granola-auth.test.ts` can
+ * exercise it; not part of the route public API.
+ */
+export async function fetchGranolaEmail(accessToken: string): Promise<string> {
+  let resp: Response;
+  try {
+    resp = await fetch(GRANOLA_USERINFO_URL, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(GRANOLA_FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // AbortError and network failures should not leak the access token.
+    const reason = err instanceof Error ? err.name : "unknown";
+    throw new Error(`Granola userinfo request failed (${reason})`);
+  }
+
+  if (!resp.ok) {
+    throw new Error(`Granola userinfo request failed (HTTP ${resp.status})`);
+  }
+
+  // Read the body with a size cap so an upstream that streams a giant
+  // payload can't OOM us before JSON.parse rejects it.
+  const reader = resp.body?.getReader();
+  if (!reader) {
+    throw new Error("Granola userinfo request failed (empty body)");
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (value) {
+      total += value.byteLength;
+      if (total > USERINFO_MAX_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new Error("Granola userinfo response exceeded size limit");
+      }
+      chunks.push(value);
+    }
+  }
+  const bodyText = new TextDecoder("utf-8").decode(Buffer.concat(chunks));
+
+  let claims: unknown;
+  try {
+    claims = JSON.parse(bodyText);
+  } catch {
+    throw new Error("Granola userinfo response was not valid JSON");
+  }
+  if (!claims || typeof claims !== "object") {
+    throw new Error("Granola userinfo response was not a JSON object");
+  }
+  const rawEmail = (claims as { email?: unknown }).email;
+  if (typeof rawEmail !== "string") {
+    throw new Error("Granola userinfo response missing email claim");
+  }
+  const email = rawEmail.trim().toLowerCase();
+  if (email.length === 0 || email.length > MAX_EMAIL_LENGTH || !EMAIL_REGEX.test(email)) {
+    throw new Error("Granola userinfo response email is not syntactically valid");
+  }
+  return email;
+}
 
 // PKCE verifiers stored in the Verification table (survives restarts, works across instances)
 const PKCE_IDENTIFIER_PREFIX = "pkce:granola:";
@@ -232,12 +319,14 @@ granolaAuth.get("/callback", async (c) => {
   }
   const { userId } = verified;
 
-  // userId is verified via HMAC — no session needed on callback
-  const user = await prisma.user.findUnique({
+  // userId is verified via HMAC — no session needed on callback. We still
+  // check the row exists so we don't accept a stale state nonce for a
+  // deleted account.
+  const userExists = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true },
+    select: { id: true },
   });
-  if (!user) {
+  if (!userExists) {
     return callbackHtml(c, { title: "User not found", message: "The user account no longer exists. Please try again.", isError: true });
   }
 
@@ -261,10 +350,11 @@ granolaAuth.get("/callback", async (c) => {
   await prisma.verification.delete({ where: { id: pkceRecord.id } }).catch(() => {});
 
   // Exchange code for tokens (with retry on 401 — re-register DCR client)
-  let client = await ensureClientRegistered();
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
 
   async function exchangeCode(cl: { client_id: string; client_secret?: string }) {
+    // Bounded timeout matches the userinfo + DCR calls. Without this, a
+    // Granola outage hangs the OAuth callback until the browser gives up.
     return fetch(GRANOLA_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -276,15 +366,30 @@ granolaAuth.get("/callback", async (c) => {
         code_verifier: codeVerifier!,
         ...(cl.client_secret ? { client_secret: cl.client_secret } : {}),
       }),
+      signal: AbortSignal.timeout(GRANOLA_FETCH_TIMEOUT_MS),
     });
   }
 
-  let tokenResp = await exchangeCode(client);
-  if (tokenResp.status === 401) {
-    // Client creds may be stale — re-register and retry once
-    clearRegisteredClient();
-    client = await ensureClientRegistered();
+  // Wrap the whole token-exchange chain so a timeout or DCR error during
+  // either ensureClientRegistered or exchangeCode renders a clean callback
+  // page instead of bubbling out as a 500.
+  let tokenResp: Response;
+  try {
+    let client = await ensureClientRegistered();
     tokenResp = await exchangeCode(client);
+    if (tokenResp.status === 401) {
+      // Client creds may be stale — re-register and retry once
+      clearRegisteredClient();
+      client = await ensureClientRegistered();
+      tokenResp = await exchangeCode(client);
+    }
+  } catch (err) {
+    console.error("[granola-auth] Token exchange failed:", err);
+    return callbackHtml(c, {
+      title: "Authorization failed",
+      message: "Couldn't reach Granola to complete the connection. Please try again.",
+      isError: true,
+    });
   }
 
   if (!tokenResp.ok) {
@@ -295,8 +400,8 @@ granolaAuth.get("/callback", async (c) => {
     access_token: string;
     refresh_token?: string;
     expires_in?: number;
-    id_token?: string;
-    email?: string;
+    // id_token intentionally not declared — we never read it. The email
+    // claim is fetched from /userinfo via fetchGranolaEmail instead.
   };
 
   if (!tokens.access_token || !tokens.refresh_token) {
@@ -307,17 +412,35 @@ granolaAuth.get("/callback", async (c) => {
     });
   }
 
-  // Resolve the Granola account email.
+  // Resolve the Granola account email via the OIDC userinfo endpoint.
   //
-  // We trust `tokens.email` (the top-level claim in Granola's token-endpoint
-  // JSON response, delivered over TLS) but do NOT trust `tokens.id_token`:
-  // parsing the JWT payload without JWKS signature verification means a
-  // forged or MITM'd id_token could inject an arbitrary email into the
-  // upsert key `(userId, email)`, allowing cross-account pollution.
+  // Granola does not put `email` at the top level of its token-endpoint
+  // response, so the previous `tokens.email ?? user.email` fallback caused
+  // every new connection (across personal + work Granola accounts) to be
+  // keyed by the Brett user's own email — the upsert then overwrote the
+  // first account with the second.
   //
-  // If `tokens.email` is missing we fall back to the authenticated Brett
-  // user's own email rather than chase an unsigned id_token.
-  const email = tokens.email ?? user.email;
+  // We deliberately do NOT trust `tokens.id_token`: parsing the JWT payload
+  // without JWKS signature verification would let a forged or MITM'd token
+  // inject an arbitrary email into the upsert key `(userId, email)`. The
+  // userinfo endpoint is server-to-server over TLS using the freshly issued
+  // access token, which is the same trust level as the token endpoint itself.
+  let email: string;
+  try {
+    email = await fetchGranolaEmail(tokens.access_token);
+  } catch (err) {
+    // Suppress the underlying error message — it can contain HTTP status
+    // codes and similar that aren't useful to the end-user, and we never
+    // want to risk a stack trace leaking the access token to the rendered
+    // HTML. The server log gets enough context to debug.
+    console.error("[granola-auth] userinfo lookup failed:", err);
+    return callbackHtml(c, {
+      title: "Couldn't identify Granola account",
+      message:
+        "Granola accepted the connection but didn't tell us which account you authorized. Please try again from Brett.",
+      isError: true,
+    });
+  }
 
   // Upsert GranolaAccount keyed on (userId, email) so re-authing the same Google
   // identity refreshes tokens on the existing row, and authorizing a different
