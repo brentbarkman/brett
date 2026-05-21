@@ -26,6 +26,8 @@ _airy, distant, breathing room — calm day_
 |---|------|-----------|----------|--------------|
 | 1 | `#A99888` | [`photo/dawn/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/light-1.webp) | [`photo-portrait/dawn/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/light-1.webp) | [Dave Ruck](https://unsplash.com/photos/a-swan-glides-on-a-calm-lake-at-dusk-U1cpCMOy1H0) |
 | 2 | `#6A5946` | [`photo/dawn/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/light-2.webp) | [`photo-portrait/dawn/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/light-2.webp) | [Jonny Gios](https://unsplash.com/photos/misty-morning-landscape-with-bare-trees-and-river-reflections-8mTgxXVpGGI) |
+| 3 | `#3F392C` | [`photo/dawn/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/light-3.webp) | [`photo-portrait/dawn/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/light-3.webp) | [Dmytro Yarish](https://unsplash.com/photos/golden-sunbeams-illuminate-layered-mountain-silhouettes-at-sunset-VvNz4khYfoQ) |
+| 4 | `#282C28` | [`photo/dawn/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/light-4.webp) | [`photo-portrait/dawn/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/light-4.webp) | [Emma Swoboda](https://unsplash.com/photos/mountain-peaks-illuminated-by-the-setting-sun-rJQZ1yYo-pg) |
 
 #### dawn / moderate
 _balanced, layered — typical day_
@@ -34,6 +36,7 @@ _balanced, layered — typical day_
 |---|------|-----------|----------|--------------|
 | 1 | `#6F7261` | [`photo/dawn/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/moderate-1.webp) | [`photo-portrait/dawn/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/moderate-1.webp) | [Jonny Gios](https://unsplash.com/photos/misty-forest-landscape-with-silhouetted-trees-mvby_QPxVxg) |
 | 2 | `#675F55` | [`photo/dawn/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/moderate-2.webp) | [`photo-portrait/dawn/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/moderate-2.webp) | [Royce Fonseca](https://unsplash.com/photos/bare-trees-in-a-foggy-forest-bLgjbyf4wzw) |
+| 3 | `#124C8B` | [`photo/dawn/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/moderate-3.webp) | [`photo-portrait/dawn/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/moderate-3.webp) | [Marek Piwnicki](https://unsplash.com/photos/layered-blue-mountains-under-a-pastel-sky-7c4Gxa6598I) |
 
 #### dawn / packed
 _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry the load)_
@@ -41,6 +44,7 @@ _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
 | 1 | `#675F55` | [`photo/dawn/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/packed-1.webp) | [`photo-portrait/dawn/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/packed-1.webp) | [Royce Fonseca](https://unsplash.com/photos/bare-trees-in-a-foggy-forest-bLgjbyf4wzw) |
+| 2 | `#8E7056` | [`photo/dawn/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/dawn/packed-2.webp) | [`photo-portrait/dawn/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/dawn/packed-2.webp) | [Ingmar](https://unsplash.com/photos/a-close-up-of-a-branch-with-leaves-HbkzVNT2i_M) |
 
 ### morning  · 07–12h · clear, bright, optimistic — blue / cream tones
 
@@ -51,22 +55,28 @@ _airy, distant, breathing room — calm day_
 |---|------|-----------|----------|--------------|
 | 1 | `#718583` | [`photo/morning/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/light-1.webp) | [`photo-portrait/morning/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/light-1.webp) | [Sorin Jurcut](https://unsplash.com/photos/golden-grass-field-under-a-clear-blue-sky-JfevklT8m7A) |
 | 2 | `#DAA06C` | [`photo/morning/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/light-2.webp) | [`photo-portrait/morning/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/light-2.webp) | [Ahmet Yüksek ✪](https://unsplash.com/photos/silhouetted-mountain-peaks-against-a-warm-sunset-sky-mybaeBtxOj8) |
+| 3 | `#9B9E97` | [`photo/morning/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/light-3.webp) | [`photo-portrait/morning/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/light-3.webp) | [Pascal Bullan](https://unsplash.com/photos/a-foggy-field-with-green-grass-under-a-gray-sky-r_WQXNhWP-E) |
+| 4 | `#908E7A` | [`photo/morning/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/light-4.webp) | [`photo-portrait/morning/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/light-4.webp) | [Merih Tasli](https://unsplash.com/photos/grassy-field-with-trees-in-the-background-TNacr6t60lM) |
 
 #### morning / moderate
 _balanced, layered — typical day_
 
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
-| 1 | `#6E84A5` | [`photo/morning/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/moderate-1.webp) | [`photo-portrait/morning/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/moderate-1.webp) | [Zetong Li](https://unsplash.com/photos/green-trees-near-body-of-water-during-sunset-9DrQ22CSpGs) |
-| 2 | `#AFB7C3` | [`photo/morning/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/moderate-2.webp) | [`photo-portrait/morning/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/moderate-2.webp) | [Zetong Li](https://unsplash.com/photos/a-mountain-covered-in-clouds-and-trees-HLvjhUqi1bM) |
+| 1 | `#6E84A5` | [`photo/morning/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/moderate-1.webp) | [`photo-portrait/morning/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/moderate-1.webp) | [Unknown](https://unsplash.com/photos/9DrQ22CSpGs) |
+| 2 | `#AFB7C3` | [`photo/morning/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/moderate-2.webp) | [`photo-portrait/morning/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/moderate-2.webp) | [Unknown](https://unsplash.com/photos/HLvjhUqi1bM) |
+| 3 | `#726D6E` | [`photo/morning/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/moderate-3.webp) | [`photo-portrait/morning/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/moderate-3.webp) | [Ahmet Yüksek ✪](https://unsplash.com/photos/a-misty-lake-reflects-bare-trees-and-sky-QDKpinrQmto) |
+| 4 | `#273232` | [`photo/morning/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/moderate-4.webp) | [`photo-portrait/morning/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/moderate-4.webp) | [Jonathan Letniak](https://unsplash.com/photos/a-lake-surrounded-by-trees-and-mountains-under-a-cloudy-sky-LJJxRJm5-j4) |
 
 #### morning / packed
 _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry the load)_
 
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
-| 1 | `#656A6A` | [`photo/morning/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/packed-1.webp) | [`photo-portrait/morning/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/packed-1.webp) | [Johanneke Kroesbergen-Kamps](https://unsplash.com/photos/a-dirt-road-in-the-middle-of-a-forest-on-a-foggy-day-lbBEb7L3MrI) |
-| 2 | `#A7B09B` | [`photo/morning/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/packed-2.webp) | [`photo-portrait/morning/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/packed-2.webp) | [C. Shi](https://unsplash.com/photos/lush-green-tree-branches-in-a-misty-forest-2guLc9yMYgU) |
+| 1 | `#656A6A` | [`photo/morning/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/packed-1.webp) | [`photo-portrait/morning/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/packed-1.webp) | [Unknown](https://unsplash.com/photos/lbBEb7L3MrI) |
+| 2 | `#A7B09B` | [`photo/morning/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/packed-2.webp) | [`photo-portrait/morning/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/packed-2.webp) | [Unknown](https://unsplash.com/photos/2guLc9yMYgU) |
+| 3 | `#C0ACA7` | [`photo/morning/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/packed-3.webp) | [`photo-portrait/morning/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/packed-3.webp) | [Daniil Silantev](https://unsplash.com/photos/a-group-of-trees-that-are-covered-in-snow-eNnGiKM-IjE) |
+| 4 | `#333531` | [`photo/morning/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/morning/packed-4.webp) | [`photo-portrait/morning/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/morning/packed-4.webp) | [Fredrik Solli Wandem](https://unsplash.com/photos/a-forest-filled-with-lots-of-trees-covered-in-fog-SvhIF0Q8gO4) |
 
 ### afternoon  · 12–17h · warm mid-day clarity, full sun
 
@@ -77,6 +87,8 @@ _airy, distant, breathing room — calm day_
 |---|------|-----------|----------|--------------|
 | 1 | `#D0966F` | [`photo/afternoon/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/light-1.webp) | [`photo-portrait/afternoon/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/light-1.webp) | [Simon Maisch](https://unsplash.com/photos/brown-sand-under-blue-sky-during-daytime-te8vIciszAk) |
 | 2 | `#C7C0BB` | [`photo/afternoon/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/light-2.webp) | [`photo-portrait/afternoon/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/light-2.webp) | [Cate Bligh](https://unsplash.com/photos/brown-rock-formation-under-blue-sky-during-daytime-5-r1P92zYNE) |
+| 3 | `#3E515A` | [`photo/afternoon/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/light-3.webp) | [`photo-portrait/afternoon/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/light-3.webp) | [Chris Bair](https://unsplash.com/photos/a-large-cloud-is-in-the-sky-over-a-grassy-field-bOK5eWMDIWk) |
+| 4 | `#9899A4` | [`photo/afternoon/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/light-4.webp) | [`photo-portrait/afternoon/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/light-4.webp) | [Dennis Zhang](https://unsplash.com/photos/vast-landscape-with-mountains-under-a-cloudy-sky-zgXV6Vx4xA4) |
 
 #### afternoon / moderate
 _balanced, layered — typical day_
@@ -85,14 +97,18 @@ _balanced, layered — typical day_
 |---|------|-----------|----------|--------------|
 | 1 | `#73766B` | [`photo/afternoon/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/moderate-1.webp) | [`photo-portrait/afternoon/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/moderate-1.webp) | [Zach Kessinger](https://unsplash.com/photos/rustic-cabin-in-a-golden-field-at-sunset-HNgcfT5MG3o) |
 | 2 | `#898885` | [`photo/afternoon/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/moderate-2.webp) | [`photo-portrait/afternoon/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/moderate-2.webp) | [Leandra Rieger](https://unsplash.com/photos/dramatic-clouds-hover-over-an-autumn-landscape-gR5B7ocb-Ww) |
+| 3 | `#84827E` | [`photo/afternoon/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/moderate-3.webp) | [`photo-portrait/afternoon/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/moderate-3.webp) | [Norbert Buduczki](https://unsplash.com/photos/a-view-of-a-mountain-range-under-a-cloudy-sky-d4jGz1HFoVM) |
+| 4 | `#764F2D` | [`photo/afternoon/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/moderate-4.webp) | [`photo-portrait/afternoon/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/moderate-4.webp) | [Daniil Silantev](https://unsplash.com/photos/golden-mountain-peaks-at-sunrise-with-mist-in-valleys-ou_9KZ6BJ-0) |
 
 #### afternoon / packed
 _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry the load)_
 
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
-| 1 | `#716A52` | [`photo/afternoon/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/packed-1.webp) | [`photo-portrait/afternoon/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/packed-1.webp) | [Jacob Castle](https://unsplash.com/photos/a-forest-of-tall-trees-j8iPllhcWWg) |
-| 2 | `#182111` | [`photo/afternoon/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/packed-2.webp) | [`photo-portrait/afternoon/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/packed-2.webp) | [Tomas Williams](https://unsplash.com/photos/a-lush-green-forest-filled-with-lots-of-trees-Ic_lvVv3Dz0) |
+| 1 | `#716A52` | [`photo/afternoon/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/packed-1.webp) | [`photo-portrait/afternoon/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/packed-1.webp) | [Unknown](https://unsplash.com/photos/j8iPllhcWWg) |
+| 2 | `#182111` | [`photo/afternoon/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/packed-2.webp) | [`photo-portrait/afternoon/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/packed-2.webp) | [Unknown](https://unsplash.com/photos/Ic_lvVv3Dz0) |
+| 3 | `#042309` | [`photo/afternoon/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/packed-3.webp) | [`photo-portrait/afternoon/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/packed-3.webp) | [Micah & Sammie Chaffin](https://unsplash.com/photos/a-close-up-of-a-plant-with-green-leaves-d49_soO1BWg) |
+| 4 | `#79917E` | [`photo/afternoon/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/afternoon/packed-4.webp) | [`photo-portrait/afternoon/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/afternoon/packed-4.webp) | [Clark Wilson](https://unsplash.com/photos/close-up-of-a-green-leafs-ribbed-texture-vRdUlUQ5PFQ) |
 
 ### goldenHour  · 17–19h · amber, low-angle warm light, deep oranges / golds
 
@@ -103,14 +119,18 @@ _airy, distant, breathing room — calm day_
 |---|------|-----------|----------|--------------|
 | 1 | `#B47C46` | [`photo/goldenHour/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/light-1.webp) | [`photo-portrait/goldenHour/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/light-1.webp) | [Kelvin Zyteng](https://unsplash.com/photos/sunset-over-the-water-with-grasses-in-the-foreground-pi9UmWpTId0) |
 | 2 | `#512F1B` | [`photo/goldenHour/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/light-2.webp) | [`photo-portrait/goldenHour/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/light-2.webp) | [Joel Durkee](https://unsplash.com/photos/the-sun-is-setting-over-the-horizon-of-the-ocean-LrgFJd61TvY) |
+| 3 | `#C5A895` | [`photo/goldenHour/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/light-3.webp) | [`photo-portrait/goldenHour/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/light-3.webp) | [Daniel Seßler](https://unsplash.com/photos/a-beautiful-sunset-over-a-small-island-in-the-middle-of-the-ocean-xHxfXRbTG1Y) |
+| 4 | `#6E624D` | [`photo/goldenHour/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/light-4.webp) | [`photo-portrait/goldenHour/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/light-4.webp) | [Darko Trajkovic](https://unsplash.com/photos/a-view-of-a-body-of-water-with-a-palm-tree-in-the-foreground-6eTplEYjapg) |
 
 #### goldenHour / moderate
 _balanced, layered — typical day_
 
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
-| 1 | `#45393F` | [`photo/goldenHour/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/moderate-1.webp) | [`photo-portrait/goldenHour/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/moderate-1.webp) | [Arno Senoner](https://unsplash.com/photos/layered-mountain-ranges-at-dusk-with-soft-sky-EdBdyuAMaJo) |
+| 1 | `#45393F` | [`photo/goldenHour/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/moderate-1.webp) | [`photo-portrait/goldenHour/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/moderate-1.webp) | [Unknown](https://unsplash.com/photos/EdBdyuAMaJo) |
 | 2 | `#585049` | [`photo/goldenHour/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/moderate-2.webp) | [`photo-portrait/goldenHour/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/moderate-2.webp) | [Luke Peterson](https://unsplash.com/photos/mountain-range-at-sunset-with-pine-trees-foreground-eYBNVOJWnBc) |
+| 3 | `#686644` | [`photo/goldenHour/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/moderate-3.webp) | [`photo-portrait/goldenHour/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/moderate-3.webp) | [Nicolas Houdayer](https://unsplash.com/photos/a-field-of-wheat-K_D0VZpElmA) |
+| 4 | `#8F5D48` | [`photo/goldenHour/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/moderate-4.webp) | [`photo-portrait/goldenHour/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/moderate-4.webp) | [Benoît Deschasaux](https://unsplash.com/photos/a-field-of-wheat-k1aKwgXB3u0) |
 
 #### goldenHour / packed
 _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry the load)_
@@ -118,7 +138,9 @@ _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
 | 1 | `#837263` | [`photo/goldenHour/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/packed-1.webp) | [`photo-portrait/goldenHour/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/packed-1.webp) | [Daniil Silantev](https://unsplash.com/photos/misty-forest-landscape-with-warm-sunlight-breaking-through-3pW91fGAKiE) |
-| 2 | `#6A645C` | [`photo/goldenHour/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/packed-2.webp) | [`photo-portrait/goldenHour/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/packed-2.webp) | [Pascal Debrunner](https://unsplash.com/photos/a-forest-with-fallen-leaves-WGyIq07D3kY) |
+| 2 | `#6A645C` | [`photo/goldenHour/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/packed-2.webp) | [`photo-portrait/goldenHour/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/packed-2.webp) | [Unknown](https://unsplash.com/photos/WGyIq07D3kY) |
+| 3 | `#262A12` | [`photo/goldenHour/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/packed-3.webp) | [`photo-portrait/goldenHour/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/packed-3.webp) | [Kristaps Ungurs](https://unsplash.com/photos/aerial-view-of-a-dense-evergreen-forest-at-sunrise-rPNT7r8YAgk) |
+| 4 | `#643C2F` | [`photo/goldenHour/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/goldenHour/packed-4.webp) | [`photo-portrait/goldenHour/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/goldenHour/packed-4.webp) | [Liana S](https://unsplash.com/photos/flowers-bloom-in-the-golden-light-of-sunset-KljshtzSd64) |
 
 ### evening  · 19–21h · post-sunset cooling blues / violets, low saturation
 
@@ -129,14 +151,18 @@ _airy, distant, breathing room — calm day_
 |---|------|-----------|----------|--------------|
 | 1 | `#74B6E1` | [`photo/evening/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/light-1.webp) | [`photo-portrait/evening/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/light-1.webp) | [Henrique Ferreira](https://unsplash.com/photos/a-view-of-the-sky-from-above-the-clouds-8xXeYkZMm-c) |
 | 2 | `#A99888` | [`photo/evening/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/light-2.webp) | [`photo-portrait/evening/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/light-2.webp) | [Dave Ruck](https://unsplash.com/photos/a-swan-glides-on-a-calm-lake-at-dusk-U1cpCMOy1H0) |
+| 3 | `#714E40` | [`photo/evening/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/light-3.webp) | [`photo-portrait/evening/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/light-3.webp) | [Kristaps Ungurs](https://unsplash.com/photos/silhouette-of-islands-on-calm-ocean-at-sunset-x8Oro9-tG64) |
+| 4 | `#9DA2A6` | [`photo/evening/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/light-4.webp) | [`photo-portrait/evening/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/light-4.webp) | [Lawrence Krowdeed](https://unsplash.com/photos/two-sailboats-on-calm-ocean-water-at-dusk-bg5QBFoQEkg) |
 
 #### evening / moderate
 _balanced, layered — typical day_
 
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
-| 1 | `#143548` | [`photo/evening/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/moderate-1.webp) | [`photo-portrait/evening/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/moderate-1.webp) | [Artem Shuba](https://unsplash.com/photos/a-large-body-of-water-surrounded-by-snow-covered-mountains-Z0YaTkx9pFk) |
-| 2 | `#2A6780` | [`photo/evening/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/moderate-2.webp) | [`photo-portrait/evening/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/moderate-2.webp) | [Peter Thomas](https://unsplash.com/photos/a-mountain-covered-in-snow-under-a-cloudy-sky-PMO6SIGHh9A) |
+| 1 | `#143548` | [`photo/evening/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/moderate-1.webp) | [`photo-portrait/evening/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/moderate-1.webp) | [Unknown](https://unsplash.com/photos/Z0YaTkx9pFk) |
+| 2 | `#2A6780` | [`photo/evening/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/moderate-2.webp) | [`photo-portrait/evening/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/moderate-2.webp) | [Unknown](https://unsplash.com/photos/PMO6SIGHh9A) |
+| 3 | `#657988` | [`photo/evening/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/moderate-3.webp) | [`photo-portrait/evening/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/moderate-3.webp) | [Fabian Bächli](https://unsplash.com/photos/misty-mountain-peaks-at-dawn-with-soft-clouds-jQAe44MEIXU) |
+| 4 | `#664C61` | [`photo/evening/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/moderate-4.webp) | [`photo-portrait/evening/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/moderate-4.webp) | [Ahmet Yüksek ✪](https://unsplash.com/photos/layered-mountain-peaks-at-sunset-with-orange-sky-zSiqe6j9Aao) |
 
 #### evening / packed
 _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry the load)_
@@ -145,6 +171,8 @@ _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry
 |---|------|-----------|----------|--------------|
 | 1 | `#494F4B` | [`photo/evening/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/packed-1.webp) | [`photo-portrait/evening/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/packed-1.webp) | [Tim Mossholder](https://unsplash.com/photos/mountains-towards-shoreline-MVfyR-s5dF0) |
 | 2 | `#1B2724` | [`photo/evening/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/packed-2.webp) | [`photo-portrait/evening/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/packed-2.webp) | [Lacyec](https://unsplash.com/photos/coastal-building-overlooking-the-ocean-at-dusk-HI3aq0LRYos) |
+| 3 | `#413E3A` | [`photo/evening/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/packed-3.webp) | [`photo-portrait/evening/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/packed-3.webp) | [Philipp Deus](https://unsplash.com/photos/dark-forest-on-a-cliff-overlooking-choppy-ocean-waves-48Avkd-XgGI) |
+| 4 | `#363433` | [`photo/evening/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/evening/packed-4.webp) | [`photo-portrait/evening/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/evening/packed-4.webp) | [Linda Xu](https://unsplash.com/photos/body-of-water-under-cloudy-sky-during-sunset-_qyPu6EJFf8) |
 
 ### night  · 21–05h · deep, low chroma, moon / starlit
 
@@ -153,8 +181,10 @@ _airy, distant, breathing room — calm day_
 
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
-| 1 | `#133436` | [`photo/night/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/light-1.webp) | [`photo-portrait/night/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/light-1.webp) | [Martin Adams](https://unsplash.com/photos/silhouette-photo-of-mountains-LuH6F1tgdB8) |
-| 2 | `#142E2F` | [`photo/night/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/light-2.webp) | [`photo-portrait/night/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/light-2.webp) | [Nadine Marfurt](https://unsplash.com/photos/starry-night-sky-reflected-in-a-calm-lake-rBHDjvgld5c) |
+| 1 | `#133436` | [`photo/night/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/light-1.webp) | [`photo-portrait/night/light-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/light-1.webp) | [Unknown](https://unsplash.com/photos/LuH6F1tgdB8) |
+| 2 | `#142E2F` | [`photo/night/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/light-2.webp) | [`photo-portrait/night/light-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/light-2.webp) | [Unknown](https://unsplash.com/photos/rBHDjvgld5c) |
+| 3 | `#203229` | [`photo/night/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/light-3.webp) | [`photo-portrait/night/light-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/light-3.webp) | [Jonny Gios](https://unsplash.com/photos/aurora-borealis-over-snow-capped-mountains-and-starry-sky-2vVhfhbj5-s) |
+| 4 | `#2B3831` | [`photo/night/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/light-4.webp) | [`photo-portrait/night/light-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/light-4.webp) | [Vladislav Zakharevich](https://unsplash.com/photos/starry-night-sky-over-a-calm-mountain-lake-Nq1yYSYCKAQ) |
 
 #### night / moderate
 _balanced, layered — typical day_
@@ -162,7 +192,9 @@ _balanced, layered — typical day_
 | # | Wash | Landscape | Portrait | Photographer |
 |---|------|-----------|----------|--------------|
 | 1 | `#172324` | [`photo/night/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/moderate-1.webp) | [`photo-portrait/night/moderate-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/moderate-1.webp) | [Joshua Woroniecki](https://unsplash.com/photos/mountains-reflect-in-a-serene-turquoise-lake-o5nOR7XVPZw) |
-| 2 | `#062837` | [`photo/night/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/moderate-2.webp) | [`photo-portrait/night/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/moderate-2.webp) | [Ahmet Yüksek ✪](https://unsplash.com/photos/snowy-mountain-peak-under-a-starry-night-sky-txXfF_2YZpY) |
+| 2 | `#062837` | [`photo/night/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/moderate-2.webp) | [`photo-portrait/night/moderate-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/moderate-2.webp) | [Unknown](https://unsplash.com/photos/txXfF_2YZpY) |
+| 3 | `#4B5158` | [`photo/night/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/moderate-3.webp) | [`photo-portrait/night/moderate-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/moderate-3.webp) | [Joseph Corl](https://unsplash.com/photos/the-night-sky-over-the-desert-with-stars-in-the-sky-kLwe_fGR5uA) |
+| 4 | `#461C16` | [`photo/night/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/moderate-4.webp) | [`photo-portrait/night/moderate-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/moderate-4.webp) | [Museum of New Zealand Te Papa Tongarewa](https://unsplash.com/photos/dramatic-clouds-over-dark-mountains-and-ocean-gp3UIaqtXWA) |
 
 #### night / packed
 _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry the load)_
@@ -171,12 +203,14 @@ _grounded, intimate, enveloping — busiest day (visual calm so the UI can carry
 |---|------|-----------|----------|--------------|
 | 1 | `#0A273C` | [`photo/night/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/packed-1.webp) | [`photo-portrait/night/packed-1.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/packed-1.webp) | [Ahmet Yüksek ✪](https://unsplash.com/photos/snowy-mountains-under-a-starry-night-sky-1E3gWJFOXms) |
 | 2 | `#506A9D` | [`photo/night/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/packed-2.webp) | [`photo-portrait/night/packed-2.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/packed-2.webp) | [Felix Rottmann](https://unsplash.com/photos/a-night-sky-with-stars-above-a-snowy-mountain-kh-WRlKnEkQ) |
+| 3 | `#133E59` | [`photo/night/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/packed-3.webp) | [`photo-portrait/night/packed-3.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/packed-3.webp) | [Ahmet Yüksek ✪](https://unsplash.com/photos/star-trails-over-a-snow-capped-mountain-peak-FSw9F6FOORw) |
+| 4 | `#86AECD` | [`photo/night/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo/night/packed-4.webp) | [`photo-portrait/night/packed-4.webp`](https://api.brett.brentbarkman.com/public/backgrounds/photo-portrait/night/packed-4.webp) | [Colin Watts](https://unsplash.com/photos/a-view-of-the-night-sky-with-the-milky-in-the-distance-eYXrvDWeJWs) |
 
 ## Totals
 
-- **35** wallpapers across 18 slots
-- Landscapes: 10.7 MB
-- Portraits: 10.6 MB
+- **69** wallpapers across 18 slots
+- Landscapes: 20.9 MB
+- Portraits: 21.4 MB
 
 ## Testing patterns
 
