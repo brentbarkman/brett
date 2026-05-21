@@ -4,7 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { Thing, ThingDetail, CreateItemInput, UpdateItemInput, InboxResponse, BulkUpdateInput } from "@brett/types";
-import { getTodayUTC } from "@brett/business";
+import { getTodayUTC, computeUrgency } from "@brett/business";
 import { apiFetch } from "./client";
 import { invalidateAllThings } from "./invalidate";
 
@@ -73,6 +73,10 @@ export function useUpcomingThings() {
 
 /** Shape a CreateItemInput into a provisional Thing for optimistic caches. */
 function provisionalThing(input: CreateItemInput, tempId: string): Thing {
+  // ThingsList groups by urgency, so a hardcoded default would render the
+  // optimistic insert invisible until the server replies with the real
+  // bucket. Mirror the server's itemToThing classification here.
+  const urgency = computeUrgency(input.dueDate ? new Date(input.dueDate) : null, null);
   return {
     id: tempId,
     type: (input.type as Thing["type"]) ?? "task",
@@ -81,7 +85,7 @@ function provisionalThing(input: CreateItemInput, tempId: string): Thing {
     listId: input.listId ?? null,
     status: (input.status as Thing["status"]) ?? "active",
     source: input.source ?? "manual",
-    urgency: "later",
+    urgency,
     dueDate: input.dueDate,
     dueDatePrecision: input.dueDatePrecision,
     sourceUrl: input.sourceUrl,

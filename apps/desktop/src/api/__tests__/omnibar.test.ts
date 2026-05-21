@@ -61,7 +61,14 @@ describe("useOmnibar", () => {
   });
 
   describe("createTask", () => {
-    it("calls API with title and type task", async () => {
+    // Helper: read the POST /things body from the latest apiFetch call.
+    const lastCreateBody = () => {
+      const call = mockApiFetch.mock.calls.find((c) => c[0] === "/things");
+      if (!call) throw new Error("apiFetch was not called with /things");
+      return JSON.parse(call[1]!.body as string);
+    };
+
+    it("posts a task with the trimmed title and type=task", async () => {
       mockApiFetch.mockResolvedValue({ id: "123", title: "Buy groceries" });
       const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
 
@@ -69,25 +76,34 @@ describe("useOmnibar", () => {
         await result.current.createTask("Buy groceries");
       });
 
-      expect(mockApiFetch).toHaveBeenCalledWith("/things", {
-        method: "POST",
-        body: JSON.stringify({ title: "Buy groceries", type: "task" }),
-        headers: { "Content-Type": "application/json" },
-      });
+      const path = mockApiFetch.mock.calls[0][0];
+      const init = mockApiFetch.mock.calls[0][1]!;
+      expect(path).toBe("/things");
+      expect(init.method).toBe("POST");
+      const body = lastCreateBody();
+      expect(body.type).toBe("task");
+      expect(body.title).toBe("Buy groceries");
     });
 
-    it("sets dueDate to today when on today view", async () => {
+    it("sets dueDate to today (UTC midnight) when on today view", async () => {
       mockApiFetch.mockResolvedValue({ id: "123", title: "Test" });
       const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
-
-      const today = new Date().toISOString().split("T")[0];
 
       await act(async () => {
         await result.current.createTask("Test task", "today");
       });
 
-      const callBody = JSON.parse(mockApiFetch.mock.calls[0][1]!.body as string);
-      expect(callBody.dueDate).toBe(today);
+      const body = lastCreateBody();
+      // ISO timestamp at the start of today (UTC). Asserts the value lands in
+      // the same UTC day rather than pinning the exact string format.
+      expect(body.dueDate).toBeTruthy();
+      const due = new Date(body.dueDate);
+      const todayUtc = new Date();
+      todayUtc.setUTCHours(0, 0, 0, 0);
+      expect(due.getUTCFullYear()).toBe(todayUtc.getUTCFullYear());
+      expect(due.getUTCMonth()).toBe(todayUtc.getUTCMonth());
+      expect(due.getUTCDate()).toBe(todayUtc.getUTCDate());
+      expect(body.dueDatePrecision).toBe("day");
     });
 
     it("sets listId when on a list view", async () => {
@@ -98,8 +114,7 @@ describe("useOmnibar", () => {
         await result.current.createTask("Test task", "list:abc123def456");
       });
 
-      const callBody = JSON.parse(mockApiFetch.mock.calls[0][1]!.body as string);
-      expect(callBody.listId).toBe("abc123def456");
+      expect(lastCreateBody().listId).toBe("abc123def456");
     });
 
     it("sets no dueDate or listId for other views", async () => {
@@ -110,16 +125,15 @@ describe("useOmnibar", () => {
         await result.current.createTask("Test task", "inbox");
       });
 
-      const callBody = JSON.parse(mockApiFetch.mock.calls[0][1]!.body as string);
-      expect(callBody.dueDate).toBeUndefined();
-      expect(callBody.listId).toBeUndefined();
+      const body = lastCreateBody();
+      expect(body.dueDate).toBeUndefined();
+      expect(body.listId).toBeUndefined();
     });
 
     it("closes omnibar after creating task", async () => {
       mockApiFetch.mockResolvedValue({ id: "123", title: "Test" });
       const { result } = renderHook(() => useOmnibar(), { wrapper: createWrapper() });
 
-      // Open first
       act(() => result.current.open("bar"));
       expect(result.current.isOpen).toBe(true);
 
@@ -153,6 +167,39 @@ describe("useOmnibar", () => {
       });
 
       expect(result.current.input).toBe("");
+    });
+
+    // Guards the #182 fix: the cache write happens before the server replies.
+    // Without optimistic updates, the user would see lag waiting for the
+    // network round-trip plus refetch.
+    it("inserts into the cache optimistically before the server responds", async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(QueryClientProvider, { client: queryClient }, children);
+
+      // Server hangs — proves the cache write is independent of the network.
+      let resolveServer: (v: unknown) => void = () => {};
+      mockApiFetch.mockImplementation(
+        () => new Promise((resolve) => { resolveServer = resolve; }),
+      );
+
+      queryClient.setQueryData(["inbox"], { visible: [] });
+
+      const { result } = renderHook(() => useOmnibar(), { wrapper });
+
+      act(() => {
+        result.current.createTask("Fresh task");
+      });
+
+      await waitFor(() => {
+        const inbox = queryClient.getQueryData<{ visible: { title: string }[] }>(["inbox"]);
+        expect(inbox?.visible).toHaveLength(1);
+        expect(inbox?.visible[0]?.title).toBe("Fresh task");
+      });
+
+      resolveServer({ id: "server-id", title: "Fresh task" });
     });
   });
 

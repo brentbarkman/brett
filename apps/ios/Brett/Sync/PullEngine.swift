@@ -444,7 +444,17 @@ final class PullEngine {
         health.isPulling = false
         if let error {
             health.consecutiveFailures += 1
-            health.lastError = String(describing: error)
+            // APIError's `description` is PII-redacted to bare category names
+            // ("APIError.unknown") — useless when diagnosing an outage from
+            // Sync Health settings. `diagnosticMessage` is the support-quality
+            // version: includes the underlying URLError code ("Timed out",
+            // "Couldn't reach the server", "DNS lookup failed", ...) without
+            // ever embedding user-typed strings.
+            if let apiError = error as? APIError {
+                health.lastError = apiError.diagnosticMessage
+            } else {
+                health.lastError = String(describing: error)
+            }
         }
         do {
             try context.save()

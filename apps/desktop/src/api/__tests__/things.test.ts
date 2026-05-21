@@ -170,6 +170,75 @@ describe("useCreateThing optimistic insert", () => {
     resolveServer(makeThing("server-id", "today task"));
   });
 
+  // ThingsList groups by `urgency`, so an optimistic insert with a hardcoded
+  // urgency wouldn't appear in any section (Today/Overdue/This Week/...).
+  // The provisional Thing must classify itself the same way the server would,
+  // otherwise the user sees lag waiting for the server to fill in the right
+  // urgency — exactly the bug reported in #182.
+  it("computes urgency from dueDate so a today-dated task lands in the Today section", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    // Today and end-of-week in UTC. Use a date close to "now" so the
+    // computeUrgency call (which compares against the real clock) classifies
+    // it as "today".
+    const todayMidnight = new Date();
+    todayMidnight.setUTCHours(0, 0, 0, 0);
+    const todayIso = todayMidnight.toISOString();
+    const endOfWeek = new Date(todayMidnight.getTime() + 6 * 86400000).toISOString();
+    const activeFilters = { status: "active" as const, dueBefore: endOfWeek };
+
+    qc.setQueryData<Thing[]>(["things", activeFilters], []);
+
+    let resolveServer: (t: Thing) => void = () => {};
+    mockApiFetch.mockImplementation(
+      () => new Promise<Thing>((resolve) => { resolveServer = resolve; }),
+    );
+
+    const { result } = renderHook(() => useCreateThing(), { wrapper });
+
+    act(() => {
+      result.current.mutate({
+        type: "task",
+        title: "due today",
+        dueDate: todayIso,
+        dueDatePrecision: "day",
+      });
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<Thing[]>(["things", activeFilters]);
+      expect(cache?.[0]?.urgency).toBe("today");
+    });
+
+    resolveServer(makeThing("server-id", "due today"));
+  });
+
+  // No dueDate → no urgency-bucket placement; default of "later" is what
+  // server-side itemToThing returns too. Keeps the inbox-bound path stable.
+  it("leaves urgency as 'later' when dueDate is not provided", async () => {
+    const { qc, wrapper } = setupQueryClient();
+
+    qc.setQueryData<InboxResponse>(["inbox"], { visible: [] });
+
+    let resolveServer: (t: Thing) => void = () => {};
+    mockApiFetch.mockImplementation(
+      () => new Promise<Thing>((resolve) => { resolveServer = resolve; }),
+    );
+
+    const { result } = renderHook(() => useCreateThing(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ type: "task", title: "inbox task" });
+    });
+
+    await waitFor(() => {
+      const inbox = qc.getQueryData<InboxResponse>(["inbox"]);
+      expect(inbox?.visible[0]?.urgency).toBe("later");
+    });
+
+    resolveServer(makeThing("server-id", "inbox task"));
+  });
+
   // Follow-up from #62: List-scoped add must land in the list's cache
   // (useListThings → ["things", { listId }]) immediately.
   it("inserts a list-scoped task into the matching ['things', { listId }] cache", async () => {

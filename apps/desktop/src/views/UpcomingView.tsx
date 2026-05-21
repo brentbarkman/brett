@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Clock } from "lucide-react";
-import { ThingCard, ItemListShell, useListKeyboardNav, useDeferredToggle, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
+import { ThingCard, ItemListShell, useListKeyboardNav, useDeferredToggle, useNewItems, SkeletonListView, SectionHeader, TypeFilter } from "@brett/ui";
 import type { Thing, FilterType } from "@brett/types";
 import { groupUpcomingThings } from "@brett/business";
 import { useUpcomingThings, useToggleThing } from "../api/things";
@@ -34,6 +34,9 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
 
   const sections = groupUpcomingThings(filteredThings);
   const allItems = sections.flatMap((s) => s.things);
+  // Matches ThingsList — one-shot fade-in when a row first lands here
+  // (e.g. omnibar create with a future due date, drag-to-future-bucket).
+  const newItemIds = useNewItems(allItems);
 
   // Deferred batch toggle — matches ThingsList + InboxView so rapid-fire
   // clicks in Upcoming don't fire one API mutation per tap.
@@ -107,25 +110,34 @@ export function UpcomingView({ onItemClick, onTriageOpen, onFocusChange, onRecon
           <div key={section.label} className={sectionIdx > 0 ? "mt-4" : ""}>
             <SectionHeader title={section.label} count={section.things.length} />
             <div className="flex flex-col">
-              {section.things.map((thing, i) => (
-                <ThingCard
-                  key={thing.id}
-                  thing={thing}
-                  onClick={() => onItemClick(thing)}
-                  onToggle={handleToggle}
-                  onFocus={() => setFocusedIndex(offset + i)}
-                  isFocused={focusedIndex === offset + i}
-                  onReconnect={thing.sourceId?.startsWith("relink:") && onReconnect
-                    ? () => onReconnect(thing.sourceId!)
-                    : undefined}
-                  reconnectPending={thing.sourceId === reconnectPendingSourceId}
-                  onInstallUpdate={thing.sourceId === "system:update" ? installUpdate : undefined}
-                  onElementRef={(el) => {
-                    if (el) cardEls.current.set(thing.id, el);
-                    else cardEls.current.delete(thing.id);
-                  }}
-                />
-              ))}
+              {section.things.map((thing, i) => {
+                const isNew = newItemIds.has(thing.id);
+                // Stable wrapper — matches ThingsList. Don't swap element
+                // type on `isNew` flips or React remounts the card.
+                return (
+                  <div
+                    key={thing.id}
+                    style={isNew ? { animation: "thingCardEnter 280ms cubic-bezier(0.16, 1, 0.3, 1)" } : undefined}
+                  >
+                    <ThingCard
+                      thing={thing}
+                      onClick={() => onItemClick(thing)}
+                      onToggle={handleToggle}
+                      onFocus={() => setFocusedIndex(offset + i)}
+                      isFocused={focusedIndex === offset + i}
+                      onReconnect={thing.sourceId?.startsWith("relink:") && onReconnect
+                        ? () => onReconnect(thing.sourceId!)
+                        : undefined}
+                      reconnectPending={thing.sourceId === reconnectPendingSourceId}
+                      onInstallUpdate={thing.sourceId === "system:update" ? installUpdate : undefined}
+                      onElementRef={(el) => {
+                        if (el) cardEls.current.set(thing.id, el);
+                        else cardEls.current.delete(thing.id);
+                      }}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

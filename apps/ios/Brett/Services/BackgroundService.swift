@@ -239,7 +239,14 @@ final class BackgroundService: Clearable {
 
         struct Sets: Codable {
             let photography: Segments
-            let abstract: Segments
+            /// Optional because the canonical manifest (bundled + served from
+            /// `/config/background-manifest`) currently only ships the
+            /// `photography` set. When the catalog grows distinct abstract
+            /// images this field will populate; until then iOS falls back
+            /// to the photography set for the `.abstract` style — matching
+            /// desktop's behavior of treating abstract as photography until
+            /// the manifest exposes a separate set.
+            let abstract: Segments?
         }
 
         struct Segments: Codable {
@@ -987,7 +994,9 @@ final class BackgroundService: Clearable {
     static func segments(for style: Style, in manifest: BackgroundManifest) -> BackgroundManifest.Segments {
         switch style {
         case .photography, .solid: return manifest.sets.photography
-        case .abstract: return manifest.sets.abstract
+        // Abstract falls back to photography when the manifest doesn't
+        // carry a distinct abstract set yet (the canonical case today).
+        case .abstract: return manifest.sets.abstract ?? manifest.sets.photography
         }
     }
 

@@ -49,6 +49,7 @@ export { Tooltip } from "./Tooltip";
 export type { QuickAddInputHandle } from "./QuickAddInput";
 export { useListKeyboardNav } from "./useListKeyboardNav";
 export { useDeferredToggle } from "./useDeferredToggle";
+export { useNewItems } from "./useNewItems";
 export { ItemListShell } from "./ItemListShell";
 export { SectionHeader } from "./SectionHeader";
 export { CollapsibleSection } from "./CollapsibleSection";
