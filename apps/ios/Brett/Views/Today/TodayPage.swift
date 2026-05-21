@@ -157,6 +157,12 @@ private struct TodayPageBody: View {
     /// and the user's next tap lands on the wrong row. Cleared 2s after
     /// the last completion (any new tap resets the clock).
     @State private var pendingDoneIDs: Set<String> = []
+    /// One-row read of the user's profile so we can pull
+    /// `avgBusynessScore` into the busyness-tier computation that
+    /// drives wallpaper selection. NOT user-scoped at the query
+    /// level (the row IS the user); upstream sign-out wipes it
+    /// before this view ever re-mounts.
+    @Query(sort: \UserProfile.id) private var profiles: [UserProfile]
     /// Memo cache for `TodaySections.bucket(...)`. Without it, the
     /// bucket runs on every SwiftUI body re-eval (sync save, scenePhase,
     /// TabView selection, completionPulse, etc.) — a 200-item set
@@ -319,7 +325,73 @@ private struct TodayPageBody: View {
             if !briefingStore.isDismissedToday {
                 await briefingStore.fetch()
             }
+            // Kick the server's 14-day busyness baseline recompute so
+            // the wallpaper-tier ratios stay calibrated to recent
+            // workload. Truly fire-and-forget via a detached Task
+            // so the briefing fetch (above) and the rest of the
+            // .task chain don't wait on two HTTP round-trips. Mirrors
+            // desktop's `App.tsx` mount effect. `.id(userId)` upstream
+            // keeps `TodayPageBody` stable for the user's session, so
+            // this fires once per session (not per body re-eval).
+            Task { await UserProfileStore().syncBusyness() }
         }
+        // Push today's busyness inputs into BackgroundService so the
+        // wallpaper picks from the correct (segment, tier) slot. We
+        // derive a fingerprint from the three inputs and `.onChange`
+        // on that — re-keying on every body eval would flood the
+        // service with redundant updates, and `updateBusyness`
+        // already dedupes internally as a second line of defense.
+        // Initial push happens via `.onAppear` so even an item-empty
+        // first-launch state pushes (0, 0, nil) → light tier.
+        .onAppear { pushBusynessInputs() }
+        .onChange(of: busynessFingerprint) { _, _ in pushBusynessInputs() }
+    }
+
+    // MARK: - Busyness inputs for wallpaper selection
+
+    /// Today's meeting count. Filters the @Query'd events down to
+    /// the ones that start today in the user's local calendar.
+    /// Mirrors desktop's `todayMeetingCount = todayCalendarEvents?.length`.
+    private var todayMeetingCount: Int {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
+        return events.filter { event in
+            event.deletedAt == nil
+                && event.startTime >= startOfDay
+                && event.startTime < startOfTomorrow
+                && !event.isAllDay
+        }.count
+    }
+
+    /// Today's task count: overdue + due-today + tonight. Mirrors
+    /// desktop's `tasks due today or overdue` formula by reusing the
+    /// already-computed section buckets.
+    private var todayTaskCount: Int {
+        let s = sections
+        return s.overdue.count + s.today.count + s.tonight.count
+    }
+
+    /// Fingerprint that captures the three inputs as a single
+    /// Equatable value. `.onChange(of: busynessFingerprint)` fires
+    /// only when one of these meaningfully changes.
+    ///
+    /// The avg-score is encoded as either `"nil"` or `"\(value)"`
+    /// rather than a numeric sentinel — `0` is a real server
+    /// response (user has no tasks/events in the 14-day window),
+    /// so any numeric sentinel would collide with it and miss the
+    /// nil→0 transition on first successful sync.
+    private var busynessFingerprint: String {
+        let score = profiles.first?.avgBusynessScore.map { "\($0)" } ?? "nil"
+        return "\(todayMeetingCount)|\(todayTaskCount)|\(score)"
+    }
+
+    private func pushBusynessInputs() {
+        BackgroundService.shared.updateBusyness(
+            meetingCount: todayMeetingCount,
+            taskCount: todayTaskCount,
+            avgBusynessScore: profiles.first?.avgBusynessScore
+        )
     }
 
     // MARK: - Section computation

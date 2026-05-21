@@ -110,6 +110,29 @@ final class BackgroundService: Clearable {
     /// cards + text to sit on without a vignette.
     static let defaultWashColor = Color(red: 26/255, green: 22/255, blue: 18/255)
 
+    /// Today's task count (overdue + due today). Pushed in via
+    /// `updateBusyness(...)` from the Today page's `@Query`-backed
+    /// item list. Used to compute the active `BusynessTier` whenever
+    /// the wallpaper resolves. 0 until the first push lands.
+    private var lastMeetingCount: Int = 0
+    private var lastTaskCount: Int = 0
+    /// User's 14-day average busyness score, server-computed via
+    /// `POST /users/busyness-sync` and synced into `UserProfile`.
+    /// `nil` means "no baseline yet" — see `Self.busynessTier(...)`
+    /// for the new-user fallback.
+    private var lastAvgBusynessScore: Double? = nil
+
+    /// Shuffle-without-replacement state for auto-mode image picks.
+    /// `shownPaths` is the set of manifest paths we've already
+    /// served in the active (style, segment, tier) slot;
+    /// `lastSlotKey` is the key for that slot. When the slot key
+    /// changes — either because the user crosses a time-of-day
+    /// boundary, their busyness flips, or they switch style — we
+    /// reset both. Mirrors the desktop `shownRef` / `categoryRef`
+    /// pattern in `apps/desktop/src/hooks/useBackground.ts`.
+    private var shownPaths: Set<String> = []
+    private var lastSlotKey: String = ""
+
     /// Reference count of mounted `BackgroundView` instances. When it
     /// transitions 0 → 1 we start the 60s segment ticker; 1 → 0 stops it.
     /// Multiple mounts (e.g. while a pushed view sits on top of the
@@ -207,18 +230,19 @@ final class BackgroundService: Clearable {
 
     // MARK: - Manifest
 
-    /// Mirrors `apps/desktop/src/data/background-manifest.json`.
-    /// Decodable; every leaf is a bundle-relative image path.
-    struct BackgroundManifest: Decodable {
+    /// Mirrors `packages/business/src/data/background-manifest.json`.
+    /// Codable — we both decode from bundle / network AND encode to
+    /// disk for the next cold launch (see `refreshManifestFromAPI`).
+    struct BackgroundManifest: Codable {
         let version: Int?
         let sets: Sets
 
-        struct Sets: Decodable {
+        struct Sets: Codable {
             let photography: Segments
             let abstract: Segments
         }
 
-        struct Segments: Decodable {
+        struct Segments: Codable {
             let dawn: BusynessTiers
             let morning: BusynessTiers
             let afternoon: BusynessTiers
@@ -227,11 +251,18 @@ final class BackgroundService: Clearable {
             let night: BusynessTiers
         }
 
-        struct BusynessTiers: Decodable {
+        struct BusynessTiers: Codable {
             let light: [String]
             let moderate: [String]
             let packed: [String]
         }
+    }
+
+    /// Busyness tier — light / moderate / packed. Drives which slot
+    /// of the manifest we pick from. Mirrors `BusynessTier` in
+    /// `@brett/business/background.ts`.
+    enum BusynessTier: String {
+        case light, moderate, packed
     }
 
     /// Canonical time-of-day segments. Order matters for UI rendering.
@@ -309,16 +340,31 @@ final class BackgroundService: Clearable {
     // MARK: - Bootstrap
 
     /// Populate `manifest` and `storageBaseUrl`. Safe to call repeatedly —
-    /// the manifest is only re-decoded once, and the config fetch is
-    /// retried on each call so a dev flipping between networks gets the
-    /// fresh value.
+    /// the bundled fallback is only decoded once, the network manifest is
+    /// re-fetched each call (cheap; the server caches at the edge for 5
+    /// minutes), and the config fetch is retried on each call so a dev
+    /// flipping between networks gets the fresh value.
     func load() async {
         loadManifestIfNeeded()
         await loadConfigIfNeeded()
+        // Fire the network manifest fetch AFTER the config call has
+        // landed `storageBaseUrl` — clients won't be able to resolve
+        // any URLs without a base anyway, so there's no point trying
+        // to publish a fresh manifest before that's resolved. This
+        // also keeps a single load() call deterministic for tests.
+        await refreshManifestFromAPI()
     }
 
     private func loadManifestIfNeeded() {
         guard manifest == nil else { return }
+        // Prefer the cached network manifest written by a prior
+        // `refreshManifestFromAPI()` — that's the user's most recently
+        // seen catalog. Bundled fallback is the cold-launch /
+        // offline / first-ever-launch path.
+        if let cached = loadCachedManifest() {
+            self.manifest = cached
+            return
+        }
         guard let url = Bundle.main.url(forResource: "background-manifest", withExtension: "json") else {
             BrettLog.app.error("BackgroundService: missing background-manifest.json in bundle")
             return
@@ -352,6 +398,108 @@ final class BackgroundService: Clearable {
         } catch {
             BrettLog.app.error("BackgroundService: failed to load /config: \(String(describing: error), privacy: .public)")
         }
+    }
+
+    // MARK: - Network manifest
+
+    /// Location of the cached server-fetched manifest. App-support
+    /// rather than caches so iOS doesn't reclaim it under memory
+    /// pressure — losing this would silently downgrade the user to
+    /// the bundled (potentially stale) manifest on next launch.
+    private static let cachedManifestURL: URL? = {
+        let fm = FileManager.default
+        guard let dir = try? fm.url(for: .applicationSupportDirectory,
+                                    in: .userDomainMask,
+                                    appropriateFor: nil,
+                                    create: true) else { return nil }
+        return dir.appendingPathComponent("background-manifest.json")
+    }()
+
+    private func loadCachedManifest() -> BackgroundManifest? {
+        guard let url = Self.cachedManifestURL,
+              FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(BackgroundManifest.self, from: data)
+    }
+
+    /// Pull the live manifest from `/config/background-manifest` and
+    /// adopt it if it differs from what we currently have loaded.
+    /// Fire-and-forget — failures leave the bundled or previously-cached
+    /// manifest in place. Writes through to disk so the next cold
+    /// launch reads the network version before the bundled one.
+    ///
+    /// Mirrors desktop's "manifest comes from the monorepo build" —
+    /// just shifted from build-time to runtime so iOS gets new
+    /// wallpaper picks on the next foreground rather than the next
+    /// App Store release.
+    private func refreshManifestFromAPI() async {
+        do {
+            let fetched: BackgroundManifest = try await client.request(
+                BackgroundManifest.self,
+                path: "/config/background-manifest",
+                method: "GET"
+            )
+            // Skip the write + recompute when the fetched manifest is
+            // byte-identical to what we already have. Cheap to check
+            // (server sends version + tier counts; we compare counts).
+            if let current = manifest, manifestsEquivalent(current, fetched) { return }
+            self.manifest = fetched
+            // Reset the shuffle bookkeeping — the slot composition
+            // may have changed, so prior shownPaths are no longer a
+            // valid exclude list against the new pool.
+            shownPaths.removeAll()
+            lastSlotKey = ""
+            // Persist for next cold launch. Failures here (disk full,
+            // missing app-support dir) are non-fatal — the in-memory
+            // manifest is in effect for this session and the next
+            // foreground will re-fetch from the network anyway — but
+            // log them so a degenerate device shows up in diagnostics
+            // instead of silently falling back to the bundled v2
+            // forever.
+            if let url = Self.cachedManifestURL {
+                do {
+                    let data = try JSONEncoder().encode(fetched)
+                    try data.write(to: url, options: .atomic)
+                } catch {
+                    BrettLog.app.error("BackgroundService: manifest cache write failed: \(String(describing: error), privacy: .public)")
+                }
+            }
+            // Republish so the new pool is in effect immediately.
+            recompute()
+        } catch {
+            BrettLog.app.error("BackgroundService: manifest refresh failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// Cheap structural equivalence — same version + same tier sizes
+    /// across all slots of BOTH the photography and abstract sets.
+    /// Avoids re-publishing the manifest when the network fetch
+    /// returns content equivalent to what we already have.
+    ///
+    /// Note: this is a count-based check, not a deep URL comparison.
+    /// A manifest that keeps the same tier sizes but swaps URLs
+    /// in-place (e.g. replacing a single photo with a new one of
+    /// the same tier) would compare equal — we'd stick with the
+    /// loaded manifest until the next cold launch picks up the
+    /// network version from disk. That's an acceptable trade for
+    /// the simplicity; in practice tier sizes change whenever the
+    /// catalog meaningfully changes.
+    private func manifestsEquivalent(_ a: BackgroundManifest, _ b: BackgroundManifest) -> Bool {
+        guard a.version == b.version else { return false }
+        for style: Style in [.photography, .abstract] {
+            let aSegments = Self.segments(for: style, in: a)
+            let bSegments = Self.segments(for: style, in: b)
+            for segment in Segment.allCases {
+                let aTiers = Self.tier(for: segment, in: aSegments)
+                let bTiers = Self.tier(for: segment, in: bSegments)
+                if aTiers.light.count != bTiers.light.count ||
+                   aTiers.moderate.count != bTiers.moderate.count ||
+                   aTiers.packed.count != bTiers.packed.count {
+                    return false
+                }
+            }
+        }
+        return true
     }
 
     // MARK: - Renderer lifecycle
@@ -407,6 +555,32 @@ final class BackgroundService: Clearable {
         // common short-background case. See #161.
         recompute()
         startTick()
+    }
+
+    /// Push today's busyness inputs so the next `recompute()` /
+    /// `rotate()` picks from the correct (segment, tier) slot. Caller
+    /// is expected to be `TodayPage` (which has the `@Query`-backed
+    /// item + event lists plus the `UserProfile` row in scope). The
+    /// 14-day average is server-computed and synced via
+    /// `POST /users/busyness-sync` → `UserProfile.avgBusynessScore`;
+    /// pass `nil` when no baseline exists yet (the tier function
+    /// falls back to fixed thresholds in that case).
+    ///
+    /// Re-runs `recompute()` so the wallpaper reflects the new tier
+    /// without waiting for the 60s tick — analogous to how
+    /// `updateProfile` re-resolves when style/pinned changes.
+    func updateBusyness(meetingCount: Int, taskCount: Int, avgBusynessScore: Double?) {
+        let changed =
+            lastMeetingCount != meetingCount ||
+            lastTaskCount != taskCount ||
+            lastAvgBusynessScore != avgBusynessScore
+        lastMeetingCount = meetingCount
+        lastTaskCount = taskCount
+        lastAvgBusynessScore = avgBusynessScore
+        // Only recompute when something actually changed. The Today
+        // page can call this on every `body` eval (cheap to dedupe
+        // here vs. wrapping every consumer in a memo).
+        if changed { recompute() }
     }
 
     /// Push the latest user profile values from a renderer. Recomputes
@@ -655,19 +829,77 @@ final class BackgroundService: Clearable {
         }
 
         // Auto mode: pick a path from the manifest for the current
-        // segment. We default to the "light" busyness tier — the iOS
-        // client doesn't yet compute a live busyness score, so picking
-        // tiers other than light would require a UX that doesn't exist
-        // on the phone.
+        // (segment, tier) slot. Busyness inputs come from
+        // `updateBusyness(...)` (caller: TodayPage); when the Today
+        // page hasn't mounted yet the inputs are 0 and the tier
+        // resolves via the new-user fallback (always "light" at
+        // score 0). Once items + events land, the tier reflects
+        // today's actual workload — same contract as desktop's
+        // `useBackground` hook.
         guard let manifest else { return nil }
 
         let segment = Self.segment(forHour: Calendar.current.component(.hour, from: now))
         let effectiveStyle = Style(rawValue: style) ?? .photography
         let segments = Self.segments(for: effectiveStyle, in: manifest)
-        let tier = Self.tier(for: segment, in: segments).light
+        let tiers = Self.tier(for: segment, in: segments)
+        let busynessTier = Self.busynessTier(
+            meetingCount: lastMeetingCount,
+            taskCount: lastTaskCount,
+            avgScore: lastAvgBusynessScore
+        )
+        let paths = Self.paths(forTier: busynessTier, in: tiers)
 
-        guard let path = tier.randomElement() else { return nil }
+        // Shuffle-without-replacement bookkeeping. Reset the shown
+        // set whenever the slot identity changes (style + segment +
+        // tier triple) — otherwise we'd carry over yesterday's
+        // already-shown paths into today's morning rotation.
+        let slotKey = "\(effectiveStyle.rawValue)/\(segment.rawValue)/\(busynessTier.rawValue)"
+        if slotKey != lastSlotKey {
+            shownPaths.removeAll()
+            lastSlotKey = slotKey
+        }
+
+        // Filter to paths we haven't shown yet in this slot. If we've
+        // exhausted the slot (e.g. small `dawn/packed` tier with two
+        // images, both already shown), reset and re-pick from the
+        // full set so the cycle resumes cleanly.
+        var available = paths.filter { !shownPaths.contains($0) }
+        if available.isEmpty {
+            shownPaths.removeAll()
+            available = paths
+        }
+        guard let path = available.randomElement() else { return nil }
+        shownPaths.insert(path)
         return url(for: path, portrait: true)
+    }
+
+    /// Mirror of `getBusynessTier` in `@brett/business/background.ts`.
+    /// Kept private to this service so the only difference between
+    /// the two clients is the inputs — never the math. See the TS
+    /// source for the rationale on the thresholds (0.7 / 1.3 ratio
+    /// when a baseline exists, ≤4 / ≤10 fixed when it doesn't).
+    static func busynessTier(meetingCount: Int, taskCount: Int, avgScore: Double?) -> BusynessTier {
+        let score = Double(meetingCount * 2 + taskCount)
+        if let avg = avgScore, avg > 0 {
+            let ratio = score / avg
+            if ratio < 0.7 { return .light }
+            if ratio <= 1.3 { return .moderate }
+            return .packed
+        }
+        if score <= 4 { return .light }
+        if score <= 10 { return .moderate }
+        return .packed
+    }
+
+    /// Extract the URL list for a single tier out of a Segments
+    /// instance. Mirrors the `tiers.light` / `.moderate` / `.packed`
+    /// access that the old `currentImageURL` did inline.
+    private static func paths(forTier tier: BusynessTier, in tiers: BackgroundManifest.BusynessTiers) -> [String] {
+        switch tier {
+        case .light: return tiers.light
+        case .moderate: return tiers.moderate
+        case .packed: return tiers.packed
+        }
     }
 
     /// Resolve a full image URL for a manifest-relative path (e.g.
@@ -696,13 +928,23 @@ final class BackgroundService: Clearable {
 
     // MARK: - Segment helpers
 
-    /// Map an hour (0-23) to a time-of-day segment. Mirrors the desktop
-    /// `app-config` bucketing so auto backgrounds line up across clients.
+    /// Map an hour (0-23) to a time-of-day segment. Mirrors the
+    /// `getTimeSegment` boundaries in `@brett/business/background.ts`
+    /// EXACTLY so the desktop and iOS clients land on the same slot
+    /// when both look at the local hour: dawn 5–6, morning 7–11,
+    /// afternoon 12–16, goldenHour 17–18, evening 19–20, night 21–4.
+    ///
+    /// (Pre-May-2026 versions of this function used a shifted
+    /// boundary set — morning 7–10, afternoon 11–16, etc. — which
+    /// pushed iOS into a different segment than desktop for a chunk
+    /// of every weekday around 11 AM and at the goldenHour shoulder.
+    /// The shifted version was a copy-paste drift from an earlier
+    /// spec; this matches desktop's canonical implementation.)
     static func segment(forHour hour: Int) -> Segment {
         switch hour {
         case 5...6: return .dawn
-        case 7...10: return .morning
-        case 11...16: return .afternoon
+        case 7...11: return .morning
+        case 12...16: return .afternoon
         case 17...18: return .goldenHour
         case 19...20: return .evening
         default: return .night // 21-4
