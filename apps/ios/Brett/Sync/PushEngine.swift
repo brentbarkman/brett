@@ -116,6 +116,17 @@ final class PushEngine {
             for entry in batch {
                 mutationQueue.fail(id: entry.id, error: "network: \(error)", errorCode: nil)
             }
+            // Cancellation isn't a real failure — it just means a newer
+            // sync superseded this one, the user navigated mid-request, or
+            // iOS suspended the URLSession. Mirrors SyncManager.sync()'s
+            // own isCancellation filter so SyncHealth.consecutiveFailures
+            // (which the StatusBanner reads as the "is the API reachable"
+            // signal) doesn't flare on routine churn. Mutations stay on the
+            // queue so the next push retries.
+            if SyncManager.isCancellation(error) {
+                markPushing(false)
+                throw error
+            }
             // APIError's `description` is PII-redacted to bare category
             // names ("APIError.unknown") — useless when diagnosing from
             // Sync Health settings. `diagnosticMessage` is the support-

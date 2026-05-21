@@ -400,6 +400,32 @@ struct PullEngineTests {
         #expect(health.first?.lastError != nil)
     }
 
+    /// Cancellation errors (URLError.cancelled — SwiftUI .refreshable
+    /// dismissed, iOS suspended URLSession, debounced superseded) are NOT
+    /// real failures. SyncHealth.consecutiveFailures must stay at 0 so the
+    /// StatusBanner doesn't flare on routine view churn. Mirrors the
+    /// matching filter in SyncManager.sync().
+    @Test func cancelledPullDoesNotIncrementConsecutiveFailures() async throws {
+        let context = try InMemoryPersistenceController.makeContext()
+        MockURLProtocol.reset()
+        MockURLProtocol.stub(url: pullURL, error: URLError(.cancelled))
+
+        let engine = PullEngine(apiClient: makeStubbedClient(), context: context)
+
+        do {
+            _ = try await engine.pull()
+            Issue.record("expected cancellation to throw")
+        } catch {
+            // Expected — pull still throws so the caller can react.
+        }
+
+        let health: [SyncHealth] = (try? context.fetch(FetchDescriptor<SyncHealth>())) ?? []
+        #expect(health.first?.consecutiveFailures == 0,
+                "cancellation must not count toward the API-unreachable signal")
+        #expect(health.first?.lastError == nil,
+                "cancellation must not leave a stale error string")
+    }
+
     // MARK: - SyncHealth touched on success
 
     @Test func successfulPullUpdatesSyncHealth() async throws {
