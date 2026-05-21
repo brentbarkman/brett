@@ -219,4 +219,71 @@ struct BackgroundServiceRendererTests {
         // displayedKey of `solid:#0040DD` (not `solid:0040DD`).
         #expect(svc.displayedKey == "solid:#0040DD")
     }
+
+    // MARK: - storageBaseUrl persistence
+    //
+    // The bug class these tests guard against: on cold launch with
+    // `/config` unreachable, the in-memory `storageBaseUrl` is nil,
+    // `currentImageURL(...)` returns nil for every URL request, and
+    // BackgroundView renders only the wash bed — so the user sees a
+    // dark solid wash where their wallpaper photo should be, even
+    // though the manifest cache + AsyncImage URLCache could otherwise
+    // have served the same image they saw last session.
+    //
+    // Persisting the env-level base URL across launches closes that
+    // gap. Per-user data (`currentRemoteURL`, pinned photo selection)
+    // is deliberately NOT persisted — that was the cross-user leak the
+    // 2026-05-17 rewrite removed and it must stay removed. The tests
+    // below pin that distinction explicitly.
+
+    /// Each test uses its own UserDefaults suite so the round-trip
+    /// doesn't touch `.standard` (which would persist across test
+    /// runs and bleed state between tests).
+    private func isolatedDefaults(_ suiteName: String) -> UserDefaults {
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
+
+    @Test func persistedStorageBaseUrlReturnsNilWhenUnset() {
+        let defaults = isolatedDefaults("BackgroundServiceTests.unset")
+        #expect(BackgroundService.persistedStorageBaseUrl(defaults: defaults) == nil)
+    }
+
+    @Test func storageBaseUrlPersistRoundTrip() {
+        let defaults = isolatedDefaults("BackgroundServiceTests.roundtrip")
+        let original = URL(string: "https://storage.example.com/public")!
+
+        BackgroundService.persistStorageBaseUrl(original, defaults: defaults)
+        let restored = BackgroundService.persistedStorageBaseUrl(defaults: defaults)
+
+        #expect(restored == original)
+    }
+
+    @Test func persistedStorageBaseUrlIgnoresEmptyString() {
+        // Defensive: a wider rewrite that ever stores an empty string
+        // (e.g. via a future migration) must not return an
+        // `URL(string: "")` to callers — `currentImageURL(...)` would
+        // then build malformed URLs. Empty string → nil keeps the
+        // wash-only fallback predictable.
+        let defaults = isolatedDefaults("BackgroundServiceTests.empty")
+        defaults.set("", forKey: BackgroundService.storageBaseUrlDefaultsKey)
+        #expect(BackgroundService.persistedStorageBaseUrl(defaults: defaults) == nil)
+    }
+
+    @Test func persistStorageBaseUrlOverwritesPriorValue() {
+        // The persisted base URL must follow the latest network value,
+        // not the first. Env shifts (dev ↔ prod, prod URL migration)
+        // need to win over a stale UserDefaults entry — otherwise a
+        // device that ran against the old base URL once would resolve
+        // images from the wrong host forever.
+        let defaults = isolatedDefaults("BackgroundServiceTests.overwrite")
+        let oldURL = URL(string: "https://old.example.com/public")!
+        let newURL = URL(string: "https://new.example.com/public")!
+
+        BackgroundService.persistStorageBaseUrl(oldURL, defaults: defaults)
+        BackgroundService.persistStorageBaseUrl(newURL, defaults: defaults)
+
+        #expect(BackgroundService.persistedStorageBaseUrl(defaults: defaults) == newURL)
+    }
 }
