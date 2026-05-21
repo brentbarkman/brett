@@ -146,4 +146,38 @@ final class UserProfileStore: Clearable {
             // (zombie token → sign out) on its own refresh path.
         }
     }
+
+    /// Trigger the server's 14-day busyness baseline recomputation
+    /// and refresh the local cache with the new `avgBusynessScore`.
+    /// Fire-and-forget: the response payload is the same as the
+    /// `/users/me` shape, so we route it through `refresh(client:)`
+    /// on success to keep one source of truth. Mirrors desktop's
+    /// `apiFetch("/users/busyness-sync", { method: "POST" })`
+    /// in `apps/desktop/src/App.tsx`.
+    ///
+    /// Safe to call repeatedly — the endpoint is idempotent (it just
+    /// recomputes the rolling 14-day average from the current task +
+    /// event tables). We trigger once per Today-page mount, which
+    /// for an `.id(userId)`-stable view is once per session.
+    func syncBusyness(client: APIClient = .shared) async {
+        struct SyncResponse: Decodable {
+            let avgBusynessScore: Double
+        }
+        do {
+            _ = try await client.request(
+                SyncResponse.self,
+                path: "/users/busyness-sync",
+                method: "POST"
+            )
+            // The endpoint returns just `avgBusynessScore`. Pull a
+            // fresh `/users/me` to capture it locally — keeps the
+            // payload-handling path through `update(from:)`.
+            await refresh(client: client)
+        } catch {
+            // Transient network — keep the cached avg in place. The
+            // wallpaper's busyness tier still works against stale
+            // averages; it just won't reflect very recent shifts in
+            // workload until the next successful sync.
+        }
+    }
 }

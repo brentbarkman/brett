@@ -282,6 +282,7 @@ export function ContentDetailPanel({
               dueDate={detail.dueDate}
               dueDateLabel={detail.dueDateLabel}
               dueDatePrecision={detail.dueDatePrecision}
+              tonight={detail.tonight}
               reminder={detail.reminder}
               recurrence={detail.recurrence}
               onUpdateDueDate={onUpdateDueDate}

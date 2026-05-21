@@ -15,6 +15,13 @@ export interface QuickDatePickerProps {
   anchorEl: HTMLElement | null;
   initialDate: Date | null;
   /**
+   * Whether the item currently has the `tonight` flag set. Used only to pick
+   * which of the Today/Tonight chips renders as "currently set" when the item
+   * is dated today — without this, both chips highlight because they resolve
+   * to the same calendar day.
+   */
+  initialTonight?: boolean;
+  /**
    * Fires when the user commits a date. `precision` is `"week"` for the
    * "This Week" / "Next Week" chips (which intentionally land in the loose
    * week bucket) and `"day"` for everything else, including raw calendar
@@ -63,6 +70,7 @@ function startOfDayUTC(d: Date): Date {
 export function QuickDatePicker({
   anchorEl,
   initialDate,
+  initialTonight = false,
   onCommit,
   onCancel,
   placement = "bottom-end",
@@ -172,6 +180,7 @@ export function QuickDatePicker({
     >
       <ChipColumn
         initialDate={initialDate}
+        initialTonight={initialTonight}
         // Pass the raw `now` (not the UTC-midnight-anchored `today`) so the
         // preset sublabels reflect the user's local calendar day. Passing the
         // normalized `today` flips the date for any TZ west of UTC because
@@ -197,11 +206,13 @@ export function QuickDatePicker({
 
 function ChipColumn({
   initialDate,
+  initialTonight,
   now,
   onCommitPreset,
   onClear,
 }: {
   initialDate: Date | null;
+  initialTonight: boolean;
   now: Date;
   onCommitPreset: (p: TriageDatePreset) => void;
   onClear: () => void;
@@ -209,10 +220,21 @@ function ChipColumn({
   return (
     <div className="flex w-[128px] flex-col gap-1">
       {DATE_PRESET_ORDER.map((preset) => {
-        const isCurrent =
+        const dateMatches =
           !!initialDate &&
           computeTriageResult(preset, now).dueDate.slice(0, 10) ===
             initialDate.toISOString().slice(0, 10);
+        // Today and Tonight resolve to the same calendar day, so a pure date
+        // match would highlight both chips whenever an item is dated today.
+        // Disambiguate using the tonight flag: Tonight requires it set,
+        // Today requires it unset. Every other preset is date-only.
+        const isCurrent =
+          dateMatches &&
+          (preset === "tonight"
+            ? initialTonight
+            : preset === "today"
+              ? !initialTonight
+              : true);
         return (
           <button
             key={preset}

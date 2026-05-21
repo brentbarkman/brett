@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scrim strength comparison — A+B variants</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --fg: #e8e8e8;
+    --muted: #888;
+    --accent: #ddb968;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    padding: 36px 28px 100px;
+    max-width: 2200px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { margin-bottom: 24px; }
+  h1 { font: 600 22px/1.2 -apple-system, sans-serif; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); max-width: 920px; margin: 0; }
+
+  h2 {
+    font: 600 13px/1.2 -apple-system, sans-serif;
+    margin: 32px 0 14px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* ─── Grid for cells ───────────────────────────────────── */
+  .grid-desktop {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .grid-ios {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    max-width: 1200px;
+  }
+  .cell-label {
+    margin-bottom: 8px;
+    font: 600 11px/1.3 -apple-system, sans-serif;
+    color: var(--fg);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .cell-label .badge {
+    background: rgba(221,185,104,0.16);
+    color: var(--accent);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font: 600 9.5px/1.2 ui-monospace, Menlo, monospace;
+  }
+  .cell-label .badge.current { background: rgba(255,255,255,0.07); color: var(--muted); }
+  .cell-label .params {
+    color: var(--muted);
+    font: 10.5px/1.3 ui-monospace, Menlo, monospace;
+    font-weight: 400;
+  }
+
+  /* ───── Desktop cell ───────────────────────────────────── */
+  .desktop {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .desktop img.bg {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  .desktop .scrim {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .desktop-window {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-columns: 14% 1fr;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .titlebar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 26px;
+    display: flex; align-items: center; gap: 5px;
+    padding: 0 11px;
+    z-index: 5;
+  }
+  .traffic { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+
+  .leftnav {
+    padding: 32px 9px 12px;
+    color: rgba(255,255,255,0.78);
+    font-size: 9.5px;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .nav-row {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 7px; border-radius: 5px;
+    color: rgba(255,255,255,0.65);
+    line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .nav-row.active { background: rgba(255,255,255,0.08); color: #fff; }
+  .nav-icon {
+    width: 11px; height: 11px;
+    border: 1px solid currentColor; border-radius: 2px;
+    flex: none; opacity: 0.78;
+  }
+  .nav-badge { margin-left: auto; font: 8.5px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.55); }
+
+  .main {
+    padding: 32px 22px 14px;
+    display: flex; flex-direction: column; gap: 8px;
+    overflow: hidden;
+  }
+  .b-greet {
+    font: 500 24px/1.05 ui-serif, "New York", Georgia, serif;
+    letter-spacing: -0.02em;
+    color: #fff;
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.45),
+      0 6px 24px rgba(0,0,0,0.25);
+  }
+  .b-date {
+    margin-top: 3px;
+    font: 600 8px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.86);
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.45),
+      0 4px 14px rgba(0,0,0,0.25);
+  }
+  .b-prose {
+    margin-top: 10px;
+    font: 400 10.5px/1.6 ui-serif, "New York", Georgia, serif;
+    color: rgba(255,255,255,0.94);
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.45),
+      0 4px 18px rgba(0,0,0,0.25);
+  }
+  .b-prose em { font-style: normal; font-weight: 500; color: #fff; }
+
+  /* ──── Scrim variants ──── */
+  .scrim-v1 {
+    height: 50%;
+    background: linear-gradient(180deg, rgba(0,0,0,0.40) 0%, rgba(0,0,0,0.18) 45%, transparent 100%);
+  }
+  .scrim-v2 {
+    height: 55%;
+    background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.26) 50%, transparent 100%);
+  }
+  .scrim-v3 {
+    height: 60%;
+    background: linear-gradient(180deg, rgba(0,0,0,0.70) 0%, rgba(0,0,0,0.34) 50%, rgba(0,0,0,0.10) 80%, transparent 100%);
+  }
+  .scrim-v4 {
+    height: 65%;
+    background: linear-gradient(180deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 45%, rgba(0,0,0,0.18) 75%, transparent 100%);
+  }
+
+  /* ───── iOS cell ────────────────────────────────────────── */
+  .ios {
+    position: relative;
+    aspect-ratio: 9 / 19.5;
+    border-radius: 30px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 2px 22px rgba(0,0,0,0.7), 0 0 0 3px #1a1a1c, 0 0 0 4px rgba(255,255,255,0.05);
+  }
+  .ios img.bg {
+    position: absolute; height: 100%; width: auto; left: 50%; top: 0;
+    transform: translateX(-50%); display: block;
+  }
+  .ios .scrim {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .ios-ui {
+    position: absolute; inset: 0;
+    padding: 50px 14px 22px;
+    display: flex; flex-direction: column;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .ios-notch {
+    position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
+    width: 64px; height: 22px;
+    background: #000; border-radius: 12px;
+    z-index: 5;
+  }
+  .ios-greet {
+    font: 500 26px/1.05 ui-serif, "New York", Georgia, serif;
+    color: #fff;
+    letter-spacing: -0.02em;
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.5),
+      0 6px 26px rgba(0,0,0,0.3);
+  }
+  .ios-date {
+    margin-top: 4px;
+    font: 600 8px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: rgba(255,255,255,0.88);
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.5),
+      0 4px 16px rgba(0,0,0,0.28);
+  }
+  .ios-prose {
+    margin-top: 11px;
+    font: 400 10.5px/1.55 ui-serif, "New York", Georgia, serif;
+    color: rgba(255,255,255,0.96);
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.5),
+      0 4px 16px rgba(0,0,0,0.28);
+  }
+  .ios-prose em { font-style: normal; font-weight: 500; color: #fff; }
+  .ios-section {
+    margin-top: 14px;
+    background: rgba(0,0,0,0.32);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 9px 11px;
+  }
+  .ios-section-label {
+    font: 600 8px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.5);
+    padding-bottom: 5px;
+  }
+  .ios-row {
+    display: flex; align-items: center; gap: 7px;
+    padding: 3px 0; font-size: 10px; color: #fff;
+  }
+  .check {
+    width: 10px; height: 10px;
+    border: 1.4px solid rgba(255,255,255,0.42);
+    border-radius: 50%; flex: none;
+  }
+  .thing-cal-bar { width: 2.5px; height: 10px; background: #5fa3ff; border-radius: 1.5px; flex: none; }
+  .thing-time { margin-left: auto; font: 9.5px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.58); }
+
+  /* IOS-side scrim variants — slightly stronger because briefing takes more vertical space */
+  .ios-scrim-v1 { height: 36%; background: linear-gradient(180deg, rgba(0,0,0,0.46) 0%, rgba(0,0,0,0.22) 50%, transparent 100%); }
+  .ios-scrim-v2 { height: 40%; background: linear-gradient(180deg, rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.30) 50%, transparent 100%); }
+  .ios-scrim-v3 { height: 45%; background: linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.36) 50%, rgba(0,0,0,0.12) 80%, transparent 100%); }
+  .ios-scrim-v4 { height: 50%; background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.48) 45%, rgba(0,0,0,0.20) 75%, transparent 100%); }
+
+  .notes {
+    margin-top: 30px;
+    padding: 16px 20px;
+    background: rgba(221,185,104,0.06);
+    border: 1px solid rgba(221,185,104,0.2);
+    border-radius: 8px;
+    color: #c8b08c;
+    font-size: 12px;
+    line-height: 1.55;
+    max-width: 1100px;
+  }
+  .notes b { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Scrim strength comparison — A+B variants</h1>
+  <p class="lede">
+    Four progressively stronger top scrims on the same bright-fog wallpaper. Dual text-shadow stack
+    is identical across all four — only the scrim varies. Look at the briefing-prose (lines 2–5) to
+    feel where readability passes "fine" vs. "presents as an intentional atmospheric layer."
+  </p>
+</header>
+
+<h2>Desktop</h2>
+<div class="grid-desktop">
+  <!-- V1 — Current -->
+  <div>
+    <div class="cell-label">
+      <span class="badge current">V1 · current</span>
+      <span class="params">0.40 → 0.18 → 0 · 50% height</span>
+    </div>
+    <div class="desktop">
+      <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+      <div class="scrim scrim-v1"></div>
+      <div class="titlebar">
+        <span class="traffic" style="background:#ff5f57"></span>
+        <span class="traffic" style="background:#febc2e"></span>
+        <span class="traffic" style="background:#28c840"></span>
+      </div>
+      <div class="desktop-window">
+        <div class="leftnav">
+          <div class="nav-row"><div class="nav-icon"></div>Inbox<span class="nav-badge">3</span></div>
+          <div class="nav-row active"><div class="nav-icon"></div>Today<span class="nav-badge">7</span></div>
+          <div class="nav-row"><div class="nav-icon"></div>Upcoming<span class="nav-badge">12</span></div>
+          <div class="nav-row"><div class="nav-icon"></div>Calendar</div>
+        </div>
+        <div class="main">
+          <div class="b-greet">Tuesday.</div>
+          <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+          <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- V2 -->
+  <div>
+    <div class="cell-label">
+      <span class="badge">V2 · +1 step</span>
+      <span class="params">0.55 → 0.26 → 0 · 55% height</span>
+    </div>
+    <div class="desktop">
+      <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+      <div class="scrim scrim-v2"></div>
+      <div class="titlebar">
+        <span class="traffic" style="background:#ff5f57"></span>
+        <span class="traffic" style="background:#febc2e"></span>
+        <span class="traffic" style="background:#28c840"></span>
+      </div>
+      <div class="desktop-window">
+        <div class="leftnav">
+          <div class="nav-row"><div class="nav-icon"></div>Inbox<span class="nav-badge">3</span></div>
+          <div class="nav-row active"><div class="nav-icon"></div>Today<span class="nav-badge">7</span></div>
+          <div class="nav-row"><div class="nav-icon"></div>Upcoming<span class="nav-badge">12</span></div>
+          <div class="nav-row"><div class="nav-icon"></div>Calendar</div>
+        </div>
+        <div class="main">
+          <div class="b-greet">Tuesday.</div>
+          <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+          <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- V3 -->
+  <div>
+    <div class="cell-label">
+      <span class="badge">V3 · +2 steps</span>
+      <span class="params">0.70 → 0.34 → 0.10 · 60%</span>
+    </div>
+    <div class="desktop">
+      <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+      <div class="scrim scrim-v3"></div>
+      <div class="titlebar">
+        <span class="traffic" style="background:#ff5f57"></span>
+        <span class="traffic" style="background:#febc2e"></span>
+        <span class="traffic" style="background:#28c840"></span>
+      </div>
+      <div class="desktop-window">
+        <div class="leftnav">
+          <div class="nav-row"><div class="nav-icon"></div>Inbox<span class="nav-badge">3</span></div>
+          <div class="nav-row active"><div class="nav-icon"></div>Today<span class="nav-badge">7</span></div>
+          <div class="nav-row"><div class="nav-icon"></div>Upcoming<span class="nav-badge">12</span></div>
+          <div class="nav-row"><div class="nav-icon"></div>Calendar</div>
+        </div>
+        <div class="main">
+          <div class="b-greet">Tuesday.</div>
+          <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+          <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- V4 -->
+  <div>
+    <div class="cell-label">
+      <span class="badge">V4 · max</span>
+      <span class="params">0.82 → 0.45 → 0.18 · 65%</span>
+    </div>
+    <div class="desktop">
+      <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+      <div class="scrim scrim-v4"></div>
+      <div class="titlebar">
+        <span class="traffic" style="background:#ff5f57"></span>
+        <span class="traffic" style="background:#febc2e"></span>
+        <span class="traffic" style="background:#28c840"></span>
+      </div>
+      <div class="desktop-window">
+        <div class="leftnav">
+          <div class="nav-row"><div class="nav-icon"></div>Inbox<span class="nav-badge">3</span></div>
+          <div class="nav-row active"><div class="nav-icon"></div>Today<span class="nav-badge">7</span></div>
+          <div class="nav-row"><div class="nav-icon"></div>Upcoming<span class="nav-badge">12</span></div>
+          <div class="nav-row"><div class="nav-icon"></div>Calendar</div>
+        </div>
+        <div class="main">
+          <div class="b-greet">Tuesday.</div>
+          <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+          <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>iOS</h2>
+<div class="grid-ios">
+  <!-- IOS V1 -->
+  <div>
+    <div class="cell-label">
+      <span class="badge current">V1 · current</span>
+      <span class="params">0.46 → 0.22 → 0 · 36%</span>
+    </div>
+    <div class="ios">
+      <div class="ios-notch"></div>
+      <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+      <div class="scrim ios-scrim-v1"></div>
+      <div class="ios-ui">
+        <div class="ios-greet">Good morning.</div>
+        <div class="ios-date">TUESDAY · MAY 19</div>
+        <div class="ios-prose">Open morning — <em>ship the spec before design review</em>. Sasha may push the 1:1 because of a 3pm flight. Tomorrow's calendar is lighter if you want deep work.</div>
+        <div class="ios-section">
+          <div class="ios-section-label">Today · 4</div>
+          <div class="ios-row"><span class="thing-cal-bar"></span><span>Standup</span><span class="thing-time">9:30</span></div>
+          <div class="ios-row"><span class="thing-cal-bar"></span><span>Design review</span><span class="thing-time">11:00</span></div>
+          <div class="ios-row"><span class="check"></span><span>Wallpaper picks</span></div>
+          <div class="ios-row"><span class="check"></span><span>Briefing spec</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IOS V2 -->
+  <div>
+    <div class="cell-label">
+      <span class="badge">V2 · +1</span>
+      <span class="params">0.60 → 0.30 → 0 · 40%</span>
+    </div>
+    <div class="ios">
+      <div class="ios-notch"></div>
+      <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+      <div class="scrim ios-scrim-v2"></div>
+      <div class="ios-ui">
+        <div class="ios-greet">Good morning.</div>
+        <div class="ios-date">TUESDAY · MAY 19</div>
+        <div class="ios-prose">Open morning — <em>ship the spec before design review</em>. Sasha may push the 1:1 because of a 3pm flight. Tomorrow's calendar is lighter if you want deep work.</div>
+        <div class="ios-section">
+          <div class="ios-section-label">Today · 4</div>
+          <div class="ios-row"><span class="thing-cal-bar"></span><span>Standup</span><span class="thing-time">9:30</span></div>
+          <div class="ios-row"><span class="thing-cal-bar"></span><span>Design review</span><span class="thing-time">11:00</span></div>
+          <div class="ios-row"><span class="check"></span><span>Wallpaper picks</span></div>
+          <div class="ios-row"><span class="check"></span><span>Briefing spec</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IOS V3 -->
+  <div>
+    <div class="cell-label">
+      <span class="badge">V3 · +2</span>
+      <span class="params">0.75 → 0.36 → 0.12 · 45%</span>
+    </div>
+    <div class="ios">
+      <div class="ios-notch"></div>
+      <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+      <div class="scrim ios-scrim-v3"></div>
+      <div class="ios-ui">
+        <div class="ios-greet">Good morning.</div>
+        <div class="ios-date">TUESDAY · MAY 19</div>
+        <div class="ios-prose">Open morning — <em>ship the spec before design review</em>. Sasha may push the 1:1 because of a 3pm flight. Tomorrow's calendar is lighter if you want deep work.</div>
+        <div class="ios-section">
+          <div class="ios-section-label">Today · 4</div>
+          <div class="ios-row"><span class="thing-cal-bar"></span><span>Standup</span><span class="thing-time">9:30</span></div>
+          <div class="ios-row"><span class="thing-cal-bar"></span><span>Design review</span><span class="thing-time">11:00</span></div>
+          <div class="ios-row"><span class="check"></span><span>Wallpaper picks</span></div>
+          <div class="ios-row"><span class="check"></span><span>Briefing spec</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IOS V4 -->
+  <div>
+    <div class="cell-label">
+      <span class="badge">V4 · max</span>
+      <span class="params">0.85 → 0.48 → 0.20 · 50%</span>
+    </div>
+    <div class="ios">
+      <div class="ios-notch"></div>
+      <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+      <div class="scrim ios-scrim-v4"></div>
+      <div class="ios-ui">
+        <div class="ios-greet">Good morning.</div>
+        <div class="ios-date">TUESDAY · MAY 19</div>
+        <div class="ios-prose">Open morning — <em>ship the spec before design review</em>. Sasha may push the 1:1 because of a 3pm flight. Tomorrow's calendar is lighter if you want deep work.</div>
+        <div class="ios-section">
+          <div class="ios-section-label">Today · 4</div>
+          <div class="ios-row"><span class="thing-cal-bar"></span><span>Standup</span><span class="thing-time">9:30</span></div>
+          <div class="ios-row"><span class="thing-cal-bar"></span><span>Design review</span><span class="thing-time">11:00</span></div>
+          <div class="ios-row"><span class="check"></span><span>Wallpaper picks</span></div>
+          <div class="ios-row"><span class="check"></span><span>Briefing spec</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <b>What to watch for:</b> at V3 the scrim is doing real work but still presents as a soft atmospheric drift.
+  By V4 it starts to look like a header bar rather than an ambient layer — the wallpaper character begins to
+  hide under it. The honest sweet spot is usually somewhere between V2 and V3, and the right answer depends
+  on whether you want the scrim to <i>disappear</i> on dark wallpapers or <i>always</i> be present.
+  <br><br>
+  <b>If you pick V3:</b> on darker wallpapers (Monument Valley, evening/packed) the scrim becomes invisible
+  anyway because the underlying pixels are already near-black — so V3-on-bright behaves like V1-on-dark in
+  practice. That argues for "always-on at V3" being safe.
+  <br><br>
+  <b>If you pick V2:</b> we may want adaptive opacity — light wallpapers boost to ~V3, dark ones stay at V1/V2.
+  Slightly more code but the system feels smarter.
+</div>
+
+</body>
+</html>

@@ -36,6 +36,7 @@ import {
   ScoutDetail,
   LivingBackground,
   BackgroundScrim,
+  BriefingCanopy,
   demoMode,
   ErrorBoundary,
 } from "@brett/ui";
@@ -77,9 +78,9 @@ import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/gra
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useBackground } from "./hooks/useBackground";
-import { useBackgroundLuminance } from "./hooks/useBackgroundLuminance";
 import { initDiagnostics, collectDiagnostics, recordRouteChange, type DiagnosticSnapshot } from "./lib/diagnostics";
 import { FeedbackModal } from "./components/FeedbackModal";
+import { StatusBanner } from "./components/StatusBanner";
 import { useFavicon } from "./hooks/useFavicon";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
@@ -275,6 +276,7 @@ export function App() {
     currentListId?: string | null;
     currentDueDate?: string | null;
     currentDueDatePrecision?: "day" | "week" | null;
+    currentTonight?: boolean;
     anchorEl?: HTMLElement | null;
     pendingDate?: Date | null;
     /** Precision committed alongside pendingDate. "day" for raw calendar
@@ -612,15 +614,6 @@ export function App() {
     backgroundStyle,
     avgBusynessScore,
     pinnedBackground,
-  });
-
-  // Wallpaper luminance — drives the briefing-prose color swap. The
-  // gradient field carries the active solid color when the user is on
-  // solid mode (the photo URL falls back to a placeholder we don't
-  // want to sample); prefer it. Otherwise sample the visible photo.
-  const { isLight: washIsLight } = useBackgroundLuminance({
-    imageUrl: background.imageUrl,
-    solidHex: background.gradient,
   });
 
   // Awakening — plays once per session on cold launch.
@@ -1113,13 +1106,13 @@ export function App() {
   const handleSetList = (id: string, anchorEl: HTMLElement) => {
     if (!selectedItem || "googleEventId" in selectedItem) return;
     const item = selectedItem as Thing;
-    handleTriageOpen("list-only", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision }, anchorEl);
+    handleTriageOpen("list-only", [id], { listId: item.listId, dueDate: item.dueDate ?? undefined, dueDatePrecision: item.dueDatePrecision, tonight: item.tonight }, anchorEl);
   };
 
   const handleTriageOpen = (
     mode: "list-first" | "date-first" | "list-only" | "date-only",
     ids: string[],
-    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null },
+    thing?: { listId?: string | null; dueDate?: string; dueDatePrecision?: "day" | "week" | null; tonight?: boolean },
     anchorEl?: HTMLElement | null,
   ) => {
     setTriageState({
@@ -1128,6 +1121,7 @@ export function App() {
       currentListId: thing?.listId,
       currentDueDate: thing?.dueDate,
       currentDueDatePrecision: thing?.dueDatePrecision,
+      currentTonight: thing?.tonight,
       anchorEl: anchorEl ?? null,
     });
   };
@@ -1246,6 +1240,12 @@ export function App() {
           awakeningZoomDurationMs={AWAKENING_KENBURNS_MS}
         />
         <BackgroundScrim />
+        {/* Top-edge briefing canopy — V2 readability scrim, see
+            packages/ui/src/BriefingCanopy.tsx. Mounted only on Today
+            because every other route has chrome (nav + cards) sitting
+            in the upper region, so the scrim would only darken
+            wallpaper that's already hidden. */}
+        {location.pathname === "/today" && <BriefingCanopy />}
 
         {/* Cold-launch cover: black overlay above UI (z-30). Opaque at
             mount, fades to transparent over AWAKENING_COVER_FADE_MS. The
@@ -1264,6 +1264,13 @@ export function App() {
 
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
+
+        {/* API-outage banner — slim fixed bar that appears below the
+            drag region when `/health` heartbeat fails. Self-contained:
+            owns its own polling, auth-gates on `useAuth().user`, and
+            renders `null` when healthy. Sits at z-20 so the awakening
+            cover (z-30) hides it during the cold-launch reveal. */}
+        <StatusBanner />
 
         {/* Main Layout Shell. Always at opacity 1 — the awakening cover
             above (z-30) handles the reveal. Any opacity / transform /
@@ -1390,7 +1397,6 @@ export function App() {
                   onReconnect={handleReconnect}
                   reconnectPendingSourceId={reconnectPendingSourceId}
                   assistantName={assistantName}
-                  washIsLight={washIsLight}
                 />
               </MainLayout>
             } />
@@ -1641,6 +1647,7 @@ export function App() {
               <TriageQuickPicker
                 anchorEl={triageState.anchorEl}
                 initialDate={initialDate}
+                initialTonight={triageState.currentTonight}
                 initialListId={triageState.currentListId ?? null}
                 lists={lists}
                 suggestedListIds={suggestedListIds}
@@ -1662,6 +1669,7 @@ export function App() {
               <QuickDatePicker
                 anchorEl={triageState.anchorEl}
                 initialDate={initialDate}
+                initialTonight={triageState.currentTonight}
                 onCommit={(date, precision, tonight) => {
                   handleInboxTriage(triageState.ids, {
                     dueDate: date ? date.toISOString() : null,

@@ -34,6 +34,18 @@ struct FeedbackSheet: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+    /// True for ~2 seconds after the user taps "Copy report" — drives
+    /// the inline confirmation that swaps the button label to
+    /// "Copied" so the action feels acknowledged.
+    @State private var didCopyReport = false
+
+    /// Per-feedback request timeout. Tighter than the APIClient default
+    /// (30s) because the user is sitting in front of a half-sheet
+    /// staring at a spinner — failing fast and offering Copy is
+    /// kinder than a 30-second hang. 5 seconds catches Railway-edge
+    /// 502s (which fire ~15s into a request) by giving up before
+    /// the gateway does.
+    private static let feedbackRequestTimeout: TimeInterval = 5
 
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -62,10 +74,51 @@ struct FeedbackSheet: View {
             descriptionField
 
             if let errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 13))
-                    .foregroundStyle(BrettColors.error)
-                    .padding(.horizontal, 20)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(errorMessage)
+                        .font(.system(size: 13))
+                        .foregroundStyle(BrettColors.error)
+
+                    // Recovery row — Retry resubmits using the same body
+                    // the user already typed; Copy writes the full report
+                    // to the pasteboard so they can paste into email /
+                    // Slack manually when Brett is unreachable for longer
+                    // than they want to wait. Both stay visible until
+                    // the next submit attempt clears `errorMessage`.
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { await submit() }
+                        } label: {
+                            Text("Try again")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.85))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 999, style: .continuous)
+                                        .fill(Color.white.opacity(0.10))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSubmitting)
+
+                        Button {
+                            copyReportToPasteboard()
+                        } label: {
+                            Text(didCopyReport ? "Copied" : "Copy report")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.85))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 999, style: .continuous)
+                                        .fill(Color.white.opacity(didCopyReport ? 0.16 : 0.10))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 20)
             }
 
             if let successMessage {
@@ -191,6 +244,7 @@ struct FeedbackSheet: View {
         isSubmitting = true
         errorMessage = nil
         successMessage = nil
+        didCopyReport = false
         defer { isSubmitting = false }
 
         // Server expects `{ type, title, description, diagnostics: { ... } }`.
@@ -220,7 +274,8 @@ struct FeedbackSheet: View {
             _ = try await APIClient.shared.rawRequest(
                 path: "/feedback",
                 method: "POST",
-                body: body
+                body: body,
+                timeout: Self.feedbackRequestTimeout
             )
             HapticManager.success()
             successMessage = "Thanks — sent. We'll take a look."
@@ -229,8 +284,103 @@ struct FeedbackSheet: View {
             dismiss()
         } catch {
             HapticManager.error()
-            errorMessage = (error as? APIError)?.userFacingMessage ?? "Couldn't send. Try again later."
+            errorMessage = Self.errorCopy(for: error)
         }
+    }
+
+    /// Copy the report (type + title + description + minimal diagnostics)
+    /// to the system pasteboard so the user can paste it into email or
+    /// Slack when Brett is unreachable. The copied form is plain text —
+    /// not the JSON payload — because the destination is human, not the
+    /// API. Briefly flips `didCopyReport` so the button label confirms
+    /// the action.
+    private func copyReportToPasteboard() {
+        UIPasteboard.general.string = Self.formatReportForClipboard(
+            type: type,
+            title: title,
+            description: description,
+            appVersion: appVersion,
+            os: "iOS \(UIDevice.current.systemVersion)",
+            userId: authManager.currentUser?.id
+        )
+        HapticManager.success()
+        didCopyReport = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s
+            didCopyReport = false
+        }
+    }
+
+    // MARK: - Pure helpers (testable)
+
+    /// Map a thrown error from `/feedback` into user-facing copy. Three
+    /// branches:
+    ///
+    ///  1. Transport-shaped APIErrors (offline / serverError /
+    ///     rateLimited / unknown / decodingFailed) → unified "Brett is
+    ///     unreachable" message so the user just knows to retry or copy,
+    ///     not the underlying HTTP status. Transport errors are the
+    ///     dominant case for `/feedback` in practice.
+    ///  2. Sign-in expired (unauthorized) → distinct message because the
+    ///     fix is different (the user needs to reopen / re-auth, not
+    ///     retry the same payload).
+    ///  3. Validation / credential errors → defer to the existing
+    ///     `userFacingMessage` since the server provided a specific
+    ///     message worth surfacing.
+    ///  4. Non-APIError fallback → same as transport-shaped: assume
+    ///     unreachable. Anything that escaped as a plain `Error` from
+    ///     `APIClient.rawRequest` is functionally a transport problem
+    ///     (the client wraps known categories in APIError).
+    ///
+    /// `internal` (default access) so tests can hit it without
+    /// standing up the full SwiftUI view.
+    static func errorCopy(for error: Error) -> String {
+        let unreachable = "Couldn't send — Brett is unreachable. Try again or copy your report."
+
+        guard let apiError = error as? APIError else {
+            return unreachable
+        }
+
+        switch apiError {
+        case .offline, .serverError, .rateLimited, .unknown, .decodingFailed:
+            return unreachable
+        case .unauthorized:
+            return "Sign-in expired. Reopen the app and try again."
+        case .invalidCredentials, .validation, .keychainWriteFailed:
+            // Server / client provided a specific message worth surfacing
+            // (validation rules, credential hints, keychain failure copy).
+            return apiError.userFacingMessage
+        }
+    }
+
+    /// Compose the plain-text report a user can paste into email or
+    /// Slack. Includes the minimal diagnostics needed for triage
+    /// (version, OS, user id) but no breadcrumbs / console dumps —
+    /// the user is going to paste this into a chat, not a debugger.
+    /// Pure helper so tests can pin the exact format.
+    static func formatReportForClipboard(
+        type: FeedbackType,
+        title: String,
+        description: String,
+        appVersion: String,
+        os: String,
+        userId: String?
+    ) -> String {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var lines: [String] = []
+        lines.append("[\(type.label)] \(trimmedTitle.isEmpty ? "(no title)" : trimmedTitle)")
+        lines.append("")
+        lines.append(trimmedDescription.isEmpty ? "(no description)" : trimmedDescription)
+        lines.append("")
+        lines.append("— Diagnostics —")
+        lines.append("App: \(appVersion)")
+        lines.append("OS: \(os)")
+        if let userId, !userId.isEmpty {
+            lines.append("User: \(userId)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// Marketing version + Fastlane-bumped build number.

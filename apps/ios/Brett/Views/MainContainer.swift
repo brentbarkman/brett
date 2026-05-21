@@ -283,6 +283,43 @@ struct MainContainer: View {
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
 
+                // Top-edge briefing canopy — V2 readability scrim. Gives
+                // the TodayHero briefing prose a uniform field to sit on
+                // regardless of the wallpaper's upper composition;
+                // replaces the per-photo color sampling we used to do
+                // for prose color. Only mounted on Today and fades with
+                // the photo so non-Today pages don't get an unmotivated
+                // top darkening. See briefing-readability review notes
+                // in `docs/backgrounds.md` companion + the
+                // `packages/ui/src/BriefingCanopy.tsx` desktop mate.
+                if currentPage == 2 {
+                    // Phone is ~844pt tall; the desktop canopy covers
+                    // 55% of viewport which on a 900px Electron window is
+                    // ~495pt. On phone, 40% of GeometryReader height
+                    // (~338pt of an 844pt frame) lands the gradient's
+                    // feather end at the same visual point relative to
+                    // the briefing-prose paragraph. The two clients use
+                    // the same gradient stops (0.55 → 0.26 → 0) so the
+                    // perceived darkening at any given pixel is matched
+                    // — only the height scales with surface.
+                    GeometryReader { geo in
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.black.opacity(0.55), location: 0.0),
+                                .init(color: Color.black.opacity(0.26), location: 0.5),
+                                .init(color: Color.black.opacity(0.0), location: 1.0),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: geo.size.height * 0.40)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
+                    .opacity(photoOpacity)
+                    .ignoresSafeArea(edges: .top)
+                    .allowsHitTesting(false)
+                }
+
                 // Shake detection is handled by `ShakeMonitor.shared` (polls
                 // CoreMotion at the app level) and presented by
                 // `FeedbackPresenter.shared` (UIWindow-level present so
@@ -387,10 +424,11 @@ struct MainContainer: View {
                     )
                 }
             )
-            // Polished state UX — offline banner stays sticky at the top,
+            // Polished state UX — status banner stays sticky at the top
+            // (covers offline, API-unreachable, and retrying states),
             // toast host sits above the omnibar. Both attach here so every
             // page inside the NavigationStack inherits them.
-            .offlineBanner()
+            .statusBanner()
             .errorToastHost()
             .overlay(alignment: .topTrailing) {
                 // Sync indicators float over the top-right corner instead

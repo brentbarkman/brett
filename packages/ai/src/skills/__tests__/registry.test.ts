@@ -133,4 +133,54 @@ describe("SkillRegistry", () => {
       expect(tools.map((t) => t.name)).toContain("get_meeting_action_items");
     });
   });
+
+  describe("toToolDefinitionsForMessage — multi-turn intent propagation", () => {
+    // Regression for issue #170. In a multi-turn create flow, the latest
+    // user message may not carry create-intent words even though the
+    // conversation is clearly about creating a task. Without the history
+    // window, the LLM was sent only mutate tools (search/update/move/...)
+    // and hallucinated "I don't have a create tool available right now".
+    //
+    // Reproduces Brent's "401k" flow:
+    //   user: "401k"           → no patterns match → fallback (create + query + mutate)
+    //   asst: "want me to create one? what action — rollover, contribution, …?"
+    //   user: "yes"            → no patterns → fallback
+    //   asst: "what's the specific action?"
+    //   user: "just to set it up" → `set` matches MUTATE only → create_task gets dropped
+    beforeEach(() => {
+      registry.register(makeSkill({ name: "create_task" }));
+      registry.register(makeSkill({ name: "update_item" }));
+      registry.register(makeSkill({ name: "complete_task" }));
+      registry.register(makeSkill({ name: "move_to_list" }));
+      registry.register(makeSkill({ name: "snooze_item" }));
+      registry.register(makeSkill({ name: "archive_list" }));
+      registry.register(makeSkill({ name: "search_things" }));
+      registry.register(makeSkill({ name: "get_item_detail" }));
+    });
+
+    it("preserves create_task when prior user turns implied a create intent", () => {
+      const tools = registry.toToolDefinitionsForMessage(
+        "just to set it up",
+        ["401k", "yes"],
+      );
+      expect(tools.map((t) => t.name)).toContain("create_task");
+    });
+
+    it("ignores history when the latest message itself has clear create intent", () => {
+      const tools = registry.toToolDefinitionsForMessage(
+        "create a task to call mom",
+        ["what's on today"],
+      );
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("create_task");
+    });
+
+    it("backward-compatible: single-message call still works (no history arg)", () => {
+      const tools = registry.toToolDefinitionsForMessage("just to set it up");
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("update_item");
+      // Without history, create_task is correctly absent — pre-existing behavior.
+      expect(names).not.toContain("create_task");
+    });
+  });
 });

@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@brett/api", "dev"],
       "port": 3001
+    },
+    {
+      "name": "wallpaper-gallery",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", "scripts/backgrounds", "-p", "5174", "-c-1", "--silent"],
+      "port": 5174
     }
   ]
 }

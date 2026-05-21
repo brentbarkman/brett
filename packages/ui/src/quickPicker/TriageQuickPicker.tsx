@@ -6,6 +6,7 @@ import { QuickListPicker } from "./QuickListPicker";
 export interface TriageQuickPickerProps {
   anchorEl: HTMLElement | null;
   initialDate: Date | null;
+  initialTonight?: boolean;
   initialListId: string | null;
   lists: NavList[];
   suggestedListIds: string[];
@@ -46,6 +47,7 @@ export function TriageQuickPicker(props: TriageQuickPickerProps) {
       <QuickDatePicker
         anchorEl={props.anchorEl}
         initialDate={props.initialDate}
+        initialTonight={props.initialTonight}
         onCommit={handleDateCommit}
         onCancel={props.onClose}
         placement={props.placement}

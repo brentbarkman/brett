@@ -90,6 +90,8 @@ The legacy 28pt `BrettTypography.dateHeader` is **deprecated for top-level page 
 
 Below the hero, a 140pt `LinearGradient(.clear → washColor)` provides the photo→wash transition. Below that, the rest of Today's content (NextUpCard, task sections, empty state) sits on a `.background(washColor)`. The hero scrolls with the page; the photo behind it (rendered by the global `BackgroundView`) stays put, so as the user scrolls the wash content covers more of the photo.
 
+**Briefing canopy.** Between the photo and the hero text sits a top-anchored `LinearGradient` (`rgba(0,0,0,0.55) → 0.26 → 0`, 40% of `GeometryReader` height) mounted in `MainContainer.swift` gated to `currentPage == 2`. It rides the same `photoOpacity` as the photo so it fades during page swipes and as the user scrolls past the hero. The canopy gives the white briefing prose a uniform dark field regardless of which wallpaper is rotating — replaces an earlier per-photo luminance-sampled text-color flip (deleted May 2026). Mirror of the desktop layer in `packages/ui/src/BriefingCanopy.tsx`.
+
 **Don't add chrome to the hero.** No card, no border, no glass plate — that defeats the calm.
 
 ---

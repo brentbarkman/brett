@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A+B at scale — bright fog wallpaper, desktop + iOS</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --fg: #e8e8e8;
+    --muted: #888;
+    --accent: #ddb968;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    padding: 40px 32px 80px;
+    max-width: 2000px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { margin-bottom: 28px; }
+  h1 { font: 600 24px/1.2 -apple-system, sans-serif; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); max-width: 920px; margin: 0; }
+  .lede b { color: var(--accent); font-weight: 600; }
+
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.55fr);
+    gap: 32px;
+    align-items: start;
+  }
+
+  /* ───── DESKTOP ──────────────────────────────────────────────── */
+  .desktop {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    background: #000;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow:
+      0 4px 50px rgba(0,0,0,0.65),
+      0 0 0 1px rgba(255,255,255,0.05);
+  }
+  .desktop img.bg {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  /* A: scrim — top 50% gradient */
+  .desktop::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 50%;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(0,0,0,0.40) 0%,
+      rgba(0,0,0,0.18) 45%,
+      transparent 100%
+    );
+  }
+  .desktop-window {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-columns: 14% 1fr;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .titlebar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 28px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 12px;
+    z-index: 5;
+  }
+  .traffic { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,0.2); }
+
+  /* Left nav */
+  .leftnav {
+    padding: 36px 12px 16px;
+    color: rgba(255,255,255,0.78);
+    font-size: 11px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .nav-row {
+    display: flex; align-items: center; gap: 9px;
+    padding: 6px 9px; border-radius: 7px;
+    color: rgba(255,255,255,0.65);
+    line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  }
+  .nav-row.active { background: rgba(255,255,255,0.08); color: #fff; }
+  .nav-icon {
+    width: 13px; height: 13px;
+    border: 1px solid currentColor; border-radius: 3px;
+    flex: none; opacity: 0.78;
+  }
+  .nav-badge { margin-left: auto; font: 10px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.55); }
+  .nav-divider { height: 1px; background: rgba(255,255,255,0.12); margin: 12px 6px; }
+  .nav-section-label {
+    padding: 0 9px 7px;
+    font: 600 8.5px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.42);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .nav-list-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 9px; color: rgba(255,255,255,0.62);
+    font-size: 10.5px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .nav-list-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+  /* Main */
+  .main {
+    padding: 40px 32px 22px;
+    display: flex; flex-direction: column; gap: 12px;
+    overflow: hidden;
+  }
+  .briefing { padding-top: 4px; }
+  .b-greet {
+    font: 500 36px/1.05 ui-serif, "New York", Georgia, serif;
+    letter-spacing: -0.02em;
+    color: #fff;
+    /* B: dual shadow */
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.45),
+      0 6px 28px rgba(0,0,0,0.25);
+  }
+  .b-date {
+    margin-top: 5px;
+    font: 600 10px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.88);
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.45),
+      0 4px 16px rgba(0,0,0,0.25);
+  }
+  .b-prose {
+    margin-top: 14px;
+    font: 400 14px/1.6 ui-serif, "New York", Georgia, serif;
+    color: rgba(255,255,255,0.94);
+    max-width: 64ch;
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.45),
+      0 4px 20px rgba(0,0,0,0.25);
+  }
+  .b-prose em { font-style: normal; font-weight: 500; color: #fff; }
+
+  /* nextup + things-card (faded since briefing is the focus) */
+  .nextup-card {
+    display: flex; align-items: center; gap: 11px;
+    background: rgba(16,16,18,0.42);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+    backdrop-filter: blur(28px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 11px;
+    padding: 10px 14px;
+    margin-top: 6px;
+  }
+  .nextup-bar { width: 3px; height: 24px; border-radius: 2px; background: #5fa3ff; flex: none; }
+  .nextup-title { font-size: 13px; font-weight: 600; color: #fff; }
+  .nextup-sub { font-size: 11px; color: rgba(255,255,255,0.62); }
+  .nextup-time { margin-left: auto; font: 600 13px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.78); }
+  .things-card {
+    background: rgba(16,16,18,0.42);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+    backdrop-filter: blur(28px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 12px 14px 10px;
+    flex: 1; min-height: 0;
+    overflow: hidden;
+  }
+  .things-section-label {
+    display: flex; align-items: baseline; gap: 7px;
+    font: 600 10px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.55);
+    padding: 4px 0 6px;
+  }
+  .things-section-count { font: 600 10px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.38); }
+  .thing-row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 5px 0;
+    font-size: 12.5px; color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .check {
+    width: 13px; height: 13px;
+    border: 1.5px solid rgba(255,255,255,0.46);
+    border-radius: 50%; flex: none;
+  }
+  .thing-cal-bar { width: 3px; height: 13px; background: #5fa3ff; border-radius: 1.5px; flex: none; }
+  .thing-time { margin-left: auto; font: 12.5px/1 ui-monospace, Menlo, monospace; color: rgba(255,255,255,0.58); }
+
+  /* ───── iOS ──────────────────────────────────────────────────── */
+  .ios {
+    position: relative;
+    aspect-ratio: 9 / 19.5;
+    border-radius: 44px;
+    overflow: hidden;
+    background: #000;
+    box-shadow:
+      0 4px 36px rgba(0,0,0,0.7),
+      0 0 0 5px #1a1a1c,
+      0 0 0 6px rgba(255,255,255,0.07);
+  }
+  .ios img.bg {
+    position: absolute; height: 100%; width: auto; left: 50%; top: 0;
+    transform: translateX(-50%); display: block;
+  }
+  /* A: scrim — top portion */
+  .ios::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 36%;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(0,0,0,0.46) 0%,
+      rgba(0,0,0,0.22) 50%,
+      transparent 100%
+    );
+  }
+  .ios-ui {
+    position: absolute; inset: 0;
+    padding: 64px 22px 28px;
+    display: flex; flex-direction: column;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .ios-notch {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 100px; height: 32px;
+    background: #000; border-radius: 18px;
+    z-index: 5;
+  }
+  .ios-status {
+    position: absolute; top: 22px; right: 28px;
+    font: 600 13px/1 -apple-system, sans-serif;
+    color: #fff;
+    z-index: 4;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .ios-status-left {
+    position: absolute; top: 22px; left: 28px;
+    font: 600 13px/1 -apple-system, sans-serif;
+    color: #fff;
+    z-index: 4;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  /* iOS briefing — uses same B-shadow treatment */
+  .ios-briefing { padding-top: 4px; }
+  .ios-greet {
+    font: 500 38px/1.05 ui-serif, "New York", Georgia, serif;
+    color: #fff;
+    letter-spacing: -0.02em;
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.5),
+      0 6px 30px rgba(0,0,0,0.3);
+  }
+  .ios-date {
+    margin-top: 6px;
+    font: 600 10.5px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: rgba(255,255,255,0.88);
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.5),
+      0 4px 18px rgba(0,0,0,0.28);
+  }
+  .ios-briefing-prose {
+    margin-top: 14px;
+    font: 400 14px/1.55 ui-serif, "New York", Georgia, serif;
+    color: rgba(255,255,255,0.96);
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.5),
+      0 4px 18px rgba(0,0,0,0.28);
+  }
+  .ios-briefing-prose em { font-style: normal; font-weight: 500; color: #fff; }
+  .ios-section {
+    margin-top: 18px;
+    background: rgba(0,0,0,0.32);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 11px 14px;
+  }
+  .ios-section-label {
+    font: 600 9.5px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.55);
+    padding-bottom: 6px;
+  }
+  .ios-row {
+    display: flex; align-items: center; gap: 9px;
+    padding: 4px 0; font-size: 12px; color: #fff;
+  }
+  .ios-row .check { width: 12px; height: 12px; }
+  .ios-row .thing-cal-bar { height: 12px; width: 3px; }
+  .ios-row .thing-time { font-size: 11.5px; }
+
+  /* ───── Annotations ─────────────────────────────────────────── */
+  .annotations {
+    margin-top: 28px;
+    padding: 18px 22px;
+    background: rgba(221,185,104,0.06);
+    border: 1px solid rgba(221,185,104,0.20);
+    border-radius: 10px;
+    color: #c8b08c;
+    font-size: 12.5px;
+    line-height: 1.6;
+    max-width: 1100px;
+  }
+  .annotations b { color: var(--accent); font-weight: 600; }
+  .annotations code {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font: 11.5px/1.4 ui-monospace, Menlo, monospace;
+    color: #d5b88d;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>A + B at scale — bright-fog wallpaper</h1>
+  <p class="lede">
+    <b>Treatment:</b> top-edge scrim (40%→18%→0 gradient over upper 50%) <b>+</b> dual text-shadow stack
+    (tight 0,1px,2px @ 0.45 alpha for crispness, wide 0,6px,28px @ 0.25 alpha for atmospheric drop).
+    Same wallpaper that you twice rejected for briefing readability — <code>4EvreRzmq44</code> foggy conifer hillside.
+    Desktop on the left, iOS on the right.
+  </p>
+</header>
+
+<section class="row">
+  <!-- ─── Desktop ─────────────────────────────────────────────── -->
+  <div class="desktop">
+    <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+    <div class="titlebar">
+      <span class="traffic" style="background:#ff5f57"></span>
+      <span class="traffic" style="background:#febc2e"></span>
+      <span class="traffic" style="background:#28c840"></span>
+    </div>
+    <div class="desktop-window">
+      <div class="leftnav">
+        <div class="nav-row"><div class="nav-icon"></div>Inbox<span class="nav-badge">3</span></div>
+        <div class="nav-row active"><div class="nav-icon"></div>Today<span class="nav-badge">7</span></div>
+        <div class="nav-row"><div class="nav-icon"></div>Upcoming<span class="nav-badge">12</span></div>
+        <div class="nav-row"><div class="nav-icon"></div>Calendar</div>
+        <div class="nav-row"><div class="nav-icon"></div>Scouts</div>
+        <div class="nav-divider"></div>
+        <div class="nav-section-label">My Lists</div>
+        <div class="nav-list-row"><span class="nav-list-dot" style="background:#5fa3ff"></span>Work</div>
+        <div class="nav-list-row"><span class="nav-list-dot" style="background:#b88de8"></span>Personal</div>
+        <div class="nav-list-row"><span class="nav-list-dot" style="background:#ddb968"></span>Reading</div>
+        <div class="nav-list-row"><span class="nav-list-dot" style="background:#7ed8a6"></span>Brett app</div>
+      </div>
+      <div class="main">
+        <div class="briefing">
+          <div class="b-greet">Tuesday.</div>
+          <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+          <div class="b-prose">
+            Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review.
+            Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter;
+            if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your
+            inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 —
+            sanity-check before EOD.
+          </div>
+        </div>
+        <div class="nextup-card">
+          <span class="nextup-bar"></span>
+          <div>
+            <div class="nextup-title">Design review with Sasha</div>
+            <div class="nextup-sub">Google Meet · 4 attendees</div>
+          </div>
+          <span class="nextup-time">11:00</span>
+        </div>
+        <div class="things-card">
+          <div class="things-section-label">Today<span class="things-section-count">4</span></div>
+          <div class="thing-row"><span class="check"></span><span>Review wallpaper picks with Brent</span></div>
+          <div class="thing-row"><span class="thing-cal-bar"></span><span>Design review</span><span class="thing-time">11:00</span></div>
+          <div class="thing-row"><span class="thing-cal-bar"></span><span>1:1 with Sasha</span><span class="thing-time">14:00</span></div>
+          <div class="thing-row"><span class="check"></span><span>Finish briefing redesign spec</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── iOS ─────────────────────────────────────────────────── -->
+  <div class="ios">
+    <div class="ios-notch"></div>
+    <div class="ios-status-left">9:41</div>
+    <div class="ios-status">●●● 􀙇 100%</div>
+    <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+    <div class="ios-ui">
+      <div class="ios-briefing">
+        <div class="ios-greet">Good morning.</div>
+        <div class="ios-date">TUESDAY · MAY 19</div>
+        <div class="ios-briefing-prose">
+          Open morning — <em>ship the spec before design review at 11</em>. Sasha may push the 1:1 because of a 3pm flight.
+          Tomorrow's calendar is lighter if you want a deep-work block. Newsletter ingest test still waiting on a real
+          email. Brett v1.4.2 ready — sanity-check the autoupdater before EOD.
+        </div>
+      </div>
+      <div class="ios-section">
+        <div class="ios-section-label">Today · 5</div>
+        <div class="ios-row"><span class="thing-cal-bar"></span><span>Standup</span><span class="thing-time">9:30</span></div>
+        <div class="ios-row"><span class="thing-cal-bar"></span><span>Design review</span><span class="thing-time">11:00</span></div>
+        <div class="ios-row"><span class="check"></span><span>Wallpaper picks with Brent</span></div>
+        <div class="ios-row"><span class="thing-cal-bar"></span><span>1:1 with Sasha</span><span class="thing-time">14:00</span></div>
+        <div class="ios-row"><span class="check"></span><span>Finish briefing spec</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="annotations">
+  <b>Implementation notes for when you say go:</b>
+  <br>
+  <b>Desktop</b> (<code>apps/desktop/...</code> Today page): one absolutely-positioned <code>.briefing-canopy</code> div
+  above the briefing block, inset 0 0 auto 0, height ~50%, linear gradient as above. Plus update the
+  <code>text-shadow</code> on briefing-greeting / briefing-date / briefing-prose to the dual stack.
+  <br>
+  <b>iOS</b> (<code>apps/ios/Brett/Views/Today/</code>): a <code>LinearGradient</code> overlay above the
+  Today content in the ZStack, masked to the upper region. The SwiftUI equivalent of the dual <code>text-shadow</code>
+  is <code>.shadow(radius: 2, y: 1).shadow(radius: 18, y: 4)</code> with appropriate opacity.
+  <br>
+  <b>Adaptive boost (optional, can ship later):</b> feed the existing <code>WashColorSampler</code> a second band
+  for the upper third; if luminance > 0.55, animate scrim opacity from 0.40 to 0.50 over 200ms. Dark wallpapers stay
+  clean, bright ones get the help they need.
+</div>
+
+</body>
+</html>

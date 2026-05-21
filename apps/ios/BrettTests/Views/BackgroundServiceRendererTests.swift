@@ -176,7 +176,6 @@ struct BackgroundServiceRendererTests {
         #expect(svc.currentSolidColor == nil)
         #expect(svc.currentRemoteURL == nil)
         #expect(svc.displayedKey.isEmpty)
-        #expect(!svc.currentWashIsLight)
     }
 
     @Test func clearForSignOutWipesBootstrapToDefendCrossUserLeak() {

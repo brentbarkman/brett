@@ -29,12 +29,6 @@ interface DailyBriefingProps {
   onRegenerate?: () => void;
   onItemClick?: (id: string) => void;
   assistantName?: string;
-  /** When true, the wallpaper behind the briefing is bright enough
-   *  that the prose paragraph should render in warm-dark instead of
-   *  white. The greeting + date sub-line stay white-on-shadow either
-   *  way — short editorial text reads on shadow alone, so we don't
-   *  pay the swap cost there. */
-  washIsLight?: boolean;
 }
 
 const STOP_WORDS = new Set([
@@ -116,7 +110,12 @@ function renderEditorial(
   });
 }
 
-const HERO_SHADOW = "";
+// Dual text-shadow stack ("B" treatment from the May 2026 briefing-readability
+// review): a tight 1px shadow for crispness on multi-tone backgrounds plus a
+// wider soft drop for atmospheric pop. Paired with the BriefingCanopy gradient
+// mounted above the wallpaper in App.tsx — together they let any wallpaper in
+// the manifest carry the briefing prose without per-image color swaps.
+const HERO_SHADOW = "[text-shadow:_0_1px_2px_rgba(0,0,0,0.45),_0_6px_28px_rgba(0,0,0,0.25)]";
 
 function BriefingProseSkeleton() {
   return (
@@ -137,18 +136,15 @@ export function DailyBriefing({
   onRegenerate,
   onItemClick,
   assistantName = "Brett",
-  washIsLight = false,
 }: DailyBriefingProps) {
   useDemoMode();
 
-  // Prose color flips between white-on-dark-photo and warm-near-black-on-bright-photo
-  // based on the sampled wallpaper luminance. `transition-colors` smooths
-  // the swap during wallpaper rotation so a borderline-bright photo
-  // doesn't snap. The greeting + date sub-line above don't get the swap:
-  // short editorial text reads on white-on-shadow against anything.
-  const proseClass = `font-prose text-[19px] leading-[1.65] font-normal transition-colors duration-200 ${
-    washIsLight ? "text-[#1a1612]" : "text-white/[0.92]"
-  } ${HERO_SHADOW}`;
+  // Prose is always white. The BriefingCanopy gradient mounted in App
+  // (`<BriefingCanopy />` after `<BackgroundScrim />`) gives white text
+  // a uniform field to sit on regardless of wallpaper; the dual
+  // text-shadow stack in HERO_SHADOW handles the multi-tone case where
+  // a glyph straddles light/dark pixels.
+  const proseClass = `font-prose text-[19px] leading-[1.65] font-normal text-white/[0.92] ${HERO_SHADOW}`;
 
   const titleMap = new Map(knownItems.map((item) => [item.title.toLowerCase(), item]));
 

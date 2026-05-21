@@ -18,6 +18,29 @@ function isAuthError(err: unknown): boolean {
   return /\b(401|403)\b/.test(msg);
 }
 
+/**
+ * Best-effort write that records the moment we successfully completed a
+ * round of Granola calls for this account. The Settings UI uses this for
+ * the "Last sync" display — a stale value signals an unhealthy connection.
+ *
+ * Failures are logged but never thrown: the sync itself already succeeded,
+ * and dropping its data on the floor because we couldn't update a timestamp
+ * would be worse than a slightly stale UI.
+ */
+async function markAccountSynced(accountId: string): Promise<void> {
+  await prisma.granolaAccount
+    .update({
+      where: { id: accountId },
+      data: { lastSyncAt: new Date() },
+    })
+    .catch((err) =>
+      console.error(
+        `[granola-provider] Failed to bump lastSyncAt for account ${accountId}:`,
+        err,
+      ),
+    );
+}
+
 const RELINK_MESSAGE =
   "Granola sync failed — your connection was lost or the token expired. Go to Settings → Granola to reconnect.";
 
@@ -105,6 +128,11 @@ export class GranolaProvider implements MeetingNoteProvider {
           return { score: bestForAccount.score, data };
         });
 
+        // Reached here = withGranolaClient resolved (auth, refresh, and the
+        // closure's Granola calls all succeeded). Bump lastSyncAt even when
+        // result is null — we successfully checked, there just wasn't a match.
+        await markAccountSynced(account.id);
+
         if (result && (!best || result.score > best.score)) {
           best = result;
         }
@@ -143,6 +171,12 @@ export class GranolaProvider implements MeetingNoteProvider {
           }
           return results;
         });
+
+        // Reached here = the Granola round-trip succeeded for this account.
+        // Bump lastSyncAt even when accountResults is empty — the connection
+        // is healthy, there's just nothing new in this window.
+        await markAccountSynced(account.id);
+
         all.push(...accountResults);
       } catch (err) {
         await handleAccountError(userId, account.id, err);
