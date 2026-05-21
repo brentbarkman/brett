@@ -116,11 +116,21 @@ final class PushEngine {
             for entry in batch {
                 mutationQueue.fail(id: entry.id, error: "network: \(error)", errorCode: nil)
             }
+            // APIError's `description` is PII-redacted to bare category
+            // names ("APIError.unknown") — useless when diagnosing from
+            // Sync Health settings. `diagnosticMessage` is the support-
+            // quality version (includes URLError code) and still PII-safe.
+            let errorMessage: String
+            if let apiError = error as? APIError {
+                errorMessage = apiError.diagnosticMessage
+            } else {
+                errorMessage = String(describing: error)
+            }
             updateSyncHealth(
                 isPushing: false,
                 pendingDelta: 0,
                 success: false,
-                error: String(describing: error)
+                error: errorMessage
             )
             throw error
         }
