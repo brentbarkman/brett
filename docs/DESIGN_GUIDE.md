@@ -50,7 +50,9 @@ All containers use the glass morphism pattern. Never use solid opaque background
 - **`bg-black` standard stops:** `/20` (light dimming), `/30` (cards), `/40` (elevated cards), `/60` (overlays/modals), `/80` (tooltips/dropdowns). Never use in-between values like `/50`, `/55`, `/70`, `/85`.
 - **`bg-white` standard stops:** `/5` (subtle tint, resting surfaces), `/10` (hover surfaces), `/15` (strong hover), `/20` (active/pressed). Never use fractional values like `bg-white/[0.03]`, `[0.06]`, `[0.07]` — use the nearest standard stop.
 
-**Known issue:** Glass is too transparent on bright backgrounds (ocean, sky). Fix needed: bump `bg-black` opacity on cards and/or add a subtle vignette/scrim layer. Track this during implementation.
+**Today briefing canopy:** the upper ~55% of viewport on Today (and ~40% of the iOS phone surface) carries a top-edge linear gradient — `rgba(0,0,0,0.55) → 0.26 → 0` — sitting between the wallpaper and all UI. Desktop: `packages/ui/src/BriefingCanopy.tsx`, mounted in `App.tsx` gated to `/today`. iOS: a `LinearGradient` in `MainContainer.swift` gated to `currentPage == 2`. The canopy gives the white briefing-prose a uniform dark field regardless of which wallpaper is rotating, replacing the per-photo luminance-sampled text color we ran for the first six months of production. Anything sitting in the upper Today region inherits this scrim — no per-component opacity bumps needed.
+
+**Open known issue:** glass cards on non-Today surfaces (Inbox, Lists, Calendar, Scouts) still sit directly over potentially-bright photos when those surfaces eventually adopt photo backdrops. The canopy only covers Today's top edge — the lower work-zone cards and the non-Today surfaces will need their own treatment.
 
 ---
 

@@ -70,13 +70,15 @@ enum WashColorSampler {
 
     /// WCAG relative luminance (0..1) of the un-darkened photo band
     /// behind the URL, derived from the cached darkened RGB. Returns
-    /// nil for first-sight photos. Used to decide light- vs dark-text
-    /// for content that sits directly on the photo (Today hero on iOS,
-    /// briefing prose on desktop's photo-direct layout).
+    /// nil for first-sight photos.
     ///
-    /// We invert the 0.85 darkening to recover the raw photo RGB before
-    /// running the WCAG formula, because the text sits on the *photo*,
-    /// not on the (darkened) wash bed.
+    /// Currently unused at the call-site level — the briefing prose used
+    /// to consume this to flip text color on bright photos, but that
+    /// path was replaced by the always-on `BriefingCanopy` scrim in the
+    /// May 2026 readability review. Kept as a public API because the
+    /// underlying math is non-trivial and the sample is already on disk
+    /// from `cachedWash`; future per-photo legibility decisions can reuse
+    /// it without re-sampling.
     static func cachedPhotoLuminance(forURL url: URL) -> Double? {
         readCache(key: url.absoluteString).map(Self.luminance(fromDarkenedRGB:))
     }

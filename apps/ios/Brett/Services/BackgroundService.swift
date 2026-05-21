@@ -110,40 +110,6 @@ final class BackgroundService: Clearable {
     /// cards + text to sit on without a vignette.
     static let defaultWashColor = Color(red: 26/255, green: 22/255, blue: 18/255)
 
-    /// WCAG relative luminance (0..1) of the *raw* photo band behind
-    /// the current wallpaper — i.e. the brightness of the region where
-    /// the Today hero's prose sits directly on the photo. 0 = pitch
-    /// black, 1 = pure white. Defaults to 0 (dark) so prose stays
-    /// white-on-shadow until a sampled value lands.
-    ///
-    /// Stored alongside `currentWashColor` so the `@Observable`
-    /// machinery emits change notifications when the photo rotates and
-    /// the wash sample resolves.
-    private(set) var currentWashLuminance: Double = 0.0
-
-    /// Hysteretic "is the photo behind the hero bright enough to need
-    /// dark text?" derived from `currentWashLuminance` with a deadband
-    /// to prevent flicker between two rotation neighbors that hover
-    /// close to the threshold. Flips false→true above 0.65 and
-    /// true→false below 0.55.
-    ///
-    /// Read by `TodayHero` to swap the prose color (white on dark
-    /// photos, warm-dark on bright photos). The greeting + date
-    /// sub-line keep their white-on-shadow treatment regardless —
-    /// short text reads fine against any photo with the legibility
-    /// shadow alone, so we don't pay the swap cost there.
-    private(set) var currentWashIsLight: Bool = false
-
-    /// Bright-text → dark-text crossover. Calibrated against real
-    /// manifest samples: most "moody" photos land 0.05–0.25, a few
-    /// "afternoon" / "golden hour" mid-brights land 0.40–0.55, only
-    /// truly sunlit shots clear 0.55+. 0.40 puts the flip right at
-    /// the point where mid-bright photos start to struggle for white
-    /// text. 0.10 deadband prevents flicker between two rotation
-    /// neighbors hovering near the threshold.
-    private static let isLightThresholdHigh: Double = 0.40
-    private static let isLightThresholdLow: Double = 0.30
-
     /// Reference count of mounted `BackgroundView` instances. When it
     /// transitions 0 → 1 we start the 60s segment ticker; 1 → 0 stops it.
     /// Multiple mounts (e.g. while a pushed view sits on top of the
@@ -178,8 +144,6 @@ final class BackgroundService: Clearable {
         currentSolidColor = nil
         displayedKey = ""
         currentWashColor = Self.defaultWashColor
-        currentWashLuminance = 0.0
-        currentWashIsLight = false
         lastProfileStyle = nil
         lastProfilePinned = nil
     }
@@ -237,8 +201,6 @@ final class BackgroundService: Clearable {
         currentSolidColor = nil
         displayedKey = ""
         currentWashColor = Self.defaultWashColor
-        currentWashLuminance = 0.0
-        currentWashIsLight = false
         lastProfileStyle = nil
         lastProfilePinned = nil
     }
@@ -508,7 +470,6 @@ final class BackgroundService: Clearable {
                 // while Today shows the user's solid — the two surfaces
                 // would visibly disagree on what color the app is.
                 currentWashColor = color
-                applyLuminance(forSolidHex: hex)
                 let key = "solid:\(hex)"
                 if displayedKey != key { displayedKey = key }
                 return
@@ -559,7 +520,6 @@ final class BackgroundService: Clearable {
             currentSolidColor = nil
             currentWashColor = WashColorSampler.cachedWash(forURL: cached)
                 ?? Self.defaultWashColor
-            applyLuminance(forURL: cached)
             kickWashSample(url: cached)
             return
         } else if let url = currentImageURL(style: effectiveStyle, pinned: nil) {
@@ -584,7 +544,6 @@ final class BackgroundService: Clearable {
         currentSolidColor = nil
         currentRemoteURL = nil
         currentWashColor = Self.defaultWashColor
-        updateIsLight(luminance: Self.defaultPhotoLuminance)
         if !displayedKey.isEmpty { displayedKey = "" }
     }
 
@@ -635,7 +594,6 @@ final class BackgroundService: Clearable {
         // `@Observable` property.
         currentWashColor = WashColorSampler.cachedWash(forURL: url)
             ?? Self.defaultWashColor
-        applyLuminance(forURL: url)
         kickWashSample(url: url)
         let key = url.absoluteString
         if displayedKey != key { displayedKey = key }
@@ -660,92 +618,9 @@ final class BackgroundService: Clearable {
                 // would briefly mismatch the current wallpaper.
                 if self.currentRemoteURL == url {
                     self.currentWashColor = sampled
-                    self.applyLuminance(forURL: url)
                 }
             }
         }
-    }
-
-    // MARK: - Luminance application
-
-    /// Set `currentWashLuminance` from the cached photo behind `url`
-    /// (raw photo, not the darkened wash — that's what the prose sits
-    /// on). Re-evaluates the hysteretic `currentWashIsLight` against
-    /// the new luminance. No-op when the cache is cold; the async
-    /// sample writes the value, then we re-call this from the
-    /// resolver.
-    private func applyLuminance(forURL url: URL) {
-        let lum = WashColorSampler.cachedPhotoLuminance(forURL: url)
-            ?? Self.defaultPhotoLuminance
-        updateIsLight(luminance: lum)
-    }
-
-    /// Bundled-asset variant. The asset sampler runs synchronously, so
-    /// the cache is hot by the time this is called from `recompute`.
-    private func applyLuminance(forAssetNamed name: String) {
-        let lum = WashColorSampler.cachedPhotoLuminance(forAssetNamed: name)
-            ?? Self.defaultPhotoLuminance
-        updateIsLight(luminance: lum)
-    }
-
-    /// Solid wallpaper — no photo to sample. Derive luminance directly
-    /// from the picked color. This keeps the wash/text contract
-    /// honest: the user picked the surface, so text should adapt to it.
-    private func applyLuminance(forSolidHex hex: String) {
-        guard let rgb = Self.rgb(forHex: hex) else {
-            updateIsLight(luminance: Self.defaultPhotoLuminance)
-            return
-        }
-        // Solid colors are not darkened — synthesize a "raw" RGB by
-        // multiplying by 1/washDarken so `luminance(fromDarkenedRGB:)`
-        // recovers the same value. Cheaper than duplicating the WCAG
-        // math here.
-        let darkened = WashColorSampler.RGB(
-            r: rgb.r * WashColorSampler.washDarken,
-            g: rgb.g * WashColorSampler.washDarken,
-            b: rgb.b * WashColorSampler.washDarken
-        )
-        updateIsLight(luminance: WashColorSampler.luminance(fromDarkenedRGB: darkened))
-    }
-
-    /// Default photo luminance when we have nothing cached. Matches
-    /// the default wash (burnt umber) — well below the "is light"
-    /// threshold, so we stay on white text until a real sample lands.
-    private static let defaultPhotoLuminance: Double = 0.01
-
-    /// Write `currentWashLuminance` and re-evaluate the hysteretic
-    /// `currentWashIsLight`. Deadband: flip false→true above 0.65,
-    /// true→false below 0.55. Keeps two-photos-at-the-threshold
-    /// rotations from flickering the text color.
-    private func updateIsLight(luminance: Double) {
-        currentWashLuminance = luminance
-        if currentWashIsLight {
-            if luminance < Self.isLightThresholdLow {
-                currentWashIsLight = false
-            }
-        } else {
-            if luminance > Self.isLightThresholdHigh {
-                currentWashIsLight = true
-            }
-        }
-    }
-
-    /// Decode `#RRGGBB` into a raw 0..1 RGB triple. Parallel to
-    /// `color(forHex:)` but returns the components separately so
-    /// `applyLuminance(forSolidHex:)` can feed them into the WCAG
-    /// pipeline without round-tripping through SwiftUI's `Color`
-    /// (which doesn't expose components without an environment).
-    private static func rgb(forHex raw: String) -> (r: Double, g: Double, b: Double)? {
-        var cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleaned.hasPrefix("#") { cleaned.removeFirst() }
-        guard cleaned.count == 6 else { return nil }
-        var value: UInt64 = 0
-        guard Scanner(string: cleaned).scanHexInt64(&value) else { return nil }
-        return (
-            r: Double((value >> 16) & 0xFF) / 255.0,
-            g: Double((value >> 8) & 0xFF) / 255.0,
-            b: Double(value & 0xFF) / 255.0
-        )
     }
 
     // MARK: - Resolution

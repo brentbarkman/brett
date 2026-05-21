@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Briefing Readability — Mockup Matrix</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --fg: #e8e8e8;
+    --muted: #888;
+    --muted-2: #555;
+    --line: #1c1c1d;
+    --card: #131314;
+    --accent: #ddb968;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    padding: 40px 28px 120px;
+    max-width: 2200px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { margin-bottom: 28px; }
+  h1 { font: 600 24px/1.2 -apple-system, sans-serif; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); max-width: 920px; }
+
+  /* ─── Matrix grid ──────────────────────────────────────────────── */
+  .matrix {
+    display: grid;
+    grid-template-columns: 130px repeat(5, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 24px;
+  }
+  .col-head {
+    text-align: center;
+    padding: 8px 6px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.04);
+  }
+  .col-head h3 {
+    margin: 0 0 4px;
+    font: 600 12px/1.2 -apple-system, sans-serif;
+    color: var(--fg);
+    letter-spacing: -0.005em;
+  }
+  .col-head p { margin: 0; font-size: 10.5px; color: var(--muted); line-height: 1.35; }
+  .col-head.recommended { background: rgba(221,185,104,0.10); border: 1px solid rgba(221,185,104,0.30); }
+  .col-head.recommended h3 { color: var(--accent); }
+
+  .row-head {
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-end;
+    text-align: right;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+    padding-right: 4px;
+  }
+  .row-head b { color: var(--fg); font-weight: 600; font-size: 12px; }
+
+  /* ─── Cell — desktop-shaped wallpaper preview ──────────────────── */
+  .cell {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 14px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .cell img.bg {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+
+  /* The briefing area is positioned where it actually lives on desktop
+     Today — after the ~14% left nav, padded a bit from the top. */
+  .briefing-block {
+    position: absolute;
+    top: 4%; left: 17%; right: 7%;
+    z-index: 4;
+    color: #fff;
+    pointer-events: none;
+  }
+  .b-greet {
+    font: 500 22px/1.05 ui-serif, "New York", Georgia, serif;
+    letter-spacing: -0.02em;
+  }
+  .b-date {
+    margin-top: 4px;
+    font: 600 8px/1 -apple-system, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    opacity: 0.85;
+  }
+  .b-prose {
+    margin-top: 10px;
+    font: 400 10.5px/1.55 ui-serif, "New York", Georgia, serif;
+    opacity: 0.95;
+  }
+  .b-prose em { font-style: normal; font-weight: 500; color: #fff; opacity: 1; }
+
+  /* ─── BASELINE (current) ───────────────────────────────────────── */
+  .opt-baseline .b-greet,
+  .opt-baseline .b-date,
+  .opt-baseline .b-prose {
+    text-shadow: 0 1px 8px rgba(0,0,0,0.28);
+  }
+
+  /* ─── OPTION A — adaptive top-edge scrim ───────────────────────── */
+  .opt-A::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 50%;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(0,0,0,0.42) 0%,
+      rgba(0,0,0,0.22) 45%,
+      transparent 100%
+    );
+  }
+  .opt-A .b-greet,
+  .opt-A .b-date,
+  .opt-A .b-prose {
+    text-shadow: 0 1px 8px rgba(0,0,0,0.28);
+  }
+
+  /* ─── OPTION B — dual text-shadow stack only ──────────────────── */
+  .opt-B .b-greet {
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.55),
+      0 6px 32px rgba(0,0,0,0.30);
+  }
+  .opt-B .b-date,
+  .opt-B .b-prose {
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.55),
+      0 4px 24px rgba(0,0,0,0.32);
+  }
+
+  /* ─── OPTION C — backdrop-blur halo behind text ────────────────── */
+  .opt-C .briefing-block {
+    /* Inline-block trick so the backdrop hugs the text bounding box */
+  }
+  .opt-C .b-wrap {
+    display: inline-block;
+    padding: 6px 10px;
+    margin: -6px -10px;
+    background: rgba(0,0,0,0.08);
+    -webkit-backdrop-filter: blur(12px) saturate(115%);
+    backdrop-filter: blur(12px) saturate(115%);
+    border-radius: 4px;
+  }
+  .opt-C .b-greet,
+  .opt-C .b-date,
+  .opt-C .b-prose {
+    text-shadow: 0 1px 6px rgba(0,0,0,0.18);
+  }
+
+  /* ─── A + B combo — recommended ────────────────────────────────── */
+  .opt-AB::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 50%;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(0,0,0,0.40) 0%,
+      rgba(0,0,0,0.18) 45%,
+      transparent 100%
+    );
+  }
+  .opt-AB .b-greet {
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.45),
+      0 6px 28px rgba(0,0,0,0.25);
+  }
+  .opt-AB .b-date,
+  .opt-AB .b-prose {
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.45),
+      0 4px 20px rgba(0,0,0,0.25);
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Briefing Readability — Mockup Matrix</h1>
+  <p class="lede">
+    Three wallpapers (bright fog, golden mid-tone, dark night) × five briefing treatments.
+    Each cell renders the briefing-greeting + date + briefing-prose roughly where they sit on desktop Today,
+    using the same fonts. Copy is intentionally long (5 sentences, varied length) so multi-tone failures
+    show up across multiple lines, not just the headline.
+  </p>
+</header>
+
+<div class="matrix">
+  <!-- Column headers -->
+  <div></div>
+  <div class="col-head">
+    <h3>Baseline</h3>
+    <p>What ships now — single soft shadow on white text. No scrim.</p>
+  </div>
+  <div class="col-head">
+    <h3>A · Top-edge scrim</h3>
+    <p>Soft dark gradient in upper 50% of the page. Always-on, gentle.</p>
+  </div>
+  <div class="col-head">
+    <h3>B · Dual text-shadow</h3>
+    <p>Tight crisp shadow + wide soft shadow. No scrim. Keeps "text on wallpaper" feel.</p>
+  </div>
+  <div class="col-head">
+    <h3>C · Backdrop-blur halo</h3>
+    <p>Subtle frosted material hugging the text bounding box. Smooths multi-tone area.</p>
+  </div>
+  <div class="col-head recommended">
+    <h3>A + B  · Recommended</h3>
+    <p>Gentle scrim + dual shadow. Reads on any wallpaper, presents as atmospheric design.</p>
+  </div>
+
+  <!-- ─── Row 1: BRIGHT — foggy conifer hillside (the one user rejected) -->
+  <div class="row-head">
+    <b>Bright fog</b>
+    <span>foggy conifer hillside (rejected)</span>
+  </div>
+  <div class="cell opt-baseline">
+    <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-A">
+    <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-B">
+    <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-C">
+    <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-wrap">
+        <div class="b-greet">Tuesday.</div>
+        <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+        <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+      </div>
+    </div>
+  </div>
+  <div class="cell opt-AB">
+    <img class="bg" src="./downloads/candidates/dawn/light-v2/4EvreRzmq44.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+
+  <!-- ─── Row 2: MEDIUM — Banff golden silhouettes -->
+  <div class="row-head">
+    <b>Golden mid-tone</b>
+    <span>Banff valley with hazy gold sky + dark left cliff</span>
+  </div>
+  <div class="cell opt-baseline">
+    <img class="bg" src="./downloads/candidates/dawn/light-v3/VvNz4khYfoQ.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-A">
+    <img class="bg" src="./downloads/candidates/dawn/light-v3/VvNz4khYfoQ.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-B">
+    <img class="bg" src="./downloads/candidates/dawn/light-v3/VvNz4khYfoQ.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-C">
+    <img class="bg" src="./downloads/candidates/dawn/light-v3/VvNz4khYfoQ.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-wrap">
+        <div class="b-greet">Tuesday.</div>
+        <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+        <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+      </div>
+    </div>
+  </div>
+  <div class="cell opt-AB">
+    <img class="bg" src="./downloads/candidates/dawn/light-v3/VvNz4khYfoQ.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+
+  <!-- ─── Row 3: DARK — Monument Valley starry night -->
+  <div class="row-head">
+    <b>Dark night</b>
+    <span>Monument Valley starfield (approved)</span>
+  </div>
+  <div class="cell opt-baseline">
+    <img class="bg" src="./downloads/candidates/night/moderate-v2/kLwe_fGR5uA.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Good evening.</div>
+      <div class="b-date">MAY 19 · 1 MEETING LEFT · 4 TASKS</div>
+      <div class="b-prose">You're almost through — <em>finish the design-review notes</em> before logging off. Sasha confirmed the flight, so move the 1:1 to Thursday. Tomorrow's first block opens at 10; nothing scheduled before that. Newsletter ingest test still waiting on a real-email confirmation when you have a minute. Quiet hours start in 40 — anything left to triage?</div>
+    </div>
+  </div>
+  <div class="cell opt-A">
+    <img class="bg" src="./downloads/candidates/night/moderate-v2/kLwe_fGR5uA.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Good evening.</div>
+      <div class="b-date">MAY 19 · 1 MEETING LEFT · 4 TASKS</div>
+      <div class="b-prose">You're almost through — <em>finish the design-review notes</em> before logging off. Sasha confirmed the flight, so move the 1:1 to Thursday. Tomorrow's first block opens at 10; nothing scheduled before that. Newsletter ingest test still waiting on a real-email confirmation when you have a minute. Quiet hours start in 40 — anything left to triage?</div>
+    </div>
+  </div>
+  <div class="cell opt-B">
+    <img class="bg" src="./downloads/candidates/night/moderate-v2/kLwe_fGR5uA.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Good evening.</div>
+      <div class="b-date">MAY 19 · 1 MEETING LEFT · 4 TASKS</div>
+      <div class="b-prose">You're almost through — <em>finish the design-review notes</em> before logging off. Sasha confirmed the flight, so move the 1:1 to Thursday. Tomorrow's first block opens at 10; nothing scheduled before that. Newsletter ingest test still waiting on a real-email confirmation when you have a minute. Quiet hours start in 40 — anything left to triage?</div>
+    </div>
+  </div>
+  <div class="cell opt-C">
+    <img class="bg" src="./downloads/candidates/night/moderate-v2/kLwe_fGR5uA.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-wrap">
+        <div class="b-greet">Good evening.</div>
+        <div class="b-date">MAY 19 · 1 MEETING LEFT · 4 TASKS</div>
+        <div class="b-prose">You're almost through — <em>finish the design-review notes</em> before logging off. Sasha confirmed the flight, so move the 1:1 to Thursday. Tomorrow's first block opens at 10; nothing scheduled before that. Newsletter ingest test still waiting on a real-email confirmation when you have a minute. Quiet hours start in 40 — anything left to triage?</div>
+      </div>
+    </div>
+  </div>
+  <div class="cell opt-AB">
+    <img class="bg" src="./downloads/candidates/night/moderate-v2/kLwe_fGR5uA.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Good evening.</div>
+      <div class="b-date">MAY 19 · 1 MEETING LEFT · 4 TASKS</div>
+      <div class="b-prose">You're almost through — <em>finish the design-review notes</em> before logging off. Sasha confirmed the flight, so move the 1:1 to Thursday. Tomorrow's first block opens at 10; nothing scheduled before that. Newsletter ingest test still waiting on a real-email confirmation when you have a minute. Quiet hours start in 40 — anything left to triage?</div>
+    </div>
+  </div>
+
+  <!-- ─── Row 4: VERY BRIGHT — foggy lake foxglove (the other rejected one) -->
+  <div class="row-head">
+    <b>Bright lake</b>
+    <span>misty lake + foreground foxglove (rejected)</span>
+  </div>
+  <div class="cell opt-baseline">
+    <img class="bg" src="./downloads/candidates/dawn/light/Mg1AQZnCgJE.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-A">
+    <img class="bg" src="./downloads/candidates/dawn/light/Mg1AQZnCgJE.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-B">
+    <img class="bg" src="./downloads/candidates/dawn/light/Mg1AQZnCgJE.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+  <div class="cell opt-C">
+    <img class="bg" src="./downloads/candidates/dawn/light/Mg1AQZnCgJE.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-wrap">
+        <div class="b-greet">Tuesday.</div>
+        <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+        <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+      </div>
+    </div>
+  </div>
+  <div class="cell opt-AB">
+    <img class="bg" src="./downloads/candidates/dawn/light/Mg1AQZnCgJE.jpg" alt="">
+    <div class="briefing-block">
+      <div class="b-greet">Tuesday.</div>
+      <div class="b-date">MAY 19 · 3 MEETINGS · 7 TASKS</div>
+      <div class="b-prose">Your morning is open — <em>tackle the briefing redesign spec</em> before the 11 a.m. design review. Sasha mentioned a flight at 3, so the 1:1 may need to slide. Calendar tomorrow is already lighter; if you want a deep-work block, hold the 10–12 stretch. The newsletter ingest test is still in your inbox waiting for a real-email confirmation. Brett cut a release, autoupdater pointing at v1.4.2 — sanity-check before EOD.</div>
+    </div>
+  </div>
+
+</div>
+
+<p style="color: var(--muted); font-size: 11.5px; margin-top: 32px; max-width: 900px;">
+  <b style="color: var(--fg);">How to read this:</b>
+  scroll across each row. Same wallpaper, same copy, just the treatment changes.
+  The fail cases are most obvious in the long briefing-prose paragraph (lines 2–5),
+  where text crosses multiple background tones.
+  The recommended A+B column should read cleanly on every row without feeling like a "card."
+  D (baked-in gradient) isn't shown separately because it produces the same visual as A — the difference is just where the gradient lives (runtime overlay vs. inside the WebP).
+</p>
+
+</body>
+</html>
