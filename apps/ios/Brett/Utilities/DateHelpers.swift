@@ -137,6 +137,15 @@ enum DateHelpers {
         return f
     }()
 
+    /// Weekday name ("Monday", "Tuesday") of a stored `dueDate`. Reads
+    /// the date through `utcCalendar` because the storage convention is
+    /// "UTC midnight of the user's local calendar date" — formatting in
+    /// the device TZ would flip the weekday near midnight (UTC-midnight
+    /// reads as the previous day in any TZ west of UTC).
+    static func weekdayName(of date: Date) -> String {
+        utcWeekdayFormatter.string(from: date)
+    }
+
     private static let utcMonthDayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "MMM d"
