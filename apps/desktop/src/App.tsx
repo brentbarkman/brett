@@ -36,6 +36,7 @@ import {
   ScoutDetail,
   LivingBackground,
   BackgroundScrim,
+  BriefingCanopy,
   demoMode,
   ErrorBoundary,
 } from "@brett/ui";
@@ -77,7 +78,6 @@ import { useGranolaMeetingForEvent, useReprocessMeetingActions } from "./api/gra
 import { useEventStream, useSSEHandler } from "./api/sse";
 import { useTimezoneSync } from "./api/timezone";
 import { useBackground } from "./hooks/useBackground";
-import { useBackgroundLuminance } from "./hooks/useBackgroundLuminance";
 import { initDiagnostics, collectDiagnostics, recordRouteChange, type DiagnosticSnapshot } from "./lib/diagnostics";
 import { FeedbackModal } from "./components/FeedbackModal";
 import { StatusBanner } from "./components/StatusBanner";
@@ -614,15 +614,6 @@ export function App() {
     backgroundStyle,
     avgBusynessScore,
     pinnedBackground,
-  });
-
-  // Wallpaper luminance — drives the briefing-prose color swap. The
-  // gradient field carries the active solid color when the user is on
-  // solid mode (the photo URL falls back to a placeholder we don't
-  // want to sample); prefer it. Otherwise sample the visible photo.
-  const { isLight: washIsLight } = useBackgroundLuminance({
-    imageUrl: background.imageUrl,
-    solidHex: background.gradient,
   });
 
   // Awakening — plays once per session on cold launch.
@@ -1249,6 +1240,12 @@ export function App() {
           awakeningZoomDurationMs={AWAKENING_KENBURNS_MS}
         />
         <BackgroundScrim />
+        {/* Top-edge briefing canopy — V2 readability scrim, see
+            packages/ui/src/BriefingCanopy.tsx. Mounted only on Today
+            because every other route has chrome (nav + cards) sitting
+            in the upper region, so the scrim would only darken
+            wallpaper that's already hidden. */}
+        {location.pathname === "/today" && <BriefingCanopy />}
 
         {/* Cold-launch cover: black overlay above UI (z-30). Opaque at
             mount, fades to transparent over AWAKENING_COVER_FADE_MS. The
@@ -1400,7 +1397,6 @@ export function App() {
                   onReconnect={handleReconnect}
                   reconnectPendingSourceId={reconnectPendingSourceId}
                   assistantName={assistantName}
-                  washIsLight={washIsLight}
                 />
               </MainLayout>
             } />
