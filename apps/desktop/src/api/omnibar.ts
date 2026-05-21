@@ -4,7 +4,9 @@ import { streamingFetch } from "./streaming";
 import { useAIConfigs } from "./ai-config";
 import { apiFetch } from "./client";
 import { applyUsageDelta, sessionUsageQueryKey } from "./ai-usage";
-import type { StreamChunk, DisplayHint } from "@brett/types";
+import { useCreateThing } from "./things";
+import { getTodayUTC } from "@brett/business";
+import type { StreamChunk, DisplayHint, CreateItemInput } from "@brett/types";
 
 export interface OmnibarMessage {
   role: "user" | "assistant";
@@ -50,6 +52,14 @@ export function useOmnibar() {
   // Maps tool call id → name so we can look up the name when the result arrives
   const toolCallNamesRef = useRef<Map<string, string>>(new Map());
   const queryClient = useQueryClient();
+
+  // Local create uses the shared optimistic-update path so the new task
+  // appears in cached views (Inbox, Today, custom lists) the moment the
+  // user hits Enter — no waiting for the server. `mutate` identity is
+  // React-Query-stable so the ref pattern keeps `createTask` stable.
+  const createThing = useCreateThing();
+  const createThingMutateRef = useRef(createThing.mutate);
+  createThingMutateRef.current = createThing.mutate;
 
   // Check if AI is configured
   const { data: aiConfigData } = useAIConfigs();
@@ -357,40 +367,31 @@ export function useOmnibar() {
   }, []);
 
   // Local action: create a task directly (no AI needed)
-  // No chat UI — just do it, invalidate queries, close the omnibar
-  // When on Today view, set dueDate to today so it appears in the current list
-  const createTask = useCallback(async (title: string, currentView?: string) => {
+  // No chat UI — just do it. useCreateThing's onMutate optimistically inserts
+  // into every cached view the task belongs in, so the user sees it land
+  // before the server replies. Matches the Today/List QuickAdd contract.
+  const createTask = useCallback((title: string, currentView?: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
     setInput("");
 
-    const body: Record<string, unknown> = { title: trimmed, type: "task" };
-
-    // Context-aware defaults based on current view
+    const input: CreateItemInput = { type: "task", title: trimmed };
     if (currentView === "today") {
-      body.dueDate = new Date().toISOString().split("T")[0];
+      input.dueDate = getTodayUTC().toISOString();
+      input.dueDatePrecision = "day";
     } else if (currentView?.startsWith("list:")) {
-      body.listId = currentView.slice(5);
+      input.listId = currentView.slice(5);
     }
 
-    try {
-      await apiFetch("/things", {
-        method: "POST",
-        body: JSON.stringify(body),
-        headers: { "Content-Type": "application/json" },
-      });
-      queryClient.invalidateQueries({ queryKey: ["things"] });
-      queryClient.invalidateQueries({ queryKey: ["inbox"] });
-    } catch {
-      // Silently fail — user will notice if the task doesn't appear
-    }
+    // Fire-and-forget: optimistic cache update is synchronous, so closing the
+    // omnibar immediately is safe. Errors roll back the cache (see things.ts).
+    createThingMutateRef.current(input);
 
-    // Close omnibar — no conversation in non-AI mode
     setIsOpen(false);
     setMessages([]);
     setSessionId(null);
-  }, [queryClient]);
+  }, []);
 
   const searchThings = useCallback(async (query: string) => {
     const trimmed = query.trim();

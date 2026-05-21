@@ -65,6 +65,15 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Fade-in for a freshly created ThingCard (e.g. omnibar/QuickAdd optimistic
+ * insert). Matches the editorial brand easing used elsewhere (CrossFade,
+ * checkPop). Subtle slide-up keeps the eye where the item landed without
+ * shoving siblings around. */
+@keyframes thingCardEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Things 3-style swoosh — fade + slide right, NO height collapse.
    Items below don't shift during rapid-fire completion.
    The list reflows in one batch when the freeze lifts. */
