@@ -6,7 +6,12 @@ import SwiftUI
 /// - `idle` / no session → invisible 8x8 dot (kept in layout so other
 ///   icons don't shift when state flips).
 /// - `pushing`           → gold dot with a subtle pulse (local → server).
-/// - `pulling`           → cerulean dot with a subtle pulse (server → local).
+/// - `pulling`           → invisible (was a cerulean pulsing dot; removed
+///   because every pull — including the 30s background poll — was
+///   flashing a blue dot in the corner that read as debug residue
+///   without telling the user anything actionable. Pushes still show
+///   gold because they represent the user's own outbound writes;
+///   pulls now go silent unless they error).
 /// - `error`             → red dot, tappable; opens a sheet with the message.
 ///
 /// Mount inside the top bar next to the settings / scouts / search icons.
@@ -39,7 +44,10 @@ struct SyncStatusIndicator: View {
                 dot(color: BrettColors.gold.opacity(0.85), isInteractive: false, pulse: true)
 
             case .pulling:
-                dot(color: BrettColors.cerulean.opacity(0.85), isInteractive: false, pulse: true)
+                // Render the same invisible placeholder as `.idle` so the
+                // surrounding icon row doesn't shift when sync flips
+                // pulling↔idle on every 30s background poll.
+                dot(color: .clear, isInteractive: false, pulse: false)
 
             case .error:
                 dot(color: BrettColors.error, isInteractive: true, pulse: false)
@@ -57,7 +65,7 @@ struct SyncStatusIndicator: View {
         .animation(.easeInOut(duration: 0.2), value: state)
         .onChange(of: state) { _, newValue in
             switch newValue {
-            case .pushing, .pulling:
+            case .pushing:
                 isPulsing = true
             default:
                 isPulsing = false
@@ -98,9 +106,8 @@ struct SyncStatusIndicator: View {
 
     private var accessibilityLabel: String {
         switch state {
-        case .idle: return ""
+        case .idle, .pulling: return ""
         case .pushing: return "Sync: sending changes"
-        case .pulling: return "Sync: receiving changes"
         case .error(let message): return "Sync error: \(message)"
         }
     }
