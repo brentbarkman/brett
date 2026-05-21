@@ -97,7 +97,7 @@ struct SyncPendingIndicator: View {
     }
 
     private func refresh() {
-        pendingCount = OfflineBannerModifier.fetchPendingCount(from: modelContext)
+        pendingCount = StatusBannerModifier.fetchPendingCount(from: modelContext)
     }
 
     private func fetchEntries() -> [MutationQueueEntry] {

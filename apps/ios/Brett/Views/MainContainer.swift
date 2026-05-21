@@ -387,10 +387,11 @@ struct MainContainer: View {
                     )
                 }
             )
-            // Polished state UX — offline banner stays sticky at the top,
+            // Polished state UX — status banner stays sticky at the top
+            // (covers offline, API-unreachable, and retrying states),
             // toast host sits above the omnibar. Both attach here so every
             // page inside the NavigationStack inherits them.
-            .offlineBanner()
+            .statusBanner()
             .errorToastHost()
             .overlay(alignment: .topTrailing) {
                 // Sync indicators float over the top-right corner instead

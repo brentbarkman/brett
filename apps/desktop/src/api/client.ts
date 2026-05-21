@@ -16,9 +16,25 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
+/**
+ * Extended fetch options understood by `apiFetch`.
+ *
+ * - `timeoutMs`: optional per-request timeout. When set, an AbortController
+ *   aborts the request after that many milliseconds and the call rejects
+ *   with a `TimeoutError` (a regular `Error` whose `name === 'TimeoutError'`).
+ *   Useful for endpoints where a hang is worse than a fast failure
+ *   (`/feedback`, `/health`) — Railway's gateway responds at ~15s anyway, so
+ *   a 5s client timeout fails before the gateway does, keeping the UI
+ *   responsive.
+ *
+ *   The caller's own `signal` (if any) is chained, so cancellation still
+ *   works in addition to the timeout.
+ */
+export type ApiFetchInit = RequestInit & { timeoutMs?: number };
+
 export async function apiFetch<T = unknown>(
   path: string,
-  init?: RequestInit
+  init?: ApiFetchInit
 ): Promise<T> {
   // Try bearer token first (works in Electron + browser after sign-in)
   const authHeaders = await getAuthHeaders();
@@ -31,11 +47,51 @@ export async function apiFetch<T = unknown>(
     ...authHeaders,
   };
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers,
-    credentials: "include", // send cookies as fallback
-  });
+  // Per-request timeout via AbortController. If the caller supplied their
+  // own `signal`, we chain it so cancelling the caller's controller also
+  // aborts our timeout-driven controller.
+  const { timeoutMs, signal: callerSignal, ...restInit } = init ?? {};
+  let signal = callerSignal;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  if (timeoutMs != null) {
+    const controller = new AbortController();
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    if (callerSignal) {
+      // If the caller cancels first, mirror it into our controller so
+      // the fetch tears down promptly. Already-aborted signals abort
+      // synchronously on .abort(); the event listener handles the
+      // pre-fetch case.
+      if (callerSignal.aborted) {
+        controller.abort();
+      } else {
+        callerSignal.addEventListener("abort", () => controller.abort(), { once: true });
+      }
+    }
+    signal = controller.signal;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...restInit,
+      headers,
+      signal,
+      credentials: "include", // send cookies as fallback
+    });
+  } catch (err) {
+    if (timedOut) {
+      const timeoutErr = new Error(`Request to ${path} timed out after ${timeoutMs}ms`);
+      timeoutErr.name = "TimeoutError";
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
 
   if (!res.ok) {
     recordFailedApiCall(

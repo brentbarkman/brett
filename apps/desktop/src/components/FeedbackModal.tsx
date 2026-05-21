@@ -1,9 +1,12 @@
 // apps/desktop/src/components/FeedbackModal.tsx
 import React, { useState, useEffect, useRef } from "react";
-import { useSubmitFeedback } from "../api/feedback";
+import {
+  useSubmitFeedback,
+  formatReportForClipboard,
+  feedbackErrorCopy,
+  type FeedbackType,
+} from "../api/feedback";
 import type { DiagnosticSnapshot } from "../lib/diagnostics";
-
-type FeedbackType = "bug" | "feature" | "enhancement";
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -33,6 +36,9 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
   const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showScreenshotPreview, setShowScreenshotPreview] = useState(false);
+  /// True for ~2 seconds after the user taps "Copy report" — drives
+  /// the inline confirmation that swaps the button label to "Copied".
+  const [didCopyReport, setDidCopyReport] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
   const submitFeedback = useSubmitFeedback();
@@ -60,6 +66,7 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
       setIncludeDiagnostics(true);
       setShowDiagnostics(false);
       setShowScreenshotPreview(false);
+      setDidCopyReport(false);
       submitFeedback.reset();
     }
   // submitFeedback is a useMutation result — its identity changes every
@@ -87,6 +94,33 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
   if (!isOpen) return null;
 
   const canSubmit = title.trim().length > 0 && description.trim().length > 0 && !submitFeedback.isPending;
+
+  /// Copy a plain-text version of the report to the clipboard so the
+  /// user can paste it into email or Slack when Brett is unreachable.
+  /// Briefly flips `didCopyReport` so the button confirms the action.
+  /// Unlike submit, this doesn't require diagnostics — a partial draft
+  /// is still useful to a human reader.
+  const handleCopyReport = async () => {
+    const report = formatReportForClipboard({
+      type,
+      title,
+      description,
+      appVersion: diagnostics?.appVersion ?? "unknown",
+      os: diagnostics?.os ?? "unknown",
+      userId,
+    });
+    try {
+      await navigator.clipboard.writeText(report);
+      setDidCopyReport(true);
+      setTimeout(() => setDidCopyReport(false), 2_000);
+    } catch {
+      // Clipboard write can reject if the document isn't focused (rare
+      // in a modal that the user just clicked, but possible if a
+      // background-tab race occurs). No graceful inline state for this
+      // — the existing error copy already invites them to copy
+      // manually. Swallow so we don't double-error the modal.
+    }
+  };
 
   const handleSubmit = () => {
     if (!canSubmit || !diagnostics) return;
@@ -271,11 +305,37 @@ export function FeedbackModal({ isOpen, onClose, diagnostics, screenshot, userId
             </div>
           )}
 
-          {/* Error */}
+          {/* Error + recovery row.
+              On submission failure (typically a `/feedback` 5xx or a
+              5s timeout during a Railway outage), we replace the bare
+              error message with two affordances: Try again resubmits
+              the same payload, Copy report writes a plain-text version
+              of the report to the clipboard so the user can paste it
+              into email / Slack manually. Mirrors the iOS feedback
+              sheet's recovery flow. */}
           {submitFeedback.isError && (
-            <p className="text-xs text-red-400">
-              {submitFeedback.error.message}
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs text-red-400">
+                {feedbackErrorCopy(submitFeedback.error)}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 text-white/85 hover:bg-white/15 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Try again
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyReport}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 text-white/85 hover:bg-white/15 transition-colors"
+                >
+                  {didCopyReport ? "Copied" : "Copy report"}
+                </button>
+              </div>
+            </div>
           )}
         </div>
 

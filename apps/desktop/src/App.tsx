@@ -80,6 +80,7 @@ import { useBackground } from "./hooks/useBackground";
 import { useBackgroundLuminance } from "./hooks/useBackgroundLuminance";
 import { initDiagnostics, collectDiagnostics, recordRouteChange, type DiagnosticSnapshot } from "./lib/diagnostics";
 import { FeedbackModal } from "./components/FeedbackModal";
+import { StatusBanner } from "./components/StatusBanner";
 import { useFavicon } from "./hooks/useFavicon";
 import { useOmnibar } from "./api/omnibar";
 import { useSessionUsage } from "./api/ai-usage";
@@ -1266,6 +1267,13 @@ export function App() {
 
         {/* Window drag region — frameless title bar */}
         <div className="absolute inset-x-0 top-0 z-50 h-[52px] [-webkit-app-region:drag]" />
+
+        {/* API-outage banner — slim fixed bar that appears below the
+            drag region when `/health` heartbeat fails. Self-contained:
+            owns its own polling, auth-gates on `useAuth().user`, and
+            renders `null` when healthy. Sits at z-20 so the awakening
+            cover (z-30) hides it during the cold-launch reveal. */}
+        <StatusBanner />
 
         {/* Main Layout Shell. Always at opacity 1 — the awakening cover
             above (z-30) handles the reveal. Any opacity / transform /
