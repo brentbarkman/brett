@@ -3,7 +3,17 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { InboxResponse, Thing, ThingDetail } from "@brett/types";
-import { useCreateThing, useUpdateThing, useDeleteThing, useBulkUpdateThings, useActiveThings, useListThings, __testing } from "../things";
+// Mock useTodayKey so we can simulate local-day rollover without waiting
+// on real wall-clock time. The current value is mutated between
+// rerender()s in the tests below. Tests that don't touch useUpcomingThings
+// are unaffected — neither useCreateThing/useUpdate/useDelete/useBulk nor
+// the useActiveThings/useListThings placeholder tests read useTodayKey.
+let mockTodayKey = "2026-05-22";
+vi.mock("../../hooks/useTodayKey", () => ({
+  useTodayKey: () => mockTodayKey,
+}));
+
+import { useCreateThing, useUpdateThing, useDeleteThing, useBulkUpdateThings, useActiveThings, useListThings, useUpcomingThings, __testing } from "../things";
 
 const { thingMatchesFilters } = __testing;
 
@@ -559,6 +569,52 @@ describe("useThings placeholder behavior on key transition (rollover guard)", ()
     expect(result.current.isLoading).toBe(false);
     expect(result.current.data).toEqual([makeThing("a", "list-1 item")]);
     expect(result.current.isPlaceholderData).toBe(true);
+  });
+});
+
+// The Upcoming view's "active items due after today" cutoff used to be
+// `getTodayUTC().toISOString()` — i.e. UTC midnight of the current UTC date.
+// For non-UTC users that means the cutoff shifts at UTC midnight, not at
+// the user's local midnight. Tasks due "tomorrow" disappear from Upcoming
+// during the wrong evening hour (e.g. 8pm Eastern in winter). The fix
+// anchors the cutoff to `useTodayKey` so it only recomputes on the user's
+// local day rollover.
+//
+// This test pins the OBSERVABLE: when useTodayKey transitions (local
+// midnight) the cache key shifts and a refetch fires. The previous
+// implementation would not refetch in this scenario because it reads UTC
+// midnight directly, ignoring local-day signal entirely.
+describe("useUpcomingThings local-rollover guard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTodayKey = "2026-05-22";
+  });
+
+  it("shifts cache key when useTodayKey changes, even if UTC clock hasn't ticked", async () => {
+    const { wrapper } = setupQueryClient();
+    mockApiFetch.mockResolvedValue([]);
+
+    const { rerender } = renderHook(() => useUpcomingThings(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalled();
+    });
+    const initialCallCount = mockApiFetch.mock.calls.length;
+
+    // Simulate the user's local day rolling over. With the fix, the cutoff
+    // is memo'd against useTodayKey, so the cache key shifts and a refetch
+    // fires. Without the fix, getTodayUTC() doesn't read useTodayKey at all
+    // — the cache key would only change when the test process's UTC clock
+    // crosses midnight, which never happens here.
+    mockTodayKey = "2026-05-23";
+    rerender();
+
+    await waitFor(
+      () => {
+        expect(mockApiFetch.mock.calls.length).toBeGreaterThan(initialCallCount);
+      },
+      { timeout: 1000 },
+    );
   });
 });
 
