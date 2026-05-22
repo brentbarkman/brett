@@ -1,5 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import { passkeyClient } from "@better-auth/passkey/client";
+import type { QueryClient } from "@tanstack/react-query";
+import { diagnostics } from "../lib/diagnostics";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
@@ -67,6 +69,29 @@ export async function clearStoredToken(): Promise<void> {
   }
 }
 
+// The QueryClient is registered by main.tsx on module init. Both sign-out
+// paths (the user-initiated AuthContext.signOut and the automatic
+// handleUnauthorized below) call wipeUserState() so the cached user
+// data and diagnostics ring buffer are dropped together — preventing
+// user A's cached `["things", ...]` / `["inbox"]` from rendering briefly
+// on user B's sign-in if they share a desktop install.
+let registeredQueryClient: QueryClient | null = null;
+export function setQueryClient(qc: QueryClient): void {
+  registeredQueryClient = qc;
+}
+
+/**
+ * Wipe in-memory user-scoped state. Both the user-initiated signOut
+ * (AuthContext) and the automatic 401 handler (handleUnauthorized below)
+ * route through this so the two paths can't drift. A drift here would be
+ * a multi-user data-leak — see the regression test in
+ * `__tests__/auth-client.test.ts`.
+ */
+export function wipeUserState(): void {
+  registeredQueryClient?.clear();
+  diagnostics.clear();
+}
+
 /**
  * Handle a 401 surfaced by any data fetch. Clears the bearer AND forces
  * better-auth's client-side session store to drop the cached user so the
@@ -79,6 +104,10 @@ export async function clearStoredToken(): Promise<void> {
  * The `signOut()` server call is best-effort: if the token is already
  * dead the POST itself will 401, but better-auth still drops the local
  * session cache on any outcome, which is what we need.
+ *
+ * Also calls wipeUserState() so the React Query cache + diagnostics are
+ * cleared — without that, user A's cached entries survive into user B's
+ * session if they share a desktop install.
  */
 export async function handleUnauthorized(): Promise<void> {
   try {
@@ -87,6 +116,7 @@ export async function handleUnauthorized(): Promise<void> {
     // Expected if the session is already dead on the server.
   }
   await clearStoredToken();
+  wipeUserState();
 }
 
 // Start Google OAuth via system browser with secure localhost callback
