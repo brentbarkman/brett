@@ -8,20 +8,31 @@ import SwiftUI
 ///      photography + abstract image paths, grouped by time-of-day and
 ///      "busyness" tier.
 ///   2. `/config` (network) — gives us the `storageBaseUrl` where images
-///      actually live. Cached in-memory for the session; re-fetched on
-///      each fresh app launch and after `clearForSignOut()`.
+///      actually live. Cached in-memory for the session AND persisted to
+///      UserDefaults so a cold launch with `/config` unreachable can still
+///      resolve image URLs against the cached manifest. Re-fetched on
+///      every `load()` to pick up env shifts. The base URL is env-level
+///      (not per-user) — see `storageBaseUrl` docs for why persisting it
+///      doesn't reintroduce the cross-user leak the URL cache had.
 ///   3. `UserProfile.backgroundStyle` + `UserProfile.pinnedBackground` —
 ///      what the user picked. Either a relative path (e.g.
 ///      "photo/evening/light-2.webp") or a "solid:#RRGGBB" sentinel.
 ///
-/// **No on-disk URL cache.** The service deliberately does not persist
-/// the last-resolved URL to UserDefaults. Cold launch starts from the
-/// wash bed (`defaultWashColor`) and the resolved photo fades in over
-/// it via `BackgroundView.paintAnimation` once `load()` + `recompute()`
-/// complete. The previous design persisted the URL to skip a blank
-/// frame, but that produced a cross-user leak (the cached URL survived
-/// sign-out) and a visible cached → resolved swap on every cold
-/// launch. See `BackgroundView` for the rendering pipeline.
+/// **No on-disk per-user URL cache.** The service deliberately does not
+/// persist `currentRemoteURL` (the resolved photo URL) to UserDefaults.
+/// Cold launch starts from the wash bed (`defaultWashColor`) and the
+/// resolved photo fades in over it via `BackgroundView.paintAnimation`
+/// once `load()` + `recompute()` complete. The previous design persisted
+/// that URL to skip a blank frame, but it leaked across sign-out and
+/// produced a visible cached → resolved swap on every cold launch.
+///
+/// The env-level `storageBaseUrl` IS persisted (see
+/// `persistedStorageBaseUrl(defaults:)`) so the photo can still resolve
+/// from the on-disk manifest cache + iOS URLCache on cold launch when
+/// `/config` is unreachable. Without that, an API outage at cold launch
+/// would leave the user staring at the bare wash bed — the prior
+/// session's photo couldn't render because the base URL was gone, even
+/// though the manifest and image bytes were both still on disk.
 ///
 /// The service is a singleton on the main actor because `BackgroundView`
 /// reads it from SwiftUI, and because the manifest + base URL are
@@ -43,7 +54,13 @@ final class BackgroundService: Clearable {
     /// Base URL of the storage server (e.g.
     /// `https://api.brett.brentbarkman.com/public`). Images are served
     /// under `{storageBaseUrl}/backgrounds/{path}`. `nil` until `/config`
-    /// returns.
+    /// returns or `loadConfigIfNeeded()` hydrates the value from
+    /// UserDefaults (see `persistedStorageBaseUrl(defaults:)`).
+    ///
+    /// The base URL is environment-level (every prod user shares the
+    /// same value), so persisting it is safe — unlike `currentRemoteURL`,
+    /// which embeds the user's pinned-photo selection and is deliberately
+    /// not persisted to avoid the cross-user leak fixed in 2026-05-17.
     private(set) var storageBaseUrl: URL?
 
     /// True once both the manifest and base URL have resolved.
@@ -385,6 +402,21 @@ final class BackgroundService: Clearable {
     }
 
     private func loadConfigIfNeeded() async {
+        // Hydrate from UserDefaults before we hit the network so a cold
+        // launch with `/config` unreachable still has a base URL to
+        // resolve cached manifest entries against. Without this, an API
+        // outage at cold launch falls through to the wash-only render
+        // even when the manifest cache and AsyncImage URLCache could
+        // have served the photo. Only fills when we don't already have
+        // a value in-memory — `clearForSignOut()` deliberately leaves
+        // `storageBaseUrl` nil until the next `load()` to keep the
+        // sign-out → sign-in race window safe (a stale prior-user
+        // profile + a non-nil base URL would resolve the prior user's
+        // pinned photo on the sign-in screen).
+        if storageBaseUrl == nil {
+            self.storageBaseUrl = Self.persistedStorageBaseUrl()
+        }
+
         // Re-fetch each call — storageBaseUrl is cheap and shifts between
         // dev and prod. We don't cache aggressively because the manifest
         // is the expensive part and already memoized.
@@ -401,10 +433,41 @@ final class BackgroundService: Clearable {
             )
             if let parsed = URL(string: response.storageBaseUrl) {
                 self.storageBaseUrl = parsed
+                Self.persistStorageBaseUrl(parsed)
             }
         } catch {
             BrettLog.app.error("BackgroundService: failed to load /config: \(String(describing: error), privacy: .public)")
         }
+    }
+
+    // MARK: - storageBaseUrl persistence
+
+    /// UserDefaults key for the persisted storage base URL. Versioned
+    /// so a future format change (e.g. moving to a struct payload) can
+    /// invalidate the old key without colliding.
+    static let storageBaseUrlDefaultsKey = "BackgroundService.storageBaseUrl.v1"
+
+    /// Read the previously-persisted storage base URL, if any. Pure
+    /// (UserDefaults-only) so tests can pass an isolated suite. The
+    /// defaults parameter has a `.standard` default for production
+    /// callers — `loadConfigIfNeeded()` uses that path.
+    static func persistedStorageBaseUrl(
+        defaults: UserDefaults = .standard
+    ) -> URL? {
+        guard let raw = defaults.string(forKey: storageBaseUrlDefaultsKey),
+              !raw.isEmpty else { return nil }
+        return URL(string: raw)
+    }
+
+    /// Persist the storage base URL so the next cold launch can resolve
+    /// image URLs even if `/config` is unreachable. Stored as the raw
+    /// string (not Data) so a quick inspection of UserDefaults during
+    /// debugging stays human-readable.
+    static func persistStorageBaseUrl(
+        _ url: URL,
+        defaults: UserDefaults = .standard
+    ) {
+        defaults.set(url.absoluteString, forKey: storageBaseUrlDefaultsKey)
     }
 
     // MARK: - Network manifest
