@@ -708,7 +708,7 @@ async function registerWebhook(
       .update(channelId)
       .digest("hex");
 
-    const channel = await watchCalendar(client, googleCalendarId, channelId, token);
+    const channel = await watchCalendar(client, googleCalendarId, channelId, token, webhookBaseUrl);
 
     await prisma.calendarList.update({
       where: { id: calendarListId },

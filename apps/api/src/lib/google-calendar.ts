@@ -200,11 +200,19 @@ export async function fetchEvents(
   let nextSyncToken: string | null | undefined;
 
   do {
+    // NOTE: do NOT set `orderBy` here. Google's events.list omits
+    // `nextSyncToken` from the response whenever `orderBy` is set (it's on
+    // the syncToken-incompatible param list, alongside `q`, `timeMin`,
+    // etc.). Without `nextSyncToken` we can never transition from full
+    // fetch to incremental sync, which means deletions never propagate
+    // (Google only returns cancelled events through syncToken-based
+    // incremental sync, never through time-windowed full fetch). The
+    // upsert path doesn't depend on event ordering — callers that need
+    // ordered events sort client-side.
     const params: calendar_v3.Params$Resource$Events$List = {
       calendarId,
       maxResults: options.maxResults ?? 250,
       singleEvents: true,
-      orderBy: "startTime",
       pageToken,
     };
 
@@ -266,20 +274,26 @@ export async function updateRsvp(
   return res.data;
 }
 
-/** Register webhook watch on a calendar */
+/** Register webhook watch on a calendar.
+ *  `webhookBaseUrl` is the public origin where Google should POST notifications
+ *  (e.g. `https://api.brett.brentbarkman.com` in prod, an ngrok URL in dev).
+ *  Caller is responsible for verifying it's set — see `GOOGLE_WEBHOOK_BASE_URL`
+ *  reads in calendar-sync.ts and jobs/cron.ts. */
 export async function watchCalendar(
   calendarClient: calendar_v3.Calendar,
   calendarId: string,
   channelId: string,
   token: string,
+  webhookBaseUrl: string,
 ): Promise<calendar_v3.Schema$Channel> {
   await googleThrottle();
+  const address = new URL("/webhooks/google-calendar", webhookBaseUrl).toString();
   const res = await calendarClient.events.watch({
     calendarId,
     requestBody: {
       id: channelId,
       type: "web_hook",
-      address: `${process.env.BETTER_AUTH_URL}/calendar/webhook`,
+      address,
       token,
     },
   });
