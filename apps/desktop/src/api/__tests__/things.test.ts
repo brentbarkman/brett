@@ -3,7 +3,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { InboxResponse, Thing, ThingDetail } from "@brett/types";
-import { useCreateThing, useUpdateThing, useDeleteThing, useBulkUpdateThings, __testing } from "../things";
+import { useCreateThing, useUpdateThing, useDeleteThing, useBulkUpdateThings, useActiveThings, useListThings, __testing } from "../things";
 
 const { thingMatchesFilters } = __testing;
 
@@ -483,6 +483,82 @@ describe("thingMatchesFilters", () => {
 
   it("never matches a completedAfter filter (new items aren't pre-completed)", () => {
     expect(thingMatchesFilters(baseThing, { completedAfter: "2026-04-20T00:00:00.000Z" })).toBe(false);
+  });
+});
+
+// Regression guard for the Today-list-reloads-overnight bug. The Today
+// view's active/done queries embed ISO date bounds in their cache key; when
+// the local day rolls over, those bounds shift and the key transitions to
+// a brand-new entry. Without placeholderData: keepPreviousData, isLoading
+// would flip true and the entire list would be replaced by a skeleton
+// until the new fetch lands. With keepPreviousData, the previous result
+// stays visible (isPlaceholderData=true) and isLoading stays false — no
+// skeleton flash. If this test fails, the Today list is going to visibly
+// reload on day rollover.
+describe("useThings placeholder behavior on key transition (rollover guard)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("keeps showing previous data with isLoading=false when the date-bound key changes", async () => {
+    const { wrapper } = setupQueryClient();
+
+    const yesterdayBound = "2026-05-21T23:59:59.999Z";
+    const todayBound = "2026-05-22T23:59:59.999Z";
+
+    // First fetch resolves with seed data; second fetch hangs forever so we
+    // can assert what the hook is showing DURING the key transition.
+    let fetchCount = 0;
+    mockApiFetch.mockImplementation(() => {
+      fetchCount += 1;
+      if (fetchCount === 1) return Promise.resolve([makeThing("a", "carry-over")]);
+      return new Promise(() => {}); // hang
+    });
+
+    const { result, rerender } = renderHook(
+      ({ d }: { d: string }) => useActiveThings(d),
+      { wrapper, initialProps: { d: yesterdayBound } },
+    );
+
+    // Initial load completes.
+    await waitFor(() => {
+      expect(result.current.data).toEqual([makeThing("a", "carry-over")]);
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Simulate the local day rolling over: new ISO bound → new cache key.
+    rerender({ d: todayBound });
+
+    // Critical assertion: even though the new key has no cached data and
+    // its fetch is still in flight, isLoading is FALSE and the previous
+    // data is still rendered. This is what prevents the skeleton flash.
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.data).toEqual([makeThing("a", "carry-over")]);
+    expect(result.current.isPlaceholderData).toBe(true);
+  });
+
+  it("also keeps previous data when useListThings switches listId", async () => {
+    const { wrapper } = setupQueryClient();
+
+    let fetchCount = 0;
+    mockApiFetch.mockImplementation(() => {
+      fetchCount += 1;
+      if (fetchCount === 1) return Promise.resolve([makeThing("a", "list-1 item")]);
+      return new Promise(() => {});
+    });
+
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useListThings(id),
+      { wrapper, initialProps: { id: "list-1" } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual([makeThing("a", "list-1 item")]);
+    });
+
+    rerender({ id: "list-2" });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.data).toEqual([makeThing("a", "list-1 item")]);
+    expect(result.current.isPlaceholderData).toBe(true);
   });
 });
 
