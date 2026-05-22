@@ -72,6 +72,29 @@ fi
 release_desktop() {
   echo "=== Desktop release ==="
 
+  # Node version guard — Prisma 7's WebAssembly bindings need Node 18.18+,
+  # and `.nvmrc` pins Node 20. Background/non-interactive shells inherit the
+  # system Node (often 16) instead of nvm's. Auto-source nvm and switch.
+  local REQUIRED_NODE_MAJOR CURRENT_NODE_MAJOR
+  REQUIRED_NODE_MAJOR=$(cut -d. -f1 "$ROOT_DIR/.nvmrc" 2>/dev/null || echo 20)
+  CURRENT_NODE_MAJOR=$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')
+  if [[ "$CURRENT_NODE_MAJOR" != "$REQUIRED_NODE_MAJOR" ]]; then
+    if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
+      # nvm.sh references unset vars; relax nounset just for the source.
+      set +u
+      # shellcheck source=/dev/null
+      source "$HOME/.nvm/nvm.sh"
+      nvm use --silent >/dev/null 2>&1 || nvm use "$REQUIRED_NODE_MAJOR" --silent >/dev/null 2>&1 || true
+      set -u
+      CURRENT_NODE_MAJOR=$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')
+    fi
+    if [[ "$CURRENT_NODE_MAJOR" != "$REQUIRED_NODE_MAJOR" ]]; then
+      echo "Error: Node $REQUIRED_NODE_MAJOR required (.nvmrc); found $(node --version 2>/dev/null || echo 'no node on PATH')." >&2
+      echo "Install nvm (https://github.com/nvm-sh/nvm) and run: nvm install $REQUIRED_NODE_MAJOR" >&2
+      exit 1
+    fi
+  fi
+
   # Auto-bump version using the same formula CI used: base major.minor from
   # package.json + commit count as patch. Mutates package.json in place but
   # we do NOT commit it — the version is ephemeral, pinned by the build.
