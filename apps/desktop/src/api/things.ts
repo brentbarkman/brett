@@ -2,6 +2,7 @@ import {
   useQuery,
   useMutation,
   useQueryClient,
+  keepPreviousData,
 } from "@tanstack/react-query";
 import type { Thing, ThingDetail, CreateItemInput, UpdateItemInput, InboxResponse, BulkUpdateInput } from "@brett/types";
 import { getTodayUTC, computeUrgency } from "@brett/business";
@@ -44,6 +45,13 @@ export function useThings(filters?: ThingsFilters) {
   return useQuery({
     queryKey: ["things", filters ?? {}],
     queryFn: () => apiFetch<Thing[]>(`/things${buildQuery(filters)}`),
+    // When date-bound filters shift (e.g. midnight rollover updates
+    // dueBefore/completedAfter on Today), keep showing the previous
+    // result while the new key fetches. Without this, the cache key
+    // changes to a fresh entry with no data, isLoading flips true,
+    // and the entire list is replaced by a skeleton for one round-trip
+    // — visible to the user as the whole list reloading.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -63,6 +71,7 @@ export function useListThings(listId: string) {
     queryKey: ["things", { listId }],
     queryFn: () => apiFetch<Thing[]>(`/things?listId=${listId}`),
     enabled: !!listId,
+    placeholderData: keepPreviousData,
   });
 }
 
