@@ -65,6 +65,12 @@ export function startCronJobs(): void {
         return;
       }
 
+      const webhookBaseUrl = process.env.GOOGLE_WEBHOOK_BASE_URL;
+      if (!webhookBaseUrl) {
+        console.warn("[cron] GOOGLE_WEBHOOK_BASE_URL not set, skipping webhook renewal");
+        return;
+      }
+
       for (const cal of expiring) {
         try {
           const client = await getCalendarClient(cal.googleAccountId);
@@ -84,7 +90,7 @@ export function startCronJobs(): void {
             .update(channelId)
             .digest("hex");
 
-          const channel = await watchCalendar(client, cal.googleCalendarId, channelId, token);
+          const channel = await watchCalendar(client, cal.googleCalendarId, channelId, token, webhookBaseUrl);
 
           await prisma.calendarList.update({
             where: { id: cal.id },
