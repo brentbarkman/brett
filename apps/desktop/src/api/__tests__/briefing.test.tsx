@@ -115,6 +115,53 @@ describe("useBriefing v2", () => {
     expect(refreshCalls).toHaveLength(0);
   });
 
+  // Regression guard for the briefing-skeleton-flash-on-rollover bug, same
+  // class as the Today-list fix in #189. The briefing queryKey embeds
+  // todayKey, so when the local day rolls over the key transitions to a
+  // brand-new cache entry. Without placeholderData: keepPreviousData the
+  // briefing surface gets isLoading=true and content=null, which causes
+  // DailyBriefing to swap the prose for <BriefingProseSkeleton />. With
+  // keepPreviousData the previous day's prose stays visible until the
+  // new fetch lands, then swaps in place — no skeleton flash.
+  it("keeps yesterday's briefing content visible while today's fetches across midnight rollover", async () => {
+    let fetchCount = 0;
+    mockApiFetch.mockImplementation((url: string) => {
+      if (url !== "/brett/briefing/current") return Promise.resolve(undefined);
+      fetchCount += 1;
+      if (fetchCount === 1) {
+        return Promise.resolve({
+          briefing: {
+            content: "Yesterday's briefing prose.",
+            isEmpty: false,
+            generatedAt: "2026-05-16T07:00:00.000Z",
+          },
+          staleness: "fresh",
+        });
+      }
+      // Subsequent fetch (for the new day's key) hangs forever so we can
+      // assert what the hook is showing DURING the key transition.
+      return new Promise(() => {});
+    });
+
+    const { wrapper } = setupQueryClient();
+    const { result, rerender } = renderHook(() => useBriefing(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.content).toBe("Yesterday's briefing prose.");
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Simulate the local day rolling over — the next render uses the new key.
+    mockTodayKey = "2026-05-17T00:00:00.000Z";
+    rerender();
+
+    // Critical assertion: even though the new key has no cached data and
+    // its fetch is hanging, the previous day's prose is still showing
+    // and isLoading remains false. No skeleton flash.
+    expect(result.current.content).toBe("Yesterday's briefing prose.");
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it("does NOT fire /refresh when staleness is capped (within 30min floor or 6/day ceiling)", async () => {
     mockApiFetch.mockResolvedValue({
       briefing: {

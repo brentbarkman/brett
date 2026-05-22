@@ -118,7 +118,7 @@ private struct ListsPageBody: View {
         ZStack {
             // No per-page wash — the global wash in `MainContainer`
             // is the backdrop, and page content slides over it during
-            // pager transitions. See `photoOpacity` in MainContainer.
+            // pager transitions. See `GlobalPhotoLayer` in MainContainer.
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

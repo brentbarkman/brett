@@ -3,7 +3,17 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { InboxResponse, Thing, ThingDetail } from "@brett/types";
-import { useCreateThing, useUpdateThing, useDeleteThing, useBulkUpdateThings, __testing } from "../things";
+// Mock useTodayKey so we can simulate local-day rollover without waiting
+// on real wall-clock time. The current value is mutated between
+// rerender()s in the tests below. Tests that don't touch useUpcomingThings
+// are unaffected — neither useCreateThing/useUpdate/useDelete/useBulk nor
+// the useActiveThings/useListThings placeholder tests read useTodayKey.
+let mockTodayKey = "2026-05-22";
+vi.mock("../../hooks/useTodayKey", () => ({
+  useTodayKey: () => mockTodayKey,
+}));
+
+import { useCreateThing, useUpdateThing, useDeleteThing, useBulkUpdateThings, useActiveThings, useListThings, useUpcomingThings, __testing } from "../things";
 
 const { thingMatchesFilters } = __testing;
 
@@ -483,6 +493,128 @@ describe("thingMatchesFilters", () => {
 
   it("never matches a completedAfter filter (new items aren't pre-completed)", () => {
     expect(thingMatchesFilters(baseThing, { completedAfter: "2026-04-20T00:00:00.000Z" })).toBe(false);
+  });
+});
+
+// Regression guard for the Today-list-reloads-overnight bug. The Today
+// view's active/done queries embed ISO date bounds in their cache key; when
+// the local day rolls over, those bounds shift and the key transitions to
+// a brand-new entry. Without placeholderData: keepPreviousData, isLoading
+// would flip true and the entire list would be replaced by a skeleton
+// until the new fetch lands. With keepPreviousData, the previous result
+// stays visible (isPlaceholderData=true) and isLoading stays false — no
+// skeleton flash. If this test fails, the Today list is going to visibly
+// reload on day rollover.
+describe("useThings placeholder behavior on key transition (rollover guard)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("keeps showing previous data with isLoading=false when the date-bound key changes", async () => {
+    const { wrapper } = setupQueryClient();
+
+    const yesterdayBound = "2026-05-21T23:59:59.999Z";
+    const todayBound = "2026-05-22T23:59:59.999Z";
+
+    // First fetch resolves with seed data; second fetch hangs forever so we
+    // can assert what the hook is showing DURING the key transition.
+    let fetchCount = 0;
+    mockApiFetch.mockImplementation(() => {
+      fetchCount += 1;
+      if (fetchCount === 1) return Promise.resolve([makeThing("a", "carry-over")]);
+      return new Promise(() => {}); // hang
+    });
+
+    const { result, rerender } = renderHook(
+      ({ d }: { d: string }) => useActiveThings(d),
+      { wrapper, initialProps: { d: yesterdayBound } },
+    );
+
+    // Initial load completes.
+    await waitFor(() => {
+      expect(result.current.data).toEqual([makeThing("a", "carry-over")]);
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Simulate the local day rolling over: new ISO bound → new cache key.
+    rerender({ d: todayBound });
+
+    // Critical assertion: even though the new key has no cached data and
+    // its fetch is still in flight, isLoading is FALSE and the previous
+    // data is still rendered. This is what prevents the skeleton flash.
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.data).toEqual([makeThing("a", "carry-over")]);
+    expect(result.current.isPlaceholderData).toBe(true);
+  });
+
+  it("also keeps previous data when useListThings switches listId", async () => {
+    const { wrapper } = setupQueryClient();
+
+    let fetchCount = 0;
+    mockApiFetch.mockImplementation(() => {
+      fetchCount += 1;
+      if (fetchCount === 1) return Promise.resolve([makeThing("a", "list-1 item")]);
+      return new Promise(() => {});
+    });
+
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useListThings(id),
+      { wrapper, initialProps: { id: "list-1" } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual([makeThing("a", "list-1 item")]);
+    });
+
+    rerender({ id: "list-2" });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.data).toEqual([makeThing("a", "list-1 item")]);
+    expect(result.current.isPlaceholderData).toBe(true);
+  });
+});
+
+// The Upcoming view's "active items due after today" cutoff used to be
+// `getTodayUTC().toISOString()` — i.e. UTC midnight of the current UTC date.
+// For non-UTC users that means the cutoff shifts at UTC midnight, not at
+// the user's local midnight. Tasks due "tomorrow" disappear from Upcoming
+// during the wrong evening hour (e.g. 8pm Eastern in winter). The fix
+// anchors the cutoff to `useTodayKey` so it only recomputes on the user's
+// local day rollover.
+//
+// This test pins the OBSERVABLE: when useTodayKey transitions (local
+// midnight) the cache key shifts and a refetch fires. The previous
+// implementation would not refetch in this scenario because it reads UTC
+// midnight directly, ignoring local-day signal entirely.
+describe("useUpcomingThings local-rollover guard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTodayKey = "2026-05-22";
+  });
+
+  it("shifts cache key when useTodayKey changes, even if UTC clock hasn't ticked", async () => {
+    const { wrapper } = setupQueryClient();
+    mockApiFetch.mockResolvedValue([]);
+
+    const { rerender } = renderHook(() => useUpcomingThings(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalled();
+    });
+    const initialCallCount = mockApiFetch.mock.calls.length;
+
+    // Simulate the user's local day rolling over. With the fix, the cutoff
+    // is memo'd against useTodayKey, so the cache key shifts and a refetch
+    // fires. Without the fix, getTodayUTC() doesn't read useTodayKey at all
+    // — the cache key would only change when the test process's UTC clock
+    // crosses midnight, which never happens here.
+    mockTodayKey = "2026-05-23";
+    rerender();
+
+    await waitFor(
+      () => {
+        expect(mockApiFetch.mock.calls.length).toBeGreaterThan(initialCallCount);
+      },
+      { timeout: 1000 },
+    );
   });
 });
 

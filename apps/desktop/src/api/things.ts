@@ -1,12 +1,15 @@
+import { useMemo } from "react";
 import {
   useQuery,
   useMutation,
   useQueryClient,
+  keepPreviousData,
 } from "@tanstack/react-query";
 import type { Thing, ThingDetail, CreateItemInput, UpdateItemInput, InboxResponse, BulkUpdateInput } from "@brett/types";
-import { getTodayUTC, computeUrgency } from "@brett/business";
+import { computeUrgency } from "@brett/business";
 import { apiFetch } from "./client";
 import { invalidateAllThings } from "./invalidate";
+import { useTodayKey } from "../hooks/useTodayKey";
 
 interface ThingsFilters {
   listId?: string;
@@ -44,6 +47,13 @@ export function useThings(filters?: ThingsFilters) {
   return useQuery({
     queryKey: ["things", filters ?? {}],
     queryFn: () => apiFetch<Thing[]>(`/things${buildQuery(filters)}`),
+    // When date-bound filters shift (e.g. midnight rollover updates
+    // dueBefore/completedAfter on Today), keep showing the previous
+    // result while the new key fetches. Without this, the cache key
+    // changes to a fresh entry with no data, isLoading flips true,
+    // and the entire list is replaced by a skeleton for one round-trip
+    // — visible to the user as the whole list reloading.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -63,12 +73,33 @@ export function useListThings(listId: string) {
     queryKey: ["things", { listId }],
     queryFn: () => apiFetch<Thing[]>(`/things?listId=${listId}`),
     enabled: !!listId,
+    placeholderData: keepPreviousData,
   });
 }
 
-/** Active items with due dates after today (for Upcoming view) */
+/** Active items with due dates after today (for Upcoming view).
+ *
+ *  The cutoff is the user's LOCAL midnight, derived directly from the
+ *  `useTodayKey` "YYYY-MM-DD" string so the value is a pure function of the
+ *  local-day signal (no implicit dependency on `new Date()` ticking).
+ *  Anchoring to local midnight is the correctness fix: the previous
+ *  implementation used `getTodayUTC().toISOString()`, which shifted the
+ *  cutoff at UTC midnight rather than the user's local midnight — tasks
+ *  due "tomorrow" would disappear from Upcoming at e.g. 8pm Eastern in
+ *  winter, hours before the user's actual day rollover.
+ */
 export function useUpcomingThings() {
-  return useThings({ status: "active", dueAfter: getTodayUTC().toISOString() });
+  const todayKey = useTodayKey();
+  const dueAfter = useMemo(() => {
+    // todayKey is YYYY-MM-DD representing the user's local calendar day.
+    // `new Date(y, m-1, d)` constructs local midnight; `.toISOString()`
+    // serialises that instant as UTC. For a Pacific user on 2026-05-22
+    // this is "2026-05-22T07:00:00.000Z" (= 00:00 PT). For a UTC user the
+    // same call yields "2026-05-22T00:00:00.000Z".
+    const [y, m, d] = todayKey.split("-").map(Number);
+    return new Date(y, m - 1, d).toISOString();
+  }, [todayKey]);
+  return useThings({ status: "active", dueAfter });
 }
 
 /** Shape a CreateItemInput into a provisional Thing for optimistic caches. */

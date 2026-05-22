@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import { useAIConfigs } from "./ai-config";
 import { useTodayKey } from "../hooks/useTodayKey";
@@ -59,6 +59,13 @@ export function useBriefing() {
     // (server-side 7am cron) is picked up the moment the user re-engages
     // the app, without needing a full reload.
     refetchOnWindowFocus: true,
+    // When todayKey flips at local midnight the queryKey transitions to
+    // a brand-new entry with no cached data. Without this option,
+    // isLoading would go true and DailyBriefing would show
+    // <BriefingProseSkeleton /> until the new fetch lands — visible as a
+    // briefing flash on overnight foreground. Carrying over the previous
+    // day's data keeps the prose visible until the new content swaps in.
+    placeholderData: keepPreviousData,
   });
 
   const cached = briefingQuery.data?.briefing ?? null;

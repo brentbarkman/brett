@@ -8,7 +8,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import { AuthGuard } from "./auth/AuthGuard";
 import { LoginPage } from "./auth/LoginPage";
 import { AutoUpdateProvider } from "./hooks/useAutoUpdate";
-import { setQueryClient } from "./auth/AuthContext";
+import { setQueryClient } from "./auth/auth-client";
 
 const queryClient = new QueryClient({
   defaultOptions: {
