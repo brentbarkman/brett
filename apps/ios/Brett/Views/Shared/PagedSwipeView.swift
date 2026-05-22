@@ -4,11 +4,11 @@ import UIKit
 /// Horizontal pager built on `UIPageViewController` so we can read
 /// real-time swipe progress (something SwiftUI's `TabView(.page)`
 /// doesn't expose). Drives the calm-hero photo crossfade: as the user
-/// drags Today off-screen toward Inbox, `signedDragProgress` ramps
-/// from 0 toward ±1, and the photo's opacity fades in lockstep — no
-/// snap at midpoint, no snap at commit, no top/bottom safe-area lag.
+/// drags Today off-screen toward Inbox, `PagerProgressState.shared.signedDragProgress`
+/// ramps from 0 toward ±1, and the photo's opacity fades in lockstep —
+/// no snap at midpoint, no snap at commit, no top/bottom safe-area lag.
 ///
-/// Three bindings:
+/// One binding:
 /// - `selection` — current page index (0…pageCount-1). Settles after
 ///   the swipe completes; updating it programmatically also flips the
 ///   page (for tap-to-switch on the view-pills row). The coordinator
@@ -17,12 +17,21 @@ import UIKit
 ///   see the post-commit values one frame earlier — without that
 ///   bump, opacity snaps from its release-moment value to the
 ///   committed value when `didFinishAnimating` fires.
-/// - `dragProgress` — magnitude 0…1 of how far the user has dragged
-///   from the current page toward an adjacent one. Always non-negative.
-/// - `signedDragProgress` — same magnitude, signed -1…+1. Positive
-///   when the user drags toward a HIGHER index (next page); negative
-///   toward a LOWER index. Lets callers compute "where is the user
-///   effectively pointing" for crossfades that need direction.
+///
+/// Drag progress is published to `PagerProgressState.shared` rather
+/// than `@Binding<CGFloat>` properties on the parent. The reason is
+/// a re-render budget one — `@Binding` writes invalidate the binding's
+/// source `@State`, which forces the owning `MainContainer` body to
+/// re-evaluate on every scroll callback (60-120 Hz). MainContainer's
+/// body is heavy enough (ZStack + computed properties + briefing
+/// canopy + chrome inset) that the re-render storm starved the main
+/// thread, dropped frames, and false-positive-tripped the
+/// `PagedSwipeResetDetector` threshold below — visible to the user
+/// as page swipes that "snap back" without committing. Routing the
+/// values through an `@Observable` singleton lets SwiftUI's
+/// Observation framework subtree-isolate the re-renders to the leaf
+/// views that actually read drag state (GlobalPhotoLayer,
+/// BriefingCanopyOverlay, the adaptive chrome wrappers).
 ///
 /// Implementation is deliberately small. `UIPageViewController` exposes
 /// its inner scroll view via `view.subviews` (the only `UIScrollView`
@@ -32,14 +41,6 @@ import UIKit
 struct PagedSwipeView<Page: View>: UIViewControllerRepresentable {
     let pageCount: Int
     @Binding var selection: Int
-    /// Magnitude 0…1.
-    @Binding var dragProgress: CGFloat
-    /// Signed -1…+1. Positive when the user drags toward a HIGHER
-    /// index (next page); negative toward a LOWER index. Lets
-    /// callers compute "where is the user effectively pointing"
-    /// for crossfades that need direction (e.g. fading the global
-    /// photo only while moving away from Today).
-    @Binding var signedDragProgress: CGFloat
     @ViewBuilder let pageBuilder: (Int) -> Page
 
     func makeUIViewController(context: Context) -> UIPageViewController {
@@ -193,12 +194,7 @@ struct PagedSwipeView<Page: View>: UIViewControllerRepresentable {
                         self.parent.selection = current.index
                     }
                 }
-                if self.parent.dragProgress != 0 {
-                    self.parent.dragProgress = 0
-                }
-                if self.parent.signedDragProgress != 0 {
-                    self.parent.signedDragProgress = 0
-                }
+                PagerProgressState.shared.reset()
             }
         }
 
@@ -274,12 +270,7 @@ struct PagedSwipeView<Page: View>: UIViewControllerRepresentable {
                     // would publish anyway, just made explicit so the
                     // consumer sees the atomic post-commit state in
                     // this tick rather than next.
-                    if self.parent.dragProgress != 0 {
-                        self.parent.dragProgress = 0
-                    }
-                    if self.parent.signedDragProgress != 0 {
-                        self.parent.signedDragProgress = 0
-                    }
+                    PagerProgressState.shared.reset()
                     prevOffsetX = currentOffset
                     return
                 }
@@ -293,12 +284,7 @@ struct PagedSwipeView<Page: View>: UIViewControllerRepresentable {
             let delta = currentOffset - pageWidth
             let signed = max(-1, min(1, delta / pageWidth))
             let magnitude = min(1, abs(delta) / pageWidth)
-            if abs(self.parent.dragProgress - magnitude) > 0.001 {
-                self.parent.dragProgress = magnitude
-            }
-            if abs(self.parent.signedDragProgress - signed) > 0.001 {
-                self.parent.signedDragProgress = signed
-            }
+            PagerProgressState.shared.publish(magnitude: magnitude, signed: signed)
         }
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
@@ -308,12 +294,7 @@ struct PagedSwipeView<Page: View>: UIViewControllerRepresentable {
             // the sources of truth for that.
             prevOffsetX = nil
             DispatchQueue.main.async {
-                if self.parent.dragProgress != 0 {
-                    self.parent.dragProgress = 0
-                }
-                if self.parent.signedDragProgress != 0 {
-                    self.parent.signedDragProgress = 0
-                }
+                PagerProgressState.shared.reset()
             }
         }
     }

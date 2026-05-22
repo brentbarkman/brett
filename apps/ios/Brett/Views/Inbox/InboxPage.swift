@@ -158,8 +158,8 @@ private struct InboxPageBody: View {
                 // No per-page wash. The global `WashBackground` in
                 // `MainContainer` is the sole backdrop; page content
                 // slides over it during swipes while the global photo
-                // crossfades to wash on top. See `photoOpacity`
-                // computation in `MainContainer.swift`.
+                // crossfades to wash on top. See `GlobalPhotoLayer`
+                // in `MainContainer.swift` for the crossfade math.
 
                 ScrollView {
                     VStack(spacing: 0) {

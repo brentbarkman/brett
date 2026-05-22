@@ -188,72 +188,33 @@ struct MainContainer: View {
     /// background state explicitly.
     @State private var wasBackgrounded: Bool = false
 
-    /// Reactive read of the shared hero-scroll state. Writes happen
-    /// inside TodayPage via `HeroScrollState.shared.publish(...)` —
-    /// reading the offset here causes MainContainer to re-render the
-    /// adaptive chrome (pills opacity + omnibar bg opacity).
-    @State private var heroScroll = HeroScrollState.shared
-
-    /// Distance over which the pills + omnibar transition between hero
-    /// (calm) and work (substantive) modes. Matches the photo→wash
-    /// gradient height in `TodayPage` so all the calm-hero affordances
-    /// transition together.
-    private static let heroFadeDistance: CGFloat = 140
-
-    /// Visibility (0–1) for the bottom view-pills row.
-    /// - On Today, ramps from 0 at the top of the hero to 1 at
-    ///   `heroFadeDistance` of scroll — pills only earn their place
-    ///   once the user is in the working zone.
-    /// - On every other page, hidden (0). Calm-hero direction is
-    ///   swipe-only navigation between pages; the pills aren't a
-    ///   primary affordance, just a "here's where you are when you
-    ///   land back on Today" signal.
-    private var pillsVisibility: Double {
-        guard currentPage == 2 else { return 0 }
-        let progress = Double(heroScroll.offset / Self.heroFadeDistance)
-        return min(max(progress, 0), 1)
-    }
-
-    /// Background opacity for the omnibar. Calm-hero spec: 0.55 at
-    /// the top of Today (thinner glass so the photo breathes), 1.0
-    /// past the hero (substantive glass against busy lists). Same
-    /// adaptive curve as `pillsVisibility` — both anchor on the
-    /// 140pt hero fade distance so all calm-hero affordances
-    /// transition together. Always 1.0 on non-Today pages.
-    private var omnibarBackgroundOpacity: Double {
-        guard currentPage == 2 else { return 1 }
-        let progress = Double(heroScroll.offset / Self.heroFadeDistance)
-        let clamped = min(max(progress, 0), 1)
-        // Lerp from 0.55 (hero) to 1.0 (work). Never goes below 0.55
-        // even at scroll=0 because the omnibar input is interactive
-        // and needs *some* glass plate for the field to read against.
-        return 0.55 + (1.0 - 0.55) * clamped
-    }
-
-    /// Magnitude of the current pager swipe (0 settled, 1 fully
-    /// dragged to an adjacent page).
-    @State private var pagerDragProgress: CGFloat = 0
-    /// Signed pager swipe progress. Positive = dragging toward a
-    /// HIGHER page index, negative toward a LOWER index. Combined
-    /// with `currentPage` we can compute "effective page position"
-    /// during the swipe and drive a smooth photo↔wash crossfade.
-    @State private var pagerSignedDragProgress: CGFloat = 0
-
-    /// Opacity for the global background photo. Crossfades smoothly
-    /// to the wash as the user swipes away from Today (and back as
-    /// they swipe toward Today). The "effective page" is `currentPage
-    /// + signedDragProgress`; how close that is to Today's index (2)
-    /// is the photo's visibility. Multiplied by the Today scroll
-    /// factor so scrolling past the hero also fades the photo out.
-    private var photoOpacity: Double {
-        let effectivePage = Double(currentPage) + Double(pagerSignedDragProgress)
-        let distanceFromToday = abs(effectivePage - 2)
-        let proximityToToday = max(0, 1 - distanceFromToday)
-        let scrollFactor = currentPage == 2
-            ? 1 - min(max(Double(heroScroll.offset / Self.heroFadeDistance), 0), 1)
-            : 1.0
-        return proximityToToday * scrollFactor
-    }
+    // MARK: - Adaptive-chrome read budget
+    //
+    // `HeroScrollState.shared` (vertical scroll on Today) and
+    // `PagerProgressState.shared` (horizontal page swipes) both
+    // publish 60-120 times per second while the user's finger is on
+    // the screen. MainContainer used to read both directly in
+    // computed properties (`photoOpacity`, `pillsVisibility`,
+    // `omnibarBackgroundOpacity`), which made the Observation
+    // framework register MainContainer as a subscriber to every
+    // change — re-evaluating the entire ZStack on every scroll frame.
+    //
+    // That re-render storm starved the main thread, dropped scroll
+    // callback frames, and false-positive-tripped the
+    // `PagedSwipeResetDetector` threshold — visible to the user as
+    // page swipes that snapped back without committing and as
+    // jittery Today scroll.
+    //
+    // Resolution: route the reads through small leaf views
+    // (`GlobalPhotoLayer`, `BriefingCanopyOverlay`,
+    // `AdaptiveViewPillsBar`, `AdaptiveOmnibarView` — all below).
+    // The leaves subscribe to the singletons; MainContainer's body
+    // no longer reads either, so it no longer re-renders during
+    // scroll or swipe.
+    //
+    // `Self.heroFadeDistance` is the constant the leaves use — kept
+    // here as the single source of truth.
+    static let heroFadeDistance: CGFloat = 140
 
     var body: some View {
         // `@Bindable` projection so we can pass `$selection.currentDestination`
@@ -275,50 +236,24 @@ struct MainContainer: View {
                 // Photo on top of the wash, opacity tied to current
                 // page + scroll position + live swipe progress. Lives
                 // here (not inside Today) so it can reach the safe-
-                // area zones — `PagedSwipeView` gives us live swipe
-                // progress so the photo crossfades smoothly during a
-                // side-swipe instead of snapping at midpoint.
-                BackgroundView()
-                    .opacity(photoOpacity)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
+                // area zones. The leaf view subscribes to
+                // `PagerProgressState.shared` and `HeroScrollState.shared`
+                // directly so its re-renders stay contained — see the
+                // "Adaptive-chrome read budget" note above for why
+                // MainContainer must not subscribe at this level.
+                GlobalPhotoLayer(currentPage: currentPage)
 
                 // Top-edge briefing canopy — V2 readability scrim. Gives
                 // the TodayHero briefing prose a uniform field to sit on
                 // regardless of the wallpaper's upper composition;
                 // replaces the per-photo color sampling we used to do
-                // for prose color. Only mounted on Today and fades with
-                // the photo so non-Today pages don't get an unmotivated
+                // for prose color. Only renders on Today (the leaf
+                // view gates internally) and rides the same photo
+                // opacity so non-Today pages don't get an unmotivated
                 // top darkening. See briefing-readability review notes
                 // in `docs/backgrounds.md` companion + the
                 // `packages/ui/src/BriefingCanopy.tsx` desktop mate.
-                if currentPage == 2 {
-                    // Phone is ~844pt tall; the desktop canopy covers
-                    // 55% of viewport which on a 900px Electron window is
-                    // ~495pt. On phone, 40% of GeometryReader height
-                    // (~338pt of an 844pt frame) lands the gradient's
-                    // feather end at the same visual point relative to
-                    // the briefing-prose paragraph. The two clients use
-                    // the same gradient stops (0.55 → 0.26 → 0) so the
-                    // perceived darkening at any given pixel is matched
-                    // — only the height scales with surface.
-                    GeometryReader { geo in
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.black.opacity(0.55), location: 0.0),
-                                .init(color: Color.black.opacity(0.26), location: 0.5),
-                                .init(color: Color.black.opacity(0.0), location: 1.0),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: geo.size.height * 0.40)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    }
-                    .opacity(photoOpacity)
-                    .ignoresSafeArea(edges: .top)
-                    .allowsHitTesting(false)
-                }
+                BriefingCanopyOverlay(currentPage: currentPage)
 
                 // Shake detection is handled by `ShakeMonitor.shared` (polls
                 // CoreMotion at the app level) and presented by
@@ -330,12 +265,14 @@ struct MainContainer: View {
                 // currentPage at midpoint, which made the photo
                 // snap-fade at the swipe midpoint instead of
                 // crossfading with the drag. Pages still respect the
-                // safe area for their own content layout.
+                // safe area for their own content layout. Drag
+                // progress is published to `PagerProgressState.shared`
+                // (not a binding here) so leaf views like
+                // `GlobalPhotoLayer` can subscribe without forcing
+                // MainContainer to re-render on every scroll frame.
                 PagedSwipeView(
                     pageCount: 4,
-                    selection: $currentPage,
-                    dragProgress: $pagerDragProgress,
-                    signedDragProgress: $pagerSignedDragProgress
+                    selection: $currentPage
                 ) { idx in
                     switch idx {
                     case 0: AnyView(ListsPage())
@@ -448,44 +385,33 @@ struct MainContainer: View {
                 .opacity(awakening.contentOpacity)
             }
             .overlay(alignment: .bottom) {
-                VStack(spacing: 0) {
-                    ViewPillsBar(
-                        currentPage: $currentPage,
-                        onMenuTap: { selection.currentDestination = .menu },
-                        visibility: pillsVisibility
-                    )
-
-                    // Omnibar fades out on Calendar but its layout
-                    // slot stays reserved — otherwise removing it
-                    // would shrink the bottom VStack and snap the
-                    // view-pills row down to fill the space, which
-                    // reads as a jarring pop. Opacity + hit-testing
-                    // gating gives a calm fade in/out instead.
-                    OmnibarView(
-                        placeholder: omnibarPlaceholder,
-                        currentPage: currentPage,
-                        backgroundOpacity: omnibarBackgroundOpacity,
-                        onSelectList: { id in
-                            // Drawer is gone (Lists has its own tab now), but
-                            // the callback is still wired so any future entry
-                            // point that re-introduces a list picker works.
-                            // Defer the push by ~350ms so the sheet dismissal
-                            // animation completes before the navigation
-                            // transition starts. Structured-Task form (vs.
-                            // DispatchQueue.main.asyncAfter) suspends with the
-                            // process and uses idiomatic concurrency; SwiftUI
-                            // doesn't auto-cancel inline Tasks on unmount but
-                            // mutating a detached @State is a no-op.
-                            Task { @MainActor in
-                                try? await Task.sleep(nanoseconds: 350_000_000)
-                                path.append(NavDestination.listView(id: id))
-                            }
+                // Wrapped in `AdaptiveBottomChrome` so the pills-row
+                // visibility + omnibar background opacity, both of
+                // which read `HeroScrollState.shared.offset` at scroll
+                // rate, do their reads inside a small leaf instead of
+                // at MainContainer scope. MainContainer stops
+                // re-rendering on every Today-scroll frame.
+                AdaptiveBottomChrome(
+                    currentPage: $currentPage,
+                    placeholder: omnibarPlaceholder,
+                    onMenuTap: { selection.currentDestination = .menu },
+                    onSelectList: { id in
+                        // Drawer is gone (Lists has its own tab now), but
+                        // the callback is still wired so any future entry
+                        // point that re-introduces a list picker works.
+                        // Defer the push by ~350ms so the sheet dismissal
+                        // animation completes before the navigation
+                        // transition starts. Structured-Task form (vs.
+                        // DispatchQueue.main.asyncAfter) suspends with the
+                        // process and uses idiomatic concurrency; SwiftUI
+                        // doesn't auto-cancel inline Tasks on unmount but
+                        // mutating a detached @State is a no-op.
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            path.append(NavDestination.listView(id: id))
                         }
-                    )
-                    .opacity(currentPage == 3 ? 0 : 1)
-                    .allowsHitTesting(currentPage != 3)
-                    .animation(.easeOut(duration: 0.20), value: currentPage)
-                }
+                    }
+                )
                 .opacity(awakening.contentOpacity)
             }
             .navigationDestination(for: NavDestination.self) { destination in
@@ -712,6 +638,188 @@ struct MainContainer: View {
                 // metadata surfaces it, otherwise fall back to the roster.
                 path.append(NavDestination.scoutsRoster)
             }
+        }
+    }
+}
+
+// MARK: - Adaptive-chrome leaf views
+//
+// Each of these subscribes to one or both of `HeroScrollState.shared`
+// and `PagerProgressState.shared` — the two high-frequency publishers
+// that drive the calm-hero crossfades. Keeping the subscription
+// scoped to small leaf views (instead of MainContainer-level
+// computed properties) means SwiftUI's Observation framework only
+// invalidates these leaves on every scroll/swipe frame, not the
+// entire MainContainer ZStack.
+//
+// This is load-bearing for swipe correctness: when MainContainer
+// re-rendered on every scroll callback, the main thread ran out of
+// budget for the next `scrollViewDidScroll` delivery, callbacks
+// arrived with frame-gap-sized offset deltas, and the
+// `PagedSwipeResetDetector` heuristic false-positive-tripped on
+// normal settles — visible as page swipes that snapped back without
+// committing.
+
+/// Renders the global background photo with adaptive opacity that
+/// crossfades to the wash as the user swipes away from Today and as
+/// they scroll the Today hero downward.
+///
+/// The "effective page" is `currentPage + signedDragProgress`; how
+/// close that is to Today's index (2) is the photo's visibility.
+/// Multiplied by the Today scroll factor so scrolling past the hero
+/// also fades the photo out.
+private struct GlobalPhotoLayer: View {
+    let currentPage: Int
+
+    @State private var pager = PagerProgressState.shared
+    @State private var heroScroll = HeroScrollState.shared
+
+    var body: some View {
+        let opacity = AdaptiveChromeOpacity.compute(
+            currentPage: currentPage,
+            signedDragProgress: pager.signedDragProgress,
+            heroScrollOffset: heroScroll.offset,
+            heroFadeDistance: MainContainer.heroFadeDistance
+        )
+
+        BackgroundView()
+            .opacity(opacity)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+    }
+}
+
+/// Top-edge briefing canopy gradient. Renders only on Today, riding
+/// the same photo opacity so non-Today pages don't get an unmotivated
+/// top darkening. Reads `PagerProgressState.shared` so it crossfades
+/// during page swipes; reads `HeroScrollState.shared` so it also
+/// fades as the user scrolls Today's hero away.
+///
+/// Phone is ~844pt tall; the desktop canopy covers 55% of viewport
+/// which on a 900px Electron window is ~495pt. On phone, 40% of
+/// GeometryReader height (~338pt of an 844pt frame) lands the
+/// gradient's feather end at the same visual point relative to the
+/// briefing-prose paragraph. The two clients use the same gradient
+/// stops (0.55 → 0.26 → 0) so the perceived darkening at any given
+/// pixel is matched — only the height scales with surface.
+private struct BriefingCanopyOverlay: View {
+    let currentPage: Int
+
+    @State private var pager = PagerProgressState.shared
+    @State private var heroScroll = HeroScrollState.shared
+
+    var body: some View {
+        // Same opacity curve as GlobalPhotoLayer (by construction —
+        // both route through `AdaptiveChromeOpacity.compute`) so the
+        // canopy fades in lockstep with the photo during page swipes.
+        // If the canopy and photo diverged the user would see an
+        // unmotivated dim strip during the crossfade.
+        let opacity = AdaptiveChromeOpacity.compute(
+            currentPage: currentPage,
+            signedDragProgress: pager.signedDragProgress,
+            heroScrollOffset: heroScroll.offset,
+            heroFadeDistance: MainContainer.heroFadeDistance
+        )
+
+        // The `> 0` gate keeps the GeometryReader out of the view
+        // tree entirely on non-Today pages and well-past-hero scroll
+        // positions, so its measurement pass doesn't run when its
+        // output is invisible anyway. Note: this also lets the
+        // canopy crossfade IN during a swipe TOWARD Today (the
+        // pre-refactor code mounted it only on `currentPage == 2`,
+        // which produced a pop-in at commit instead of a fade-in
+        // with the photo). Both leaves now use the same effective-
+        // page math, so they enter and exit together.
+        if opacity > 0 {
+            GeometryReader { geo in
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.black.opacity(0.55), location: 0.0),
+                        .init(color: Color.black.opacity(0.26), location: 0.5),
+                        .init(color: Color.black.opacity(0.0), location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: geo.size.height * 0.40)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+            .opacity(opacity)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+/// Bottom-chrome wrapper holding the view-pills row and the omnibar.
+/// Owns the high-frequency subscription to `HeroScrollState.shared`
+/// (vertical Today scroll drives both children's adaptive opacity).
+/// Splitting this out of MainContainer's overlay keeps the
+/// `HeroScrollState` reads inside a small subtree that contains only
+/// the chrome — the rest of MainContainer (NavigationStack content,
+/// sheet presenter, background ZStack) doesn't re-render on Today
+/// scroll.
+private struct AdaptiveBottomChrome: View {
+    @Binding var currentPage: Int
+    let placeholder: String
+    let onMenuTap: () -> Void
+    let onSelectList: (String) -> Void
+
+    @State private var heroScroll = HeroScrollState.shared
+
+    /// Visibility (0–1) for the bottom view-pills row.
+    /// - On Today, ramps from 0 at the top of the hero to 1 at
+    ///   `heroFadeDistance` of scroll — pills only earn their place
+    ///   once the user is in the working zone.
+    /// - On every other page, hidden (0). Calm-hero direction is
+    ///   swipe-only navigation between pages; the pills aren't a
+    ///   primary affordance, just a "here's where you are when you
+    ///   land back on Today" signal.
+    private var pillsVisibility: Double {
+        guard currentPage == 2 else { return 0 }
+        let progress = Double(heroScroll.offset / MainContainer.heroFadeDistance)
+        return min(max(progress, 0), 1)
+    }
+
+    /// Background opacity for the omnibar. Calm-hero spec: 0.55 at
+    /// the top of Today (thinner glass so the photo breathes), 1.0
+    /// past the hero (substantive glass against busy lists). Same
+    /// adaptive curve as `pillsVisibility` — both anchor on the
+    /// 140pt hero fade distance so all calm-hero affordances
+    /// transition together. Always 1.0 on non-Today pages.
+    private var omnibarBackgroundOpacity: Double {
+        guard currentPage == 2 else { return 1 }
+        let progress = Double(heroScroll.offset / MainContainer.heroFadeDistance)
+        let clamped = min(max(progress, 0), 1)
+        // Lerp from 0.55 (hero) to 1.0 (work). Never goes below 0.55
+        // even at scroll=0 because the omnibar input is interactive
+        // and needs *some* glass plate for the field to read against.
+        return 0.55 + (1.0 - 0.55) * clamped
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ViewPillsBar(
+                currentPage: $currentPage,
+                onMenuTap: onMenuTap,
+                visibility: pillsVisibility
+            )
+
+            // Omnibar fades out on Calendar but its layout
+            // slot stays reserved — otherwise removing it
+            // would shrink the bottom VStack and snap the
+            // view-pills row down to fill the space, which
+            // reads as a jarring pop. Opacity + hit-testing
+            // gating gives a calm fade in/out instead.
+            OmnibarView(
+                placeholder: placeholder,
+                currentPage: currentPage,
+                backgroundOpacity: omnibarBackgroundOpacity,
+                onSelectList: onSelectList
+            )
+            .opacity(currentPage == 3 ? 0 : 1)
+            .allowsHitTesting(currentPage != 3)
+            .animation(.easeOut(duration: 0.20), value: currentPage)
         }
     }
 }
