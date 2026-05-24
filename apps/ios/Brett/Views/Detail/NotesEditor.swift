@@ -67,13 +67,14 @@ struct NotesEditor: View {
                             scheduleSave(newValue)
                         }
                 } else {
+                    // Frame's minHeight matches the parent's so the tap target fills the card even when Text is empty/short.
                     Text(markdownRendered)
                         .font(BrettTypography.body)
                         .foregroundStyle(BrettColors.textBody)
                         .lineSpacing(4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
                         .padding(.horizontal, 4)
+                        .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             isFocused = true
