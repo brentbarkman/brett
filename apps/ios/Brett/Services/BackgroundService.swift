@@ -139,16 +139,20 @@ final class BackgroundService: Clearable {
     /// for the new-user fallback.
     private var lastAvgBusynessScore: Double? = nil
 
-    /// Shuffle-without-replacement state for auto-mode image picks.
-    /// `shownPaths` is the set of manifest paths we've already
-    /// served in the active (style, segment, tier) slot;
-    /// `lastSlotKey` is the key for that slot. When the slot key
-    /// changes — either because the user crosses a time-of-day
-    /// boundary, their busyness flips, or they switch style — we
-    /// reset both. Mirrors the desktop `shownRef` / `categoryRef`
-    /// pattern in `apps/desktop/src/hooks/useBackground.ts`.
-    private var shownPaths: Set<String> = []
-    private var lastSlotKey: String = ""
+    /// Shuffle-without-replacement state for auto-mode image picks,
+    /// keyed by `"\(style)/\(segment)/\(tier)"`. Each slot remembers
+    /// which manifest paths it has already served so the picker can
+    /// exclude them until the pool is exhausted, then start over.
+    ///
+    /// Persisted to UserDefaults (see `shownPathsDefaultsKey`) so the
+    /// no-repeat behaviour survives cold launches — without persistence
+    /// the dict resets every time the process restarts, which in
+    /// practice meant every short-session app open was a uniform draw
+    /// from a 2–4 image pool and image-1 hit ~25% of opens. Wiped on
+    /// sign-out (`clearForSignOut`) and on a manifest version/size
+    /// change (`refreshManifestFromAPI`) so a stale exclude list can't
+    /// outlive its pool.
+    private var shownPathsBySlot: [String: Set<String>] = BackgroundService.loadShownPaths()
 
     /// Reference count of mounted `BackgroundView` instances. When it
     /// transitions 0 → 1 we start the 60s segment ticker; 1 → 0 stops it.
@@ -186,6 +190,8 @@ final class BackgroundService: Clearable {
         currentWashColor = Self.defaultWashColor
         lastProfileStyle = nil
         lastProfilePinned = nil
+        shownPathsBySlot.removeAll()
+        Self.clearShownPaths()
     }
     #endif
 
@@ -243,6 +249,13 @@ final class BackgroundService: Clearable {
         currentWashColor = Self.defaultWashColor
         lastProfileStyle = nil
         lastProfilePinned = nil
+        // Wipe the per-slot exclude list too — UserDefaults survives
+        // sign-out, and a fresh user picking up the previous user's
+        // shown set would mostly be harmless (paths overlap), but
+        // it's also user-state that we have no business carrying
+        // across accounts.
+        shownPathsBySlot.removeAll()
+        Self.clearShownPaths()
     }
 
     // MARK: - Manifest
@@ -470,6 +483,45 @@ final class BackgroundService: Clearable {
         defaults.set(url.absoluteString, forKey: storageBaseUrlDefaultsKey)
     }
 
+    // MARK: - shownPaths persistence
+
+    /// UserDefaults key for the per-slot exclude dict. Versioned so a
+    /// schema change (e.g. moving to a struct payload with timestamps)
+    /// can invalidate the old key cleanly. The fully-populated payload
+    /// is small enough (≤36 slots × ≤4 paths) that the whole dict can
+    /// be rewritten on every pick without measurable cost.
+    // `nonisolated` so callers off the main actor (the property
+    // initializer of `shownPathsBySlot`, tests, future background
+    // tasks) can read/write them without an actor hop. The helpers
+    // touch only UserDefaults — no instance state — so they're safe
+    // outside the main actor.
+    nonisolated static let shownPathsDefaultsKey = "BackgroundService.shownPaths.v1"
+
+    nonisolated static func loadShownPaths(
+        defaults: UserDefaults = .standard
+    ) -> [String: Set<String>] {
+        guard let data = defaults.data(forKey: shownPathsDefaultsKey),
+              let decoded = try? JSONDecoder().decode([String: [String]].self, from: data)
+        else { return [:] }
+        return decoded.mapValues { Set($0) }
+    }
+
+    nonisolated static func persistShownPaths(
+        _ dict: [String: Set<String>],
+        defaults: UserDefaults = .standard
+    ) {
+        // Sets aren't JSON-encodable directly; persist as arrays.
+        let encodable = dict.mapValues { Array($0) }
+        guard let data = try? JSONEncoder().encode(encodable) else { return }
+        defaults.set(data, forKey: shownPathsDefaultsKey)
+    }
+
+    nonisolated static func clearShownPaths(
+        defaults: UserDefaults = .standard
+    ) {
+        defaults.removeObject(forKey: shownPathsDefaultsKey)
+    }
+
     // MARK: - Network manifest
 
     /// Location of the cached server-fetched manifest. App-support
@@ -517,8 +569,8 @@ final class BackgroundService: Clearable {
             // Reset the shuffle bookkeeping — the slot composition
             // may have changed, so prior shownPaths are no longer a
             // valid exclude list against the new pool.
-            shownPaths.removeAll()
-            lastSlotKey = ""
+            shownPathsBySlot.removeAll()
+            Self.clearShownPaths()
             // Persist for next cold launch. Failures here (disk full,
             // missing app-support dir) are non-fatal — the in-memory
             // manifest is in effect for this session and the next
@@ -919,27 +971,26 @@ final class BackgroundService: Clearable {
         )
         let paths = Self.paths(forTier: busynessTier, in: tiers)
 
-        // Shuffle-without-replacement bookkeeping. Reset the shown
-        // set whenever the slot identity changes (style + segment +
-        // tier triple) — otherwise we'd carry over yesterday's
-        // already-shown paths into today's morning rotation.
+        // Shuffle-without-replacement bookkeeping. Each slot
+        // (style + segment + tier triple) keeps its own shown set in
+        // `shownPathsBySlot`, persisted to UserDefaults so the
+        // no-repeat behaviour survives cold launches.
         let slotKey = "\(effectiveStyle.rawValue)/\(segment.rawValue)/\(busynessTier.rawValue)"
-        if slotKey != lastSlotKey {
-            shownPaths.removeAll()
-            lastSlotKey = slotKey
-        }
+        var shown = shownPathsBySlot[slotKey] ?? []
 
         // Filter to paths we haven't shown yet in this slot. If we've
         // exhausted the slot (e.g. small `dawn/packed` tier with two
         // images, both already shown), reset and re-pick from the
         // full set so the cycle resumes cleanly.
-        var available = paths.filter { !shownPaths.contains($0) }
+        var available = paths.filter { !shown.contains($0) }
         if available.isEmpty {
-            shownPaths.removeAll()
+            shown.removeAll()
             available = paths
         }
         guard let path = available.randomElement() else { return nil }
-        shownPaths.insert(path)
+        shown.insert(path)
+        shownPathsBySlot[slotKey] = shown
+        Self.persistShownPaths(shownPathsBySlot)
         return url(for: path, portrait: true)
     }
 
