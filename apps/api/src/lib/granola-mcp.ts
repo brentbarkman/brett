@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { prisma } from "./prisma.js";
 import { decryptToken, encryptToken } from "./encryption.js";
-import { ensureClientRegistered, clearRegisteredClient } from "../routes/granola-auth.js";
+import { ensureClientRegistered } from "../routes/granola-auth.js";
 
 const GRANOLA_MCP_URL = "https://mcp.granola.ai/mcp";
 
@@ -237,33 +237,26 @@ async function refreshGranolaTokens(refreshToken: string): Promise<{
   // Bounded timeout — Granola's OAuth endpoint normally responds in <1s.
   // Without this, a Granola outage would hang every MCP-dependent
   // background job indefinitely.
-  let resp = await fetch("https://mcp-auth.granola.ai/oauth2/token", {
+  //
+  // No 401-retry-with-re-register: see ensureClientRegistered in
+  // granola-auth.ts for the full reasoning. Granola's DCR is non-idempotent;
+  // re-registering on a 401 here would silently invalidate every account's
+  // refresh tokens at once.
+  const resp = await fetch("https://mcp-auth.granola.ai/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(params),
     signal: AbortSignal.timeout(10_000),
   });
 
-  // If 401, client creds may be stale — re-register and retry once
-  if (resp.status === 401) {
-    clearRegisteredClient();
-    const freshClient = await ensureClientRegistered();
-    params.client_id = freshClient.client_id;
-    if (freshClient.client_secret) {
-      params.client_secret = freshClient.client_secret;
-    } else {
-      delete params.client_secret;
-    }
-    resp = await fetch("https://mcp-auth.granola.ai/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(params),
-      signal: AbortSignal.timeout(10_000),
-    });
-  }
-
   if (!resp.ok) {
-    throw new Error(`Token refresh failed: ${resp.status}`);
+    // Capture (truncated, token-scrubbed) body so the next 4xx tells us
+    // Granola's actual error code (invalid_grant vs invalid_client vs ...)
+    // instead of just the HTTP status — which is what made the last round
+    // of this debugging blind.
+    const body = await resp.text().catch(() => "");
+    const scrubbed = body.replace(refreshToken, "[refresh_token]").slice(0, 500);
+    throw new Error(`Token refresh failed: ${resp.status} ${scrubbed}`);
   }
 
   return resp.json();

@@ -23,6 +23,35 @@ const ROTATION_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 const SEGMENT_CHECK_MS = 60 * 1000; // 60 seconds
 const CROSSFADE_MS = 3000;
 
+/// Per-slot shuffle-without-replacement bookkeeping, keyed by
+/// `${style}/${segment}/${tier}`. Persisted via `userStorage` so the
+/// no-repeat behaviour survives cold launches — without persistence,
+/// every short-session app open was a uniform draw from a 2–4 image
+/// pool, which read as "always image-1" to the user.
+type ShownBySlot = Record<string, string[]>;
+const SHOWN_PATHS_KEY = "brett-shown-paths.v1";
+
+function loadShownPaths(): ShownBySlot {
+  try {
+    const raw = userStorage.getItem(SHOWN_PATHS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    return parsed as ShownBySlot;
+  } catch {
+    return {};
+  }
+}
+
+function persistShownPaths(dict: ShownBySlot): void {
+  try {
+    userStorage.setItem(SHOWN_PATHS_KEY, JSON.stringify(dict));
+  } catch {
+    // Quota / storage failures are non-fatal — we keep the in-memory
+    // dict and the next pick is still deduplicated within the session.
+  }
+}
+
 interface UseBackgroundInput {
   meetingCount: number;
   taskCount: number;
@@ -85,10 +114,23 @@ export function useBackground({
 
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Track shown items for shuffle-without-replacement
-  const shownRef = useRef<(string | number)[]>([]);
+  // Per-slot shuffle-without-replacement state, hydrated from
+  // userStorage so the no-repeat behaviour survives cold launches.
+  // Each slot key `${style}/${segment}/${tier}` keeps its own list;
+  // there's no global reset on category change because the lookup
+  // naturally targets the right slot.
+  const shownBySlotRef = useRef<ShownBySlot>(loadShownPaths());
+
+  // Tracks the currently-active category so the segment-check
+  // intervals below can detect a boundary crossing. Kept separate
+  // from `shownBySlotRef` — pre-persistence these were entangled
+  // (segment changes triggered a shown reset); they don't need to
+  // be now.
   const categoryRef = useRef({ segment, busynessTier, backgroundStyle });
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const slotKeyFor = (style: BackgroundStyle, seg: TimeSegment, tier: BusynessTier) =>
+    `${style}/${seg}/${tier}`;
 
   const buildUrl = (relativePath: string) => `${baseUrl}/backgrounds/${relativePath}`;
 
@@ -115,30 +157,39 @@ export function useBackground({
     const seg = getTimeSegment(new Date().getHours());
     const tier = getBusynessTier(meetingCount, taskCount, avgBusynessScore);
 
-    // Reset shown list if category changed
-    const cat = categoryRef.current;
-    if (cat.segment !== seg || cat.busynessTier !== tier || cat.backgroundStyle !== backgroundStyle) {
-      shownRef.current = [];
-      categoryRef.current = { segment: seg, busynessTier: tier, backgroundStyle };
-    }
+    // Keep `categoryRef` in sync for the segment-check intervals.
+    // No shown-list reset needed — per-slot storage already isolates
+    // each category's history.
+    categoryRef.current = { segment: seg, busynessTier: tier, backgroundStyle };
 
     setSegment(seg);
     setBusynessTier(tier);
 
     {
       // Photography and Abstract both use images from the manifest
+      const effectiveStyle = isAbstract ? "abstract" : backgroundStyle;
+      const slotKey = slotKeyFor(effectiveStyle, seg, tier);
+      const shown = shownBySlotRef.current[slotKey] ?? [];
+
       const relativePath = selectImage(
         manifest as BackgroundManifest,
-        isAbstract ? "abstract" : backgroundStyle,
+        effectiveStyle,
         seg,
         tier,
-        shownRef.current as string[]
+        shown,
       );
 
       if (!relativePath || !baseUrl) return;
 
       const fullUrl = buildUrl(relativePath);
-      shownRef.current.push(relativePath);
+      // If the pool was exhausted, `selectImage` re-picks from the
+      // full set ignoring `shown`; mirror that by clearing this slot's
+      // history before recording the new pick so the cycle restarts
+      // cleanly. (Without the clear we'd keep growing the array with
+      // duplicates and the filter would no-op on every pick.)
+      const refreshedShown = shown.includes(relativePath) ? [relativePath] : [...shown, relativePath];
+      shownBySlotRef.current = { ...shownBySlotRef.current, [slotKey]: refreshedShown };
+      persistShownPaths(shownBySlotRef.current);
 
       cancelTransition();
 
@@ -224,12 +275,13 @@ export function useBackground({
     setBusynessTier(newTier);
   }, [meetingCount, taskCount, avgBusynessScore]);
 
-  // Immediately rotate when user switches background style
+  // Immediately rotate when user switches background style. No
+  // shown-list clear needed — switching style just looks up a
+  // different slot in `shownBySlotRef`.
   const prevStyleRef = useRef(backgroundStyle);
   useEffect(() => {
     if (prevStyleRef.current !== backgroundStyle) {
       prevStyleRef.current = backgroundStyle;
-      shownRef.current = [];
       rotateImageRef.current();
     }
   }, [backgroundStyle]);
