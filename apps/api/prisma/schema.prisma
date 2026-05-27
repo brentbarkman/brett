@@ -107,6 +107,21 @@ model Verification {
   updatedAt  DateTime @updatedAt
 }
 
+// One row per OAuth provider that uses Dynamic Client Registration (RFC 7591).
+// Granola's DCR endpoint mints a new client_id on every POST, and refresh
+// tokens are bound to the client_id that issued them — so the registered
+// client must survive process restarts, or every account silently breaks on
+// the next refresh. clientSecret is encrypted with the same AES-256-GCM
+// helper used for user tokens.
+model OAuthClient {
+  id           String   @id @default(uuid())
+  provider     String   @unique
+  clientId     String
+  clientSecret String?
+  registeredAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model Passkey {
   id            String    @id
   name          String?
