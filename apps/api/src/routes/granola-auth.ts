@@ -1,7 +1,8 @@
 import { Hono } from "hono";
+import { Prisma } from "@brett/api-core";
 import { authMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { encryptToken } from "../lib/encryption.js";
+import { encryptToken, decryptToken } from "../lib/encryption.js";
 import { resolveRelinkTaskForAccount } from "../lib/connection-health.js";
 import { generateId } from "@brett/utils";
 import { randomBytes, createHash } from "crypto";
@@ -103,9 +104,16 @@ export async function fetchGranolaEmail(accessToken: string): Promise<string> {
 // PKCE verifiers stored in the Verification table (survives restarts, works across instances)
 const PKCE_IDENTIFIER_PREFIX = "pkce:granola:";
 
-// Cached client credentials from Dynamic Client Registration (with TTL)
-let registeredClient: { client_id: string; client_secret?: string; registeredAt: number } | null = null;
-const CLIENT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// In-memory cache of the DCR client. Populated lazily from the OAuthClient
+// table on first use, then re-used for the rest of the process's lifetime.
+// The persisted row is the source of truth — every container that boots up
+// reads the same client_id, so refresh tokens issued to that client_id stay
+// valid across deploys. Granola's DCR endpoint is NOT idempotent (every POST
+// returns a brand-new client_id), so re-registering on a whim would orphan
+// every account's refresh tokens at once. Don't do it.
+let cachedClient: { client_id: string; client_secret?: string } | null = null;
+
+const GRANOLA_OAUTH_PROVIDER = "granola";
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -137,9 +145,37 @@ ${autoClose}
   return c.html(html);
 }
 
+/**
+ * Resolve the persisted Brett OAuth client at Granola, registering one on
+ * first use and writing it to the OAuthClient table so it survives process
+ * restarts.
+ *
+ * Granola's DCR endpoint mints a brand-new client_id on every POST. If
+ * the client_id is held only in process memory, every container restart
+ * silently breaks every account's refresh tokens (they were issued under
+ * the previous client_id; RFC 6749 §6 binds refresh tokens to the client
+ * that issued them, so the new client_id can't redeem them — refresh
+ * returns 400 invalid_grant). Persisting once and reusing forever is the
+ * fix.
+ *
+ * Concurrency: two cold callers can race past the SELECT and both register.
+ * The unique constraint on `provider` makes exactly one INSERT win; the
+ * loser catches P2002, re-reads, and uses the winner's client. The loser's
+ * Granola-side registration is then abandoned (harmless — Granola has no
+ * referent for it).
+ */
 export async function ensureClientRegistered(): Promise<{ client_id: string; client_secret?: string }> {
-  if (registeredClient && (Date.now() - registeredClient.registeredAt) < CLIENT_TTL_MS) {
-    return registeredClient;
+  if (cachedClient) return cachedClient;
+
+  const existing = await prisma.oAuthClient.findUnique({
+    where: { provider: GRANOLA_OAUTH_PROVIDER },
+  });
+  if (existing) {
+    cachedClient = {
+      client_id: existing.clientId,
+      client_secret: existing.clientSecret ? decryptToken(existing.clientSecret) : undefined,
+    };
+    return cachedClient;
   }
 
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
@@ -165,14 +201,41 @@ export async function ensureClientRegistered(): Promise<{ client_id: string; cli
     throw new Error(`Granola client registration failed: ${resp.status} ${text}`);
   }
 
-  const client = (await resp.json()) as { client_id: string; client_secret?: string };
-  registeredClient = { ...client, registeredAt: Date.now() };
-  return registeredClient;
+  const fresh = (await resp.json()) as { client_id: string; client_secret?: string };
+
+  try {
+    await prisma.oAuthClient.create({
+      data: {
+        provider: GRANOLA_OAUTH_PROVIDER,
+        clientId: fresh.client_id,
+        clientSecret: fresh.client_secret ? encryptToken(fresh.client_secret) : null,
+      },
+    });
+    cachedClient = fresh;
+    return cachedClient;
+  } catch (err) {
+    // Race: a concurrent caller persisted first. Read theirs and discard ours.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const winner = await prisma.oAuthClient.findUniqueOrThrow({
+        where: { provider: GRANOLA_OAUTH_PROVIDER },
+      });
+      cachedClient = {
+        client_id: winner.clientId,
+        client_secret: winner.clientSecret ? decryptToken(winner.clientSecret) : undefined,
+      };
+      return cachedClient;
+    }
+    throw err;
+  }
 }
 
-/** Clear cached client registration (used for retry on 401). */
-export function clearRegisteredClient(): void {
-  registeredClient = null;
+/**
+ * Test-only: drop the in-memory cache so a subsequent call re-reads from
+ * the DB. Used by the persistence tests to assert that the DB row is the
+ * source of truth across "process restarts".
+ */
+export function __resetCachedClientForTests(): void {
+  cachedClient = null;
 }
 
 const granolaAuth = new Hono<AuthEnv>();
@@ -349,7 +412,13 @@ granolaAuth.get("/callback", async (c) => {
   // Delete immediately to prevent replay
   await prisma.verification.delete({ where: { id: pkceRecord.id } }).catch(() => {});
 
-  // Exchange code for tokens (with retry on 401 — re-register DCR client)
+  // Exchange code for tokens. No 401-retry-with-re-register here: with the
+  // DCR client persisted in OAuthClient, re-registering would mint a fresh
+  // client_id and overwrite the row (or race against itself), invalidating
+  // every existing account's refresh tokens at once. A 401 on this exchange
+  // means the persisted client is no longer recognised by Granola — that's
+  // an ops problem (delete the OAuthClient row, redeploy, all users reconnect),
+  // not something to paper over silently.
   const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3001";
 
   async function exchangeCode(cl: { client_id: string; client_secret?: string }) {
@@ -375,14 +444,8 @@ granolaAuth.get("/callback", async (c) => {
   // page instead of bubbling out as a 500.
   let tokenResp: Response;
   try {
-    let client = await ensureClientRegistered();
+    const client = await ensureClientRegistered();
     tokenResp = await exchangeCode(client);
-    if (tokenResp.status === 401) {
-      // Client creds may be stale — re-register and retry once
-      clearRegisteredClient();
-      client = await ensureClientRegistered();
-      tokenResp = await exchangeCode(client);
-    }
   } catch (err) {
     console.error("[granola-auth] Token exchange failed:", err);
     return callbackHtml(c, {
