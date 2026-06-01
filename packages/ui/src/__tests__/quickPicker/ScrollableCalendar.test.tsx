@@ -2,10 +2,32 @@ import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ScrollableCalendar } from "../../quickPicker/ScrollableCalendar";
+import {
+  ScrollableCalendar,
+  localDayUtcMidnight,
+} from "../../quickPicker/ScrollableCalendar";
 
 const MAY_7 = new Date(Date.UTC(2026, 4, 7));
 const MAY_15 = new Date(Date.UTC(2026, 4, 15));
+
+/**
+ * Construct a Date whose local components and UTC components disagree —
+ * the runtime shape of a real `new Date()` when the user is at, say,
+ * 11:30 PM MT on May 31 (local) which is 5:30 AM UTC on June 1 (UTC).
+ * Lets us assert the fix is TZ-independent — the unit test must catch
+ * the bug even when the test runner is in UTC (CI default).
+ */
+function dateWithLocalAndUtc(
+  local: { y: number; m: number; d: number },
+  utc: { y: number; m: number; d: number; h: number; min: number },
+): Date {
+  const real = new Date(Date.UTC(utc.y, utc.m, utc.d, utc.h, utc.min));
+  return Object.assign(real, {
+    getFullYear: () => local.y,
+    getMonth: () => local.m,
+    getDate: () => local.d,
+  });
+}
 
 describe("ScrollableCalendar", () => {
   it("renders the weekday header above the scroll region", () => {
@@ -84,6 +106,28 @@ describe("ScrollableCalendar", () => {
     expect(passed.toISOString().slice(0, 10)).toBe("2026-05-09");
   });
 
+  it("marks today using the user's LOCAL calendar day, not UTC's", () => {
+    // 11:30 PM MT on May 31, 2026 — UTC has already rolled to June 1.
+    const localMay31 = dateWithLocalAndUtc(
+      { y: 2026, m: 4, d: 31 },
+      { y: 2026, m: 5, d: 1, h: 5, min: 30 },
+    );
+    render(
+      <ScrollableCalendar
+        anchorDate={MAY_15}
+        highlightedDate={MAY_15}
+        selectedDate={null}
+        onHighlight={vi.fn()}
+        onCommit={vi.fn()}
+        monthsBefore={0}
+        monthsAfter={1}
+        now={localMay31}
+      />,
+    );
+    expect(screen.getByTestId("day-2026-05-31").dataset.today).toBe("true");
+    expect(screen.getByTestId("day-2026-06-01").dataset.today).toBe("false");
+  });
+
   it("fires onHighlight when a day cell is hovered", () => {
     const onHighlight = vi.fn();
     render(
@@ -102,5 +146,29 @@ describe("ScrollableCalendar", () => {
     expect(onHighlight).toHaveBeenCalled();
     const last = onHighlight.mock.calls.at(-1)![0] as Date;
     expect(last.toISOString().slice(0, 10)).toBe("2026-05-12");
+  });
+});
+
+describe("localDayUtcMidnight", () => {
+  it("returns UTC midnight of the user's LOCAL calendar day", () => {
+    // 11:30 PM MT on May 31 (local) = 5:30 AM UTC on June 1 (UTC).
+    const evening = dateWithLocalAndUtc(
+      { y: 2026, m: 4, d: 31 },
+      { y: 2026, m: 5, d: 1, h: 5, min: 30 },
+    );
+    expect(localDayUtcMidnight(evening).toISOString()).toBe(
+      "2026-05-31T00:00:00.000Z",
+    );
+  });
+
+  it("returns UTC midnight when local and UTC days agree", () => {
+    const utcMay7 = new Date(Date.UTC(2026, 4, 7, 12));
+    // For a UTC-constructed Date in the (typically UTC) test runner, local
+    // components match UTC components, so the result is May 7 UTC midnight.
+    // This guards against an accidental "always shift by N hours" regression.
+    const result = localDayUtcMidnight(utcMay7);
+    expect(result.getUTCHours()).toBe(0);
+    expect(result.getUTCMinutes()).toBe(0);
+    expect(result.getUTCSeconds()).toBe(0);
   });
 });
