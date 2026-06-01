@@ -128,6 +128,7 @@ export function useBackground({
   // be now.
   const categoryRef = useRef({ segment, busynessTier, backgroundStyle });
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRafRef = useRef<number | null>(null);
 
   const slotKeyFor = (style: BackgroundStyle, seg: TimeSegment, tier: BusynessTier) =>
     `${style}/${seg}/${tier}`;
@@ -140,17 +141,33 @@ export function useBackground({
       clearTimeout(transitionTimeoutRef.current);
       transitionTimeoutRef.current = null;
     }
+    if (pendingRafRef.current !== null) {
+      cancelAnimationFrame(pendingRafRef.current);
+      pendingRafRef.current = null;
+    }
   };
 
-  // Finalize a crossfade after CROSSFADE_MS
+  // Finalize a crossfade after CROSSFADE_MS. Two-step state update: paint
+  // Layer B with the new image at opacity 0 first (set by the caller via
+  // setNextImage), then flip opacity to 1 in a second frame. Without the
+  // double rAF the src change and the opacity change land in the same paint
+  // and the browser skips the CSS transition — visible as a flash instead
+  // of a fade, especially on visibilitychange-triggered rotations where the
+  // next image is already in the browser cache and onload fires in the
+  // same task as the visibility flip.
   const startCrossfade = (onComplete: () => void) => {
     cancelTransition();
-    setIsTransitioning(true);
-    transitionTimeoutRef.current = setTimeout(() => {
-      onComplete();
-      setIsTransitioning(false);
-      transitionTimeoutRef.current = null;
-    }, CROSSFADE_MS);
+    pendingRafRef.current = requestAnimationFrame(() => {
+      pendingRafRef.current = requestAnimationFrame(() => {
+        pendingRafRef.current = null;
+        setIsTransitioning(true);
+        transitionTimeoutRef.current = setTimeout(() => {
+          onComplete();
+          setIsTransitioning(false);
+          transitionTimeoutRef.current = null;
+        }, CROSSFADE_MS);
+      });
+    });
   };
 
   const rotateImage = () => {
