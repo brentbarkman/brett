@@ -13,7 +13,6 @@ import {
 } from "@brett/ui";
 import type { OmnibarProps, NextUpTimerState } from "@brett/ui";
 import type { Thing, CalendarEventDisplay, NavList, FilterType } from "@brett/types";
-import { getTodayUTC, getEndOfWeekUTC } from "@brett/business";
 import {
   useActiveThings,
   useDoneThings,
@@ -23,7 +22,7 @@ import {
 import { useBriefing, useBriefingSummary } from "../api/briefing";
 import { usePreference } from "../api/preferences";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
-import { useTodayKey } from "../hooks/useTodayKey";
+import { useTodayKey, todayKeyToBounds } from "../hooks/useTodayKey";
 import { useLocalStorageBoolean } from "../lib/useLocalStorageBoolean";
 import { useTonightExpansion } from "../lib/useTonightAutoExpand";
 
@@ -73,18 +72,18 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
 
   // Date boundaries — recomputed when the user's LOCAL day rolls over so
   // tasks coming due today become visible without requiring an app reload.
-  // todayKey is just the rollover trigger; the actual UTC ISO bounds come
-  // straight from `getTodayUTC()` / `getEndOfWeekUTC()` so they stay correct
-  // independent of the key's string format.
+  // Bounds are derived from `todayKey` (YYYY-MM-DD in the user's local
+  // timezone) — UTC anchoring would mis-bucket items near the user's local
+  // midnight (see issue #197: 6:31pm MT showed tomorrow tasks as today).
   const todayKey = useTodayKey();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dueBefore = useMemo(() => getEndOfWeekUTC(new Date()).toISOString(), [todayKey]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const completedAfter = useMemo(() => getTodayUTC().toISOString(), [todayKey]);
+  const { todayStartISO, endOfWeekISO, todayDueDateISO } = useMemo(
+    () => todayKeyToBounds(todayKey),
+    [todayKey],
+  );
 
   // Two explicit queries: active items due this week or earlier, done items from today
-  const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(dueBefore);
-  const { data: doneThings = [], isLoading: doneLoading } = useDoneThings(completedAfter);
+  const { data: activeThings = [], isLoading: activeLoading } = useActiveThings(endOfWeekISO);
+  const { data: doneThings = [], isLoading: doneLoading } = useDoneThings(todayStartISO);
   const things = [...activeThings, ...doneThings];
   const thingsLoading = activeLoading || doneLoading;
 
@@ -97,7 +96,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
 
   const handleAddTask = (title: string, listId: string | null) => {
     createThing.mutate(
-      { type: "task", title, listId: listId ?? undefined, dueDate: getTodayUTC().toISOString(), dueDatePrecision: "day" },
+      { type: "task", title, listId: listId ?? undefined, dueDate: todayDueDateISO, dueDatePrecision: "day" },
       { onError: (err) => console.error("Failed to create thing:", err) }
     );
   };
@@ -111,7 +110,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
 
   const handleQuickAddContent = (url: string) => {
     createThing.mutate(
-      { type: "content", title: url, sourceUrl: url, dueDate: getTodayUTC().toISOString(), dueDatePrecision: "day" as const },
+      { type: "content", title: url, sourceUrl: url, dueDate: todayDueDateISO, dueDatePrecision: "day" as const },
       { onError: (err) => console.error("Failed to create thing:", err) }
     );
   };
@@ -149,7 +148,11 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
   }, [filteredThings]);
 
   const sections = useMemo(() => {
-    const dow = new Date().getUTCDay();
+    // Local day-of-week so the weekend/weekday ordering matches the user's
+    // wall clock, not UTC's. (UTC's day flips hours before/after a user's
+    // local midnight outside Greenwich.)
+    const [y, m, d] = todayKey.split("-").map(Number);
+    const dow = new Date(y, m - 1, d).getDay();
     const isWeekendNow = dow === 0 || dow === 6;
     const list: Array<{ key: string; title: string; count: number }> = [];
     if (grouped.overdue.length > 0) list.push({ key: "overdue", title: "Overdue", count: grouped.overdue.length });
@@ -172,7 +175,7 @@ export function TodayView({ lists, onItemClick, onTriageOpen, onFocusChange, omn
     }
     if (grouped.done.length > 0) list.push({ key: "done-today", title: "Done Today", count: grouped.done.length });
     return list;
-  }, [grouped]);
+  }, [grouped, todayKey]);
 
   // Per-section collapsed state. Persisted per-user via localStorage so
   // toggling a section, navigating away, and coming back retains the choice.

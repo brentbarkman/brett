@@ -14,6 +14,25 @@ import { getBrokenConnections } from "../lib/connection-health.js";
 
 const things = new Hono<AuthEnv>();
 
+/** Fallback timezone for users whose row was created before the User.timezone
+ *  field existed (defensive — the schema default is the same value). */
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
+
+/**
+ * Fetch the authenticated user's IANA timezone. Threaded into every
+ * `itemToThing` / `itemToThingDetail` call so `computeUrgency` anchors on the
+ * user's local "today", not the server's UTC clock. Without this, items due
+ * tomorrow MT show up in the Today bucket once UTC rolls past midnight — see
+ * issue #197.
+ */
+async function getUserTimezone(userId: string): Promise<string> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  return u?.timezone ?? DEFAULT_TIMEZONE;
+}
+
 /** Enrich items with scout names for items where source === "scout" */
 async function enrichWithScoutNames<T extends { source: string; sourceId: string | null }>(items: T[]): Promise<(T & { scoutName?: string })[]> {
   const scoutIds = [...new Set(items.filter((i) => i.source === "scout" && i.sourceId).map((i) => i.sourceId!))];
@@ -29,7 +48,11 @@ async function enrichWithScoutNames<T extends { source: string; sourceId: string
   }));
 }
 
-async function itemToThingDetail(item: any): Promise<ThingDetail> {
+async function itemToThingDetail(
+  item: any,
+  now: Date = new Date(),
+  timezone?: string,
+): Promise<ThingDetail> {
   // Enrich scout-originated items with scout name + finding feedback (parallelized)
   let scoutFindingId: string | undefined;
   let scoutFeedbackUseful: boolean | null | undefined;
@@ -50,7 +73,7 @@ async function itemToThingDetail(item: any): Promise<ThingDetail> {
     }
   }
 
-  const thing = itemToThing(item);
+  const thing = itemToThing(item, now, timezone);
 
   const attachments: AttachmentType[] = await Promise.all(
     (item.attachments || []).map(async (a: any) => ({
@@ -272,7 +295,9 @@ things.get("/", async (c) => {
       });
 
   const enriched = await enrichWithScoutNames(items);
-  const thingsList = enriched.map((item) => itemToThing(item as any));
+  const timezone = await getUserTimezone(user.id);
+  const now = new Date();
+  const thingsList = enriched.map((item) => itemToThing(item as any, now, timezone));
   return c.json(thingsList);
 });
 
@@ -350,8 +375,10 @@ things.get("/inbox", async (c) => {
   });
 
   const enriched = await enrichWithScoutNames(items);
+  const timezone = await getUserTimezone(user.id);
+  const nowDate = new Date();
   return c.json({
-    visible: enriched.map((item) => itemToThing(item as any)),
+    visible: enriched.map((item) => itemToThing(item as any, nowDate, timezone)),
   });
 });
 
@@ -370,7 +397,8 @@ things.get("/:id", async (c) => {
   });
 
   if (!item) return c.json({ error: "Not found" }, 404);
-  return c.json(await itemToThingDetail(item));
+  const timezone = await getUserTimezone(user.id);
+  return c.json(await itemToThingDetail(item, new Date(), timezone));
 });
 
 // POST /things — create
@@ -409,7 +437,8 @@ things.post("/", async (c) => {
     include: { list: { select: { name: true } }, meetingNote: { select: { title: true, calendarEventId: true } } },
   });
 
-  const thing = itemToThing(item as any);
+  const timezone = await getUserTimezone(user.id);
+  const thing = itemToThing(item as any, new Date(), timezone);
 
   // Inline embedding + duplicate detection
   let duplicateCandidates: Array<{ id: string; title: string; similarity: number }> | undefined;
@@ -629,7 +658,8 @@ things.patch("/:id", async (c) => {
     await spawnNextRecurrence(item, item.linksFrom);
   }
 
-  return c.json(itemToThing(item as any));
+  const timezone = await getUserTimezone(user.id);
+  return c.json(itemToThing(item as any, new Date(), timezone));
 });
 
 // PATCH /things/:id/toggle — toggle completion
@@ -656,7 +686,8 @@ things.patch("/:id/toggle", async (c) => {
     await spawnNextRecurrence(existing, existing.linksFrom);
   }
 
-  return c.json(itemToThing(item as any));
+  const timezone = await getUserTimezone(user.id);
+  return c.json(itemToThing(item as any, new Date(), timezone));
 });
 
 // DELETE /things/:id

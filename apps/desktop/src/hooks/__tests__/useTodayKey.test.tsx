@@ -19,7 +19,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useTodayKey } from "../useTodayKey";
+import { useTodayKey, todayKeyToBounds } from "../useTodayKey";
 
 describe("useTodayKey", () => {
   beforeEach(() => {
@@ -80,5 +80,69 @@ describe("useTodayKey", () => {
 
     expect(result.current).not.toBe(dayBefore);
     expect(result.current).toContain("2026-05-07");
+  });
+});
+
+/**
+ * Regression tests for issue #197 — Today view showed tomorrow tasks as
+ * today at 6:31pm MT. Pre-fix, the view derived its `dueBefore` /
+ * `completedAfter` / new-task `dueDate` from `getTodayUTC()` / `getEndOfWeekUTC()`,
+ * which anchor on the server-process UTC day. Replacing the anchor with
+ * `todayKeyToBounds` (local-key-derived) is the desktop side of the fix.
+ */
+describe("todayKeyToBounds", () => {
+  it("encodes the user's local calendar day as UTC midnight for storage", () => {
+    // Storage convention: dueDate is UTC midnight of the user's intended
+    // calendar date, regardless of the runtime timezone.
+    expect(todayKeyToBounds("2026-05-31").todayDueDateISO).toBe(
+      "2026-05-31T00:00:00.000Z",
+    );
+    expect(todayKeyToBounds("2026-01-01").todayDueDateISO).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
+  });
+
+  it("todayStartISO round-trips back to the same local calendar date", () => {
+    // `new Date(todayStartISO)` parsed back as local time must agree with
+    // the parts we constructed it from. Catches a stale "UTC midnight"
+    // anchor that would shift the calendar day for non-UTC runtimes.
+    const r = todayKeyToBounds("2026-05-31");
+    const d = new Date(r.todayStartISO);
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(4); // May (0-indexed)
+    expect(d.getDate()).toBe(31);
+  });
+
+  it("endOfWeekISO lands on the upcoming local Sunday for every weekday", () => {
+    // Walk a full week and assert the endOfWeek always reads as Sunday in
+    // local time. Independent of the runtime timezone — the helper computes
+    // the day-of-week locally, so the resulting Date's local getDay() === 0.
+    const days = [
+      "2026-05-25", // Mon
+      "2026-05-26", // Tue
+      "2026-05-27", // Wed
+      "2026-05-28", // Thu
+      "2026-05-29", // Fri
+      "2026-05-30", // Sat
+      "2026-05-31", // Sun
+    ];
+    for (const key of days) {
+      const dow = new Date(todayKeyToBounds(key).endOfWeekISO).getDay();
+      expect(dow).toBe(0);
+    }
+  });
+
+  it("Sunday's endOfWeek is the next Sunday (a full week out, not today)", () => {
+    // Without `dow === 0 ? 7 : 7 - dow`, Sunday would resolve to "0 days
+    // out" — i.e. dueBefore == today, hiding everything later in the week.
+    const r = todayKeyToBounds("2026-05-31"); // Sun
+    expect(r.endOfWeekISO).not.toBe(r.todayStartISO);
+    // Both anchors are local midnights, so the difference resolves to a
+    // multiple of 24h (modulo DST, which doesn't apply between May 31 and
+    // Jun 7). 7 days is the expected gap.
+    const startDate = new Date(r.todayStartISO);
+    const endDate = new Date(r.endOfWeekISO);
+    const days = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000);
+    expect(days).toBe(7);
   });
 });

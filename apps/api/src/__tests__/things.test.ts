@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { createTestUser, authRequest } from "./helpers.js";
 import { app } from "../app.js";
 import { DEFAULT_LIST_NAME } from "@brett/business";
@@ -520,6 +520,69 @@ describe("GET /things?dueAfter", () => {
     expect(body.length).toBe(2);
     const titles = body.map((t: any) => t.title).sort();
     expect(titles).toEqual(["Past", "Today"]);
+  });
+});
+
+/**
+ * Regression test for issue #197 — at 18:31 MDT (= 00:31 UTC next day), a
+ * task due tomorrow MT was bucketed as `today` because the route handler
+ * called `itemToThing(item)` with no `timezone` argument. `computeUrgency`
+ * then fell back to the server-process clock (UTC on Railway), so it
+ * treated UTC's "today" as the user's "today".
+ *
+ * Fix: route handlers fetch `User.timezone` and thread it through every
+ * `itemToThing` / `itemToThingDetail` call.
+ *
+ * Assumes the test runner's TZ is UTC (the CI default). On a non-UTC dev
+ * box the assertion still holds with the fix in place; the regression-
+ * detection power is what depends on the runtime TZ.
+ */
+describe("GET /things — urgency anchors on the user's stored timezone", () => {
+  let token: string;
+  let userId: string;
+  let itemId: string;
+
+  beforeAll(async () => {
+    const u = await createTestUser("TZ Urgency User");
+    token = u.token;
+    userId = u.userId;
+    await prisma.user.update({
+      where: { id: userId },
+      data: { timezone: "America/Denver" },
+    });
+    // Create the item directly so signup/auth aren't running under fake
+    // timers — better-auth uses Date.now() for tokens and we don't want
+    // to introduce timer interactions across the unrelated setup steps.
+    const item = await prisma.item.create({
+      data: {
+        type: "task",
+        title: "TZ Urgency: tomorrow MT",
+        status: "active",
+        userId,
+        dueDate: new Date("2026-06-01T00:00:00Z"),
+        dueDatePrecision: "day",
+        source: "Brett",
+      },
+    });
+    itemId = item.id;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does not bucket a Jun 1 MT task as 'today' at 18:31 MDT May 31 (= 00:31 UTC Jun 1)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-01T00:31:00Z"));
+
+    const res = await authRequest("/things?status=active", token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ id: string; urgency: string }>;
+    const t = body.find((row) => row.id === itemId);
+    expect(t).toBeDefined();
+    // Pre-fix: server-clock anchored "today" => bucket = "today".
+    // Post-fix: MT anchored "today" (May 31, Sun) => Jun 1 Mon = "this_week".
+    expect(t!.urgency).not.toBe("today");
   });
 });
 
