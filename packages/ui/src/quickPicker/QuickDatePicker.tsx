@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { computeTriageResult, type TriageDatePreset } from "@brett/business";
 import type { DueDatePrecision } from "@brett/types";
-import { ScrollableCalendar } from "./ScrollableCalendar";
+import { localDayUtcMidnight, ScrollableCalendar } from "./ScrollableCalendar";
 import { useAnchoredPosition } from "./useAnchoredPosition";
 import {
   DATE_LETTER_TO_PRESET,
@@ -63,9 +63,6 @@ function addDays(d: Date, n: number): Date {
   return copy;
 }
 
-function startOfDayUTC(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
 
 export function QuickDatePicker({
   anchorEl,
@@ -77,7 +74,7 @@ export function QuickDatePicker({
   now,
   visible = true,
 }: QuickDatePickerProps) {
-  const today = useMemo(() => startOfDayUTC(now ?? new Date()), [now]);
+  const today = useMemo(() => localDayUtcMidnight(now ?? new Date()), [now]);
   const popoverRef = useRef<HTMLDivElement>(null);
   // Bumping `version` when `visible` flips forces useAnchoredPosition to
   // re-measure once popoverRef.current has actually been attached to the DOM

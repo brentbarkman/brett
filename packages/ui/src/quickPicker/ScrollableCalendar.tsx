@@ -51,6 +51,17 @@ const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
+/**
+ * UTC midnight of the user's LOCAL calendar day. Day cells in the grid are
+ * UTC-midnight Dates, and `isoDay` compares via `toISOString()` (UTC). Using
+ * `new Date()` (or any local-time Date) directly leaks the UTC-offset hours
+ * into the comparison — for any user whose local day differs from UTC's day
+ * the today pill lands on the wrong cell.
+ */
+export function localDayUtcMidnight(d: Date): Date {
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
 export function ScrollableCalendar({
   anchorDate,
   highlightedDate,
@@ -61,7 +72,7 @@ export function ScrollableCalendar({
   monthsAfter = 24,
   now,
 }: ScrollableCalendarProps) {
-  const today = useMemo(() => now ?? new Date(), [now]);
+  const today = useMemo(() => localDayUtcMidnight(now ?? new Date()), [now]);
   const months = useMemo(
     () => buildMonths(anchorDate, monthsBefore, monthsAfter),
     [anchorDate, monthsBefore, monthsAfter],
